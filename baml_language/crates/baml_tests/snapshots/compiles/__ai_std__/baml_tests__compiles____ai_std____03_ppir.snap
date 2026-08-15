@@ -514,7 +514,7 @@ lambda (t) in get: captures [name]
 
 --- <builtin>/ai/ns_wire/wire.baml ---
 function ai.wire.render_output_format(t: type) -> string  [expr] {
-  {  } baml.prompt.render_output_format(t)
+  { baml.prompt.validate_output_type(t) } baml.prompt.render_output_format(t)
 }
 function ai.wire.send_as(req: baml.http.Request, provider: string) -> T  [expr] {
   { let resp = baml.http.send(req) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: null } } }; let text = resp.text() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: "the response body...", raw_body: null } } }; if (Not resp.ok()) { throw root.errors.classify_http(provider, resp.status_code, text) } } baml.json.from_string(text) catch_all (e) { _ => throw root.errors.ParseFailed { provider: provider, raw_output: text } }
@@ -604,7 +604,7 @@ function ai.name(self: ?) -> string  [expr] {
   {  } self.spec_name
 }
 function ai.output_type(self: ?) -> type  [expr] {
-  {  } reflect.type_of()
+  { let output_type = type.of(); baml.prompt.validate_output_type(output_type) } output_type
 }
 function ai.prompt(body: (role: (string) -> baml.prompt.Role throws never, ctx: baml.prompt.Context) -> baml.TaggedString throws never) -> (baml.prompt.Context) -> ai.Prompt throws never  [expr] {
   { let render = (ctx: baml.prompt.Context) -> { { let tagged = body(baml.prompt.make_role, ctx) } root.internal.assemble_prompt(tagged.parts, tagged.values) } } render

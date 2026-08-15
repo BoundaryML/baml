@@ -3420,36 +3420,18 @@ function interfaces.fz04_main() -> string {
 
   L0:
     alloc_instance user.interfaces.Fz04Cat
-    store_var _1
     jump L2
 
   L1:
     alloc_instance user.interfaces.Fz04Dog
-    store_var _1
 
   L2:
-    load_var _1
-    is_type interfaces.Fz04Cat
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var _1
-    is_type interfaces.Fz04Dog
-    pop_jump_if_false L6
-    load_var _1
-    call user.interfaces.Fz04Dog.Fz04Animal.speak
-    jump L5
-
-  L4:
-    load_var _1
-    call user.interfaces.Fz04Cat.Fz04Animal.speak
-
-  L5:
+    load_type interfaces.Fz04Animal
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
-
-  L6:
-    unreachable
 }
 
 function interfaces.fz05_main() -> string {
@@ -3638,36 +3620,18 @@ function interfaces.fz31_main() -> string {
 
   L0:
     alloc_instance user.interfaces.Fz31Cat
-    store_var result
     jump L2
 
   L1:
     alloc_instance user.interfaces.Fz31Dog
-    store_var result
 
   L2:
-    load_var result
-    is_type interfaces.Fz31Cat
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var result
-    is_type interfaces.Fz31Dog
-    pop_jump_if_false L6
-    load_var result
-    call user.interfaces.Fz31Dog.Fz31Animal.speak
-    jump L5
-
-  L4:
-    load_var result
-    call user.interfaces.Fz31Cat.Fz31Animal.speak
-
-  L5:
+    load_type interfaces.Fz31Animal
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
-
-  L6:
-    unreachable
 }
 
 function interfaces.fz32_main() -> bool {
@@ -5625,27 +5589,12 @@ function interfaces.w3sp_main() -> string {
 
 function interfaces.w3um_describe(x: interfaces.W3umDog | interfaces.W3umCat) -> string {
     load_var x
-    is_type interfaces.W3umCat
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var x
-    is_type interfaces.W3umDog
-    pop_jump_if_false L3
-    load_var x
-    call user.interfaces.W3umDog.W3umAnimal.speak
-    jump L2
-
-  L1:
-    load_var x
-    call user.interfaces.W3umCat.W3umAnimal.speak
-
-  L2:
+    load_type interfaces.W3umAnimal
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.w3um_main() -> string {

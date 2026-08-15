@@ -424,6 +424,7 @@ fn external_to_typed_expr(
         BamlType::Named(name) if name == "type" => quote! {
             match #val_expr {
                 BexExternalValue::Adt(bex_external_types::BexExternalAdt::Type(v)) => Ok(v),
+                BexExternalValue::Adt(bex_external_types::BexExternalAdt::TypeDef(v)) => Ok(v.root),
                 other => Err(AccessError::TypeMismatch {
                     expected: "type",
                     actual: other.type_name().to_string(),
@@ -783,7 +784,15 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
                     if has_generic_throw {
                         quote! { SysOp::#variant => &[] }
                     } else {
-                        let cats: Vec<_> = cats.iter().map(|t| format_ident!("{}", t)).collect();
+                        let cats: Vec<_> = cats
+                            .iter()
+                            .map(|t| {
+                                format_ident!(
+                                    "{}",
+                                    t.rsplit('.').next().expect("throw type has a name")
+                                )
+                            })
+                            .collect();
                         if cats.is_empty() {
                             quote! { SysOp::#variant => &[] }
                         } else {

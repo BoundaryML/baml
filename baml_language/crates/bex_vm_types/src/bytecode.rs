@@ -141,6 +141,34 @@ pub struct ClassInitPlan {
     pub fields: Vec<usize>,
 }
 
+/// High bit of a call instruction's `ntypeargs` operand. The remaining bits
+/// retain the actual count; setting this bit asks the VM to run the M-5/M-6
+/// marker checks before entering the callee.
+pub const RUNTIME_TYPE_CHECK_FLAG: u16 = 1 << 15;
+
+/// Packs the call-site type-argument count and the marker-runtime-check flag.
+pub fn encode_call_type_args(count: usize, runtime_type_check: bool) -> u16 {
+    let count = u16::try_from(count).expect("ntypeargs fits in u16");
+    assert!(
+        count < RUNTIME_TYPE_CHECK_FLAG,
+        "call type-argument count must leave the runtime-check flag bit free"
+    );
+    count
+        | if runtime_type_check {
+            RUNTIME_TYPE_CHECK_FLAG
+        } else {
+            0
+        }
+}
+
+/// Unpacks a call-site type-argument count and marker-runtime-check flag.
+pub fn decode_call_type_args(encoded: u16) -> (usize, bool) {
+    (
+        usize::from(encoded & !RUNTIME_TYPE_CHECK_FLAG),
+        encoded & RUNTIME_TYPE_CHECK_FLAG != 0,
+    )
+}
+
 /// Individual bytecode instruction.
 ///
 /// For faster iteration we'll start with an in-memory data structure that
@@ -678,6 +706,10 @@ pub enum Instruction {
     /// which must hold a `ConstValue::Type(TyTemplate)` at that slot.
     LoadType(usize),
 
+    /// Pop an exact `Object::Type` and bind it to a frame type-argument slot.
+    /// Later `LoadType(TypeArgRef(slot))` reproduces the same mint and defs.
+    BindType(usize),
+
     /// Remap a sparse type tag to a dense index via perfect hash lookup.
     ///
     /// Pops the type tag (from a preceding `TypeTag` instruction), computes
@@ -860,6 +892,18 @@ pub enum Instruction {
     /// Fused `StoreVar(a); StoreVar(b)` — pop into `local[a]`, then `local[b]`.
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
+
+    /// Compare a value's runtime nominal mint with an `Object::Type` mint.
+    /// Stack: `[value, type_value] -> [bool]`.
+    ///
+    /// Appended to preserve the serialized discriminants of existing
+    /// instructions.
+    RuntimeIsType,
+
+    /// Reify the package selected lexically by the compiler. The operand is a
+    /// constant-pool string naming the static package; a dynamic function's
+    /// runtime owner takes precedence.
+    LoadCurrentPackage(usize),
 }
 
 /// Compact bytecode opcodes.
@@ -984,6 +1028,7 @@ pub enum OpCode {
     IsType,
     DenseTag,
     LoadType,
+    BindType,
     MakeBoundMethod,
     LoadDeref,
     StoreDeref,
@@ -1043,6 +1088,12 @@ pub enum OpCode {
     // u32 interface-field index; receiver and interface type come off the stack.
     VirtualLoadField,
     VirtualStoreField,
+
+    // Runtime nominal identity test, appended to preserve discriminants.
+    RuntimeIsType,
+
+    // Lexical Package.current(): u32 constant-pool string index.
+    LoadCurrentPackage,
 }
 
 impl OpCode {
@@ -1062,6 +1113,7 @@ impl OpCode {
             | Self::CallIndirectWithRuntimeId
             | Self::Discriminant
             | Self::TypeTag
+            | Self::RuntimeIsType
             | Self::ThrowIfPanic
             | Self::Unreachable
             | Self::MakeCell
@@ -1153,6 +1205,7 @@ impl OpCode {
             | Self::IsType
             | Self::DenseTag
             | Self::LoadType
+            | Self::BindType
             | Self::MakeBoundMethod
             | Self::LoadDeref
             | Self::StoreDeref
@@ -1166,6 +1219,8 @@ impl OpCode {
             | Self::VirtualLoadField
             | Self::VirtualStoreField
             | Self::VirtualCallWithRuntimeId => 5,
+
+            Self::LoadCurrentPackage => 5,
 
             // 3-byte: opcode + u16
             Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
@@ -1207,6 +1262,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CallIndirectWithRuntimeId as u8 => Ok(Self::CallIndirectWithRuntimeId),
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
+            x if x == Self::RuntimeIsType as u8 => Ok(Self::RuntimeIsType),
+            x if x == Self::LoadCurrentPackage as u8 => Ok(Self::LoadCurrentPackage),
             x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
             x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
@@ -1295,6 +1352,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::IsType as u8 => Ok(Self::IsType),
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
             x if x == Self::LoadType as u8 => Ok(Self::LoadType),
+            x if x == Self::BindType as u8 => Ok(Self::BindType),
             x if x == Self::MakeBoundMethod as u8 => Ok(Self::MakeBoundMethod),
             x if x == Self::LoadDeref as u8 => Ok(Self::LoadDeref),
             x if x == Self::StoreDeref as u8 => Ok(Self::StoreDeref),
@@ -1344,6 +1402,8 @@ impl std::fmt::Display for OpCode {
             Self::CallIndirectWithRuntimeId => "CALL_INDIRECT_WITH_RUNTIME_ID",
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
+            Self::RuntimeIsType => "RUNTIME_IS_TYPE",
+            Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
@@ -1433,6 +1493,7 @@ impl std::fmt::Display for OpCode {
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
             Self::LoadType => "LOAD_TYPE",
+            Self::BindType => "BIND_TYPE",
             Self::MakeBoundMethod => "MAKE_BOUND_METHOD",
             Self::LoadDeref => "LOAD_DEREF",
             Self::StoreDeref => "STORE_DEREF",
@@ -1660,11 +1721,14 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::RuntimeIsType => f.write_str("RUNTIME_IS_TYPE"),
+            Instruction::LoadCurrentPackage(i) => write!(f, "LOAD_CURRENT_PACKAGE {i}"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
             Instruction::NarrowBind { ty, destination } => {
                 write!(f, "NARROW_BIND {ty} {destination}")
             }
             Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
+            Instruction::BindType(i) => write!(f, "BIND_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
@@ -2105,6 +2169,7 @@ impl Bytecode {
                 | Instruction::CallIndirectWithRuntimeId
                 | Instruction::Discriminant
                 | Instruction::TypeTag
+                | Instruction::RuntimeIsType
                 | Instruction::ThrowIfPanic
                 | Instruction::Unreachable
                 | Instruction::MakeCell
@@ -2183,6 +2248,8 @@ impl Bytecode {
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
                 | Instruction::LoadType(v)
+                | Instruction::BindType(v)
+                | Instruction::LoadCurrentPackage(v)
                 | Instruction::LoadDeref(v)
                 | Instruction::StoreDeref(v)
                 | Instruction::LoadCapture(v)
@@ -2467,6 +2534,7 @@ impl Bytecode {
             Instruction::CallIndirectWithRuntimeId => OpCode::CallIndirectWithRuntimeId,
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
+            Instruction::RuntimeIsType => OpCode::RuntimeIsType,
             Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
             Instruction::Unreachable => OpCode::Unreachable,
             Instruction::MakeCell => OpCode::MakeCell,
@@ -2538,6 +2606,8 @@ impl Bytecode {
             Instruction::NarrowBind { .. } => OpCode::NarrowBind,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
+            Instruction::BindType(_) => OpCode::BindType,
+            Instruction::LoadCurrentPackage(_) => OpCode::LoadCurrentPackage,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,
             Instruction::LoadDeref(_) => OpCode::LoadDeref,
             Instruction::StoreDeref(_) => OpCode::StoreDeref,

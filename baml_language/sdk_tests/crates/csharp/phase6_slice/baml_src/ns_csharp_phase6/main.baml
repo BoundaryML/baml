@@ -53,7 +53,7 @@ function identity<T>(value: T) -> T {
 }
 
 function type_name<T>() -> string {
-  reflect.type_of<T>().to_string()
+  type.of<T>().to_string()
 }
 
 function head<T>(values: T[]) -> T {

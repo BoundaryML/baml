@@ -6,7 +6,6 @@ fn main() {
     for (package, file) in [
         ("baml", "nativefunctions_generated.rs"),
         ("ai", "aifunctions_generated.rs"),
-        ("reflect", "reflectfunctions_generated.rs"),
         ("boundary", "boundaryfunctions_generated.rs"),
     ] {
         let (vm_builtins, _io_builtins, class_defs) =

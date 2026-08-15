@@ -6,9 +6,7 @@
 // make an actual LLM network call. The client declaration is required by the
 // compiler (LLM functions must declare a client) but no request is sent.
 //
-// Each test body is lifted into a top-level helper function to avoid the
-// test-block local-boxing VM bug (locals holding `type` values misbehave
-// when compared inside a test block).
+// The direct test-block comparisons below also guard the local-boxing fix.
 
 client TestClient = openai.OpenAiClient.new(
     model = "gpt-4o-mini",
@@ -69,4 +67,20 @@ function neq_type_values_different_fn() -> bool {
 
 test "neq_type_values_different" {
     assert.is_true(neq_type_values_different_fn())
+}
+
+// BEP-066: all type equality sites use the canonical mint, so union order is
+// irrelevant in both function and test-block contexts.
+function union_order_eq_fn() -> bool {
+    type.of<int | string>() == type.of<string | int>()
+}
+
+test "union_order_eq_canonical_in_function" {
+    assert.is_true(union_order_eq_fn())
+}
+
+test "union_order_eq_canonical_in_test_block" {
+    let a = type.of<int | string>();
+    let b = type.of<string | int>();
+    assert.is_true(a == b)
 }

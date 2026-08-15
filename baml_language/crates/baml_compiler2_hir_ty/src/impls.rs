@@ -324,11 +324,31 @@ pub(crate) fn is_concrete_receiver(ty: &Ty) -> bool {
     )
 }
 
-/// One resolved impl: the block plus the generic instantiation the match
-/// pinned.
+/// Resolution-relevant impl facts in a location-free shape shared by source
+/// blocks and mounted export rows.
+#[derive(Clone)]
+pub struct ResolvedImplFacts {
+    pub interface: InterfaceRef,
+    pub for_ty_pattern: Ty,
+    pub generic_params: Vec<(ParamTy, Vec<InterfaceRef>)>,
+    pub associated_types: Vec<(Name, Ty)>,
+}
+
+/// The dispatch identity retained after matching an impl.
+pub enum ResolvedImplOrigin<'db> {
+    Source {
+        block: ImplLoc<'db>,
+        methods: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>>,
+    },
+    Mounted {
+        methods: Vec<crate::package_interface::ExportedFunction>,
+    },
+}
+
+/// One resolved impl plus the generic instantiation the match pinned.
 pub struct ResolvedImpl<'db> {
-    pub block: ImplLoc<'db>,
-    pub facts: &'db ImplFacts<'db>,
+    pub origin: ResolvedImplOrigin<'db>,
+    pub facts: ResolvedImplFacts,
     pub bindings: FxHashMap<ParamTy, Ty>,
 }
 
@@ -362,7 +382,16 @@ impl ResolvedImpl<'_> {
                         .map(|assoc| assoc.name.clone())
                         .collect()
                 }
-                _ => return header,
+                _ => match crate::package_interface::mounted_type_row(db, &header.name) {
+                    Some(crate::package_interface::ExportedType::Interface {
+                        associated_types,
+                        ..
+                    }) => associated_types
+                        .iter()
+                        .map(|assoc| assoc.name.clone())
+                        .collect(),
+                    _ => return header,
+                },
             }
         };
         let associated_types = declared
@@ -370,6 +399,40 @@ impl ResolvedImpl<'_> {
             .filter_map(|member| resolved_pin(db, self, self_ty, &member).map(|pin| (member, pin)))
             .collect();
         InterfaceRef::new(header.name.clone(), header.generics, associated_types)
+    }
+}
+
+impl<'db> ResolvedImpl<'db> {
+    pub fn source_dispatch(
+        &self,
+        db: &'db dyn baml_compiler2_ppir::Db,
+        name: &Name,
+    ) -> Option<(ImplLoc<'db>, baml_compiler2_hir::loc::FunctionLoc<'db>)> {
+        let ResolvedImplOrigin::Source { block, methods } = &self.origin else {
+            return None;
+        };
+        methods
+            .iter()
+            .copied()
+            .find(|&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)
+            .map(|method| (*block, method))
+    }
+
+    pub fn mounted_method(
+        &self,
+        name: &Name,
+    ) -> Option<&crate::package_interface::ExportedFunction> {
+        let ResolvedImplOrigin::Mounted { methods } = &self.origin else {
+            return None;
+        };
+        methods.iter().find(|method| method.name == *name)
+    }
+
+    pub fn source_block(&self) -> Option<ImplLoc<'db>> {
+        match self.origin {
+            ResolvedImplOrigin::Source { block, .. } => Some(block),
+            ResolvedImplOrigin::Mounted { .. } => None,
+        }
     }
 }
 
@@ -409,6 +472,24 @@ pub(crate) fn realized_assoc_default(
     self_ty: &Ty,
     member: &Name,
 ) -> Option<Ty> {
+    if let Some(crate::package_interface::ExportedType::Interface {
+        generic_params,
+        associated_types,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, &target.name)
+    {
+        let default = associated_types
+            .iter()
+            .find(|assoc| &assoc.name == member)?
+            .default
+            .as_ref()?;
+        let instantiation =
+            mounted_interface_instantiation(target, self_ty, generic_params, associated_types)?;
+        return Some(crate::lower::substitute_params(
+            &Ty::from_plain(default),
+            &instantiation,
+        ));
+    }
     let (interface, data) = assoc_realization_env(db, target)?;
     let lowered = crate::lower::interface_assoc_default(db, interface, member.clone())
         .0
@@ -426,6 +507,31 @@ pub(crate) fn realized_assoc_bound(
     self_ty: &Ty,
     member: &Name,
 ) -> Option<Ty> {
+    if let Some(crate::package_interface::ExportedType::Interface {
+        generic_params,
+        associated_types,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, &target.name)
+    {
+        let bound = associated_types
+            .iter()
+            .find(|assoc| &assoc.name == member)?
+            .bound
+            .as_ref()?;
+        let instantiation =
+            mounted_interface_instantiation(target, self_ty, generic_params, associated_types)?;
+        let bound_ty = Ty::intern(TyKind::Interface(
+            bound.name.clone(),
+            bound.generics.iter().map(Ty::from_plain).collect(),
+            bound
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+                .collect(),
+            baml_type::TyAttr::default(),
+        ));
+        return Some(crate::lower::substitute_params(&bound_ty, &instantiation));
+    }
     let (interface, data) = assoc_realization_env(db, target)?;
     let lowered = crate::lower::interface_assoc_bound(db, interface, member.clone())
         .0
@@ -457,6 +563,36 @@ fn assoc_realization_env<'db>(
     Some((interface, data))
 }
 
+pub(crate) fn mounted_interface_instantiation(
+    target: &InterfaceRef,
+    self_ty: &Ty,
+    generic_params: &[ParamTy],
+    associated_types: &[crate::package_interface::ExportedAssociatedType],
+) -> Option<Vec<Ty>> {
+    if generic_params.len() != target.generics.len() {
+        return None;
+    }
+    let mut out = vec![self_ty.clone()];
+    out.extend(target.generics.iter().cloned());
+    for assoc in associated_types {
+        let ty = target
+            .associated_types
+            .iter()
+            .find(|(name, _)| name == &assoc.name)
+            .map(|(_, ty)| ty.clone())
+            .unwrap_or_else(|| {
+                Ty::intern(TyKind::AssociatedTypeProjection {
+                    base: self_ty.clone(),
+                    interface: target.clone(),
+                    member: assoc.name.clone(),
+                    attr: baml_type::TyAttr::default(),
+                })
+            });
+        out.push(ty);
+    }
+    Some(out)
+}
+
 /// Every impl an admissible `concrete` type matches, across every package
 /// in the compilation (enumeration has no interface side to derive
 /// search roots from, and coherence guarantees the set is
@@ -484,10 +620,7 @@ pub fn impls_for_type<'db>(
     let eq = AliasOnlyFacts::new(db);
     let mut out = Vec::new();
     for package in all_packages(db) {
-        for &block in package_impl_locs(db, package) {
-            let Some(facts) = impl_facts(db, block) else {
-                continue;
-            };
+        for (origin, facts) in package_impl_candidates(db, package) {
             let params: Vec<ParamTy> = facts
                 .generic_params
                 .iter()
@@ -506,7 +639,7 @@ pub fn impls_for_type<'db>(
             }
             if !bounds_hold(
                 db,
-                facts,
+                &facts,
                 &bindings,
                 BLANKET_IMPL_BOUND_DEPTH,
                 &mut Vec::new(),
@@ -531,7 +664,7 @@ pub fn impls_for_type<'db>(
                 continue;
             }
             out.push(ResolvedImpl {
-                block,
+                origin,
                 facts,
                 bindings,
             });
@@ -546,12 +679,72 @@ fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<PackageId<'_>> {
         .into_iter()
         .map(|file| baml_compiler2_hir::file_package::file_package(db, file).package)
         .collect();
+    names.extend(baml_compiler2_hir::package::mounted_package_names(db));
     names.sort();
     names.dedup();
     names
         .into_iter()
         .map(|name| PackageId::new(db, name))
         .collect()
+}
+
+fn package_impl_candidates<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    package: PackageId<'db>,
+) -> Vec<(ResolvedImplOrigin<'db>, ResolvedImplFacts)> {
+    let mut out = Vec::new();
+    for &block in package_impl_locs(db, package) {
+        let Some(facts) = impl_facts(db, block) else {
+            continue;
+        };
+        out.push((
+            ResolvedImplOrigin::Source {
+                block,
+                methods: facts.methods.clone(),
+            },
+            ResolvedImplFacts {
+                interface: facts.interface.clone(),
+                for_ty_pattern: facts.for_ty_pattern.clone(),
+                generic_params: facts.generic_params.clone(),
+                associated_types: facts.associated_types.clone(),
+            },
+        ));
+    }
+    if let Some(interface) = crate::package_interface::mounted_interface(db, &package.name(db)) {
+        out.extend(interface.impls.iter().map(|row| {
+            let generic_params = row
+                .generic_params
+                .iter()
+                .enumerate()
+                .map(|(index, param)| {
+                    let bounds = row
+                        .param_bounds
+                        .get(index)
+                        .into_iter()
+                        .flatten()
+                        .map(InterfaceRef::from_constraint)
+                        .collect();
+                    (param.clone(), bounds)
+                })
+                .collect();
+            (
+                ResolvedImplOrigin::Mounted {
+                    methods: row.methods.clone(),
+                },
+                ResolvedImplFacts {
+                    interface: InterfaceRef::from_constraint(&row.interface),
+                    for_ty_pattern: Ty::from_plain(&row.for_ty_pattern),
+                    generic_params,
+                    associated_types: row
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+                        .collect(),
+                },
+            )
+        }));
+    }
+    out
 }
 
 /// Every impl block implementing `interface_name`, drawn from the
@@ -672,18 +865,15 @@ fn resolve_within_depth<'db>(
     let eq = AliasOnlyFacts::new(db);
     let mut resolved = None;
     'search: for package in search_roots(db, concrete, interface) {
-        for &block in package_impl_locs(db, package) {
-            let Some(facts) = impl_facts(db, block) else {
+        for (origin, facts) in package_impl_candidates(db, package) {
+            let Some(bindings) = match_impl_head(db, &facts, concrete, interface, &eq) else {
                 continue;
             };
-            let Some(bindings) = match_impl_head(db, facts, concrete, interface, &eq) else {
-                continue;
-            };
-            if !bounds_hold(db, facts, &bindings, depth, in_progress) {
+            if !bounds_hold(db, &facts, &bindings, depth, in_progress) {
                 continue;
             }
             resolved = Some(ResolvedImpl {
-                block,
+                origin,
                 facts,
                 bindings,
             });
@@ -753,7 +943,7 @@ fn collect_packages(ty: &Ty, out: &mut Vec<Name>) {
 /// then the associated-pin gate. Declared bounds are NOT checked here.
 fn match_impl_head(
     db: &dyn baml_compiler2_ppir::Db,
-    facts: &ImplFacts<'_>,
+    facts: &ResolvedImplFacts,
     concrete: &Ty,
     interface: &InterfaceRef,
     eq: &AliasOnlyFacts<'_>,
@@ -1103,7 +1293,7 @@ pub fn substitute_bindings(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
 /// obligation); realized ones recurse with the budget.
 fn bounds_hold(
     db: &dyn baml_compiler2_ppir::Db,
-    facts: &ImplFacts<'_>,
+    facts: &ResolvedImplFacts,
     bindings: &FxHashMap<ParamTy, Ty>,
     depth: u32,
     in_progress: &mut Vec<(Ty, InterfaceRef)>,
@@ -1208,6 +1398,44 @@ fn direct_requires(
     of: &InterfaceRef,
     self_ty: &Ty,
 ) -> Vec<InterfaceRef> {
+    if let Some(crate::package_interface::ExportedType::Interface {
+        generic_params,
+        associated_types,
+        requires,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, &of.name)
+    {
+        let Some(instantiation) =
+            mounted_interface_instantiation(of, self_ty, generic_params, associated_types)
+        else {
+            return Vec::new();
+        };
+        return requires
+            .iter()
+            .map(InterfaceRef::from_constraint)
+            .map(|required| {
+                InterfaceRef::new(
+                    required.name.clone(),
+                    required
+                        .generics
+                        .iter()
+                        .map(|arg| crate::lower::substitute_params(arg, &instantiation))
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice(),
+                    required
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| {
+                            (
+                                name.clone(),
+                                crate::lower::substitute_params(ty, &instantiation),
+                            )
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+    }
     let Some((interface, data)) = assoc_realization_env(db, of) else {
         return Vec::new();
     };

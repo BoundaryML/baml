@@ -432,6 +432,29 @@ impl<'db> InferenceContext<'db> {
                     .unwrap_or_else(Ty::error);
                 self.type_pattern_outcome(pat, scrut, &pat_ty)
             }
+            Pattern::Unreflect(operand) => {
+                self.validate_runtime_type_operand(body, *operand);
+                let mut identity = self.body_owner_identity;
+                for byte in pat.into_raw().into_u32().to_le_bytes() {
+                    identity ^= u32::from(byte);
+                    identity = identity.wrapping_mul(0x0100_0193);
+                }
+                let parameter = baml_type::ParamTy::new(
+                    0xc000_0000 | (identity & 0x3fff_ffff),
+                    baml_type::Name::new(format!("$unreflect${identity:08x}")),
+                );
+                let constructor = Ty::intern(TyKind::TypeVar(parameter, TyAttr::default()));
+                PatternOutcome {
+                    // Each runtime predicate is possible but cannot cover a
+                    // static alphabet. Its statement-independent rigid
+                    // singleton also keeps two source patterns distinct.
+                    dpat: DPat::single(constructor.to_plain(), scrut.to_plain()),
+                    matched_ty: scrut.clone(),
+                    recorded_ty: None,
+                    covers_type: false,
+                    consumes_matched: false,
+                }
+            }
             Pattern::Class { class, fields, .. } => {
                 let class = class.clone();
                 let fields: Vec<(baml_type::Name, PatId)> = fields
@@ -1424,7 +1447,7 @@ impl<'db> InferenceContext<'db> {
             },
             // Type patterns carry their own runtime test; the lowering
             // settles their claim - no discrimination here.
-            Pattern::Type(_) => true,
+            Pattern::Type(_) | Pattern::Unreflect(_) => true,
             Pattern::Or(alternatives) => {
                 let alternatives = alternatives.clone();
                 alternatives

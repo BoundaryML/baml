@@ -129,6 +129,10 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
+    /// A source-authored `let` appeared at file scope. Only compiler-synthesized
+    /// globals (such as clients and retry policies) are supported.
+    TopLevelLetNotSupported { span: TextRange },
+
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
 
@@ -389,7 +393,7 @@ impl LoweringDiagnostic {
                 "invalid escape",
             ),
             LoweringDiagnostic::InstanceofRemoved { span } => (
-                DiagnosticId::InstanceofRemoved,
+                DiagnosticId::RemovedFeature,
                 Severity::Error,
                 "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
                 *span,
@@ -481,6 +485,13 @@ impl LoweringDiagnostic {
                 format!("invalid pattern type ascription: {reason}"),
                 *span,
                 "type ascription not allowed here",
+            ),
+            LoweringDiagnostic::TopLevelLetNotSupported { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "top-level `let` bindings are not supported".to_string(),
+                *span,
+                "move this binding into a function body",
             ),
             LoweringDiagnostic::ConstBindingIntroducer { span } => (
                 DiagnosticId::InvalidSyntax,

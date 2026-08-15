@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
-assertion_line: 152
 ---
 function type_reflection.$init_test_ns_type_reflection_type_reflection(registry: testing.TestCollector) -> null {
     load_var registry
@@ -31,6 +30,20 @@ function type_reflection.$init_test_ns_type_reflection_type_reflection(registry:
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "union_order_eq_canonical_in_function"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "union_order_eq_canonical_in_test_block"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -54,7 +67,7 @@ function type_reflection.GetBar(client: ai.Client | null) -> type_reflection.Bar
     call user.type_reflection.GetBar$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<type_reflection.Bar, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<type_reflection.Bar>>
+    load_type ai.Runner<type_reflection.Bar, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<type_reflection.Bar>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
@@ -136,7 +149,7 @@ function type_reflection.GetFoo(client: ai.Client | null) -> type_reflection.Foo
     call user.type_reflection.GetFoo$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<type_reflection.Foo, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<type_reflection.Foo>>
+    load_type ai.Runner<type_reflection.Foo, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<type_reflection.Foo>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
@@ -246,5 +259,12 @@ function type_reflection.neq_type_values_same_fn() -> bool {
     load_var2 1 2
     call baml.ops.equals_equals
     unary_op !
+    return
+}
+
+function type_reflection.union_order_eq_fn() -> bool {
+    load_type int | string
+    load_type string | int
+    call baml.ops.equals_equals
     return
 }

@@ -24,7 +24,7 @@ use std::collections::HashSet;
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{
     Diagnostic, DiagnosticId, DiagnosticIdentifierKind, DiagnosticPhase, DiagnosticText,
-    ParseError, ToDiagnostic,
+    ParseError, ToDiagnostic, runtime_type,
 };
 use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_hir_ty::diagnostics::TirTypeError;
@@ -292,7 +292,8 @@ fn parse_error_tainted_scopes(
         let span = match err {
             ParseError::UnexpectedToken { span, .. }
             | ParseError::UnexpectedEof { span, .. }
-            | ParseError::InvalidSyntax { span, .. } => span,
+            | ParseError::InvalidSyntax { span, .. }
+            | ParseError::RemovedFeature { span, .. } => span,
         };
         let fsid = index.scope_at_offset(span.range.start(), None);
         let scope = &index.scopes[fsid.index() as usize];
@@ -378,6 +379,54 @@ fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagn
                 .with_phase(DiagnosticPhase::Type),
         );
     }
+    // Mounted impls have no source span and therefore cannot enter the legacy
+    // loc-paired coherence report above.  Compare each source impl against the
+    // exported rows with hir_ty's shared overlap engine, anchoring only the
+    // editable source side and retaining a structural description of its
+    // mounted partner in the message.
+    for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, file) {
+        let Some(source) = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc) else {
+            continue;
+        };
+        for mounted_package in baml_compiler2_hir::package::mounted_package_names(db) {
+            let Some(interface) =
+                baml_compiler2_hir_ty::package_interface::mounted_interface(db, &mounted_package)
+            else {
+                continue;
+            };
+            for mounted in &interface.impls {
+                let overlap = baml_compiler2_hir_ty::coherence::source_mounted_impl_conflict(
+                    db, pkg_id, source, mounted,
+                );
+                if overlap == baml_compiler2_hir_ty::coherence::Overlap::No {
+                    continue;
+                }
+                let partner = format!(
+                    "implement {} for {}",
+                    mounted.interface.name, mounted.for_ty_pattern
+                );
+                let message = if overlap == baml_compiler2_hir_ty::coherence::Overlap::Unknown {
+                    format!(
+                        "these interface implementations are too complex to prove disjoint; \
+simplify the types involved so coherence can be decided (conflicts with the mounted \
+dependency's `{partner}`)"
+                    )
+                } else {
+                    format!(
+                        "overlapping interface implementations for the same receiver/interface \
+(conflicts with the mounted dependency's `{partner}`)"
+                    )
+                };
+                let range =
+                    baml_compiler2_ppir::item_data::impl_block_source_map(db, impl_loc).span;
+                diagnostics.push(
+                    Diagnostic::error(DiagnosticId::OverlappingImplements, message)
+                        .with_primary_span(Span::new(file_id, range))
+                        .with_phase(DiagnosticPhase::Type),
+                );
+            }
+        }
+    }
 
     // ── 2 + 3. Per-impl structural + signature/conformance diagnostics ────────
     //
@@ -387,6 +436,92 @@ fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagn
     // map; a `Method` / field-link / binding location may mark several sites.
     for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, file) {
         let sm = baml_compiler2_hir_ty::interfaces::impl_data_source_map(db, impl_loc);
+        // The loc-based declaration validator cannot open a source-less
+        // interface declaration. Replay its name-level conformance from the
+        // exported row so mounted and source dependency modes retain the same
+        // required/default/override surface.
+        if let Some(source) = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc)
+            && let Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
+                fields,
+                required_methods,
+                default_methods,
+                ..
+            }) = baml_compiler2_hir_ty::package_interface::mounted_type_row(
+                db,
+                &source.interface.name,
+            )
+        {
+            let block = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
+            let override_names: Vec<Name> = block
+                .methods
+                .iter()
+                .map(|method| {
+                    baml_compiler2_ppir::item_data::function_data(db, *method)
+                        .name
+                        .clone()
+                })
+                .collect();
+            let default_names: Vec<&Name> =
+                default_methods.iter().map(|method| &method.name).collect();
+            let mut mounted_structural = Vec::new();
+            for required in required_methods {
+                if !override_names.contains(&required.name)
+                    && !default_names.iter().any(|name| **name == required.name)
+                {
+                    mounted_structural.push((
+                        TirTypeError::MissingInterfaceMethod {
+                            interface: source.interface.name.clone(),
+                            method: required.name.clone(),
+                        },
+                        baml_compiler2_hir_ty::interfaces::ImplDiagnosticLocation::InterfaceTarget,
+                    ));
+                }
+            }
+            for (index, name) in override_names.iter().enumerate() {
+                if override_names[..index].contains(name) {
+                    continue;
+                }
+                let known = required_methods.iter().any(|method| method.name == *name)
+                    || default_names.iter().any(|default| **default == *name);
+                if !known {
+                    mounted_structural.push((
+                        TirTypeError::UnknownInterfaceMember {
+                            interface: source.interface.name.clone(),
+                            member: name.clone(),
+                        },
+                        baml_compiler2_hir_ty::interfaces::ImplDiagnosticLocation::Method(
+                            name.clone(),
+                        ),
+                    ));
+                }
+            }
+            let out_of_body = match &block.subject {
+                baml_compiler2_ppir::item_data::ImplSubjectData::InClass {
+                    out_of_body, ..
+                } => *out_of_body,
+                baml_compiler2_ppir::item_data::ImplSubjectData::Free { .. } => true,
+            };
+            if out_of_body && !fields.is_empty() {
+                mounted_structural.push((
+                    TirTypeError::OutOfBodyImplementsFieldInterface {
+                        interface: source.interface.name.clone(),
+                    },
+                    baml_compiler2_hir_ty::interfaces::ImplDiagnosticLocation::InterfaceTarget,
+                ));
+            }
+            for (error, loc) in &mounted_structural {
+                for span in impl_diagnostic_spans(loc, sm) {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            tir_type_error_to_diagnostic_id(error),
+                            error.to_string(),
+                        )
+                        .with_primary_span(span)
+                        .with_phase(DiagnosticPhase::Type),
+                    );
+                }
+            }
+        }
         // `impl_data` owns an impl's structural diagnostics whether or not it
         // fully resolves: an unresolved interface target still carries the
         // diagnostics it lowered (the bad target, the for-target, the bounds). A
@@ -741,6 +876,22 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                 let base = &segments[0];
                 let member = &segments[1];
                 if let Some(bounds) = generic_bounds.get(base) {
+                    // The legacy structural renderer below is loc-based. A
+                    // mounted bound has no InterfaceLoc; hir_ty's ordinary
+                    // projection lowering owns its loc-free requires walk and
+                    // diagnostics, so do not manufacture an "unknown" here.
+                    let has_mounted_bound = bounds.iter().any(|bound| {
+                        let TypeExprKind::Path { segments, .. } = &bound.kind else {
+                            return false;
+                        };
+                        segments.first().is_some_and(|package| {
+                            baml_compiler2_hir_ty::package_interface::mounted_interface(db, package)
+                                .is_some()
+                        })
+                    });
+                    if has_mounted_bound {
+                        return;
+                    }
                     // `T extends A & B` — the member may come from any conjunct,
                     // so the declarers are collected across the whole conjunction:
                     // none means unknown, two or more is ambiguous. The compiler
@@ -1019,9 +1170,29 @@ fn new_tir_diagnostic(
     span: Span,
     warning: bool,
 ) -> Diagnostic {
+    if let TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } = error {
+        return runtime_type::computed_generic_argument_requires_unreflect(name.as_str())
+            .with_primary_span(span)
+            .with_phase(DiagnosticPhase::Type);
+    }
+    if let TirTypeError::CannotConstructReflectionKind { class_name } = error {
+        return runtime_type::cannot_construct_reflection_kind(&class_name.render_user_facing())
+            .with_primary_span(span)
+            .with_phase(DiagnosticPhase::Type);
+    }
+    if matches!(error, TirTypeError::TypeMismatch { .. }) {
+        let base = runtime_type::mismatched_types();
+        let diagnostic = if warning {
+            Diagnostic::warning(base.id, base.message)
+        } else {
+            base
+        };
+        return diagnostic
+            .with_primary(span, message)
+            .with_phase(DiagnosticPhase::Type);
+    }
     let id = tir_type_error_to_diagnostic_id(error);
     let headline = match error {
-        TirTypeError::TypeMismatch { .. } => Some("mismatched types"),
         TirTypeError::MissingReturn { .. } => Some("missing return expression"),
         _ => None,
     };
@@ -1251,6 +1422,13 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnresolvedName { .. } | TirTypeError::UnresolvedPropertyShorthand { .. } => {
             DiagnosticId::UnknownVariable
         }
+        TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
+            runtime_type::computed_generic_argument_requires_unreflect(name.as_str()).id
+        }
+        TirTypeError::MountedPackageCallUnsupported { path } => {
+            runtime_type::mounted_package_call_unsupported(path.as_str()).id
+        }
+        TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
@@ -1306,6 +1484,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::GenericFunctionValueNotSpecialized { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::WrongTypeArgArity { .. } => DiagnosticId::ArgumentCountMismatch,
+        TirTypeError::RuntimeTypeArgumentOnStreamingCall { .. } => DiagnosticId::InvalidSyntax,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,

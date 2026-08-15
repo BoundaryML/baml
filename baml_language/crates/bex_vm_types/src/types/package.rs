@@ -1,9 +1,14 @@
+use std::sync::{Arc, atomic::AtomicBool};
+
 use baml_base::Name;
 use baml_type::{RuntimeTy, TyTemplate};
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
-use crate::{HeapPtr, ObjectIndex, types::interface::InterfaceBound};
+use crate::{
+    AtomicValueSlot, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, Value,
+    types::interface::InterfaceBound,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, BorshSerialize, BorshDeserialize)]
 pub struct LocalName {
@@ -15,6 +20,9 @@ pub struct LocalName {
 /// Contains lookups for named items defined in the package.
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Package {
+    /// Every source-visible exported declaration name, including aliases that
+    /// have no heap object of their own.
+    pub exported_names: Vec<LocalName>,
     /// Classes defined in the package.
     pub classes: IndexMap<LocalName, HeapPtr>,
     /// Enums defined in the package.
@@ -25,7 +33,73 @@ pub struct Package {
     /// May include implementations for interfaces in the package's dependencies.
     /// key references an `Object::Interface` and each value is an `Object::ImplRule`
     pub impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
+    /// Exported free functions, keyed by their package-local name. This is the
+    /// runtime projection of the package surface, shared by static and dynamic
+    /// packages so reflection never has to deserialize compiler IR.
+    pub functions: IndexMap<LocalName, HeapPtr>,
     pub recursive_type_aliases: IndexMap<LocalName, RuntimeTy>,
+    /// Enriched, source-less compiler interface for mounting this package under
+    /// an alias in a later `Package.compile` call.
+    pub interface_blob: Vec<u8>,
+    /// Compiler-synthesized test registrar for this package, when it has tests.
+    pub test_init: Option<HeapPtr>,
+    /// Exact runtime type values attached by `Package.with_types`.
+    #[borsh(skip)]
+    pub mounted_types: IndexMap<String, HeapPtr>,
+    /// Present only for a package produced by `reflect.Package.compile`.
+    #[borsh(skip)]
+    pub runtime: Option<Box<RuntimePackage>>,
+    /// Present only for the package-shaped payload owned by a Session.
+    #[borsh(skip)]
+    pub session: Option<Box<SessionState>>,
+}
+
+/// Compiler-free persistent state of one `reflect.Session`.
+#[derive(Clone, Debug)]
+pub struct SessionState {
+    /// Committed, hygienically lowered source, replayed into every fresh DB.
+    pub history: IndexMap<String, String>,
+    /// Newest source-visible name to its persistent generated symbol.
+    pub visible: IndexMap<String, crate::SessionVisibleSymbol>,
+    /// Atomic single-eval admission bit shared with RAII compile artifacts.
+    pub busy: Arc<AtomicBool>,
+    pub submission_counter: u64,
+}
+
+/// Runtime-only package image grafted into the moving heap.
+#[derive(Clone, Debug)]
+pub struct RuntimePackage {
+    /// Linked local object table. Imported entries point into static or other
+    /// runtime packages; owned entries point back into this package's graph.
+    pub objects: Box<[HeapPtr]>,
+    /// Newest-wins dynamic object link table. Old objects stay in `objects`,
+    /// while later submissions resolve a repeated source name to this entry.
+    pub object_names: IndexMap<String, HeapPtr>,
+    /// Package-local global slots, mutable only while `$init` is running.
+    pub globals: Box<[AtomicValueSlot]>,
+    /// Fully-qualified function/let name to this image's local global slot.
+    pub global_names: IndexMap<String, usize>,
+    /// Created-once reflected class, enum, and interface type values, keyed by
+    /// source-visible FQN.
+    pub type_values: IndexMap<String, HeapPtr>,
+    /// Compiler warnings retained on a successful package.
+    pub diagnostics: Vec<RuntimeCompileDiagnostic>,
+    /// Runtime package objects imported by this image.
+    pub dependencies: Box<[HeapPtr]>,
+    /// Direct import alias to runtime package. Kept alongside the dense list so
+    /// runtime type names such as `dep.models.Base` resolve by their compiler
+    /// package identity.
+    pub dependency_names: IndexMap<String, HeapPtr>,
+    /// The candidate `$init`, if one exists.
+    pub init: Option<HeapPtr>,
+    /// False while `$init` may write package globals; true after commit.
+    pub initialized: bool,
+}
+
+impl RuntimePackage {
+    pub fn load_global(&self, index: usize) -> Option<Value> {
+        self.globals.get(index).map(AtomicValueSlot::load)
+    }
 }
 
 /// The serialized, global-index-keyed twin of [`Package`]. The `Program` must be
@@ -37,13 +111,20 @@ pub struct Package {
 /// functions are carried as pooled objects referenced by index.
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct ProgramPackage {
+    pub exported_names: Vec<LocalName>,
     pub classes: IndexMap<LocalName, ObjectIndex>,
     pub enums: IndexMap<LocalName, ObjectIndex>,
     pub interfaces: IndexMap<LocalName, ObjectIndex>,
+    /// Exported free functions only (methods and compiler helpers are excluded).
+    pub functions: IndexMap<LocalName, ObjectIndex>,
     /// Implemented-interface `ObjectIndex` → the impl rules of it declared in
     /// this package (may target an interface from a dependency).
     pub impl_rules: IndexMap<ObjectIndex, Vec<ProgramImplRule>>,
     pub recursive_type_aliases: IndexMap<LocalName, RuntimeTy>,
+    /// `borsh(PackageInterface)`, captured at build time and embedded in packs.
+    pub interface_blob: Vec<u8>,
+    /// The package's synthesized `$init_test`, if present.
+    pub test_init: Option<ObjectIndex>,
 }
 
 impl ProgramPackage {
@@ -61,10 +142,13 @@ impl ProgramPackage {
     /// The full-compile emit and the incremental linker both apply this so their
     /// `Program`s stay byte-identical.
     pub fn sort_maps(&mut self) {
+        self.exported_names.sort();
+        self.exported_names.dedup();
         self.classes.sort_keys();
         self.enums.sort_keys();
         self.recursive_type_aliases.sort_keys();
         self.interfaces.sort_keys();
+        self.functions.sort_keys();
         self.impl_rules.sort_keys();
         for rules in self.impl_rules.values_mut() {
             rules.sort_by_cached_key(|rule| {

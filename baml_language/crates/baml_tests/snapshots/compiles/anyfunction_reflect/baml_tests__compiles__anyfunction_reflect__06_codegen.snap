@@ -1,6 +1,108 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function $init() -> null {
+    call $init_let_0
+    store_global user.RuntimeEnumClient
+    load_const null
+    return
+}
+
+function user.RuntimeClassify(input: string, client: ai.Client | null) -> #0 {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type #0
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_type #0
+    load_var input
+    call user.RuntimeClassify$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<#0, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function user.RuntimeClassify$parse(json: string) -> #0 {
+    load_type #0
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function user.RuntimeClassify$render_prompt(input: string) -> ai.Prompt {
+    load_type #0
+    load_var input
+    call user.RuntimeClassify$spec
+    store_var _2
+    load_type #0
+    call ai.wire.render_output_format
+    store_var _4
+    load_type #0
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function user.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<#0> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "RuntimeClassify"
+    load_deref ?1
+    load_const "input"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_type #0
+    load_var input
+    make_closure .<lambda(RuntimeClassify$spec, 0)>, captures=1, ntypeargs=1
+    load_var _4
+    load_global user.RuntimeEnumClient
+    load_type #0
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function user.RuntimeClassify$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<#0 | null, #0> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type #0
+    load_var input
+    call user.RuntimeClassify$spec
+    store_var _4
+    load_type #0 | null
+    load_type #0
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
 function user.bare_and_pinned() -> int {
     load_const user.web_search
     store_var g
@@ -24,9 +126,39 @@ function user.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns =
     return
 }
 
+function user.runtime_enum_llm_companions_compile() -> string {
+    load_const "RED"
+    load_const "k7"
+    load_const "warm"
+    load_const <omitted>
+    load_const <omitted>
+    call baml.reflect.enum.value
+    store_var _3
+    load_const "Category"
+    load_var _3
+    load_const "BLUE"
+    load_type string | baml.reflect.enum.Value
+    alloc_array 2
+    call baml.reflect.enum.new
+    store_var category
+    load_var category
+    load_const "sample"
+    call user.RuntimeClassify$render_prompt
+    call ai.Prompt.text
+    store_var prompt
+    load_var category
+    load_const "\"k7\""
+    call user.RuntimeClassify$parse
+    call baml.reflect.enum.get_value
+    store_var _10
+    load_var2 3 4
+    bin_op +
+    return
+}
+
 function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> string {
     load_var f
-    call reflect.signature
+    call baml.reflect.signature
     store_var sig
     load_var sig
     load_field .returns
@@ -51,14 +183,14 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
     store_var parts
     load_var sig
     load_field .args
-    load_type baml.iter.Iterable<Error = never, Item = reflect.Arg>
+    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.Arg>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _14
 
   L0:
     load_var _14
-    load_type baml.iter.Iterator<Error = never, Item = reflect.Arg>
+    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.Arg>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _15
@@ -85,7 +217,7 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
 
   L2:
     load_type string
-    load_type reflect.Arg
+    load_type baml.reflect.Arg
     load_var sig
     load_field .opts
     call baml.Map.keys
@@ -109,7 +241,7 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
     load_var _29
     store_var key
     load_type string
-    load_type reflect.Arg
+    load_type baml.reflect.Arg
     load_var sig
     load_field .opts
     load_var key
@@ -166,7 +298,7 @@ function user.typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] 
     load_type string | Doc[]
     load_type ToolError
     load_var2 4 2
-    call reflect.call_any
+    call baml.reflect.call_any
     jump L9
     load_var e
     is_type ToolError
@@ -175,7 +307,7 @@ function user.typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] 
 
   L4:
     load_var e
-    is_type reflect.InvalidArgumentError
+    is_type baml.reflect.InvalidArgumentError
     pop_jump_if_false L5
     jump L6
 

@@ -10,13 +10,13 @@ class Box<T> {
     value T
 
     function describe(self) -> string {
-        reflect.type_of<T>().to_string()
+        type.of<T>().to_string()
     }
 }
 
 class Box2<T> {
     function make_describer(self) -> () -> string throws never {
-        return () -> string { reflect.type_of<T>().to_string() }
+        return () -> string { type.of<T>().to_string() }
     }
 }
 
@@ -48,7 +48,7 @@ function method_sees_composite_class_type_arg_fn() -> string {
     outer.describe()
 }
 
-// NOTE: reflect.type_of<T>().to_string() includes the namespace segment, so
+// NOTE: type.of<T>().to_string() includes the namespace segment, so
 // the result is "class_type_args_at_runtime.Box<int>", not bare "Box<int>".
 test "method_sees_composite_class_type_arg" {
     assert.equal(method_sees_composite_class_type_arg_fn(), "class_type_args_at_runtime.Box<int>")

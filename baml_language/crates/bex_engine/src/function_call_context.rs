@@ -61,6 +61,9 @@ pub struct FunctionCallContext {
     /// the callee's generic params in `set_entry_point_with_type_args`.
     /// Empty for non-generic / internal calls.
     pub type_args: IndexMap<String, baml_type::RuntimeTy>,
+    /// Definition graphs accompanying entries in `type_args`. Only host
+    /// reflected runtime types populate this map.
+    pub type_defs: IndexMap<String, bex_vm_types::types::PortableTypeDef>,
 }
 
 /// Builder for `FunctionCallContext`.
@@ -71,6 +74,7 @@ pub struct FunctionCallContextBuilder {
     cancel: Option<CancellationToken>,
     profile_enabled: bool,
     type_args: Option<IndexMap<String, baml_type::RuntimeTy>>,
+    type_defs: Option<IndexMap<String, bex_vm_types::types::PortableTypeDef>>,
 }
 
 impl FunctionCallContextBuilder {
@@ -82,6 +86,7 @@ impl FunctionCallContextBuilder {
             cancel: None,
             profile_enabled: true,
             type_args: None,
+            type_defs: None,
         }
     }
 
@@ -94,6 +99,7 @@ impl FunctionCallContextBuilder {
             cancel: self.cancel.unwrap_or_default(),
             profile_enabled: self.profile_enabled,
             type_args: self.type_args.unwrap_or_default(),
+            type_defs: self.type_defs.unwrap_or_default(),
         }
     }
 
@@ -121,6 +127,15 @@ impl FunctionCallContextBuilder {
     #[must_use]
     pub fn with_type_args(mut self, type_args: IndexMap<String, baml_type::RuntimeTy>) -> Self {
         self.type_args = Some(type_args);
+        self
+    }
+
+    #[must_use]
+    pub fn with_type_defs(
+        mut self,
+        type_defs: IndexMap<String, bex_vm_types::types::PortableTypeDef>,
+    ) -> Self {
+        self.type_defs = Some(type_defs);
         self
     }
 

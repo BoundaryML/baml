@@ -275,11 +275,11 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
                         changed = true;
                     }
                 }
-                Symbol::TypeAlias(alias) => {
-                    if supported_aliases.contains(&fqn) && !alias_definition_ok(alias, &ctx) {
-                        supported_aliases.remove(&fqn);
-                        changed = true;
-                    }
+                Symbol::TypeAlias(alias)
+                    if supported_aliases.contains(&fqn) && !alias_definition_ok(alias, &ctx) =>
+                {
+                    supported_aliases.remove(&fqn);
+                    changed = true;
                 }
                 _ => {}
             }

@@ -26,7 +26,7 @@ from baml_bridge.cffi.v1 import baml_handle_pb2 as baml__bridge_dot_cffi_dot_v1_
 from baml_bridge.cffi.v1 import baml_type_pb2 as baml__bridge_dot_cffi_dot_v1_dot_baml__type__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\'baml_bridge/cffi/v1/baml_outbound.proto\x12\x13\x62\x61ml_bridge.cffi.v1\x1a%baml_bridge/cffi/v1/baml_handle.proto\x1a#baml_bridge/cffi/v1/baml_type.proto\"\xc6\x01\n\x12\x42\x61mlOutboundResult\x12\x34\n\x02ok\x18\x01 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValueH\x00\x12\x37\n\x05\x65rror\x18\x02 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundErrorH\x00\x12\x37\n\x05panic\x18\x03 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundPanicH\x00\x42\x08\n\x06result\"Y\n\x11\x42\x61mlOutboundError\x12\x35\n\x05value\x18\x01 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\x12\r\n\x05trace\x18\x02 \x03(\t\"\x83\x01\n\x11\x42\x61mlOutboundPanic\x12\x35\n\x05value\x18\x01 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\x12\r\n\x05trace\x18\x02 \x03(\t\x12\x15\n\ris_exit_panic\x18\x03 \x01(\x08\x12\x11\n\texit_code\x18\x04 \x01(\x03\"\xca\x06\n\x11\x42\x61mlOutboundValue\x12\x38\n\nnull_value\x18\x02 \x01(\x0b\x32\".baml_bridge.cffi.v1.BamlValueNullH\x00\x12\x16\n\x0cstring_value\x18\x03 \x01(\tH\x00\x12\x13\n\tint_value\x18\x04 \x01(\x03H\x00\x12\x15\n\x0b\x66loat_value\x18\x05 \x01(\x01H\x00\x12\x14\n\nbool_value\x18\x06 \x01(\x08H\x00\x12:\n\x0b\x63lass_value\x18\x07 \x01(\x0b\x32#.baml_bridge.cffi.v1.BamlValueClassH\x00\x12\x38\n\nenum_value\x18\x08 \x01(\x0b\x32\".baml_bridge.cffi.v1.BamlValueEnumH\x00\x12>\n\rliteral_value\x18\t \x01(\x0b\x32%.baml_bridge.cffi.v1.BamlLiteralValueH\x00\x12\x38\n\nlist_value\x18\x0b \x01(\x0b\x32\".baml_bridge.cffi.v1.BamlValueListH\x00\x12\x36\n\tmap_value\x18\x0c \x01(\x0b\x32!.baml_bridge.cffi.v1.BamlValueMapH\x00\x12I\n\x13union_variant_value\x18\r \x01(\x0b\x32*.baml_bridge.cffi.v1.BamlValueUnionVariantH\x00\x12?\n\x0chandle_value\x18\x10 \x01(\x0b\x32\'.baml_bridge.cffi.v1.BamlOutboundHandleH\x00\x12:\n\x0bmedia_value\x18\x11 \x01(\x0b\x32#.baml_bridge.cffi.v1.BamlValueMediaH\x00\x12\x43\n\x10prompt_ast_value\x18\x12 \x01(\x0b\x32\'.baml_bridge.cffi.v1.BamlValuePromptAstH\x00\x12\x1a\n\x10uint8array_value\x18\x13 \x01(\x0cH\x00\x12\x16\n\x0c\x62igint_value\x18\x14 \x01(\tH\x00\x12/\n\x08ty_value\x18\x15 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTyH\x00\x42\x07\n\x05value\"\x84\x01\n\x12\x42\x61mlOutboundHandle\x12\x0b\n\x03key\x18\x01 \x01(\x04\x12\x38\n\x0bhandle_type\x18\x02 \x01(\x0e\x32#.baml_bridge.cffi.v1.BamlHandleType\x12\'\n\x02ty\x18\x03 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\"\x0f\n\rBamlValueNull\"v\n\rBamlValueList\x12.\n\titem_type\x18\x01 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\x12\x35\n\x05items\x18\x02 \x03(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\"Z\n\x14\x42\x61mlOutboundMapEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x35\n\x05value\x18\x02 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\"\xaa\x01\n\x0c\x42\x61mlValueMap\x12-\n\x08key_type\x18\x01 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\x12/\n\nvalue_type\x18\x02 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\x12:\n\x07\x65ntries\x18\x03 \x03(\x0b\x32).baml_bridge.cffi.v1.BamlOutboundMapEntry\"\x89\x01\n\x0e\x42\x61mlValueClass\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x39\n\x06\x66ields\x18\x02 \x03(\x0b\x32).baml_bridge.cffi.v1.BamlOutboundMapEntry\x12.\n\ttype_args\x18\x03 \x03(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\"@\n\rBamlValueEnum\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\x12\x12\n\nis_dynamic\x18\x03 \x01(\x08\"\x9b\x02\n\x15\x42\x61mlValueUnionVariant\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0bis_optional\x18\x02 \x01(\x08\x12\x19\n\x11is_single_pattern\x18\x03 \x01(\x08\x12.\n\tself_type\x18\x04 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\x12\x19\n\x11value_option_name\x18\x05 \x01(\t\x12\x35\n\x05value\x18\x06 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\x12\"\n\x15selected_option_index\x18\x08 \x01(\rH\x00\x88\x01\x01\x42\x18\n\x16_selected_option_indexJ\x04\x08\x07\x10\x08\"\xa3\x01\n\x0e\x42\x61mlValueMedia\x12\x31\n\x05media\x18\x01 \x01(\x0e\x32\".baml_bridge.cffi.v1.MediaTypeEnum\x12\x16\n\tmime_type\x18\x02 \x01(\tH\x01\x88\x01\x01\x12\r\n\x03url\x18\x03 \x01(\tH\x00\x12\x10\n\x06\x62\x61se64\x18\x04 \x01(\tH\x00\x12\x0e\n\x04\x66ile\x18\x05 \x01(\tH\x00\x42\x07\n\x05valueB\x0c\n\n_mime_type\"\xe6\x01\n\x12\x42\x61mlValuePromptAst\x12?\n\x06simple\x18\x01 \x01(\x0b\x32-.baml_bridge.cffi.v1.BamlValuePromptAstSimpleH\x00\x12\x41\n\x07message\x18\x02 \x01(\x0b\x32..baml_bridge.cffi.v1.BamlValuePromptAstMessageH\x00\x12\x43\n\x08multiple\x18\x03 \x01(\x0b\x32/.baml_bridge.cffi.v1.BamlValuePromptAstMultipleH\x00\x42\x07\n\x05value\"\x83\x01\n\x19\x42\x61mlValuePromptAstMessage\x12\x0c\n\x04role\x18\x01 \x01(\t\x12>\n\x07\x63ontent\x18\x02 \x01(\x0b\x32-.baml_bridge.cffi.v1.BamlValuePromptAstSimple\x12\x18\n\x10metadata_as_json\x18\x03 \x01(\t\"T\n\x1a\x42\x61mlValuePromptAstMultiple\x12\x36\n\x05items\x18\x01 \x03(\x0b\x32\'.baml_bridge.cffi.v1.BamlValuePromptAst\"\xb6\x01\n\x18\x42\x61mlValuePromptAstSimple\x12\x10\n\x06string\x18\x01 \x01(\tH\x00\x12\x34\n\x05media\x18\x02 \x01(\x0b\x32#.baml_bridge.cffi.v1.BamlValueMediaH\x00\x12I\n\x08multiple\x18\x03 \x01(\x0b\x32\x35.baml_bridge.cffi.v1.BamlValuePromptAstSimpleMultipleH\x00\x42\x07\n\x05value\"`\n BamlValuePromptAstSimpleMultiple\x12<\n\x05items\x18\x01 \x03(\x0b\x32-.baml_bridge.cffi.v1.BamlValuePromptAstSimple\"B\n\x0e\x42\x61mlToHostCall\x12\x30\n\x04\x61rgs\x18\x01 \x03(\x0b\x32\".baml_bridge.cffi.v1.BamlToHostArg\"q\n\rBamlToHostArg\x12\x35\n\x05value\x18\x01 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\x12\x10\n\x08\x61rg_name\x18\x02 \x01(\t\x12\x17\n\x0fis_optional_arg\x18\x03 \x01(\x08\"\x8f\x01\n\x10\x42\x61mlLiteralValue\x12\x16\n\x0cstring_value\x18\x01 \x01(\tH\x00\x12\x13\n\tint_value\x18\x02 \x01(\x03H\x00\x12\x14\n\nbool_value\x18\x03 \x01(\x08H\x00\x12\x16\n\x0c\x62igint_value\x18\x04 \x01(\tH\x00\x12\x15\n\x0b\x66loat_value\x18\x05 \x01(\tH\x00\x42\t\n\x07literal*`\n\rMediaTypeEnum\x12\x1a\n\x16MEDIA_TYPE_UNSPECIFIED\x10\x00\x12\t\n\x05IMAGE\x10\x01\x12\t\n\x05\x41UDIO\x10\x02\x12\x07\n\x03PDF\x10\x03\x12\t\n\x05VIDEO\x10\x04\x12\t\n\x05OTHER\x10\x05\x42\nH\x03Z\x06./cffib\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\'baml_bridge/cffi/v1/baml_outbound.proto\x12\x13\x62\x61ml_bridge.cffi.v1\x1a%baml_bridge/cffi/v1/baml_handle.proto\x1a#baml_bridge/cffi/v1/baml_type.proto\"\xc6\x01\n\x12\x42\x61mlOutboundResult\x12\x34\n\x02ok\x18\x01 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValueH\x00\x12\x37\n\x05\x65rror\x18\x02 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundErrorH\x00\x12\x37\n\x05panic\x18\x03 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundPanicH\x00\x42\x08\n\x06result\"Y\n\x11\x42\x61mlOutboundError\x12\x35\n\x05value\x18\x01 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\x12\r\n\x05trace\x18\x02 \x03(\t\"\x83\x01\n\x11\x42\x61mlOutboundPanic\x12\x35\n\x05value\x18\x01 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\x12\r\n\x05trace\x18\x02 \x03(\t\x12\x15\n\ris_exit_panic\x18\x03 \x01(\x08\x12\x11\n\texit_code\x18\x04 \x01(\x03\"\x82\x07\n\x11\x42\x61mlOutboundValue\x12\x38\n\nnull_value\x18\x02 \x01(\x0b\x32\".baml_bridge.cffi.v1.BamlValueNullH\x00\x12\x16\n\x0cstring_value\x18\x03 \x01(\tH\x00\x12\x13\n\tint_value\x18\x04 \x01(\x03H\x00\x12\x15\n\x0b\x66loat_value\x18\x05 \x01(\x01H\x00\x12\x14\n\nbool_value\x18\x06 \x01(\x08H\x00\x12:\n\x0b\x63lass_value\x18\x07 \x01(\x0b\x32#.baml_bridge.cffi.v1.BamlValueClassH\x00\x12\x38\n\nenum_value\x18\x08 \x01(\x0b\x32\".baml_bridge.cffi.v1.BamlValueEnumH\x00\x12>\n\rliteral_value\x18\t \x01(\x0b\x32%.baml_bridge.cffi.v1.BamlLiteralValueH\x00\x12\x38\n\nlist_value\x18\x0b \x01(\x0b\x32\".baml_bridge.cffi.v1.BamlValueListH\x00\x12\x36\n\tmap_value\x18\x0c \x01(\x0b\x32!.baml_bridge.cffi.v1.BamlValueMapH\x00\x12I\n\x13union_variant_value\x18\r \x01(\x0b\x32*.baml_bridge.cffi.v1.BamlValueUnionVariantH\x00\x12?\n\x0chandle_value\x18\x10 \x01(\x0b\x32\'.baml_bridge.cffi.v1.BamlOutboundHandleH\x00\x12:\n\x0bmedia_value\x18\x11 \x01(\x0b\x32#.baml_bridge.cffi.v1.BamlValueMediaH\x00\x12\x43\n\x10prompt_ast_value\x18\x12 \x01(\x0b\x32\'.baml_bridge.cffi.v1.BamlValuePromptAstH\x00\x12\x1a\n\x10uint8array_value\x18\x13 \x01(\x0cH\x00\x12\x16\n\x0c\x62igint_value\x18\x14 \x01(\tH\x00\x12/\n\x08ty_value\x18\x15 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTyH\x00\x12\x36\n\x0cty_def_value\x18\x16 \x01(\x0b\x32\x1e.baml_bridge.cffi.v1.BamlTyDefH\x00\x42\x07\n\x05value\"\x84\x01\n\x12\x42\x61mlOutboundHandle\x12\x0b\n\x03key\x18\x01 \x01(\x04\x12\x38\n\x0bhandle_type\x18\x02 \x01(\x0e\x32#.baml_bridge.cffi.v1.BamlHandleType\x12\'\n\x02ty\x18\x03 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\"\x0f\n\rBamlValueNull\"v\n\rBamlValueList\x12.\n\titem_type\x18\x01 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\x12\x35\n\x05items\x18\x02 \x03(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\"Z\n\x14\x42\x61mlOutboundMapEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x35\n\x05value\x18\x02 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\"\xaa\x01\n\x0c\x42\x61mlValueMap\x12-\n\x08key_type\x18\x01 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\x12/\n\nvalue_type\x18\x02 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\x12:\n\x07\x65ntries\x18\x03 \x03(\x0b\x32).baml_bridge.cffi.v1.BamlOutboundMapEntry\"\x89\x01\n\x0e\x42\x61mlValueClass\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x39\n\x06\x66ields\x18\x02 \x03(\x0b\x32).baml_bridge.cffi.v1.BamlOutboundMapEntry\x12.\n\ttype_args\x18\x03 \x03(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\"@\n\rBamlValueEnum\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\x12\x12\n\nis_dynamic\x18\x03 \x01(\x08\"\x9b\x02\n\x15\x42\x61mlValueUnionVariant\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0bis_optional\x18\x02 \x01(\x08\x12\x19\n\x11is_single_pattern\x18\x03 \x01(\x08\x12.\n\tself_type\x18\x04 \x01(\x0b\x32\x1b.baml_bridge.cffi.v1.BamlTy\x12\x19\n\x11value_option_name\x18\x05 \x01(\t\x12\x35\n\x05value\x18\x06 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\x12\"\n\x15selected_option_index\x18\x08 \x01(\rH\x00\x88\x01\x01\x42\x18\n\x16_selected_option_indexJ\x04\x08\x07\x10\x08\"\xa3\x01\n\x0e\x42\x61mlValueMedia\x12\x31\n\x05media\x18\x01 \x01(\x0e\x32\".baml_bridge.cffi.v1.MediaTypeEnum\x12\x16\n\tmime_type\x18\x02 \x01(\tH\x01\x88\x01\x01\x12\r\n\x03url\x18\x03 \x01(\tH\x00\x12\x10\n\x06\x62\x61se64\x18\x04 \x01(\tH\x00\x12\x0e\n\x04\x66ile\x18\x05 \x01(\tH\x00\x42\x07\n\x05valueB\x0c\n\n_mime_type\"\xe6\x01\n\x12\x42\x61mlValuePromptAst\x12?\n\x06simple\x18\x01 \x01(\x0b\x32-.baml_bridge.cffi.v1.BamlValuePromptAstSimpleH\x00\x12\x41\n\x07message\x18\x02 \x01(\x0b\x32..baml_bridge.cffi.v1.BamlValuePromptAstMessageH\x00\x12\x43\n\x08multiple\x18\x03 \x01(\x0b\x32/.baml_bridge.cffi.v1.BamlValuePromptAstMultipleH\x00\x42\x07\n\x05value\"\x83\x01\n\x19\x42\x61mlValuePromptAstMessage\x12\x0c\n\x04role\x18\x01 \x01(\t\x12>\n\x07\x63ontent\x18\x02 \x01(\x0b\x32-.baml_bridge.cffi.v1.BamlValuePromptAstSimple\x12\x18\n\x10metadata_as_json\x18\x03 \x01(\t\"T\n\x1a\x42\x61mlValuePromptAstMultiple\x12\x36\n\x05items\x18\x01 \x03(\x0b\x32\'.baml_bridge.cffi.v1.BamlValuePromptAst\"\xb6\x01\n\x18\x42\x61mlValuePromptAstSimple\x12\x10\n\x06string\x18\x01 \x01(\tH\x00\x12\x34\n\x05media\x18\x02 \x01(\x0b\x32#.baml_bridge.cffi.v1.BamlValueMediaH\x00\x12I\n\x08multiple\x18\x03 \x01(\x0b\x32\x35.baml_bridge.cffi.v1.BamlValuePromptAstSimpleMultipleH\x00\x42\x07\n\x05value\"`\n BamlValuePromptAstSimpleMultiple\x12<\n\x05items\x18\x01 \x03(\x0b\x32-.baml_bridge.cffi.v1.BamlValuePromptAstSimple\"B\n\x0e\x42\x61mlToHostCall\x12\x30\n\x04\x61rgs\x18\x01 \x03(\x0b\x32\".baml_bridge.cffi.v1.BamlToHostArg\"q\n\rBamlToHostArg\x12\x35\n\x05value\x18\x01 \x01(\x0b\x32&.baml_bridge.cffi.v1.BamlOutboundValue\x12\x10\n\x08\x61rg_name\x18\x02 \x01(\t\x12\x17\n\x0fis_optional_arg\x18\x03 \x01(\x08\"\x8f\x01\n\x10\x42\x61mlLiteralValue\x12\x16\n\x0cstring_value\x18\x01 \x01(\tH\x00\x12\x13\n\tint_value\x18\x02 \x01(\x03H\x00\x12\x14\n\nbool_value\x18\x03 \x01(\x08H\x00\x12\x16\n\x0c\x62igint_value\x18\x04 \x01(\tH\x00\x12\x15\n\x0b\x66loat_value\x18\x05 \x01(\tH\x00\x42\t\n\x07literal*`\n\rMediaTypeEnum\x12\x1a\n\x16MEDIA_TYPE_UNSPECIFIED\x10\x00\x12\t\n\x05IMAGE\x10\x01\x12\t\n\x05\x41UDIO\x10\x02\x12\x07\n\x03PDF\x10\x03\x12\t\n\x05VIDEO\x10\x04\x12\t\n\x05OTHER\x10\x05\x42\nH\x03Z\x06./cffib\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,8 +34,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'baml_bridge.cffi.v1.baml_ou
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'H\003Z\006./cffi'
-  _globals['_MEDIATYPEENUM']._serialized_start=3671
-  _globals['_MEDIATYPEENUM']._serialized_end=3767
+  _globals['_MEDIATYPEENUM']._serialized_start=3727
+  _globals['_MEDIATYPEENUM']._serialized_end=3823
   _globals['_BAMLOUTBOUNDRESULT']._serialized_start=141
   _globals['_BAMLOUTBOUNDRESULT']._serialized_end=339
   _globals['_BAMLOUTBOUNDERROR']._serialized_start=341
@@ -43,39 +43,39 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_BAMLOUTBOUNDPANIC']._serialized_start=433
   _globals['_BAMLOUTBOUNDPANIC']._serialized_end=564
   _globals['_BAMLOUTBOUNDVALUE']._serialized_start=567
-  _globals['_BAMLOUTBOUNDVALUE']._serialized_end=1409
-  _globals['_BAMLOUTBOUNDHANDLE']._serialized_start=1412
-  _globals['_BAMLOUTBOUNDHANDLE']._serialized_end=1544
-  _globals['_BAMLVALUENULL']._serialized_start=1546
-  _globals['_BAMLVALUENULL']._serialized_end=1561
-  _globals['_BAMLVALUELIST']._serialized_start=1563
-  _globals['_BAMLVALUELIST']._serialized_end=1681
-  _globals['_BAMLOUTBOUNDMAPENTRY']._serialized_start=1683
-  _globals['_BAMLOUTBOUNDMAPENTRY']._serialized_end=1773
-  _globals['_BAMLVALUEMAP']._serialized_start=1776
-  _globals['_BAMLVALUEMAP']._serialized_end=1946
-  _globals['_BAMLVALUECLASS']._serialized_start=1949
-  _globals['_BAMLVALUECLASS']._serialized_end=2086
-  _globals['_BAMLVALUEENUM']._serialized_start=2088
-  _globals['_BAMLVALUEENUM']._serialized_end=2152
-  _globals['_BAMLVALUEUNIONVARIANT']._serialized_start=2155
-  _globals['_BAMLVALUEUNIONVARIANT']._serialized_end=2438
-  _globals['_BAMLVALUEMEDIA']._serialized_start=2441
-  _globals['_BAMLVALUEMEDIA']._serialized_end=2604
-  _globals['_BAMLVALUEPROMPTAST']._serialized_start=2607
-  _globals['_BAMLVALUEPROMPTAST']._serialized_end=2837
-  _globals['_BAMLVALUEPROMPTASTMESSAGE']._serialized_start=2840
-  _globals['_BAMLVALUEPROMPTASTMESSAGE']._serialized_end=2971
-  _globals['_BAMLVALUEPROMPTASTMULTIPLE']._serialized_start=2973
-  _globals['_BAMLVALUEPROMPTASTMULTIPLE']._serialized_end=3057
-  _globals['_BAMLVALUEPROMPTASTSIMPLE']._serialized_start=3060
-  _globals['_BAMLVALUEPROMPTASTSIMPLE']._serialized_end=3242
-  _globals['_BAMLVALUEPROMPTASTSIMPLEMULTIPLE']._serialized_start=3244
-  _globals['_BAMLVALUEPROMPTASTSIMPLEMULTIPLE']._serialized_end=3340
-  _globals['_BAMLTOHOSTCALL']._serialized_start=3342
-  _globals['_BAMLTOHOSTCALL']._serialized_end=3408
-  _globals['_BAMLTOHOSTARG']._serialized_start=3410
-  _globals['_BAMLTOHOSTARG']._serialized_end=3523
-  _globals['_BAMLLITERALVALUE']._serialized_start=3526
-  _globals['_BAMLLITERALVALUE']._serialized_end=3669
+  _globals['_BAMLOUTBOUNDVALUE']._serialized_end=1465
+  _globals['_BAMLOUTBOUNDHANDLE']._serialized_start=1468
+  _globals['_BAMLOUTBOUNDHANDLE']._serialized_end=1600
+  _globals['_BAMLVALUENULL']._serialized_start=1602
+  _globals['_BAMLVALUENULL']._serialized_end=1617
+  _globals['_BAMLVALUELIST']._serialized_start=1619
+  _globals['_BAMLVALUELIST']._serialized_end=1737
+  _globals['_BAMLOUTBOUNDMAPENTRY']._serialized_start=1739
+  _globals['_BAMLOUTBOUNDMAPENTRY']._serialized_end=1829
+  _globals['_BAMLVALUEMAP']._serialized_start=1832
+  _globals['_BAMLVALUEMAP']._serialized_end=2002
+  _globals['_BAMLVALUECLASS']._serialized_start=2005
+  _globals['_BAMLVALUECLASS']._serialized_end=2142
+  _globals['_BAMLVALUEENUM']._serialized_start=2144
+  _globals['_BAMLVALUEENUM']._serialized_end=2208
+  _globals['_BAMLVALUEUNIONVARIANT']._serialized_start=2211
+  _globals['_BAMLVALUEUNIONVARIANT']._serialized_end=2494
+  _globals['_BAMLVALUEMEDIA']._serialized_start=2497
+  _globals['_BAMLVALUEMEDIA']._serialized_end=2660
+  _globals['_BAMLVALUEPROMPTAST']._serialized_start=2663
+  _globals['_BAMLVALUEPROMPTAST']._serialized_end=2893
+  _globals['_BAMLVALUEPROMPTASTMESSAGE']._serialized_start=2896
+  _globals['_BAMLVALUEPROMPTASTMESSAGE']._serialized_end=3027
+  _globals['_BAMLVALUEPROMPTASTMULTIPLE']._serialized_start=3029
+  _globals['_BAMLVALUEPROMPTASTMULTIPLE']._serialized_end=3113
+  _globals['_BAMLVALUEPROMPTASTSIMPLE']._serialized_start=3116
+  _globals['_BAMLVALUEPROMPTASTSIMPLE']._serialized_end=3298
+  _globals['_BAMLVALUEPROMPTASTSIMPLEMULTIPLE']._serialized_start=3300
+  _globals['_BAMLVALUEPROMPTASTSIMPLEMULTIPLE']._serialized_end=3396
+  _globals['_BAMLTOHOSTCALL']._serialized_start=3398
+  _globals['_BAMLTOHOSTCALL']._serialized_end=3464
+  _globals['_BAMLTOHOSTARG']._serialized_start=3466
+  _globals['_BAMLTOHOSTARG']._serialized_end=3579
+  _globals['_BAMLLITERALVALUE']._serialized_start=3582
+  _globals['_BAMLLITERALVALUE']._serialized_end=3725
 # @@protoc_insertion_point(module_scope)

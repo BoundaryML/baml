@@ -42,6 +42,28 @@ class Context {
     }
 }
 
+/// Reject output types that cannot be represented faithfully at the shared
+/// LLM render boundary. Both prompt preview and execution call this guard.
+function validate_output_type(return_type: type) -> void throws baml.reflect.errors.CompilationError {
+    return_type._validate_renderable();
+    match (return_type.as_enum()) {
+        let enum_type: baml.reflect.enum.Type => {
+            if (enum_type.values().length() == 0) {
+                let message = "empty enum `" + return_type.to_string() + "` cannot be rendered as an LLM output schema";
+                throw baml.reflect.errors.CompilationError {
+                    message: message,
+                    diagnostics: [baml.reflect.Diagnostic {
+                        code: "E0159",
+                        span: null,
+                        message: message,
+                    }],
+                }
+            }
+        },
+        null => null,
+    }
+}
+
 /// Render a return type's schema with the default output-format options.
 function render_output_format(return_type: type) -> string throws never {
     $rust_io_function

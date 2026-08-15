@@ -1190,6 +1190,51 @@ pub fn impls_conflict(
     impls_overlap(db, a, b, aliases)
 }
 
+/// Compare a source-owned impl with a span-less mounted export row.  This is
+/// the declaration-diagnostic twin of the mounted candidate registry: the
+/// overlap engine receives the same normalized facts, but the caller keeps the
+/// mounted side structural because there is no legitimate `ImplLoc` to mint.
+pub fn source_mounted_impl_conflict(
+    db: &dyn baml_compiler2_ppir::Db,
+    source_package: PackageId<'_>,
+    source: &ImplFacts<'_>,
+    mounted: &crate::package_interface::ExportedImpl,
+) -> Overlap {
+    let mounted_facts = ImplFacts {
+        interface: InterfaceRef::from_constraint(&mounted.interface),
+        for_ty_pattern: baml_type::interned::Ty::from_plain(&mounted.for_ty_pattern),
+        generic_params: mounted
+            .generic_params
+            .iter()
+            .enumerate()
+            .map(|(index, param)| {
+                (
+                    param.clone(),
+                    mounted
+                        .param_bounds
+                        .get(index)
+                        .into_iter()
+                        .flatten()
+                        .map(InterfaceRef::from_constraint)
+                        .collect(),
+                )
+            })
+            .collect(),
+        associated_types: mounted
+            .associated_types
+            .iter()
+            .map(|(name, ty)| (name.clone(), baml_type::interned::Ty::from_plain(ty)))
+            .collect(),
+        methods: Vec::new(),
+    };
+    impls_conflict(
+        db,
+        source,
+        &mounted_facts,
+        &normalized_alias_map(db, source_package),
+    )
+}
+
 /// Conservative symmetric overlap over two impls of the same interface:
 /// do the subjects (for-type + interface args) share a common instance?
 /// Both impls' params become fresh disjoint unification variables, so

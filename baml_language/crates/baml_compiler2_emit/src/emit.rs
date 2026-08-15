@@ -798,9 +798,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => elements
                 .iter()
                 .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
-            Rvalue::Uint8Array(_) | Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
-                false
-            }
+            Rvalue::Uint8Array(_)
+            | Rvalue::LoadType(_)
+            | Rvalue::CurrentPackage(_)
+            | Rvalue::MakeGenericFunction { .. } => false,
             Rvalue::MakeGenericFunctionFromValue { value, .. } => {
                 self.operand_reads_spawn_captured_local(value, seen)
             }
@@ -810,6 +811,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }),
             Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
                 self.place_reads_spawn_captured_local(place, seen)
+            }
+            Rvalue::RuntimeIsType {
+                operand,
+                type_value,
+            } => {
+                self.operand_reads_spawn_captured_local(operand, seen)
+                    || self.operand_reads_spawn_captured_local(type_value, seen)
             }
             Rvalue::IsType { operand, .. }
             | Rvalue::IsTypeTag { operand, .. }
@@ -1065,6 +1073,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
             throws_type: baml_type::TyTemplate::Never {
@@ -1074,6 +1083,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0, // assigned at engine init (interim provider)
+            runtime_package: bex_vm_types::HeapPtr::null(),
         }
     }
 
@@ -1475,6 +1485,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             StatementKind::Intrinsic { op, args } => {
                 match op {
+                    IntrinsicOp::BindType(slot) => {
+                        let [value] = args.as_slice() else {
+                            panic!("BindType expects exactly one operand")
+                        };
+                        self.emit_operand_pull(value);
+                        self.emit(Instruction::BindType(*slot));
+                    }
                     IntrinsicOp::Log(level) => {
                         // Emit the reserved "$baml_log" event with payload
                         // { level: "<level>", data: <user_arg> }, where
@@ -1946,6 +1963,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             None => self.mint_object(Object::GenericFunction(bex_vm_types::GenericFunction {
                 function: gidx,
                 type_args: type_args.to_vec().into_boxed_slice(),
+                runtime_package: bex_vm_types::HeapPtr::null(),
             })),
         };
         let const_idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(pool_idx)));
@@ -2240,11 +2258,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 callee,
                 args,
                 ntypeargs,
+                runtime_type_check,
                 runtime_id,
                 destination,
                 target,
                 unwind: _,
             } => {
+                let call_span = self.current_debug_span;
                 let func_name = pull_semantics::resolve_constant_function_name(
                     callee,
                     &self.analysis.classifications,
@@ -2263,14 +2283,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     let instruction = if runtime_id.is_some() {
                         Instruction::CallWithRuntimeId {
                             callee: global_callee,
-                            ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                            ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                                *ntypeargs,
+                                *runtime_type_check,
+                            ),
                         }
                     } else {
                         Instruction::Call {
                             callee: global_callee,
-                            ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                            ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                                *ntypeargs,
+                                *runtime_type_check,
+                            ),
                         }
                     };
+                    // Pulling nested argument producers may install their own
+                    // debug spans. Restore the terminator's enclosing call span
+                    // on the actual call opcode so native diagnostics identify
+                    // the offending call rather than its final nested operand.
+                    self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
                     if let Some(name) = &func_name {
                         self.set_operand(inst, OperandMeta::Callable(name.clone()));
@@ -2278,13 +2309,19 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
                 } else {
+                    debug_assert!(
+                        !runtime_type_check,
+                        "unreflect type arguments on indirect calls require a checked indirect opcode"
+                    );
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
                     if let Some(runtime_id) = runtime_id {
                         unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                        self.set_debug_span(call_span, false);
                         self.emit(Instruction::CallIndirectWithRuntimeId);
                     } else {
+                        self.set_debug_span(call_span, false);
                         self.emit(Instruction::CallIndirect);
                     }
                     self.emit_store_place(destination);
@@ -2297,6 +2334,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 method,
                 args,
                 ntypeargs,
+                runtime_type_check,
                 runtime_id,
                 destination,
                 target,
@@ -2319,12 +2357,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let instruction = if runtime_id.is_some() {
                     Instruction::VirtualCallWithRuntimeId {
                         nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                        ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                            *ntypeargs,
+                            *runtime_type_check,
+                        ),
                     }
                 } else {
                     Instruction::VirtualCall {
                         nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                        ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                            *ntypeargs,
+                            *runtime_type_check,
+                        ),
                     }
                 };
                 let inst = self.emit(instruction);
@@ -3389,6 +3433,15 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // so the VM compares each arg invariantly; empty args →
             // class-pointer identity.
             TyTemplate::Class(tn, type_args_templates, _) => {
+                // A reflected `type` value is physically `Object::Type` but its
+                // reconstructed concrete type is one of the nine sealed kind
+                // classes. Kind tests must therefore use the structural value
+                // matcher; class-object pointer identity only applies to normal
+                // user instances.
+                if baml_type::type_kind::is_type_kind_class(tn) {
+                    emit_structural(self, ty_template);
+                    return Ok(());
+                }
                 let class_name_str = tn.display_name();
                 let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) else {
                     emit_false(self);
@@ -3528,10 +3581,23 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
+    fn runtime_is_type(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::RuntimeIsType);
+        Ok(())
+    }
+
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error> {
         let const_idx = self.add_constant(ConstValue::Type(template.clone()));
         let inst = self.emit(Instruction::LoadType(const_idx));
         self.set_operand(inst, OperandMeta::Const(template.to_string()));
+        Ok(())
+    }
+
+    fn load_current_package(&mut self, package: &str) -> Result<(), Self::Error> {
+        let object = self.mint_object(Object::String(package.into()));
+        let constant = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(object)));
+        let inst = self.emit(Instruction::LoadCurrentPackage(constant));
+        self.set_operand(inst, OperandMeta::Const(package.to_string()));
         Ok(())
     }
 
@@ -3644,8 +3710,8 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         RealizedTy::List(..) => Some(baml_type::typetag::LIST),
         RealizedTy::Map { .. } => Some(baml_type::typetag::MAP),
         RealizedTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
-        RealizedTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
         RealizedTy::Type { .. } => Some(baml_type::typetag::TYPE),
+        RealizedTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
         RealizedTy::Literal(lit, _, _) => Some(match lit {
             baml_base::Literal::Int(_) => baml_type::typetag::INT,
             baml_base::Literal::Bigint(_) => baml_type::typetag::BIGINT,

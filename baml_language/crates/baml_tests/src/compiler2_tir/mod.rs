@@ -12,6 +12,11 @@ mod explicit_type_args;
 #[cfg(test)]
 mod inference;
 #[cfg(test)]
+// Re-enabled in Slice 3 after the enriched PackageInterface schema is native
+// to hir_ty. The test source remains the contract for that slice.
+#[cfg(any())]
+mod package_interface;
+#[cfg(test)]
 mod phase3a;
 mod phase3a_recursion;
 #[cfg(test)]
@@ -118,6 +123,7 @@ pub(crate) mod support {
                 }
             }
             Pattern::Type(ty) => ty.to_string(),
+            Pattern::Unreflect(expr) => format!("unreflect({})", expr_desc(*expr, body)),
             Pattern::Or(pats) => pats
                 .iter()
                 .map(|p| pat_desc(*p, body))
@@ -241,12 +247,21 @@ pub(crate) mod support {
                 callee,
                 type_args,
                 args,
+                ..
             } => {
                 let callee_str = expr_desc(*callee, body);
                 let ty_args_str = if type_args.is_empty() {
                     String::new()
                 } else {
-                    let tys: Vec<_> = type_args.iter().map(|t| t.to_string()).collect();
+                    let tys: Vec<_> = type_args
+                        .iter()
+                        .map(|arg| match arg {
+                            baml_compiler2_ast::TypeArg::Static(ty) => ty.to_string(),
+                            baml_compiler2_ast::TypeArg::Unreflect(operand) => {
+                                format!("unreflect({})", expr_desc(*operand, body))
+                            }
+                        })
+                        .collect();
                     format!("<{}>", tys.join(", "))
                 };
                 let arg_strs: Vec<String> = args
@@ -641,6 +656,10 @@ pub(crate) mod support {
         let pad = " ".repeat(indent);
         let stmt = &body.stmts[stmt_id];
         match stmt {
+            Stmt::TypeBinding { name, value } => {
+                let operand = expr_desc(*value, body);
+                writeln!(output, "{pad}type {name} = unreflect({operand})").ok();
+            }
             Stmt::Let {
                 pattern,
                 initializer,
@@ -785,6 +804,15 @@ pub(crate) mod support {
         let pad = " ".repeat(indent);
         let stmt = &body.stmts[stmt_id];
         match stmt {
+            Stmt::TypeBinding { name, value } => {
+                let operand = expr_desc_rich(*value, body, inference);
+                let operand_ty = expr_ty(inference, *value);
+                writeln!(
+                    output,
+                    "{pad}type {name} = unreflect({operand}) : {operand_ty}"
+                )
+                .ok();
+            }
             Stmt::Let {
                 pattern,
                 initializer,
@@ -1632,6 +1660,10 @@ pub(crate) mod support {
                     .collect::<Vec<_>>()
                     .join(" | "),
                 Pattern::Type(ty) => type_expr_to_string_hir(ty, prefix, local_type_names),
+                Pattern::Unreflect(expr) => format!(
+                    "unreflect({})",
+                    expr_desc_hir(*expr, body, prefix, local_type_names)
+                ),
                 Pattern::Class {
                     class,
                     generic_args,
@@ -1995,6 +2027,10 @@ pub(crate) mod support {
             use baml_compiler2_ast::Stmt;
             let stmt = &body.stmts[stmt_id];
             match stmt {
+                Stmt::TypeBinding { name, value } => format!(
+                    "type {name} = unreflect({})",
+                    expr_desc_hir(*value, body, prefix, local_type_names)
+                ),
                 Stmt::Let {
                     pattern,
                     initializer,

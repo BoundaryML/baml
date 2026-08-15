@@ -100,6 +100,101 @@ class BamlTy(_message.Message):
     never: BamlTyNever
     def __init__(self, primitive: _Optional[_Union[BamlTyPrimitive, _Mapping]] = ..., class_ty: _Optional[_Union[BamlTyClass, _Mapping]] = ..., enum: _Optional[_Union[BamlTyEnum, _Mapping]] = ..., list: _Optional[_Union[BamlTyList, _Mapping]] = ..., map: _Optional[_Union[BamlTyMap, _Mapping]] = ..., optional: _Optional[_Union[BamlTyOptional, _Mapping]] = ..., union: _Optional[_Union[BamlTyUnion, _Mapping]] = ..., literal: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., type_alias: _Optional[_Union[BamlTyTypeAlias, _Mapping]] = ..., unknown: _Optional[_Union[BamlTyUnknown, _Mapping]] = ..., media: _Optional[_Union[BamlTyMedia, _Mapping]] = ..., interface: _Optional[_Union[BamlTyInterface, _Mapping]] = ..., enum_variant: _Optional[_Union[BamlTyEnumVariant, _Mapping]] = ..., function: _Optional[_Union[BamlTyFunction, _Mapping]] = ..., future: _Optional[_Union[BamlTyFuture, _Mapping]] = ..., rust_type: _Optional[_Union[BamlTyRustType, _Mapping]] = ..., meta_type: _Optional[_Union[BamlTyMetaType, _Mapping]] = ..., resource: _Optional[_Union[BamlTyResource, _Mapping]] = ..., prompt_ast: _Optional[_Union[BamlTyPromptAst, _Mapping]] = ..., void: _Optional[_Union[BamlTyVoid, _Mapping]] = ..., type_var: _Optional[_Union[BamlTyTypeVar, _Mapping]] = ..., associated_type_projection: _Optional[_Union[BamlTyAssociatedTypeProjection, _Mapping]] = ..., never: _Optional[_Union[BamlTyNever, _Mapping]] = ...) -> None: ...
 
+class BamlTyDef(_message.Message):
+    __slots__ = ("root", "classes", "enums", "witnesses")
+    ROOT_FIELD_NUMBER: _ClassVar[int]
+    CLASSES_FIELD_NUMBER: _ClassVar[int]
+    ENUMS_FIELD_NUMBER: _ClassVar[int]
+    WITNESSES_FIELD_NUMBER: _ClassVar[int]
+    root: BamlTy
+    classes: _containers.RepeatedCompositeFieldContainer[BamlClassDef]
+    enums: _containers.RepeatedCompositeFieldContainer[BamlEnumDef]
+    witnesses: _containers.RepeatedCompositeFieldContainer[BamlWitnessDef]
+    def __init__(self, root: _Optional[_Union[BamlTy, _Mapping]] = ..., classes: _Optional[_Iterable[_Union[BamlClassDef, _Mapping]]] = ..., enums: _Optional[_Iterable[_Union[BamlEnumDef, _Mapping]]] = ..., witnesses: _Optional[_Iterable[_Union[BamlWitnessDef, _Mapping]]] = ...) -> None: ...
+
+class BamlWitnessDef(_message.Message):
+    __slots__ = ("interface", "interface_args", "associated_types", "field_links")
+    INTERFACE_FIELD_NUMBER: _ClassVar[int]
+    INTERFACE_ARGS_FIELD_NUMBER: _ClassVar[int]
+    ASSOCIATED_TYPES_FIELD_NUMBER: _ClassVar[int]
+    FIELD_LINKS_FIELD_NUMBER: _ClassVar[int]
+    interface: str
+    interface_args: _containers.RepeatedCompositeFieldContainer[BamlTy]
+    associated_types: _containers.RepeatedCompositeFieldContainer[BamlTyAssociatedBinding]
+    field_links: _containers.RepeatedCompositeFieldContainer[BamlWitnessFieldLink]
+    def __init__(self, interface: _Optional[str] = ..., interface_args: _Optional[_Iterable[_Union[BamlTy, _Mapping]]] = ..., associated_types: _Optional[_Iterable[_Union[BamlTyAssociatedBinding, _Mapping]]] = ..., field_links: _Optional[_Iterable[_Union[BamlWitnessFieldLink, _Mapping]]] = ...) -> None: ...
+
+class BamlWitnessFieldLink(_message.Message):
+    __slots__ = ("interface_field", "class_field")
+    INTERFACE_FIELD_FIELD_NUMBER: _ClassVar[int]
+    CLASS_FIELD_FIELD_NUMBER: _ClassVar[int]
+    interface_field: str
+    class_field: str
+    def __init__(self, interface_field: _Optional[str] = ..., class_field: _Optional[str] = ...) -> None: ...
+
+class BamlTyMetadata(_message.Message):
+    __slots__ = ("description", "alias", "docstring", "other")
+    class OtherEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    ALIAS_FIELD_NUMBER: _ClassVar[int]
+    DOCSTRING_FIELD_NUMBER: _ClassVar[int]
+    OTHER_FIELD_NUMBER: _ClassVar[int]
+    description: str
+    alias: str
+    docstring: str
+    other: _containers.ScalarMap[str, str]
+    def __init__(self, description: _Optional[str] = ..., alias: _Optional[str] = ..., docstring: _Optional[str] = ..., other: _Optional[_Mapping[str, str]] = ...) -> None: ...
+
+class BamlClassDef(_message.Message):
+    __slots__ = ("name", "fields", "metadata", "generic_param_count")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    FIELDS_FIELD_NUMBER: _ClassVar[int]
+    METADATA_FIELD_NUMBER: _ClassVar[int]
+    GENERIC_PARAM_COUNT_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    fields: _containers.RepeatedCompositeFieldContainer[BamlClassFieldDef]
+    metadata: BamlTyMetadata
+    generic_param_count: int
+    def __init__(self, name: _Optional[str] = ..., fields: _Optional[_Iterable[_Union[BamlClassFieldDef, _Mapping]]] = ..., metadata: _Optional[_Union[BamlTyMetadata, _Mapping]] = ..., generic_param_count: _Optional[int] = ...) -> None: ...
+
+class BamlClassFieldDef(_message.Message):
+    __slots__ = ("name", "ty", "metadata", "skip")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    TY_FIELD_NUMBER: _ClassVar[int]
+    METADATA_FIELD_NUMBER: _ClassVar[int]
+    SKIP_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    ty: BamlTy
+    metadata: BamlTyMetadata
+    skip: bool
+    def __init__(self, name: _Optional[str] = ..., ty: _Optional[_Union[BamlTy, _Mapping]] = ..., metadata: _Optional[_Union[BamlTyMetadata, _Mapping]] = ..., skip: bool = ...) -> None: ...
+
+class BamlEnumDef(_message.Message):
+    __slots__ = ("name", "variants", "metadata")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    VARIANTS_FIELD_NUMBER: _ClassVar[int]
+    METADATA_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    variants: _containers.RepeatedCompositeFieldContainer[BamlEnumVariantDef]
+    metadata: BamlTyMetadata
+    def __init__(self, name: _Optional[str] = ..., variants: _Optional[_Iterable[_Union[BamlEnumVariantDef, _Mapping]]] = ..., metadata: _Optional[_Union[BamlTyMetadata, _Mapping]] = ...) -> None: ...
+
+class BamlEnumVariantDef(_message.Message):
+    __slots__ = ("name", "metadata", "skip")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    METADATA_FIELD_NUMBER: _ClassVar[int]
+    SKIP_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    metadata: BamlTyMetadata
+    skip: bool
+    def __init__(self, name: _Optional[str] = ..., metadata: _Optional[_Union[BamlTyMetadata, _Mapping]] = ..., skip: bool = ...) -> None: ...
+
 class BamlTyPrimitive(_message.Message):
     __slots__ = ("kind",)
     KIND_FIELD_NUMBER: _ClassVar[int]

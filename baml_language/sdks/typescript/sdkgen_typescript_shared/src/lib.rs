@@ -30,15 +30,115 @@ use std::{
     path::PathBuf,
 };
 
-use baml_codegen_types::SymbolPool;
+use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 
 use crate::{
     emit::{build_emitted, typemap_file::render_typemap_module},
     leaf::{LeafBody, group_and_sort, render_index_ts},
-    routing::{LeafPath, route},
+    routing::{LeafPath, route, route_class_ref},
 };
+
+fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
+    match ty {
+        Ty::Interface(name, generics, associated, _) => {
+            out.insert(name.clone());
+            for nested in generics.iter().chain(associated.iter().map(|(_, ty)| ty)) {
+                collect_interface_tys(nested, out);
+            }
+        }
+        Ty::Class(_, args, _) => args.iter().for_each(|ty| collect_interface_tys(ty, out)),
+        Ty::List(inner, _) => collect_interface_tys(inner, out),
+        Ty::Map { key, value, .. } => {
+            collect_interface_tys(key, out);
+            collect_interface_tys(value, out);
+        }
+        Ty::Union(items, _) => items.iter().for_each(|ty| collect_interface_tys(ty, out)),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for param in params {
+                collect_interface_tys(&param.ty, out);
+            }
+            collect_interface_tys(ret, out);
+            collect_interface_tys(throws, out);
+        }
+        Ty::Future(value, error, _) => {
+            collect_interface_tys(value, out);
+            collect_interface_tys(error, out);
+        }
+        Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::TypeAlias(..)
+        | Ty::Literal(..)
+        | Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::TypeVar(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Void { .. }
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. } => {}
+    }
+}
+
+fn public_interface_tokens(pool: &SymbolPool) -> BTreeSet<Name> {
+    fn function(value: &baml_codegen_types::Function, out: &mut BTreeSet<Name>) {
+        for arg in &value.arguments {
+            collect_interface_tys(&arg.ty, out);
+        }
+        collect_interface_tys(&value.return_type, out);
+        if let Some(throws) = &value.throws {
+            collect_interface_tys(throws, out);
+        }
+        for (_, watcher) in &value.watchers {
+            collect_interface_tys(watcher, out);
+        }
+    }
+    let mut out = BTreeSet::new();
+    for symbol in pool.values() {
+        match symbol {
+            Symbol::Function(value) => function(value, &mut out),
+            Symbol::Class(value) => {
+                for property in &value.properties {
+                    collect_interface_tys(&property.ty, &mut out);
+                }
+                for method in value.static_methods.iter().chain(&value.instance_methods) {
+                    function(method, &mut out);
+                }
+            }
+            Symbol::TypeAlias(value) => collect_interface_tys(&value.resolves_to, &mut out),
+            Symbol::Enum(_) => {}
+        }
+    }
+    out
+}
+
+fn render_interface_tokens(tokens: impl Iterator<Item = Name>) -> String {
+    let mut out = String::new();
+    for name in tokens {
+        let bare = name.name();
+        let fqn = name.render_dotted(false);
+        let _ = writeln!(
+            out,
+            "\n/** Erased runtime token for BAML interface `{fqn}`. */\nexport const {bare} = Object.freeze({{ __baml_interface_fqn__: {} }} as const);",
+            ts_string(&fqn),
+        );
+    }
+    out
+}
 
 /// Target-specific settings supplied by the SDK generator modules.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -103,16 +203,23 @@ pub fn to_source_code_with_metadata(
          (got {naming_convention})",
     );
     let mut out: HashMap<PathBuf, String> = HashMap::new();
+    let interface_tokens = public_interface_tokens(pool);
 
     // Every symbol routes to exactly one leaf. Dedup via `BTreeSet`.
     let mut leaves: BTreeSet<LeafPath> = BTreeSet::new();
     for key in pool.keys() {
         leaves.insert(route(key));
     }
+    for name in &interface_tokens {
+        leaves.insert(route_class_ref(name));
+    }
 
     // `baml/` and the root leaf are always emitted.
     leaves.insert(LeafPath {
         segments: vec!["baml".to_string()],
+    });
+    leaves.insert(LeafPath {
+        segments: vec!["baml".to_string(), "reflect".to_string()],
     });
     leaves.insert(LeafPath {
         segments: Vec::new(),
@@ -156,10 +263,14 @@ pub fn to_source_code_with_metadata(
         let body = bodies.get(&leaf_path).unwrap_or(&empty_body);
         let is_root = dir.is_empty();
 
-        out.insert(
-            init_ts_path(dir),
-            render_index_ts(body, &kids, is_root, config.runtime_package),
-        );
+        let mut content = render_index_ts(body, &kids, is_root, config.runtime_package);
+        content.push_str(&render_interface_tokens(
+            interface_tokens
+                .iter()
+                .filter(|name| route_class_ref(name) == leaf_path)
+                .cloned(),
+        ));
+        out.insert(init_ts_path(dir), content);
     }
 
     // Root-only data modules.

@@ -197,7 +197,7 @@ fn to_source_code_with_optional_metadata(
     }
 
     let mut symbols: Vec<_> = pool.iter().collect();
-    symbols.sort_by(|(a, _), (b, _)| a.cmp(b));
+    symbols.sort_by_key(|(name, _)| *name);
     for (name, symbol) in symbols {
         let placement = |analysis: &analyze::Analysis| {
             analysis.renamed(&routing::route(name).segments).to_vec()

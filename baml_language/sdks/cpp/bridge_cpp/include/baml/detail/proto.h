@@ -57,6 +57,9 @@ inline const char* arm_name(pb::BamlOutboundValue::ValueCase c) {
       return "bigint";
     case pb::BamlOutboundValue::kTyValue:
       return "type";
+    case pb::BamlOutboundValue::kTyDefValue:
+      return "runtime type definition (requires BEP-066 reflection support, "
+             "which the C++ SDK does not provide)";
   }
   return "?";
 }

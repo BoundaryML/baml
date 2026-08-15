@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.f(t: type, value: unknown) -> unknown {
+    // Locals:
+    let _0: unknown // _0 // return
+    let _1: type // t // param
+    let _2: unknown // value // param
+
+    bb0: {
+        _0 = call const fn app.accept<copy _1>(copy _2; runtime_type_check) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}

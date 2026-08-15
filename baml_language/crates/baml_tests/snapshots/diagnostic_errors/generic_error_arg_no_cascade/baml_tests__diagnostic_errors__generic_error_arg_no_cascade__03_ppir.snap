@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 47042
 ---
 === PPIR ===
 function user.broken_arg() -> int  [expr] {

@@ -4,7 +4,9 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::{Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr};
+use crate::{
+    Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr, TyAttrValue,
+};
 
 // ── stub context ───────────────────────────────────────────────────────────
 
@@ -171,6 +173,75 @@ fn projection_reduces_to_its_binding() {
         &Ty::string(),
         &ctx,
     ));
+}
+
+// ── BEP-066 shared runtime-type algebra ──────────────────────────────────
+
+#[test]
+fn reflection_kind_classes_are_sealed_type_subtypes_in_both_entries() {
+    let ctx = Ctx::default();
+    let carrier = Ty::Type {
+        attr: TyAttr::default(),
+    };
+
+    for kind in crate::type_kind::TypeKind::ALL {
+        let view = Ty::Class(kind.class_name(), Vec::new(), TyAttr::default());
+        assert!(
+            is_subtype(&view, &carrier, &ctx),
+            "plain subtype entry rejected {kind:?}"
+        );
+        assert!(
+            is_subtype_interned(
+                &interned::Ty::from_plain(&view),
+                &interned::Ty::from_plain(&carrier),
+                &ctx,
+            ),
+            "interned subtype entry rejected {kind:?}"
+        );
+        assert!(
+            !definitely_disjoint(&view, &carrier, &ctx),
+            "reflection view and type carrier cannot be head-disjoint"
+        );
+    }
+
+    let user_lookalike = Ty::Class(
+        QualifiedTypeName::new(
+            Name::new("user"),
+            vec![Name::new("reflect"), Name::new("class")],
+            Name::new("Type"),
+        ),
+        Vec::new(),
+        TyAttr::default(),
+    );
+    assert!(!is_subtype(&user_lookalike, &carrier, &ctx));
+    assert!(!is_subtype_interned(
+        &interned::Ty::from_plain(&user_lookalike),
+        &interned::Ty::from_plain(&carrier),
+        &ctx,
+    ));
+}
+
+#[test]
+fn canonical_digest_is_stable_and_uses_canonical_plain_types() {
+    let ctx = Ctx::default();
+    let int = Ty::int();
+    let int_with_attr = Ty::Int {
+        attr: TyAttr {
+            sap_parse_without_null: TyAttrValue::Set,
+            ..TyAttr::default()
+        },
+    };
+    let ordered = union(vec![Ty::int(), Ty::string()]);
+    let permuted = union(vec![Ty::string(), Ty::int()]);
+
+    let int_digest = canonical_digest(&int, &ctx);
+    let union_digest = canonical_digest(&ordered, &ctx);
+    assert_eq!(int_digest, canonical_digest(&int, &ctx));
+    assert_eq!(int_digest, canonical_digest(&int_with_attr, &ctx));
+    assert_eq!(union_digest, canonical_digest(&permuted, &ctx));
+    assert_ne!(int_digest, union_digest);
+    assert_eq!(int_digest, 0xa8c7_f832_281a_39c5);
+    assert_eq!(union_digest, 0x9886_dba9_b789_ac56);
 }
 
 #[test]

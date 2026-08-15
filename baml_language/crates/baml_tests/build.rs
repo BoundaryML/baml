@@ -1036,12 +1036,16 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
     let snapshot_name = format!("10_formatter__{}", baml_file.name);
     let full_path = baml_file.full_path.display().to_string();
     let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
 
     quote! {
         #[test]
         fn #test_name() {
-            let content = #include_content;
+            // Read at runtime rather than include_str!: an embedded copy goes
+            // stale when a restored CI target/ cache skips re-embedding a
+            // changed corpus file, making the formatter output disagree with a
+            // freshly-updated snapshot on CI only.
+            let content = std::fs::read_to_string(#full_path)
+                .unwrap_or_else(|e| panic!("failed to read {}: {e}", #full_path));
             // Normalize line endings for cross-platform compatibility
             let content = content.replace("\r\n", "\n");
             let options = baml_fmt::FormatOptions::default();

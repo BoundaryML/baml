@@ -144,10 +144,26 @@ pub struct RuntimeSignature {
     pub name: Option<String>,
     /// Display strings for the generic type parameters (`T extends Bound`).
     pub display_type_params: Vec<String>,
+    /// Runtime-checkable interface bounds, parallel to the callee frame's
+    /// De Bruijn generic parameter slots.  Kept separately from display text
+    /// so `unreflect(...)` calls can validate opaque runtime types before the
+    /// callee executes.
+    pub generic_param_bounds: Vec<Vec<RuntimeInterfaceBound>>,
     /// Display strings for the parameter types, parallel to `param_names`.
     pub display_param_types: Vec<String>,
     /// Display string for the return type.
     pub display_return_type: String,
+}
+
+/// Loc-free, templated form of one declared generic interface bound.
+///
+/// MIR owns this transport shape so the compiler layers do not depend on VM
+/// object types; emission converts it directly to `bex_vm_types::InterfaceBound`.
+#[derive(Debug, Clone)]
+pub struct RuntimeInterfaceBound {
+    pub interface: baml_type::TypeName,
+    pub args: Vec<baml_type::TyTemplate>,
+    pub assoc: Vec<(baml_type::Name, baml_type::TyTemplate)>,
 }
 
 /// A function represented as a control flow graph.
@@ -292,6 +308,8 @@ pub enum LogLevel {
 pub enum IntrinsicOp {
     /// `log.info`, `log.debug`, `log.warn`, `log.error` — emit a `$baml_log` event.
     Log(LogLevel),
+    /// Bind an exact runtime type value into this bytecode frame's type slot.
+    BindType(usize),
 }
 
 /// The kind of a MIR statement.
@@ -407,6 +425,10 @@ pub enum Terminator {
         /// calls to generic functions where at least one type argument is
         /// threaded at the call site (explicit `<T>` or type-arg forwarding).
         ntypeargs: usize,
+        /// At least one explicit type argument was supplied through
+        /// `unreflect(...)`. The emitter encodes this on the call instruction so
+        /// the VM performs M-5/M-6 checks only for marker-instantiated calls.
+        runtime_type_check: bool,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
         ///
         /// This is not part of ordinary call arity. Emitters push it above the
@@ -447,6 +469,9 @@ pub enum Terminator {
         /// Number of leading `args` entries that are method-level type arguments.
         /// Zero for a non-generic method.
         ntypeargs: usize,
+        /// Whether this call carries an `unreflect(...)` type argument and must
+        /// execute the runtime generic gate before entering the resolved method.
+        runtime_type_check: bool,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
         runtime_id: Option<Operand>,
         /// Where to store the result.
@@ -798,6 +823,14 @@ pub enum Rvalue {
     /// other coarse tag checks.
     IsTypeTag { operand: Operand, tag: i64 },
 
+    /// Runtime-mint identity filter used by `is unreflect(t)` patterns.
+    /// `type_value` evaluates to an `Object::Type`; the VM reconstructs the
+    /// nominal mint of `operand` and compares the two identity tokens.
+    RuntimeIsType {
+        operand: Operand,
+        type_value: Operand,
+    },
+
     /// Allocate a closure object from a child lambda function.
     ///
     /// `lambda_idx` indexes into `MirFunction::lambdas` of the enclosing function.
@@ -903,9 +936,14 @@ pub enum Rvalue {
     /// For templates containing `TypeArgRef(N)`, the VM substitutes
     /// `frame.type_args[N]` at execution time.
     ///
-    /// Emitted by the `reflect.type_of<T>()` intrinsic.
+    /// Emitted by the `type.of<T>()` intrinsic.
     /// Lowers to `Instruction::LoadType(const_idx)` in bytecode.
     LoadType(TyTemplate),
+
+    /// Reify the package lexically enclosing this call site. The package name
+    /// is baked by lowering; dynamically compiled code substitutes its owning
+    /// runtime package at execution.
+    CurrentPackage(String),
 }
 
 /// The kind of aggregate being constructed.

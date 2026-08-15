@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/help_command.rs
-assertion_line: 203
 expression: concise
 ---
 Build and run BAML projects.

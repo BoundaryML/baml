@@ -19,7 +19,7 @@ import {
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { attachCallContext } from './call_context.js';
 import { baml_bridge } from './proto/baml_cffi.js';
-import { lowerTypeToWireTy, type BamlType } from './wire_ty.js';
+import { BamlType, lowerTypeToWireTy, type BamlTypeToken } from './wire_ty.js';
 
 export type Mode = 'sync' | 'async';
 
@@ -46,15 +46,15 @@ interface BuiltArgs {
     types?: unknown;
 }
 
-type WireTypeArg = [string, baml_bridge.cffi.v1.IBamlTy];
+type HostTypeToken = BamlType | BamlTypeToken;
+type WireTypeArg = [string, baml_bridge.cffi.v1.IBamlTy | BamlType];
 
 /**
  * Resolve the caller's `$types` option onto the callee's own generic params, in
- * declaration order. Mirrors Python's `_resolve_types_kwarg`: `$types` is an
- * object keyed by param name and is required iff the callee declares its own
- * generic params; it must bind exactly those params (no missing, no extras).
+ * declaration order. Omitted bindings are inferred by the engine; supplied
+ * names must belong to the callee.
  */
-function resolveTypesOption(typesOpt: unknown, typeParams: readonly string[]): BamlType[] {
+function resolveTypesOption(typesOpt: unknown, typeParams: readonly string[]): Array<[string, HostTypeToken]> {
     if (typeParams.length === 0) {
         if (typesOpt !== undefined && typesOpt !== null) {
             throw new TypeError(
@@ -64,45 +64,37 @@ function resolveTypesOption(typesOpt: unknown, typeParams: readonly string[]): B
         }
         return [];
     }
-    const example = `{ ${JSON.stringify(typeParams[0])}: 'int' }`;
     if (typesOpt === undefined || typesOpt === null) {
-        throw new TypeError(
-            `$types is required for this generic call: bind every type parameter in ` +
-            `${JSON.stringify(typeParams)} with an object, e.g. $types: ${example}`,
-        );
+        return [];
     }
+    const example = `{ ${JSON.stringify(typeParams[0])}: 'int' }`;
     if (typeof typesOpt !== 'object' || Array.isArray(typesOpt)) {
         throw new TypeError(
             `$types must be an object mapping type-parameter names to types (e.g. ` +
             `$types: ${example}); got ${typeof typesOpt}`,
         );
     }
-    const obj = typesOpt as Record<string, BamlType>;
-    const missing = typeParams.filter((n) => !(n in obj));
-    if (missing.length) {
-        throw new TypeError(
-            `$types is missing binding(s) for ${JSON.stringify(missing)}: every type parameter ` +
-            `in ${JSON.stringify(typeParams)} must be bound.`,
-        );
-    }
+    const obj = typesOpt as Record<string, HostTypeToken | undefined>;
     const extra = Object.keys(obj).filter((k) => !typeParams.includes(k));
     if (extra.length) {
         throw new TypeError(
-            `$types has unknown type parameter(s) ${JSON.stringify(extra)}; expected exactly ` +
+            `$types has unknown type parameter(s) ${JSON.stringify(extra)}; expected ` +
             `${JSON.stringify(typeParams)}.`,
         );
     }
-    return typeParams.map((n) => obj[n]);
+    return typeParams
+        .filter((name) => obj[name] !== undefined)
+        .map((name) => [name, obj[name] as HostTypeToken]);
 }
 
 /** The `$types` field of a generic receiver instance (its class TypeVar
  * bindings), or `undefined` when the receiver carries none. The TS analog of
  * Python's `pydantic_instance_type_args(self)`. */
-function receiverTypes(self: unknown): Record<string, BamlType> | undefined {
+function receiverTypes(self: unknown): Record<string, HostTypeToken> | undefined {
     if (self != null && typeof self === 'object') {
         const t = (self as { $types?: unknown }).$types;
         if (t != null && typeof t === 'object') {
-            return t as Record<string, BamlType>;
+            return t as Record<string, HostTypeToken>;
         }
     }
     return undefined;
@@ -126,11 +118,14 @@ function buildTypeArgs(
     const classTypes = classTypeParams.length ? receiverTypes(self) : undefined;
     if (classTypes) {
         for (const name of classTypeParams) {
-            wire.push([name, lowerTypeToWireTy(classTypes[name])]);
+            const token = classTypes[name];
+            if (token !== undefined) {
+                wire.push([name, token instanceof BamlType ? token : lowerTypeToWireTy(token)]);
+            }
         }
     }
     const resolved = resolveTypesOption(typesOpt, typeParams);
-    if (typeParams.length > 0) {
+    if (resolved.length > 0) {
         if (classTypeParams.length && !classTypes) {
             // The method's own params sit after the class prefix in De Bruijn
             // order; without recovered class args we can't position them.
@@ -139,9 +134,9 @@ function buildTypeArgs(
                 'args (a `$types` field on the instance)',
             );
         }
-        typeParams.forEach((name, i) => {
-            wire.push([name, lowerTypeToWireTy(resolved[i])]);
-        });
+        for (const [name, token] of resolved) {
+            wire.push([name, token instanceof BamlType ? token : lowerTypeToWireTy(token)]);
+        }
     }
     return wire;
 }

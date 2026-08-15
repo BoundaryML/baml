@@ -18,7 +18,7 @@ function main() -> string {{
     prompt: spec.prompt_template,
     journal: ai.Journal {{ log: [] }},
     toolbox: ai.tools.Toolbox.new([]),
-    output_type: reflect.type_of<string>(),
+    output_type: type.of<string>(),
   }}
   {expr}.body
 }}

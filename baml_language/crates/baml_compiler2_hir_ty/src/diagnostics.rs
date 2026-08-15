@@ -130,6 +130,12 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
+    /// A value name was written bare in a generic slot. Runtime-computed
+    /// slots require the whole-slot `unreflect(value)` marker.
+    ComputedGenericArgumentRequiresUnreflect { name: Name },
+    /// A mounted callable whose implementation is compiler-owned and has no
+    /// location-free link ABI was invoked from a source-less consumer.
+    MountedPackageCallUnsupported { path: Name },
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -146,6 +152,11 @@ pub enum TirTypeError {
         class_name: QualifiedTypeName,
         field_name: Name,
         suggestions: Vec<Name>,
+    },
+    /// Sealed reflection-kind values are VM views and cannot be constructed
+    /// with an object literal.
+    CannotConstructReflectionKind {
+        class_name: baml_type::QualifiedTypeName,
     },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
@@ -378,6 +389,9 @@ pub enum TirTypeError {
         expected: usize,
         got: usize,
     },
+    /// Runtime type arguments cannot enter the generated streaming
+    /// specialization path.
+    RuntimeTypeArgumentOnStreamingCall { callee_name: Name },
     /// Type arguments were supplied for a type that is not generic
     /// (enums and type aliases cannot take type parameters).
     TypeIsNotGeneric { type_name: Name, kind: &'static str },
@@ -831,6 +845,13 @@ impl fmt::Display for TirTypeError {
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
             }
+            TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::computed_generic_argument_requires_unreflect(
+                        name.as_str(),
+                    );
+                f.write_str(diagnostic.message.as_str())
+            }
             TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
                 if suggestions.is_empty() {
                     write!(
@@ -890,6 +911,20 @@ impl fmt::Display for TirTypeError {
                         class_name.render_user_facing()
                     )
                 }
+            }
+            TirTypeError::CannotConstructReflectionKind { class_name } => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::cannot_construct_reflection_kind(
+                        &class_name.render_user_facing(),
+                    );
+                f.write_str(diagnostic.message.as_str())
+            }
+            TirTypeError::MountedPackageCallUnsupported { path } => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::mounted_package_call_unsupported(
+                        path.as_str(),
+                    );
+                f.write_str(diagnostic.message.as_str())
             }
             TirTypeError::DeadCode {
                 unreachable_count, ..
@@ -1249,6 +1284,12 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "function `{callee_name}` expects {expected} type argument(s), got {got}"
+                )
+            }
+            TirTypeError::RuntimeTypeArgumentOnStreamingCall { callee_name } => {
+                write!(
+                    f,
+                    "runtime type arguments are not supported on streaming call `{callee_name}`"
                 )
             }
             TirTypeError::TypeIsNotGeneric { type_name, kind } => {

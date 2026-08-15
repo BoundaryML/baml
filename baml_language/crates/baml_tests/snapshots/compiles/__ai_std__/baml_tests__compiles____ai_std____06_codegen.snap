@@ -906,6 +906,11 @@ function ai.FunctionSpec.name(self: ai.FunctionSpec<#0>) -> string {
 
 function ai.FunctionSpec.output_type(self: ai.FunctionSpec<#0>) -> type {
     load_type #0
+    store_var output_type
+    load_var output_type
+    call baml.prompt.validate_output_type
+    pop 1
+    load_var output_type
     return
 }
 
@@ -1752,7 +1757,7 @@ function ai.errors.normalize(error: unknown) -> ai.errors.Failure | baml.errors.
 
 function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> {
     load_var handler
-    call reflect.signature
+    call baml.reflect.signature
     store_var sig
     load_type string
     load_type unknown
@@ -1763,14 +1768,14 @@ function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = u
     store_var required
     load_var sig
     load_field .args
-    load_type baml.iter.Iterable<Error = never, Item = reflect.Arg>
+    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.Arg>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
 
   L0:
     load_var _6
-    load_type baml.iter.Iterator<Error = never, Item = reflect.Arg>
+    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.Arg>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
@@ -3041,13 +3046,13 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
     load_type unknown
     load_type unknown
     load_var2 4 2
-    call reflect.call_any
+    call baml.reflect.call_any
     store_var value
     jump L5
     load_var e
     store_var _15
     load_var _15
-    narrow_bind reflect.InvalidArgumentError, slot=7
+    narrow_bind baml.reflect.InvalidArgumentError, slot=7
     pop_jump_if_false L3
     jump L4
 
@@ -3063,7 +3068,7 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
     load_field .name
     call baml.String.from
     store_var _21
-    load_type reflect.InvalidArgumentError
+    load_type baml.reflect.InvalidArgumentError
     load_var bad
     call baml.String.from
     store_var _25
@@ -3239,7 +3244,7 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
 
   L2:
     load_var handler
-    call reflect.signature
+    call baml.reflect.signature
     store_var sig
     load_var name
     store_var_load_var _10
@@ -3310,6 +3315,9 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
 }
 
 function ai.wire.render_output_format(t: type) -> string {
+    load_var t
+    call baml.prompt.validate_output_type
+    pop 1
     load_var t
     sys_op baml.prompt.render_output_format
     return

@@ -33,7 +33,7 @@ function user.GetMixedList$parse(json: string) -> int | string[]  [expr] {
   baml.sap.parse(json)
 }
 function user.GetMixedList$render_prompt() -> ai.Prompt  [expr] {
-  GetMixedList$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  GetMixedList$spec().prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.GetMixedList$spec() -> ai.FunctionSpec<int | string[]>  [expr] {
   ai.FunctionSpec { spec_name: "GetMixedList", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Get mixed list";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 }
@@ -48,7 +48,7 @@ function user.GetMixedMap$parse(json: string) -> map<string, int | string>  [exp
   baml.sap.parse(json)
 }
 function user.GetMixedMap$render_prompt() -> ai.Prompt  [expr] {
-  GetMixedMap$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  GetMixedMap$spec().prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.GetMixedMap$spec() -> ai.FunctionSpec<map<string, int | string>>  [expr] {
   ai.FunctionSpec { spec_name: "GetMixedMap", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Get mixed map";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 }
@@ -63,7 +63,7 @@ function user.GetStatus$parse(json: string) -> Status  [expr] {
   baml.sap.parse(json)
 }
 function user.GetStatus$render_prompt() -> ai.Prompt  [expr] {
-  GetStatus$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  GetStatus$spec().prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.GetStatus$spec() -> ai.FunctionSpec<Status>  [expr] {
   ai.FunctionSpec { spec_name: "GetStatus", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Get status";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 }
@@ -78,7 +78,7 @@ function user.GetUser$parse(json: string) -> User  [expr] {
   baml.sap.parse(json)
 }
 function user.GetUser$render_prompt(id: int) -> ai.Prompt  [expr] {
-  GetUser$spec(id).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  GetUser$spec(id).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.GetUser$spec(id: int) -> ai.FunctionSpec<User>  [expr] {
   ai.FunctionSpec { spec_name: "GetUser", args: map { "id": id }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Get user ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } id);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o") }

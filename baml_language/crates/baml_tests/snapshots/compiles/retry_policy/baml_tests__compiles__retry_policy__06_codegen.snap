@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 22117
 ---
 function $init() -> null {
     call $init_let_0
@@ -31,7 +30,7 @@ function user.UseRetryClient(input: string, client: ai.Client | null) -> string 
     call user.UseRetryClient$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
