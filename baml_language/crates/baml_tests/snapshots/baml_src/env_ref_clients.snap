@@ -1610,7 +1610,7 @@ function env_ref_clients.unset_base_url_is_the_same_configuration_error() -> str
     call openai.GenericClient.resolved_base_url
     jump L2
     load_var e
-    is_type baml.errors.InvalidArgument
+    is_type ai.errors.InvalidRequest
     pop_jump_if_false L0
     jump L1
 
@@ -1620,7 +1620,7 @@ function env_ref_clients.unset_base_url_is_the_same_configuration_error() -> str
 
   L1:
     load_var e
-    load_field .message
+    load_field .detail
 
   L2:
     return
@@ -1645,7 +1645,7 @@ function env_ref_clients.unset_ref_base_url_is_a_configuration_error() -> string
     call openai.GenericClient.resolved_base_url
     jump L2
     load_var e
-    is_type baml.errors.InvalidArgument
+    is_type ai.errors.InvalidRequest
     pop_jump_if_false L0
     jump L1
 
@@ -1655,7 +1655,7 @@ function env_ref_clients.unset_ref_base_url_is_a_configuration_error() -> string
 
   L1:
     load_var e
-    load_field .message
+    load_field .detail
 
   L2:
     return
