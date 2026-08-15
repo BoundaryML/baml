@@ -189,7 +189,7 @@ pub enum LoweringDiagnostic {
     ///
     /// `provider` is the block's own `provider` value when it had one, so the
     /// suggested replacement names the class that actually speaks to that
-    /// provider; see [`client_replacement_expr`].
+    /// provider; see this module's private `client_replacement_expr`.
     ClientBlockRemoved {
         name: String,
         provider: Option<String>,
