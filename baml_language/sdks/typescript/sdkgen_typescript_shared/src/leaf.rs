@@ -469,6 +469,12 @@ pub(crate) fn safe_param_name(name: &str) -> String {
 /// `translate_ty::render_name_ref` re-derives the reference from the IR at
 /// every cross-reference rather than reading the emitted declaration back.
 ///
+/// One bound follows from that statelessness: a leaf declaring BOTH a reserved
+/// word and its `_`-suffixed twin (`import` alongside `import_`) collapses them
+/// onto a single identifier, which is not a regression because at base that same
+/// leaf emitted `export class import {}`, a TS1359 parse error that already
+/// killed the whole generated file.
+///
 /// Only the TypeScript identifier moves. Wire identity travels on separate
 /// channels and is untouched: `defineFunction` is handed `baml_fqn`,
 /// `_typemap.ts` is keyed on `TypeScriptClass::source`, and enum member values
@@ -1443,6 +1449,140 @@ mod tests {
             ts.contains("static readonly $generic = [\"package\", \"package_\"] as const;"),
             "raw generic names must survive on the wire channel:\n{ts}"
         );
+    }
+
+    /// Instance-method scope, the `Some(class_map)` arm of the `outer` match in
+    /// `render_method_binding_ts`. A method that re-declares a reserved-word
+    /// parameter must bump clear of BOTH the class's raw parameter names and the
+    /// binders the class already allocated for them. Landing on `package_` would
+    /// silently retarget every class-level reference that resolves through that
+    /// binder, which is a wrong-type error the compiler cannot catch.
+    #[test]
+    fn instance_method_binder_bumps_past_the_outer_class_scope() {
+        let module_names: BTreeSet<String> = ["Pair".to_string()].into_iter().collect();
+        let class_raw = vec!["package".to_string(), "package_".to_string()];
+        let class_map = allocate_binders(&class_raw, None, &module_names);
+        assert_eq!(
+            class_map.get("package").map(String::as_str),
+            Some("package__")
+        );
+        assert_eq!(
+            class_map.get("package_").map(String::as_str),
+            Some("package_")
+        );
+
+        // The instance arm: the method's OWN parameters only, with the class map
+        // as the enclosing scope.
+        let method_raw = vec!["package".to_string()];
+        let sig_map = allocate_binders(&method_raw, Some(&class_map), &module_names);
+
+        // KILL ASSERTION. Without the outer-scope reservation loop the candidate
+        // `package_` is unreserved, so the method binder lands exactly on the
+        // class's own `package_` binder. Reserving the outer raw names AND the
+        // outer binders is what pushes it to `package___`.
+        assert_eq!(
+            sig_map.get("package").map(String::as_str),
+            Some("package___"),
+            "method binder did not bump clear of the outer scope: {sig_map:?}"
+        );
+
+        // Stated the other way: clear of every outer raw name and every outer
+        // binder, not just the one this fixture happens to collide with.
+        let allocated = sig_map.get("package").cloned().unwrap();
+        for (raw, emitted) in &class_map {
+            assert_ne!(
+                &allocated, raw,
+                "method binder collided with an outer raw name"
+            );
+            assert_ne!(
+                &allocated, emitted,
+                "method binder collided with an outer binder"
+            );
+        }
+
+        // The enclosing scope's entries survive into the method map, so a
+        // class-level reference inside the method body still resolves.
+        assert_eq!(
+            sig_map.get("package_").map(String::as_str),
+            Some("package_")
+        );
+        assert_eq!(generic_decl(&method_raw, &sig_map), "<package___>");
+    }
+
+    /// Static-method scope, the `None` arm of the same match. A static member
+    /// cannot reference the class's type parameters (TS2302), so
+    /// `method_sig_generics` flattens the class params and the method's own into
+    /// ONE list that is allocated with no enclosing scope. The flat list must
+    /// still allocate distinct binders, and re-declaring the class params must
+    /// reproduce the class's binders exactly.
+    #[test]
+    fn static_method_scope_allocates_the_flattened_list_with_no_outer() {
+        let module_names: BTreeSet<String> = ["Box".to_string()].into_iter().collect();
+        let class_raw = vec!["package".to_string(), "package_".to_string()];
+        let class_map = allocate_binders(&class_raw, None, &module_names);
+
+        let m = TypeScriptMethodBinding {
+            name: "build".to_string(),
+            baml_fqn: "user.lorem.Box.build".to_string(),
+            mode: SyncAsync::Sync,
+            kind: MethodKind::Static,
+            required_args: Vec::new(),
+            optional_args: Vec::new(),
+            return_ty: Ty::Int {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            generic_params: vec!["T".to_string()],
+            docstring: None,
+            raises_names: Vec::new(),
+        };
+
+        let sig_generics = method_sig_generics(&m, &class_raw);
+        assert_eq!(
+            sig_generics,
+            vec![
+                "package".to_string(),
+                "package_".to_string(),
+                "T".to_string()
+            ],
+            "static signature must re-declare the class params ahead of its own"
+        );
+
+        let sig_map = allocate_binders(&sig_generics, None, &module_names);
+        assert_eq!(
+            sig_map.get("package").map(String::as_str),
+            Some("package__")
+        );
+        assert_eq!(
+            sig_map.get("package_").map(String::as_str),
+            Some("package_")
+        );
+        assert_eq!(sig_map.get("T").map(String::as_str), Some("T"));
+        // Three raw names, three distinct binders.
+        let distinct: BTreeSet<&String> = sig_map.values().collect();
+        assert_eq!(distinct.len(), sig_map.len());
+        assert_eq!(
+            generic_decl(&sig_generics, &sig_map),
+            "<package__, package_, T>"
+        );
+        // Re-declaring the class params reproduces the class binders exactly.
+        // That is what passing no enclosing scope buys.
+        assert_eq!(sig_map.get("package"), class_map.get("package"));
+        assert_eq!(sig_map.get("package_"), class_map.get("package_"));
+
+        // KILL ASSERTION, as a control on the arm this branch deliberately does
+        // not take. Allocating the same flat list WITH the class map as an
+        // enclosing scope reserves the outer binders, so `package` bumps one
+        // further to `package___` and the static signature drifts off the class
+        // declaration. If the outer-scope reservation loop were removed, this
+        // allocation would collapse back onto the no-outer result and both
+        // assertions below would fail.
+        let with_outer = allocate_binders(&sig_generics, Some(&class_map), &module_names);
+        assert_eq!(
+            with_outer.get("package").map(String::as_str),
+            Some("package___"),
+            "outer-scope reservation did not apply: {with_outer:?}"
+        );
+        assert_ne!(with_outer.get("package"), sig_map.get("package"));
     }
 
     #[test]
