@@ -70,6 +70,10 @@ name = "runtime_benchmark"
 harness = false
 
 [[bench]]
+name = "profiling_overhead"
+harness = false
+
+[[bench]]
 name = "cache_profile"
 harness = false
 

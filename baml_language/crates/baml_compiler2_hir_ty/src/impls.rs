@@ -327,18 +327,53 @@ pub(crate) fn is_concrete_receiver(ty: &Ty) -> bool {
 /// Resolution-relevant impl facts in a location-free shape shared by source
 /// blocks and mounted export rows.
 #[derive(Clone)]
-pub struct ResolvedImplFacts {
+pub struct MountedImplFacts {
     pub interface: InterfaceRef,
     pub for_ty_pattern: Ty,
     pub generic_params: Vec<(ParamTy, Vec<InterfaceRef>)>,
     pub associated_types: Vec<(Name, Ty)>,
 }
 
+pub enum ResolvedImplFacts<'db> {
+    Source(&'db ImplFacts<'db>),
+    Mounted(MountedImplFacts),
+}
+
+impl ResolvedImplFacts<'_> {
+    pub fn interface(&self) -> &InterfaceRef {
+        match self {
+            Self::Source(facts) => &facts.interface,
+            Self::Mounted(facts) => &facts.interface,
+        }
+    }
+
+    pub fn for_ty_pattern(&self) -> &Ty {
+        match self {
+            Self::Source(facts) => &facts.for_ty_pattern,
+            Self::Mounted(facts) => &facts.for_ty_pattern,
+        }
+    }
+
+    pub fn generic_params(&self) -> &[(ParamTy, Vec<InterfaceRef>)] {
+        match self {
+            Self::Source(facts) => &facts.generic_params,
+            Self::Mounted(facts) => &facts.generic_params,
+        }
+    }
+
+    pub fn associated_types(&self) -> &[(Name, Ty)] {
+        match self {
+            Self::Source(facts) => &facts.associated_types,
+            Self::Mounted(facts) => &facts.associated_types,
+        }
+    }
+}
+
 /// The dispatch identity retained after matching an impl.
 pub enum ResolvedImplOrigin<'db> {
     Source {
         block: ImplLoc<'db>,
-        methods: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>>,
+        methods: &'db [baml_compiler2_hir::loc::FunctionLoc<'db>],
     },
     Mounted {
         methods: Vec<crate::package_interface::ExportedFunction>,
@@ -348,7 +383,7 @@ pub enum ResolvedImplOrigin<'db> {
 /// One resolved impl plus the generic instantiation the match pinned.
 pub struct ResolvedImpl<'db> {
     pub origin: ResolvedImplOrigin<'db>,
-    pub facts: ResolvedImplFacts,
+    pub facts: ResolvedImplFacts<'db>,
     pub bindings: FxHashMap<ParamTy, Ty>,
 }
 
@@ -359,7 +394,7 @@ impl ResolvedImpl<'_> {
     /// per-member (`resolved_pin`); [`Self::implemented_view`] is the
     /// complete spelling.
     pub fn implemented(&self) -> InterfaceRef {
-        realized(&self.facts.interface, &self.bindings)
+        realized(self.facts.interface(), &self.bindings)
     }
 
     /// The COMPLETE realized view of the implemented interface for
@@ -448,7 +483,7 @@ pub(crate) fn resolved_pin(
 ) -> Option<Ty> {
     if let Some((_, declared)) = resolved
         .facts
-        .associated_types
+        .associated_types()
         .iter()
         .find(|(name, _)| name == member)
     {
@@ -622,19 +657,25 @@ pub fn impls_for_type<'db>(
     for package in all_packages(db) {
         for (origin, facts) in package_impl_candidates(db, package) {
             let params: Vec<ParamTy> = facts
-                .generic_params
+                .generic_params()
                 .iter()
                 .map(|(param, _)| param.clone())
                 .collect();
             // Bare-blanket guard, as in `match_impl_head`.
-            if let TyKind::TypeVar(param, _) = facts.for_ty_pattern.kind()
+            if let TyKind::TypeVar(param, _) = facts.for_ty_pattern().kind()
                 && params.contains(param)
                 && !is_concrete_receiver(concrete)
             {
                 continue;
             }
             let mut bindings = FxHashMap::default();
-            if !match_pattern(&facts.for_ty_pattern, concrete, &params, &mut bindings, &eq) {
+            if !match_pattern(
+                facts.for_ty_pattern(),
+                concrete,
+                &params,
+                &mut bindings,
+                &eq,
+            ) {
                 continue;
             }
             if !bounds_hold(
@@ -654,9 +695,9 @@ pub fn impls_for_type<'db>(
             // never trip it even when their `ParamTy` identity shadows
             // an impl param's.
             let undetermined = |ty: &Ty| !pattern_fully_bound(ty, &params, &bindings);
-            if facts.interface.generics.iter().any(&undetermined)
+            if facts.interface().generics.iter().any(&undetermined)
                 || facts
-                    .interface
+                    .interface()
                     .associated_types
                     .iter()
                     .any(|(_, ty)| undetermined(ty))
@@ -691,7 +732,7 @@ fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<PackageId<'_>> {
 fn package_impl_candidates<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     package: PackageId<'db>,
-) -> Vec<(ResolvedImplOrigin<'db>, ResolvedImplFacts)> {
+) -> Vec<(ResolvedImplOrigin<'db>, ResolvedImplFacts<'db>)> {
     let mut out = Vec::new();
     for &block in package_impl_locs(db, package) {
         let Some(facts) = impl_facts(db, block) else {
@@ -700,14 +741,9 @@ fn package_impl_candidates<'db>(
         out.push((
             ResolvedImplOrigin::Source {
                 block,
-                methods: facts.methods.clone(),
+                methods: &facts.methods,
             },
-            ResolvedImplFacts {
-                interface: facts.interface.clone(),
-                for_ty_pattern: facts.for_ty_pattern.clone(),
-                generic_params: facts.generic_params.clone(),
-                associated_types: facts.associated_types.clone(),
-            },
+            ResolvedImplFacts::Source(facts),
         ));
     }
     if let Some(interface) = crate::package_interface::mounted_interface(db, &package.name(db)) {
@@ -731,7 +767,7 @@ fn package_impl_candidates<'db>(
                 ResolvedImplOrigin::Mounted {
                     methods: row.methods.clone(),
                 },
-                ResolvedImplFacts {
+                ResolvedImplFacts::Mounted(MountedImplFacts {
                     interface: InterfaceRef::from_constraint(&row.interface),
                     for_ty_pattern: Ty::from_plain(&row.for_ty_pattern),
                     generic_params,
@@ -740,7 +776,7 @@ fn package_impl_candidates<'db>(
                         .iter()
                         .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
                         .collect(),
-                },
+                }),
             )
         }));
     }
@@ -943,34 +979,34 @@ fn collect_packages(ty: &Ty, out: &mut Vec<Name>) {
 /// then the associated-pin gate. Declared bounds are NOT checked here.
 fn match_impl_head(
     db: &dyn baml_compiler2_ppir::Db,
-    facts: &ResolvedImplFacts,
+    facts: &ResolvedImplFacts<'_>,
     concrete: &Ty,
     interface: &InterfaceRef,
     eq: &AliasOnlyFacts<'_>,
 ) -> Option<FxHashMap<ParamTy, Ty>> {
-    if facts.interface.name != interface.name
-        || facts.interface.generics.len() != interface.generics.len()
+    if facts.interface().name != interface.name
+        || facts.interface().generics.len() != interface.generics.len()
     {
         return None;
     }
     // Bare-blanket guard: `implement<T> I for T` applies only to
     // concrete receivers - never existentials, unions, or vars.
-    if let TyKind::TypeVar(param, _) = facts.for_ty_pattern.kind()
-        && facts.generic_params.iter().any(|(p, _)| p == param)
+    if let TyKind::TypeVar(param, _) = facts.for_ty_pattern().kind()
+        && facts.generic_params().iter().any(|(p, _)| p == param)
         && !is_concrete_receiver(concrete)
     {
         return None;
     }
     let params: Vec<ParamTy> = facts
-        .generic_params
+        .generic_params()
         .iter()
         .map(|(param, _)| param.clone())
         .collect();
     let mut bindings = FxHashMap::default();
-    if !match_pattern(&facts.for_ty_pattern, concrete, &params, &mut bindings, eq) {
+    if !match_pattern(facts.for_ty_pattern(), concrete, &params, &mut bindings, eq) {
         return None;
     }
-    for (pattern, target) in facts.interface.generics.iter().zip(&interface.generics) {
+    for (pattern, target) in facts.interface().generics.iter().zip(&interface.generics) {
         if !match_pattern(pattern, target, &params, &mut bindings, eq) {
             return None;
         }
@@ -982,13 +1018,13 @@ fn match_impl_head(
     // fails closed - the request pins something this impl cannot supply.
     for (name, requested) in &interface.associated_types {
         let supplied = match facts
-            .associated_types
+            .associated_types()
             .iter()
             .find(|(declared_name, _)| declared_name == name)
         {
             Some((_, declared)) => Some(substitute_bindings(declared, &bindings)),
             None => {
-                let implemented = realized(&facts.interface, &bindings);
+                let implemented = realized(facts.interface(), &bindings);
                 realized_assoc_default(db, &implemented, concrete, name)
             }
         };
@@ -1293,12 +1329,12 @@ pub fn substitute_bindings(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
 /// obligation); realized ones recurse with the budget.
 fn bounds_hold(
     db: &dyn baml_compiler2_ppir::Db,
-    facts: &ResolvedImplFacts,
+    facts: &ResolvedImplFacts<'_>,
     bindings: &FxHashMap<ParamTy, Ty>,
     depth: u32,
     in_progress: &mut Vec<(Ty, InterfaceRef)>,
 ) -> bool {
-    for (param, bounds) in &facts.generic_params {
+    for (param, bounds) in facts.generic_params() {
         let Some(actual) = bindings.get(param) else {
             continue;
         };

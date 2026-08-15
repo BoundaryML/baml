@@ -647,7 +647,7 @@ fn env_discharges_rigid_bounds<'db>(
     facts: &Facts<'db>,
     resolved: &crate::impls::ResolvedImpl<'db>,
 ) -> bool {
-    for (param, bounds) in &resolved.facts.generic_params {
+    for (param, bounds) in resolved.facts.generic_params() {
         let Some(actual) = resolved.bindings.get(param) else {
             continue;
         };
