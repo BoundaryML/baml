@@ -11,5 +11,5 @@ gzip_bytes = "9.8 MiB"
 # reflection) VM+bytecode surface plus the native provider stdlib additions
 # since the 2026-08-12 record (EnvRef, ai.internal prompt plumbing).
 [artifacts.packed-program]
-file_bytes = 17356834
-gzip_bytes = 7536100
+file_bytes = "16.6 MiB"
+gzip_bytes = "7.2 MiB"

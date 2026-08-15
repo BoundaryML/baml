@@ -6,10 +6,10 @@ git_sha = "a51ffdf12b5caf288cc7028fa5fbd86449c0d518"
 # reflection) VM+bytecode surface plus the native provider stdlib additions
 # since the 2026-08-12 record (EnvRef, ai.internal prompt plumbing).
 [artifacts.baml-cli]
-file_bytes = 23953408
-stripped_bytes = 23953408
-gzip_bytes = 10710147
+file_bytes = "22.8 MiB"
+stripped_bytes = "22.8 MiB"
+gzip_bytes = "10.2 MiB"
 
 [artifacts.packed-program]
-file_bytes = 18485107
-gzip_bytes = 7649393
+file_bytes = "17.6 MiB"
+gzip_bytes = "7.3 MiB"

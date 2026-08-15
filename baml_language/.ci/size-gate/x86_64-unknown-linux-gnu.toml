@@ -10,5 +10,5 @@ gzip_bytes = "11.2 MiB"
 # Re-recorded from CI run 31906918242: BEP-066 VM+bytecode surface plus the
 # native provider stdlib additions since the 2026-08-12 record.
 [artifacts.packed-program]
-file_bytes = 21617224
-gzip_bytes = 8505842
+file_bytes = "20.6 MiB"
+gzip_bytes = "8.1 MiB"
