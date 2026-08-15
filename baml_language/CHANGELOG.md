@@ -10,7 +10,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 - Added `baml.crypto.*` APIs for SHA-256 hashing, authenticated encryption, and key generation. ([#4431](https://github.com/BoundaryML/baml/pull/4431)) - 2kai2kai2
 - Added `baml toolchain pin <canary|nightly|version|path>` to select a project-local toolchain in the nearest `baml.toml` ([#4386](https://github.com/BoundaryML/baml/pull/4386)) - Sam Lijin
 - Added arithmetic across `baml.time` values ([#4366](https://github.com/BoundaryML/baml/pull/4366)) - 2kai2kai2
-- Added `assert.is_type<T>(value)`and improved assertion failure formatting  ([#4388](https://github.com/BoundaryML/baml/pull/4388)) - 2kai2kai2
+- Added `assert.is_type<T>(value)` and improved assertion failure formatting  ([#4388](https://github.com/BoundaryML/baml/pull/4388)) - 2kai2kai2
 - Added integer and bigint bitwise operators (`&`, `|`, `^`, `<<`, and `>>`), including mixed `int`/`bigint` widening, and added generic `baml.ops.Index` support for arrays, string-keyed maps, and `uint8array`. ([#4301](https://github.com/BoundaryML/baml/pull/4301)) - Avery Townsend
 - Enabled advertised LSP code-action support so spec-compliant editors can request BAML code actions, including “Open in Playground.” ([#3358](https://github.com/BoundaryML/baml/pull/3358)) - Miguel F. Serna
 
