@@ -326,7 +326,7 @@ pub(crate) fn is_concrete_receiver(ty: &Ty) -> bool {
 
 /// Resolution-relevant impl facts in a location-free shape shared by source
 /// blocks and mounted export rows.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MountedImplFacts {
     pub interface: InterfaceRef,
     pub for_ty_pattern: Ty,
@@ -334,6 +334,7 @@ pub struct MountedImplFacts {
     pub associated_types: Vec<(Name, Ty)>,
 }
 
+#[derive(Clone, PartialEq)]
 pub enum ResolvedImplFacts<'db> {
     Source(&'db ImplFacts<'db>),
     Mounted(MountedImplFacts),
@@ -370,6 +371,7 @@ impl ResolvedImplFacts<'_> {
 }
 
 /// The dispatch identity retained after matching an impl.
+#[derive(Clone, PartialEq)]
 pub enum ResolvedImplOrigin<'db> {
     Source {
         block: ImplLoc<'db>,
@@ -381,10 +383,46 @@ pub enum ResolvedImplOrigin<'db> {
 }
 
 /// One resolved impl plus the generic instantiation the match pinned.
+#[derive(Clone, PartialEq)]
 pub struct ResolvedImpl<'db> {
     pub origin: ResolvedImplOrigin<'db>,
     pub facts: ResolvedImplFacts<'db>,
     pub bindings: FxHashMap<ParamTy, Ty>,
+}
+
+#[derive(Clone, PartialEq)]
+enum CachedResolvedImplOrigin<'db> {
+    Source {
+        block: ImplLoc<'db>,
+    },
+    Mounted {
+        methods: Vec<crate::package_interface::ExportedFunction>,
+        facts: MountedImplFacts,
+    },
+}
+
+#[derive(Clone, PartialEq)]
+struct CachedResolvedImpl<'db> {
+    origin: CachedResolvedImplOrigin<'db>,
+    bindings: FxHashMap<ParamTy, Ty>,
+}
+
+// SAFETY: the cached rows contain Salsa-interned locations tied to the query
+// database. This is the same PartialEq-driven overwrite contract as ImplFacts.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for CachedResolvedImpl<'_> {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
 }
 
 impl ResolvedImpl<'_> {
@@ -652,10 +690,59 @@ pub fn impls_for_type<'db>(
     if concrete.has_infer() || concrete.has_error() {
         return Vec::new();
     }
+    impls_for_type_cached(db, ImplTypeKey::new(db, concrete.clone()))
+        .iter()
+        .map(|cached| match &cached.origin {
+            CachedResolvedImplOrigin::Source { block } => {
+                let facts = impl_facts(db, *block)
+                    .as_ref()
+                    .expect("cached source impl remains well formed");
+                ResolvedImpl {
+                    origin: ResolvedImplOrigin::Source {
+                        block: *block,
+                        methods: &facts.methods,
+                    },
+                    facts: ResolvedImplFacts::Source(facts),
+                    bindings: cached.bindings.clone(),
+                }
+            }
+            CachedResolvedImplOrigin::Mounted { methods, facts } => ResolvedImpl {
+                origin: ResolvedImplOrigin::Mounted {
+                    methods: methods.clone(),
+                },
+                facts: ResolvedImplFacts::Mounted(facts.clone()),
+                bindings: cached.bindings.clone(),
+            },
+        })
+        .collect()
+}
+
+#[salsa::interned]
+struct ImplTypeKey<'db> {
+    #[returns(ref)]
+    concrete: Ty,
+}
+
+/// Memoized ground candidate assembly. Concrete primitive/container types recur
+/// throughout one project (especially through operator and interface lookup),
+/// while their impl set is a pure Salsa-dependent function of the type and
+/// package inputs. Cache that scan once instead of re-walking every impl block
+/// for every expression that mentions the same receiver type.
+#[salsa::tracked(returns(ref))]
+fn impls_for_type_cached<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    type_key: ImplTypeKey<'db>,
+) -> Vec<CachedResolvedImpl<'db>> {
+    let concrete = type_key.concrete(db);
     let eq = AliasOnlyFacts::new(db);
     let mut out = Vec::new();
-    for package in all_packages(db) {
+    for &package in all_packages(db) {
         for (origin, facts) in package_impl_candidates(db, package) {
+            let pattern = facts.for_ty_pattern();
+            let pattern_has_typevar = pattern.has_typevar();
+            if !pattern_has_typevar && !equivalent_interned(pattern, concrete, &eq) {
+                continue;
+            }
             let params: Vec<ParamTy> = facts
                 .generic_params()
                 .iter()
@@ -669,13 +756,8 @@ pub fn impls_for_type<'db>(
                 continue;
             }
             let mut bindings = FxHashMap::default();
-            if !match_pattern(
-                facts.for_ty_pattern(),
-                concrete,
-                &params,
-                &mut bindings,
-                &eq,
-            ) {
+            if pattern_has_typevar && !match_pattern(pattern, concrete, &params, &mut bindings, &eq)
+            {
                 continue;
             }
             if !bounds_hold(
@@ -704,17 +786,23 @@ pub fn impls_for_type<'db>(
             {
                 continue;
             }
-            out.push(ResolvedImpl {
-                origin,
-                facts,
-                bindings,
-            });
+            let origin = match (origin, facts) {
+                (ResolvedImplOrigin::Source { block, .. }, ResolvedImplFacts::Source(_)) => {
+                    CachedResolvedImplOrigin::Source { block }
+                }
+                (ResolvedImplOrigin::Mounted { methods }, ResolvedImplFacts::Mounted(facts)) => {
+                    CachedResolvedImplOrigin::Mounted { methods, facts }
+                }
+                _ => unreachable!("impl candidate origin and facts have the same provenance"),
+            };
+            out.push(CachedResolvedImpl { origin, bindings });
         }
     }
     out
 }
 
 /// Every package contributing files to the compilation, deduplicated.
+#[salsa::tracked(returns(ref))]
 fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<PackageId<'_>> {
     let mut names: Vec<Name> = baml_compiler2_hir::compiler2_all_files(db)
         .into_iter()
@@ -732,55 +820,56 @@ fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<PackageId<'_>> {
 fn package_impl_candidates<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     package: PackageId<'db>,
-) -> Vec<(ResolvedImplOrigin<'db>, ResolvedImplFacts<'db>)> {
-    let mut out = Vec::new();
-    for &block in package_impl_locs(db, package) {
-        let Some(facts) = impl_facts(db, block) else {
-            continue;
-        };
-        out.push((
-            ResolvedImplOrigin::Source {
-                block,
-                methods: &facts.methods,
-            },
-            ResolvedImplFacts::Source(facts),
-        ));
-    }
-    if let Some(interface) = crate::package_interface::mounted_interface(db, &package.name(db)) {
-        out.extend(interface.impls.iter().map(|row| {
-            let generic_params = row
-                .generic_params
-                .iter()
-                .enumerate()
-                .map(|(index, param)| {
-                    let bounds = row
-                        .param_bounds
-                        .get(index)
-                        .into_iter()
-                        .flatten()
-                        .map(InterfaceRef::from_constraint)
-                        .collect();
-                    (param.clone(), bounds)
-                })
-                .collect();
-            (
-                ResolvedImplOrigin::Mounted {
-                    methods: row.methods.clone(),
+) -> impl Iterator<Item = (ResolvedImplOrigin<'db>, ResolvedImplFacts<'db>)> + 'db {
+    let source = package_impl_locs(db, package)
+        .iter()
+        .filter_map(move |&block| {
+            let facts = impl_facts(db, block).as_ref()?;
+            Some((
+                ResolvedImplOrigin::Source {
+                    block,
+                    methods: &facts.methods,
                 },
-                ResolvedImplFacts::Mounted(MountedImplFacts {
-                    interface: InterfaceRef::from_constraint(&row.interface),
-                    for_ty_pattern: Ty::from_plain(&row.for_ty_pattern),
-                    generic_params,
-                    associated_types: row
-                        .associated_types
-                        .iter()
-                        .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
-                        .collect(),
-                }),
-            )
-        }));
-    }
-    out
+                ResolvedImplFacts::Source(facts),
+            ))
+        });
+    let mounted = crate::package_interface::mounted_interface(db, &package.name(db))
+        .into_iter()
+        .flat_map(move |interface| {
+            interface.impls.iter().map(|row| {
+                let generic_params = row
+                    .generic_params
+                    .iter()
+                    .enumerate()
+                    .map(|(index, param)| {
+                        let bounds = row
+                            .param_bounds
+                            .get(index)
+                            .into_iter()
+                            .flatten()
+                            .map(InterfaceRef::from_constraint)
+                            .collect();
+                        (param.clone(), bounds)
+                    })
+                    .collect();
+                (
+                    ResolvedImplOrigin::Mounted {
+                        methods: row.methods.clone(),
+                    },
+                    ResolvedImplFacts::Mounted(MountedImplFacts {
+                        interface: InterfaceRef::from_constraint(&row.interface),
+                        for_ty_pattern: Ty::from_plain(&row.for_ty_pattern),
+                        generic_params,
+                        associated_types: row
+                            .associated_types
+                            .iter()
+                            .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+                            .collect(),
+                    }),
+                )
+            })
+        });
+    source.chain(mounted)
 }
 
 /// Every impl block implementing `interface_name`, drawn from the
@@ -817,7 +906,7 @@ pub(crate) fn impl_candidates<'db>(
 /// (`impls_for_type`) does.
 pub(crate) fn all_impl_facts(db: &dyn baml_compiler2_ppir::Db) -> Vec<&ImplFacts<'_>> {
     let mut out = Vec::new();
-    for package in all_packages(db) {
+    for &package in all_packages(db) {
         for &block in package_impl_locs(db, package) {
             if let Some(facts) = impl_facts(db, block) {
                 out.push(facts);

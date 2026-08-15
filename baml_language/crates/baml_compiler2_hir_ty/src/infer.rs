@@ -4303,17 +4303,19 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn validate_runtime_type_arg_operands(&mut self, body: &ExprBody, call: ExprId) {
-        let slots = self
+        let operands: Vec<_> = self
             .type_refs
             .expr_type_args
             .get(&call)
-            .cloned()
-            .unwrap_or_default();
-        for slot in &*slots {
-            let BodyTypeArgRef::Runtime { operand } = slot else {
-                continue;
-            };
-            self.validate_runtime_type_operand(body, *operand);
+            .into_iter()
+            .flat_map(|slots| slots.iter())
+            .filter_map(|slot| match slot {
+                BodyTypeArgRef::Runtime { operand } => Some(*operand),
+                BodyTypeArgRef::Static(_) => None,
+            })
+            .collect();
+        for operand in operands {
+            self.validate_runtime_type_operand(body, operand);
         }
     }
 
@@ -4382,6 +4384,21 @@ impl<'db> InferenceContext<'db> {
         callee: ExprId,
         args: &[baml_compiler2_ast::CallArg],
     ) {
+        let callee_name = match &body.exprs[callee] {
+            Expr::Path(segments) => segments.last(),
+            Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. } => {
+                Some(member)
+            }
+            _ => None,
+        };
+        if !callee_name.is_some_and(|name| {
+            matches!(
+                name.as_str(),
+                "render_prompt" | "build_request" | "build_request_stream"
+            )
+        }) {
+            return;
+        }
         if self.type_refs.expr_type_args.contains_key(&call) {
             return;
         }
@@ -4459,12 +4476,17 @@ impl<'db> InferenceContext<'db> {
         let _ = self.table.unify(&schema_arg, &target_ret);
     }
 
-    fn default_uncontracted_session_eval(
-        &mut self,
-        _body: &ExprBody,
-        call: ExprId,
-        callee: ExprId,
-    ) {
+    fn default_uncontracted_session_eval(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) {
+        let callee_name = match &body.exprs[callee] {
+            Expr::Path(segments) => segments.last(),
+            Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. } => {
+                Some(member)
+            }
+            _ => None,
+        };
+        if callee_name.is_none_or(|name| name.as_str() != "eval") {
+            return;
+        }
         if self.type_refs.expr_type_args.contains_key(&call) {
             return;
         }
@@ -6601,6 +6623,28 @@ impl<'db> InferenceContext<'db> {
                 continue;
             };
             for bound in param_bounds {
+                if runtime_params.is_empty() && self.scoped_type_bindings.is_empty() {
+                    let interface = baml_type::interned::InterfaceRef::new(
+                        bound.name.clone(),
+                        bound
+                            .generics
+                            .iter()
+                            .map(|generic| substitute_params(generic, instantiation))
+                            .collect(),
+                        bound
+                            .associated_types
+                            .iter()
+                            .map(|(name, ty)| (name.clone(), substitute_params(ty, instantiation)))
+                            .collect(),
+                    );
+                    self.register_obligation(obligations::Obligation::Implements {
+                        ty: arg.clone(),
+                        interface,
+                        at,
+                        not_concrete_rejects: (param.index() as usize) >= own_start,
+                    });
+                    continue;
+                }
                 let runtime_slot_dependent = runtime_params
                     .iter()
                     .any(|runtime| runtime == &param || interface_mentions_param(&bound, runtime));
@@ -6890,6 +6934,13 @@ impl<'db> InferenceContext<'db> {
         signature: &crate::lower::FunctionSignature,
         bound_receiver: bool,
     ) {
+        if !self.result.call_plans.get(&call).is_some_and(|plan| {
+            plan.slots
+                .iter()
+                .any(|slot| matches!(slot, CallTypeArgPlan::Runtime { .. }))
+        }) {
+            return;
+        }
         let runtime_params = self.runtime_call_params(call);
         if runtime_params.is_empty() {
             return;
@@ -8465,6 +8516,18 @@ impl<'db> InferenceContext<'db> {
         own_offset: usize,
     ) -> Vec<Ty> {
         let explicit = self.type_refs.expr_type_args.contains_key(&call);
+        if !self.result.call_plans.get(&call).is_some_and(|plan| {
+            plan.slots
+                .iter()
+                .any(|slot| matches!(slot, CallTypeArgPlan::Runtime { .. }))
+        }) {
+            let type_args = type_args.to_vec();
+            let plan = self.result.call_plans.entry(call).or_default();
+            plan.type_args.clone_from(&type_args);
+            plan.own_offset = own_offset;
+            plan.explicit = explicit;
+            return type_args;
+        }
         let runtime_params = self.runtime_call_params(call);
         let mut type_args = type_args.to_vec();
         let runtime_occurrences: Vec<(baml_type::ParamTy, Ty)> = self
