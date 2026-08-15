@@ -44,9 +44,6 @@ pub enum Hir2Diagnostic {
     },
     /// An attribute on a type expression is not a known type or field attribute.
     UnknownTypeAttribute { attr_name: Name, span: TextRange },
-    /// The legacy `@@dynamic` block attribute (removed with the `TypeBuilder`
-    /// feature by BEP-066).
-    RemovedDynamicAttribute { span: TextRange },
     /// Builtin-internal attribute used in the wrong place.
     InvalidAttributeContext {
         attr_name: Name,
@@ -387,18 +384,6 @@ impl Hir2Diagnostic {
                 format!("unknown attribute `@{attr_name}`"),
             )
             .with_primary(Span { file_id, range: *span }, "unknown attribute")
-            .with_phase(DiagnosticPhase::Hir),
-            Hir2Diagnostic::RemovedDynamicAttribute { span } => Diagnostic::error(
-                DiagnosticId::RemovedFeature,
-                "`@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)",
-            )
-            .with_primary(
-                Span {
-                    file_id,
-                    range: *span,
-                },
-                "removed attribute",
-            )
             .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::InvalidAttributeContext {
                 attr_name,

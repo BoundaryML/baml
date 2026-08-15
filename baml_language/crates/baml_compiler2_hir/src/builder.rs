@@ -1806,7 +1806,6 @@ impl<'db> SemanticIndexBuilder<'db> {
                     "class",
                     false,
                 );
-                self.validate_removed_dynamic_attribute(&class.attributes);
                 self.validate_schema_attributes(&class.attributes);
                 for field in &class.fields {
                     let type_expr = &field.type_expr;
@@ -1832,7 +1831,6 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Item::Enum(enm) => {
-                self.validate_removed_dynamic_attribute(&enm.attributes);
                 self.validate_schema_attributes(&enm.attributes);
                 for variant in &enm.variants {
                     self.validate_schema_attributes(&variant.attributes);
@@ -1918,22 +1916,6 @@ impl<'db> SemanticIndexBuilder<'db> {
                         span: throws.span,
                     });
                 }
-            }
-        }
-    }
-
-    /// Reject the legacy `@@dynamic` block attribute on classes and enums.
-    ///
-    /// BEP-066 removed the `TypeBuilder` feature (`@@dynamic`, `type_builder`
-    /// blocks, `dynamic class`/`dynamic enum`); runtime type construction is
-    /// `baml.reflect` now. Unknown block attributes normally pass through
-    /// silently, which for `@@dynamic` would turn a once-meaningful marker
-    /// into a silent no-op — surface a targeted E0098 instead.
-    fn validate_removed_dynamic_attribute(&mut self, attributes: &[ast::RawAttribute]) {
-        for attr in attributes {
-            if attr.name.as_str() == "dynamic" {
-                self.diagnostics
-                    .push(Hir2Diagnostic::RemovedDynamicAttribute { span: attr.span });
             }
         }
     }
