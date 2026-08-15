@@ -2754,7 +2754,6 @@ fn generate_impl(
         // stdlib" is the full pipeline over the builtin files alone.
         all_files.truncate(builtin_count);
     }
-    let package_exports = capture_package_exports(db, &all_files);
     let alias_caches = build_alias_caches(db, &all_files);
 
     // Emit in two file groups — builtin stubs first, then user files — so the
@@ -2790,6 +2789,11 @@ fn generate_impl(
         opt,
         skip_clean,
     )?;
+    // Derive the serializable compiler surface after ordinary lowering has
+    // populated Salsa's body/signature caches. The artifact is unchanged; only
+    // the scheduling avoids a cold whole-package inference traversal before
+    // the same bodies are lowered for emit.
+    let package_exports = capture_package_exports(db, &all_files);
 
     // --- Pass 6: Retry policies ---
     // Retry policies are now synthesized as Item::Let bindings during CST lowering.
