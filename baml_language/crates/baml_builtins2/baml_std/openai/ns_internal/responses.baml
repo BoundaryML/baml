@@ -184,6 +184,10 @@ class OaIncompleteDetails {
 class OaErrorBody {
     code: string?,
     message: string?,
+    // OpenAI's error category (e.g. "insufficient_quota"); on billing errors
+    // the specific `code` ("credit_balance_exhausted") only makes sense
+    // together with this.
+    type: string?,
 }
 
 class OaResponse {
@@ -776,10 +780,12 @@ function _openai_transient_code(code: string) -> bool {
 // blanket NetworkFailure: a retry-safe classification on a 400-shaped failure
 // is what makes a Retry policy replay an invalid request forever.
 function _openai_error_failure(err: OaErrorBody) -> ai.errors.Failure {
-    let code = (err.code ?? "").to_lower_case();
+    // Billing errors split the signal across `type` ("insufficient_quota")
+    // and `code` ("credit_balance_exhausted"), so classify on both.
+    let code = ((err.code ?? "") + " " + (err.type ?? "")).to_lower_case();
     let detail = err.message ?? "the OpenAI Responses request failed";
     let raw = baml.json.stringify(baml.json.to_json(err));
-    if (code.includes("rate_limit") || code.includes("insufficient_quota")) {
+    if (code.includes("rate_limit") || code.includes("quota") || code.includes("credit_balance")) {
         ai.errors.RateLimited { provider: "openai", retry_after_ms: null, raw_body: raw }
     } else if (code.includes("content_filter") || code.includes("moderation") || code.includes("refusal")) {
         ai.errors.Refused { provider: "openai", reason: detail, raw_body: raw }
@@ -949,9 +955,12 @@ class OaStreamEvent {
     content_index: int?,
     item: OaOutputItem?,
     response: OaResponse?,
-    // a bare `error` event puts the failure at the top level
+    // a bare `error` event puts the failure at the top level ...
     code: string?,
     message: string?,
+    // ... but immediate rejections (e.g. quota exhaustion) arrive as the plain
+    // HTTP error envelope `{"error": {...}}` on the SSE data line instead.
+    error: OaErrorBody?,
 }
 
 // What the decoder must remember ACROSS batches: which text items already
@@ -993,7 +1002,10 @@ function _openai_stream_failure(event: OaStreamEvent) -> ai.errors.Failure {
     if let response: OaResponse = event.response {
         return _openai_response_failure(response);
     };
-    _openai_error_failure(OaErrorBody { code: event.code, message: event.message })
+    if let nested: OaErrorBody = event.error {
+        return _openai_error_failure(nested);
+    };
+    _openai_error_failure(OaErrorBody { code: event.code, message: event.message, type: null })
 }
 
 // One decoded SSE event -> provider-agnostic stream events.
@@ -1004,6 +1016,13 @@ function _openai_stream_events(
 ) -> ai.stream.StreamEvent[] {
     let out: ai.stream.StreamEvent[] = [];
     let kind = event.type ?? sse_name ?? "";
+    // A top-level `error` envelope only ever appears on failures; surface it
+    // even when the rejection line carries no recognizable event type.
+    if (kind != "response.failed" && kind != "error") {
+        if let nested: OaErrorBody = event.error {
+            throw _openai_error_failure(nested);
+        };
+    };
     match (kind) {
         "response.created" | "response.in_progress" => {
             // The resolved model id arrives here. ai.stream.TurnMeta has no
