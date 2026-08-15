@@ -344,14 +344,11 @@ function _gw_images_find_output_format(value: baml.json.json?) -> string? {
 
 function _gw_images_mime(format: string?) -> string {
     let normalized = (format ?? "png").to_lower_case();
-    if (normalized == "jpeg" || normalized == "jpg") {
-        "image/jpeg"
-    } else if (normalized == "webp") {
-        "image/webp"
-    } else if (normalized == "gif") {
-        "image/gif"
-    } else {
-        "image/png"
+    match (normalized) {
+        "jpeg" | "jpg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "image/png",
     }
 }
 

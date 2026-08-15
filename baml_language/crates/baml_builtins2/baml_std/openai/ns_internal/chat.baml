@@ -451,12 +451,10 @@ function _chat_audio_format(mime_type: string) -> string {
     } else {
         mime_type
     };
-    if (subtype == "mpeg" || subtype == "mp3") {
-        "mp3"
-    } else if (subtype == "x-wav") {
-        "wav"
-    } else {
-        subtype
+    match (subtype) {
+        "mpeg" | "mp3" => "mp3",
+        "x-wav" => "wav",
+        _ => subtype,
     }
 }
 
@@ -468,12 +466,10 @@ function _chat_audio_format(mime_type: string) -> string {
 // modality some other way.
 function _chat_audio_output_mime(request_body: baml.json.json?) -> string {
     let format = baml.json.path_or<string>(request_body, ".audio.format", "wav");
-    if (format == "mp3") {
-        "audio/mpeg"
-    } else if (format == "pcm16") {
-        "audio/pcm"
-    } else {
-        `audio/${format}`
+    match (format) {
+        "mp3" => "audio/mpeg",
+        "pcm16" => "audio/pcm",
+        _ => `audio/${format}`,
     }
 }
 
@@ -623,12 +619,10 @@ function _chat_content(parts: ChatContentPart[], collapse: bool) -> ChatMessageC
 function chat_lower_prompt(prompt: ai.Prompt, compat: ChatCompat) -> ChatMessage[] {
     let lowered: ChatPromptMessage[] = [];
     for (let message in prompt.messages()) {
-        let role = if (message.role == "") {
-            compat.default_role
-        } else if (message.role == "tool") {
-            "user"
-        } else {
-            message.role
+        let role = match (message.role) {
+            "" => compat.default_role,
+            "tool" => "user",
+            _ => message.role,
         };
         let parts = _chat_prompt_parts(message, compat);
         // Placement happens BEFORE the adjacent-same-role merge, so a directive
@@ -1025,14 +1019,11 @@ function chat_render(
 
 // One wire `finish_reason` -> the canonical stop reason.
 function chat_stop_reason(reason: string) -> ai.content.StopReason {
-    if (reason == "tool_calls" || reason == "function_call") {
-        ai.content.StopReason.ToolUse
-    } else if (reason == "length" || reason == "max_tokens") {
-        ai.content.StopReason.MaxTokens
-    } else if (reason == "content_filter") {
-        ai.content.StopReason.Refused
-    } else {
-        ai.content.StopReason.Complete
+    match (reason) {
+        "tool_calls" | "function_call" => ai.content.StopReason.ToolUse,
+        "length" | "max_tokens" => ai.content.StopReason.MaxTokens,
+        "content_filter" => ai.content.StopReason.Refused,
+        _ => ai.content.StopReason.Complete,
     }
 }
 

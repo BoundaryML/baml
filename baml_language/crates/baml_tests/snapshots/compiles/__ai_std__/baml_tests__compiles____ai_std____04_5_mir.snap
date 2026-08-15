@@ -7209,109 +7209,106 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     let _18: bool
     let _19: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // payload
     let _20: bool
-    let _21: string
-    let _22: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // items
-    let _23: bool
-    let _24: string
-    let _25: baml.json.json[] // items
-    let _26: bool
-    let _27: int
-    let _28: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // only
-    let _29: baml.json.json[]
-    let _30: baml.iter.Iterator<Error = never, Item = baml.json.json>
-    let _31: unknown
-    let _32: bool
-    let _33: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _34: baml.json.json // i
-    let _35: bool
-    let _36: baml.json.json[]
-    let _37: baml.json.json[]
-    let _38: ai.errors.ParseFailed
+    let _21: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // items
+    let _22: bool
+    let _23: baml.json.json[] // items
+    let _24: bool
+    let _25: int
+    let _26: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // only
+    let _27: baml.json.json[]
+    let _28: baml.iter.Iterator<Error = never, Item = baml.json.json>
+    let _29: unknown
+    let _30: bool
+    let _31: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _32: baml.json.json // i
+    let _33: bool
+    let _34: baml.json.json[]
+    let _35: baml.json.json[]
+    let _36: ai.errors.ParseFailed
+    let _37: string
+    let _38: string
     let _39: string
     let _40: string
     let _41: string
     let _42: string
-    let _43: string
+    let _43: type
     let _44: string
-    let _45: type
-    let _46: string
-    let _47: int
-    let _48: type
-    let _49: bool
-    let _50: string
-    let _51: void
-    let _52: string
-    let _53: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // items
-    let _54: string
-    let _55: baml.json.json[] // parts
-    let _56: string
-    let _57: void
-    let _58: string
-    let _59: bool
-    let _60: int
-    let _61: ai.errors.ParseFailed
+    let _45: int
+    let _46: type
+    let _47: bool
+    let _48: void
+    let _49: string
+    let _50: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // items
+    let _51: string
+    let _52: baml.json.json[] // parts
+    let _53: string
+    let _54: void
+    let _55: string
+    let _56: bool
+    let _57: int
+    let _58: ai.errors.ParseFailed
+    let _59: string
+    let _60: bool
+    let _61: string
     let _62: string
-    let _63: bool
+    let _63: string
     let _64: string
     let _65: string
     let _66: string
     let _67: string
     let _68: string
-    let _69: string
+    let _69: type
     let _70: string
-    let _71: string
+    let _71: int
     let _72: type
     let _73: string
-    let _74: int
+    let _74: string
     let _75: type
     let _76: string
     let _77: string
-    let _78: type
+    let _78: string
     let _79: string
     let _80: string
     let _81: string
     let _82: string
     let _83: string
     let _84: string
-    let _85: string
+    let _85: type
     let _86: string
     let _87: string
     let _88: type
     let _89: string
-    let _90: string
+    let _90: int
     let _91: type
     let _92: string
-    let _93: int
+    let _93: string
     let _94: type
-    let _95: string
-    let _96: string
-    let _97: type
-    let _98: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // only
-    let _99: baml.json.json[]
-    let _100: baml.iter.Iterator<Error = never, Item = baml.json.json>
-    let _101: unknown
-    let _102: bool
+    let _95: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // only
+    let _96: baml.json.json[]
+    let _97: baml.iter.Iterator<Error = never, Item = baml.json.json>
+    let _98: unknown
+    let _99: bool
+    let _100: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _101: baml.json.json // p
+    let _102: unknown // e
     let _103: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _104: baml.json.json // p
-    let _105: unknown // e
-    let _106: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _107: type
-    let _108: ai.errors.ParseFailed
+    let _104: type
+    let _105: ai.errors.ParseFailed
+    let _106: string
+    let _107: string
+    let _108: string
     let _109: string
     let _110: string
     let _111: string
     let _112: string
-    let _113: string
+    let _113: type
     let _114: string
     let _115: string
     let _116: type
     let _117: string
     let _118: string
     let _119: type
-    let _120: string
-    let _121: string
-    let _122: type
-    let _123: type
+    let _120: type
 
     bb0: {
         _4 = load_type(#0);
@@ -7366,269 +7363,266 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
 
     bb10: {
         _13 = copy _14;
-        _21 = copy _7;
-        _20 = copy _21 == const "mixedlist";
+        _20 = copy _7 == const "mixedlist";
         branch copy _20 -> [bb55, bb11];
     }
 
     bb11: {
-        _24 = copy _7;
-        _23 = copy _24 == const "mixed";
-        branch copy _23 -> [bb39, bb12];
+        _22 = copy _7 == const "mixed";
+        branch copy _22 -> [bb39, bb12];
     }
 
     bb12: {
-        _50 = copy _7;
-        _49 = copy _50 == const "list";
-        branch copy _49 -> [bb36, bb13];
+        _47 = copy _7 == const "list";
+        branch copy _47 -> [bb36, bb13];
     }
 
     bb13: {
-        _56 = copy _13;
-        _55 = call const fn ai._media_of_kind(copy _2, copy _56) -> [bb14];
+        _53 = copy _13;
+        _52 = call const fn ai._media_of_kind(copy _2, copy _53) -> [bb14];
     }
 
     bb14: {
-        _58 = copy _13;
-        _57 = call const fn ai._media_reject_mixed(copy _2, copy _58, copy _3) -> [bb15];
+        _55 = copy _13;
+        _54 = call const fn ai._media_reject_mixed(copy _2, copy _55, copy _3) -> [bb15];
     }
 
     bb15: {
-        _60 = len(_55);
+        _57 = len(_52);
         goto -> bb16;
     }
 
     bb16: {
-        _59 = copy _60 != const 1_i64;
-        branch copy _59 -> [bb22, bb17];
+        _56 = copy _57 != const 1_i64;
+        branch copy _56 -> [bb22, bb17];
     }
 
     bb17: {
-        _98 = const null;
-        _99 = copy _55;
-        _100 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>(copy _99) -> [bb18];
+        _95 = const null;
+        _96 = copy _52;
+        _97 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>(copy _96) -> [bb18];
     }
 
     bb18: {
-        _101 = virtual_call next as baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>(copy _100) -> [bb19];
+        _98 = virtual_call next as baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>(copy _97) -> [bb19];
     }
 
     bb19: {
-        _102 = is_type(copy _101, baml.iter.Done);
-        branch copy _102 -> [bb21, bb20];
+        _99 = is_type(copy _98, baml.iter.Done);
+        branch copy _99 -> [bb21, bb20];
     }
 
     bb20: {
-        _103 = copy _101;
-        fresh_cell(_104);
-        _104 = copy _103;
-        _98 = copy _104;
+        _100 = copy _98;
+        fresh_cell(_101);
+        _101 = copy _100;
+        _95 = copy _101;
         goto -> bb18;
     }
 
     bb21: {
-        _19 = copy _98;
+        _19 = copy _95;
         goto -> bb57;
     }
 
     bb22: {
-        _64 = copy _7;
-        _63 = copy _64 == const "one";
-        branch copy _63 -> [bb30, bb23];
+        _61 = copy _7;
+        _60 = copy _61 == const "one";
+        branch copy _60 -> [bb30, bb23];
     }
 
     bb23: {
-        _87 = copy _13;
-        _88 = load_type(string);
-        _86 = call const fn baml.String.from<copy _88>(copy _87) -> [bb24];
+        _84 = copy _13;
+        _85 = load_type(string);
+        _83 = call const fn baml.String.from<copy _85>(copy _84) -> [bb24];
     }
 
     bb24: {
-        _85 = const "Expected zero or one " + copy _86;
-        _84 = copy _85 + const " output for ";
-        _90 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb25];
+        _82 = const "Expected zero or one " + copy _83;
+        _81 = copy _82 + const " output for ";
+        _87 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb25];
     }
 
     bb25: {
-        _91 = load_type(string);
-        _89 = call const fn baml.String.from<copy _91>(copy _90) -> [bb26];
+        _88 = load_type(string);
+        _86 = call const fn baml.String.from<copy _88>(copy _87) -> [bb26];
     }
 
     bb26: {
-        _83 = copy _84 + copy _89;
-        _82 = copy _83 + const ", got ";
-        _93 = len(_55);
+        _80 = copy _81 + copy _86;
+        _79 = copy _80 + const ", got ";
+        _90 = len(_52);
         goto -> bb27;
     }
 
     bb27: {
-        _94 = load_type(int);
-        _92 = call const fn baml.String.from<copy _94>(copy _93) -> [bb28];
+        _91 = load_type(int);
+        _89 = call const fn baml.String.from<copy _91>(copy _90) -> [bb28];
     }
 
     bb28: {
-        _81 = copy _82 + copy _92;
-        _80 = copy _81 + const ". Use ";
-        _96 = copy _13;
-        _97 = load_type(string);
-        _95 = call const fn baml.String.from<copy _97>(copy _96) -> [bb29];
+        _78 = copy _79 + copy _89;
+        _77 = copy _78 + const ". Use ";
+        _93 = copy _13;
+        _94 = load_type(string);
+        _92 = call const fn baml.String.from<copy _94>(copy _93) -> [bb29];
     }
 
     bb29: {
-        _79 = copy _80 + copy _95;
-        _62 = copy _79 + const "[] for multiple outputs.";
+        _76 = copy _77 + copy _92;
+        _59 = copy _76 + const "[] for multiple outputs.";
         goto -> bb35;
     }
 
     bb30: {
-        _71 = copy _13;
-        _72 = load_type(string);
-        _70 = call const fn baml.String.from<copy _72>(copy _71) -> [bb31];
+        _68 = copy _13;
+        _69 = load_type(string);
+        _67 = call const fn baml.String.from<copy _69>(copy _68) -> [bb31];
     }
 
     bb31: {
-        _69 = const "Expected exactly one " + copy _70;
-        _68 = copy _69 + const " output, got ";
-        _74 = len(_55);
+        _66 = const "Expected exactly one " + copy _67;
+        _65 = copy _66 + const " output, got ";
+        _71 = len(_52);
         goto -> bb32;
     }
 
     bb32: {
-        _75 = load_type(int);
-        _73 = call const fn baml.String.from<copy _75>(copy _74) -> [bb33];
+        _72 = load_type(int);
+        _70 = call const fn baml.String.from<copy _72>(copy _71) -> [bb33];
     }
 
     bb33: {
-        _67 = copy _68 + copy _73;
-        _66 = copy _67 + const ". Use ";
-        _77 = copy _13;
-        _78 = load_type(string);
-        _76 = call const fn baml.String.from<copy _78>(copy _77) -> [bb34];
+        _64 = copy _65 + copy _70;
+        _63 = copy _64 + const ". Use ";
+        _74 = copy _13;
+        _75 = load_type(string);
+        _73 = call const fn baml.String.from<copy _75>(copy _74) -> [bb34];
     }
 
     bb34: {
-        _65 = copy _66 + copy _76;
-        _62 = copy _65 + const "[] for multiple outputs.";
+        _62 = copy _63 + copy _73;
+        _59 = copy _62 + const "[] for multiple outputs.";
         goto -> bb35;
     }
 
     bb35: {
-        _61 = ai.errors.ParseFailed { copy _3, copy _62 };
-        throw copy _61;
+        _58 = ai.errors.ParseFailed { copy _3, copy _59 };
+        throw copy _58;
     }
 
     bb36: {
-        _52 = copy _13;
-        _51 = call const fn ai._media_reject_mixed(copy _2, copy _52, copy _3) -> [bb37];
+        _49 = copy _13;
+        _48 = call const fn ai._media_reject_mixed(copy _2, copy _49, copy _3) -> [bb37];
     }
 
     bb37: {
-        _54 = copy _13;
-        _53 = call const fn ai._media_of_kind(copy _2, copy _54) -> [bb38];
+        _51 = copy _13;
+        _50 = call const fn ai._media_of_kind(copy _2, copy _51) -> [bb38];
     }
 
     bb38: {
-        _19 = copy _53;
+        _19 = copy _50;
         goto -> bb57;
     }
 
     bb39: {
-        _25 = call const fn ai._media_mixed_parts(copy _2) -> [bb40];
+        _23 = call const fn ai._media_mixed_parts(copy _2) -> [bb40];
     }
 
     bb40: {
-        _27 = len(_25);
+        _25 = len(_23);
         goto -> bb41;
     }
 
     bb41: {
-        _26 = copy _27 == const 1_i64;
-        branch copy _26 -> [bb50, bb42];
+        _24 = copy _25 == const 1_i64;
+        branch copy _24 -> [bb50, bb42];
     }
 
     bb42: {
-        _36 = copy _25;
-        _35 = call const fn ai._media_all_text(copy _36) -> [bb43];
+        _34 = copy _23;
+        _33 = call const fn ai._media_all_text(copy _34) -> [bb43];
     }
 
     bb43: {
-        branch copy _35 -> [bb49, bb44];
+        branch copy _33 -> [bb49, bb44];
     }
 
     bb44: {
-        _44 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb45];
+        _42 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb45];
     }
 
     bb45: {
-        _45 = load_type(string);
-        _43 = call const fn baml.String.from<copy _45>(copy _44) -> [bb46];
+        _43 = load_type(string);
+        _41 = call const fn baml.String.from<copy _43>(copy _42) -> [bb46];
     }
 
     bb46: {
-        _42 = const "Expected one text or image output for " + copy _43;
-        _41 = copy _42 + const ", got ";
-        _47 = len(_25);
+        _40 = const "Expected one text or image output for " + copy _41;
+        _39 = copy _40 + const ", got ";
+        _45 = len(_23);
         goto -> bb47;
     }
 
     bb47: {
-        _48 = load_type(int);
-        _46 = call const fn baml.String.from<copy _48>(copy _47) -> [bb48];
+        _46 = load_type(int);
+        _44 = call const fn baml.String.from<copy _46>(copy _45) -> [bb48];
     }
 
     bb48: {
-        _40 = copy _41 + copy _46;
-        _39 = copy _40 + const " parts. Use (image | string)[] to preserve mixed outputs.";
-        _38 = ai.errors.ParseFailed { copy _3, copy _39 };
-        throw copy _38;
+        _38 = copy _39 + copy _44;
+        _37 = copy _38 + const " parts. Use (image | string)[] to preserve mixed outputs.";
+        _36 = ai.errors.ParseFailed { copy _3, copy _37 };
+        throw copy _36;
     }
 
     bb49: {
-        _37 = copy _25;
-        _19 = call const fn ai._media_join_text(copy _37) -> [bb57];
+        _35 = copy _23;
+        _19 = call const fn ai._media_join_text(copy _35) -> [bb57];
     }
 
     bb50: {
-        _28 = const null;
-        _29 = copy _25;
-        _30 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>(copy _29) -> [bb51];
+        _26 = const null;
+        _27 = copy _23;
+        _28 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>(copy _27) -> [bb51];
     }
 
     bb51: {
-        _31 = virtual_call next as baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>(copy _30) -> [bb52];
+        _29 = virtual_call next as baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>(copy _28) -> [bb52];
     }
 
     bb52: {
-        _32 = is_type(copy _31, baml.iter.Done);
-        branch copy _32 -> [bb54, bb53];
+        _30 = is_type(copy _29, baml.iter.Done);
+        branch copy _30 -> [bb54, bb53];
     }
 
     bb53: {
-        _33 = copy _31;
-        fresh_cell(_34);
-        _34 = copy _33;
-        _28 = copy _34;
+        _31 = copy _29;
+        fresh_cell(_32);
+        _32 = copy _31;
+        _26 = copy _32;
         goto -> bb51;
     }
 
     bb54: {
-        _19 = copy _28;
+        _19 = copy _26;
         goto -> bb57;
     }
 
     bb55: {
-        _22 = call const fn ai._media_mixed_parts(copy _2) -> [bb56];
+        _21 = call const fn ai._media_mixed_parts(copy _2) -> [bb56];
     }
 
     bb56: {
-        _19 = copy _22;
+        _19 = copy _21;
         goto -> bb57;
     }
 
     bb57: {
-        _106 = copy _19;
-        _107 = load_type(#0);
-        _0 = call const fn baml.json.from_json<copy _107>(copy _106) -> [bb58, unwind: bb59];
+        _103 = copy _19;
+        _104 = load_type(#0);
+        _0 = call const fn baml.json.from_json<copy _104>(copy _103) -> [bb58, unwind: bb59];
     }
 
     bb58: {
@@ -7636,42 +7630,42 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     }
 
     bb59: {
-        throw_if_panic copy _105 -> bb60;
+        throw_if_panic copy _102 -> bb60;
     }
 
     bb60: {
-        _115 = copy _13;
-        _116 = load_type(string);
-        _114 = call const fn baml.String.from<copy _116>(copy _115) -> [bb61];
+        _112 = copy _13;
+        _113 = load_type(string);
+        _111 = call const fn baml.String.from<copy _113>(copy _112) -> [bb61];
     }
 
     bb61: {
-        _113 = const "the " + copy _114;
-        _112 = copy _113 + const " output did not fit ";
-        _118 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb62];
+        _110 = const "the " + copy _111;
+        _109 = copy _110 + const " output did not fit ";
+        _115 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb62];
     }
 
     bb62: {
-        _119 = load_type(string);
-        _117 = call const fn baml.String.from<copy _119>(copy _118) -> [bb63];
+        _116 = load_type(string);
+        _114 = call const fn baml.String.from<copy _116>(copy _115) -> [bb63];
     }
 
     bb63: {
-        _111 = copy _112 + copy _117;
-        _110 = copy _111 + const ": ";
-        _122 = load_type(baml.json.JsonDecodeError);
-        _121 = call const fn baml.String.from<copy _122>(copy _105) -> [bb64];
+        _108 = copy _109 + copy _114;
+        _107 = copy _108 + const ": ";
+        _119 = load_type(baml.json.JsonDecodeError);
+        _118 = call const fn baml.String.from<copy _119>(copy _102) -> [bb64];
     }
 
     bb64: {
-        _123 = load_type(string);
-        _120 = call const fn baml.String.from<copy _123>(copy _121) -> [bb65];
+        _120 = load_type(string);
+        _117 = call const fn baml.String.from<copy _120>(copy _118) -> [bb65];
     }
 
     bb65: {
-        _109 = copy _110 + copy _120;
-        _108 = ai.errors.ParseFailed { copy _3, copy _109 };
-        throw copy _108;
+        _106 = copy _107 + copy _117;
+        _105 = ai.errors.ParseFailed { copy _3, copy _106 };
+        throw copy _105;
     }
 }
 

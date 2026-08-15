@@ -395,16 +395,12 @@ function _is_s3_url(url: string?) -> bool {
 }
 
 function _image_format(mime: string) -> string {
-    if (mime == "image/png") {
-        "png"
-    } else if (mime == "image/jpeg" || mime == "image/jpg") {
-        "jpeg"
-    } else if (mime == "image/gif") {
-        "gif"
-    } else if (mime == "image/webp") {
-        "webp"
-    } else {
-        throw _reject(`unsupported image format for Bedrock: ${mime}`)
+    match (mime) {
+        "image/png" => "png",
+        "image/jpeg" | "image/jpg" => "jpeg",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        _ => throw _reject(`unsupported image format for Bedrock: ${mime}`),
     }
 }
 
@@ -412,26 +408,17 @@ function _image_format(mime: string) -> string {
 // three_gp. sys_llm's map (`build_request/bedrock.rs:280-292`) predates `mpg`
 // and `wmv`; both are carried here.
 function _video_format(mime: string) -> string {
-    if (mime == "video/mp4") {
-        "mp4"
-    } else if (mime == "video/mpeg") {
-        "mpeg"
-    } else if (mime == "video/mpg" || mime == "video/x-mpg") {
-        "mpg"
-    } else if (mime == "video/x-ms-wmv" || mime == "video/wmv") {
-        "wmv"
-    } else if (mime == "video/x-matroska") {
-        "mkv"
-    } else if (mime == "video/quicktime") {
-        "mov"
-    } else if (mime == "video/x-flv") {
-        "flv"
-    } else if (mime == "video/webm") {
-        "webm"
-    } else if (mime == "video/3gpp") {
-        "three_gp"
-    } else {
-        throw _reject(`unsupported video format for Bedrock: ${mime}`)
+    match (mime) {
+        "video/mp4" => "mp4",
+        "video/mpeg" => "mpeg",
+        "video/mpg" | "video/x-mpg" => "mpg",
+        "video/x-ms-wmv" | "video/wmv" => "wmv",
+        "video/x-matroska" => "mkv",
+        "video/quicktime" => "mov",
+        "video/x-flv" => "flv",
+        "video/webm" => "webm",
+        "video/3gpp" => "three_gp",
+        _ => throw _reject(`unsupported video format for Bedrock: ${mime}`),
     }
 }
 
@@ -440,34 +427,21 @@ function _video_format(mime: string) -> string {
 // (`build_request/bedrock.rs:267-278`); the enum has widened since, so the
 // containers with an unambiguous IANA/common mime type are all mapped.
 function _audio_format(mime: string) -> string {
-    if (mime == "audio/mpeg" || mime == "audio/mp3") {
-        "mp3"
-    } else if (mime == "audio/wav" || mime == "audio/x-wav" || mime == "audio/wave") {
-        "wav"
-    } else if (mime == "audio/flac" || mime == "audio/x-flac") {
-        "flac"
-    } else if (mime == "audio/ogg") {
-        "ogg"
-    } else if (mime == "audio/opus") {
-        "opus"
-    } else if (mime == "audio/aac") {
-        "aac"
-    } else if (mime == "audio/x-aac") {
-        "x-aac"
-    } else if (mime == "audio/mp4") {
-        "mp4"
-    } else if (mime == "audio/m4a" || mime == "audio/x-m4a") {
-        "m4a"
-    } else if (mime == "audio/x-matroska") {
-        "mka"
-    } else if (mime == "audio/mpga") {
-        "mpga"
-    } else if (mime == "audio/pcm" || mime == "audio/x-pcm" || mime == "audio/L16") {
-        "pcm"
-    } else if (mime == "audio/webm") {
-        "webm"
-    } else {
-        throw _reject(`unsupported audio format for Bedrock: ${mime}`)
+    match (mime) {
+        "audio/mpeg" | "audio/mp3" => "mp3",
+        "audio/wav" | "audio/x-wav" | "audio/wave" => "wav",
+        "audio/flac" | "audio/x-flac" => "flac",
+        "audio/ogg" => "ogg",
+        "audio/opus" => "opus",
+        "audio/aac" => "aac",
+        "audio/x-aac" => "x-aac",
+        "audio/mp4" => "mp4",
+        "audio/m4a" | "audio/x-m4a" => "m4a",
+        "audio/x-matroska" => "mka",
+        "audio/mpga" => "mpga",
+        "audio/pcm" | "audio/x-pcm" | "audio/L16" => "pcm",
+        "audio/webm" => "webm",
+        _ => throw _reject(`unsupported audio format for Bedrock: ${mime}`),
     }
 }
 
@@ -809,12 +783,10 @@ function _lower_journal(journal: ai.Journal, with_status: bool) -> Message[] {
 // documented modes; anything else names a specific tool.
 function _tool_choice(choice: string) -> ToolChoice {
     let empty: map<string, unknown> = { };
-    if (choice == "auto") {
-        ToolChoice { auto: empty, any: null, tool: null }
-    } else if (choice == "any" || choice == "required") {
-        ToolChoice { auto: null, any: empty, tool: null }
-    } else {
-        ToolChoice { auto: null, any: null, tool: SpecificToolChoice { name: choice } }
+    match (choice) {
+        "auto" => ToolChoice { auto: empty, any: null, tool: null },
+        "any" | "required" => ToolChoice { auto: null, any: empty, tool: null },
+        _ => ToolChoice { auto: null, any: null, tool: SpecificToolChoice { name: choice } },
     }
 }
 
@@ -1188,23 +1160,19 @@ function _is_malformed_stop(raw: string) -> bool {
 /// (`parse_response/bedrock.rs:110-116`, extended with the guardrail and
 /// failure reasons the Converse API documents).
 function stop_reason(raw: string) -> ai.content.StopReason {
-    if (raw == "tool_use") {
-        ai.content.StopReason.ToolUse
-    } else if (raw == "max_tokens" || raw == "model_context_window_exceeded") {
+    match (raw) {
+        "tool_use" => ai.content.StopReason.ToolUse,
         // `model_context_window_exceeded`: prompt + output overflowed the
         // context window. Semantically the twin of `max_tokens` — the
         // generation was cut short, so it is emphatically not a clean answer.
-        ai.content.StopReason.MaxTokens
-    } else if (raw == "content_filtered" || raw == "guardrail_intervened") {
-        ai.content.StopReason.Refused
-    } else if (_is_malformed_stop(raw)) {
+        "max_tokens" | "model_context_window_exceeded" => ai.content.StopReason.MaxTokens,
+        "content_filtered" | "guardrail_intervened" => ai.content.StopReason.Refused,
         // Unreachable from `parse_response`, which throws first. Kept
         // non-Complete so a direct caller of this mapper never reads a
         // malformed turn as a finished one.
-        ai.content.StopReason.Refused
-    } else {
+        let r if _is_malformed_stop(r) => ai.content.StopReason.Refused,
         // end_turn, stop_sequence, and anything Bedrock adds later.
-        ai.content.StopReason.Complete
+        _ => ai.content.StopReason.Complete,
     }
 }
 

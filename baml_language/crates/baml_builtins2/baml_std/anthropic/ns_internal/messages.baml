@@ -756,15 +756,12 @@ function anthropic_render(c: root.AnthropicClient, input: ai.ModelTurnInput) -> 
 // (the runner's "incomplete answer" outcome) rather than silently reporting a
 // truncated candidate as a successful completion.
 function _anthropic_stop_reason(s: string) -> ai.content.StopReason {
-    if (s == "end_turn" || s == "stop_sequence") {
-        ai.content.StopReason.Complete
-    } else if (s == "tool_use") {
-        ai.content.StopReason.ToolUse
-    } else if (s == "refusal") {
-        ai.content.StopReason.Refused
-    } else {
+    match (s) {
+        "end_turn" | "stop_sequence" => ai.content.StopReason.Complete,
+        "tool_use" => ai.content.StopReason.ToolUse,
+        "refusal" => ai.content.StopReason.Refused,
         // max_tokens, pause_turn, model_context_window_exceeded, unknown.
-        ai.content.StopReason.MaxTokens
+        _ => ai.content.StopReason.MaxTokens,
     }
 }
 
@@ -772,26 +769,29 @@ function _anthropic_stop_reason(s: string) -> ai.content.StopReason {
 function anthropic_parse(resp: AnthropicResponse) -> ai.ModelTurn {
     let content: ai.content.Block[] = [];
     for (let b in resp.content) {
-        if (b.type == "text") {
-            content.push(ai.content.Text { text: b.text ?? "" });
-            null
-        } else if (b.type == "thinking") {
-            content.push(ai.content.Reasoning { summary: b.thinking ?? "" });
-            null
-        } else if (b.type == "tool_use") {
-            let empty_args: map<string, unknown> = {};
-            content.push(
-                ai.content.ToolUse {
-                    id: b.id ?? "",
-                    name: b.name ?? "",
-                    args: b.input ?? empty_args,
-                },
-            );
-            null
-        } else {
+        match (b.type) {
+            "text" => {
+                content.push(ai.content.Text { text: b.text ?? "" });
+                null
+            },
+            "thinking" => {
+                content.push(ai.content.Reasoning { summary: b.thinking ?? "" });
+                null
+            },
+            "tool_use" => {
+                let empty_args: map<string, unknown> = {};
+                content.push(
+                    ai.content.ToolUse {
+                        id: b.id ?? "",
+                        name: b.name ?? "",
+                        args: b.input ?? empty_args,
+                    },
+                );
+                null
+            },
             // redacted_thinking and server-tool blocks: nothing canonical to
             // build from them yet.
-            null
+            _ => null,
         };
     }
 
@@ -966,23 +966,25 @@ function _anth_stream_call_at(state: AnthStreamState, index: int?) -> AnthStream
 function _anth_stream_failure(error: AnthStreamError?, raw: string) -> ai.errors.Failure {
     let kind = error?.type ?? "";
     let detail = error?.message ?? kind;
-    if (kind == "rate_limit_error") {
-        ai.errors.RateLimited { provider: "anthropic", retry_after_ms: null, raw_body: raw }
-    } else if (kind == "overloaded_error" || kind == "api_error" || kind == "timeout_error") {
-        ai.errors.NetworkFailure {
+    match (kind) {
+        "rate_limit_error" => ai.errors.RateLimited {
+            provider: "anthropic",
+            retry_after_ms: null,
+            raw_body: raw,
+        },
+        "overloaded_error" | "api_error" | "timeout_error" => ai.errors.NetworkFailure {
             provider: "anthropic",
             detail: `${kind}: ${detail}`,
             raw_body: raw,
-        }
-    } else {
+        },
         // authentication_error, permission_error, invalid_request_error,
         // not_found_error, request_too_large, billing_error, and anything new.
-        ai.errors.InvalidRequest {
+        _ => ai.errors.InvalidRequest {
             provider: "anthropic",
             status_code: null,
             detail: `${kind}: ${detail}`,
             raw_body: raw,
-        }
+        },
     }
 }
 
@@ -997,12 +999,110 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
             };
             if let event: AnthStreamEvent = ev {
                 let t = event.type ?? raw.event ?? "";
-                if (t == "error") {
-                    throw _anth_stream_failure(event.error, data)
-                } else if (t == "message_start") {
-                    if let message: AnthStreamMessage = event.message {
-                        state.model = message.model;
-                        if let usage: AnthStreamUsage = message.usage {
+                match (t) {
+                    "error" => {
+                        throw _anth_stream_failure(event.error, data)
+                    },
+                    "message_start" => {
+                        if let message: AnthStreamMessage = event.message {
+                            state.model = message.model;
+                            if let usage: AnthStreamUsage = message.usage {
+                                state.cache_read_input_tokens =
+                                    usage.cache_read_input_tokens ?? state.cache_read_input_tokens;
+                                state.cache_creation_input_tokens =
+                                    usage.cache_creation_input_tokens
+                                        ?? state.cache_creation_input_tokens;
+                                state.reasoning_tokens =
+                                    usage.output_tokens_details?.thinking_tokens
+                                        ?? state.reasoning_tokens;
+                            }
+                            null
+                        } else {
+                            null
+                        };
+                        out.push(
+                            ai.stream.TurnMeta {
+                                stop_reason: null,
+                                input_tokens: event.message?.usage?.input_tokens,
+                                output_tokens: event.message?.usage?.output_tokens,
+                            },
+                        );
+                        null
+                    },
+                    "content_block_start" => {
+                        if let block: AnthStreamContentBlock = event.content_block {
+                            let kind = block.type ?? "";
+                            match (kind) {
+                                "tool_use" => {
+                                    state.tool_calls.push(
+                                        AnthStreamToolCall {
+                                            index: event.index ?? state.tool_calls.length(),
+                                            id: block.id ?? "",
+                                            name: block.name ?? "",
+                                            args_json: "",
+                                        },
+                                    );
+                                    null
+                                },
+                                "thinking" => {
+                                    state.thinking = `${state.thinking}${block.thinking ?? ""}`;
+                                    null
+                                },
+                                _ => {
+                                    // A text block may open with content already in it.
+                                    if let text: string = block.text {
+                                        if (text != "") {
+                                            out.push(ai.stream.TextDelta { text: text });
+                                        }
+                                    }
+                                    null
+                                },
+                            };
+                            null
+                        } else {
+                            null
+                        };
+                        null
+                    },
+                    "content_block_delta" => {
+                        if let d: AnthStreamDelta = event.delta {
+                            let kind = d.type ?? "";
+                            match (kind) {
+                                "text_delta" => {
+                                    if let text: string = d.text {
+                                        out.push(ai.stream.TextDelta { text: text });
+                                    }
+                                    null
+                                },
+                                "input_json_delta" => {
+                                    if let call: AnthStreamToolCall = _anth_stream_call_at(
+                                        state,
+                                        event.index,
+                                    ) {
+                                        call.args_json = `${call.args_json}${d.partial_json ?? ""}`;
+                                    }
+                                    null
+                                },
+                                "thinking_delta" => {
+                                    // Deliberately NOT a TextDelta: thinking is not part
+                                    // of the answer the parser will see.
+                                    state.thinking = `${state.thinking}${d.thinking ?? ""}`;
+                                    null
+                                },
+                                "signature_delta" => {
+                                    state.signature = `${state.signature}${d.signature ?? ""}`;
+                                    null
+                                },
+                                _ => null,
+                            };
+                            null
+                        } else {
+                            null
+                        };
+                        null
+                    },
+                    "message_delta" => {
+                        if let usage: AnthStreamUsage = event.usage {
                             state.cache_read_input_tokens =
                                 usage.cache_read_input_tokens ?? state.cache_read_input_tokens;
                             state.cache_creation_input_tokens =
@@ -1012,112 +1112,28 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
                                 usage.output_tokens_details?.thinking_tokens
                                     ?? state.reasoning_tokens;
                         }
-                        null
-                    } else {
-                        null
-                    };
-                    out.push(
-                        ai.stream.TurnMeta {
-                            stop_reason: null,
-                            input_tokens: event.message?.usage?.input_tokens,
-                            output_tokens: event.message?.usage?.output_tokens,
-                        },
-                    );
-                    null
-                } else if (t == "content_block_start") {
-                    if let block: AnthStreamContentBlock = event.content_block {
-                        let kind = block.type ?? "";
-                        if (kind == "tool_use") {
-                            state.tool_calls.push(
-                                AnthStreamToolCall {
-                                    index: event.index ?? state.tool_calls.length(),
-                                    id: block.id ?? "",
-                                    name: block.name ?? "",
-                                    args_json: "",
-                                },
-                            );
-                            null
-                        } else if (kind == "thinking") {
-                            state.thinking = `${state.thinking}${block.thinking ?? ""}`;
-                            null
-                        } else {
-                            // A text block may open with content already in it.
-                            if let text: string = block.text {
-                                if (text != "") {
-                                    out.push(ai.stream.TextDelta { text: text });
-                                }
-                            }
-                            null
+                        let stop: ai.content.StopReason? = match (event.delta?.stop_reason) {
+                            null => null,
+                            let s: string => {
+                                state.stop_reason_raw = s;
+                                _anthropic_stop_reason(s)
+                            },
                         };
+                        out.push(
+                            ai.stream.TurnMeta {
+                                stop_reason: stop,
+                                input_tokens: event.usage?.input_tokens,
+                                output_tokens: event.usage?.output_tokens,
+                            },
+                        );
                         null
-                    } else {
+                    },
+                    "message_stop" => {
+                        out.push(ai.stream.TurnDone {  });
                         null
-                    };
-                    null
-                } else if (t == "content_block_delta") {
-                    if let d: AnthStreamDelta = event.delta {
-                        let kind = d.type ?? "";
-                        if (kind == "text_delta") {
-                            if let text: string = d.text {
-                                out.push(ai.stream.TextDelta { text: text });
-                            }
-                            null
-                        } else if (kind == "input_json_delta") {
-                            if let call: AnthStreamToolCall = _anth_stream_call_at(
-                                state,
-                                event.index,
-                            ) {
-                                call.args_json = `${call.args_json}${d.partial_json ?? ""}`;
-                            }
-                            null
-                        } else if (kind == "thinking_delta") {
-                            // Deliberately NOT a TextDelta: thinking is not part
-                            // of the answer the parser will see.
-                            state.thinking = `${state.thinking}${d.thinking ?? ""}`;
-                            null
-                        } else if (kind == "signature_delta") {
-                            state.signature = `${state.signature}${d.signature ?? ""}`;
-                            null
-                        } else {
-                            null
-                        };
-                        null
-                    } else {
-                        null
-                    };
-                    null
-                } else if (t == "message_delta") {
-                    if let usage: AnthStreamUsage = event.usage {
-                        state.cache_read_input_tokens =
-                            usage.cache_read_input_tokens ?? state.cache_read_input_tokens;
-                        state.cache_creation_input_tokens =
-                            usage.cache_creation_input_tokens
-                                ?? state.cache_creation_input_tokens;
-                        state.reasoning_tokens =
-                            usage.output_tokens_details?.thinking_tokens
-                                ?? state.reasoning_tokens;
-                    }
-                    let stop: ai.content.StopReason? = match (event.delta?.stop_reason) {
-                        null => null,
-                        let s: string => {
-                            state.stop_reason_raw = s;
-                            _anthropic_stop_reason(s)
-                        },
-                    };
-                    out.push(
-                        ai.stream.TurnMeta {
-                            stop_reason: stop,
-                            input_tokens: event.usage?.input_tokens,
-                            output_tokens: event.usage?.output_tokens,
-                        },
-                    );
-                    null
-                } else if (t == "message_stop") {
-                    out.push(ai.stream.TurnDone {  });
-                    null
-                } else {
+                    },
                     // content_block_stop and ping carry nothing to fold.
-                    null
+                    _ => null,
                 };
                 null
             } else {

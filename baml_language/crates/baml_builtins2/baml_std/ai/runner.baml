@@ -269,48 +269,53 @@ class Agent<Out> {
         let shape = _media_shape(t);
         let form = shape.split(":").at(0) ?? "";
         let kind = shape.split(":").at(1) ?? "";
-        let payload = if (form == "mixedlist") {
-            let items: baml.json.json = _media_mixed_parts(turn);
-            items
-        } else if (form == "mixed") {
-            let items = _media_mixed_parts(turn);
-            if (items.length() == 1) {
+        let payload = match (form) {
+            "mixedlist" => {
+                let items: baml.json.json = _media_mixed_parts(turn);
+                items
+            },
+            "mixed" => {
+                let items = _media_mixed_parts(turn);
+                if (items.length() == 1) {
+                    let only: baml.json.json = null;
+                    for (let i in items) {
+                        only = i;
+                    }
+                    only
+                } else if (_media_all_text(items)) {
+                    // several plain text parts collapse into one string
+                    _media_join_text(items)
+                } else {
+                    throw root.errors.ParseFailed {
+                        provider: provider,
+                        raw_output: `Expected one text or image output for ${t.to_string()}, got ${items.length()} parts. Use (image | string)[] to preserve mixed outputs.`,
+                    }
+                }
+            },
+            "list" => {
+                _media_reject_mixed(turn, kind, provider);
+                let items: baml.json.json = _media_of_kind(turn, kind);
+                items
+            },
+            _ => {
+                let parts = _media_of_kind(turn, kind);
+                _media_reject_mixed(turn, kind, provider);
+                if (parts.length() != 1) {
+                    throw root.errors.ParseFailed {
+                        provider: provider,
+                        raw_output: if (form == "one") {
+                            `Expected exactly one ${kind} output, got ${parts.length()}. Use ${kind}[] for multiple outputs.`
+                        } else {
+                            `Expected zero or one ${kind} output for ${t.to_string()}, got ${parts.length()}. Use ${kind}[] for multiple outputs.`
+                        },
+                    }
+                }
                 let only: baml.json.json = null;
-                for (let i in items) {
-                    only = i;
+                for (let p in parts) {
+                    only = p;
                 }
                 only
-            } else if (_media_all_text(items)) {
-                // several plain text parts collapse into one string
-                _media_join_text(items)
-            } else {
-                throw root.errors.ParseFailed {
-                    provider: provider,
-                    raw_output: `Expected one text or image output for ${t.to_string()}, got ${items.length()} parts. Use (image | string)[] to preserve mixed outputs.`,
-                }
-            }
-        } else if (form == "list") {
-            _media_reject_mixed(turn, kind, provider);
-            let items: baml.json.json = _media_of_kind(turn, kind);
-            items
-        } else {
-            let parts = _media_of_kind(turn, kind);
-            _media_reject_mixed(turn, kind, provider);
-            if (parts.length() != 1) {
-                throw root.errors.ParseFailed {
-                    provider: provider,
-                    raw_output: if (form == "one") {
-                        `Expected exactly one ${kind} output, got ${parts.length()}. Use ${kind}[] for multiple outputs.`
-                    } else {
-                        `Expected zero or one ${kind} output for ${t.to_string()}, got ${parts.length()}. Use ${kind}[] for multiple outputs.`
-                    },
-                }
-            }
-            let only: baml.json.json = null;
-            for (let p in parts) {
-                only = p;
-            }
-            only
+            },
         };
         baml.json.from_json<Out>(payload) catch_all (e) {
             _ => {

@@ -870,8 +870,8 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     pop 1
     load_var parts
     container_len
-    store_var _60
-    load_var _60
+    store_var _57
+    load_var _57
     load_const 1
     cmp_int_op !=
     pop_jump_if_false L5
@@ -884,21 +884,21 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _100
+    store_var _97
 
   L6:
-    load_var _100
+    load_var _97
     load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _101
-    load_var _101
+    store_var _98
+    load_var _98
     is_type baml.iter.Done
     pop_jump_if_false L7
     jump L8
 
   L7:
-    load_var _101
+    load_var _98
     store_var only
     jump L6
 
@@ -918,75 +918,75 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_type string
     load_var kind
     call baml.String.from
-    store_var _86
+    store_var _83
     load_var t
     call baml.TypeValue.baml.ToString.to_string
-    store_var _90
+    store_var _87
     load_type string
+    load_var _87
+    call baml.String.from
+    store_var _86
+    load_var parts
+    container_len
+    store_var _90
+    load_type int
     load_var _90
     call baml.String.from
     store_var _89
-    load_var parts
-    container_len
-    store_var _93
-    load_type int
-    load_var _93
-    call baml.String.from
-    store_var _92
     load_type string
     load_var kind
     call baml.String.from
-    store_var _95
+    store_var _92
     load_const "Expected zero or one "
-    load_var _86
+    load_var _83
     bin_op +
     load_const " output for "
     bin_op +
-    load_var _89
+    load_var _86
     bin_op +
     load_const ", got "
     bin_op +
-    load_var _92
+    load_var _89
     bin_op +
     load_const ". Use "
     bin_op +
-    load_var _95
+    load_var _92
     bin_op +
     load_const "[] for multiple outputs."
     bin_op +
-    store_var _62
+    store_var _59
     jump L12
 
   L11:
     load_type string
     load_var kind
     call baml.String.from
-    store_var _70
+    store_var _67
     load_var parts
     container_len
-    store_var _74
+    store_var _71
     load_type int
-    load_var _74
+    load_var _71
     call baml.String.from
-    store_var _73
+    store_var _70
     load_type string
     load_var kind
     call baml.String.from
-    store_var _76
+    store_var _73
     load_const "Expected exactly one "
-    load_var _70
+    load_var _67
     bin_op +
     load_const " output, got "
     bin_op +
-    load_var _73
+    load_var _70
     bin_op +
     load_const ". Use "
     bin_op +
-    load_var _76
+    load_var _73
     bin_op +
     load_const "[] for multiple outputs."
     bin_op +
-    store_var _62
+    store_var _59
 
   L12:
     load_var2 3 24
@@ -1009,8 +1009,8 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     store_var items
     load_var items
     container_len
-    store_var _27
-    load_var _27
+    store_var _25
+    load_var _25
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L15
@@ -1025,25 +1025,25 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
   L16:
     load_var t
     call baml.TypeValue.baml.ToString.to_string
-    store_var _44
+    store_var _42
     load_type string
-    load_var _44
+    load_var _42
     call baml.String.from
-    store_var _43
+    store_var _41
     load_var items
     container_len
-    store_var _47
+    store_var _45
     load_type int
-    load_var _47
+    load_var _45
     call baml.String.from
-    store_var _46
+    store_var _44
     load_var provider
     load_const "Expected one text or image output for "
-    load_var _43
+    load_var _41
     bin_op +
     load_const ", got "
     bin_op +
-    load_var _46
+    load_var _44
     bin_op +
     load_const " parts. Use (image | string)[] to preserve mixed outputs."
     bin_op +
@@ -1063,21 +1063,21 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _30
+    store_var _28
 
   L19:
-    load_var _30
+    load_var _28
     load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _31
-    load_var _31
+    store_var _29
+    load_var _29
     is_type baml.iter.Done
     pop_jump_if_false L20
     jump L21
 
   L20:
-    load_var _31
+    load_var _29
     store_var only
     jump L19
 
@@ -1101,33 +1101,33 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_type string
     load_var kind
     call baml.String.from
-    store_var _114
+    store_var _111
     load_var t
     call baml.TypeValue.baml.ToString.to_string
+    store_var _115
+    load_type string
+    load_var _115
+    call baml.String.from
+    store_var _114
+    load_type baml.json.JsonDecodeError
+    load_var e
+    call baml.String.from
     store_var _118
     load_type string
     load_var _118
     call baml.String.from
     store_var _117
-    load_type baml.json.JsonDecodeError
-    load_var e
-    call baml.String.from
-    store_var _121
-    load_type string
-    load_var _121
-    call baml.String.from
-    store_var _120
     load_var provider
     load_const "the "
-    load_var _114
+    load_var _111
     bin_op +
     load_const " output did not fit "
     bin_op +
-    load_var _117
+    load_var _114
     bin_op +
     load_const ": "
     bin_op +
-    load_var _120
+    load_var _117
     bin_op +
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw

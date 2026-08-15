@@ -305,14 +305,11 @@ function images_render(c: root.ImageClient, input: ai.ModelTurnInput) -> baml.ht
 // best available answer, and png is the API default.
 function _oai_images_mime(format: string?) -> string {
     let normalized = (format ?? "png").to_lower_case();
-    if (normalized == "jpeg" || normalized == "jpg") {
-        "image/jpeg"
-    } else if (normalized == "webp") {
-        "image/webp"
-    } else if (normalized == "gif") {
-        "image/gif"
-    } else {
-        "image/png"
+    match (normalized) {
+        "jpeg" | "jpg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "image/png",
     }
 }
 

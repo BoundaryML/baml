@@ -320,18 +320,13 @@ function _openai_file_name(source: string?) -> string {
 // formats; the remaining mappings are carried over from sys_llm so a provider
 // that widens the set keeps working.
 function _openai_audio_format(mime_type: string) -> string {
-    if (mime_type == "audio/wav" || mime_type == "audio/x-wav") {
-        "wav"
-    } else if (mime_type == "audio/mpeg" || mime_type == "audio/mp3") {
-        "mp3"
-    } else if (mime_type == "audio/flac" || mime_type == "audio/x-flac") {
-        "flac"
-    } else if (mime_type == "audio/ogg") {
-        "ogg"
-    } else if (mime_type == "audio/webm") {
-        "webm"
-    } else {
-        mime_type
+    match (mime_type) {
+        "audio/wav" | "audio/x-wav" => "wav",
+        "audio/mpeg" | "audio/mp3" => "mp3",
+        "audio/flac" | "audio/x-flac" => "flac",
+        "audio/ogg" => "ogg",
+        "audio/webm" => "webm",
+        _ => mime_type,
     }
 }
 
@@ -438,12 +433,9 @@ function _openai_prompt_content(message: ai.PromptMessage, role: string) -> OaIn
 function openai_lower_prompt(prompt: ai.Prompt) -> OaInputItem[] {
     let items: OaInputItem[] = [];
     for (let message in prompt.messages()) {
-        let role = if (message.role == "") {
-            "user"
-        } else if (message.role == "tool") {
-            "user"
-        } else {
-            message.role
+        let role = match (message.role) {
+            "" | "tool" => "user",
+            _ => message.role,
         };
         items.push(OaMessageItem { role: role, content: _openai_prompt_content(message, role) });
     }
@@ -757,12 +749,10 @@ function _openai_request(
 // The mime type of an image_generation_call payload.
 function _openai_image_mime(output_format: string?) -> string {
     let format = (output_format ?? "").trim().to_lower_case();
-    if (format == "jpeg" || format == "jpg") {
-        "image/jpeg"
-    } else if (format == "webp") {
-        "image/webp"
-    } else {
-        "image/png"
+    match (format) {
+        "jpeg" | "jpg" => "image/jpeg",
+        "webp" => "image/webp",
+        _ => "image/png",
     }
 }
 
@@ -828,68 +818,79 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
     let refused = false;
     let output: OaOutputItem[] = resp.output ?? [];
     for (let item in output) {
-        if (item.type == "function_call") {
-            has_call = true;
-            let args: map<string, unknown> = { };
-            if let s: string = item.arguments {
-                // Provider-malformed output, not a bug in the caller's code:
-                // the raw baml JsonParseError would escape as an untyped
-                // UnknownError, so it is classified like every other
-                // undecodable provider payload (ai.wire.send_as does the same
-                // for the response body).
-                args = baml.json.from_string<map<string, unknown>>(s) catch_all (e) {
-                    _ => throw ai.errors.ParseFailed { provider: "openai", raw_output: s },
+        match (item.type) {
+            "function_call" => {
+                has_call = true;
+                let args: map<string, unknown> = { };
+                if let s: string = item.arguments {
+                    // Provider-malformed output, not a bug in the caller's code:
+                    // the raw baml JsonParseError would escape as an untyped
+                    // UnknownError, so it is classified like every other
+                    // undecodable provider payload (ai.wire.send_as does the
+                    // same for the response body).
+                    args = baml.json.from_string<map<string, unknown>>(s) catch_all (e) {
+                        _ => throw ai.errors.ParseFailed { provider: "openai", raw_output: s },
+                    };
                 };
-            };
-            content.push(
-                ai.content.ToolUse { id: item.call_id ?? "", name: item.name ?? "", args: args },
-            );
-            null
-        } else if (item.type == "message") {
-            let parts: OaContentPart[] = item.content ?? [];
-            for (let part in parts) {
-                let kind = part.type ?? "";
-                if (kind == "output_text") {
-                    content.push(ai.content.Text { text: part.text ?? "" });
-                    null
-                } else if (kind == "refusal") {
-                    refused = true;
-                    content.push(ai.content.Text { text: part.refusal ?? "" });
-                    null
-                } else {
-                    null
-                };
-            }
-            null
-        } else if (item.type == "reasoning") {
-            let parts: OaContentPart[] = item.summary ?? [];
-            for (let part in parts) {
-                if let txt: string = part.text {
-                    content.push(ai.content.Reasoning { summary: txt });
-                    null
-                } else {
-                    null
-                };
-            }
-            null
-        } else if (item.type == "image_generation_call") {
-            // The provider-side image tool already ran: its result is turn
-            // content, NOT a tool call the runner has to execute.
-            if let encoded: string = item.result {
                 content.push(
-                    ai.content.Media.new(
-                        baml.media.Image.from_base64(encoded, _openai_image_mime(item.output_format)),
-                        provider_id = item.id,
-                        revised_prompt = item.revised_prompt,
-                    ),
+                    ai.content.ToolUse {
+                        id: item.call_id ?? "",
+                        name: item.name ?? "",
+                        args: args,
+                    },
                 );
                 null
-            } else {
+            },
+            "message" => {
+                let parts: OaContentPart[] = item.content ?? [];
+                for (let part in parts) {
+                    let kind = part.type ?? "";
+                    match (kind) {
+                        "output_text" => {
+                            content.push(ai.content.Text { text: part.text ?? "" });
+                            null
+                        },
+                        "refusal" => {
+                            refused = true;
+                            content.push(ai.content.Text { text: part.refusal ?? "" });
+                            null
+                        },
+                        _ => null,
+                    };
+                }
                 null
-            };
-            null
-        } else {
-            null
+            },
+            "reasoning" => {
+                let parts: OaContentPart[] = item.summary ?? [];
+                for (let part in parts) {
+                    if let txt: string = part.text {
+                        content.push(ai.content.Reasoning { summary: txt });
+                        null
+                    } else {
+                        null
+                    };
+                }
+                null
+            },
+            "image_generation_call" => {
+                // The provider-side image tool already ran: its result is turn
+                // content, NOT a tool call the runner has to execute.
+                if let encoded: string = item.result {
+                    let mime = _openai_image_mime(item.output_format);
+                    content.push(
+                        ai.content.Media.new(
+                            baml.media.Image.from_base64(encoded, mime),
+                            provider_id = item.id,
+                            revised_prompt = item.revised_prompt,
+                        ),
+                    );
+                    null
+                } else {
+                    null
+                };
+                null
+            },
+            _ => null,
         };
     }
     let stop = if (has_call) {
@@ -1003,64 +1004,72 @@ function _openai_stream_events(
 ) -> ai.stream.StreamEvent[] {
     let out: ai.stream.StreamEvent[] = [];
     let kind = event.type ?? sse_name ?? "";
-    if (kind == "response.created" || kind == "response.in_progress") {
-        // The resolved model id arrives here. ai.stream.TurnMeta has no model
-        // field yet, so it is remembered rather than emitted.
-        if let started: OaResponse = event.response {
-            state.model = started.model;
-        };
-        null
-    } else if (kind == "response.output_text.delta") {
-        if let delta: string = event.delta {
-            let _ = state.text_started.set(_openai_event_key(event), true);
-            out.push(ai.stream.TextDelta { text: delta });
-        };
-        null
-    } else if (kind == "response.output_text.done") {
-        // The full text of the item. Emitted only when no delta arrived for it,
-        // so a server that sends both does not duplicate the text.
-        let key = _openai_event_key(event);
-        if (!(state.text_started.get(key) ?? false)) {
-            if let full: string = event.text {
-                let _ = state.text_started.set(key, true);
-                out.push(ai.stream.TextDelta { text: full });
+    match (kind) {
+        "response.created" | "response.in_progress" => {
+            // The resolved model id arrives here. ai.stream.TurnMeta has no
+            // model field yet, so it is remembered rather than emitted.
+            if let started: OaResponse = event.response {
+                state.model = started.model;
             };
             null
-        } else {
+        },
+        "response.output_text.delta" => {
+            if let delta: string = event.delta {
+                let _ = state.text_started.set(_openai_event_key(event), true);
+                out.push(ai.stream.TextDelta { text: delta });
+            };
             null
-        };
-        null
-    } else if (kind == "response.function_call_arguments.delta") {
-        // ai.stream.StreamEvent cannot carry tool calls (PLAN §6), so the
-        // arguments accumulate here and the completed call is read from the
-        // terminal event's response object.
-        if let delta: string = event.delta {
+        },
+        "response.output_text.done" => {
+            // The full text of the item. Emitted only when no delta arrived for
+            // it, so a server that sends both does not duplicate the text.
             let key = _openai_event_key(event);
-            let _ = state.call_arguments.set(key, (state.call_arguments.get(key) ?? "") + delta);
-        };
-        null
-    } else if (kind == "response.function_call_arguments.done") {
-        if let full: string = event.arguments {
-            let _ = state.call_arguments.set(_openai_event_key(event), full);
-        };
-        null
-    } else if (kind == "response.failed" || kind == "error") {
-        throw _openai_stream_failure(event)
-    } else if (kind == "response.completed" || kind == "response.incomplete") {
-        if let final_response: OaResponse = event.response {
-            let turn = openai_parse(final_response);
-            out.push(
-                ai.stream.TurnMeta {
-                    stop_reason: turn.stop_reason,
-                    input_tokens: turn.usage?.input_tokens,
-                    output_tokens: turn.usage?.output_tokens,
-                },
-            );
-        };
-        out.push(ai.stream.TurnDone {  });
-        null
-    } else {
-        null
+            if (!(state.text_started.get(key) ?? false)) {
+                if let full: string = event.text {
+                    let _ = state.text_started.set(key, true);
+                    out.push(ai.stream.TextDelta { text: full });
+                };
+                null
+            } else {
+                null
+            };
+            null
+        },
+        "response.function_call_arguments.delta" => {
+            // ai.stream.StreamEvent cannot carry tool calls (PLAN §6), so the
+            // arguments accumulate here and the completed call is read from the
+            // terminal event's response object.
+            if let delta: string = event.delta {
+                let key = _openai_event_key(event);
+                let _ = state.call_arguments.set(
+                    key,
+                    (state.call_arguments.get(key) ?? "") + delta,
+                );
+            };
+            null
+        },
+        "response.function_call_arguments.done" => {
+            if let full: string = event.arguments {
+                let _ = state.call_arguments.set(_openai_event_key(event), full);
+            };
+            null
+        },
+        "response.failed" | "error" => throw _openai_stream_failure(event),
+        "response.completed" | "response.incomplete" => {
+            if let final_response: OaResponse = event.response {
+                let turn = openai_parse(final_response);
+                out.push(
+                    ai.stream.TurnMeta {
+                        stop_reason: turn.stop_reason,
+                        input_tokens: turn.usage?.input_tokens,
+                        output_tokens: turn.usage?.output_tokens,
+                    },
+                );
+            };
+            out.push(ai.stream.TurnDone {  });
+            null
+        },
+        _ => null,
     };
     out
 }
