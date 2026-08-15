@@ -39,6 +39,17 @@ fn main() {
         // reads its args/env. No other thread can observe the environment.
         unsafe { std::env::set_var("DIVAN_MAX_TIME", "2") };
     }
+    // Hermetic wall-time: BAML profiling ships default-ON, which both skews
+    // per-call timings and can abort hot workloads outright when the event
+    // ring's overflow cap is hit (compute::fib32_recursive reproduced this at
+    // the 1 GiB cap on bare metal). Pin it OFF unless the caller explicitly
+    // chose a value; tracing cost is measured deliberately in the
+    // `profiling_overhead` bench target instead of contaminating every number
+    // here.
+    if std::env::var_os("BAML_PROFILE").is_none() {
+        // SAFETY: as above — single-threaded, before any engine reads env.
+        unsafe { std::env::set_var("BAML_PROFILE", "0") };
+    }
     divan::main();
 }
 
