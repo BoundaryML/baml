@@ -170,17 +170,51 @@ fn to_source_code_with_optional_metadata(
         // from scratch until a round completes with no failures.
         let mut cycle_set: BTreeSet<Name> = pending.iter().map(|n| (*n).clone()).collect();
         loop {
+            // Only forward-declarable members may be assumed available: a
+            // struct (and a recursive alias's wrapper struct) can be named
+            // through `baml::box` ahead of its definition. A NON-recursive
+            // alias emits a `using`, which cannot be forward-declared, so it
+            // has to be declared before anything that names it. Seeding it
+            // here let a struct that names it win `cycle_set`'s alphabetical
+            // order (`ChatMessage` sorts before `ChatMessageContent`) and
+            // emit a use of an undeclared alias. Instead the plain aliases
+            // stay unavailable and the inner loop below settles the real
+            // order.
             for name in &cycle_set {
-                emitted_types.insert(name.clone());
+                if is_plain_alias(pool, name) {
+                    emitted_types.remove(name);
+                } else {
+                    emitted_types.insert(name.clone());
+                }
             }
             let mut round = Vec::new();
             let mut failed = Vec::new();
-            for name in &cycle_set {
-                match emit_type(name, &emitted_types, &cycle_set) {
-                    Ok(Some(emitted)) => round.push(emitted),
-                    Ok(None) | Err(_) => failed.push(name.clone()),
+            // Inner fixed point: `using` declarations (and whatever names
+            // them) land in dependency order rather than name order.
+            let mut cycle_pending: Vec<&Name> = cycle_set.iter().collect();
+            loop {
+                let mut progressed = false;
+                let mut still_pending = Vec::new();
+                for name in cycle_pending {
+                    match emit_type(name, &emitted_types, &cycle_set) {
+                        Ok(Some(emitted)) => {
+                            round.push(emitted);
+                            emitted_types.insert(name.clone());
+                            progressed = true;
+                        }
+                        Ok(None) => still_pending.push(name),
+                        Err(_) => {
+                            failed.push(name.clone());
+                            progressed = true;
+                        }
+                    }
+                }
+                cycle_pending = still_pending;
+                if cycle_pending.is_empty() || !progressed {
+                    break;
                 }
             }
+            failed.extend(cycle_pending.into_iter().cloned());
             if failed.is_empty() {
                 classes.extend(round);
                 break;
@@ -615,6 +649,14 @@ fn request_callable_members(
 /// `$`-suffixed companion functions.
 fn skip_symbol(name: &Name) -> bool {
     name.is_stream() || name.bare_name().contains('$')
+}
+
+/// Whether `name` is a NON-recursive type alias, i.e. one that emits a
+/// `using` declaration. Unlike a struct (or a recursive alias's wrapper
+/// struct) a `using` cannot be forward-declared, so every use of it must
+/// follow its declaration.
+fn is_plain_alias(pool: &SymbolPool, name: &Name) -> bool {
+    matches!(pool.get(name), Some(Symbol::TypeAlias(alias)) if !alias.recursive)
 }
 
 /// The name request for a free function. Shared between collection and
