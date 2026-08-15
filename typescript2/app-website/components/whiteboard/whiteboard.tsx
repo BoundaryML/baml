@@ -29,6 +29,48 @@ const COLORS = ['#1A1612', '#6D28D9', '#B4342B', '#1F8B4C'];
 
 let stickySeq = 1;
 
+// Minimal single-stroke icons, sized by the button's font-size via em units.
+function icon(d: string) {
+  return (
+    <svg
+      aria-hidden
+      fill="none"
+      height="18"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+      width="18"
+    >
+      <path d={d} />
+    </svg>
+  );
+}
+
+const ICONS = {
+  cursor: icon('M5 3l14 8-6.5 1.5L9 19z'),
+  eraser: icon('M6 20h12M6 16l8-8 4 4-6 6H8z'),
+  hand: icon(
+    'M8 12V6.5a1.5 1.5 0 0 1 3 0V11m0-5.5a1.5 1.5 0 0 1 3 0V11m0-3.5a1.5 1.5 0 0 1 3 0V13c0 4-2.5 7-6.5 7S6 17 6 14v-3a1.5 1.5 0 0 1 2 0',
+  ),
+  hl: icon('M9 15l-4 4H3v-2l4-4m2 2l8-8 2 2-8 8m-4-4l4 4M14 5l3 3'),
+  note: icon('M4 5h16v10H10l-4 4v-4H4z'),
+  pen: icon('M4 20l1-4L16 5l3 3L8 19zM14 7l3 3'),
+  squiggle: icon('M3 16c3-6 5-6 7-2s4 4 7-2 4-2 4-2'),
+  trash: icon('M5 7h14M9 7V4h6v3m-8 0l1 13h8l1-13'),
+  undo: icon('M8 5L4 9l4 4M4 9h10a5 5 0 0 1 0 10h-3'),
+};
+
+const TOOL_BUTTONS: [Tool, JSX.Element, string][] = [
+  ['browse', ICONS.cursor, 'Browse'],
+  ['move', ICONS.hand, 'Move blocks'],
+  ['pen', ICONS.pen, 'Pen'],
+  ['hl', ICONS.hl, 'Highlighter'],
+  ['eraser', ICONS.eraser, 'Eraser'],
+  ['text', ICONS.note, 'Note'],
+];
+
 export function Whiteboard() {
   const [tool, setTool] = useState<Tool>('browse');
   const [color, setColor] = useState(COLORS[1]);
@@ -303,17 +345,9 @@ export function Whiteboard() {
       </div>
 
       <div className="xp-toolbar">
-        {(
-          [
-            ['browse', '🖱', 'Browse'],
-            ['move', '✋', 'Move blocks'],
-            ['pen', '✏️', 'Pen'],
-            ['hl', '🖊', 'Highlighter'],
-            ['eraser', '🩹', 'Eraser'],
-            ['text', '💬', 'Note'],
-          ] as [Tool, string, string][]
-        ).map(([t, icon, label]) => (
+        {TOOL_BUTTONS.map(([t, icon, label]) => (
           <button
+            aria-label={label}
             aria-pressed={tool === t}
             className={`xp-btn${tool === t ? ' on' : ''}`}
             key={t}
@@ -343,7 +377,7 @@ export function Whiteboard() {
           title="Undo stroke"
           type="button"
         >
-          ↩️
+          {ICONS.undo}
         </button>
         <button
           className="xp-btn"
@@ -351,7 +385,7 @@ export function Whiteboard() {
           title="Clear board"
           type="button"
         >
-          🗑
+          {ICONS.trash}
         </button>
         <button
           aria-pressed={sketchy}
@@ -360,11 +394,17 @@ export function Whiteboard() {
           title="Sketchy mode"
           type="button"
         >
-          🌀
+          {ICONS.squiggle}
         </button>
       </div>
 
       <style>{`
+        /* whiteboard grid under everything */
+        body { background-color: #FBF8F0 !important;
+          background-image:
+            linear-gradient(rgba(26, 22, 18, 0.055) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(26, 22, 18, 0.055) 1px, transparent 1px) !important;
+          background-size: 32px 32px !important; }
         .xp-canvas { position: fixed; inset: 0; z-index: 45;
           cursor: crosshair; touch-action: none; }
         .xp-notes { position: absolute; top: 0; left: 0; width: 100%;
@@ -387,7 +427,7 @@ export function Whiteboard() {
           border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
           box-shadow: 4px 6px 0 rgba(26, 22, 18, 0.15); }
         .xp-btn { border: 1px solid transparent; background: none;
-          border-radius: 8px; font-size: 17px; line-height: 1; padding: 6px 8px;
+          border-radius: 8px; line-height: 0; padding: 7px; color: #1A1612;
           cursor: pointer; }
         .xp-btn:hover { background: rgba(109, 40, 217, 0.08); }
         .xp-btn.on { border-color: #6D28D9; background: #F3EEFE; }
