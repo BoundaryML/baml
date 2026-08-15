@@ -86,15 +86,14 @@ interface Speaker {
 }
 
 class Dog {
-  function speak(self) -> int { 1 }
+  implements Speaker {
+    function speak(self) -> int { 1 }
+  }
 }
 
 class Cat {
   function speak(self) -> int { 2 }
 }
-
-implements Speaker for Dog {}
-implements Speaker for Cat {}
 
 function indirect(callback: (int) -> int throws never, id: boundary.LocalId) -> int {
   callback(1, $id = id)
@@ -169,7 +168,16 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
         .collect::<Vec<_>>();
     assert!(
         union_calls.len() >= 2,
-        "expected one dispatch call per union member"
+        "expected one direct call per heterogeneous union member: {}",
+        display_function(&union_mir)
+    );
+    assert!(
+        !union_body
+            .blocks
+            .iter()
+            .any(|block| matches!(block.terminator, Some(Terminator::VirtualCall { .. }))),
+        "heterogeneous union dispatch must not use the first member's interface: {}",
+        display_function(&union_mir)
     );
     assert!(
         union_calls.iter().all(|runtime_id| runtime_id.is_some()),
@@ -506,9 +514,9 @@ fn source_param_interface_dispatch_respects_shadowed_local_binding() {
     );
 }
 
-// ─── Phase 4: reflect.type_of concrete types ─────────────────────────────────
+// ─── Phase 4: type.of concrete types ─────────────────────────────────
 
-/// `reflect.type_of<User>()` should lower to `_N = load_type(Concrete(User))`.
+/// `type.of<User>()` should lower to `_N = load_type(Concrete(User))`.
 #[test]
 fn reflect_type_of_class() {
     let mut db = make_db();
@@ -517,14 +525,14 @@ fn reflect_type_of_class() {
         r#"
         class User { name string }
         function f() -> type {
-            reflect.type_of<User>()
+            type.of<User>()
         }
         "#,
     );
     mir_snapshot!("reflect_type_of_class", render_mir(&db, file));
 }
 
-/// `reflect.type_of<int[]>()` — concrete array type.
+/// `type.of<int[]>()` — concrete array type.
 #[test]
 fn reflect_type_of_array() {
     let mut db = make_db();
@@ -532,16 +540,16 @@ fn reflect_type_of_array() {
         "test.baml",
         r#"
         function f() -> type {
-            reflect.type_of<int[]>()
+            type.of<int[]>()
         }
         "#,
     );
     mir_snapshot!("reflect_type_of_array", render_mir(&db, file));
 }
 
-// ─── Phase 5: reflect.type_of with generic type params ───────────────────────
+// ─── Phase 5: type.of with generic type params ───────────────────────
 
-/// `reflect.type_of<T>()` inside a generic function should lower to
+/// `type.of<T>()` inside a generic function should lower to
 /// `_N = load_type(TypeArgRef(0))`.
 #[test]
 fn reflect_type_of_bare_typevar() {
@@ -550,14 +558,14 @@ fn reflect_type_of_bare_typevar() {
         "test.baml",
         r#"
         function f<T>() -> type {
-            reflect.type_of<T>()
+            type.of<T>()
         }
         "#,
     );
     mir_snapshot!("reflect_type_of_bare_typevar", render_mir(&db, file));
 }
 
-/// `reflect.type_of<T[]>()` — composite array wrapping a type-var.
+/// `type.of<T[]>()` — composite array wrapping a type-var.
 /// Should lower to `_N = load_type(Array(TypeArgRef(0)))`.
 #[test]
 fn reflect_type_of_array_of_typevar() {
@@ -566,11 +574,70 @@ fn reflect_type_of_array_of_typevar() {
         "test.baml",
         r#"
         function f<T>() -> type {
-            reflect.type_of<T[]>()
+            type.of<T[]>()
         }
         "#,
     );
     mir_snapshot!("reflect_type_of_array_of_typevar", render_mir(&db, file));
+}
+
+/// Runtime type syntax is consumed from hir_ty's durable plan: bind the
+/// lexical slot once, pass the stored runtime type operand to the generic call,
+/// retain its checked-call flag, and use the bound value for `is T`.
+#[test]
+fn runtime_type_plan_operations_are_explicit() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function accept<T>(value: T) -> T { value }
+
+function f(t: type, value: unknown) -> bool {
+    type T = unreflect(t)
+    let result = accept<unreflect(t)>(value)
+    result is T && result is unreflect(t)
+}
+"#,
+    );
+    baml_project::testing::assert_no_diagnostic_errors(&db);
+    mir_snapshot!(
+        "runtime_type_plan_operations_are_explicit",
+        render_mir(&db, file)
+    );
+}
+
+/// A source-less callable keeps its symbolic package target all the way into
+/// MIR while runtime generic operands still come exclusively from the solved
+/// call plan.
+#[test]
+fn mounted_loc_free_runtime_call_target_is_explicit() {
+    let mut library = make_db();
+    library.add_compiler2_virtual_file(
+        "<builtin>/app/lib.baml",
+        "function accept<T>(value: T) -> T { value }",
+    );
+    baml_project::testing::assert_no_diagnostic_errors(&library);
+    let interface = baml_compiler2_hir_ty::package_interface::package_interface(
+        &library,
+        baml_compiler2_hir::package::PackageId::new(&library, baml_base::Name::new("app")),
+    );
+    let blob = borsh::to_vec(interface).expect("serialize mounted interface");
+
+    let mut db = make_db();
+    db.set_mounted_packages([("app".to_string(), blob)].into());
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(t: type, value: unknown) -> unknown {
+    app.accept<unreflect(t)>(value)
+}
+"#,
+    );
+    baml_project::testing::assert_no_diagnostic_errors(&db);
+    mir_snapshot!(
+        "mounted_loc_free_runtime_call_target_is_explicit",
+        render_mir(&db, file)
+    );
 }
 
 /// Bare `$id` read is a special form: it must lower to a call of

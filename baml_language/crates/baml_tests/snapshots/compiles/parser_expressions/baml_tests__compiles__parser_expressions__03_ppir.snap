@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 25209
 ---
 === PPIR ===
 function user.Calculate() -> int  [expr] {

@@ -21,9 +21,11 @@ pub use bex_engine::{
     },
 };
 pub use bex_external_types::{
-    BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,
-    HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch,
-    runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
+    BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostReleaseFn, HostReturnTypeError,
+    HostValueArc, HostValueKind, MediaKind, PortableClassDef, PortableClassFieldDef,
+    PortableEnumDef, PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeTy, TyAttr,
+    host_release_dispatch, runtime_ty_structurally_equal, selected_arm_equal,
+    try_convert_rust_data, validate_host_return,
 };
 use indexmap::IndexMap;
 pub use sys_ops::SysOps;
@@ -34,7 +36,12 @@ mod bex;
 mod bex_lsp;
 mod fs;
 mod project;
+mod runtime_compile;
 mod seed;
+
+pub fn runtime_compiler() -> Arc<dyn bex_engine::RuntimeCompiler> {
+    runtime_compile::runtime_compiler()
+}
 
 pub struct BexArgs {
     /// Required values keyed by their type-level names and kept in declared order.
@@ -124,7 +131,12 @@ pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex
         borsh::from_slice(bytecode).map_err(|e| RuntimeError::Compilation {
             message: format!("Failed to deserialize BAML bytecode: {e}"),
         })?;
-    let engine = bex_engine::BexEngine::new(program, Arc::new(sys_ops), Vec::new())?;
+    let engine = bex_engine::BexEngine::new_with_runtime_compiler(
+        program,
+        Arc::new(sys_ops),
+        Vec::new(),
+        runtime_compiler(),
+    )?;
     Ok(Arc::new(engine))
 }
 

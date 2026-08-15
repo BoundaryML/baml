@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.old_bare_spelling() -> type  [expr] {
+  {  } reflect.type_of()
+}
+function user.old_qualified_spelling() -> type  [expr] {
+  {  } baml.reflect.type_of()
+}

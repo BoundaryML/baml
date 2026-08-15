@@ -51,6 +51,15 @@ function to_string<T>(v: T) -> string throws JsonSerializationError {
     $rust_function
 }
 
+/// Encode a value using its concrete runtime shape. Unlike `to_string<T>`,
+/// this discovers runtime-created classes through the instance's authoritative
+/// class pointer, so it also works when `T` is statically `unknown` (for
+/// example a value parsed from `unreflect(...)`).
+//baml:mut_vm
+function encode<T>(v: T) -> string throws JsonSerializationError {
+  $rust_function
+}
+
 /// Serialize any BAML value to its `json` representation by dispatching on
 /// the value's runtime type.
 ///

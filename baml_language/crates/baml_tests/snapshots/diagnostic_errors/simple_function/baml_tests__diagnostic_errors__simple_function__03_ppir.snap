@@ -17,7 +17,7 @@ function user.HelloWorld$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.HelloWorld$render_prompt(name: string) -> ai.Prompt  [expr] {
-  HelloWorld$spec(name).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  HelloWorld$spec(name).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.HelloWorld$spec(name: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "HelloWorld", args: map { "name": name }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Say hello to ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } name);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }

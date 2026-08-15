@@ -88,9 +88,11 @@ macro_rules! visit_bytecode_index_operands {
             | I::IsType(..)
             | I::NarrowBind { .. }
             | I::LoadType(..)
+            | I::BindType(..)
             | I::DenseTag(..) => bakes_type_layout = true,
             // ── no cross-function references ─────────────────────────────
             I::LoadConst(..)
+            | I::LoadCurrentPackage(..)
             | I::LoadVar(..)
             | I::StoreVar(..)
             | I::StoreVarLoadVar(..)
@@ -136,6 +138,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::AwaitAny
             | I::CallIndirect
             | I::CallIndirectWithRuntimeId
+            | I::RuntimeIsType
             | I::Throw
             | I::Rethrow
             | I::Return
@@ -255,6 +258,7 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
 mod tests {
     use super::*;
     use crate::{
+        HeapPtr,
         bytecode::{Bytecode, ClassInitPlan},
         types::{FunctionCaptureProps, FunctionKind, FunctionOrigin},
     };
@@ -315,6 +319,7 @@ mod tests {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
             throws_type: baml_type::TyTemplate::Never {
@@ -324,6 +329,7 @@ mod tests {
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
+            runtime_package: HeapPtr::null(),
         }
     }
 

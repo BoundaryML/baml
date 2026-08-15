@@ -137,6 +137,20 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_ops/index.baml"),
     builtin!("baml", "ns_ops/math.baml"),
     builtin!("baml", "ns_random/random.baml"),
+    // `baml.reflect` (BEP-066 I-9: `reflect` is a keyword shorthand for it).
+    builtin!("baml", "ns_reflect/reflect.baml"),
+    builtin!("baml", "ns_reflect/ns_class/class.baml"),
+    builtin!("baml", "ns_reflect/ns_enum/enum.baml"),
+    builtin!("baml", "ns_reflect/ns_union/union.baml"),
+    builtin!("baml", "ns_reflect/ns_literal/literal.baml"),
+    builtin!("baml", "ns_reflect/ns_array/array.baml"),
+    builtin!("baml", "ns_reflect/ns_map/map.baml"),
+    builtin!("baml", "ns_reflect/ns_interface/interface.baml"),
+    builtin!("baml", "ns_reflect/ns_primitive/primitive.baml"),
+    builtin!("baml", "ns_reflect/ns_function/function.baml"),
+    builtin!("baml", "ns_reflect/ns_errors/errors.baml"),
+    // `baml.type` (BEP-066 K-13: `type.of` / `type.of_value` resolve here).
+    builtin!("baml", "ns_type/type.baml"),
     builtin!("baml", "ns_crypto/errors.baml"),
     builtin!("baml", "ns_crypto/interfaces.baml"),
     builtin!("baml", "ns_crypto/aes_gcm_siv.baml"),
@@ -145,8 +159,6 @@ pub const ALL: &[BuiltinFile] = &[
     // --- boundary package ---
     builtin!("boundary", "core.baml"),
     builtin!("boundary", "ns_id/id.baml"),
-    // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
-    builtin!("reflect", "reflect.baml"),
     // --- testing package ---
     builtin!("testing", "types.baml"),
     builtin!("testing", "registry.baml"),
@@ -233,6 +245,21 @@ pub fn stdlib_package_names() -> &'static [&'static str] {
                 names.push(file.package);
             }
         }
+        names
+    })
+}
+
+/// Every package name that user-provided mounts may not claim, in stable
+/// first-appearance order: all builtin packages, followed by the implicit user
+/// package and the two compiler-reserved package names.
+///
+/// This is the single source of truth shared by mount filtering and runtime
+/// reflection, so both paths reject exactly the same aliases.
+pub fn reserved_package_names() -> &'static [&'static str] {
+    static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        let mut names = stdlib_package_names().to_vec();
+        names.extend([baml_type::RESERVED_USER_PACKAGE, "root", "env"]);
         names
     })
 }

@@ -8,20 +8,26 @@
 //! `PackageResolutionContext` bundles a package's own `PackageItems` with its
 //! dependencies' `PackageInterface`s, providing unified lookup methods.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::BuiltinKind;
 use baml_compiler2_hir::{
     contributions::Definition,
     file_package,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, TypeAliasLoc},
-    package::{PackageId, PackageItems, package_dependencies},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
+    package::{PackageId, PackageItems, is_mounted_package, package_dependencies},
 };
 use baml_type::{FunctionParamMode, FunctionParamTy, ParamTy, QualifiedTypeName, Ty, TyAttr};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::lower::qualify_def;
+use crate::{
+    callable::{ExternalCallTarget, ExternalLinkability},
+    lower::qualify_def,
+};
 
 /// Count of *honest* (non-seeded) `package_interface` derivations for stdlib
 /// packages, since process start. A warm compile that seeds the cached stdlib
@@ -57,6 +63,13 @@ pub struct PackageInterface {
     pub functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>>,
     /// Throw sets for all functions in this package (transitive, fully inferred).
     pub throw_sets: FunctionThrowSets,
+    /// Complete namespace set, including namespaces whose only declaration is
+    /// an interface. A source-less resolver cannot reconstruct this from HIR.
+    pub namespaces: BTreeSet<Vec<Name>>,
+    /// Every implementation block in this package, normalized to its free,
+    /// location-free matching shape. Mounted consumers use these rows in the
+    /// same impl registry as source-backed blocks.
+    pub impls: Vec<ExportedImpl>,
 }
 
 /// A type exported from a package.
@@ -64,9 +77,10 @@ pub struct PackageInterface {
 pub enum ExportedType {
     Class {
         qtn: QualifiedTypeName,
-        fields: Vec<(Name, Ty)>,
+        fields: Vec<(Name, Ty, ExportedFieldAttrs)>,
         methods: Vec<ExportedFunction>,
         generic_params: Vec<ParamTy>,
+        generic_param_bounds: Vec<Vec<baml_type::Interface>>,
     },
     Enum {
         qtn: QualifiedTypeName,
@@ -76,6 +90,55 @@ pub enum ExportedType {
         qtn: QualifiedTypeName,
         resolved: Ty,
     },
+    Interface {
+        qtn: QualifiedTypeName,
+        self_param: ParamTy,
+        generic_params: Vec<ParamTy>,
+        param_bounds: Vec<Vec<baml_type::Interface>>,
+        /// Transitive `requires` closure at identity arguments with symbolic
+        /// `Self`; cycle-safe and duplicate-free.
+        requires: Vec<baml_type::Interface>,
+        associated_types: Vec<ExportedAssociatedType>,
+        fields: Vec<(Name, Ty, ExportedFieldAttrs)>,
+        required_methods: Vec<ExportedFunction>,
+        default_methods: Vec<ExportedFunction>,
+    },
+}
+
+#[derive(Debug, Clone, Default, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct ExportedFieldAttrs {
+    pub alias: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct ExportedAssociatedType {
+    pub name: Name,
+    pub bound: Option<baml_type::Interface>,
+    pub default: Option<Ty>,
+}
+
+/// A location-free implementation block. All types are lowered over
+/// `generic_params`; matching binds those rigid parameters exactly as the
+/// source registry binds an `ImplFacts` row.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct ExportedImpl {
+    pub interface: baml_type::Interface,
+    pub for_ty_pattern: Ty,
+    pub generic_params: Vec<ParamTy>,
+    pub param_bounds: Vec<Vec<baml_type::Interface>>,
+    pub associated_types: Vec<(Name, Ty)>,
+    pub field_links: Vec<(Name, Name)>,
+    pub origin: ExportedImplOrigin,
+    pub methods: Vec<ExportedFunction>,
+}
+
+/// Source provenance is retained only for diagnostics. Resolution and
+/// dispatch deliberately treat both forms identically.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub enum ExportedImplOrigin {
+    InBodyClass { class_qtn: QualifiedTypeName },
+    OutOfBody,
 }
 
 /// A function exported from a package (free function or method).
@@ -89,7 +152,10 @@ pub struct ExportedFunction {
     /// Function-level generic parameters, including any synthetic callback
     /// effect parameters introduced by bounded signature elaboration.
     pub generic_params: Vec<ParamTy>,
+    pub generic_param_bounds: Vec<Vec<baml_type::Interface>>,
     pub builtin_kind: Option<BuiltinKind>,
+    pub target: ExternalCallTarget,
+    pub linkability: ExternalLinkability,
 }
 
 /// The typed export surface a single file contributes to its package.
@@ -127,6 +193,7 @@ pub enum ResolvedSource {
 }
 
 /// Common output for resolved function signatures.
+#[derive(Clone)]
 pub struct ResolvedFunction {
     pub name: Name,
     pub params: Vec<FunctionParamTy>,
@@ -134,7 +201,17 @@ pub struct ResolvedFunction {
     pub declared_throws: Option<Ty>,
     pub callable_throws: Ty,
     pub generic_params: Vec<ParamTy>,
+    pub generic_param_bounds: Vec<Vec<baml_type::Interface>>,
     pub builtin_kind: Option<BuiltinKind>,
+    pub external: Option<Arc<crate::callable::ExternalCallable>>,
+}
+
+/// A value lookup never lies about source ownership. Source-backed results
+/// retain their real definition; mounted results carry only owned symbolic
+/// callable facts.
+pub enum ResolvedValue<'db> {
+    Source(Definition<'db>),
+    Exported(Box<ResolvedFunction>),
 }
 
 /// Common output for resolved method lookups (includes class context).
@@ -142,6 +219,37 @@ pub struct ResolvedMethod {
     pub function: ResolvedFunction,
     pub class_name: Name,
     pub class_generic_params: Vec<ParamTy>,
+}
+
+pub(crate) fn resolved_exported_function(
+    function: &ExportedFunction,
+    owner_generic_params: Vec<ParamTy>,
+    owner_generic_param_bounds: Vec<Vec<baml_type::Interface>>,
+) -> ResolvedFunction {
+    let takes_self = function
+        .params
+        .first()
+        .and_then(|param| param.name.as_ref())
+        .is_some_and(|name| name.as_str() == "self");
+    ResolvedFunction {
+        name: function.name.clone(),
+        params: function.params.clone(),
+        return_type: function.return_type.clone(),
+        declared_throws: function.declared_throws.clone(),
+        callable_throws: function.callable_throws.clone(),
+        generic_params: function.generic_params.clone(),
+        generic_param_bounds: function.generic_param_bounds.clone(),
+        builtin_kind: function.builtin_kind,
+        external: Some(Arc::new(crate::callable::ExternalCallable {
+            target: function.target.clone(),
+            linkability: function.linkability,
+            takes_self,
+            owner_generic_params,
+            owner_generic_param_bounds,
+            generic_params: function.generic_params.clone(),
+            generic_param_bounds: function.generic_param_bounds.clone(),
+        })),
+    }
 }
 
 /// Bundles a package's own items with its dependencies' pre-resolved interfaces.
@@ -230,6 +338,23 @@ impl PackageInterface {
     }
 }
 
+/// The serialized compiler interface of a mounted (source-less) package.
+pub fn mounted_interface<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    package: &Name,
+) -> Option<&'db PackageInterface> {
+    is_mounted_package(db, package)
+        .then(|| package_interface(db, PackageId::new(db, package.clone())))
+}
+
+/// A mounted package's structural type row, addressed without source locs.
+pub fn mounted_type_row<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    qtn: &QualifiedTypeName,
+) -> Option<&'db ExportedType> {
+    mounted_interface(db, qtn.package())?.lookup_type(qtn.namespace(), qtn.name())
+}
+
 impl ExportedType {
     /// Convert to a Ty (for type resolution results).
     pub fn to_ty(&self) -> Ty {
@@ -250,8 +375,111 @@ impl ExportedType {
             ),
             ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
             ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
+            ExportedType::Interface { qtn, .. } => {
+                Ty::Interface(qtn.clone(), vec![], vec![], TyAttr::default())
+            }
         }
     }
+}
+
+fn plain_interface(reference: &baml_type::interned::InterfaceRef) -> baml_type::Interface {
+    baml_type::Interface::new(
+        reference.name.clone(),
+        reference
+            .generics
+            .iter()
+            .map(baml_type::interned::Ty::to_plain)
+            .collect(),
+        reference
+            .associated_types
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty.to_plain()))
+            .collect(),
+    )
+}
+
+fn plain_bounds(
+    params: &[ParamTy],
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+) -> Vec<Vec<baml_type::Interface>> {
+    params
+        .iter()
+        .map(|param| {
+            bounds
+                .get(param)
+                .into_iter()
+                .flatten()
+                .map(plain_interface)
+                .collect()
+        })
+        .collect()
+}
+
+fn external_target<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+    frame: &[ParamTy],
+) -> ExternalCallTarget {
+    use baml_compiler2_ppir::item_data::MethodOwner;
+
+    let package = file_package::file_package(db, function.file(db));
+    let name = baml_compiler2_ppir::item_data::function_data(db, function)
+        .name
+        .clone();
+    match baml_compiler2_ppir::item_data::method_owner(db, function) {
+        Some(MethodOwner::Class(class)) => {
+            if let Some(target) = crate::lower::owner_impl_target(db, function, frame) {
+                ExternalCallTarget::Interface {
+                    interface: target.name,
+                    method: name,
+                }
+            } else {
+                ExternalCallTarget::Method {
+                    package: package.package,
+                    namespace: package.namespace_path,
+                    class: baml_compiler2_ppir::item_data::class_data(db, class)
+                        .name
+                        .clone(),
+                    name,
+                }
+            }
+        }
+        Some(MethodOwner::Interface(interface)) => ExternalCallTarget::Interface {
+            interface: crate::lower::interface_qualified_name(db, interface),
+            method: name,
+        },
+        Some(MethodOwner::FreeImpl(_)) => crate::lower::owner_impl_target(db, function, frame)
+            .map(|target| ExternalCallTarget::Interface {
+                interface: target.name,
+                method: name.clone(),
+            })
+            .unwrap_or_else(|| ExternalCallTarget::Free {
+                package: package.package,
+                namespace: package.namespace_path,
+                name,
+            }),
+        None => ExternalCallTarget::Free {
+            package: package.package,
+            namespace: package.namespace_path,
+            name,
+        },
+    }
+}
+
+fn exported_field_attrs(attrs: &[baml_compiler2_hir::item_tree::Attribute]) -> ExportedFieldAttrs {
+    let mut result = ExportedFieldAttrs::default();
+    for attr in attrs {
+        if attr.args.len() != 1 {
+            continue;
+        }
+        let value = baml_compiler2_ast::parse_string_attr_value(attr.args[0].value.as_str());
+        match attr.name.as_str() {
+            "alias" => result.alias = value,
+            "description" => result.description = value,
+            _ => {}
+        }
+    }
+    result
 }
 
 /// Reduce GROUND associated-type projections for an exported surface:
@@ -377,20 +605,40 @@ fn exported_function<'db>(
     let declared_throws = sig
         .throws_declared
         .then(|| reduce_ground_projections(db, &sig.throws.to_plain(), 8));
-    let callable_throws = crate::callable::callable_throws(db, func_loc).0;
+    let callable_throws =
+        if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+            if sig.throws_declared {
+                sig.throws.to_plain()
+            } else {
+                Ty::BuiltinUnknown {
+                    attr: TyAttr::default(),
+                }
+            }
+        } else {
+            crate::callable::callable_throws(db, func_loc).0
+        };
     let builtin_kind = match body.as_ref() {
         baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
         _ => None,
     };
+    let own_generic_params =
+        sig.generic_params[enclosing_param_count.min(sig.generic_params.len())..].to_vec();
+    let all_bounds = crate::lower::function_generic_bounds(db, func_loc);
     ExportedFunction {
         name: name.clone(),
         params,
         return_type: reduce_ground_projections(db, &sig.ret.to_plain(), 8),
         declared_throws,
         callable_throws,
-        generic_params: sig.generic_params[enclosing_param_count.min(sig.generic_params.len())..]
-            .to_vec(),
+        generic_param_bounds: plain_bounds(&own_generic_params, &all_bounds),
+        generic_params: own_generic_params,
         builtin_kind,
+        target: external_target(db, func_loc, &sig.generic_params),
+        linkability: if builtin_kind.is_some() {
+            ExternalLinkability::ReservedBuiltin
+        } else {
+            ExternalLinkability::Linkable
+        },
     }
 }
 
@@ -419,7 +667,11 @@ fn lower_class_export<'db>(
         let field_ty = field_ctx
             .lower_type_ref(&class_data.type_refs, field.type_ref)
             .to_plain();
-        fields.push((field.name.clone(), field_ty));
+        fields.push((
+            field.name.clone(),
+            field_ty,
+            exported_field_attrs(&field.attributes),
+        ));
     }
 
     // Lower methods
@@ -440,6 +692,10 @@ fn lower_class_export<'db>(
         fields,
         methods,
         generic_params: class_frame,
+        generic_param_bounds: plain_bounds(
+            &crate::lower::class_generic_frame(db, class_loc),
+            &crate::lower::class_generic_bounds(db, class_loc),
+        ),
     }
 }
 
@@ -468,6 +724,113 @@ fn lower_alias_export<'db>(
     let resolved = crate::lower::type_alias_value(db, ta_loc).to_plain();
     let qtn = qualify_def(db, Definition::TypeAlias(ta_loc), name);
     ExportedType::TypeAlias { qtn, resolved }
+}
+
+/// Lower an interface at its declaration scope. Every row is span-free and
+/// remains symbolic over `Self` and the interface's declared parameters.
+fn lower_interface_export<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface_loc: InterfaceLoc<'db>,
+    name: &Name,
+) -> ExportedType {
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface_loc);
+    let qtn = qualify_def(db, Definition::Interface(interface_loc), name);
+    let frame = crate::lower::interface_frame(db, interface_loc);
+    let self_param = frame
+        .first()
+        .cloned()
+        .expect("interface frame starts with Self");
+    let generic_params = crate::lower::interface_declared_params(db, interface_loc);
+    let bounds = crate::lower::interface_scope_bounds(db, interface_loc);
+    let ctx = crate::lower::lower_ctx_for_file(db, interface_loc.file(db))
+        .with_frame(frame.clone())
+        .with_bounds(bounds.clone());
+
+    let self_ty = baml_type::interned::Ty::intern(baml_type::interned::TyKind::TypeVar(
+        self_param.clone(),
+        TyAttr::default(),
+    ));
+    let mut requires_refs = Vec::new();
+    for &required in &data.requires {
+        let Some(root) = baml_type::interned::InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+            &data.type_refs,
+            required,
+            crate::lower::TypePosition::ConstraintHead,
+        )) else {
+            continue;
+        };
+        if !requires_refs.contains(&root) {
+            requires_refs.push(root.clone());
+        }
+        for inherited in crate::impls::direct_requires_closure(db, &root, &self_ty, 64) {
+            if !requires_refs.contains(&inherited) {
+                requires_refs.push(inherited);
+            }
+        }
+    }
+    let requires = requires_refs.iter().map(plain_interface).collect();
+
+    let associated_types = data
+        .associated_types
+        .iter()
+        .map(|assoc| ExportedAssociatedType {
+            name: assoc.name.clone(),
+            bound: assoc.bound.and_then(|bound| {
+                baml_type::interned::InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+                    &data.type_refs,
+                    bound,
+                    crate::lower::TypePosition::ConstraintHead,
+                ))
+                .map(|bound| plain_interface(&bound))
+            }),
+            default: crate::interfaces::interface_associated_type_default(
+                db,
+                interface_loc,
+                assoc.name.clone(),
+            )
+            .map(|(ty, _)| ty),
+        })
+        .collect();
+
+    let fields = crate::interfaces::resolve_interface_fields(db, interface_loc)
+        .fields
+        .iter()
+        .zip(&data.fields)
+        .map(|((field, ty, attrs), field_data)| {
+            let mut exported = exported_field_attrs(attrs);
+            let type_attrs = exported_field_attrs(&data.type_refs[field_data.type_ref].attrs);
+            exported.alias = exported.alias.or(type_attrs.alias);
+            exported.description = exported.description.or(type_attrs.description);
+            (field.clone(), ty.clone(), exported)
+        })
+        .collect();
+
+    let mut required_methods = Vec::new();
+    let mut default_methods = Vec::new();
+    for &method in &data.methods {
+        let method_data = baml_compiler2_ppir::item_data::function_data(db, method);
+        let exported = exported_function(db, method, &method_data.name, frame.len());
+        if baml_compiler2_ppir::item_data::is_required_interface_method(db, method) {
+            required_methods.push(exported);
+        } else {
+            default_methods.push(exported);
+        }
+    }
+
+    ExportedType::Interface {
+        qtn,
+        self_param,
+        generic_params,
+        param_bounds: plain_bounds(
+            &crate::lower::interface_declared_params(db, interface_loc),
+            &bounds,
+        ),
+        requires,
+        associated_types,
+        fields,
+        required_methods,
+        default_methods,
+    }
 }
 
 /// Lower a free-function definition into its `ExportedFunction`, read off
@@ -534,6 +897,7 @@ pub fn file_interface_fragment(
             Definition::Class(class_loc) => lower_class_export(db, pkg_items, class_loc, name),
             Definition::Enum(enum_loc) => lower_enum_export(db, enum_loc, name),
             Definition::TypeAlias(ta_loc) => lower_alias_export(db, pkg_items, ta_loc, name),
+            Definition::Interface(interface_loc) => lower_interface_export(db, interface_loc, name),
             _ => continue,
         };
         types.insert(name.clone(), exported);
@@ -584,6 +948,17 @@ pub fn package_interface<'db>(
         }
     }
 
+    // A mounted package has no source rows. Its serialized interface is the
+    // authoritative compiler surface; stale/corrupt blobs fail closed by
+    // falling through to the empty honest derivation.
+    if is_mounted_package(db, &pkg_name)
+        && let Some(mounted) = db.mounted_packages()
+        && let Some(bytes) = mounted.by_package(db).get(pkg_name.as_str())
+        && let Ok(interface) = borsh::from_slice::<PackageInterface>(bytes)
+    {
+        return interface;
+    }
+
     // Honest derivation. Count stdlib-package derivations so a warm run can
     // assert zero (the seed served every stdlib package). The authoritative set
     // of stdlib packages is the embedded builtin manifest — a package is stdlib
@@ -594,6 +969,76 @@ pub fn package_interface<'db>(
     }
 
     fold_package_interface(db, pkg_id)
+}
+
+/// Lower the package's implementation registry into a canonical, loc-free
+/// export. Malformed headers have no `ImplFacts` row and are skipped; their
+/// source diagnostics remain owned by the declaration checker.
+fn exported_impls<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    pkg_id: PackageId<'db>,
+) -> Vec<ExportedImpl> {
+    use baml_compiler2_ppir::item_data::ImplSubjectData;
+
+    let mut rows = Vec::new();
+    for &block in crate::impls::package_impl_locs(db, pkg_id) {
+        let Some(facts) = crate::impls::impl_facts(db, block) else {
+            continue;
+        };
+        let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
+        let generic_params: Vec<ParamTy> = facts
+            .generic_params
+            .iter()
+            .map(|(param, _)| param.clone())
+            .collect();
+        let param_bounds = facts
+            .generic_params
+            .iter()
+            .map(|(_, bounds)| bounds.iter().map(plain_interface).collect())
+            .collect();
+        let methods = facts
+            .methods
+            .iter()
+            .map(|&method| {
+                let name = baml_compiler2_ppir::item_data::function_data(db, method)
+                    .name
+                    .clone();
+                exported_function(db, method, &name, generic_params.len())
+            })
+            .collect();
+        let origin = match &data.subject {
+            ImplSubjectData::InClass {
+                class,
+                out_of_body: false,
+            } => ExportedImplOrigin::InBodyClass {
+                class_qtn: crate::lower::class_qualified_name(db, *class),
+            },
+            ImplSubjectData::InClass {
+                out_of_body: true, ..
+            }
+            | ImplSubjectData::Free { .. } => ExportedImplOrigin::OutOfBody,
+        };
+        rows.push(ExportedImpl {
+            interface: plain_interface(&facts.interface),
+            for_ty_pattern: facts.for_ty_pattern.to_plain(),
+            generic_params,
+            param_bounds,
+            associated_types: facts
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                .collect(),
+            field_links: data
+                .field_links
+                .iter()
+                .map(|link| (link.interface_field.clone(), link.class_field.clone()))
+                .collect(),
+            origin,
+            methods,
+        });
+    }
+    rows.sort_by_cached_key(|row| borsh::to_vec(row).expect("ExportedImpl serializes"));
+    rows
 }
 
 /// Fold each file's `file_interface_fragment` into the whole-package interface.
@@ -640,6 +1085,8 @@ fn fold_package_interface<'db>(
         types,
         functions,
         throw_sets,
+        namespaces: pkg_items.namespaces.keys().cloned().collect(),
+        impls: exported_impls(db, pkg_id),
     }
 }
 
@@ -894,13 +1341,14 @@ impl<'db> PackageResolutionContext<'db> {
         None
     }
 
-    /// Resolve a function/value by path. Returns the Definition for own-package values.
+    /// Resolve a function/value by path, preserving source versus source-less
+    /// ownership in the result.
     pub fn resolve_value(
         &self,
         db: &'db dyn baml_compiler2_ppir::Db,
         path: &[Name],
         ns_context: &[Name],
-    ) -> Option<(ResolvedSource, Definition<'db>)> {
+    ) -> Option<ResolvedValue<'db>> {
         let item = path.last()?;
         if !ns_context.is_empty() {
             let ns: Vec<_> = ns_context
@@ -908,14 +1356,14 @@ impl<'db> PackageResolutionContext<'db> {
                 .chain(path[..path.len() - 1].iter())
                 .cloned()
                 .collect();
-            if let Some(result) = self.resolve_value_in_own(&ns, item) {
-                return Some(result);
+            if let Some(definition) = self.own_items.lookup_value(&ns, item) {
+                return Some(ResolvedValue::Source(definition));
             }
         }
         // When ns_context is empty, try unqualified path (same-namespace for root files)
         if ns_context.is_empty() {
-            if let Some(result) = self.resolve_value_in_own(&path[..path.len() - 1], item) {
-                return Some(result);
+            if let Some(definition) = self.own_items.lookup_value(&path[..path.len() - 1], item) {
+                return Some(ResolvedValue::Source(definition));
             }
         }
         // No bare fallback from non-root namespaces — cross-namespace requires explicit qualification
@@ -923,30 +1371,24 @@ impl<'db> PackageResolutionContext<'db> {
         if path.len() >= 2 {
             if path[0].as_str() == "root" {
                 if let Some(def) = self.own_items.lookup_value(&path[1..path.len() - 1], item) {
-                    return Some((ResolvedSource::Item, def));
+                    return Some(ResolvedValue::Source(def));
                 }
             }
-            // dep-prefixed search (parity with resolve_type)
-            for (dep_name, _dep_iface) in &self.dep_interfaces {
+            for (dep_name, dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
+                    if is_mounted_package(db, dep_name) {
+                        let function = dep_iface.lookup_function(&path[1..path.len() - 1], item)?;
+                        return Some(ResolvedValue::Exported(Box::new(
+                            resolved_exported_function(function, Vec::new(), Vec::new()),
+                        )));
+                    }
                     let dep_pkg_id = PackageId::new(db, dep_name.clone());
                     let dep_items = baml_compiler2_ppir::package_items(db, dep_pkg_id);
                     if let Some(def) = dep_items.lookup_value(&path[1..path.len() - 1], item) {
-                        return Some((ResolvedSource::Builtin, def));
+                        return Some(ResolvedValue::Source(def));
                     }
                 }
             }
-        }
-        None
-    }
-
-    fn resolve_value_in_own(
-        &self,
-        namespace: &[Name],
-        item: &Name,
-    ) -> Option<(ResolvedSource, Definition<'db>)> {
-        if let Some(def) = self.own_items.lookup_value(namespace, item) {
-            return Some((ResolvedSource::Item, def));
         }
         None
     }
@@ -969,20 +1411,17 @@ impl<'db> PackageResolutionContext<'db> {
                 if let Some(ExportedType::Class {
                     methods,
                     generic_params,
+                    generic_param_bounds,
                     ..
                 }) = dep_iface.lookup_type(class_name.namespace(), class_name.name())
                 {
                     if let Some(method) = methods.iter().find(|m| &m.name == method_name) {
                         return Some(ResolvedMethod {
-                            function: ResolvedFunction {
-                                name: method.name.clone(),
-                                params: method.params.clone(),
-                                return_type: method.return_type.clone(),
-                                declared_throws: method.declared_throws.clone(),
-                                callable_throws: method.callable_throws.clone(),
-                                generic_params: method.generic_params.clone(),
-                                builtin_kind: method.builtin_kind,
-                            },
+                            function: resolved_exported_function(
+                                method,
+                                generic_params.clone(),
+                                generic_param_bounds.clone(),
+                            ),
                             class_name: class_name.name().clone(),
                             class_generic_params: generic_params.clone(),
                         });
@@ -1027,7 +1466,9 @@ impl<'db> PackageResolutionContext<'db> {
                     declared_throws: exported.declared_throws,
                     callable_throws: exported.callable_throws,
                     generic_params: exported.generic_params,
+                    generic_param_bounds: exported.generic_param_bounds,
                     builtin_kind: exported.builtin_kind,
+                    external: None,
                 },
                 class_name: class_name.name().clone(),
                 class_generic_params: crate::lower::class_generic_frame(db, class_loc),

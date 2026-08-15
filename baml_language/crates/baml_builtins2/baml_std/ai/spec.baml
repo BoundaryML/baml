@@ -108,8 +108,10 @@ class FunctionSpec<Out> {
         self.args
     }
 
-    function output_type(self) -> type {
-        reflect.type_of<Out>()
+    function output_type(self) -> type throws baml.reflect.errors.CompilationError {
+        let output_type = type.of<Out>();
+        baml.prompt.validate_output_type(output_type);
+        output_type
     }
 
     function prompt(self, output_format: string = "") -> Prompt {

@@ -153,12 +153,39 @@ fn accessible_package_items<'db>(
     None
 }
 
+/// Resolve the package and namespace split for a qualified path.
+///
+/// A real accessible package wins. If there is none, BEP-066's `reflect`,
+/// `type`, and `json` roots are interpreted as namespaces of the accessible
+/// builtin `baml` package, matching compiler name resolution and completions.
+fn accessible_path_package<'db>(
+    db: &'db dyn crate::Db,
+    file: SourceFile,
+    segments: &[Name],
+) -> Option<(Name, &'db PackageItems<'db>, usize)> {
+    let first = segments.first()?;
+    let own = baml_compiler2_hir::file_package::file_package(db, file).package;
+    if first.as_str() == "root" {
+        let items = accessible_package_items(db, file, &own)?;
+        return Some((own, items, 1));
+    }
+    if let Some(items) = accessible_package_items(db, file, first) {
+        return Some((first.clone(), items, 1));
+    }
+    if matches!(first.as_str(), "reflect" | "type" | "json") {
+        let baml = Name::new("baml");
+        let items = accessible_package_items(db, file, &baml)?;
+        return Some((baml, items, 0));
+    }
+    None
+}
+
 /// Resolve a path expression at a given position.
 ///
 /// Single-segment paths are resolved via `resolve_name_at`. Multi-segment
 /// paths treat the first segment as either `root` (the current file's
-/// package) or a literal package name; the remaining segments look up
-/// inside that package.
+/// package), a literal package name, or a BEP-066 builtin namespace shorthand;
+/// the remaining segments look up inside that package.
 pub fn resolve_path_at<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,
@@ -172,16 +199,11 @@ pub fn resolve_path_at<'db>(
     if segments.len() == 1 {
         return resolve_name_at_in_scope(db, file, at_offset, &segments[0], scope_name);
     }
-    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_name = if segments[0].as_str() == "root" {
-        &pkg_info.package
-    } else {
-        &segments[0]
-    };
-    let Some(pkg_items) = accessible_package_items(db, file, pkg_name) else {
+    let Some((_pkg_name, pkg_items, namespace_start)) = accessible_path_package(db, file, segments)
+    else {
         return ResolvedName::Unknown;
     };
-    let after_pkg = &segments[1..];
+    let after_pkg = &segments[namespace_start..];
     let item = after_pkg
         .last()
         .expect("multi-segment path has elements after pkg prefix");
@@ -205,15 +227,9 @@ pub fn resolve_namespace_prefix(
     file: SourceFile,
     segments: &[Name],
 ) -> Option<bool> {
-    let first = segments.first()?;
     let own = baml_compiler2_hir::file_package::file_package(db, file).package;
-    let pkg_name = if first.as_str() == "root" {
-        own.clone()
-    } else {
-        first.clone()
-    };
-    let pkg_items = accessible_package_items(db, file, &pkg_name)?;
-    let ns_prefix = &segments[1..];
+    let (pkg_name, pkg_items, namespace_start) = accessible_path_package(db, file, segments)?;
+    let ns_prefix = &segments[namespace_start..];
     let is_namespace = ns_prefix.is_empty()
         || pkg_items
             .namespaces

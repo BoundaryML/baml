@@ -402,32 +402,38 @@ test "t_dirty" {
     );
 }
 
-/// R2 (design §9): a dirty file with a top-level `let` (client-like). Editing it
+/// R2 (design §9): a dirty file with a client-synthesized global. Editing it
 /// re-participates in the package `$init` synthesis, resynthesized incrementally.
 #[test]
-fn incremental_dirty_top_level_let() {
+fn incremental_dirty_client_global() {
     const CLEAN: &str = r#"function clean_fn() -> int {
   7
 }
 "#;
-    const DIRTY: &str = r#"let greeting = "hi";
+    const DIRTY: &str = r#"client<llm> TestClient {
+  provider openai
+  options {
+    model "unused"
+    api_key "unused"
+  }
+}
 
-function use_greeting() -> string {
-  greeting
+function use_client() -> string {
+  TestClient.name
 }
 "#;
     let files = [("l_clean.baml", CLEAN), ("l_dirty.baml", DIRTY)];
     let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
     let prev = prev_units(&files);
 
-    let dirty_edit = DIRTY.replace("  greeting\n}", "  greeting\n  // edited\n}");
+    let dirty_edit = DIRTY.replace("  TestClient.name\n}", "  TestClient.name\n  // edited\n}");
     assert_ne!(dirty_edit, DIRTY, "edit must apply");
     let edited = [
         ("l_clean.baml", CLEAN),
         ("l_dirty.baml", dirty_edit.as_str()),
     ];
     assert_incremental_matches(
-        "dirty top-level let",
+        "dirty client global",
         &edited,
         &base,
         &prev,

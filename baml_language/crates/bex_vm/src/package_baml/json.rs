@@ -432,6 +432,22 @@ impl BamlNamespaceJson for PackageBamlImpl {
         bex_str::BexStr::from(s)
     }
 
+    fn encode(vm: &mut BexVm, v: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
+        let mut counter = 0;
+        let mut path = String::new();
+        let json = render_to_serde(vm, *v, &[], &[], &mut counter, &mut path)?;
+        serde_json::to_string(&json)
+            .map(bex_str::BexStr::from)
+            .map_err(|error| {
+                raise_serialize(
+                    vm,
+                    format!("serde_json::to_string failed: {error}"),
+                    &path,
+                    "serde_json",
+                )
+            })
+    }
+
     fn to_string(vm: &mut BexVm, v: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
         let ty = vm
             .current_call_type_args()

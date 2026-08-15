@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 9637
 ---
 // `<expr> is <pattern>` — Rust `matches!`-style pattern test.
 // Returns true if the scrutinee matches the pattern, false otherwise.

@@ -18,6 +18,7 @@ pub mod lazy_biased_mutex;
 pub mod link;
 pub mod relink;
 mod roots;
+pub mod runtime_compile;
 pub mod task_group;
 pub mod types;
 pub mod unit;
@@ -30,6 +31,13 @@ pub use indexable::{
 };
 pub use link::LinkError;
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
+pub use runtime_compile::{
+    RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
+    RuntimeDiagnosticSeverity, RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs,
+    RuntimePackageMount, RuntimeSessionCompileArtifact, RuntimeSessionCompileRequest,
+    RuntimeSessionInitializer, RuntimeSessionStep, RuntimeSourceSpan, RuntimeTypeMount,
+    SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
+};
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,

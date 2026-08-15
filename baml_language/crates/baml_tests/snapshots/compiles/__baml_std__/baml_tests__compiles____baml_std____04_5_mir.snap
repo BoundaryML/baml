@@ -5643,6 +5643,8 @@ fn baml.json.stringify_pretty = builtin(vm)
 
 fn baml.json.to_string = builtin(vm)
 
+fn baml.json.encode = builtin(vm)
+
 fn baml.json.to_json = builtin(vm)
 
 fn baml.json.from(value: T) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
@@ -7310,6 +7312,84 @@ fn baml.ops.__union_neg = builtin(vm)
 
 fn baml.prompt.Context.output_format_with = builtin(io)
 
+fn baml.prompt.validate_output_type(return_type: type) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: type // return_type // param
+    let _2: void
+    let _3: null | baml.reflect.enum.Type
+    let _4: null | baml.reflect.enum.Type
+    let _5: baml.reflect.enum.Type // enum_type
+    let _6: bool
+    let _7: int
+    let _8: baml.reflect.enum.Value[]
+    let _9: string // message
+    let _10: string
+    let _11: string
+    let _12: baml.reflect.errors.CompilationError
+    let _13: string
+    let _14: baml.reflect.Diagnostic[]
+    let _15: baml.reflect.Diagnostic
+    let _16: string
+
+    bb0: {
+        _2 = call const fn baml.TypeValue._validate_renderable(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = call const fn baml.TypeValue.as_enum(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        _4 = copy _3;
+        _4 = narrow_bind copy _4 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["reflect", "enum"], name: "Type" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb3];
+    }
+
+    bb3: {
+        _0 = const null;
+        goto -> bb8;
+    }
+
+    bb4: {
+        _5 = copy _4;
+        _8 = call const fn baml.reflect.enum.Type.values(copy _5) -> [bb5];
+    }
+
+    bb5: {
+        _7 = len(_8);
+        goto -> bb6;
+    }
+
+    bb6: {
+        _6 = copy _7 == const 0_i64;
+        branch copy _6 -> [bb9, bb7];
+    }
+
+    bb7: {
+        _0 = const null;
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+
+    bb9: {
+        _11 = call const fn baml.TypeValue.baml.ToString.to_string(copy _1) -> [bb10];
+    }
+
+    bb10: {
+        _10 = const "empty enum `" + copy _11;
+        _9 = copy _10 + const "` cannot be rendered as an LLM output schema";
+        _13 = copy _9;
+        _16 = copy _9;
+        _15 = baml.reflect.Diagnostic { const "E0159", const null, copy _16 };
+        _14 = [copy _15]: baml.reflect.Diagnostic[];
+        _12 = baml.reflect.errors.CompilationError { copy _13, copy _14 };
+        throw copy _12;
+    }
+}
+
 fn baml.prompt.render_output_format = builtin(io)
 
 fn baml.prompt.build_output_format = builtin(io)
@@ -7552,6 +7632,280 @@ fn baml.random.ChaCha20._new = builtin(vm)
 fn baml.random.ChaCha20.Rng.random = builtin(vm)
 
 fn baml.random.ChaCha20.Rng.random_int = builtin(vm)
+
+fn baml.reflect.array.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.array.Type.element_type = builtin(vm)
+
+fn baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
+    // Locals:
+    let _0: baml.reflect.class.Type // _0 // return
+    let _1: string // name // param
+    let _2: map<string, type | baml.reflect.WithMeta<type>> // fields // param
+    let _3: baml.reflect.interface.Implementation[] // implementations // param
+    let _4: bool
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = []: baml.reflect.interface.Implementation[];
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn baml.reflect.class._new(copy _1, copy _2, copy _3) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.reflect.class._new = builtin(vm)
+
+fn baml.reflect.class.builder = builtin(vm)
+
+fn baml.reflect.class.Builder.field = builtin(vm)
+
+fn baml.reflect.class.Builder.type = builtin(vm)
+
+fn baml.reflect.class.Builder.build(self: baml.reflect.class.Builder, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
+    // Locals:
+    let _0: baml.reflect.class.Type // _0 // return
+    let _1: baml.reflect.class.Builder // self // param
+    let _2: baml.reflect.interface.Implementation[] // implementations // param
+    let _3: bool
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = []: baml.reflect.interface.Implementation[];
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn baml.reflect.class.Builder._build(copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.reflect.class.Builder._build = builtin(vm)
+
+fn baml.reflect.class.PendingType.array = builtin(vm)
+
+fn baml.reflect.class.PendingType.optional = builtin(vm)
+
+fn baml.reflect.class.PendingType.union = builtin(vm)
+
+fn baml.reflect.class.PendingType.resolved = builtin(vm)
+
+fn baml.reflect.class.get_field = builtin(vm)
+
+fn baml.reflect.class.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.class.Type.fields = builtin(vm)
+
+fn baml.reflect.class.Type.meta = builtin(vm)
+
+fn baml.reflect.enum.value = builtin(vm)
+
+fn baml.reflect.enum.new = builtin(vm)
+
+fn baml.reflect.enum.get_value = builtin(vm)
+
+fn baml.reflect.enum.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.enum.Type.values = builtin(vm)
+
+fn baml.reflect.enum.Type.meta = builtin(vm)
+
+fn baml.reflect.function.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.function.Type.params = builtin(vm)
+
+fn baml.reflect.function.Type.return_type = builtin(vm)
+
+fn baml.reflect.interface.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.interface.Type.implemented_by = builtin(vm)
+
+fn baml.reflect.interface.Implementation.field = builtin(vm)
+
+fn baml.reflect.interface.implementation = builtin(vm)
+
+fn baml.reflect.literal.new = builtin(vm)
+
+fn baml.reflect.literal.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.map.new = builtin(vm)
+
+fn baml.reflect.map.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.map.Type.key_type = builtin(vm)
+
+fn baml.reflect.map.Type.value_type = builtin(vm)
+
+fn baml.reflect.primitive.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.union.new = builtin(vm)
+
+fn baml.reflect.union.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.union.Type.member_types = builtin(vm)
+
+fn baml.reflect.TypeView.as_type(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.reflect.Package.current = builtin(intrinsic)
+
+fn baml.reflect.Package.compile(files: map<string, string>, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package {
+    // Locals:
+    let _0: baml.reflect.Package // _0 // return
+    let _1: map<string, string> // files // param
+    let _2: map<string, baml.reflect.Package> // packages // param
+    let _3: bool
+    let _4: baml.reflect.Package // artifact
+    let _5: baml.reflect.Package
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = {  }: map<string, baml.reflect.Package>;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = sys_op const fn baml.reflect.Package._compile(copy _1, copy _2) -> bb3;
+    }
+
+    bb3: {
+        _5 = copy _4;
+        _0 = call const fn baml.reflect.Package._finish(copy _5, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn baml.reflect.Package._compile = builtin(io)
+
+fn baml.reflect.Package._finish = builtin(vm)
+
+fn baml.reflect.Package.get_class = builtin(vm)
+
+fn baml.reflect.Package.get_enum = builtin(vm)
+
+fn baml.reflect.Package.get_interface = builtin(vm)
+
+fn baml.reflect.Package.with_types = builtin(vm)
+
+fn baml.reflect.Package.get_function = builtin(vm)
+
+fn baml.reflect.Package.classes = builtin(vm)
+
+fn baml.reflect.Package.enums = builtin(vm)
+
+fn baml.reflect.Package.interfaces = builtin(vm)
+
+fn baml.reflect.Package.functions = builtin(vm)
+
+fn baml.reflect.Package.tests = builtin(vm)
+
+fn baml.reflect.Package.diagnostics = builtin(vm)
+
+fn baml.reflect.Session.new(packages: map<string, baml.reflect.Package>) -> baml.reflect.Session {
+    // Locals:
+    let _0: baml.reflect.Session // _0 // return
+    let _1: map<string, baml.reflect.Package> // packages // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = {  }: map<string, baml.reflect.Package>;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn baml.reflect.Session._new(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.reflect.Session._new = builtin(vm)
+
+fn baml.reflect.Session.eval(self: baml.reflect.Session, source: string) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: baml.reflect.Session // self // param
+    let _2: string // source // param
+    let _3: baml.reflect.Package // artifact
+    let _4: type
+    let _5: unknown // _
+    let _6: baml.reflect.Package
+    let _7: type
+    let _8: baml.reflect.errors.EvaluationError
+
+    bb0: {
+        _4 = load_type(#0);
+        _3 = sys_op const fn baml.reflect.Session._compile(copy _1, copy _2, copy _4) -> bb1;
+    }
+
+    bb1: {
+        _6 = copy _3;
+        _7 = load_type(#0);
+        _0 = call const fn baml.reflect.Session._finish<copy _7>(copy _1, copy _6) -> [bb2, unwind: bb3];
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw_if_panic copy _5 -> bb4;
+    }
+
+    bb4: {
+        _8 = baml.reflect.errors.EvaluationError { const "session evaluation failed" };
+        throw copy _8;
+    }
+}
+
+fn baml.reflect.Session._compile = builtin(io)
+
+fn baml.reflect.Session._finish = builtin(vm)
+
+fn baml.reflect.Session.diagnostics = builtin(vm)
+
+fn baml.reflect.signature = builtin(vm)
+
+fn baml.reflect.call_any = builtin(vm)
 
 fn baml.sap.ParseCache.new = builtin(io)
 
@@ -11299,6 +11653,10 @@ fn baml.toml.item_from_json(json: int | float | string | bool | null | baml.json
     }
 }
 
+fn baml.type.of = builtin(intrinsic)
+
+fn baml.type.of_value = builtin(vm)
+
 fn baml.ws.WsStream.send = builtin(io)
 
 fn baml.ws.WsStream.next = builtin(io)
@@ -11494,6 +11852,36 @@ fn baml.root.ops.Add<string>$for$string.add(self: string, rhs: string) -> string
         return;
     }
 }
+
+fn baml.TypeValue.array = builtin(vm)
+
+fn baml.TypeValue.optional = builtin(vm)
+
+fn baml.TypeValue.to_baml = builtin(vm)
+
+fn baml.TypeValue.kind = builtin(vm)
+
+fn baml.TypeValue.as_class = builtin(vm)
+
+fn baml.TypeValue.as_enum = builtin(vm)
+
+fn baml.TypeValue.as_union = builtin(vm)
+
+fn baml.TypeValue.as_literal = builtin(vm)
+
+fn baml.TypeValue.as_array = builtin(vm)
+
+fn baml.TypeValue.as_map = builtin(vm)
+
+fn baml.TypeValue.as_interface = builtin(vm)
+
+fn baml.TypeValue.as_primitive = builtin(vm)
+
+fn baml.TypeValue.as_function = builtin(vm)
+
+fn baml.TypeValue._validate_renderable = builtin(vm)
+
+fn baml.TypeValue.meta = builtin(vm)
 
 fn baml.TypeValue.baml.ToString.to_string(self: baml.TypeValue) -> string {
     // Locals:

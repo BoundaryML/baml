@@ -57,7 +57,7 @@ fn s(v: &str) -> BEV {
 /// A free generic function reflecting its single `TypeVar` as a string — the
 /// observable proof of what `T` was bound to.
 const IDENTITY: &str = r#"
-    function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
+    function identity<T>(x: T) -> string { type.of<T>().to_string() }
     function main() -> int { 0 }
 "#;
 
@@ -107,7 +107,7 @@ async fn infer_identity_generic_instance() {
     // T4-ish: a fully-bound GenericBox[int] instance ⇒ T = GenericBox<int>.
     let source = r#"
         class GenericBox<T> { value T }
-        function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
+        function identity<T>(x: T) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let arg = BEV::instance_generic(
@@ -137,7 +137,7 @@ async fn infer_make_triple_structural() {
     // unbound var would fail Gate A before the body runs). Render mentions each.
     let source = r#"
         function make_triple<A, B, C>(a: A, b: B[], c: map<string, C>) -> string {
-            reflect.type_of<A | B | C>().to_string()
+            type.of<A | B | C>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -168,7 +168,7 @@ async fn infer_second_of_nested_generic() {
     // T9: second_of<T>(p: GenericPair<int, T>) with GenericPair<int, string> ⇒ T=string.
     let source = r#"
         class GenericPair<A, B> { first A second B }
-        function second_of<T>(p: GenericPair<int, T>) -> string { reflect.type_of<T>().to_string() }
+        function second_of<T>(p: GenericPair<int, T>) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let arg = BEV::instance_generic(
@@ -183,7 +183,7 @@ async fn infer_second_of_nested_generic() {
 // ── §C: union merge (same var, multiple positions) ─────────────────────────
 
 const CHOOSE: &str = r#"
-    function choose<T>(left: T, right: T) -> string { reflect.type_of<T>().to_string() }
+    function choose<T>(left: T, right: T) -> string { type.of<T>().to_string() }
     function main() -> int { 0 }
 "#;
 
@@ -224,7 +224,7 @@ async fn partial_explicit_seed_then_infer() {
     // while B=string and C=bool are still inferred.
     let source = r#"
         function make_triple<A, B, C>(a: A, b: B[], c: map<string, C>) -> string {
-            reflect.type_of<A | B | C>().to_string()
+            type.of<A | B | C>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -296,7 +296,7 @@ async fn explicit_binding_widens_inferred_type() {
 async fn body_only_var_still_requires_binding() {
     // T19: one_type_arg() with no value carrying T ⇒ Gate A rejects.
     let source = r#"
-        function one_type_arg<T>() -> string { reflect.type_of<T>().to_string() }
+        function one_type_arg<T>() -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let err = call_infer(source, "one_type_arg", vec![])
@@ -403,7 +403,7 @@ async fn g3_nested_unbound_under_bare_formal_is_rust_type() {
     // instance is unbound under a bare-`T` formal ⇒ the whole value is rust_type.
     let source = r#"
         class GenericBox<T> { value T }
-        function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
+        function identity<T>(x: T) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let inner = BEV::instance(
@@ -428,7 +428,7 @@ async fn j13_closure_typed_param_poisons_typevars_must_specify() {
     // is rejected (must-specify), not silently inferred.
     let source = r#"
         function apply<T, R>(f: (T) -> R, x: T) -> string {
-            reflect.type_of<T>().to_string()
+            type.of<T>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -447,7 +447,7 @@ async fn j13_closure_poisoned_typevars_succeed_when_specified() {
     // §J J13 (positive): the same call succeeds once `T` and `R` are specified.
     let source = r#"
         function apply<T, R>(f: (T) -> R, x: T) -> string {
-            reflect.type_of<T>().to_string()
+            type.of<T>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -514,7 +514,7 @@ async fn infer_identity_empty_map_binds_rust_type_map() {
 // ── §I: nullable-only TypeVar T? ───────────────────────────────────────────
 
 const MAYBE_ID: &str = r#"
-    function maybe_id<T>(x: T?) -> string { reflect.type_of<T>().to_string() }
+    function maybe_id<T>(x: T?) -> string { type.of<T>().to_string() }
     function main() -> int { 0 }
 "#;
 
@@ -549,7 +549,7 @@ async fn infer_maybe_id_null_value() {
 /// introspection fix is not exercised here).
 const TAG_OR_VALUE_REFLECT: &str = r#"
     function tag_or_value<T>(x: T | string | null) -> string {
-        reflect.type_of<T>().to_string()
+        type.of<T>().to_string()
     }
     function main() -> int { 0 }
 "#;
@@ -637,7 +637,7 @@ async fn infer_nonempty_map_binds_key_despite_valueless_values() {
     // map-key TypeVar K must bind to `string` rather than collapsing the whole
     // map to NoEvidence (which previously left K unbound and Gate-A rejected).
     let src = r#"
-        function map_key<K>(m: map<K, int[]>) -> string { reflect.type_of<K>().to_string() }
+        function map_key<K>(m: map<K, int[]>) -> string { type.of<K>().to_string() }
         function main() -> int { 0 }
     "#;
     let mut entries = indexmap::IndexMap::new();
@@ -671,7 +671,7 @@ async fn gatea_class_method_body_only_var_should_reject() {
     // ALL class methods and `T` silently erased to `unknown`.
     let src = r#"
         class Helper {
-            function reflect_t<T>() -> string { reflect.type_of<T>().to_string() }
+            function reflect_t<T>() -> string { type.of<T>().to_string() }
         }
         function main() -> int { 0 }
     "#;
@@ -690,7 +690,7 @@ async fn unbound_generic_instance_should_be_host_only() {
     // into, so `T` defaults to `rust_type`.
     let source = r#"
         class GenericBox<T> { value T }
-        function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
+        function identity<T>(x: T) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     // Instance whose wire type_args are EMPTY (unbound generic class encoding).
@@ -760,7 +760,7 @@ async fn g1_unbound_instance_under_forcing_formal_recovers_field_type() {
     // wire carries no type-args), distinct from the bare-`T` host-only path.
     let source = r#"
         class GenericPair<A, B> { first A second B }
-        function second_of<T>(p: GenericPair<int, T>) -> string { reflect.type_of<T>().to_string() }
+        function second_of<T>(p: GenericPair<int, T>) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let unbound = BEV::instance(
@@ -804,7 +804,7 @@ fn int_map(value_type: RuntimeTy, entries: &[(&str, BEV)]) -> BEV {
 
 /// `pair<T>(a: T[], b: T[])` — `T` in two **invariant** (list-element) positions.
 const PAIR: &str = r#"
-    function pair<T>(a: T[], b: T[]) -> string { reflect.type_of<T>().to_string() }
+    function pair<T>(a: T[], b: T[]) -> string { type.of<T>().to_string() }
     function main() -> int { 0 }
 "#;
 
@@ -871,7 +871,7 @@ async fn infer_merge_invariant_map_value_conflict_rejects() {
     // map-value ⇒ reject.
     let src = r#"
         function merge<T>(a: map<string, T>, b: map<string, T>) -> string {
-            reflect.type_of<T>().to_string()
+            type.of<T>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -893,7 +893,7 @@ async fn infer_combine_invariant_class_arg_conflict_rejects() {
     let src = r#"
         class GenericBox<T> { value T }
         function combine<T>(x: GenericBox<T>, y: GenericBox<T>) -> string {
-            reflect.type_of<T>().to_string()
+            type.of<T>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -921,7 +921,7 @@ async fn infer_glue_invariant_vs_covariant_conflict_rejects() {
     // J7/E4: glue(int, string[]) ⇒ arr⇒T==string (invariant) but bare⇒int <: T
     // (covariant); int <: string is false ⇒ reject (the key cross-variance case).
     let src = r#"
-        function glue<T>(bare: T, arr: T[]) -> string { reflect.type_of<T>().to_string() }
+        function glue<T>(bare: T, arr: T[]) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let arr_arg = arr(RuntimeTy::string(), vec![s("x")]);
@@ -939,7 +939,7 @@ async fn infer_glue_invariant_and_covariant_agree_binds() {
     // J11/G4 regression: glue(int, int[]) ⇒ invariant (T==int) + covariant
     // (int <: int) AGREE ⇒ T = int; must succeed.
     let src = r#"
-        function glue<T>(bare: T, arr: T[]) -> string { reflect.type_of<T>().to_string() }
+        function glue<T>(bare: T, arr: T[]) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let arr_arg = arr(RuntimeTy::int(), vec![BEV::Int(2)]);
@@ -957,7 +957,7 @@ async fn infer_triple_choose_three_covariant_join() {
     // covariant bare-arg occurrences union-merge (n-ary, not pairwise-special).
     let src = r#"
         function triple_choose<T>(a: T, b: T, c: T) -> string {
-            reflect.type_of<T>().to_string()
+            type.of<T>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -988,7 +988,7 @@ async fn infer_make_triple_heterogeneous_list_element_unions() {
     // invariant conflict BETWEEN two separate args).
     let src = r#"
         function make_triple<A, B, C>(a: A, b: B[], c: map<string, C>) -> string {
-            reflect.type_of<A | B | C>().to_string()
+            type.of<A | B | C>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -1017,7 +1017,7 @@ async fn infer_two_typevar_union_is_uninferrable_rejects() {
     // members). Both T and U stay unbound ⇒ Gate A rejects.
     let src = r#"
         function two_in_union<T, U>(x: T | U | int) -> string {
-            reflect.type_of<T | U>().to_string()
+            type.of<T | U>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -1038,7 +1038,7 @@ async fn infer_identity_known_class_instance() {
     // BAML class recovered from the instance value).
     let src = r#"
         class StringIntPair { my_string string my_int int }
-        function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
+        function identity<T>(x: T) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let arg = BEV::instance(
@@ -1073,7 +1073,7 @@ async fn infer_extract_four_vars_from_nested_generic() {
     let src = r#"
         class GenericPair<A, B> { first A second B }
         function extract<A, B, C, D>(a: GenericPair<GenericPair<A, B>, GenericPair<C, D>>) -> string {
-            reflect.type_of<A | B | C | D>().to_string()
+            type.of<A | B | C | D>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -1119,7 +1119,7 @@ async fn explicit_binding_contradicted_by_scalar_actual_rejects() {
     // case.) The friendly error names the function and both types, no jargon.
     let src = r#"
         function make_triple<A, B, C>(a: A, b: B[], c: map<string, C>) -> string {
-            reflect.type_of<A | B | C>().to_string()
+            type.of<A | B | C>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -1163,7 +1163,7 @@ async fn infer_choose_divergent_generic_instances_union() {
     // same actuals conflict (§J E3).
     let src = r#"
         class GenericBox<T> { value T }
-        function choose<T>(left: T, right: T) -> string { reflect.type_of<T>().to_string() }
+        function choose<T>(left: T, right: T) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let x = BEV::instance_generic(
@@ -1196,7 +1196,7 @@ async fn infer_tag_or_value_binds_generic_instance() {
     let src = r#"
         class GenericBox<T> { value T }
         function tag_or_value<T>(x: T | string | null) -> string {
-            reflect.type_of<T>().to_string()
+            type.of<T>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -1224,7 +1224,7 @@ async fn infer_identity_enum_binds_enum_type() {
     // from a resolved variant value).
     let src = r#"
         enum SomeEnum { VARIANT OTHER }
-        function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
+        function identity<T>(x: T) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let arg = BEV::Variant {
@@ -1260,7 +1260,7 @@ async fn a3_nested_fully_bound_generic_instance() {
     // `infer_identity_generic_instance`, the single-level bound box.)
     let source = r#"
         class GenericBox<T> { value T }
-        function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
+        function identity<T>(x: T) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let inner = BEV::instance_generic(
@@ -1298,7 +1298,7 @@ const READ_T: &str = r#"
       mixed T | string | null
     }
     function read_t<T>(shape: ContainerShapes<T>) -> string {
-        reflect.type_of<T>().to_string()
+        type.of<T>().to_string()
     }
     function main() -> int { 0 }
 "#;
@@ -1357,7 +1357,7 @@ async fn b4_list_head_recursive_generic_wire_arg() {
     let src = r#"
         class GenericRecursive<T> { value T next GenericRecursive<T>? }
         function list_head_t<T>(list: GenericRecursive<T>) -> string {
-            reflect.type_of<T>().to_string()
+            type.of<T>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -1383,7 +1383,7 @@ async fn b7_first_or_empty_list_free_fn_binds_rust_type() {
     // element evidence ⇒ the *element* T = rust_type (NOT rust_type[]; that is
     // identity([]), where T is the whole list). The B6/B7 split is the point.
     let src = r#"
-        function first_or<T>(xs: T[]) -> string { reflect.type_of<T>().to_string() }
+        function first_or<T>(xs: T[]) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let out = call_infer(src, "first_or", vec![arr(RuntimeTy::int(), vec![])])
@@ -1406,7 +1406,7 @@ async fn b9_values_of_empty_map_free_fn_binds_rust_type() {
     // `map<_,T>` just as B7 shows for `T[]`).
     let src = r#"
         function values_of<T>(m: map<string, T>) -> string {
-            reflect.type_of<T>().to_string()
+            type.of<T>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -1430,9 +1430,9 @@ async fn b9_values_of_empty_map_free_fn_binds_rust_type() {
 const GENERIC_BOX_METHODS: &str = r#"
     class GenericBox<T> {
       value T
-      function get(self) -> string { reflect.type_of<T>().to_string() }
+      function get(self) -> string { type.of<T>().to_string() }
       function pair_with<U>(self, other: U) -> string {
-          reflect.type_of<T | U>().to_string()
+          type.of<T | U>().to_string()
       }
       function new<V>(value: V) -> GenericBox<V> { GenericBox<V> { value: value } }
     }
@@ -1507,7 +1507,7 @@ async fn l4_named_static_distinct_method_vars() {
           second B
           third C
           function make<D, E>(d: D, e: E) -> string {
-              reflect.type_of<D | E>().to_string()
+              type.of<D | E>().to_string()
           }
         }
         function main() -> int { 0 }
@@ -1530,7 +1530,7 @@ async fn l5_unbound_receiver_method_recovers_class_var_from_field() {
     // (no `[...]`) carries no wire type-args, but the method's `self: GenericBox<T>`
     // formal FORCES recursion into the `value` field — exactly the G1 forcing-formal
     // path — so the class `T` is recovered from the field VALUE (`5` ⇒ int), NOT
-    // left as host-only rust_type. `reflect.type_of<T | U>` then renders
+    // left as host-only rust_type. `type.of<T | U>` then renders
     // `int | string` (U=string from `other`). (The 03b L5 sketch guessed rust_type
     // under uncertainty and told us to assert whatever the implementation renders;
     // the forcing-formal recovery wins, which is the sounder outcome.)
@@ -1563,7 +1563,7 @@ async fn het_array_element_type_unifies() {
     // Directly asserts the unified element type (distinct from B8, which reads
     // the union via make_triple's `B[]`).
     let src = r#"
-        function elem_type<T>(xs: T[]) -> string { reflect.type_of<T>().to_string() }
+        function elem_type<T>(xs: T[]) -> string { type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let xs = arr(RuntimeTy::int(), vec![BEV::Int(1), s("x")]);
@@ -1617,7 +1617,7 @@ async fn unbound_recursive_recovers_t_from_fields() {
     let src = r#"
         class GenericRecursive<T> { value T next GenericRecursive<T>? }
         function list_head_t<T>(list: GenericRecursive<T>) -> string {
-            reflect.type_of<T>().to_string()
+            type.of<T>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -1643,7 +1643,7 @@ async fn unbound_outer_pair_with_bound_inner_recovers_all_vars() {
     let src = r#"
         class GenericPair<A, B> { first A second B }
         function extract<A, B, C, D>(a: GenericPair<GenericPair<A, B>, GenericPair<C, D>>) -> string {
-            reflect.type_of<A | B | C | D>().to_string()
+            type.of<A | B | C | D>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -1685,7 +1685,7 @@ async fn fully_unbound_nested_pair_recovers_all_vars_deeply() {
     let src = r#"
         class GenericPair<A, B> { first A second B }
         function extract<A, B, C, D>(a: GenericPair<GenericPair<A, B>, GenericPair<C, D>>) -> string {
-            reflect.type_of<A | B | C | D>().to_string()
+            type.of<A | B | C | D>().to_string()
         }
         function main() -> int { 0 }
     "#;
@@ -1724,7 +1724,7 @@ async fn triple_choose_join_includes_enum_and_concrete_class() {
         enum SomeEnum { VARIANT OTHER }
         class StringIntPair { my_string string my_int int }
         function triple_choose<T>(a: T, b: T, c: T) -> string {
-            reflect.type_of<T>().to_string()
+            type.of<T>().to_string()
         }
         function main() -> int { 0 }
     "#;

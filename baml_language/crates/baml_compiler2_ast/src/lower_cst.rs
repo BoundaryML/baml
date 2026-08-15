@@ -84,6 +84,28 @@ pub fn lower_file_with_path_and_test_owner(
     file_path: Option<&std::path::Path>,
     test_owner: Option<&str>,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, false)
+}
+
+/// Lower compiler-generated source for a `Session.eval` submission.
+///
+/// Session lowering rewrites persistent bindings into root lets before the
+/// transient source reaches HIR. This entry point is intentionally separate
+/// from ordinary file lowering so user-authored file-scope lets stay rejected.
+pub fn lower_session_file_with_path_and_test_owner(
+    root: &SyntaxNode,
+    file_path: Option<&std::path::Path>,
+    test_owner: Option<&str>,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, true)
+}
+
+fn lower_file_with_path_and_test_owner_impl(
+    root: &SyntaxNode,
+    file_path: Option<&std::path::Path>,
+    test_owner: Option<&str>,
+    is_session_submission: bool,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     let mut diags = Vec::new();
     let mut env_var_refs = Vec::new();
     let mut items = Vec::new();
@@ -185,6 +207,19 @@ pub fn lower_file_with_path_and_test_owner(
                     name,
                     span: child.span_range(),
                 });
+            }
+            baml_compiler_syntax::SyntaxKind::LET_STMT => {
+                if is_session_submission {
+                    if let Some(let_item) =
+                        lower_expr_body::lower_session_let(&child, &mut diags, &mut env_var_refs)
+                    {
+                        items.push(Item::Let(let_item));
+                    }
+                } else {
+                    diags.push(LoweringDiagnostic::TopLevelLetNotSupported {
+                        span: child.span_range(),
+                    });
+                }
             }
             baml_compiler_syntax::SyntaxKind::IMPLEMENTS_FOR => {
                 if let Some(imp) = lower_implements_for(&child, &mut diags, &mut env_var_refs) {
@@ -422,22 +457,13 @@ fn lower_function(
             .iter()
             .any(|(t, _)| t == "spec")
         {
-            let spec_type_args = generic_params
-                .iter()
-                .map(|param| {
-                    crate::ast::TypeExprKind::Path {
-                        segments: vec![param.name.clone()],
-                        generic_args: vec![],
-                        associated_type_bindings: vec![],
-                        attrs: vec![],
-                    }
-                    .at(llm_body_def.span)
-                })
-                .collect();
             let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
                 name.as_str(),
                 &param_names,
-                spec_type_args,
+                &generic_params
+                    .iter()
+                    .map(|param| param.name.clone())
+                    .collect::<Vec<_>>(),
                 return_type.clone(),
                 llm_body_def.span,
             );
@@ -1005,7 +1031,7 @@ fn lower_class(
                     let all_outer_attrs = std::mem::take(expr.attrs_mut());
                     let (hoist, keep): (Vec<_>, Vec<_>) =
                         all_outer_attrs.into_iter().partition(|a| {
-                            crate::disambiguate::is_field_attr(a.name.as_str())
+                            crate::disambiguate::should_hoist_field_attr(a.name.as_str())
                                 && direct_attr_spans.contains(&a.span)
                         });
                     *expr.attrs_mut() = keep;

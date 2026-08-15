@@ -837,6 +837,43 @@ fn unwrap_output_format(
 /// retain the generated defaults.
 struct DefaultIoOps;
 
+impl io::IoClassReflectPackage for DefaultIoOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _files: indexmap::IndexMap<String, String>,
+        _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::Package> {
+        // BexEngine intercepts this operation and delegates to its injected
+        // RuntimeCompiler before the provider table is consulted.
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
+impl io::IoClassReflectSession for DefaultIoOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _session: io::owned::reflect::Session,
+        _source: String,
+        _type_arg_0: baml_type::RuntimeTy,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::Package> {
+        // BexEngine intercepts Session compilation for the same reason as
+        // Package.compile: the concrete compiler is injected above sys_ops.
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
+impl io::IoNamespaceReflect for DefaultIoOps {}
+
 impl io::IoClassFsFile for DefaultIoOps {
     fn text(
         &self,

@@ -614,16 +614,16 @@ class RfiStringSource {
 
 function rfi_main() -> int {
     let score = 0
-    if reflect.type_of<RfiIntSource>().implements(reflect.type_of<RfiSource<Item = int>>()) {
+    if type.of<RfiIntSource>().implements(type.of<RfiSource<Item = int>>()) {
         score = score + 1
     }
-    if reflect.type_of<RfiIntSource>().implements(reflect.type_of<RfiSource<Item = string>>()) {
+    if type.of<RfiIntSource>().implements(type.of<RfiSource<Item = string>>()) {
         score = score + 10
     }
-    if reflect.type_of<RfiStringSource>().implements(reflect.type_of<RfiSource<Item = string>>()) {
+    if type.of<RfiStringSource>().implements(type.of<RfiSource<Item = string>>()) {
         score = score + 100
     }
-    if reflect.type_of<RfiStringSource>().implements(reflect.type_of<RfiSource<Item = int>>()) {
+    if type.of<RfiStringSource>().implements(type.of<RfiSource<Item = int>>()) {
         score = score + 1000
     }
     return score
@@ -653,9 +653,9 @@ class RfgBox<T> {
 }
 
 function rfg_main() -> int {
-    let box_int = reflect.type_of<RfgBox<int>>()
-    let int_source = reflect.type_of<RfgSource<Item = int>>()
-    let string_source = reflect.type_of<RfgSource<Item = string>>()
+    let box_int = type.of<RfgBox<int>>()
+    let int_source = type.of<RfgSource<Item = int>>()
+    let string_source = type.of<RfgSource<Item = string>>()
 
     let score = 0
     if box_int.implements(int_source) {
@@ -705,10 +705,10 @@ implement<T extends RgbSource<Item = int>> RgbIntSourced for T {}
 
 function rgb_main() -> int {
     let score = 0
-    if reflect.type_of<RgbIntSource>().implements(reflect.type_of<RgbIntSourced>()) {
+    if type.of<RgbIntSource>().implements(type.of<RgbIntSourced>()) {
         score = score + 1
     }
-    if reflect.type_of<RgbStrSource>().implements(reflect.type_of<RgbIntSourced>()) {
+    if type.of<RgbStrSource>().implements(type.of<RgbIntSourced>()) {
         score = score + 10
     }
     return score
@@ -738,10 +738,10 @@ implement<T extends RpaContainer<int>> RpaNeedsIntContainer for T {}
 
 function rpa_main() -> int {
     let score = 0
-    if reflect.type_of<RpaIntBox>().implements(reflect.type_of<RpaNeedsIntContainer>()) {
+    if type.of<RpaIntBox>().implements(type.of<RpaNeedsIntContainer>()) {
         score = score + 1
     }
-    if reflect.type_of<RpaStrBox>().implements(reflect.type_of<RpaNeedsIntContainer>()) {
+    if type.of<RpaStrBox>().implements(type.of<RpaNeedsIntContainer>()) {
         score = score + 10
     }
     return score
@@ -766,10 +766,10 @@ implements RltDebuggable for int {
 
 function rlt_main() -> int {
     let score = 0
-    if reflect.type_of<1>().implements(reflect.type_of<RltDebuggable>()) {
+    if type.of<1>().implements(type.of<RltDebuggable>()) {
         score = score + 1
     }
-    if reflect.type_of<int>().implements(reflect.type_of<RltDebuggable>()) {
+    if type.of<int>().implements(type.of<RltDebuggable>()) {
         score = score + 10
     }
     return score
@@ -794,10 +794,10 @@ implements RevNamed for RevColor {
 
 function rev_main() -> int {
     let score = 0
-    if reflect.type_of<RevColor.Red>().implements(reflect.type_of<RevNamed>()) {
+    if type.of<RevColor.Red>().implements(type.of<RevNamed>()) {
         score = score + 1
     }
-    if reflect.type_of<RevColor>().implements(reflect.type_of<RevNamed>()) {
+    if type.of<RevColor>().implements(type.of<RevNamed>()) {
         score = score + 10
     }
     return score

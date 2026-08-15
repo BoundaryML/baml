@@ -5,7 +5,7 @@
 //! representation (`BexValue`, `BexExternalValue`).
 
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
-use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value, ValueKind};
+use ::bex_vm_types::{HeapPtr, Object, ObjectType, Value, ValueKind};
 use baml_type::{Literal, Ty};
 use bex_external_types::{
     BexExternalAdt, BexExternalValue, HostValueKind, RuntimeTy, UnionMetadata,
@@ -14,7 +14,7 @@ use bex_external_types::{
 };
 use bex_vm::BexVm;
 
-use crate::{BexEngine, EngineError};
+use crate::{BexEngine, EngineError, thread::BexThread};
 
 /// Narrow a host-supplied [`RuntimeTy`] to the [`baml_type::RealizedTy`] the VM
 /// heap stores for a value's type (an array's element type, a map's key/value
@@ -30,6 +30,123 @@ fn realize_host_ty(ty: RuntimeTy) -> Result<baml_type::RealizedTy, EngineError> 
     baml_type::RealizedTy::try_from(ty).map_err(|e| EngineError::TypeMismatch {
         message: format!("host-supplied type is not realized: {e}"),
     })
+}
+
+fn portable_type_def(
+    type_value: &bex_vm_types::types::TypeValue,
+) -> bex_vm_types::types::PortableTypeDef {
+    use bex_vm_types::types::{
+        PortableClassDef, PortableClassFieldDef, PortableEnumDef, PortableEnumVariantDef,
+        PortableMetadata, PortableTypeDef,
+    };
+
+    let mut class_ptrs = type_value
+        .defs()
+        .classes
+        .values()
+        .copied()
+        .collect::<Vec<_>>();
+    let mut enum_ptrs = type_value
+        .defs()
+        .enums
+        .values()
+        .copied()
+        .collect::<Vec<_>>();
+    if !type_value.owner.is_null() {
+        // SAFETY: the VM-to-external caller holds a `PermitProof`, so the
+        // owning type and all of its definition edges cannot move here.
+        if let Object::Package(package) = unsafe { type_value.owner.get() } {
+            for ptr in package.classes.values().copied() {
+                if !class_ptrs.contains(&ptr)
+                    && !matches!(unsafe { ptr.get() }, Object::Class(class) if class.name.name().as_str().ends_with("$stream"))
+                {
+                    class_ptrs.push(ptr);
+                }
+            }
+            for ptr in package.enums.values().copied() {
+                if !enum_ptrs.contains(&ptr) {
+                    enum_ptrs.push(ptr);
+                }
+            }
+        }
+    }
+    let metadata =
+        |description: &Option<String>,
+         alias: &Option<String>,
+         docstring: &Option<String>,
+         other: &indexmap::IndexMap<String, String>| PortableMetadata {
+            description: description.clone(),
+            alias: alias.clone(),
+            docstring: docstring.clone(),
+            other: other.clone(),
+        };
+    let classes = class_ptrs
+        .into_iter()
+        .filter_map(|ptr| {
+            // SAFETY: definition pointers are rooted edges of `type_value`.
+            let Object::Class(class) = (unsafe { ptr.get() }) else {
+                return None;
+            };
+            Some(PortableClassDef {
+                name: class.name.clone(),
+                fields: class
+                    .fields
+                    .iter()
+                    .map(|field| PortableClassFieldDef {
+                        name: field.name.clone(),
+                        ty: field.field_type.clone(),
+                        metadata: metadata(
+                            &field.description,
+                            &field.alias,
+                            &field.docstring,
+                            &field.other,
+                        ),
+                        skip: field.skip,
+                    })
+                    .collect(),
+                metadata: metadata(
+                    &class.description,
+                    &class.alias,
+                    &class.docstring,
+                    &class.other,
+                ),
+                generic_param_count: class.generic_param_count,
+            })
+        })
+        .collect();
+    let enums = enum_ptrs
+        .into_iter()
+        .filter_map(|ptr| {
+            // SAFETY: definition pointers are rooted edges of `type_value`.
+            let Object::Enum(enm) = (unsafe { ptr.get() }) else {
+                return None;
+            };
+            Some(PortableEnumDef {
+                name: enm.name.clone(),
+                variants: enm
+                    .variants
+                    .iter()
+                    .map(|variant| PortableEnumVariantDef {
+                        name: variant.name.clone(),
+                        metadata: metadata(
+                            &variant.description,
+                            &variant.alias,
+                            &variant.docstring,
+                            &variant.other,
+                        ),
+                        skip: variant.skip,
+                    })
+                    .collect(),
+                metadata: metadata(&enm.description, &enm.alias, &enm.docstring, &enm.other),
+            })
+        })
+        .collect();
+    PortableTypeDef {
+        root: type_value.ty.clone().into(),
+        classes,
+        enums,
+        witnesses: type_value.defs().witnesses.clone(),
+    }
 }
 
 fn host_call_parameter_types<'a>(
@@ -358,9 +475,7 @@ impl BexEngine {
             Object::Interface(_) => Err(EngineError::CannotConvert {
                 type_name: "interface".to_string(),
             }),
-            Object::Package(_) => Err(EngineError::CannotConvert {
-                type_name: "package".to_string(),
-            }),
+            Object::Package(_) => Ok(BexExternalValue::Handle(self.heap.create_handle(ptr))),
             Object::ImplRule(_) => Err(EngineError::CannotConvert {
                 type_name: "impl_rule".to_string(),
             }),
@@ -378,8 +493,10 @@ impl BexEngine {
             }),
             Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-            Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
-                (**ty).clone().into(),
+            // Identity never crosses the host boundary (BEP-066 H-4), but the
+            // portable definition graph does.
+            Object::Type(type_value) => Ok(BexExternalValue::Adt(BexExternalAdt::TypeDef(
+                portable_type_def(type_value),
             ))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
             Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
@@ -495,7 +612,7 @@ impl BexEngine {
                 }
             }
             // A reflected type passed as a value inhabits the `type` metatype.
-            BexExternalValue::Adt(BexExternalAdt::Type(_)) => {
+            BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)) => {
                 SynthTy::Known(RuntimeTy::Type { attr: attr() })
             }
             // A typed heap handle already carries its concrete `RuntimeTy`.
@@ -715,16 +832,63 @@ impl BexEngine {
     /// external input — from `--json-args`, language bindings, or buggy
     /// sys ops — surfaces as a graceful error instead of crashing the
     /// process.
-    pub(crate) fn convert_external_to_vm_value<T: RootHaver + TlabHolder>(
+    pub(crate) fn convert_external_to_vm_value(
         &self,
-        holder: &mut impl HeapPermit<T>,
+        holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
     ) -> Result<Value, EngineError> {
         // Default: no declared-type context. Inbound `HostValue` arguments
         // need the declared `RuntimeTy::Function` to materialize an
         // `Object::HostClosure` — callers that thread the type in should
         // use `convert_external_to_vm_value_with_ty`.
-        self.convert_external_to_vm_value_with_ty(holder, external, None)
+        self.convert_external_to_vm_value_with_ty_and_runtime(
+            holder,
+            external,
+            None,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+            None,
+        )
+    }
+
+    pub(crate) fn convert_external_to_vm_value_with_runtime_schema(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        external: BexExternalValue,
+        overlay: &crate::RuntimeSchemaOverlay,
+        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
+        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
+    ) -> Result<Value, EngineError> {
+        let mut named = indexmap::IndexMap::new();
+        for (name, handle) in &overlay.named_owners {
+            let Some(owner) = self.resolve_handle(holder.proof(), handle) else {
+                continue;
+            };
+            let Object::Package(package) = (unsafe { owner.get() }) else {
+                continue;
+            };
+            let ptr = package
+                .classes
+                .values()
+                .chain(package.enums.values())
+                .copied()
+                .find(|ptr| match unsafe { ptr.get() } {
+                    Object::Class(class) => class.name.to_string() == *name,
+                    Object::Enum(enm) => enm.name.to_string() == *name,
+                    _ => false,
+                });
+            if let Some(ptr) = ptr {
+                named.insert(name.clone(), ptr);
+            }
+        }
+        self.convert_external_to_vm_value_with_ty_and_runtime(
+            holder,
+            external,
+            None,
+            dynamic_classes,
+            dynamic_enums,
+            Some(&named),
+        )
     }
 
     /// Like [`Self::convert_external_to_vm_value`], but threads the effective
@@ -733,11 +897,51 @@ impl BexEngine {
     /// context for their payload subtree; unannotated children inherit their
     /// list, map, or class-field type from the parent. This also lets nested
     /// `BexExternalValue::HostValue` values bind to an [`Object::HostClosure`].
-    pub(crate) fn convert_external_to_vm_value_with_ty<T: RootHaver + TlabHolder>(
+    pub(crate) fn convert_external_to_vm_value_with_ty(
         &self,
-        holder: &mut impl HeapPermit<T>,
+        holder: &mut impl HeapPermit<BexThread>,
+        external: BexExternalValue,
+        expected_ty: Option<&RuntimeTy>,
+    ) -> Result<Value, EngineError> {
+        self.convert_external_to_vm_value_with_ty_and_runtime(
+            holder,
+            external,
+            expected_ty,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+            None,
+        )
+    }
+
+    /// Materialize an external value using call-local runtime class and enum
+    /// side tables in addition to the engine's frozen static definition table.
+    /// Recursive calls retain both tables for nested containers and classes.
+    pub(crate) fn convert_external_to_vm_value_with_dynamic_types(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        external: BexExternalValue,
+        expected_ty: Option<&RuntimeTy>,
+        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
+        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
+    ) -> Result<Value, EngineError> {
+        self.convert_external_to_vm_value_with_ty_and_runtime(
+            holder,
+            external,
+            expected_ty,
+            dynamic_classes,
+            dynamic_enums,
+            None,
+        )
+    }
+
+    fn convert_external_to_vm_value_with_ty_and_runtime(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
         mut external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
+        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
+        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
+        runtime_named_objects: Option<&indexmap::IndexMap<String, HeapPtr>>,
     ) -> Result<Value, EngineError> {
         // A `baml.json.json` slot materializes containers with the alias as
         // their element/value type, exactly like BAML-born `baml.json.parse`
@@ -831,7 +1035,14 @@ impl BexEngine {
                             Some(ty) => self.coerce_inbound_arg(v, ty)?,
                             None => v,
                         };
-                        self.convert_external_to_vm_value_with_ty(holder, v, declared_element_ty)
+                        self.convert_external_to_vm_value_with_ty_and_runtime(
+                            holder,
+                            v,
+                            declared_element_ty,
+                            dynamic_classes,
+                            dynamic_enums,
+                            runtime_named_objects,
+                        )
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 Value::object(
@@ -862,8 +1073,15 @@ impl BexEngine {
                             Some(ty) => self.coerce_inbound_arg(v, ty)?,
                             None => v,
                         };
-                        self.convert_external_to_vm_value_with_ty(holder, v, declared_value_ty)
-                            .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
+                        self.convert_external_to_vm_value_with_ty_and_runtime(
+                            holder,
+                            v,
+                            declared_value_ty,
+                            dynamic_classes,
+                            dynamic_enums,
+                            runtime_named_objects,
+                        )
+                        .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
                     })
                     .collect::<Result<indexmap::IndexMap<bex_vm_types::BexStr, Value>, _>>()?;
                 Value::object(holder.holder_mut().tlab_mut().alloc_map(
@@ -892,13 +1110,29 @@ impl BexEngine {
                         type_args.clone_from(expected_args);
                     }
                 }
-                let class_ptr = self
-                    .resolved_class_names
-                    .get(&class_name)
-                    .or_else(|| resolve_named_object(&self.resolved_class_names, &class_name))
-                    .ok_or_else(|| EngineError::TypeMismatch {
-                        message: format!("Unknown class `{class_name}` in external Instance value"),
-                    })?;
+                let class_ptr = if let Some(handle) = dynamic_classes.get(&class_name) {
+                    self.resolve_handle(holder.proof(), handle).ok_or_else(|| {
+                        EngineError::TypeMismatch {
+                            message: format!(
+                                "Runtime class `{class_name}` expired before its value landed"
+                            ),
+                        }
+                    })?
+                } else {
+                    *runtime_named_objects
+                        .and_then(|objects| objects.get(&class_name))
+                        .or_else(|| {
+                            runtime_named_objects
+                                .and_then(|objects| resolve_named_object(objects, &class_name))
+                        })
+                        .or_else(|| self.resolved_class_names.get(&class_name))
+                        .or_else(|| resolve_named_object(&self.resolved_class_names, &class_name))
+                        .ok_or_else(|| EngineError::TypeMismatch {
+                            message: format!(
+                                "Unknown class `{class_name}` in external Instance value"
+                            ),
+                        })?
+                };
 
                 // SAFETY: class_ptr points to a compile-time Class object
                 let class_fields = match unsafe { class_ptr.get() } {
@@ -930,10 +1164,13 @@ impl BexEngine {
                     })?;
                     let field_ty = class_field.field_template.substitute_symbolic(&type_args);
                     let field_value = self.coerce_inbound_arg(ext.clone(), &field_ty)?;
-                    values.push(self.convert_external_to_vm_value_with_ty(
+                    values.push(self.convert_external_to_vm_value_with_ty_and_runtime(
                         holder,
                         field_value,
                         Some(&field_ty),
+                        dynamic_classes,
+                        dynamic_enums,
+                        runtime_named_objects,
                     )?);
                 }
                 let realized_type_args = type_args
@@ -944,20 +1181,36 @@ impl BexEngine {
                     holder
                         .holder_mut()
                         .tlab_mut()
-                        .alloc_instance_with_type_args(*class_ptr, realized_type_args, values),
+                        .alloc_instance_with_type_args(class_ptr, realized_type_args, values),
                 )
             }
             BexExternalValue::Variant {
                 enum_name,
                 variant_name,
             } => {
-                let enum_ptr = self
-                    .resolved_enum_names
-                    .get(&enum_name)
-                    .or_else(|| resolve_named_object(&self.resolved_enum_names, &enum_name))
-                    .ok_or_else(|| EngineError::TypeMismatch {
-                        message: format!("Unknown enum `{enum_name}` in external Variant value"),
-                    })?;
+                let enum_ptr = if let Some(handle) = dynamic_enums.get(&enum_name) {
+                    self.resolve_handle(holder.proof(), handle).ok_or_else(|| {
+                        EngineError::TypeMismatch {
+                            message: format!(
+                                "Runtime enum `{enum_name}` expired before its value landed"
+                            ),
+                        }
+                    })?
+                } else {
+                    *runtime_named_objects
+                        .and_then(|objects| objects.get(&enum_name))
+                        .or_else(|| {
+                            runtime_named_objects
+                                .and_then(|objects| resolve_named_object(objects, &enum_name))
+                        })
+                        .or_else(|| self.resolved_enum_names.get(&enum_name))
+                        .or_else(|| resolve_named_object(&self.resolved_enum_names, &enum_name))
+                        .ok_or_else(|| EngineError::TypeMismatch {
+                            message: format!(
+                                "Unknown enum `{enum_name}` in external Variant value"
+                            ),
+                        })?
+                };
                 #[allow(unsafe_code)]
                 let bex_vm_types::Object::Enum(enum_obj) = (unsafe { enum_ptr.get() }) else {
                     return Err(EngineError::TypeMismatch {
@@ -975,7 +1228,7 @@ impl BexEngine {
                     holder
                         .holder_mut()
                         .tlab_mut()
-                        .alloc_variant(*enum_ptr, index),
+                        .alloc_variant(enum_ptr, index),
                 )
             }
             BexExternalValue::Union { value, metadata } => {
@@ -985,10 +1238,13 @@ impl BexEngine {
                 // throws, which have no declared parameter context.
                 let selected_type = metadata.selected_option;
                 let value = self.coerce_inbound_arg(*value, &selected_type)?;
-                return self.convert_external_to_vm_value_with_ty(
+                return self.convert_external_to_vm_value_with_ty_and_runtime(
                     holder,
                     value,
                     Some(&selected_type),
+                    dynamic_classes,
+                    dynamic_enums,
+                    runtime_named_objects,
                 );
             }
             BexExternalValue::Adt(BexExternalAdt::Collector(c)) => {
@@ -996,7 +1252,16 @@ impl BexEngine {
             }
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
                 let ty = realize_host_ty(ty)?;
-                Value::object(holder.holder_mut().tlab_mut().alloc_type(ty))
+                // The wire carries the definition only (H-4); derive a fresh
+                // static identity with the receiving VM's complete fact context.
+                Value::object(holder.holder_mut().vm.alloc_static_type(ty))
+            }
+            BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
+                let vm = &mut holder.holder_mut().vm;
+                let type_value = vm
+                    .materialize_portable_type_def(definition)
+                    .map_err(|message| EngineError::TypeMismatch { message })?;
+                Value::object(vm.alloc_type(type_value))
             }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 return Err(EngineError::CannotConvert {
@@ -2418,7 +2683,10 @@ fn value_matches_type_with_definitions(
         }
         (BexExternalValue::FunctionRef { .. }, RuntimeTy::Function { .. }) => true,
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
-        (BexExternalValue::Adt(BexExternalAdt::Type(_)), RuntimeTy::Type { .. }) => true,
+        (
+            BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)),
+            RuntimeTy::Type { .. },
+        ) => true,
         (BexExternalValue::Union { value, metadata }, RuntimeTy::Union(members, _)) => {
             members.iter().any(|member| {
                 selected_arm_equal(member, &metadata.selected_option)
@@ -4249,18 +4517,25 @@ mod union_container_selection_tests {
                     name: "HAPPY".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: indexmap::IndexMap::new(),
                     skip: false,
                 },
                 EnumVariant {
                     name: "SAD".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: indexmap::IndexMap::new(),
                     skip: false,
                 },
             ],
             description: None,
             alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::new(),
             ty_attr: TyAttr::default(),
+            runtime_type: None,
         })));
         let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
         let broad = RuntimeTy::Enum(mood, TyAttr::default());

@@ -642,7 +642,7 @@ function ai.wire.redact_url_secrets(text: string) -> string  [expr] {
   { let keys = root.internal._redact_after(text, "key="); let tokens = root.internal._redact_after(keys, "token=") } root.internal._redact_after(tokens, "secret=")
 }
 function ai.wire.render_output_format(t: type) -> string  [expr] {
-  {  } baml.prompt.render_output_format(t)
+  { baml.prompt.validate_output_type(t) } baml.prompt.render_output_format(t)
 }
 function ai.wire.resolve_credential(cred: root.Credential?, env_fallback: string?) -> string?  [expr] {
   { let explicit: string? = match (cred) { literal: string => root.internal._configured(literal), named: baml.env.Ref => root.internal._configured(named.get() NullCoalesce ""), null => null }; if let value: string = explicit { return value }; if let fallback: string = env_fallback { return root.internal._configured(baml.env.get(fallback) NullCoalesce "") } } null
@@ -759,7 +759,7 @@ function ai.name(self: ?) -> string  [expr] {
   {  } self.spec_name
 }
 function ai.output_type(self: ?) -> type  [expr] {
-  {  } reflect.type_of()
+  { let output_type = type.of(); baml.prompt.validate_output_type(output_type) } output_type
 }
 function ai.prompt(body: (role: (string) -> baml.prompt.Role throws never, ctx: baml.prompt.Context) -> baml.TaggedString throws never) -> (baml.prompt.Context) -> ai.Prompt throws never  [expr] {
   { let render = (ctx: baml.prompt.Context) -> { { let tagged = body(baml.prompt.make_role, ctx) } root.internal.assemble_prompt(tagged.parts, tagged.values) } } render

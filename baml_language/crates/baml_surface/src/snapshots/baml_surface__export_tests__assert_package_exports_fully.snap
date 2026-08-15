@@ -184,8 +184,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "docstring": "Asserts that `actual` is of type `T`. Panics if not.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 3330,
-        "end": 3596
+        "start": 3467,
+        "end": 3725
       },
       "detail": "function",
       "signature": {

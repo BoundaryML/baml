@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0003
+
+  × unresolved name: `reflect.type_of`
+   ╭─[main.baml:6:5]
+ 6 │     reflect.type_of<int>()
+   ·     ───────────────
+   ╰────
+
+  [type] E0003
+
+  × unresolved name: `baml.reflect.type_of`
+    ╭─[main.baml:10:5]
+ 10 │     baml.reflect.type_of<string>()
+    ·     ────────────────────
+    ╰────

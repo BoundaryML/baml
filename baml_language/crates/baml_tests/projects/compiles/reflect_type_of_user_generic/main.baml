@@ -3,7 +3,7 @@
 // Phase 6's stdlib cleanup dropped `type_def: type` from `primitive.parse<T>(body)`
 // because the compiler now threads `T`'s runtime type through generic call
 // boundaries automatically. The same mechanism lets user code write
-// `reflect.type_of<T>()` inside a generic function and have `T` resolve to
+// `type.of<T>()` inside a generic function and have `T` resolve to
 // the caller-supplied type at runtime.
 //
 // This project pins the user-facing TIR/MIR shape of that auto-threading.
@@ -12,11 +12,11 @@
 class Person { name string }
 
 function reflect_type<T>() -> type {
-    reflect.type_of<T>()
+    type.of<T>()
 }
 
 function reflect_array<T>() -> type {
-    reflect.type_of<T[]>()
+    type.of<T[]>()
 }
 
 function reflect_person() -> type {

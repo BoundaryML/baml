@@ -161,13 +161,16 @@ pub fn external_to_outbound(
             }))
         }
 
-        // A reflected BAML type returned as a value (`reflect.type_of<T>()`)
+        // A reflected BAML type returned as a value (`type.of<T>()`)
         // crosses the boundary as a first-class `Ty`, sharing the inbound
         // representation. Must precede the opaque-ADT catch-all, which would
         // otherwise box it into a handle.
         BexExternalValue::Adt(BexExternalAdt::Type(rt)) => Some(BamlValueVariant::TyValue(
             crate::ty_encode::runtime_ty_to_proto_ty(rt),
         )),
+        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => Some(
+            BamlValueVariant::TyDefValue(crate::ty_encode::portable_type_def_to_proto(definition)),
+        ),
 
         // All opaque types → insert into handle table, encode as BamlOutboundHandle.
         BexExternalValue::Handle(_)
@@ -314,6 +317,9 @@ pub(crate) fn artifact_safe_external_to_outbound(
         BexExternalValue::Adt(BexExternalAdt::Type(rt)) => Some(BamlValueVariant::TyValue(
             crate::ty_encode::runtime_ty_to_proto_ty(rt),
         )),
+        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => Some(
+            BamlValueVariant::TyDefValue(crate::ty_encode::portable_type_def_to_proto(definition)),
+        ),
         BexExternalValue::HostValue(arc) => Some(artifact_safe_omission(
             "hostOwnedValue",
             match arc.kind {

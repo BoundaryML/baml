@@ -480,6 +480,32 @@ pub struct Token {
     pub span: Span,
 }
 
+/// Return whether `value` is one complete, non-keyword BAML identifier token.
+///
+/// Lexer keywords are rejected automatically by their dedicated [`TokenKind`].
+/// The additional spellings are contextual parser keywords: they intentionally
+/// remain `Word` tokens so the parser can recognize them only in the grammar
+/// positions where they are meaningful.
+pub fn is_baml_identifier(value: &str) -> bool {
+    const CONTEXTUAL_KEYWORDS: &[&str] = &[
+        "as",
+        "catch_all_panics",
+        "const",
+        "false",
+        "map",
+        "null",
+        "true",
+        "type",
+        "unreflect",
+        "with",
+    ];
+
+    let mut lexer = TokenKind::lexer(value);
+    matches!(lexer.next(), Some(Ok(TokenKind::Word)))
+        && lexer.next().is_none()
+        && !CONTEXTUAL_KEYWORDS.contains(&value)
+}
+
 /// Lossless lexer that preserves all source text.
 ///
 /// This tokenizes the entire input including whitespace and comments,
@@ -1030,6 +1056,38 @@ mod tests {
 
         let all = lex("get_client");
         assert_eq!(all[0].text, "get_client");
+    }
+
+    #[test]
+    fn baml_identifiers_exclude_lexer_and_contextual_keywords() {
+        for keyword in [
+            "class",
+            "test",
+            "return",
+            "is",
+            "as",
+            "catch_all_panics",
+            "const",
+            "false",
+            "map",
+            "null",
+            "true",
+            "type",
+            "unreflect",
+            "with",
+        ] {
+            assert!(
+                !is_baml_identifier(keyword),
+                "keyword {keyword:?} must not be accepted as an identifier"
+            );
+        }
+
+        for identifier in ["Thing", "field_name", "get_client", "$companion", "Foo$bar"] {
+            assert!(
+                is_baml_identifier(identifier),
+                "ordinary spelling {identifier:?} must remain a valid identifier"
+            );
+        }
     }
 
     #[test]

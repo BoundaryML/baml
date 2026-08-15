@@ -50,9 +50,13 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 3: diagnostic cache blobs gained `message_highlights` fields.
 ///
-/// Version 4: `FunctionMeta::Llm` removed the Borsh-serialized
+/// Version 4: `DiagnosticId` dropped the legacy `TypeBuilder` variants
+/// (E0040–E0043, BEP-066 removal), shifting the borsh discriminants of all
+/// later variants.
+///
+/// Version 5: `FunctionMeta::Llm` removed the Borsh-serialized
 /// `prompt_template` field.
-pub const FORMAT_VERSION: u32 = 4;
+pub const FORMAT_VERSION: u32 = 5;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

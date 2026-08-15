@@ -23,6 +23,42 @@ fn shared_stdin() -> &'static tokio::sync::Mutex<tokio::io::BufReader<tokio::io:
 
 use crate::NativeSysOps;
 
+// Runtime compilation is intercepted by BexEngine and delegated to the
+// compiler trait injected by bex_project. This provider implementation is the
+// closed fallback required by the generated IO trait hierarchy.
+impl io::IoClassReflectPackage for NativeSysOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _files: indexmap::IndexMap<String, String>,
+        _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::Package> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
+impl io::IoClassReflectSession for NativeSysOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _session: io::owned::reflect::Session,
+        _source: String,
+        _type_arg_0: baml_type::RuntimeTy,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::Package> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
+impl io::IoNamespaceReflect for NativeSysOps {}
+
 // ============================================================================
 // Environment
 // ============================================================================

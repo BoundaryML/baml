@@ -362,7 +362,7 @@ function main() -> ai.Prompt {
 #[tokio::test]
 async fn prompt_interpolates_ctx_output_format() {
     // BEP-049 M5b: `${ctx.output_format}` renders the return type's schema.
-    // `render_output_format(reflect.type_of<Person>())` produces the schema
+    // `render_output_format(type.of<Person>())` produces the schema
     // string the orchestrator will later populate `Context.output_format` with;
     // here we wire it by hand and assert the assembled prompt embeds the schema.
     let output = baml_test!(
@@ -374,7 +374,7 @@ class Person {
 
 function main() -> ai.Prompt {
   let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-  let of = baml.prompt.render_output_format(reflect.type_of<Person>())
+  let of = baml.prompt.render_output_format(type.of<Person>())
   let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: of }
   let render = ai.prompt`Answer using this schema:
 ${ctx.output_format}`
@@ -410,7 +410,7 @@ class Person {
 
 function main() -> ai.Prompt {
   let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-  let rt = reflect.type_of<Person>()
+  let rt = type.of<Person>()
   let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
   let render = ai.prompt`${ctx.output_format_with(prefix = "Use this exact schema:")}`
   render(ctx)
@@ -446,7 +446,7 @@ class Person {
 
 function main() -> ai.Prompt {
   let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-  let rt = reflect.type_of<Person>()
+  let rt = type.of<Person>()
   let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
   let render = ai.prompt`${ctx.output_format_with(quote_class_fields = true)}`
   render(ctx)
@@ -471,7 +471,7 @@ class Person {
 
 function main() -> ai.Prompt {
   let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-  let rt = reflect.type_of<Person>()
+  let rt = type.of<Person>()
   let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
   let render = ai.prompt`${ctx.output_format_with(render_null_as = "omit")}`
   render(ctx)

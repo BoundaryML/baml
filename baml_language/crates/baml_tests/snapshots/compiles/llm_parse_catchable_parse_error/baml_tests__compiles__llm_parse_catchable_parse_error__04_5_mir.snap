@@ -33,7 +33,7 @@ fn user.ExtractInvoice(text: string, client: null | ai.Client) -> Invoice {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<Invoice, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Invoice>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<Invoice, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Invoice>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {

@@ -151,7 +151,7 @@ interface Labeled {
     }
 
     function label_name(self) -> string throws never {
-        reflect.type_of<Self.Label>().to_string()
+        type.of<Self.Label>().to_string()
     }
 }
 

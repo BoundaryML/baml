@@ -106,7 +106,7 @@ use bex_vm::{
     VmEventSourceLocation, VmExecState,
 };
 use bex_vm_types::{
-    FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
+    FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
     TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
@@ -116,10 +116,29 @@ pub use function_call_context::{
     FunctionCallContextBuilder,
 };
 pub use inbound_config::{InboundUnionAmbiguityPolicy, register_inbound_union_ambiguity_policy};
+use indexmap::IndexMap;
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
+
+/// Compiler implementation injected by an assembly crate above the runtime.
+/// Every call receives only owned data and returns an owned, compiler-neutral
+/// artifact, so no compiler database can leak into the engine or heap.
+pub trait RuntimeCompiler: Send + Sync + 'static {
+    fn compile(
+        &self,
+        request: bex_vm_types::RuntimeCompileRequest,
+    ) -> Result<bex_vm_types::RuntimeCompileArtifact, Vec<bex_vm_types::RuntimeCompileDiagnostic>>;
+}
+
+/// Runtime-owned schema data for one sys-op plus handles that keep every
+/// contributing package stable across the async permit release/GC window.
+struct RuntimeSchemaOverlay {
+    classes: indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
+    enums: indexmap::IndexMap<baml_type::TypeName, sys_types::EnumDefinition>,
+    named_owners: indexmap::IndexMap<String, bex_external_types::Handle>,
+}
 
 /// Sets the VM park request flag for the lifetime of a pending GC park request.
 ///
@@ -154,6 +173,20 @@ pub use crate::{
 
 const SPAWN_CLOSURE_FQN: &str = "baml.<spawn-closure>";
 const SPAWN_CLOSURE_DISPLAY_NAME: &str = "<spawn-closure>";
+
+/// Definitions attached to runtime-minted type arguments for one sys-op call.
+///
+/// The definition metadata is copied into the sys-op context for prompt/SAP
+/// work. Handles keep the corresponding heap definitions rooted while an
+/// asynchronous sys-op has released the VM's heap permit, and form the landing
+/// side table used to allocate parsed values with their original nominal identity.
+#[derive(Default)]
+struct RuntimeTypeOverlay {
+    class_definitions: indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
+    class_handles: indexmap::IndexMap<String, bex_external_types::Handle>,
+    enum_definitions: indexmap::IndexMap<baml_type::TypeName, sys_types::EnumDefinition>,
+    enum_handles: indexmap::IndexMap<String, bex_external_types::Handle>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnhandledSpawnError {
@@ -801,6 +834,7 @@ pub struct BexEngine {
     resolved_enum_names: indexmap::IndexMap<String, HeapPtr>,
     /// System operations provider.
     sys_ops: std::sync::Arc<sys_ops::SysOps>,
+    runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
     /// Context passed to `sys_ops` that need engine-level information.
     sys_op_ctx: sys_types::EngineSysOpContext,
     /// Compiled test cases from the BAML program.
@@ -834,6 +868,11 @@ pub struct BexEngine {
     /// with every VM so spawned workers see the same index. The source of truth
     /// for interface dispatch, recursive aliases, and named-item lookup.
     packages: Arc<bex_vm::package_load::PackageIndex>,
+
+    /// Value-scoped runtime class/interface dispatch table.
+    dynamic_dispatch: Arc<bex_vm::package_load::DynDispatchTables>,
+    /// Weak-table forwarding/sweep participant registered for every GC.
+    _dynamic_dispatch_permit: bex_heap::InactiveHeapPermit<bex_vm::package_load::DynDispatchRoot>,
 
     /// Builtin `baml.errors.*` / `baml.panics.*` class pointers, resolved once
     /// from `packages` and shared with every spawned VM (each `BexVm` would
@@ -978,7 +1017,7 @@ fn truncate_preview(mut value: String, max_chars: usize) -> String {
 }
 
 /// Extract an owned `RuntimeTy` from a `SysOp::BamlHostCallHostValue` type-arg operand
-/// (an `Object::Type(Box<RuntimeTy>)`).
+/// (an `Object::Type(Box<TypeValue>)`).
 ///
 /// The VM packs the sys-op args as `[handle, args_array, ret_ty, throws_ty]`
 /// (see `bex_vm::vm`'s `CallIndirect`-`HostClosure` path): `ret_ty` is
@@ -1012,7 +1051,7 @@ fn host_call_type_arg(
     // pointer would dangle. The caller clones the `RuntimeTy` out before awaiting.
     match unsafe { ptr.get() } {
         // `Object::Type` stores a realized type; widen it to the boundary `RuntimeTy`.
-        Object::Type(ty) => Ok((**ty).clone().into()),
+        Object::Type(type_value) => Ok(type_value.ty.clone().into()),
         _ => Err(bad_slot()),
     }
 }
@@ -1537,6 +1576,39 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
+        Self::new_with_deferred_profiling_and_runtime_compiler(
+            bytecode_program,
+            sys_ops,
+            argv,
+            None,
+        )
+    }
+
+    /// Construct an engine with runtime compilation enabled by an injected
+    /// compiler implementation.
+    pub fn new_with_runtime_compiler(
+        bytecode_program: bex_vm_types::Program,
+        sys_ops: std::sync::Arc<sys_ops::SysOps>,
+        argv: Vec<String>,
+        runtime_compiler: Arc<dyn RuntimeCompiler>,
+    ) -> Result<Self, EngineError> {
+        let engine = Self::new_with_deferred_profiling_and_runtime_compiler(
+            bytecode_program,
+            sys_ops,
+            argv,
+            Some(runtime_compiler),
+        )?;
+        engine.activate_profiling();
+        Ok(engine)
+    }
+
+    /// Deferred-profiling variant used by conditional project installation.
+    pub fn new_with_deferred_profiling_and_runtime_compiler(
+        bytecode_program: bex_vm_types::Program,
+        sys_ops: std::sync::Arc<sys_ops::SysOps>,
+        argv: Vec<String>,
+        runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
+    ) -> Result<Self, EngineError> {
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
@@ -1626,13 +1698,36 @@ impl BexEngine {
         // Create the unified heap with compile-time objects, additionally
         // allocating the per-package `Object::Package` / `Object::ImplRule`
         // objects and the `vm.packages` index.
-        let (heap, package_index) = bex_vm::package_load::build_heap_with_packages(
+        let (heap, mut package_index) = bex_vm::package_load::build_heap_with_packages(
             compile_time_objects,
             &bytecode.packages,
         );
+        let image_objects = bytecode
+            .resolved_function_names
+            .iter()
+            .map(|(name, (idx, _))| (name.clone(), heap.compile_time_ptr(idx.into_raw())))
+            .chain(
+                class_indices
+                    .iter()
+                    .map(|(name, idx)| (name.clone(), heap.compile_time_ptr(*idx))),
+            )
+            .chain(
+                enum_indices
+                    .iter()
+                    .map(|(name, idx)| (name.clone(), heap.compile_time_ptr(*idx))),
+            )
+            .collect();
+        let image_globals = bytecode
+            .function_global_indices
+            .iter()
+            .chain(&bytecode.let_global_indices)
+            .map(|(name, idx)| (name.clone(), GlobalIndex::from_raw(*idx)))
+            .collect();
+        package_index.install_image_symbols(image_objects, image_globals);
         // Shared with every VM so spawned workers see the same package index
         // without re-resolving it.
         let packages = Arc::new(package_index);
+        let dynamic_dispatch = Arc::new(bex_vm::package_load::DynDispatchTables::default());
         // Resolve the builtin error/panic class pointers once; shared with every
         // spawned VM rather than re-resolved per `BexVm::new`.
         let error_class_ptrs = bex_vm::vm::resolve_error_class_ptrs(&packages);
@@ -1702,6 +1797,7 @@ impl BexEngine {
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
                     Arc::clone(&packages),
+                    Arc::clone(&dynamic_dispatch),
                     Arc::clone(&error_class_ptrs),
                     Arc::clone(&panic_class_ptrs),
                 );
@@ -1783,6 +1879,9 @@ impl BexEngine {
         // engine's own field point at the same `UnsafeCell<Box<[Value]>>`.
         let globals_permit =
             futures::executor::block_on(heap_permit_manager.new_permit(globals.clone()));
+        let dynamic_dispatch_permit = futures::executor::block_on(heap_permit_manager.new_permit(
+            bex_vm::package_load::DynDispatchRoot(Arc::clone(&dynamic_dispatch)),
+        ));
 
         // Build a default RuntimeIo from the SysOps table with an empty context.
         // This is replaced per-call in execute_sys_op with a live context that
@@ -1817,6 +1916,7 @@ impl BexEngine {
             resolved_class_names,
             resolved_enum_names,
             sys_ops,
+            runtime_compiler,
             sys_op_ctx,
             test_cases,
             argv,
@@ -1837,6 +1937,8 @@ impl BexEngine {
             }),
             unhandled_spawn_delivery: tokio::sync::Mutex::new(()),
             packages,
+            dynamic_dispatch,
+            _dynamic_dispatch_permit: dynamic_dispatch_permit,
             error_class_ptrs,
             panic_class_ptrs,
             prof_enabled,
@@ -2102,6 +2204,180 @@ impl BexEngine {
             }
         }
         defs
+    }
+
+    fn enum_definition(enm: &bex_vm_types::Enum) -> sys_types::EnumDefinition {
+        sys_types::EnumDefinition {
+            name: enm.name.display_name().to_string(),
+            description: enm.description.clone(),
+            alias: enm.alias.clone(),
+            variants: enm
+                .variants
+                .iter()
+                .filter(|variant| !variant.skip)
+                .map(|variant| sys_types::EnumVariantDefinition {
+                    name: variant.name.clone(),
+                    description: variant.description.clone(),
+                    alias: variant.alias.clone(),
+                })
+                .collect(),
+        }
+    }
+
+    fn class_definition(class: &bex_vm_types::Class) -> sys_types::ClassDefinition {
+        sys_types::ClassDefinition {
+            name: class.name.display_name().to_string(),
+            description: class.description.clone(),
+            alias: class.alias.clone(),
+            fields: class
+                .fields
+                .iter()
+                .filter(|field| !field.skip)
+                .map(|field| sys_types::ClassFieldDefinition {
+                    name: field.name.clone(),
+                    field_type: field.field_type.clone(),
+                    description: field.description.clone(),
+                    alias: field.alias.clone(),
+                    skip: field.skip,
+                })
+                .collect(),
+        }
+    }
+
+    /// Gather runtime definitions from the type descriptors passed directly
+    /// to a sys-op. Type arguments are lowered as ordinary `Object::Type`
+    /// arguments, so this is the last synchronous chokepoint before the permit
+    /// is released for async work.
+    fn runtime_type_overlay(
+        &self,
+        args: &[Value],
+        _permit: bex_heap::PermitProof<'_>,
+    ) -> RuntimeTypeOverlay {
+        let mut overlay = RuntimeTypeOverlay::default();
+        for value in args {
+            let Some(type_ptr) = value.as_object_ptr() else {
+                continue;
+            };
+            let Object::Type(type_value) = (unsafe { type_ptr.get() }) else {
+                continue;
+            };
+            for (name, class_ptr) in &type_value.defs().classes {
+                let Object::Class(class) = (unsafe { class_ptr.get() }) else {
+                    debug_assert!(
+                        false,
+                        "dynamic class definition must point to Object::Class"
+                    );
+                    continue;
+                };
+                overlay
+                    .class_definitions
+                    .entry(name.clone())
+                    .or_insert_with(|| Self::class_definition(class));
+                overlay
+                    .class_handles
+                    .entry(name.to_string())
+                    .or_insert_with(|| self.heap.create_handle(*class_ptr));
+            }
+            for (name, enum_ptr) in &type_value.defs().enums {
+                let Object::Enum(enm) = (unsafe { enum_ptr.get() }) else {
+                    debug_assert!(false, "dynamic enum definition must point to Object::Enum");
+                    continue;
+                };
+                overlay
+                    .enum_definitions
+                    .entry(name.clone())
+                    .or_insert_with(|| Self::enum_definition(enm));
+                overlay
+                    .enum_handles
+                    .entry(name.to_string())
+                    .or_insert_with(|| self.heap.create_handle(*enum_ptr));
+            }
+        }
+        overlay
+    }
+
+    fn runtime_schema_overlay(&self, vm: &BexVm, args: &[Value]) -> Option<RuntimeSchemaOverlay> {
+        let mut pending = args
+            .iter()
+            .filter_map(Value::as_object_ptr)
+            .filter_map(|ptr| match vm.get_object(ptr) {
+                Object::Type(value) if !value.owner.is_null() => Some(value.owner),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let mut seen = std::collections::HashSet::<usize>::new();
+        let mut classes = IndexMap::new();
+        let mut enums = IndexMap::new();
+        let mut named_owners = IndexMap::new();
+
+        while let Some(owner) = pending.pop() {
+            if !seen.insert(owner.as_ptr() as usize) {
+                continue;
+            }
+            let Object::Package(package) = vm.get_object(owner) else {
+                continue;
+            };
+            let Some(runtime) = package.runtime.as_ref() else {
+                continue;
+            };
+            pending.extend(runtime.dependencies.iter().copied());
+            let handle = self.heap.create_handle(owner);
+            for ptr in package.classes.values().copied() {
+                let Object::Class(class) = vm.get_object(ptr) else {
+                    continue;
+                };
+                classes.insert(
+                    class.name.clone(),
+                    sys_types::ClassDefinition {
+                        name: class.name.display_name().to_string(),
+                        description: class.description.clone(),
+                        alias: class.alias.clone(),
+                        fields: class
+                            .fields
+                            .iter()
+                            .map(|field| sys_types::ClassFieldDefinition {
+                                name: field.name.clone(),
+                                field_type: field.field_type.clone(),
+                                description: field.description.clone(),
+                                alias: field.alias.clone(),
+                                skip: field.skip,
+                            })
+                            .collect(),
+                    },
+                );
+                named_owners.insert(class.name.to_string(), handle.clone());
+            }
+            for ptr in package.enums.values().copied() {
+                let Object::Enum(enm) = vm.get_object(ptr) else {
+                    continue;
+                };
+                enums.insert(
+                    enm.name.clone(),
+                    sys_types::EnumDefinition {
+                        name: enm.name.display_name().to_string(),
+                        description: enm.description.clone(),
+                        alias: enm.alias.clone(),
+                        variants: enm
+                            .variants
+                            .iter()
+                            .filter(|variant| !variant.skip)
+                            .map(|variant| sys_types::EnumVariantDefinition {
+                                name: variant.name.clone(),
+                                description: variant.description.clone(),
+                                alias: variant.alias.clone(),
+                            })
+                            .collect(),
+                    },
+                );
+                named_owners.insert(enm.name.to_string(), handle.clone());
+            }
+        }
+
+        (!named_owners.is_empty()).then_some(RuntimeSchemaOverlay {
+            classes,
+            enums,
+            named_owners,
+        })
     }
 
     /// Get a reference to the shared heap.
@@ -2520,6 +2796,7 @@ impl BexEngine {
             cancel,
             profile_enabled,
             type_args,
+            type_defs,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -2537,6 +2814,7 @@ impl BexEngine {
                 cancel,
                 profile_enabled,
                 type_args,
+                type_defs,
             },
             copy_objects,
         )
@@ -2566,6 +2844,7 @@ impl BexEngine {
             cancel,
             profile_enabled,
             type_args,
+            type_defs,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -2741,7 +3020,22 @@ impl BexEngine {
             }
         }
 
-        let type_args = type_args;
+        let mut type_args = type_args;
+
+        // Materialize definition-carrying host type bindings once per call.
+        // Every call receives fresh mints, while the exact `TypeValue`s remain
+        // attached to the entry frame so `LoadType<T>` preserves that arrival's
+        // identity and definition overlay.
+        let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
+        let mut type_values = IndexMap::new();
+        for (name, definition) in type_defs {
+            let type_value = thread
+                .vm
+                .materialize_portable_type_def(definition)
+                .map_err(|message| EngineError::TypeMismatch { message })?;
+            type_args.insert(name.clone(), RuntimeTy::from(&type_value.ty));
+            type_values.insert(name, type_value);
+        }
 
         // Always fold the recovered bindings into the return type. This is the
         // pre-existing streaming fix (a generic `self` method's return type
@@ -2856,10 +3150,6 @@ impl BexEngine {
             })
             .collect::<Result<_, EngineError>>()?;
 
-        // Create the root thread (shared heap, own TLAB) and acquire its
-        // permit. This named-entry path is the genuine top-level root run.
-        let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
-
         // Reuse the (substituted) `param_types` to thread the expected
         // `RuntimeTy` into per-arg VM conversion. Binding a `HostValue` to an
         // `Object::HostClosure` needs it: the closure carries the declared
@@ -2891,6 +3181,7 @@ impl BexEngine {
             function_index,
             vm_args,
             type_args,
+            type_values,
             return_type,
             throws_type,
             host_call_id,
@@ -2919,6 +3210,7 @@ impl BexEngine {
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
             Arc::clone(&self.packages),
+            Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
         );
@@ -2957,6 +3249,7 @@ impl BexEngine {
         entry_ptr: HeapPtr,
         vm_args: Vec<Value>,
         type_args: indexmap::IndexMap<String, RuntimeTy>,
+        type_values: indexmap::IndexMap<String, bex_vm_types::types::TypeValue>,
         return_type: RuntimeTy,
         throws_type: Option<RuntimeTy>,
         host_call_id: CallId,
@@ -3012,7 +3305,7 @@ impl BexEngine {
             .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
         thread
             .vm
-            .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
+            .set_entry_point_with_type_values(entry_ptr, &vm_args, type_args, type_values);
         thread
             .vm
             .install_boundary_id_for_current_call(boundary.boundary_id);
@@ -3191,6 +3484,7 @@ impl BexEngine {
             cancel,
             profile_enabled,
             type_args: _,
+            type_defs: _,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -3545,6 +3839,7 @@ impl BexEngine {
             entry,
             vm_args,
             seed_type_args,
+            IndexMap::new(),
             return_type,
             throws_type,
             host_call_id,
@@ -3692,7 +3987,7 @@ impl BexEngine {
     /// declaration order. Empty for a non-generic function. Sourced from the
     /// `Function`'s `display_type_params`, so it includes type params that
     /// appear only in the body (e.g. `one_type_arg<T>()` whose `T` shows up
-    /// solely via `reflect.type_of<T>()`), which a signature-only scan misses.
+    /// solely via `type.of<T>()`), which a signature-only scan misses.
     fn function_generic_params(&self, name: &str) -> Vec<String> {
         let Some(resolved) = self.resolve_function_name(name) else {
             return vec![];
@@ -4577,6 +4872,7 @@ impl BexEngine {
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
             Arc::clone(&self.packages),
+            Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
         );
@@ -5018,6 +5314,25 @@ impl BexEngine {
                         return Err(cancelled_unhandled_throw());
                     }
 
+                    let runtime_type_overlay = self.runtime_type_overlay(&args, thread.proof());
+                    let runtime_compile_request = match operation {
+                        SysOp::BamlReflectPackageCompile => {
+                            Some(Ok(Self::runtime_compile_request(&thread.vm, &args)?))
+                        }
+                        SysOp::BamlReflectSessionCompile => {
+                            Some(Self::runtime_session_compile_request(&mut thread.vm, &args))
+                        }
+                        _ => None,
+                    };
+                    if let Some(Ok(request)) = runtime_compile_request.as_ref()
+                        && let bex_vm_types::RuntimeCompileMode::Session(session) = &request.mode
+                        && let Some(future_id) = thread.vm_thread_settles_future()
+                    {
+                        let mut guard = self.futures.acquire(thread.proof()).await;
+                        guard.register_session_lease(future_id, &session.lease)?;
+                    }
+                    let runtime_schema_overlay = self.runtime_schema_overlay(&thread.vm, &args);
+
                     let bex_args: Vec<BexExternalValue> =
                         if operation == SysOp::BamlHostCallHostValue {
                             let params = host_call_params(args.first().copied())
@@ -5079,8 +5394,22 @@ impl BexEngine {
                             None
                         };
 
-                    let sys_op_result =
-                        self.execute_sys_op(operation, &bex_args, call_id, cancel, thread.proof());
+                    let sys_op_result = if let Some(request) = runtime_compile_request {
+                        match request {
+                            Ok(request) => self.execute_runtime_compile(request, operation),
+                            Err(error) => SysOpResult::Ready(Err(error)),
+                        }
+                    } else {
+                        self.execute_sys_op(
+                            operation,
+                            &bex_args,
+                            &runtime_type_overlay,
+                            call_id,
+                            cancel,
+                            thread.proof(),
+                            runtime_schema_overlay.as_ref(),
+                        )
+                    };
 
                     let outcome = match sys_op_result {
                         SysOpResult::Ready(r) => r,
@@ -5211,8 +5540,22 @@ impl BexEngine {
                                         external,
                                         host_ret_ty.as_ref(),
                                     )?
+                                } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
+                                    self.convert_external_to_vm_value_with_runtime_schema(
+                                        &mut thread,
+                                        external,
+                                        overlay,
+                                        &runtime_type_overlay.class_handles,
+                                        &runtime_type_overlay.enum_handles,
+                                    )?
                                 } else {
-                                    self.convert_external_to_vm_value(&mut thread, external)?
+                                    self.convert_external_to_vm_value_with_dynamic_types(
+                                        &mut thread,
+                                        external,
+                                        None,
+                                        &runtime_type_overlay.class_handles,
+                                        &runtime_type_overlay.enum_handles,
+                                    )?
                                 };
                                 if let Some((call_id, mask)) = sysop_origin_capture {
                                     thread
@@ -5563,13 +5906,16 @@ impl BexEngine {
     ///
     /// A per-call context is created by cloning the shared `sys_op_ctx` with the
     /// call's cancellation token. This is O(1) since all fields are `Arc`-wrapped.
+    #[allow(clippy::too_many_arguments)] // Interpreter state is explicit at this dispatch boundary.
     fn execute_sys_op(
         self: &Arc<Self>,
         op: SysOp,
         args: &[BexExternalValue],
+        runtime_type_overlay: &RuntimeTypeOverlay,
         call_id: CallId,
         cancel: &CancellationToken,
         permit: bex_heap::PermitProof<'_>,
+        runtime_schema: Option<&RuntimeSchemaOverlay>,
     ) -> SysOpResult {
         fn check(op: SysOp, err: &OpError) {
             if let sys_types::OpErrorPayload::Vm(kind) = &err.payload {
@@ -5596,6 +5942,24 @@ impl BexEngine {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        if let Some(runtime_schema) = runtime_schema {
+            let mut classes = ctx.class_definitions.as_ref().clone();
+            classes.extend(runtime_schema.classes.clone());
+            ctx.class_definitions = Arc::new(classes);
+            let mut enums = ctx.enum_definitions.as_ref().clone();
+            enums.extend(runtime_schema.enums.clone());
+            ctx.enum_definitions = Arc::new(enums);
+        }
+        if !runtime_type_overlay.class_definitions.is_empty() {
+            let mut classes = ctx.class_definitions.as_ref().clone();
+            classes.extend(runtime_type_overlay.class_definitions.clone());
+            ctx.class_definitions = Arc::new(classes);
+        }
+        if !runtime_type_overlay.enum_definitions.is_empty() {
+            let mut enums = ctx.enum_definitions.as_ref().clone();
+            enums.extend(runtime_type_overlay.enum_definitions.clone());
+            ctx.enum_definitions = Arc::new(enums);
+        }
         // Rebuild RuntimeIo with the live per-call context so IO calls
         // (media resolution, auth) use the correct cancellation token.
         ctx.runtime_io =
@@ -5623,6 +5987,409 @@ impl BexEngine {
                 SysOpResult::Async(boxed)
             }
         }
+    }
+
+    fn runtime_compile_request(
+        vm: &BexVm,
+        args: &[Value],
+    ) -> Result<bex_vm_types::RuntimeCompileRequest, EngineError> {
+        fn type_mount(
+            vm: &BexVm,
+            export_name: &str,
+            ptr: bex_vm_types::HeapPtr,
+        ) -> Result<bex_vm_types::RuntimeTypeMount, EngineError> {
+            let Object::Type(value) = vm.get_object(ptr) else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("with_types entry `{export_name}` is not a type"),
+                });
+            };
+            let identity_name = match &value.ty {
+                baml_type::RealizedTy::Class(qtn, _, _) | baml_type::RealizedTy::Enum(qtn, _) => {
+                    qtn.clone()
+                }
+                _ => {
+                    let suffix = match value.mint() {
+                        bex_vm_types::types::MintId::Runtime(n) => format!("r-{n}"),
+                        bex_vm_types::types::MintId::Static(n) => format!("s-{n}"),
+                    };
+                    baml_type::QualifiedTypeName::new(
+                        baml_type::Name::new("user"),
+                        vec![baml_type::Name::new("$dyn"), baml_type::Name::new(suffix)],
+                        baml_type::Name::new(export_name),
+                    )
+                }
+            };
+            let classes = value
+                .defs()
+                .classes
+                .iter()
+                .filter_map(|(qtn, ptr)| {
+                    let Object::Class(class) = vm.get_object(*ptr) else {
+                        return None;
+                    };
+                    Some(bex_vm_types::RuntimeMountedClass {
+                        qtn: qtn.clone(),
+                        fields: class
+                            .fields
+                            .iter()
+                            .map(|field| {
+                                (
+                                    baml_type::Name::new(&field.name),
+                                    baml_type::Ty::from(&field.field_type),
+                                    bex_vm_types::RuntimeMountedFieldAttrs {
+                                        alias: field.alias.clone(),
+                                        description: field.description.clone(),
+                                    },
+                                )
+                            })
+                            .collect(),
+                    })
+                })
+                .collect();
+            let enums = value
+                .defs()
+                .enums
+                .iter()
+                .filter_map(|(qtn, ptr)| {
+                    let Object::Enum(enm) = vm.get_object(*ptr) else {
+                        return None;
+                    };
+                    Some(bex_vm_types::RuntimeMountedEnum {
+                        qtn: qtn.clone(),
+                        variants: enm
+                            .variants
+                            .iter()
+                            .map(|variant| baml_type::Name::new(&variant.name))
+                            .collect(),
+                    })
+                })
+                .collect();
+            let witnesses = value
+                .defs()
+                .witnesses
+                .iter()
+                .map(|witness| {
+                    (
+                        baml_type::Interface::new(
+                            witness.interface.clone(),
+                            witness
+                                .interface_args
+                                .iter()
+                                .map(baml_type::Ty::from)
+                                .collect(),
+                            witness
+                                .associated_types
+                                .iter()
+                                .map(|(name, ty)| (name.clone(), baml_type::Ty::from(ty)))
+                                .collect(),
+                        ),
+                        witness.field_links.clone(),
+                    )
+                })
+                .collect();
+            Ok(bex_vm_types::RuntimeTypeMount {
+                export_name: baml_type::Name::new(export_name),
+                identity_name,
+                ty: value.ty.clone(),
+                classes,
+                enums,
+                witnesses,
+            })
+        }
+
+        fn map_entries(
+            vm: &BexVm,
+            value: Value,
+        ) -> Result<IndexMap<bex_str::BexStr, Value>, EngineError> {
+            let Some(ptr) = value.as_object_ptr() else {
+                return Err(EngineError::TypeMismatch {
+                    message: "Package.compile expected a map".to_string(),
+                });
+            };
+            let Object::Map(map) = vm.get_object(ptr) else {
+                return Err(EngineError::TypeMismatch {
+                    message: "Package.compile expected a map".to_string(),
+                });
+            };
+            Ok(map.to_index_map())
+        }
+
+        let files_value = args
+            .first()
+            .copied()
+            .ok_or_else(|| EngineError::TypeMismatch {
+                message: "Package.compile is missing files".to_string(),
+            })?;
+        let packages_value = args
+            .get(1)
+            .copied()
+            .ok_or_else(|| EngineError::TypeMismatch {
+                message: "Package.compile is missing packages".to_string(),
+            })?;
+        let mut files = IndexMap::new();
+        for (path, value) in map_entries(vm, files_value)? {
+            let Some(ptr) = value.as_object_ptr() else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("Package.compile file `{path}` must be a string"),
+                });
+            };
+            let Object::String(source) = vm.get_object(ptr) else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("Package.compile file `{path}` must be a string"),
+                });
+            };
+            files.insert(path.to_string(), source.to_string());
+        }
+
+        let mut packages = IndexMap::new();
+        for (alias, value) in map_entries(vm, packages_value)? {
+            let Some(wrapper_ptr) = value.as_object_ptr() else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("Package.compile dependency `{alias}` must be a Package"),
+                });
+            };
+            let package_ptr = match vm.get_object(wrapper_ptr) {
+                Object::Package(_) => wrapper_ptr,
+                Object::Instance(wrapper) => {
+                    wrapper.load_field(0).as_object_ptr().ok_or_else(|| {
+                        EngineError::TypeMismatch {
+                            message: format!(
+                                "Package.compile dependency `{alias}` is not initialized"
+                            ),
+                        }
+                    })?
+                }
+                _ => {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!("Package.compile dependency `{alias}` must be a Package"),
+                    });
+                }
+            };
+            let Object::Package(package) = vm.get_object(package_ptr) else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("Package.compile dependency `{alias}` is not initialized"),
+                });
+            };
+            let types = package
+                .mounted_types
+                .iter()
+                .map(|(name, ptr)| type_mount(vm, name, *ptr))
+                .collect::<Result<Vec<_>, _>>()?;
+            packages.insert(
+                alias.to_string(),
+                bex_vm_types::RuntimePackageMount {
+                    interface_blob: package.interface_blob.clone(),
+                    types,
+                },
+            );
+        }
+        Ok(bex_vm_types::RuntimeCompileRequest {
+            files,
+            packages,
+            mode: bex_vm_types::RuntimeCompileMode::Package,
+        })
+    }
+
+    fn runtime_session_compile_request(
+        vm: &mut BexVm,
+        args: &[Value],
+    ) -> Result<bex_vm_types::RuntimeCompileRequest, OpError> {
+        let operation = SysOp::BamlReflectSessionCompile;
+        let invalid = |message: String| {
+            OpError::new(
+                operation,
+                bex_vm_types::errors::VmBamlError::InvalidArgument { message },
+            )
+        };
+        let receiver = args
+            .first()
+            .copied()
+            .ok_or_else(|| invalid("Session.eval is missing its receiver".to_string()))?;
+        let wrapper_ptr = receiver
+            .as_object_ptr()
+            .ok_or_else(|| invalid("Session.eval receiver is not an instance".to_string()))?;
+        let package_ptr = match vm.get_object(wrapper_ptr) {
+            Object::Package(_) => wrapper_ptr,
+            Object::Instance(wrapper) => wrapper
+                .load_field(0)
+                .as_object_ptr()
+                .ok_or_else(|| invalid("Session is not initialized".to_string()))?,
+            _ => {
+                return Err(invalid(
+                    "Session.eval receiver is not an instance".to_string(),
+                ));
+            }
+        };
+        let source_ptr = args
+            .get(1)
+            .and_then(Value::as_object_ptr)
+            .ok_or_else(|| invalid("Session.eval source is not a string".to_string()))?;
+        let Object::String(source) = vm.get_object(source_ptr) else {
+            return Err(invalid("Session.eval source is not a string".to_string()));
+        };
+        let source = source.to_string();
+        let expected = host_call_type_arg(args.get(2).copied(), 2, "eval type contract")
+            .map_err(|error| OpError::new(operation, error))?;
+
+        let busy = {
+            let Object::Package(package) = vm.get_object(package_ptr) else {
+                return Err(invalid(
+                    "Session has an invalid runtime payload".to_string(),
+                ));
+            };
+            package
+                .session
+                .as_ref()
+                .map(|state| state.busy.clone())
+                .ok_or_else(|| invalid("Session has an invalid runtime payload".to_string()))?
+        };
+        let Some(lease) = bex_vm_types::SessionEvalLease::acquire(busy) else {
+            return Err(OpError::host_thrown_value(
+                operation,
+                BexExternalValue::Instance {
+                    class_name: "baml.reflect.errors.SessionBusy".to_string(),
+                    type_args: Vec::new(),
+                    fields: indexmap::indexmap! {
+                        "message".to_string() => BexExternalValue::String(
+                            "a Session permits only one active eval".into(),
+                        ),
+                    },
+                },
+            ));
+        };
+        let (history, visible, dependency_names, sequence) = {
+            let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+                return Err(invalid(
+                    "Session has an invalid runtime payload".to_string(),
+                ));
+            };
+            let state = package
+                .session
+                .as_mut()
+                .ok_or_else(|| invalid("Session has an invalid runtime payload".to_string()))?;
+            let sequence = state.submission_counter;
+            state.submission_counter = state.submission_counter.saturating_add(1);
+            let dependencies = package
+                .runtime
+                .as_ref()
+                .map(|runtime| runtime.dependency_names.clone())
+                .unwrap_or_default();
+            (
+                state.history.clone(),
+                state.visible.clone(),
+                dependencies,
+                sequence,
+            )
+        };
+        let mut packages = IndexMap::new();
+        for (alias, ptr) in dependency_names {
+            let Object::Package(package) = vm.get_object(ptr) else {
+                return Err(invalid(format!(
+                    "Session dependency `{alias}` has an invalid runtime payload"
+                )));
+            };
+            packages.insert(
+                alias,
+                bex_vm_types::RuntimePackageMount {
+                    interface_blob: package.interface_blob.clone(),
+                    types: Vec::new(),
+                },
+            );
+        }
+        let submission_name = format!("$submission_{sequence}.baml");
+        let session = bex_vm_types::RuntimeSessionCompileRequest {
+            submission_name,
+            source,
+            history,
+            visible,
+            expected,
+            lease,
+        };
+        Ok(bex_vm_types::RuntimeCompileRequest {
+            files: IndexMap::new(),
+            packages,
+            mode: bex_vm_types::RuntimeCompileMode::Session(Box::new(session)),
+        })
+    }
+
+    fn execute_runtime_compile(
+        &self,
+        request: bex_vm_types::RuntimeCompileRequest,
+        operation: SysOp,
+    ) -> SysOpResult {
+        fn string(value: impl Into<String>) -> BexExternalValue {
+            BexExternalValue::String(value.into().into())
+        }
+        fn diagnostic(value: bex_vm_types::RuntimeCompileDiagnostic) -> BexExternalValue {
+            let span =
+                value
+                    .span
+                    .map_or(BexExternalValue::Null, |span| BexExternalValue::Instance {
+                        class_name: "baml.reflect.Span".to_string(),
+                        type_args: Vec::new(),
+                        fields: indexmap::indexmap! {
+                            "file".to_string() => string(span.file),
+                            "start".to_string() => BexExternalValue::Int(i64::try_from(span.start).expect("source offsets fit BAML int")),
+                            "end".to_string() => BexExternalValue::Int(i64::try_from(span.end).expect("source offsets fit BAML int")),
+                        },
+                    });
+            BexExternalValue::Instance {
+                class_name: "baml.reflect.Diagnostic".to_string(),
+                type_args: Vec::new(),
+                fields: indexmap::indexmap! {
+                    "code".to_string() => string(value.code),
+                    "message".to_string() => string(value.message),
+                    "span".to_string() => span,
+                },
+            }
+        }
+
+        let compiler = self.runtime_compiler.clone();
+        SysOpResult::Async(Box::pin(async move {
+            let Some(compiler) = compiler else {
+                return Err(OpError::new(
+                    operation,
+                    bex_vm_types::errors::VmBamlError::Unsupported {
+                        message: "runtime compiler was not installed by the host".to_string(),
+                    },
+                ));
+            };
+            match compiler.compile(request) {
+                Ok(artifact) => Ok(BexExternalValue::Instance {
+                    class_name: "baml.reflect.Package".to_string(),
+                    type_args: Vec::new(),
+                    fields: indexmap::indexmap! {
+                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(artifact)),
+                    },
+                }),
+                Err(diagnostics) => {
+                    let message = diagnostics
+                        .iter()
+                        .find(|diagnostic| {
+                            diagnostic.severity == bex_vm_types::RuntimeDiagnosticSeverity::Error
+                        })
+                        .map_or_else(
+                            || "runtime compilation failed".to_string(),
+                            |diagnostic| diagnostic.message.clone(),
+                        );
+                    let items = diagnostics.into_iter().map(diagnostic).collect();
+                    Err(OpError::host_thrown_value(
+                        operation,
+                        BexExternalValue::Instance {
+                            class_name: "baml.reflect.errors.CompilationError".to_string(),
+                            type_args: Vec::new(),
+                            fields: indexmap::indexmap! {
+                                "message".to_string() => string(message),
+                                "diagnostics".to_string() => BexExternalValue::Array {
+                                    element_type: baml_type::RuntimeTy::unknown(),
+                                    items,
+                                },
+                            },
+                        },
+                    ))
+                }
+            }
+        }))
     }
 }
 
@@ -5776,5 +6543,59 @@ mod concurrent_tests {
         //     assert!(result.is_ok(), "concurrent call failed: {:?}", result);
         // }
         // ```
+    }
+}
+
+#[cfg(test)]
+mod mint_identity_tests {
+    use std::sync::Arc;
+
+    use baml_project::testing::compile_source;
+    use bex_vm_types::{Object, types::MintId};
+    use sys_native::SysOpsExt;
+    use tokio_util::sync::CancellationToken;
+
+    use super::BexEngine;
+
+    fn engine() -> Arc<BexEngine> {
+        let program = compile_source("function main() -> null { null }");
+        Arc::new(
+            BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+                .expect("engine construction should succeed"),
+        )
+    }
+
+    async fn mint_in_engine(engine: &Arc<BexEngine>, ty: baml_type::RealizedTy) -> MintId {
+        let mut thread = engine
+            .new_root_thread(CancellationToken::new(), false)
+            .await;
+        let ptr = thread.vm.alloc_static_type(ty);
+        let Object::Type(type_value) = thread.vm.get_object(ptr) else {
+            panic!("alloc_static_type must allocate Object::Type")
+        };
+        type_value.mint()
+    }
+
+    #[tokio::test]
+    async fn static_digest_is_canonical_and_deterministic_across_engines() {
+        let left = baml_type::RealizedTy::Union(
+            vec![
+                baml_type::RealizedTy::int(),
+                baml_type::RealizedTy::string(),
+            ],
+            baml_type::TyAttr::default(),
+        );
+        let right = baml_type::RealizedTy::Union(
+            vec![
+                baml_type::RealizedTy::string(),
+                baml_type::RealizedTy::int(),
+            ],
+            baml_type::TyAttr::default(),
+        );
+
+        let first = mint_in_engine(&engine(), left).await;
+        let second = mint_in_engine(&engine(), right).await;
+        assert_eq!(first, second);
+        assert!(matches!(first, MintId::Static(_)));
     }
 }

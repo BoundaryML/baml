@@ -442,7 +442,7 @@ function user.TestTarget$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.TestTarget$render_prompt() -> ai.Prompt  [expr] {
-  TestTarget$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  TestTarget$spec().prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.TestTarget$spec() -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "TestTarget", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Hello";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(BasicClient) }
@@ -506,7 +506,7 @@ function user.LlmBasic$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmBasic$render_prompt(name: string) -> ai.Prompt  [expr] {
-  LlmBasic$spec(name).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  LlmBasic$spec(name).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.LlmBasic$spec(name: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "LlmBasic", args: map { "name": name }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Say hello to ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } name);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
@@ -521,7 +521,7 @@ function user.LlmMultiLine$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmMultiLine$render_prompt(text: string) -> ai.Prompt  [expr] {
-  LlmMultiLine$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  LlmMultiLine$spec(text).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.LlmMultiLine$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "LlmMultiLine", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Analyze the follo...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_cur =  __tt_cur Add "\nReturn a summary.";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
@@ -536,7 +536,7 @@ function user.LlmReversedOrder$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmReversedOrder$render_prompt(text: string) -> ai.Prompt  [expr] {
-  LlmReversedOrder$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  LlmReversedOrder$spec(text).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.LlmReversedOrder$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "LlmReversedOrder", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Summarize: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
@@ -551,7 +551,7 @@ function user.LlmStringClient$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmStringClient$render_prompt(text: string) -> ai.Prompt  [expr] {
-  LlmStringClient$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  LlmStringClient$spec(text).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.LlmStringClient$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "LlmStringClient", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Summarize: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ResponsesClient.new(model = "gpt-4o") }
@@ -566,7 +566,7 @@ function user.LlmWithLongSignature$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> ai.Prompt  [expr] {
-  LlmWithLongSignature$spec(first_context, second_context, third_context, user_query).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  LlmWithLongSignature$spec(first_context, second_context, third_context, user_query).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.LlmWithLongSignature$spec(first_context: string, second_context: string, third_context: string, user_query: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "LlmWithLongSignature", args: map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Context: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } first_context);  __tt_cur =  __tt_cur Add " ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } second_context);  __tt_cur =  __tt_cur Add " ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } third_context);  __tt_cur =  __tt_cur Add "\nQuery: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } user_query);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }

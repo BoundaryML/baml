@@ -55,23 +55,33 @@ impl<'db> Facts<'db> {
 
 impl TypeContext for Facts<'_> {
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
-        let Some(Definition::TypeAlias(alias)) = self.definition_of(name) else {
-            return None;
-        };
-        Some(crate::lower::type_alias_value(self.db, alias).to_plain())
+        if let Some(Definition::TypeAlias(alias)) = self.definition_of(name) {
+            return Some(crate::lower::type_alias_value(self.db, alias).to_plain());
+        }
+        match crate::package_interface::mounted_type_row(self.db, name) {
+            Some(crate::package_interface::ExportedType::TypeAlias { resolved, .. }) => {
+                Some(resolved.clone())
+            }
+            _ => None,
+        }
     }
 
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
-        let Some(Definition::Enum(enum_loc)) = self.definition_of(name) else {
-            return None;
-        };
-        Some(
-            baml_compiler2_ppir::item_data::enum_data(self.db, enum_loc)
-                .variants
-                .iter()
-                .map(|variant| variant.name.clone())
-                .collect(),
-        )
+        if let Some(Definition::Enum(enum_loc)) = self.definition_of(name) {
+            return Some(
+                baml_compiler2_ppir::item_data::enum_data(self.db, enum_loc)
+                    .variants
+                    .iter()
+                    .map(|variant| variant.name.clone())
+                    .collect(),
+            );
+        }
+        match crate::package_interface::mounted_type_row(self.db, name) {
+            Some(crate::package_interface::ExportedType::Enum { variants, .. }) => {
+                Some(variants.clone())
+            }
+            _ => None,
+        }
     }
 
     // -- Interface facts (I1: the impl registry answers; bounds and

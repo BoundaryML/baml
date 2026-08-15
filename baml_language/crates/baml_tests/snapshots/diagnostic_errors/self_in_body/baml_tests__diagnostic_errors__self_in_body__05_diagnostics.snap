@@ -37,7 +37,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × unresolved type: Self
-    ╭─[main.baml:42:25]
- 42 │         reflect.type_of<Self>().to_string()
-    ·                         ────
+    ╭─[main.baml:42:17]
+ 42 │         type.of<Self>().to_string()
+    ·                 ────
     ╰────

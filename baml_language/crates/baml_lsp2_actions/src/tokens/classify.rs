@@ -121,13 +121,25 @@ pub(super) fn classify_member(res: &MemberResolution<'_>) -> (SemanticTokenType,
     use MemberResolution as M;
     use SemanticTokenType as T;
     let token_type = match res {
-        M::Field { .. } | M::InterfaceVirtualField { .. } => T::Property,
-        M::Variant { .. } => T::EnumMember,
+        M::Field { .. }
+        | M::InterfaceVirtualField { .. }
+        | M::ExternalField { .. }
+        | M::ExternalInterfaceVirtualField { .. } => T::Property,
+        M::Variant { .. } | M::ExternalVariant { .. } => T::EnumMember,
         M::Free { .. } => T::Function,
+        M::External(callable)
+            if matches!(
+                callable.target,
+                baml_compiler2_hir_ty::callable::ExternalCallTarget::Free { .. }
+            ) =>
+        {
+            T::Function
+        }
         M::BoundMethod { .. }
         | M::UnboundMethod { .. }
         | M::InterfaceConcreteMethod { .. }
-        | M::InterfaceVirtualMethod { .. } => T::Method,
+        | M::InterfaceVirtualMethod { .. }
+        | M::External(_) => T::Method,
     };
     (token_type, ModifierSet::empty())
 }

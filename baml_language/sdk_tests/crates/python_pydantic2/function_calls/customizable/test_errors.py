@@ -116,11 +116,11 @@ async def test_errors_cancellation_surfaces_as_baml_panic():
         await asyncio.sleep(0.1)
         ctx.abort()
 
+    abort_task = asyncio.create_task(_abort_soon())
     with pytest.raises(asyncio.CancelledError) as exc_info:
-        await asyncio.gather(
-            call_function(rt, "user.throws_test.SleepMs", {"ms": 2000}, _ctx=ctx),
-            _abort_soon(),
-        )
+        await call_function(rt, "user.throws_test.SleepMs", {"ms": 2000}, _ctx=ctx)
+
+    await abort_task
     assert isinstance(exc_info.value.reason, BamlCancelledError)
 
 

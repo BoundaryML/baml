@@ -1,5 +1,5 @@
 function is_type_runtime_value() -> bool {
-    let value: type | int = reflect.type_of<int>();
+    let value: type | int = type.of<int>();
     value is type
 }
 
@@ -9,7 +9,7 @@ function is_type_rejects_non_type() -> bool {
 }
 
 function if_let_binds_type_runtime_value() -> string {
-    let value: type | int = reflect.type_of<string>();
+    let value: type | int = type.of<string>();
     if let runtime_type: type = value {
         runtime_type.to_string()
     } else {
@@ -49,7 +49,7 @@ function classify_media_runtime_value(value: image | audio | video | pdf) -> str
 }
 
 function match_recognizes_type_runtime_values() -> bool {
-    classify_type_runtime_value(reflect.type_of<string>()) == "string"
+    classify_type_runtime_value(type.of<string>()) == "string"
         && classify_type_runtime_value(7) == "int"
 }
 

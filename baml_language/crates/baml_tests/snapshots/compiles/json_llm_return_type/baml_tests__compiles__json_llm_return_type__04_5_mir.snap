@@ -32,7 +32,7 @@ fn user.ExtractAny(client: null | ai.Client) -> int | float | string | bool | nu
     }
 
     bb4: {
-        _3 = virtual_call run as ai.Runner<int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<baml.json.json>>(copy _4, copy _6) -> [bb5];
+        _3 = virtual_call run as ai.Runner<int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<baml.json.json>>(copy _4, copy _6) -> [bb5];
     }
 
     bb5: {

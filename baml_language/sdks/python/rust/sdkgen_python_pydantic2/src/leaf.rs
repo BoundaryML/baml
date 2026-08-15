@@ -2416,5 +2416,15 @@ pub(crate) fn render_leaf_body_pyi(
         out.push_str("]\n");
     }
 
+    // Referencing `ai.stream.Stream` through the generated package tree makes
+    // pyright lose the `Stream` re-export while resolving the circular
+    // `ai`/`ai.stream` stub graph. Point annotations at the underlying runtime
+    // type directly; this is the same `BamlStream` class that the
+    // `ai.stream` leaf re-exports as `Stream`.
+    if out.contains("ai.stream.Stream[") {
+        out = out.replace("ai.stream.Stream[", "_BamlStream[");
+        out.insert_str(0, "\nfrom baml_bridge import BamlStream as _BamlStream\n");
+    }
+
     out
 }

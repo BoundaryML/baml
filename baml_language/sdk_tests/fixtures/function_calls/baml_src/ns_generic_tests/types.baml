@@ -20,7 +20,7 @@
 // ---------------------------------------------------------------------------
 
 // A generic box carrying *methods* that read the class TypeVar back out via
-// `reflect.type_of` (drives the "bound via caller" case): the host constructs
+// `type.of` (drives the "bound via caller" case): the host constructs
 // a concrete `GenericBox<int>` and the method reports the bound type name. Also
 // the fully-bound (`GenericBox<int>`) and outbound (`-> GenericBox<T>`) vehicle.
 class GenericBox<T> {
@@ -28,13 +28,13 @@ class GenericBox<T> {
 
   // Reflect the class-level binding the caller pinned at construction.
   function get(self) -> string {
-    reflect.type_of<T>().to_string()
+    type.of<T>().to_string()
   }
 
   // Method-level TypeVar `U` fused with the class `T`: `U` is inferred from
   // the argument, then reflected alongside `T` as a union.
   function pair_with<U>(self, other: U) -> string {
-    reflect.type_of<T | U>().to_string()
+    type.of<T | U>().to_string()
   }
 
   // Static constructor (no `self`): binds its OWN `V` via the caller's
@@ -53,7 +53,7 @@ class GenericBox<T> {
   }
 
   function static_pair<U>(left: T, right: U) -> string {
-    reflect.type_of<T | U>().to_string()
+    type.of<T | U>().to_string()
   }
 }
 
@@ -67,7 +67,7 @@ class NamedStatic<A, B, C> {
   third C
 
   function make<D, E>(d: D, e: E) -> string {
-    reflect.type_of<D | E>().to_string()
+    type.of<D | E>().to_string()
   }
 }
 
@@ -112,7 +112,7 @@ class GenericNameCollision<foo_bar> {
   value foo_bar
 
   function pair<fooBar>(self, other: fooBar) -> string {
-    reflect.type_of<foo_bar | fooBar>().to_string()
+    type.of<foo_bar | fooBar>().to_string()
   }
 
   function make<fooBar>(value: fooBar) -> GenericNameCollision<fooBar> {
@@ -121,7 +121,7 @@ class GenericNameCollision<foo_bar> {
 }
 
 function generic_name_collision<foo_bar, fooBar>(left: foo_bar, right: fooBar) -> string {
-  reflect.type_of<foo_bar | fooBar>().to_string()
+  type.of<foo_bar | fooBar>().to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -136,15 +136,15 @@ function identity<T>(x: T) -> T {
 // Return-position-only TypeVars with NO argument to infer from: the binding
 // can only come from the host's explicit `_types=`. The cleanest proof the
 // inbound path doesn't rely on argument inference. `T` (and `A`/`B`) appear
-// solely in the body via `reflect.type_of`, never in a parameter.
+// solely in the body via `type.of`, never in a parameter.
 // ---------------------------------------------------------------------------
 
 function one_type_arg<T>() -> string {
-  reflect.type_of<T>().to_string()
+  type.of<T>().to_string()
 }
 
 function two_type_args<A, B>() -> string {
-  reflect.type_of<A | B>().to_string()
+  type.of<A | B>().to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +164,7 @@ function second_of<T>(p: GenericPair<int, T>) -> T {
 // ---------------------------------------------------------------------------
 
 function tag_or_value<T>(x: T | string | null) -> string {
-  reflect.type_of<T>().to_string()
+  type.of<T>().to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ function make_triple<A, B, C>(a: A, b: B[], c: map<string, C>) -> GenericTriple<
 // ---------------------------------------------------------------------------
 
 function extract<A, B, C, D>(a: GenericPair<GenericPair<A, B>, GenericPair<C, D>>) -> string {
-  reflect.type_of<A | B | C | D>().to_string()
+  type.of<A | B | C | D>().to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -303,34 +303,34 @@ function make_int_str_bool_triple() -> GenericTriple<int, string, bool> {
 // Two invariant list-element occurrences: pair(int[], string[]) rejects;
 // pair(int[], int[]) binds T = int.
 function pair<T>(a: T[], b: T[]) -> string {
-  reflect.type_of<T>().to_string()
+  type.of<T>().to_string()
 }
 
 // Two invariant map-value occurrences: conflicting value types reject.
 function merge<T>(a: map<string, T>, b: map<string, T>) -> string {
-  reflect.type_of<T>().to_string()
+  type.of<T>().to_string()
 }
 
 // Two invariant generic-class-arg occurrences: GenericBox<int> vs GenericBox<string> rejects.
 function combine<T>(x: GenericBox<T>, y: GenericBox<T>) -> string {
-  reflect.type_of<T>().to_string()
+  type.of<T>().to_string()
 }
 
 // Invariant (`arr: T[]`) × covariant (`bare: T`) in one call: glue(int, string[])
 // rejects; glue(int, int[]) binds T = int.
 function glue<T>(bare: T, arr: T[]) -> string {
-  reflect.type_of<T>().to_string()
+  type.of<T>().to_string()
 }
 
 // §D n-ary covariant join: three covariant bare-arg occurrences union-merge.
 function triple_choose<T>(a: T, b: T, c: T) -> string {
-  reflect.type_of<T>().to_string()
+  type.of<T>().to_string()
 }
 
 // §J multiple unconstrained TypeVars in one union: un-inferrable ⇒ reject (two
 // free vars beside a concrete `int` member have no principled split).
 function two_in_union<T, U>(x: T | U | int) -> string {
-  reflect.type_of<T | U>().to_string()
+  type.of<T | U>().to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -362,7 +362,7 @@ function first_or<T>(xs: T[]) -> T? {
 // `T = int | string`. Reflects `T` so the host can read the unified element type
 // directly (distinct from B8, which only reads back the round-tripped values).
 function elem_type<T>(xs: T[]) -> string {
-  reflect.type_of<T>().to_string()
+  type.of<T>().to_string()
 }
 
 function values_of<T>(m: map<string, T>) -> T[] {

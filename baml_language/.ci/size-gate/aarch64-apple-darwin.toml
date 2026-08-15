@@ -1,15 +1,15 @@
 version = 1
-recorded_at = "2026-07-29T10:12:16Z"
-git_sha = "fc9cf16fa5a374f6287d13c421f28b29f9b52597"
+recorded_at = "2026-08-12T05:04:16Z"
+git_sha = "a51ffdf12b5caf288cc7028fa5fbd86449c0d518"
 
 [artifacts.baml-cli]
-file_bytes = "20.3 MiB"
-stripped_bytes = "20.3 MiB"
-gzip_bytes = "9.7 MiB"
+file_bytes = "20.6 MiB"
+stripped_bytes = "20.6 MiB"
+gzip_bytes = "9.8 MiB"
 
 # Re-recorded from CI run 31863070778 when the native BAML provider clients
 # landed (sys_llm parity migration): 12 provider client packages of stdlib
 # bytecode ride along in every packed program.
 [artifacts.packed-program]
-file_bytes = "14.4 MiB"
-gzip_bytes = "6.2 MiB"
+file_bytes = "14.9 MiB"
+gzip_bytes = "6.8 MiB"

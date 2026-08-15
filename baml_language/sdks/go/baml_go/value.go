@@ -15,7 +15,113 @@ import (
 // representation remains private so generated code cannot depend on wire
 // implementation details or parse diagnostic type strings.
 type BAMLType struct {
-	value *cffi.BamlTy
+	value      *cffi.BamlTy
+	definition *cffi.BamlTyDef
+	err        error
+}
+
+// BAMLTypeMetadata is the ordered metadata row accepted by reflected class
+// fields and enum values. It is data, not another type handle.
+type BAMLTypeMetadata struct {
+	Type        BAMLType
+	Alias       *string
+	Description *string
+	Docstring   *string
+	Other       map[string]string
+}
+
+// MetadataOption applies one schema annotation. The generated reflect facade
+// re-exports these options so the same spelling works for fields, enum values,
+// and BAMLType.Meta.
+type MetadataOption func(*BAMLTypeMetadata)
+
+func WithAlias(value string) MetadataOption {
+	return func(metadata *BAMLTypeMetadata) { metadata.Alias = &value }
+}
+
+func WithDescription(value string) MetadataOption {
+	return func(metadata *BAMLTypeMetadata) { metadata.Description = &value }
+}
+
+func WithDocstring(value string) MetadataOption {
+	return func(metadata *BAMLTypeMetadata) { metadata.Docstring = &value }
+}
+
+func WithOther(value map[string]string) MetadataOption {
+	return func(metadata *BAMLTypeMetadata) {
+		metadata.Other = make(map[string]string, len(value))
+		for key, item := range value {
+			metadata.Other[key] = item
+		}
+	}
+}
+
+// Meta pairs a type with schema metadata without mutating the opaque type.
+func (value BAMLType) Meta(options ...MetadataOption) BAMLTypeMetadata {
+	metadata := BAMLTypeMetadata{Type: value, Other: map[string]string{}}
+	for _, option := range options {
+		if option != nil {
+			option(&metadata)
+		}
+	}
+	return metadata
+}
+
+// Array and Optional are the only type-graph composition operations exposed
+// to hosts. Definition tables are copied intact and only the root changes.
+func (value BAMLType) Array() BAMLType {
+	return value.wrapDefinition(func(root *cffi.BamlTy) *cffi.BamlTy {
+		return &cffi.BamlTy{Ty: &cffi.BamlTy_List{List: &cffi.BamlTyList{Item: root}}}
+	})
+}
+
+func (value BAMLType) Optional() BAMLType {
+	return value.wrapDefinition(func(root *cffi.BamlTy) *cffi.BamlTy {
+		return &cffi.BamlTy{Ty: &cffi.BamlTy_Optional{Optional: &cffi.BamlTyOptional{Inner: root}}}
+	})
+}
+
+func (value BAMLType) wrapDefinition(wrap func(*cffi.BamlTy) *cffi.BamlTy) BAMLType {
+	if value.err != nil {
+		return value
+	}
+	definition, err := value.definitionCopy()
+	if err != nil {
+		return BAMLType{err: err}
+	}
+	definition.Root = wrap(definition.Root)
+	return BAMLType{definition: definition}
+}
+
+func (value BAMLType) definitionCopy() (*cffi.BamlTyDef, error) {
+	if value.err != nil {
+		return nil, value.err
+	}
+	if value.definition != nil {
+		return proto.Clone(value.definition).(*cffi.BamlTyDef), nil
+	}
+	if value.value == nil {
+		return nil, fmt.Errorf("descriptor is missing its type")
+	}
+	return &cffi.BamlTyDef{Root: proto.Clone(value.value).(*cffi.BamlTy)}, nil
+}
+
+func (value BAMLType) root() *cffi.BamlTy {
+	if value.definition != nil {
+		return value.definition.Root
+	}
+	return value.value
+}
+
+// GobEncode and MarshalJSON deliberately reject persistence. A BAMLType is a
+// process-local capability whose portable definition is only transported by
+// the BAML wire protocol.
+func (BAMLType) GobEncode() ([]byte, error) {
+	return nil, fmt.Errorf("BAMLType values are runtime handles and cannot be serialized")
+}
+
+func (BAMLType) MarshalJSON() ([]byte, error) {
+	return nil, fmt.Errorf("BAMLType values are runtime handles and cannot be serialized")
 }
 
 type resultOwner struct {
@@ -58,13 +164,19 @@ func PrimitiveBAMLType(kind PrimitiveType) BAMLType {
 func ClassBAMLType(name string, typeArgs ...BAMLType) BAMLType {
 	encoded := make([]*cffi.BamlTy, len(typeArgs))
 	for index, argument := range typeArgs {
-		encoded[index] = argument.value
+		encoded[index] = argument.root()
 	}
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{Name: name, TypeArgs: encoded}}}}
 }
 
 func EnumBAMLType(name string) BAMLType {
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Enum{Enum: &cffi.BamlTyEnum{Name: name}}}}
+}
+
+// InterfaceBAMLType is the erased token emitted for an interface which is
+// present in the public generated API.
+func InterfaceBAMLType(name string) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Interface{Interface: &cffi.BamlTyInterface{Name: name}}}}
 }
 
 // EnumVariantBAMLType describes one narrowed enum variant while the Go value
@@ -83,6 +195,9 @@ func TypeAliasBAMLType(name string) BAMLType {
 }
 
 func ListBAMLType(item BAMLType) BAMLType {
+	if item.definition != nil || item.err != nil {
+		return item.Array()
+	}
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_List{List: &cffi.BamlTyList{Item: item.value}}}}
 }
 
@@ -91,6 +206,9 @@ func MapBAMLType(key, value BAMLType) BAMLType {
 }
 
 func OptionalBAMLType(inner BAMLType) BAMLType {
+	if inner.definition != nil || inner.err != nil {
+		return inner.Optional()
+	}
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Optional{Optional: &cffi.BamlTyOptional{Inner: inner.value}}}}
 }
 
@@ -138,6 +256,11 @@ func RustTypeBAMLType() BAMLType {
 // Equal compares complete BAML type descriptors. Optionality is significant
 // at every level, while union member order is not.
 func (value BAMLType) Equal(other BAMLType) bool {
+	if value.definition != nil || other.definition != nil {
+		left, leftErr := value.definitionCopy()
+		right, rightErr := other.definitionCopy()
+		return leftErr == nil && rightErr == nil && proto.Equal(left, right)
+	}
 	return equalBAMLType(value.value, other.value, false)
 }
 
@@ -145,7 +268,80 @@ func (value BAMLType) Equal(other BAMLType) bool {
 // a single Optional wrapper at the selected arm's root is ignored. Generated
 // union decoders use this method; application code normally wants Equal.
 func (value BAMLType) MatchesUnionArm(other BAMLType) bool {
-	return equalBAMLType(value.value, other.value, true)
+	return equalBAMLType(value.root(), other.root(), true)
+}
+
+func validateBAMLTypeValue(value BAMLType) error {
+	if value.err != nil {
+		return value.err
+	}
+	if value.definition != nil {
+		return validateBAMLTypeDefinition(value.definition)
+	}
+	return validateBAMLType(value.value, 0)
+}
+
+func validateBAMLTypeDefinition(definition *cffi.BamlTyDef) error {
+	if definition == nil {
+		return fmt.Errorf("definition is missing")
+	}
+	if err := validateBAMLType(definition.Root, 0); err != nil {
+		return fmt.Errorf("definition root: %w", err)
+	}
+	classNames := make(map[string]struct{}, len(definition.Classes))
+	for classIndex, class := range definition.Classes {
+		if class == nil || class.Name == "" {
+			return fmt.Errorf("class definition %d has no name", classIndex)
+		}
+		if _, duplicate := classNames[class.Name]; duplicate {
+			return fmt.Errorf("duplicate class definition %q", class.Name)
+		}
+		classNames[class.Name] = struct{}{}
+		fieldNames := make(map[string]struct{}, len(class.Fields))
+		for fieldIndex, field := range class.Fields {
+			if field == nil || field.Name == "" {
+				return fmt.Errorf("class %q field %d has no name", class.Name, fieldIndex)
+			}
+			if _, duplicate := fieldNames[field.Name]; duplicate {
+				return fmt.Errorf("class %q has duplicate field %q", class.Name, field.Name)
+			}
+			fieldNames[field.Name] = struct{}{}
+			if err := validateBAMLType(field.Ty, 0); err != nil {
+				return fmt.Errorf("class %q field %q: %w", class.Name, field.Name, err)
+			}
+		}
+	}
+	enumNames := make(map[string]struct{}, len(definition.Enums))
+	for enumIndex, enum := range definition.Enums {
+		if enum == nil || enum.Name == "" {
+			return fmt.Errorf("enum definition %d has no name", enumIndex)
+		}
+		if _, duplicate := enumNames[enum.Name]; duplicate {
+			return fmt.Errorf("duplicate enum definition %q", enum.Name)
+		}
+		enumNames[enum.Name] = struct{}{}
+		variantNames := make(map[string]struct{}, len(enum.Variants))
+		for variantIndex, variant := range enum.Variants {
+			if variant == nil || variant.Name == "" {
+				return fmt.Errorf("enum %q variant %d has no name", enum.Name, variantIndex)
+			}
+			if _, duplicate := variantNames[variant.Name]; duplicate {
+				return fmt.Errorf("enum %q has duplicate variant %q", enum.Name, variant.Name)
+			}
+			variantNames[variant.Name] = struct{}{}
+		}
+	}
+	for index, witness := range definition.Witnesses {
+		if witness == nil || witness.Interface == "" {
+			return fmt.Errorf("witness definition %d has no interface", index)
+		}
+		for argumentIndex, argument := range witness.InterfaceArgs {
+			if err := validateBAMLType(argument, 0); err != nil {
+				return fmt.Errorf("witness %q argument %d: %w", witness.Interface, argumentIndex, err)
+			}
+		}
+	}
+	return nil
 }
 
 func equalBAMLType(left, right *cffi.BamlTy, allowTopLevelOptional bool) bool {
@@ -743,14 +939,20 @@ func (value Value) Type() (BAMLType, error) {
 	if value.value == nil {
 		return BAMLType{}, fmt.Errorf("BAML value is uninitialized")
 	}
-	item, ok := value.value.Value.(*cffi.BamlOutboundValue_TyValue)
-	if !ok {
+	switch item := value.value.Value.(type) {
+	case *cffi.BamlOutboundValue_TyDefValue:
+		if err := validateBAMLTypeDefinition(item.TyDefValue); err != nil {
+			return BAMLType{}, fmt.Errorf("invalid BAML type definition: %w", err)
+		}
+		return BAMLType{definition: proto.Clone(item.TyDefValue).(*cffi.BamlTyDef)}, nil
+	case *cffi.BamlOutboundValue_TyValue:
+		if err := validateBAMLType(item.TyValue, 0); err != nil {
+			return BAMLType{}, fmt.Errorf("invalid BAML type value: %w", err)
+		}
+		return BAMLType{value: proto.Clone(item.TyValue).(*cffi.BamlTy)}, nil
+	default:
 		return BAMLType{}, fmt.Errorf("expected BAML type value, got %T", value.value.Value)
 	}
-	if err := validateBAMLType(item.TyValue, 0); err != nil {
-		return BAMLType{}, fmt.Errorf("invalid BAML type value: %w", err)
-	}
-	return BAMLType{value: proto.Clone(item.TyValue).(*cffi.BamlTy)}, nil
 }
 
 // unwrapUnionVariants removes the ABI's descriptive union envelopes before a

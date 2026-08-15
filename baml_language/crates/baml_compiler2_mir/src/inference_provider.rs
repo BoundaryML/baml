@@ -15,12 +15,15 @@
 //! owner's arena and parameter defaults as their own body owner, so the
 //! per-scope dispatch reduces to body-vs-defaults.
 
-use baml_compiler2_ast::{ExprId as AstExprId, PatId as AstPatId};
+use baml_compiler2_ast::{ExprId as AstExprId, PatId as AstPatId, StmtId as AstStmtId};
 use baml_compiler2_hir::{
     body::BodyOwnerId,
     loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
 };
-use baml_compiler2_hir_ty::infer as hir_infer;
+use baml_compiler2_hir_ty::{
+    callable::{ExternalCallTarget, ExternalCallable},
+    infer as hir_infer,
+};
 use baml_type::{Name, Ty as Tir2Ty};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -76,15 +79,72 @@ pub(crate) enum MemberResolution<'db> {
         field_index: u32,
         field: Name,
     },
+    /// A callable exported by a source-less package. Its owned descriptor is
+    /// the complete link and frame-layout contract; it intentionally carries
+    /// no HIR location.
+    External(std::sync::Arc<ExternalCallable>),
+    ExternalField {
+        class: baml_type::QualifiedTypeName,
+        field: Name,
+    },
+    ExternalVariant {
+        enum_name: baml_type::QualifiedTypeName,
+        variant: Name,
+    },
+    ExternalInterfaceVirtualField {
+        interface_name: baml_type::QualifiedTypeName,
+        interface: Tir2Ty,
+        field_index: u32,
+        field: Name,
+    },
 }
 
 /// One call's argument/parameter pairing plus its runtime type arguments.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct CallPlan {
     pub(crate) bindings: Vec<ParamBinding>,
+    /// Full solved owner + callable generic frame, in declared order.
     pub(crate) type_args: Vec<Tir2Ty>,
+    pub(crate) own_offset: usize,
+    pub(crate) explicit: bool,
+    pub(crate) slots: Vec<CallTypeArgPlan>,
+    pub(crate) deferred_checks: Vec<RuntimeCheck>,
+    pub(crate) target: Option<ExternalCallTarget>,
     /// Hidden call metadata which is not part of the callee's parameter list.
     pub(crate) side_channels: CallSideChannels,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum CallTypeArgPlan {
+    Static {
+        ty: Tir2Ty,
+        emission_ty: Tir2Ty,
+    },
+    Runtime {
+        operand: AstExprId,
+        occurrence_ty: Tir2Ty,
+        parameter: baml_type::ParamTy,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum RuntimeCheck {
+    Argument {
+        arg: AstExprId,
+        expected: Tir2Ty,
+    },
+    Bound {
+        argument: Tir2Ty,
+        bound: baml_type::Interface,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ScopedTypeBinding {
+    pub(crate) name: Name,
+    pub(crate) parameter: baml_type::ParamTy,
+    pub(crate) operand: AstExprId,
+    pub(crate) occurrence_ty: Tir2Ty,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -175,6 +235,8 @@ pub(crate) struct ConvertedTables<'db> {
     path_segment_types: FxHashMap<(AstExprId, usize), Tir2Ty>,
     path_member_resolutions: FxHashMap<AstExprId, Vec<MemberResolution<'db>>>,
     call_plans: FxHashMap<AstExprId, CallPlan>,
+    type_bindings: FxHashMap<AstStmtId, ScopedTypeBinding>,
+    runtime_checks: Vec<RuntimeCheck>,
     function_coercions: FxHashMap<AstExprId, FunctionCoercion>,
     exhaustiveness: MatchExhaustiveness,
 }
@@ -228,6 +290,13 @@ impl<'db> ConvertedTables<'db> {
     }
     pub(crate) fn call_plan(&self, expr: AstExprId) -> Option<&CallPlan> {
         self.call_plans.get(&expr)
+    }
+    pub(crate) fn type_binding(&self, stmt: AstStmtId) -> Option<&ScopedTypeBinding> {
+        self.type_bindings.get(&stmt)
+    }
+    #[allow(dead_code)]
+    pub(crate) fn runtime_checks(&self) -> &[RuntimeCheck] {
+        &self.runtime_checks
     }
     pub(crate) fn function_coercion(&self, expr: AstExprId) -> Option<&FunctionCoercion> {
         self.function_coercions.get(&expr)
@@ -304,28 +373,66 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                         },
                     })
                     .collect(),
-                // The runtime convention (TIR's runtime_call_type_args):
-                // only the OWN suffix threads as call operands - the
-                // receiver/impl frame supplies the owner prefix - and
-                // fresh literals WIDEN (class type args match invariantly
-                // at runtime; an escaped `literal "hi"` would never match
-                // `is Box<string>`). Turbofish calls carry NO plan args
-                // (MIR lowers the written types; TIR's
-                // `!explicit_args_used` gate).
-                type_args: if plan.explicit {
-                    Vec::new()
-                } else {
-                    plan.type_args[plan.own_offset..]
-                        .iter()
-                        .map(|ty| ty.to_plain().widen_fresh())
-                        .collect()
-                },
+                type_args: plan
+                    .type_args
+                    .iter()
+                    .map(baml_type::interned::Ty::to_plain)
+                    .collect(),
+                own_offset: plan.own_offset,
+                explicit: plan.explicit,
+                slots: plan
+                    .slots
+                    .iter()
+                    .map(|slot| match slot {
+                        hir_infer::CallTypeArgPlan::Static { ty, emission_ty } => {
+                            CallTypeArgPlan::Static {
+                                ty: ty.to_plain(),
+                                emission_ty: emission_ty.to_plain(),
+                            }
+                        }
+                        hir_infer::CallTypeArgPlan::Runtime {
+                            operand,
+                            occurrence_ty,
+                            parameter,
+                        } => CallTypeArgPlan::Runtime {
+                            operand: *operand,
+                            occurrence_ty: occurrence_ty.to_plain(),
+                            parameter: parameter.clone(),
+                        },
+                    })
+                    .collect(),
+                deferred_checks: plan
+                    .deferred_checks
+                    .iter()
+                    .map(convert_runtime_check)
+                    .collect(),
+                target: plan.target.clone(),
                 side_channels: CallSideChannels {
                     runtime_id: plan.runtime_id,
                 },
             },
         );
     }
+    out.type_bindings = result
+        .type_bindings
+        .iter()
+        .map(|(&stmt, binding)| {
+            (
+                stmt,
+                ScopedTypeBinding {
+                    name: binding.name.clone(),
+                    parameter: binding.parameter.clone(),
+                    operand: binding.operand,
+                    occurrence_ty: binding.occurrence_ty.to_plain(),
+                },
+            )
+        })
+        .collect();
+    out.runtime_checks = result
+        .runtime_checks
+        .iter()
+        .map(convert_runtime_check)
+        .collect();
     for (&expr, adjustments) in &result.expr_adjustments {
         for adjustment in adjustments {
             let hir_infer::Adjust::FunctionAdapter = adjustment.kind;
@@ -363,6 +470,23 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         result.non_exhaustive_matches.iter().copied().collect(),
     );
     out
+}
+
+fn convert_runtime_check(check: &hir_infer::RuntimeCheck) -> RuntimeCheck {
+    match check {
+        hir_infer::RuntimeCheck::Argument { arg, expected } => RuntimeCheck::Argument {
+            arg: *arg,
+            expected: expected.to_plain(),
+        },
+        hir_infer::RuntimeCheck::Bound { argument, bound } => RuntimeCheck::Bound {
+            argument: argument.to_plain(),
+            bound: bound
+                .existential()
+                .to_plain()
+                .as_interface()
+                .expect("an interned interface reference materializes as an interface"),
+        },
+    }
 }
 
 fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> MemberResolution<'db> {
@@ -405,6 +529,32 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
             field,
         } => MemberResolution::InterfaceVirtualField {
             iface_loc: *interface,
+            interface: view.to_plain(),
+            field_index: *field_index,
+            field: field.clone(),
+        },
+        hir_infer::MemberResolution::External(external) => {
+            MemberResolution::External(external.clone())
+        }
+        hir_infer::MemberResolution::ExternalField { class, field } => {
+            MemberResolution::ExternalField {
+                class: class.clone(),
+                field: field.clone(),
+            }
+        }
+        hir_infer::MemberResolution::ExternalVariant { enum_name, variant } => {
+            MemberResolution::ExternalVariant {
+                enum_name: enum_name.clone(),
+                variant: variant.clone(),
+            }
+        }
+        hir_infer::MemberResolution::ExternalInterfaceVirtualField {
+            interface,
+            view,
+            field_index,
+            field,
+        } => MemberResolution::ExternalInterfaceVirtualField {
+            interface_name: interface.clone(),
             interface: view.to_plain(),
             field_index: *field_index,
             field: field.clone(),

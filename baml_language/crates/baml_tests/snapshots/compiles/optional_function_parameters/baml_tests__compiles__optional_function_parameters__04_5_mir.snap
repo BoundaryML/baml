@@ -265,7 +265,7 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: null | 
     }
 
     bb4: {
-        _6 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _7, copy _9) -> [bb5];
+        _6 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _7, copy _9) -> [bb5];
     }
 
     bb5: {

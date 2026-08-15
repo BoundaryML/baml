@@ -16,7 +16,7 @@ lambda user.GetBoxedInt$spec {
 block user.GetBoxedInt$spec {
 }
 function user.GetBoxedInt$render_prompt() -> ai.Prompt throws never {
-  GetBoxedInt$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of<Box<int>>())) : ai.Prompt
+  GetBoxedInt$spec().prompt(output_format = ai.wire.render_output_format(type.of<Box<int>>())) : ai.Prompt
 }
 function user.GetBoxedInt$parse(json: string) -> user.Box<int> throws never {
   baml.sap.parse(json) : user.Box<int>

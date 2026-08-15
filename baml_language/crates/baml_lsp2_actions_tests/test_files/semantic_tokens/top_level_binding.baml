@@ -7,7 +7,24 @@ let y = {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//    ╭─[top_level_binding.baml:1:1]
+//  1 │ let x = 1;
+//    · ─────┬────
+//    ·      ╰── move this binding into a function body
+//    ╰────
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//    ╭─[top_level_binding.baml:3:1]
+//  3 │ ╭─▶ let y = {
+//  4 │ │       let b = 2;
+//  5 │ │       [1,2,3]
+//  6 │ ├─▶ };
+//    · ╰──── move this binding into a function body
+//    ╰────
 //
 //- semantic_tokens
 // top_level_binding.baml:1:1 (keyword) len=3 "let"

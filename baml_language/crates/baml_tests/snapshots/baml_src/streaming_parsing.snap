@@ -21,7 +21,7 @@ function streaming_parsing.ExtractDoc(input: string, client: ai.Client | null) -
     call user.streaming_parsing.ExtractDoc$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<streaming_parsing.Doc, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<streaming_parsing.Doc>>
+    load_type ai.Runner<streaming_parsing.Doc, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<streaming_parsing.Doc>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -114,7 +114,7 @@ function streaming_parsing.SayHello(input: string, client: ai.Client | null) -> 
     call user.streaming_parsing.SayHello$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4

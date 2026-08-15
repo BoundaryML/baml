@@ -36,6 +36,12 @@ use baml_type::{
 };
 use rustc_hash::FxHashMap;
 
+#[derive(Debug, Clone)]
+enum ResolvedTypeDefinition<'db> {
+    Source(Definition<'db>),
+    Exported(Box<crate::package_interface::ExportedType>),
+}
+
 /// Everything needed to lower type syntax appearing in one file, for one
 /// generic frame.
 /// One unresolved written type (E0002), anchored at its `TypeRefId` -
@@ -86,6 +92,11 @@ pub enum LoweringDiagKind {
 pub enum TypePosition {
     Existential,
     ConstraintHead,
+    /// The outer function contract supplied to the exact
+    /// `baml.reflect.Package.get_function<F>` method. It is otherwise an
+    /// existential; only an omitted OUTER `throws` differs, becoming the
+    /// runtime wildcard instead of E0151 + `never` recovery.
+    ExtractionContract,
 }
 
 pub struct LowerCtx<'db> {
@@ -256,6 +267,62 @@ impl<'db> LowerCtx<'db> {
         ty
     }
 
+    /// Lower one body-owned type through a lexical rigid-parameter overlay.
+    /// The declaration frame on this context remains immutable and reusable;
+    /// diagnostics produced by the short-lived fork are merged back into this
+    /// context's sink.
+    pub fn lower_type_ref_with_overlay(
+        &self,
+        store: &TypeRefStore,
+        id: TypeRefId,
+        position: TypePosition,
+        overlay: &[ParamTy],
+    ) -> Ty {
+        if overlay.is_empty() {
+            return self.lower_type_ref_at(store, id, position);
+        }
+        let fork = self.fork_with_overlay(overlay);
+        let ty = fork.lower_type_ref_at(store, id, position);
+        self.merge_fork_diagnostics(&fork);
+        ty
+    }
+
+    /// [`Self::lower_type_path`] through the same body-local overlay.
+    pub fn lower_type_path_with_overlay(&self, segments: &[Name], overlay: &[ParamTy]) -> Ty {
+        if overlay.is_empty() {
+            return self.lower_type_path(segments);
+        }
+        let fork = self.fork_with_overlay(overlay);
+        let ty = fork.lower_type_path(segments);
+        self.merge_fork_diagnostics(&fork);
+        ty
+    }
+
+    fn fork_with_overlay(&self, overlay: &[ParamTy]) -> LowerCtx<'db> {
+        let mut generic_params = self.generic_params.clone();
+        generic_params.extend_from_slice(overlay);
+        LowerCtx {
+            diags: self
+                .diags
+                .as_ref()
+                .map(|_| std::cell::RefCell::new(Vec::new())),
+            current_ref: std::cell::Cell::new(None),
+            db: self.db,
+            package_items: self.package_items,
+            ns_context: self.ns_context.clone(),
+            generic_params,
+            self_ty: self.self_ty.clone(),
+            self_impl_target: self.self_impl_target.clone(),
+            bounds: self.bounds.clone(),
+        }
+    }
+
+    fn merge_fork_diagnostics(&self, fork: &LowerCtx<'db>) {
+        if let Some(diags) = &self.diags {
+            diags.borrow_mut().extend(fork.take_diagnostics());
+        }
+    }
+
     fn lower_type_ref_inner(
         &self,
         store: &TypeRefStore,
@@ -263,6 +330,12 @@ impl<'db> LowerCtx<'db> {
         position: TypePosition,
     ) -> Ty {
         let attr = TyAttr::default;
+        let extraction_contract = position == TypePosition::ExtractionContract;
+        let position = if extraction_contract {
+            TypePosition::Existential
+        } else {
+            position
+        };
         match &store[id].kind {
             TypeRefKind::Int => Ty::int(),
             TypeRefKind::Bigint => Ty::intern(TyKind::Bigint { attr: attr() }),
@@ -317,6 +390,9 @@ impl<'db> LowerCtx<'db> {
                 throws: throws
                     .map(|throws| self.lower_type_ref(store, throws))
                     .unwrap_or_else(|| {
+                        if extraction_contract {
+                            return Ty::intern(TyKind::Unknown { attr: attr() });
+                        }
                         if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get())
                         {
                             diags.borrow_mut().push(LoweringDiag {
@@ -412,7 +488,15 @@ impl<'db> LowerCtx<'db> {
     /// rejection intact instead of tripping the existential completeness
     /// check first.
     fn probe_projection_prefix(&self, prefix: &[Name]) -> Option<Ty> {
-        if let Some(Definition::Enum(_)) = self.resolve_type(prefix) {
+        let resolved = self.resolve_type(prefix);
+        if matches!(
+            resolved,
+            Some(ResolvedTypeDefinition::Source(Definition::Enum(_)))
+        ) || matches!(
+            resolved,
+            Some(ResolvedTypeDefinition::Exported(ref exported))
+                if matches!(exported.as_ref(), crate::package_interface::ExportedType::Enum { .. })
+        ) {
             return None;
         }
         let saved = self.diags.as_ref().map(|d| d.borrow().len());
@@ -479,45 +563,29 @@ impl<'db> LowerCtx<'db> {
         base: &Ty,
         member: &Name,
     ) -> Option<baml_type::interned::InterfaceRef> {
-        let declares = |name: &TypeName| -> bool {
-            let def = self
-                .package_items
-                .lookup_type(name.namespace(), name.name())
-                .or_else(|| {
-                    let package = baml_compiler2_hir::package::PackageId::new(
-                        self.db,
-                        name.package().clone(),
-                    );
-                    baml_compiler2_ppir::package_items(self.db, package)
-                        .lookup_type(name.namespace(), name.name())
-                });
-            match def {
-                Some(Definition::Interface(interface)) => {
-                    baml_compiler2_ppir::item_data::interface_data(self.db, interface)
-                        .associated_types
-                        .iter()
-                        .any(|assoc| assoc.name == *member)
-                }
-                _ => false,
-            }
+        let declares = |target: &baml_type::interned::InterfaceRef| {
+            crate::interfaces::interface_declares_member(self.db, &target.name, member)
         };
         match base.kind() {
             TyKind::TypeVar(param, _) => {
                 let candidates: Vec<&baml_type::interned::InterfaceRef> = self
                     .bounds
                     .get(param)
-                    .map(|bounds| bounds.iter().filter(|b| declares(&b.name)).collect())
+                    .map(|bounds| bounds.iter().filter(|bound| declares(bound)).collect())
                     .unwrap_or_default();
                 match candidates.as_slice() {
                     [only] => Some((*only).clone()),
                     _ => None,
                 }
             }
-            TyKind::Interface(name, args, pins, _) => Some(baml_type::interned::InterfaceRef::new(
-                name.clone(),
-                args.to_vec().into_boxed_slice(),
-                pins.to_vec(),
-            )),
+            TyKind::Interface(name, args, pins, _) => {
+                let target = baml_type::interned::InterfaceRef::new(
+                    name.clone(),
+                    args.to_vec().into_boxed_slice(),
+                    pins.to_vec(),
+                );
+                declares(&target).then_some(target)
+            }
             // A chained step (`T.Item.Sub`): the previous member's
             // declared bound (`type Item extends J`), realized at its
             // qualifier, is what declares the next member.
@@ -531,12 +599,13 @@ impl<'db> LowerCtx<'db> {
                 let bound =
                     crate::impls::realized_assoc_bound(self.db, &target, prev_base, prev_member)?;
                 match bound.kind() {
-                    TyKind::Interface(name, args, pins, _) if declares(name) => {
-                        Some(baml_type::interned::InterfaceRef::new(
+                    TyKind::Interface(name, args, pins, _) => {
+                        let target = baml_type::interned::InterfaceRef::new(
                             name.clone(),
                             args.to_vec().into_boxed_slice(),
                             pins.to_vec(),
-                        ))
+                        );
+                        declares(&target).then_some(target)
                     }
                     _ => None,
                 }
@@ -548,7 +617,7 @@ impl<'db> LowerCtx<'db> {
             _ if Some(base) == self.self_ty.as_ref() => self
                 .self_impl_target
                 .as_ref()
-                .filter(|target| declares(&target.name))
+                .filter(|target| declares(target))
                 .cloned(),
             _ => None,
         }
@@ -601,22 +670,65 @@ impl<'db> LowerCtx<'db> {
         let attr = TyAttr::default;
         let short = segments.last().expect("type paths are never empty");
 
+        // Lexical generic names (including a body-local overlay appended to
+        // the frame) shadow nominal type definitions. A multi-segment path
+        // rooted in such a name is an associated projection, never a package
+        // or namespace path with the same spelling.
+        let generic_head = self
+            .generic_params
+            .iter()
+            .rev()
+            .find(|param| param.name() == &segments[0]);
+        if segments.len() == 1
+            && let Some(param) = generic_head
+        {
+            return Ty::intern(TyKind::TypeVar(param.clone(), attr()));
+        }
+        if segments.len() > 1
+            && args.is_empty()
+            && bindings.is_empty()
+            && let Some(param) = generic_head
+        {
+            let mut ty = Ty::intern(TyKind::TypeVar(param.clone(), attr()));
+            for member in &segments[1..] {
+                if let Some(interface) = self.projection_interface_for(&ty, member) {
+                    ty = Ty::intern(TyKind::AssociatedTypeProjection {
+                        base: ty,
+                        interface,
+                        member: member.clone(),
+                        attr: attr(),
+                    });
+                    continue;
+                }
+                let lowered = crate::interfaces::lower_projection(
+                    self.db,
+                    &self.plain_bounds_env(),
+                    ty.to_plain(),
+                    None,
+                    member.clone(),
+                );
+                self.record_type_errors(lowered.diagnostics);
+                ty = Ty::from_plain(&lowered.ty);
+                if ty.has_error() {
+                    return ty;
+                }
+            }
+            return ty;
+        }
+
         if let Some(def) = self.resolve_type(segments) {
-            return self.lower_definition(def, short, args, bindings, position);
+            return match def {
+                ResolvedTypeDefinition::Source(def) => {
+                    self.lower_definition(def, short, args, bindings, position)
+                }
+                ResolvedTypeDefinition::Exported(exported) => {
+                    self.lower_exported_type(*exported, short, args, bindings, position)
+                }
+            };
         }
 
         // Fallback 1: a single segment naming an in-scope generic param
         // (inner frames shadow outer: search in reverse).
-        if segments.len() == 1
-            && let Some(param) = self
-                .generic_params
-                .iter()
-                .rev()
-                .find(|param| param.name() == &segments[0])
-        {
-            return Ty::intern(TyKind::TypeVar(param.clone(), attr()));
-        }
-
         // Fallback 1b: bare `Self` under a concrete impl owner (r-a's
         // resolver-provided self type). Interface frames never reach
         // here - their `Self` is a param, caught by fallback 1.
@@ -631,21 +743,30 @@ impl<'db> LowerCtx<'db> {
         if segments.len() >= 2
             && args.is_empty()
             && bindings.is_empty()
-            && let Some(Definition::Enum(enum_loc)) =
-                self.resolve_type(&segments[..segments.len() - 1])
+            && let Some(enum_def) = self.resolve_type(&segments[..segments.len() - 1])
         {
-            let enum_data = baml_compiler2_ppir::item_data::enum_data(self.db, enum_loc);
-            if enum_data
-                .variants
-                .iter()
-                .any(|variant| &variant.name == short)
-            {
-                let enum_short = &segments[segments.len() - 2];
-                return Ty::intern(TyKind::EnumVariant(
-                    self.qualify(Definition::Enum(enum_loc), enum_short),
-                    short.clone(),
-                    attr(),
-                ));
+            let enum_qtn = match enum_def {
+                ResolvedTypeDefinition::Source(Definition::Enum(enum_loc)) => {
+                    let enum_data = baml_compiler2_ppir::item_data::enum_data(self.db, enum_loc);
+                    enum_data
+                        .variants
+                        .iter()
+                        .any(|variant| &variant.name == short)
+                        .then(|| {
+                            self.qualify(Definition::Enum(enum_loc), &segments[segments.len() - 2])
+                        })
+                }
+                ResolvedTypeDefinition::Exported(exported) => match *exported {
+                    crate::package_interface::ExportedType::Enum { qtn, variants } => variants
+                        .iter()
+                        .any(|variant| variant == short)
+                        .then_some(qtn),
+                    _ => None,
+                },
+                ResolvedTypeDefinition::Source(_) => None,
+            };
+            if let Some(qtn) = enum_qtn {
+                return Ty::intern(TyKind::EnumVariant(qtn, short.clone(), attr()));
             }
         }
 
@@ -939,10 +1060,148 @@ impl<'db> LowerCtx<'db> {
         }
     }
 
+    fn lower_exported_type(
+        &self,
+        exported: crate::package_interface::ExportedType,
+        short: &Name,
+        mut args: Vec<Ty>,
+        bindings: Vec<(Name, Ty)>,
+        position: TypePosition,
+    ) -> Ty {
+        use crate::package_interface::ExportedType;
+        let attr = TyAttr::default;
+        match exported {
+            ExportedType::Class {
+                qtn,
+                generic_params,
+                ..
+            } => {
+                self.record_arity(short, args.len(), generic_params.len());
+                enforce_arity(&mut args, generic_params.len());
+                Ty::intern(TyKind::Class(qtn, args.into_boxed_slice(), attr()))
+            }
+            ExportedType::Enum { qtn, .. } => {
+                self.record_arity(short, args.len(), 0);
+                self.reject_non_interface_bindings(bindings);
+                Ty::intern(TyKind::Enum(qtn, attr()))
+            }
+            ExportedType::TypeAlias { qtn, .. } => {
+                self.record_arity(short, args.len(), 0);
+                self.reject_non_interface_bindings(bindings);
+                Ty::intern(TyKind::TypeAlias(qtn, attr()))
+            }
+            ExportedType::Interface {
+                qtn,
+                self_param,
+                generic_params,
+                associated_types,
+                ..
+            } => {
+                self.record_arity(short, args.len(), generic_params.len());
+                enforce_arity(&mut args, generic_params.len());
+
+                let mut checked = Vec::with_capacity(bindings.len());
+                for (name, value) in bindings {
+                    if !associated_types.iter().any(|assoc| assoc.name == name) {
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::UnresolvedType {
+                                name,
+                                suggestions: associated_types
+                                    .iter()
+                                    .map(|assoc| assoc.name.clone())
+                                    .collect(),
+                            },
+                        ]);
+                        continue;
+                    }
+                    if checked.iter().any(|(seen, _)| seen == &name) {
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::DuplicateAssociatedTypeBinding {
+                                interface: qtn.clone(),
+                                name,
+                            },
+                        ]);
+                        continue;
+                    }
+                    checked.push((name, value));
+                }
+
+                if position == TypePosition::Existential {
+                    let plain_args: Vec<_> = args.iter().map(Ty::to_plain).collect();
+                    for assoc in &associated_types {
+                        if checked.iter().any(|(name, _)| name == &assoc.name) {
+                            continue;
+                        }
+                        let Some(default) = &assoc.default else {
+                            continue;
+                        };
+                        let self_ty = Ty::intern(TyKind::Interface(
+                            qtn.clone(),
+                            args.clone().into_boxed_slice(),
+                            checked.clone().into_boxed_slice(),
+                            attr(),
+                        ))
+                        .to_plain();
+                        let realized = crate::interfaces::realize_associated_default(
+                            default,
+                            &generic_params,
+                            &plain_args,
+                            &self_param,
+                            &self_ty,
+                        );
+                        checked.push((assoc.name.clone(), Ty::from_plain(&realized)));
+                    }
+                    let missing: Vec<Name> = associated_types
+                        .iter()
+                        .map(|assoc| assoc.name.clone())
+                        .filter(|name| !checked.iter().any(|(bound, _)| bound == name))
+                        .collect();
+                    if !missing.is_empty() {
+                        checked.extend(missing.iter().cloned().map(|name| (name, Ty::error())));
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::MissingAssociatedTypeBindings {
+                                interface: qtn.clone(),
+                                missing,
+                            },
+                        ]);
+                    }
+                }
+                checked.sort_by(|(a, _), (b, _)| a.cmp(b));
+                Ty::intern(TyKind::Interface(
+                    qtn,
+                    args.into_boxed_slice(),
+                    checked.into_boxed_slice(),
+                    attr(),
+                ))
+            }
+        }
+    }
+
+    fn reject_non_interface_bindings(&self, bindings: Vec<(Name, Ty)>) {
+        for (name, _) in bindings {
+            self.record_type_errors(vec![crate::diagnostics::TirTypeError::UnresolvedType {
+                name,
+                suggestions: Vec::new().into(),
+            }]);
+        }
+    }
+
+    fn can_access_package(&self, package: &Name) -> bool {
+        if &self.package_items.package == package {
+            return true;
+        }
+        baml_compiler2_hir::package::package_dependencies(
+            self.db,
+            PackageId::new(self.db, self.package_items.package.clone()),
+        )
+        .iter()
+        .any(|dep| dep.name(self.db) == *package)
+    }
+
     /// TIR's `resolve_type_in`, mirrored: (1) namespace-relative in the
     /// current package (no outward walk); (2) `root.`-absolute or
     /// package-prefixed; (3) the `$stream` companion fallback.
-    fn resolve_type(&self, segments: &[Name]) -> Option<Definition<'db>> {
+    fn resolve_type(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
         let (item, seg_ns) = segments.split_last().expect("type paths are never empty");
 
         let relative_ns: Vec<Name> = if self.ns_context.is_empty() {
@@ -951,23 +1210,59 @@ impl<'db> LowerCtx<'db> {
             self.ns_context.iter().chain(seg_ns).cloned().collect()
         };
         if let Some(def) = self.package_items.lookup_type(&relative_ns, item) {
-            return Some(def);
+            return Some(ResolvedTypeDefinition::Source(def));
         }
 
         if segments.len() >= 2 {
             let prefix_ns = &segments[1..segments.len() - 1];
             if segments[0].as_str() == "root" {
                 if let Some(def) = self.package_items.lookup_type(prefix_ns, item) {
-                    return Some(def);
+                    return Some(ResolvedTypeDefinition::Source(def));
                 }
             } else {
+                if baml_compiler2_hir::package::is_mounted_package(self.db, &segments[0]) {
+                    if !self.can_access_package(&segments[0]) {
+                        return None;
+                    }
+                    let interface =
+                        crate::package_interface::mounted_interface(self.db, &segments[0])?;
+                    if let Some(exported) = interface.lookup_type(prefix_ns, item) {
+                        return Some(ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
+                    }
+                }
                 let dep_items = baml_compiler2_ppir::package_items(
                     self.db,
                     PackageId::new(self.db, segments[0].clone()),
                 );
                 if let Some(def) = dep_items.lookup_type(prefix_ns, item) {
-                    return Some(def);
+                    return Some(ResolvedTypeDefinition::Source(def));
                 }
+            }
+        }
+
+        // BEP-066 namespace shorthand: after ordinary local/package lookup
+        // fails, reinterpret `reflect.*`, `type.*`, and `json.*` under the
+        // accessible builtin `baml` package. Preserve the full written path.
+        if segments
+            .first()
+            .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
+            && self.can_access_package(&Name::new("baml"))
+        {
+            let baml_package = Name::new("baml");
+            let baml_items = baml_compiler2_ppir::package_items(
+                self.db,
+                PackageId::new(self.db, baml_package.clone()),
+            );
+            let namespace = &segments[..segments.len() - 1];
+            let visible = self.package_items.package == baml_package
+                || crate::package_interface::package_interface(
+                    self.db,
+                    PackageId::new(self.db, baml_package),
+                )
+                .lookup_type(namespace, item)
+                .is_some();
+            if visible && let Some(def) = baml_items.lookup_type(namespace, item) {
+                return Some(ResolvedTypeDefinition::Source(def));
             }
         }
 
@@ -976,9 +1271,17 @@ impl<'db> LowerCtx<'db> {
         if let Some(base) = item.as_str().strip_suffix("$stream") {
             let mut base_segments = segments.to_vec();
             *base_segments.last_mut().expect("non-empty") = Name::new(base);
-            return self
-                .resolve_type(&base_segments)
-                .filter(|def| matches!(def, Definition::Class(_) | Definition::TypeAlias(_)));
+            return self.resolve_type(&base_segments).filter(|def| match def {
+                ResolvedTypeDefinition::Source(Definition::Class(_) | Definition::TypeAlias(_)) => {
+                    true
+                }
+                ResolvedTypeDefinition::Exported(exported) => matches!(
+                    exported.as_ref(),
+                    crate::package_interface::ExportedType::Class { .. }
+                        | crate::package_interface::ExportedType::TypeAlias { .. }
+                ),
+                ResolvedTypeDefinition::Source(_) => false,
+            });
         }
 
         None
@@ -1013,12 +1316,70 @@ impl<'db> LowerCtx<'db> {
                 }
             }
         }
+        if segments
+            .first()
+            .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
+            && self.can_access_package(&Name::new("baml"))
+        {
+            let baml_package = Name::new("baml");
+            let baml_items = baml_compiler2_ppir::package_items(
+                self.db,
+                PackageId::new(self.db, baml_package.clone()),
+            );
+            let namespace = &segments[..segments.len() - 1];
+            let visible = self.package_items.package == baml_package
+                || crate::package_interface::package_interface(
+                    self.db,
+                    PackageId::new(self.db, baml_package),
+                )
+                .lookup_function(namespace, item)
+                .is_some();
+            if visible && let Some(def) = baml_items.lookup_value(namespace, item) {
+                return Some(def);
+            }
+        }
         None
+    }
+
+    /// Source-less free-function lookup. Kept separate from
+    /// [`Self::resolve_value`] so source consumers that require a real loc can
+    /// remain explicit; inference tries the source road first, then this one.
+    pub fn resolve_exported_value(
+        &self,
+        segments: &[Name],
+    ) -> Option<crate::package_interface::ResolvedFunction> {
+        if segments.len() < 2
+            || !baml_compiler2_hir::package::is_mounted_package(self.db, &segments[0])
+            || !self.can_access_package(&segments[0])
+        {
+            return None;
+        }
+        let (item, namespace) = segments[1..].split_last()?;
+        let interface = crate::package_interface::mounted_interface(self.db, &segments[0])?;
+        let function = interface.lookup_function(namespace, item)?;
+        Some(crate::package_interface::resolved_exported_function(
+            function,
+            Vec::new(),
+            Vec::new(),
+        ))
     }
 
     /// Type-namespace resolution, exposed for constructor and member typing.
     pub fn resolve_type_definition(&self, segments: &[Name]) -> Option<Definition<'db>> {
-        self.resolve_type(segments)
+        match self.resolve_type(segments) {
+            Some(ResolvedTypeDefinition::Source(def)) => Some(def),
+            _ => None,
+        }
+    }
+
+    pub fn resolve_exported_type_definition(
+        &self,
+        segments: &[Name],
+    ) -> Option<Box<crate::package_interface::ExportedType>> {
+        match self.resolve_type(segments) {
+            Some(ResolvedTypeDefinition::Exported(exported)) => Some(exported),
+            _ => None,
+        }
     }
 
     /// A dotted TYPE path in value position (the `Type` prefix of

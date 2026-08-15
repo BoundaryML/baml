@@ -26,7 +26,10 @@ pub use ast::*;
 pub use baml_base::escape::unescape_string_literal;
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
-pub use lower_cst::{lower_file, lower_file_with_path, lower_file_with_path_and_test_owner};
+pub use lower_cst::{
+    lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,
+    lower_session_file_with_path_and_test_owner,
+};
 pub use lower_expr_body::{EnvVarRef, synthesize_spec_stream_body};
 pub use lowering_diagnostic::LoweringDiagnostic;
 // Re-exported so callers of `TypeExprKind::at(span)` can name the span type
@@ -470,6 +473,32 @@ mod tests {
                 }
             })
             .expect("expected a FunctionDef")
+    }
+
+    #[test]
+    fn call_unreflect_bare_path_keeps_its_operand() {
+        let function = first_function(parse_and_lower(
+            "function main(t: type) -> type { return type.of<unreflect(t)>() }",
+        ));
+        let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = function.body else {
+            panic!("expected expression body")
+        };
+        let operand = body
+            .exprs
+            .iter()
+            .find_map(|(_, expr)| match expr {
+                Expr::Call { type_args, .. } => type_args.iter().find_map(|arg| match arg {
+                    crate::ast::TypeArg::Unreflect(operand) => Some(*operand),
+                    crate::ast::TypeArg::Static(_) => None,
+                }),
+                _ => None,
+            })
+            .expect("expected unreflect type argument");
+        assert!(
+            matches!(&body.exprs[operand], Expr::Path(path) if path.len() == 1 && path[0].as_str() == "t"),
+            "unreflect operand lowered as {:?}",
+            body.exprs[operand]
+        );
     }
 
     #[test]
@@ -2173,6 +2202,23 @@ class C {
     }
 
     #[test]
+    fn custom_schema_attr_is_hoisted_but_stream_attr_stays_on_type() {
+        let source = r#"
+class C {
+  f string @custom("read-back") @stream.done
+}
+"#;
+        let (items, diags) = parse_lower_validate(source);
+        assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
+        let class = first_class(items);
+        let field = &class.fields[0];
+        assert_eq!(field.attributes.len(), 1);
+        assert_eq!(field.attributes[0].name.as_str(), "custom");
+        assert_eq!(field.type_expr.attrs().len(), 1);
+        assert_eq!(field.type_expr.attrs()[0].name.as_str(), "stream.done");
+    }
+
+    #[test]
     fn union_trailing_field_attr_hoisted_to_field() {
         // A | B | C @alias("x") → @alias hoisted to FieldDef, Union has no attrs.
         let source = r#"
@@ -2511,6 +2557,18 @@ mod traverse_coverage_tests {
   let looped = `${for (let i in [1, 2])}x${a}${endfor}`
   let branched = `${if (n > 0)}pos${else}neg${endif}`
   return plain + looped + branched
+}"#,
+            // BEP-066 hides ordinary expression nodes inside type arguments,
+            // type bindings, and patterns. Canonical traversal must still see
+            // every one exactly once.
+            r#"function runtime_edges(t: type, value: int) -> int throws never {
+  type T = unreflect(t)
+  let called = identity<unreflect(t)>(value)
+  let tested = value is unreflect(t)
+  match (value) {
+    unreflect(t) => called,
+    _ => if (tested) { value } else { 0 }
+  }
 }"#,
         ];
         for source in sources {

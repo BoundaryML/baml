@@ -41,6 +41,9 @@ pub struct InterfaceMethodDef {
     pub kwargs: Vec<(baml_type::Name, baml_type::RuntimeTy)>,
     pub returns: baml_type::RuntimeTy,
     pub errors: baml_type::RuntimeTy,
+    /// Fully-qualified callable name when the interface supplies a default
+    /// body. Required methods carry `None`.
+    pub default_fqn: Option<String>,
 }
 
 /// A single interface bound on an impl's generic parameter — `T extends I`, or a

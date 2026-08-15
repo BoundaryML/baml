@@ -174,6 +174,7 @@ fn build_interface_def(
             kwargs,
             returns: return_type.map_or_else(void, |id| lower_rt(ctx, store, id)),
             errors: throws.map_or_else(void, |id| lower_rt(ctx, store, id)),
+            default_fqn: None,
         }
     };
 
@@ -277,6 +278,122 @@ fn build_interface_def(
 /// the [`build_packages`] prepass entry per assoc-carrying interface.
 type IfaceAssocDecls = (ParamTy, Vec<ParamTy>, Vec<(Name, Option<baml_type::Ty>)>);
 
+/// The source-less package surface captured before MIR/codegen starts.
+///
+/// Some interface leaves share salsa queries with function lowering. Capture
+/// the artifact serially at the emit boundary so codegen scheduling cannot
+/// affect the package metadata persisted in the executable image.
+struct PackageExportArtifact {
+    interface_blob: Vec<u8>,
+    exported_names: Vec<bex_vm_types::types::LocalName>,
+    functions: Vec<(bex_vm_types::types::LocalName, String)>,
+}
+
+/// Read-only whole-project facts consumed while assembling runtime packages.
+struct PackageBuildMetadata<'a> {
+    /// Field-name → slot for each emitted class, keyed by rendered FQN.
+    class_field_indices: &'a HashMap<String, HashMap<String, usize>>,
+    /// Typed source-less export artifacts captured before parallel codegen.
+    package_exports: &'a indexmap::IndexMap<Name, PackageExportArtifact>,
+}
+
+fn external_call_target_name(
+    target: &baml_compiler2_hir_ty::callable::ExternalCallTarget,
+) -> String {
+    use baml_compiler2_hir_ty::callable::ExternalCallTarget;
+    let (package, namespace, owner, name) = match target {
+        ExternalCallTarget::Free {
+            package,
+            namespace,
+            name,
+        } => (package, namespace.as_slice(), None, name),
+        ExternalCallTarget::Method {
+            package,
+            namespace,
+            class,
+            name,
+        } => (package, namespace.as_slice(), Some(class), name),
+        ExternalCallTarget::Interface { interface, method } => (
+            interface.package(),
+            interface.namespace().as_slice(),
+            Some(interface.name()),
+            method,
+        ),
+    };
+    let mut parts = Vec::with_capacity(2 + namespace.len());
+    parts.push(package.as_str());
+    parts.extend(namespace.iter().map(Name::as_str));
+    if let Some(owner) = owner {
+        parts.push(owner.as_str());
+    }
+    parts.push(name.as_str());
+    parts.join(".")
+}
+
+fn capture_package_exports(
+    db: &dyn baml_compiler2_mir::Db,
+    all_files: &[baml_base::SourceFile],
+) -> indexmap::IndexMap<Name, PackageExportArtifact> {
+    let package_names: std::collections::BTreeSet<_> = all_files
+        .iter()
+        .map(|file| file_package(db, *file).package)
+        .collect();
+    package_names
+        .into_iter()
+        .map(|package_name| {
+            let package_id = PackageId::new(db, package_name.clone());
+            let interface =
+                baml_compiler2_hir_ty::package_interface::package_interface(db, package_id);
+            // Runtime compilers already own the exact stdlib sources, so only
+            // mountable packages need to carry a serialized compiler surface.
+            let interface_blob =
+                if baml_builtins2::stdlib_package_names().contains(&package_name.as_str()) {
+                    Vec::new()
+                } else {
+                    borsh::to_vec(interface)
+                        .expect("PackageInterface serialization into Vec is infallible")
+                };
+            let mut functions = interface
+                .functions
+                .iter()
+                .flat_map(|(namespace, functions)| {
+                    functions.iter().map(|(name, function)| {
+                        (
+                            bex_vm_types::types::LocalName {
+                                namespace: namespace.clone(),
+                                name: name.clone(),
+                            },
+                            external_call_target_name(&function.target),
+                        )
+                    })
+                })
+                .collect::<Vec<_>>();
+            functions.sort_by(|(left, _), (right, _)| left.cmp(right));
+            let mut exported_names = interface
+                .types
+                .iter()
+                .flat_map(|(namespace, types)| {
+                    types.keys().map(|name| bex_vm_types::types::LocalName {
+                        namespace: namespace.clone(),
+                        name: name.clone(),
+                    })
+                })
+                .chain(functions.iter().map(|(name, _)| name.clone()))
+                .collect::<Vec<_>>();
+            exported_names.sort();
+            exported_names.dedup();
+            (
+                package_name,
+                PackageExportArtifact {
+                    interface_blob,
+                    exported_names,
+                    functions,
+                },
+            )
+        })
+        .collect()
+}
+
 fn build_packages(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
@@ -287,7 +404,7 @@ fn build_packages(
     // name. This is the *same* map the class pass built `Class::fields` from, threaded
     // in rather than recomputed: a second derivation of the layout that drifted would
     // make every virtual field access read the wrong slot, silently.
-    class_field_indices: &HashMap<String, HashMap<String, usize>>,
+    metadata: &PackageBuildMetadata<'_>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
 ) {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
@@ -331,6 +448,9 @@ fn build_packages(
             .collect();
         Some((qtn.clone(), arg_templates, assoc_templates))
     }
+
+    let class_field_indices = metadata.class_field_indices;
+    let package_exports = metadata.package_exports;
 
     // Resolve a function FQN to its emitted object index. `function_indices` holds
     // every function except `$compiler_intrinsic` / `$await_any` bodies, which
@@ -430,6 +550,61 @@ fn build_packages(
                     function_data(db, m).name.clone(),
                     def_to_item_ref(db, Definition::Function(m)).to_string(),
                 );
+            }
+        }
+    }
+    // Source-less interfaces participate in consumer-owned impl rules through
+    // exactly the same runtime tables.  Seed their declaration facts from the
+    // mounted artifact before walking the consumer's source blocks: otherwise
+    // `class Local { implements dep.I {} }` would prove membership at check
+    // time but emit neither inherited defaults nor virtual-field links.
+    for package in baml_compiler2_hir::package::mounted_package_names(db) {
+        let Some(interface) =
+            baml_compiler2_hir_ty::package_interface::mounted_interface(db, &package)
+        else {
+            continue;
+        };
+        for exported in interface
+            .types
+            .values()
+            .flat_map(|namespace| namespace.values())
+        {
+            let baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
+                qtn,
+                self_param,
+                generic_params,
+                associated_types,
+                fields,
+                default_methods,
+                ..
+            } = exported
+            else {
+                continue;
+            };
+            if !fields.is_empty() {
+                iface_field_decls
+                    .entry(qtn.clone())
+                    .or_insert_with(|| fields.iter().map(|(name, ..)| name.clone()).collect());
+            }
+            if !associated_types.is_empty() {
+                iface_assoc_decls.entry(qtn.clone()).or_insert_with(|| {
+                    (
+                        self_param.clone(),
+                        generic_params.clone(),
+                        associated_types
+                            .iter()
+                            .map(|assoc| (assoc.name.clone(), assoc.default.clone()))
+                            .collect(),
+                    )
+                });
+            }
+            if !default_methods.is_empty() {
+                let defaults = iface_defaults.entry(qtn.clone()).or_default();
+                for method in default_methods {
+                    defaults
+                        .entry(method.name.clone())
+                        .or_insert_with(|| external_call_target_name(&method.target));
+                }
             }
         }
     }
@@ -944,6 +1119,34 @@ fn build_packages(
         }
     }
 
+    // Project the compiler's enriched export surface into the runtime package
+    // record. A functions-only package has no type/impl pass to create its row,
+    // so establish every source-backed package here before copying the table.
+    for (package_name, exports) in package_exports {
+        let package = program_packages.entry(package_name.clone()).or_default();
+        package.interface_blob.clone_from(&exports.interface_blob);
+        package.exported_names.clone_from(&exports.exported_names);
+        package.functions.clear();
+        for (local_name, callable_fqn) in &exports.functions {
+            let Some(&index) = function_indices.get(callable_fqn) else {
+                // Compiler intrinsics deliberately have no callable object.
+                continue;
+            };
+            package
+                .functions
+                .insert(local_name.clone(), ObjectIndex::from_raw(index));
+        }
+        let test_init_name = if package_name.as_str() == "user" {
+            "$init_test".to_string()
+        } else {
+            format!("{package_name}.$init_test")
+        };
+        package.test_init = function_indices
+            .get(&test_init_name)
+            .copied()
+            .map(ObjectIndex::from_raw);
+    }
+
     // Deterministic order: files/classes iterate from unordered maps. Impl rules
     // are keyed by their interface's object index (assigned in deterministic
     // emission order); within one interface a `for_ty_pattern` is unique (overlap
@@ -1107,35 +1310,86 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
-/// Extract `@description`, `@alias`, `@skip` from span-free HIR attributes.
-///
-/// Returns `(description, alias, skip)`. Invalid attribute usage is diagnosed
-/// at HIR validation time; by this point, malformed attrs are simply skipped.
+#[derive(Debug)]
+pub enum MountedPackageLinkError {
+    DependencyLink(bex_vm_types::link::LinkError),
+    Consumer(LoweringError),
+}
+
+impl std::fmt::Display for MountedPackageLinkError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DependencyLink(error) => write!(f, "link mounted dependency units: {error}"),
+            Self::Consumer(error) => write!(f, "compile mounted-package consumer: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for MountedPackageLinkError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::DependencyLink(error) => Some(error),
+            Self::Consumer(error) => Some(error),
+        }
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct SchemaAttrs {
+    description: Option<String>,
+    alias: Option<String>,
+    docstring: Option<String>,
+    other: indexmap::IndexMap<String, String>,
+    skip: bool,
+}
+
+/// Extract schema metadata from span-free HIR attributes and docstrings.
 fn extract_schema_attrs(
     attrs: &[baml_compiler2_hir::item_tree::Attribute],
-) -> (Option<String>, Option<String>, bool) {
-    let mut description = None;
-    let mut alias = None;
-    let mut skip = false;
+    docstring: Option<&str>,
+) -> SchemaAttrs {
+    let mut result = SchemaAttrs {
+        docstring: docstring.map(str::to_owned),
+        ..SchemaAttrs::default()
+    };
     for attr in attrs {
         match attr.name.as_str() {
             "description" | "alias" if attr.args.len() == 1 => {
                 let raw = attr.args[0].value.as_str();
                 let value = parse_string_attr_value(raw);
                 if attr.name.as_str() == "description" {
-                    description = value;
+                    result.description = value;
                 } else {
-                    alias = value;
+                    result.alias = value;
                 }
             }
             "description" | "alias" => {}
             "skip" => {
-                skip = true;
+                result.skip = true;
             }
-            _ => {}
+            _ => {
+                let value = match attr.args.as_slice() {
+                    [] => "true".to_string(),
+                    [arg] if arg.key.is_none() => {
+                        parse_string_attr_value(&arg.value).unwrap_or_else(|| arg.value.clone())
+                    }
+                    args => args
+                        .iter()
+                        .map(|arg| {
+                            let value = parse_string_attr_value(&arg.value)
+                                .unwrap_or_else(|| arg.value.clone());
+                            arg.key
+                                .as_ref()
+                                .map_or(value.clone(), |key| format!("{}={value}", key.as_str()))
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                };
+                result.other.insert(attr.name.to_string(), value);
+            }
         }
     }
-    (description, alias, skip)
+    result
 }
 
 pub use bex_vm_types::Program as ProgramAlias;
@@ -1146,6 +1400,7 @@ type MergedFieldEntry = (
     String,
     baml_compiler2_hir::type_ref::TypeRefId,
     Vec<baml_compiler2_hir::item_tree::Attribute>,
+    Option<String>,
     Vec<Name>,
     Vec<Name>,
 );
@@ -1168,6 +1423,7 @@ fn collect_class_fields_with_implements(
             name,
             field.type_ref,
             field.attributes.clone(),
+            field.docstring.clone(),
             class
                 .generic_params
                 .iter()
@@ -1246,6 +1502,21 @@ pub fn generate_project_bytecode_with_stdlib(
     base: &Program,
 ) -> Result<Program, LoweringError> {
     generate_impl(db, options, opt, Some(base), false, None)
+}
+
+/// Compile and link a source consumer against independently emitted mounted
+/// dependency units. The database's package-interface blobs provide semantic
+/// resolution; `dependency_units` provide the matching runtime symbols.
+pub fn generate_project_bytecode_with_mounted_units(
+    db: &dyn crate::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    dependency_units: &[CompilationUnit],
+) -> Result<Program, MountedPackageLinkError> {
+    let base = bex_vm_types::link::link(dependency_units)
+        .map_err(MountedPackageLinkError::DependencyLink)?;
+    generate_impl(db, options, opt, Some(&base), false, None)
+        .map_err(MountedPackageLinkError::Consumer)
 }
 
 /// Incremental compile that lowers function bodies only for dirty files, reuses
@@ -2190,6 +2461,7 @@ fn build_package_fragment(
         }
     };
     let mut frag = ProgramPackageFrag::default();
+    frag.exported_names.clone_from(&pkg.exported_names);
     for (local, &idx) in &pkg.classes {
         frag.classes.push((local.clone(), obj_fq(idx)?));
     }
@@ -2198,6 +2470,9 @@ fn build_package_fragment(
     }
     for (local, &idx) in &pkg.interfaces {
         frag.interfaces.push((local.clone(), obj_fq(idx)?));
+    }
+    for (local, &idx) in &pkg.functions {
+        frag.functions.push((local.clone(), obj_fq(idx)?));
     }
     for (local, ty) in &pkg.recursive_type_aliases {
         frag.recursive_type_aliases
@@ -2229,6 +2504,8 @@ fn build_package_fragment(
         }
         frag.impl_rules.push((iface_fq, rule_frags));
     }
+    frag.interface_blob.clone_from(&pkg.interface_blob);
+    frag.test_init = pkg.test_init.map(obj_fq).transpose()?;
     Ok(frag)
 }
 
@@ -2479,6 +2756,7 @@ fn generate_impl(
         // stdlib" is the full pipeline over the builtin files alone.
         all_files.truncate(builtin_count);
     }
+    let package_exports = capture_package_exports(db, &all_files);
     let alias_caches = build_alias_caches(db, &all_files);
 
     // Emit in two file groups — builtin stubs first, then user files — so the
@@ -2554,9 +2832,38 @@ fn generate_impl(
         &alias_caches,
         &program.function_indices,
         &tables.interface_object_indices,
-        &tables.classes,
+        &PackageBuildMetadata {
+            class_field_indices: &tables.classes,
+            package_exports: &package_exports,
+        },
         &mut tables.program_packages,
     );
+    // Mounted packages contribute no source files to this database. Preserve
+    // their compiled package records from the linked prefix after the ordinary
+    // source-backed package pass rebuilds the consumer metadata.
+    if let Some(base) = base {
+        for pkg_name in baml_compiler2_hir::package::mounted_package_names(db) {
+            let Some(base_pkg) = base.packages.get(&pkg_name) else {
+                continue;
+            };
+            match tables.program_packages.get_mut(&pkg_name) {
+                Some(pkg) => {
+                    pkg.functions.clone_from(&base_pkg.functions);
+                    pkg.exported_names.clone_from(&base_pkg.exported_names);
+                    pkg.interface_blob.clone_from(&base_pkg.interface_blob);
+                    pkg.test_init = base_pkg.test_init;
+                    pkg.impl_rules.clone_from(&base_pkg.impl_rules);
+                    pkg.recursive_type_aliases
+                        .clone_from(&base_pkg.recursive_type_aliases);
+                }
+                None => {
+                    tables
+                        .program_packages
+                        .insert(pkg_name.clone(), base_pkg.clone());
+                }
+            }
+        }
+    }
     tables.program_packages.sort_keys();
     program.packages = tables.program_packages;
 
@@ -2885,7 +3192,8 @@ fn emit_file_group(
             // validator enforces/link-checks them before emit.
             let merged_fields =
                 collect_class_fields_with_implements(&pkg_info.namespace_path, class);
-            for (idx, (name, type_ref, attrs, _gen_params, _ns)) in merged_fields.iter().enumerate()
+            for (idx, (name, type_ref, attrs, docstring, _gen_params, _ns)) in
+                merged_fields.iter().enumerate()
             {
                 field_indices.insert(name.clone(), idx);
                 let (field_type, field_template) = {
@@ -2911,18 +3219,21 @@ fn emit_file_group(
                         (resolved_ty, template)
                     }
                 };
-                let (field_desc, field_alias, field_skip) = extract_schema_attrs(attrs.as_slice());
+                let meta = extract_schema_attrs(attrs.as_slice(), docstring.as_deref());
                 fields.push(ClassField {
                     name: name.clone(),
                     field_type,
                     field_template,
-                    description: field_desc,
-                    alias: field_alias,
-                    skip: field_skip,
+                    description: meta.description,
+                    alias: meta.alias,
+                    docstring: meta.docstring,
+                    other: meta.other,
+                    skip: meta.skip,
+                    runtime_type: None,
                 });
             }
 
-            let (class_desc, class_alias, _class_skip) = extract_schema_attrs(&class.attributes);
+            let class_meta = extract_schema_attrs(&class.attributes, class.docstring.as_deref());
 
             let type_tag = bex_vm_types::type_tags::class_type_tag(&fq_name);
             if let Some(previous) = class_type_tags.insert(type_tag, fq_name.clone())
@@ -2982,12 +3293,15 @@ fn emit_file_group(
             let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
                 name: fq_to_type_name(&fq_name),
                 fields,
-                description: class_desc,
-                alias: class_alias,
+                description: class_meta.description,
+                alias: class_meta.alias,
+                docstring: class_meta.docstring,
+                other: class_meta.other,
                 type_tag,
                 ty_attr: TyAttr::default(),
                 has_cleanup,
                 generic_param_count: class.generic_params.len(),
+                runtime_type: None,
             })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
@@ -3035,7 +3349,7 @@ fn emit_file_group(
             let rebuild_indices = || {
                 let merged = collect_class_fields_with_implements(&pkg_info.namespace_path, class);
                 let mut m = HashMap::new();
-                for (idx, (name, _, _, _, _)) in merged.iter().enumerate() {
+                for (idx, (name, _, _, _, _, _)) in merged.iter().enumerate() {
                     m.insert(name.clone(), idx);
                 }
                 m
@@ -3065,24 +3379,29 @@ fn emit_file_group(
             let mut variant_map = HashMap::new();
             let mut variants = Vec::new();
             for (idx, variant) in enm.variants.iter().enumerate() {
-                let (var_desc, var_alias, var_skip) = extract_schema_attrs(&variant.attributes);
+                let meta = extract_schema_attrs(&variant.attributes, variant.docstring.as_deref());
                 variant_map.insert(variant.name.to_string(), idx);
                 variants.push(EnumVariant {
                     name: variant.name.to_string(),
-                    description: var_desc,
-                    alias: var_alias,
-                    skip: var_skip,
+                    description: meta.description,
+                    alias: meta.alias,
+                    docstring: meta.docstring,
+                    other: meta.other,
+                    skip: meta.skip,
                 });
             }
 
-            let (enum_desc, enum_alias, _enum_skip) = extract_schema_attrs(&enm.attributes);
+            let enum_meta = extract_schema_attrs(&enm.attributes, enm.docstring.as_deref());
 
             let enum_obj_idx = program.add_object(Object::Enum(Box::new(Enum {
                 name: fq_to_type_name(&fq_name),
                 variants,
-                description: enum_desc,
-                alias: enum_alias,
+                description: enum_meta.description,
+                alias: enum_meta.alias,
+                docstring: enum_meta.docstring,
+                other: enum_meta.other,
                 ty_attr: TyAttr::default(),
+                runtime_type: None,
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
             program_packages
@@ -3390,6 +3709,7 @@ fn emit_file_group(
                 }], // type not needed for chainer dispatch
                 param_has_default: vec![false],
                 display_type_params: Vec::new(),
+                generic_param_bounds: Vec::new(),
                 display_param_types: vec!["unknown".to_string()],
                 display_return_type: "null".to_string(),
                 throws_type: baml_type::TyTemplate::Never {
@@ -3399,6 +3719,7 @@ fn emit_file_group(
                 body_meta: None,
                 capture: FunctionCaptureProps::disabled(),
                 function_id: 0, // assigned at engine init (interim provider)
+                runtime_package: bex_vm_types::HeapPtr::null(),
             };
 
             let chainer_name = if pkg_name.as_str() == "user" {
@@ -3522,6 +3843,20 @@ fn apply_signature_metadata(f: &mut Function, sig: &baml_compiler2_mir::RuntimeS
     f.docstring.clone_from(&sig.docstring);
     f.declared_name.clone_from(&sig.name);
     f.display_type_params.clone_from(&sig.display_type_params);
+    f.generic_param_bounds = sig
+        .generic_param_bounds
+        .iter()
+        .map(|bounds| {
+            bounds
+                .iter()
+                .map(|bound| bex_vm_types::types::InterfaceBound {
+                    interface: bound.interface.clone(),
+                    args: bound.args.clone(),
+                    assoc: bound.assoc.clone(),
+                })
+                .collect()
+        })
+        .collect();
     f.display_param_types.clone_from(&sig.display_param_types);
     f.display_return_type.clone_from(&sig.display_return_type);
 }
@@ -3929,6 +4264,29 @@ fn compute_function_metadata<'db>(
             &baml_compiler2_hir_ty::package_interface::reduce_ground_projections(db, tir_ty, 8);
         baml_compiler2_mir::tir2_to_template(tir_ty, cache, &frame_params)
     };
+    let runtime_generic_param_bounds = frame_params
+        .iter()
+        .map(|param| {
+            scope_bounds
+                .get(param)
+                .into_iter()
+                .flatten()
+                .map(|bound| baml_compiler2_mir::RuntimeInterfaceBound {
+                    interface: bound.name.clone(),
+                    args: bound
+                        .generics
+                        .iter()
+                        .map(|ty| to_template(&ty.to_plain()))
+                        .collect(),
+                    assoc: bound
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), to_template(&ty.to_plain())))
+                        .collect(),
+                })
+                .collect()
+        })
+        .collect();
     let null_template = || baml_type::TyTemplate::Null {
         attr: baml_type::TyAttr::default(),
     };
@@ -3970,6 +4328,7 @@ fn compute_function_metadata<'db>(
         docstring: func.docstring.clone(),
         name: Some(func.name.to_string()),
         display_type_params,
+        generic_param_bounds: runtime_generic_param_bounds,
         display_param_types,
         display_return_type,
     }
@@ -4929,6 +5288,7 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         param_types: Vec::new(),
         param_has_default: Vec::new(),
         display_type_params: Vec::new(),
+        generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
         throws_type: baml_type::TyTemplate::Never {
@@ -4938,6 +5298,7 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
         function_id: 0, // assigned at engine init (interim provider)
+        runtime_package: bex_vm_types::HeapPtr::null(),
     })
 }
 
@@ -5228,6 +5589,7 @@ fn compile_init_function<'db>(
                     param_types: Vec::new(),
                     param_has_default: Vec::new(),
                     display_type_params: Vec::new(),
+                    generic_param_bounds: Vec::new(),
                     display_param_types: Vec::new(),
                     display_return_type: "null".to_string(),
                     throws_type: baml_type::TyTemplate::Never {
@@ -5237,6 +5599,7 @@ fn compile_init_function<'db>(
                     body_meta: None,
                     capture: FunctionCaptureProps::disabled(),
                     function_id: 0, // assigned at engine init (interim provider)
+                    runtime_package: bex_vm_types::HeapPtr::null(),
                 }
             }
         };
@@ -5305,6 +5668,7 @@ fn compile_init_function<'db>(
         param_types: Vec::new(),
         param_has_default: Vec::new(),
         display_type_params: Vec::new(),
+        generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
         throws_type: baml_type::TyTemplate::Never {
@@ -5314,6 +5678,7 @@ fn compile_init_function<'db>(
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
         function_id: 0, // assigned at engine init (interim provider)
+        runtime_package: bex_vm_types::HeapPtr::null(),
     })
 }
 
@@ -5361,7 +5726,7 @@ mod tests {
     impl TestDb {
         fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
             let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
-            SourceFile::new(self, content.to_string(), path.into(), file_id)
+            SourceFile::new(self, content.to_string(), path.into(), file_id, false)
         }
     }
 
@@ -5638,44 +6003,47 @@ mod tests {
             mk_attr("description", &[r#""A field""#]),
             mk_attr("alias", &[r#""myField""#]),
         ];
-        let (desc, alias, skip) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, Some("A field".to_string()));
-        assert_eq!(alias, Some("myField".to_string()));
-        assert!(!skip);
+        let meta = extract_schema_attrs(&attrs, Some("docs"));
+        assert_eq!(meta.description, Some("A field".to_string()));
+        assert_eq!(meta.alias, Some("myField".to_string()));
+        assert_eq!(meta.docstring, Some("docs".to_string()));
+        assert!(!meta.skip);
     }
 
     #[test]
     fn extract_skip() {
         let attrs = vec![mk_attr("skip", &[])];
-        let (desc, alias, skip) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, None);
-        assert_eq!(alias, None);
-        assert!(skip);
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, None);
+        assert_eq!(meta.alias, None);
+        assert!(meta.skip);
     }
 
     #[test]
-    fn extract_unknown_attrs_ignored() {
+    fn extract_custom_attrs_into_other() {
         let attrs = vec![
             mk_attr("stream.done", &["true"]),
             mk_attr("internal.opaque", &[]),
             mk_attr("description", &[r#""kept""#]),
         ];
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, Some("kept".to_string()));
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, Some("kept".to_string()));
+        assert_eq!(meta.other["stream.done"], "true");
+        assert_eq!(meta.other["internal.opaque"], "true");
     }
 
     #[test]
     fn extract_non_string_arg_ignored() {
         let attrs = vec![mk_attr("description", &["42"])];
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, None);
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, None);
     }
 
     #[test]
     fn extract_wrong_arg_count_ignored() {
         let attrs = vec![mk_attr("description", &[])]; // 0 args
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, None);
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, None);
     }
 
     #[test]
@@ -5684,29 +6052,27 @@ mod tests {
             mk_attr("description", &[r#""first""#]),
             mk_attr("description", &[r#""second""#]),
         ];
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, Some("second".to_string()));
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, Some("second".to_string()));
     }
 
     #[test]
     fn extract_raw_string_attr() {
         let attrs = vec![mk_attr("description", &["#\"raw desc\"#"])];
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, Some("raw desc".to_string()));
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, Some("raw desc".to_string()));
     }
 
     #[test]
     fn extract_regular_string_attr_decodes_escapes() {
         let attrs = vec![mk_attr("description", &[r#""a\nb\tc\\d\"e""#])];
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, Some("a\nb\tc\\d\"e".to_string()));
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, Some("a\nb\tc\\d\"e".to_string()));
     }
 
     #[test]
     fn extract_no_attrs() {
-        let (desc, alias, skip) = extract_schema_attrs(&[]);
-        assert_eq!(desc, None);
-        assert_eq!(alias, None);
-        assert!(!skip);
+        let meta = extract_schema_attrs(&[], None);
+        assert_eq!(meta, SchemaAttrs::default());
     }
 }

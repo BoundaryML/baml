@@ -665,7 +665,9 @@ pub struct LlmFunctionBody {
 }
 impl FromCST for LlmFunctionBody {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        // A duplicate LLM-body field is a hard error, not an overwrite.
+        // A duplicate LLM-body field is a hard error, not an overwrite:
+        // silently printing only the survivor would delete the other field
+        // from the user's source. An errored declaration is left unformatted.
         fn fill<T>(
             slot: &mut Option<T>,
             value: T,

@@ -24,6 +24,7 @@ struct DecodedCallArgs {
     /// frame's `type_args` slot. Empty for non-generic calls. Mirrors
     /// `bridge_python`'s `DecodedCallArgs::type_args`.
     type_args: indexmap::IndexMap<String, bex_project::RuntimeTy>,
+    type_defs: indexmap::IndexMap<String, bex_project::PortableTypeDef>,
 }
 
 /// The main BAML runtime. A zero-sized handle (see module docs).
@@ -88,6 +89,7 @@ impl BamlRuntime {
         };
         let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
             .with_type_args(decoded.type_args)
+            .with_type_defs(decoded.type_defs)
             .build();
 
         // The whole Result -> BamlOutboundResult translation (incl. the
@@ -139,6 +141,7 @@ impl BamlRuntime {
                 Ok((runtime, decoded)) => {
                     let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
                         .with_type_args(decoded.type_args)
+                        .with_type_defs(decoded.type_defs)
                         .build();
                     match decoded.target {
                         bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(function_name) => {
@@ -199,6 +202,7 @@ fn decode_args(
         kwargs: kwargs.into(),
         call_id,
         target,
-        type_args,
+        type_args: type_args.type_args,
+        type_defs: type_args.type_defs,
     })
 }
