@@ -9,7 +9,7 @@ rust-version.workspace = true
 # crates.io, so its version must be the canonical BAML language version.
 # `scripts/baml-language-version` keeps this equal to the canary version and
 # stamps it to the release version at packaging time (`check` guards it).
-version = "0.16.0"
+version = "0.17.0"
 authors.workspace = true
 license.workspace = true
 homepage.workspace = true

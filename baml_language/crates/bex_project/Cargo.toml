@@ -32,6 +32,7 @@ baml_compiler_syntax = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }
 baml_lsp2_actions = { workspace = true }
+baml_path = { workspace = true }
 baml_project = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }

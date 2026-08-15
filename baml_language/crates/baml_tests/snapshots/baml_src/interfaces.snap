@@ -1,6 +1,25 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
+function interfaces.$init_test_ns_interfaces_b_1180(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.interfaces"
+    load_const "optional_interface_method_call_dispatches"
+    make_closure .<lambda($init_test_ns_interfaces_b_1180, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "optional_generic_interface_method_call_preserves_type_args"
+    make_closure .<lambda($init_test_ns_interfaces_b_1180, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
 function interfaces.$init_test_ns_interfaces_interfaces(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.interfaces"
@@ -1190,6 +1209,18 @@ function interfaces.ApssHybrid.ApssSerializer.encode(self: interfaces.ApssHybrid
 
 function interfaces.ApwuDog.ApwuAnimal.speak(self: interfaces.ApwuDog) -> string {
     load_const "Woof!"
+    return
+}
+
+function interfaces.B1180IntValue.B1180Getter<int>.get(self: interfaces.B1180IntValue) -> int {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces.B1180Person.B1180Named.name(self: interfaces.B1180Person) -> string {
+    load_var self
+    load_field .value
     return
 }
 
@@ -2456,6 +2487,75 @@ function interfaces.ausi_main() -> bool {
     cmp_op ==
 
   L0:
+    return
+}
+
+function interfaces.b1180_optional_get(value: interfaces.B1180Getter<int> | null) -> int {
+    load_var value
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var value
+    load_type interfaces.B1180Getter<int>
+    load_const "get"
+    make_virtual_bound_method ntypeargs=0
+    call_indirect
+    store_var _3
+    jump L2
+
+  L1:
+    load_const null
+    store_var _3
+
+  L2:
+    load_var _3
+    store_var_load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const 1
+    unary_op -
+    store_var _2
+
+  L3:
+    load_var _2
+    return
+}
+
+function interfaces.b1180_optional_name(value: interfaces.B1180Named | null) -> string {
+    load_var value
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var value
+    load_type interfaces.B1180Named
+    load_const "name"
+    make_virtual_bound_method ntypeargs=0
+    call_indirect
+    store_var _3
+    jump L2
+
+  L1:
+    load_const null
+    store_var _3
+
+  L2:
+    load_var _3
+    store_var_load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const "nobody"
+    store_var _2
+
+  L3:
+    load_var _2
     return
 }
 

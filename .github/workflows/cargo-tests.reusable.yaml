@@ -495,6 +495,7 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       sdk-dirs: ${{ steps.matrix.outputs.sdk-dirs }}
+      temporarily-disabled-sdk-dirs: ${{ steps.matrix.outputs.temporarily-disabled-sdk-dirs }}
     steps:
       - name: "Build matrix"
         id: matrix
@@ -780,15 +781,21 @@ jobs:
               },
             ];
 
+            // TODO(B-1545): Re-enable macOS SDK tests after the SIGABRT flakiness is fixed: https://linear.app/boundaryml2/issue/B-1545/investigate-flakiness-in-cargo-test-aarch64-apple-darwin-ci-job
+            const enabledMatrix = baseMatrix.filter((entry) => entry["os-label"] !== "macos");
             const matrix = context.eventName === "merge_group"
-              ? baseMatrix.filter((entry) => entry["os-label"] === "linux")
-              : baseMatrix;
+              ? enabledMatrix.filter((entry) => entry["os-label"] === "linux")
+              : enabledMatrix;
+            const enabledSdkDirs = new Set(enabledMatrix.map((entry) => entry["sdk-dir"]));
+            const temporarilyDisabledSdkDirs = [...new Set(
+              baseMatrix
+                .map((entry) => entry["sdk-dir"])
+                .filter((sdkDir) => !enabledSdkDirs.has(sdkDir)),
+            )].sort();
 
             core.setOutput("matrix", JSON.stringify(matrix, null, 2));
-            core.setOutput(
-              "sdk-dirs",
-              JSON.stringify([...new Set(baseMatrix.map((entry) => entry["sdk-dir"]))].sort()),
-            );
+            core.setOutput("sdk-dirs", JSON.stringify([...enabledSdkDirs].sort()));
+            core.setOutput("temporarily-disabled-sdk-dirs", JSON.stringify(temporarilyDisabledSdkDirs));
 
   sdk-test-coverage:
     name: "sdk test coverage"
@@ -803,6 +810,7 @@ jobs:
         uses: actions/github-script@v8
         env:
           MATRIX_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.sdk-dirs }}
+          TEMPORARILY_DISABLED_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.temporarily-disabled-sdk-dirs }}
         with:
           script: |
             const fs = require("fs");
@@ -815,13 +823,23 @@ jobs:
               .filter((sdkDir) => sdkDir !== "agent-docs")
               .sort();
             const coveredSdkDirs = new Set(JSON.parse(process.env.MATRIX_SDK_DIRS));
-            const missingSdkDirs = sdkDirs.filter((sdkDir) => !coveredSdkDirs.has(sdkDir));
+            const temporarilyDisabledSdkDirs = new Set(JSON.parse(process.env.TEMPORARILY_DISABLED_SDK_DIRS));
+            const missingSdkDirs = sdkDirs.filter(
+              (sdkDir) => !coveredSdkDirs.has(sdkDir) && !temporarilyDisabledSdkDirs.has(sdkDir),
+            );
 
             await core.summary
               .addHeading("SDK test matrix coverage")
               .addTable([
                 [{ data: "SDK directory", header: true }, { data: "Matrix entry", header: true }],
-                ...sdkDirs.map((sdkDir) => [sdkDir, coveredSdkDirs.has(sdkDir) ? "yes" : "no"]),
+                ...sdkDirs.map((sdkDir) => [
+                  sdkDir,
+                  coveredSdkDirs.has(sdkDir)
+                    ? "yes"
+                    : temporarilyDisabledSdkDirs.has(sdkDir)
+                      ? "temporarily disabled (B-1545)"
+                      : "no",
+                ]),
               ])
               .write();
 
