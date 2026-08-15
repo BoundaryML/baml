@@ -1002,20 +1002,25 @@ fn walk_ty(
     ty: &baml_type::RuntimeTy,
     ctx: &::sys_types::SysOpContext,
     content: &mut self::OutputFormatContent,
-    visited: &mut std::collections::HashSet<baml_base::Name>,
-    ancestry: &mut Vec<baml_base::Name>,
+    visited: &mut std::collections::HashSet<baml_type::TypeName>,
+    ancestry: &mut Vec<baml_type::TypeName>,
 ) {
     use baml_type::RuntimeTy;
 
     match ty {
         RuntimeTy::Class(type_name, _, _) => {
-            let key = type_name.display_name();
+            // Runtime definitions carry a mint-qualified internal TypeName. Use
+            // that identity for traversal: the display name is an output label,
+            // not a definition key (BEP-066 R-3).
+            let key = type_name.clone();
 
             // If this class is already on the ancestry stack, it's a recursive cycle.
             // Only mark classes from the cycle start, not unrelated ancestors.
             if let Some(start) = ancestry.iter().position(|name| name == &key) {
                 for name in &ancestry[start..] {
-                    content.recursive_classes.insert(name.to_string());
+                    content
+                        .recursive_classes
+                        .insert(name.display_name().to_string());
                 }
                 return;
             }
@@ -1058,7 +1063,7 @@ fn walk_ty(
             }
         }
         RuntimeTy::Enum(type_name, _) => {
-            let key = type_name.display_name();
+            let key = type_name.clone();
             if !visited.insert(key) {
                 return;
             }
@@ -1093,10 +1098,10 @@ fn walk_ty(
             // recurse into the alias body (which would diverge on the self-referential
             // `json[]` / `map<string, json>` arms).
             if type_name.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
-                visited.insert(type_name.display_name());
+                visited.insert(type_name.clone());
                 return;
             }
-            let key = type_name.display_name();
+            let key = type_name.clone();
             if !visited.insert(key) {
                 return;
             }
