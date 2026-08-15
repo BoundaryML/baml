@@ -3,6 +3,7 @@ import { ogImagePath, TWITTER_HANDLE } from '@/app/_lib/metadata';
 import { SiteBanner } from '@/components/site-banner';
 import { SiteStructuredData } from '@/components/structured-data';
 import { ThemeProvider } from '@/components/theme-provider';
+import { Whiteboard } from '@/components/whiteboard/whiteboard';
 import { cn } from '@/lib/utils';
 import './globals.css';
 
@@ -117,6 +118,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
             >
               <SiteBanner />
               {props.children}
+              <Whiteboard />
             </ThemeProvider>
           </AnalyticsProvider>
         </Suspense>
