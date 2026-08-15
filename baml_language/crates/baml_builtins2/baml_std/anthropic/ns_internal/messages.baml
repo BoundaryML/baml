@@ -27,7 +27,7 @@
 /// into an untyped `baml.errors.UnknownError`, and `ai.Fallback` only advances
 /// to the next member on a TYPED failure. A missing key in one member of a
 /// fallback chain has to fall through, not abort the chain.
-function reject(detail: string) -> ai.errors.InvalidRequest {
+function _reject(detail: string) -> ai.errors.InvalidRequest {
     ai.errors.InvalidRequest {
         provider: "anthropic",
         status_code: null,
@@ -312,7 +312,7 @@ function _anthropic_media_block(media: ai.MediaPart, block_type: string) -> Anth
         AnthSource { type: "url", media_type: null, data: null, url: url }
     } else {
         if (block_type == "image" && !_anth_supported_image_mime(resolved.mime_type)) {
-            throw reject(
+            throw _reject(
                 `Anthropic does not accept ${resolved.mime_type} images: the Messages API supports image/jpeg, image/png, image/gif and image/webp`,
             )
         }
@@ -340,7 +340,7 @@ function _anthropic_prompt_blocks(message: ai.PromptMessage, role: string) -> An
             },
             let image: baml.media.Image => {
                 if (role != "user") {
-                    throw reject(
+                    throw _reject(
                         `Anthropic only supports image input in user messages, found ${role}`,
                     )
                 }
@@ -354,13 +354,13 @@ function _anthropic_prompt_blocks(message: ai.PromptMessage, role: string) -> An
             // a guaranteed provider 400; it is a client-side error now, exactly
             // like video below.
             let audio: baml.media.Audio => {
-                throw reject(
+                throw _reject(
                     "Anthropic does not support audio prompt input: the Messages API has no audio content block",
                 )
             },
             let pdf: baml.media.Pdf => {
                 if (role != "user") {
-                    throw reject(
+                    throw _reject(
                         `Anthropic only supports PDF input in user messages, found ${role}`,
                     )
                 }
@@ -368,7 +368,7 @@ function _anthropic_prompt_blocks(message: ai.PromptMessage, role: string) -> An
                 null
             },
             let video: baml.media.Video => {
-                throw reject("Anthropic does not support video prompt input")
+                throw _reject("Anthropic does not support video prompt input")
             },
         };
     }

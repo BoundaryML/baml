@@ -143,7 +143,7 @@ class AnthropicClient {
         if let k: string = ai.wire.resolve_credential(self.api_key, "ANTHROPIC_API_KEY") {
             return k;
         }
-        throw root.internal.reject(
+        throw root.internal._reject(
             `anthropic needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "ANTHROPIC_API_KEY")}`,
         )
     }
