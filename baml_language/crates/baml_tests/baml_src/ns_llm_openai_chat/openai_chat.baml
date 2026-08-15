@@ -484,6 +484,143 @@ test "chat_azure_deployment_url" {
     )
 }
 
+// An Azure deployment is almost always named after the model it serves, so an
+// unset `deployment_id` falls back to `model`. Without that the `"azure/…"`
+// shorthand — which can only carry a model — could never name a deployment.
+function chat_azure_deployment_defaults_to_model() -> string {
+    let cl = openai.AzureClient.new(model = "gpt-4o", resource_name = "my-resource");
+    cl.compat().base_url
+}
+
+test "chat_azure_deployment_defaults_to_model" {
+    assert.equal(
+        chat_azure_deployment_defaults_to_model(),
+        "https://my-resource.openai.azure.com/openai/deployments/gpt-4o",
+    )
+}
+
+// With no base_url, no resource_name and no `AZURE_OPENAI_ENDPOINT`, the client
+// cannot send — and the error has to name the endpoint variable, because that
+// is the one the `"azure/<model>"` shorthand expects the deployment to come
+// from. It is a TYPED `ai.errors.InvalidRequest`, so an `ai.Fallback` can skip
+// this member rather than abort (see `chat_fallback_skips_misconfigured_member`).
+//
+// A corpus test cannot set environment variables, so the env rung itself is
+// covered by the message naming it plus the URL composition asserted above.
+function chat_azure_missing_endpoint_names_env() -> string {
+    let cl = openai.AzureClient.new(model = "gpt-4o");
+    cl.resolved_base_url() catch (e) {
+        ai.errors.InvalidRequest => `${e.provider}|${e.detail}`,
+    }
+}
+
+// Registered only when the variable is unset: the fallback chain ends at the
+// real environment, so a machine that HAS an Azure endpoint configured would
+// (correctly) resolve a URL instead of failing.
+testset "azure_unconfigured" {
+    if (baml.env.get("AZURE_OPENAI_ENDPOINT") == null) {
+        test "missing_endpoint_names_env" {
+            let got = chat_azure_missing_endpoint_names_env();
+            assert.contains(got, "azure|");
+            assert.contains(got, "AZURE_OPENAI_ENDPOINT");
+            assert.contains(got, "base_url");
+            assert.contains(got, "resource_name")
+        }
+    } else {
+        log.warn(
+            "azure_unconfigured::missing_endpoint_names_env not registered: AZURE_OPENAI_ENDPOINT is set",
+        )
+    }
+}
+
+// ─── typed configuration failures ────────────────────────────────────────────
+//
+// A missing key / bad config must reach the caller as an `ai.errors.Failure`,
+// not a `baml.errors.InvalidArgument`. `ai.errors.normalize` flattens anything
+// that is not a Failure into an untyped `UnknownError`, and that is exactly
+// what `ai.Fallback` inspects to decide whether to try the next member.
+
+function _config_failure_class(e: unknown) -> string {
+    match (ai.errors.normalize(e)) {
+        let f: ai.errors.InvalidRequest => `InvalidRequest/${f.provider}`,
+        // Anything else means normalize could not keep an identity — which is
+        // precisely what `ai.Fallback` cannot act on.
+        _ => "untyped",
+    }
+}
+
+// `GenericClient.base_url` has no canonical variable to fall through to, so
+// this case is deterministic on any machine.
+function chat_generic_config_error_survives_normalize() -> string {
+    openai.GenericClient.new(model = "m").resolved_base_url() catch_all (e) {
+        _ => _config_failure_class(e),
+    }
+}
+
+test "chat_generic_config_error_survives_normalize" {
+    assert.equal(chat_generic_config_error_survives_normalize(), "InvalidRequest/openai-generic")
+}
+
+function chat_azure_config_error_survives_normalize() -> string {
+    openai.AzureClient.new(model = "gpt-4o").resolved_base_url() catch_all (e) {
+        _ => _config_failure_class(e),
+    }
+}
+
+function chat_anthropic_config_error_survives_normalize() -> string {
+    anthropic.AnthropicClient.new(
+        model = "claude-haiku-4-5",
+        api_key = env.BAML_TEST_UNSET_ANTHROPIC_KEY,
+    ).resolved_api_key() catch_all (e) { _ => _config_failure_class(e) }
+}
+
+// Both consult a canonical variable as the last rung, so they only fail on a
+// machine that has not configured the provider.
+testset "config_errors_are_typed" {
+    if (baml.env.get("AZURE_OPENAI_ENDPOINT") == null) {
+        test "azure" {
+            assert.equal(chat_azure_config_error_survives_normalize(), "InvalidRequest/azure")
+        }
+    } else {
+        log.warn("config_errors_are_typed::azure not registered: AZURE_OPENAI_ENDPOINT is set")
+    }
+
+    if (baml.env.get("ANTHROPIC_API_KEY") == null) {
+        test "anthropic" {
+            assert.equal(
+                chat_anthropic_config_error_survives_normalize(),
+                "InvalidRequest/anthropic",
+            )
+        }
+    } else {
+        log.warn("config_errors_are_typed::anthropic not registered: ANTHROPIC_API_KEY is set")
+    }
+}
+
+// The contract those typed errors buy: a misconfigured member does not abort
+// the chain, it is skipped. Before the unification the missing base_url
+// normalized to `UnknownError` and `ai.Fallback` stopped there.
+function chat_fallback_skips_misconfigured_member() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let broken = openai.GenericClient.new(model = "broken");
+            let working = openai.ChatClient.new(
+                model = "gpt-4o-mini",
+                api_key = "k",
+                base_url = mock.base_url(),
+            );
+            let members: ai.Client[] = [broken, working];
+            let chain = ai.clients.Fallback { members: members };
+            chain.invoke(_chat_input("hi")).terminal_text() ?? "-"
+        },
+    )
+}
+
+test "chat_fallback_skips_misconfigured_member" {
+    assert.equal(chat_fallback_skips_misconfigured_member(), "pong")
+}
+
 // The 4096 default is skipped when the caller set max_completion_tokens — the
 // engine's rule; sys_llm sent both (sys_llm `azure_max_completion_tokens_forwarded`
 // locked in the wrong body).
