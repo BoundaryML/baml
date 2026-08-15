@@ -35,3 +35,5 @@ there before submitting, and format with:
 ```bash
 cargo fmt -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate"
 ```
+
+Maintainers preparing dependent changes can use the experimental [stacked pull request workflow](./docs/stacked-prs.md).

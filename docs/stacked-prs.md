@@ -119,3 +119,51 @@ mise run pr-unresolved
 ```
 
 GitHub Actions exposes stack metadata as `github.event.pull_request.stack`. If duplicated heavyweight CI becomes expensive, use that metadata for a deliberate optimization rather than excluding child bases from validation.
+
+## Land a stack safely
+
+Before merging, confirm the stack is linear and every pull request through the intended stopping point is approved, open rather than draft, and passing its required checks.
+
+Use the interactive merge command and select the highest layer you want to land:
+
+```bash
+gh stack merge --squash
+```
+
+GitHub merges the selected pull request and every unmerged layer below it as one all-or-nothing operation ordered from bottom to top. Because `canary` uses a merge queue, the complete contiguous group is enqueued in order. A failure prevents the group from partially merging, and an ejected pull request also removes every layer above it from the queue.
+
+After the merge completes, synchronize and prune merged local branches:
+
+```bash
+gh stack sync --prune
+```
+
+`gh stack sync --prune` fetches and fast-forwards `canary`, rebases any remaining layers, pushes their updated branches, synchronizes pull request state, and removes local branches for merged layers.
+
+If a layer is closed without merging, stop and use `gh stack modify` or the GitHub Unstack action to make the intended dependency change explicit. Do not leave a silently retargeted chain in review.
+
+## Using `jj` or existing branches
+
+This checkout is a regular Git worktree. In a colocated `jj` repository, keep branch and commit management in `jj` and use the stateless link command to create or adopt the GitHub stack:
+
+```bash
+gh stack link --base canary sam/parser-cleanup-01 sam/parser-cleanup-02 sam/parser-cleanup-03
+```
+
+Arguments are ordered bottom to top. Branch arguments are pushed automatically and pull requests are created when missing, so inspect the bookmarks and commits before running the command. Existing pull requests can be linked without recreating them by passing their numbers or URLs.
+
+## Options considered
+
+| Option | Fit for BAML | Decision |
+| --- | --- | --- |
+| GitHub `gh stack` | First-party stack objects and review UI; no enablement; existing protections and Actions apply to every layer; native merge-queue and atomic stack merge support; external-tool link mode supports `jj`. Public preview and same-repository linear stacks only. | Use for the pilot. |
+| `git-spice` | Mature local branch manipulation and multi-forge support, but needs separate stack metadata and a manual or custom integration with BAML's squash-only GitHub merge queue. | Remove from the repo-local experiment now that GitHub provides the required native path. |
+| Graphite | Mature author and reviewer experience, but requires accounts, a GitHub App, and external configuration. | Unnecessary for the smallest first-party pilot. |
+| Aviator Stacked PRs | Stack-aware CLI and hosted merge queue, but introduces another service and queue. | Unnecessary while GitHub's native queue supports stacks. |
+| Plain Git plus `gh pr` | No added extension, but lacks native local topology operations and makes safe cascade rebases manual. | Keep only as a fallback. |
+
+## Pilot success criteria and next steps
+
+Try one non-urgent two- or three-layer maintainer stack. Record whether the public-preview CLI remains predictable, reviews stay focused after cascade rebases, every expected CI workflow runs per layer, and the existing merge queue lands the selected contiguous group atomically.
+
+If CI duplication is material, inspect the new stack event metadata and add a narrowly scoped optimization with contract tests. If the CLI or API changes during public preview, update this guide and the pilot before broad rollout.
