@@ -7,6 +7,9 @@ file_bytes = "21.9 MiB"
 stripped_bytes = "21.9 MiB"
 gzip_bytes = "9.9 MiB"
 
+# Re-recorded from CI run 31863070778 when the native BAML provider clients
+# landed (sys_llm parity migration): 12 provider client packages of stdlib
+# bytecode ride along in every packed program.
 [artifacts.packed-program]
-file_bytes = "14.8 MiB"
-gzip_bytes = "6.4 MiB"
+file_bytes = "15.3 MiB"
+gzip_bytes = "6.3 MiB"
