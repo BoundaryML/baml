@@ -45,3 +45,77 @@ gh extension upgrade gh-stack
 ```
 
 The extension stores local topology in Git repository metadata. Authentication remains managed by GitHub CLI and no credential belongs in this repository.
+
+## Create and submit a stack
+
+Start from an up-to-date `canary` and initialize the bottom layer:
+
+```bash
+git switch canary
+git pull --ff-only origin canary
+gh stack init --base canary sam/parser-cleanup-01
+# Edit, test, and commit the first change normally.
+```
+
+Add one branch per reviewable dependent change:
+
+```bash
+gh stack add sam/parser-cleanup-02
+# Edit, test, and commit the second change normally.
+
+gh stack add sam/parser-cleanup-03
+# Edit, test, and commit the third change normally.
+```
+
+Inspect the local topology before publishing anything:
+
+```bash
+gh stack view
+gh stack view --json
+```
+
+Open the submission editor, verify the bottom-to-top order and pull request contents, set new layers to draft as appropriate, and submit:
+
+```bash
+gh stack submit
+```
+
+`gh stack submit` pushes every branch, creates or updates the pull requests with the correct direct bases, and links them as a native stack. Reviewers see only each layer's focused diff and can navigate the stack on GitHub.
+
+For non-interactive use, `gh stack submit --auto` derives titles from commits and creates new pull requests as drafts. Add `--open` only when every affected layer is ready for review.
+
+## Update a stack
+
+Normal commits on the top branch need no special handling. If review changes a lower branch, update that branch and cascade-rebase the layers above it:
+
+```bash
+gh stack checkout sam/parser-cleanup-01
+# Edit, test, and commit or amend the lower change.
+gh stack rebase --upstack
+gh stack push
+gh stack top
+```
+
+`gh stack push` updates rebased remote branches with `--force-with-lease --atomic`. If a rebase conflicts, resolve and stage the files, then run `gh stack rebase --continue`; use `gh stack rebase --abort` to restore the pre-rebase state.
+
+When `canary` advances, refresh the full stack:
+
+```bash
+gh stack rebase
+gh stack push
+```
+
+Use `gh stack modify` to insert, drop, fold, reorder, or rename layers. The worktree must be clean and no pull request in the stack may be queued while restructuring.
+
+## Review a stack
+
+Reviewers use GitHub normally. Start at the bottom pull request and use the native stack map to move upward. GitHub applies the `canary` branch protection rules, required checks, and applicable `pull_request` workflows to every layer even though each pull request directly targets the branch below it.
+
+Authors can inspect stack and unresolved-thread status from the terminal:
+
+```bash
+gh stack view
+mise run pr-unresolved
+```
+
+GitHub Actions exposes stack metadata as `github.event.pull_request.stack`. If duplicated heavyweight CI becomes expensive, use that metadata for a deliberate optimization rather than excluding child bases from validation.
