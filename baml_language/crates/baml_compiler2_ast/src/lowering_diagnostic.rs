@@ -251,7 +251,7 @@ pub enum LoweringDiagnostic {
 /// native client, and it is deliberately the same set the `"provider/model"`
 /// shorthand resolves (`baml_std/ai/ns_internal/clients.baml::_from_shorthand`).
 ///
-/// An unrecognized or absent provider keeps the generic OpenAI suggestion:
+/// An unrecognized or absent provider keeps the generic `OpenAI` suggestion:
 /// there is nothing better to say, and it is still a valid client expression.
 ///
 /// KNOWN GAP: the composite providers only get a shape, not their configured

@@ -1730,133 +1730,6 @@ impl<'a> Parser<'a> {
 
     // ============ String Parsing ============
 
-    /// Raw-token index just past the string literal that STARTS at `i`, or
-    /// `None` when `i` does not begin one.
-    ///
-    /// The lexer is context-free and emits no string token: `"a b"` arrives as
-    /// `Quote Word Whitespace Word Quote`, `#"a"#` as `Hash Quote … Quote Hash`,
-    /// and `` `a` `` as `Backtick … Backtick` (see [`TokenKind`] docs). Any
-    /// lookahead scan that walks raw tokens therefore sees string CONTENTS as
-    /// ordinary tokens — keywords included, since `client` inside quotes lexes
-    /// as `TokenKind::Client`. Such scans must use this helper to step over a
-    /// literal instead of reading prose as syntax.
-    ///
-    /// Close-detection mirrors the real parsers ([`Self::parse_string`],
-    /// [`Self::parse_raw_string_content`], [`Self::parse_backtick_content`]):
-    /// backslash escapes in quoted/backtick literals, hash-count matching for
-    /// raw strings, and the BEP-049 anchored close for backtick runs. An
-    /// unterminated literal yields the end of the token stream, so a scan can
-    /// never loop or resume inside one.
-    fn skip_string_literal_from(&self, i: usize) -> Option<usize> {
-        match self.tokens.get(i)?.kind {
-            // `#"…"#` — no escapes; closes on `"` followed by exactly as many
-            // `#` as opened it.
-            TokenKind::Hash => {
-                let mut j = i;
-                while self.tokens.get(j).map(|t| t.kind) == Some(TokenKind::Hash) {
-                    j += 1;
-                }
-                let opening_hashes = j - i;
-                if self.tokens.get(j).map(|t| t.kind) != Some(TokenKind::Quote) {
-                    // A bare `#` run (e.g. a `#!` shebang) is not a raw string.
-                    return None;
-                }
-                j += 1; // opening quote
-                while j < self.tokens.len() {
-                    if self.tokens[j].kind == TokenKind::Quote {
-                        let mut k = j + 1;
-                        while self.tokens.get(k).map(|t| t.kind) == Some(TokenKind::Hash) {
-                            k += 1;
-                        }
-                        if k - (j + 1) == opening_hashes {
-                            return Some(k);
-                        }
-                    }
-                    j += 1;
-                }
-                Some(self.tokens.len())
-            }
-            // `"…"` (and the `"` of a `b"…"` byte string, whose `b` prefix is a
-            // plain Word that needs no skipping).
-            TokenKind::Quote => {
-                let mut j = i + 1;
-                while j < self.tokens.len() {
-                    match self.tokens[j].kind {
-                        TokenKind::Backslash => j += 2,
-                        TokenKind::Quote => return Some(j + 1),
-                        _ => j += 1,
-                    }
-                }
-                Some(self.tokens.len())
-            }
-            // `` `…` `` — N-tick opener, anchored close on the first run of ≥ N.
-            TokenKind::Backtick => {
-                let mut j = i;
-                while self.tokens.get(j).map(|t| t.kind) == Some(TokenKind::Backtick) {
-                    j += 1;
-                }
-                let opening_ticks = j - i;
-                while j < self.tokens.len() {
-                    match self.tokens[j].kind {
-                        TokenKind::Backslash => j += 2,
-                        // `${…}` holds a host expression that may itself contain
-                        // string literals — skip it as a balanced brace span so
-                        // a nested backtick isn't mistaken for the close.
-                        TokenKind::Dollar
-                            if self.tokens.get(j + 1).map(|t| t.kind)
-                                == Some(TokenKind::LBrace) =>
-                        {
-                            j = self.skip_balanced_braces_from(j + 1);
-                        }
-                        TokenKind::Backtick => {
-                            let run_start = j;
-                            while self.tokens.get(j).map(|t| t.kind) == Some(TokenKind::Backtick) {
-                                j += 1;
-                            }
-                            if j - run_start >= opening_ticks {
-                                return Some(j);
-                            }
-                        }
-                        _ => j += 1,
-                    }
-                }
-                Some(self.tokens.len())
-            }
-            _ => None,
-        }
-    }
-
-    /// Raw-token index just past the `{ … }` span opening at `i`, skipping over
-    /// any string literals inside it. Used to step over a `${…}` interpolation.
-    fn skip_balanced_braces_from(&self, i: usize) -> usize {
-        if self.tokens.get(i).map(|t| t.kind) != Some(TokenKind::LBrace) {
-            return i;
-        }
-        let mut depth = 0usize;
-        let mut j = i;
-        while j < self.tokens.len() {
-            if let Some(after_string) = self.skip_string_literal_from(j) {
-                j = after_string;
-                continue;
-            }
-            match self.tokens[j].kind {
-                TokenKind::LBrace => depth += 1,
-                TokenKind::RBrace => {
-                    // `depth` is ≥ 1 here (the entry token is the opening
-                    // brace), but the parser must never panic on malformed
-                    // input — saturate rather than underflow.
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        return j + 1;
-                    }
-                }
-                _ => {}
-            }
-            j += 1;
-        }
-        j
-    }
-
     /// Count consecutive Hash tokens starting at current position (skipping basic trivia only)
     /// Will skip *leading* trivia, but only basic trivia is allowed internally
     fn count_consecutive_hashes(&self) -> usize {
@@ -9737,7 +9610,7 @@ function Foo() -> {
     }
 
     /// The LLM-vs-expression classifier walks raw tokens, where string
-    /// CONTENTS lex as ordinary tokens (`client` even lexes as KW_CLIENT).
+    /// CONTENTS lex as ordinary tokens (`client` even lexes as `KW_CLIENT`).
     /// Prose that happens to mention `client`/`prompt`/`tools` must never
     /// flip a plain function into an LLM body — that produced a cascade of
     /// "Only 'client', 'tools' and 'prompt' allowed in LLM function" errors.

@@ -7,8 +7,9 @@
 //! `aws-sigv4`) — no provider request/response knowledge lives here; that is all
 //! `.baml`.
 //!
-//! All IO (env, files, HTTP) is routed through BAML's [`RuntimeIo`] by
-//! [`BamlAuthIo`], so credential resolution stays inside the sandbox.
+//! All IO (env, files, HTTP) is routed through BAML's [`RuntimeIo`] by an
+//! internal `BamlAuthIo` adapter, so credential resolution stays inside the
+//! sandbox.
 //!
 //! Exposed to BAML as the `ai.internal.*` sys-ops (see
 //! `baml_builtins2/baml_std/ai/ns_internal/auth.baml`), which the `google` and

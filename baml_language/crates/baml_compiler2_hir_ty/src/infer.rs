@@ -1361,11 +1361,6 @@ struct InferenceContext<'db> {
     /// owner's `AstSourceMap` (property-shorthand identification). Set for
     /// every owner kind, unlike `body_owner`.
     body_owner_id: Option<BodyOwnerId<'db>>,
-    /// The value expressions AST lowering marked as property shorthand
-    /// (`{ key }`, never `{ "key": key }`). Materialized on demand - the
-    /// source map is a clone, and only the shorthand DIAGNOSTIC path
-    /// consults it.
-    shorthand_exprs: std::cell::OnceCell<rustc_hash::FxHashSet<ExprId>>,
     /// Whether this run infers a parameter-default arena: the semantic
     /// index keys those expressions under
     /// `ExprMetadataScope::ParameterDefault` (the builder's
@@ -1450,7 +1445,6 @@ impl<'db> InferenceContext<'db> {
             obligation_anchor: None,
             body_owner: None,
             body_owner_id: None,
-            shorthand_exprs: std::cell::OnceCell::new(),
             defaults_owner: false,
             chain_nullable: Vec::new(),
             property_shorthand_values: FxHashMap::default(),

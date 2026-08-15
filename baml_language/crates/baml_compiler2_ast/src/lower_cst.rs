@@ -766,7 +766,7 @@ fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
 /// and the user-land `resolve()` convention.
 ///
 /// DRIFT HAZARD — this compile-time `"provider/model"` prefix map is mirrored
-/// at runtime by `ai.clients.resolve` (baml_std `ai/ns_clients/clients.baml`),
+/// at runtime by `ai.clients.resolve` (`baml_std/ai/ns_clients/clients.baml`),
 /// which handles the same shorthand when the `client:` value is a dynamic
 /// string / `baml.env.Ref` instead of a literal. Add a prefix in one place and
 /// you must add it in the other.

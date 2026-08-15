@@ -103,7 +103,7 @@ impl PromptAst {
     fn collect_structured_messages(&self, out: &mut Vec<StructuredMessage>) {
         match self {
             PromptAst::Simple(content) => {
-                out.push((String::new(), content.clone(), serde_json::Value::Null))
+                out.push((String::new(), content.clone(), serde_json::Value::Null));
             }
             PromptAst::Message {
                 role,

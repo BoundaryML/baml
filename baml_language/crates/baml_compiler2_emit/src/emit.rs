@@ -3421,6 +3421,15 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // carries a binding for every declared member, pinned or
             // defaulted), or a union that may carry any of these: the VM
             // value matcher.
+            //
+            // Media (`image` / `audio` / `video` / `pdf`) belongs here rather
+            // than with the tagless leaves below: there is no type tag for
+            // media, but `value_concrete_ty` reports the *primitive*
+            // `ConcreteRealizedTy::Media(kind)`, so the value matcher
+            // discriminates `image` from `audio` exactly. Routing it to the
+            // tagless-leaf fallback instead compiles to constant-FALSE — `v is
+            // image` false for every value, and a `match`'s media arm never
+            // firing (the last arm swallows the value).
             TyTemplate::List(..)
             | TyTemplate::Map { .. }
             | TyTemplate::Future(..)
@@ -3440,18 +3449,6 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // against the frame it carries. A coarse "is it callable" tag test
             // would answer `true` for a callable of the wrong signature.
             TyTemplate::Function { .. } => emit_structural(self, ty_template),
-
-            // ── Media primitives (`image` / `audio` / `video` / `pdf`) ───────
-            // Kind-precise, via the same value matcher. A media value is an
-            // `Object::Instance` of one of the four `baml.media.*` classes, and
-            // `value_concrete_ty` reports it as the *primitive*
-            // `ConcreteRealizedTy::Media(kind)` — so the canonical algebra
-            // discriminates `image` from `audio` exactly. There is no type tag
-            // for media, so without this arm every media leaf fell into the
-            // tagless-leaf fallback below and compiled to constant-FALSE:
-            // `v is image` was false for every value, and in a `match` the
-            // media arm never fired (the last arm swallowed the value).
-            TyTemplate::Media(..) => emit_structural(self, ty_template),
 
             // `unknown` is the top type: every value inhabits it, so the test is
             // constant-true. It is a realized *leaf* with no type tag, so without
