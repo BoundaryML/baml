@@ -75,10 +75,3 @@ client GPT4 = openai.ResponsesClient.new(
 //     ·                       ┬
 //     ·                       ╰── expected `expression`, found `'#'`
 //     ╰────
-// E0003
-//
-//   × unresolved name: `openai.ResponsesClient.new`
-//     ╭─[headers_invalid.baml:47:15]
-//  47 │ client GPT4 = openai.ResponsesClient.new(
-//     ·               ───────────────────────
-//     ╰────
