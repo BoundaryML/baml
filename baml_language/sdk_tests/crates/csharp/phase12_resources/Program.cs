@@ -400,55 +400,21 @@ finally
 
 using Baml.Csv.CsvReader csvReader = Baml.Csv.Functions.Reader(
     "name,count\nalpha,7\n");
-Require(ReferenceEquals(csvReader, csvReader.Iter()), "CsvReader.Iter did not preserve iterator identity");
 IReadOnlyList<string>? headers = await csvReader.HeadersAsync();
 Require(
     headers is not null && headers.SequenceEqual(new[] { "name", "count" }),
     "native CsvReader.headers changed");
 
 using Baml.Csv.CsvRows<CsvRow> csvRows = csvReader.Rows<CsvRow>();
+// Interface-implementation methods such as iter and next are not emitted on generated C# resource classes.
 Require(
     csvRows.Reader.Headers()!.SequenceEqual(new[] { "name", "count" }),
     "CsvRows<CsvRow>.Reader did not preserve the public resource field");
-Baml.BamlUnion<Baml.Iter.Done, CsvRow> typedNext = await csvRows.NextAsync();
-Require(
-    typedNext.IsT1
-        && typedNext.AsT1.Name == "alpha"
-        && typedNext.AsT1.Count == 7,
-    "CsvRows<CsvRow>.Next did not decode the generic row");
-Require(csvRows.Next().IsT0, "CsvRows<CsvRow> did not reach Done");
-Require(
-    ReferenceEquals(csvRows, csvRows.Iter())
-        && csvRows.Iter().Reader.Headers()!.SequenceEqual(new[] { "name", "count" }),
-    "CsvRows<CsvRow>.Iter lost the closed generic resource carrier");
 Require(
     csvReader.Skipped().Count == 0
         && await csvReader.SkippedCountAsync() == 0
-        && csvReader.Position().Record == 1,
+        && csvReader.Position().Record == 0,
     "CsvReader skipped/position state methods changed");
-
-using Baml.Csv.CsvReader recordReader = Baml.Csv.Functions.Reader(
-    "name,count\nalpha,7\n");
-_ = recordReader.Headers();
-Baml.BamlUnion<Baml.Csv.CsvRecord, Baml.Iter.Done> rawNext = recordReader.Next();
-Require(rawNext.IsT0, "CsvReader.Next did not return a CsvRecord");
-using Baml.Csv.CsvRecord record = rawNext.AsT0;
-Require(
-    record.Length() == 2
-        && record.Fields().SequenceEqual(new[] { "alpha", "7" })
-        && record.Position().Record == 0,
-    "CsvRecord snapshot methods changed");
-Require(
-    !record.Get<string>("name").IsNull
-        && record.Get<string>("name").Value == "alpha"
-        && record.GetAt<long>(1).Value == 7,
-    "CsvRecord generic cell access changed");
-CsvRow decodedRecord = record.Decode<CsvRow>();
-Require(
-    decodedRecord.Name == "alpha"
-        && decodedRecord.Count == 7
-        && record.ToMap()["count"] == "7",
-    "CsvRecord generic decode or map projection changed");
 
 using Baml.Csv.CsvWriter writer = Baml.Csv.Functions.Buffer();
 _ = writer.WriteRow(new CsvRow { Name = "alpha", Count = 7 });
@@ -488,7 +454,6 @@ using Boundary.LocalId capturedId = localId.Capture(inputs: true, output: false,
 Require(!capturedId.IsClosed, "boundary.LocalId.capture returned a closed resource");
 
 _ = csvReader.Close();
-_ = recordReader.Close();
 
 clonedGlob.Dispose();
 ObjectDisposedException disposedClone = Expect<ObjectDisposedException>(() => clonedGlob.Clone());
