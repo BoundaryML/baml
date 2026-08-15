@@ -16,13 +16,13 @@
 //! type aliases natively, so — unlike the Python port — there is no
 //! self-ref quoting or `defer_name_refs`.
 //!
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, rc::Rc};
 
 use baml_base::{Literal, MediaKind};
 use baml_codegen_types::{CodegenFunctionParamMode, Name, Ty};
 
 use crate::{
-    leaf::safe_decl_name,
+    leaf::{TypeVarMap, emitted_binder, safe_decl_name},
     routing::{LeafPath, route_class_ref},
     ts_string,
 };
@@ -30,6 +30,26 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TranslateCtx {
     pub(crate) current_leaf: LeafPath,
+    /// Raw→emitted type-parameter map for the generic scope whose body is being
+    /// translated (one class, one free function, or one method). `Ty::TypeVar`
+    /// resolves through it so a `{package, package_}` twin's references match the
+    /// distinct `{package__, package_}` binders the declaration allocated.
+    /// `None` when no generic scope is active — resolution then falls back to the
+    /// stateless [`crate::leaf::safe_decl_name`], which is exact for a scope that
+    /// binds no type parameters and so cannot carry a twin (type-alias bodies,
+    /// non-generic classes and callables). Mirrors the Python SDK's
+    /// `TranslateCtx::type_var_map`.
+    pub(crate) type_var_map: Option<Rc<TypeVarMap>>,
+}
+
+impl TranslateCtx {
+    /// The same leaf, with `map` installed as the active generic scope.
+    pub(crate) fn with_type_vars(&self, map: &Rc<TypeVarMap>) -> Self {
+        Self {
+            current_leaf: self.current_leaf.clone(),
+            type_var_map: Some(Rc::clone(map)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -163,8 +183,13 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         }
         Ty::TypeAlias(name, _) => render_name_ref(name, ctx),
         // A type parameter is a binding identifier at its declaration site
-        // (`leaf::generic_decl`), so the use site takes the same escape.
-        Ty::TypeVar(name, _) => TranslatedType::bare(safe_decl_name(name.as_str())),
+        // (`leaf::generic_decl`), so the use site must land on exactly the
+        // identifier that site allocated. The scope map wins; the stateless
+        // escape is the fallback only for scopes that bind no type parameters,
+        // where no twin can exist.
+        Ty::TypeVar(name, _) => {
+            TranslatedType::bare(emitted_binder(name.as_str(), ctx.type_var_map.as_deref()))
+        }
 
         Ty::Function { params, ret, .. } => {
             let ret_t = translate_ty(ret, ctx);
@@ -308,6 +333,7 @@ mod tests {
     fn ctx(segments: &[&str]) -> TranslateCtx {
         TranslateCtx {
             current_leaf: leaf(segments),
+            type_var_map: None,
         }
     }
     fn name(pkg: &str, namespace_path: &[&str], bare_name: &str) -> Name {

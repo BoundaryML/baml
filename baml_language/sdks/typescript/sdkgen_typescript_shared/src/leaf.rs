@@ -301,16 +301,145 @@ fn write_enum_doc(out: &mut String, e: &TypeScriptEnum) {
     out.push_str(" */\n");
 }
 
+/// Raw BAML type-parameter name → the TypeScript binder identifier allocated
+/// for it in one generic scope. Mirrors the Python SDK's `TypeVarMap`.
+pub(crate) type TypeVarMap = BTreeMap<String, String>;
+
+/// Resolve one raw type-parameter name to the identifier its declaration
+/// allocated. The scope map wins; the stateless [`safe_decl_name`] is the
+/// fallback for scopes that bind no type parameters (type-alias bodies,
+/// non-generic classes and callables), where no twin can exist.
+pub(crate) fn emitted_binder(raw: &str, map: Option<&TypeVarMap>) -> String {
+    map.and_then(|m| m.get(raw).cloned())
+        .unwrap_or_else(|| safe_decl_name(raw))
+}
+
+/// Allocate the emitted binder identifier for every type parameter of ONE
+/// generic scope, against a reservation set, and return the scope's full
+/// raw→emitted map (the enclosing scope's entries included).
+///
+/// This is the TypeScript counterpart of the Python SDK's
+/// `leaf::allocate_leaf_type_vars`, narrowed to TypeScript's scoping rules. The
+/// Python allocator reserves LEAF-globally because a Python `TypeVar` is a
+/// module-level assignment (`T = typing.TypeVar("T")`), so two scopes really do
+/// share one binding. A TypeScript type parameter is scoped to its own
+/// declaration, so the allocation unit here is the scope, not the leaf. The
+/// collision-resolution rule is otherwise identical.
+///
+/// - `raw_params` are this scope's OWN type parameters, in declaration order.
+/// - `outer` is the enclosing scope's map (a generic class, for an instance
+///   method) or `None`. A static method re-declares the class parameters as its
+///   own (TS2302), so it passes them in `raw_params` with no `outer`.
+/// - `module_names` are the leaf's module-scope bindings a binder could shadow.
+///
+/// Guarantees, matching the Python allocator's:
+/// - **A non-reserved raw name maps to itself, unconditionally.** The
+///   reservation set is only ever consulted for a raw name that is a JavaScript
+///   reserved word, and bumping only appends `_`. Every keyword-free schema
+///   therefore renders byte-identically to the stateless escape it replaces.
+/// - **A reserved raw name bumps** (`package`→`package_`→`package__`…) past
+///   (a) every raw type-parameter name in this scope and its enclosing scope,
+///   (b) every binder already allocated in this scope chain, and (c) the leaf's
+///   module-scope declaration names and immediate child-namespace names.
+/// - The map is keyed by RAW name, so a `{package, package_}` twin can never
+///   collapse onto one identifier, and `translate_ty` resolves each use site
+///   through the same map.
+///
+/// **Deliberately not reserved.** Runtime import names (`defineFunction`,
+/// `BamlCallContext`, `_BamlHandle`, `_TYPE_MAP`, `__ns_*`, `__baml_*`) are
+/// unreachable by construction: bumping only appends `_` to a reserved word, so
+/// an allocated binder is never `_`-leading and never equals one of them. The
+/// cross-leaf `import type * as <segment>` aliases are NOT reserved: they are
+/// routing-sanitized module path segments, they are not known until the leaf's
+/// bodies have been rendered, and shadowing one inside a type-parameter list is
+/// a resolution change rather than a parse error. That bound is stated here
+/// rather than papered over.
+/// An inner scope's NON-reserved parameter is likewise not reserved against.
+/// `Box<package>` allocates `package_`, and an instance method that declares a
+/// parameter literally named `package_` re-binds that identifier for the whole
+/// method. Shadowing a type parameter is legal TypeScript and compiles clean,
+/// so this is a name-resolution change of the same category as the import
+/// aliases above, not a parse error. Widening the bump to cover it would
+/// destroy the unconditional non-reserved-maps-to-itself guarantee, so it is
+/// stated rather than fixed.
+fn allocate_binders(
+    raw_params: &[String],
+    outer: Option<&TypeVarMap>,
+    module_names: &BTreeSet<String>,
+) -> TypeVarMap {
+    let mut map: TypeVarMap = outer.cloned().unwrap_or_default();
+    if raw_params.is_empty() {
+        return map;
+    }
+    let mut reserved: BTreeSet<String> = BTreeSet::new();
+    // (a) every raw type-parameter name in this scope — so `package` cannot bump
+    //     onto a sibling `package_` that maps to itself.
+    reserved.extend(raw_params.iter().cloned());
+    // (b) the enclosing scope's raw names and the binders already allocated for
+    //     them. This is a BUMP target only: it stops a reserved-word inner
+    //     parameter from bumping onto an identifier the enclosing scope is
+    //     already using, which would silently retarget that scope's references.
+    //     It does NOT stop a non-reserved inner parameter from re-binding an
+    //     outer name: that branch maps the raw name to itself unconditionally
+    //     and never reads this set. That case is ordinary TypeScript shadowing,
+    //     legal and compile-clean, and is noted with the other unreserved
+    //     surfaces above.
+    for (raw, emitted) in &map {
+        reserved.insert(raw.clone());
+        reserved.insert(emitted.clone());
+    }
+    // (c) the leaf's module-scope declaration and child-namespace names.
+    reserved.extend(module_names.iter().cloned());
+
+    for raw in raw_params {
+        if !is_js_reserved(raw) {
+            map.insert(raw.clone(), raw.clone());
+        } else {
+            let mut candidate = format!("{raw}_");
+            while is_js_reserved(&candidate) || reserved.contains(&candidate) {
+                candidate.push('_');
+            }
+            reserved.insert(candidate.clone());
+            map.insert(raw.clone(), candidate);
+        }
+    }
+    map
+}
+
+/// The leaf's module-scope bindings a type-parameter binder could shadow: every
+/// emitted declaration name in the body, plus every immediate child-namespace
+/// name re-exported by this `index.ts`.
+fn module_scope_names(body: &LeafBody, kids: &BTreeSet<String>) -> BTreeSet<String> {
+    let mut out: BTreeSet<String> = kids.clone();
+    for (sym, _) in &body.symbols {
+        out.insert(symbol_decl_name(sym).to_string());
+    }
+    out
+}
+
+fn symbol_decl_name(sym: &EmittedSymbol) -> &str {
+    match sym {
+        EmittedSymbol::Class(c) => &c.name,
+        EmittedSymbol::Enum(e) => &e.name,
+        EmittedSymbol::TypeAlias(a) => &a.name,
+        EmittedSymbol::Function(f) => &f.name,
+    }
+}
+
 /// `<T, U>` generic-parameter list, or empty. A type-parameter name is a
-/// binding identifier, so it takes the same declaration escape as a class or
-/// enum name; `translate_ty` re-applies that escape at every `Ty::TypeVar` use
-/// site. The raw spellings still reach the runtime through the `$generic`
-/// array and the `typeParams` factory argument, which are string literals.
-fn generic_decl(params: &[String]) -> String {
+/// binding identifier, so it cannot be a reserved word; `map` carries the
+/// identifier allocated for each raw name by [`allocate_binders`], and
+/// `translate_ty` resolves every `Ty::TypeVar` use site through the same map.
+/// The raw spellings still reach the runtime through the `$generic` array and
+/// the `typeParams` factory argument, which are string literals.
+fn generic_decl(params: &[String], map: &TypeVarMap) -> String {
     if params.is_empty() {
         String::new()
     } else {
-        let escaped: Vec<String> = params.iter().map(|p| safe_decl_name(p.as_str())).collect();
+        let escaped: Vec<String> = params
+            .iter()
+            .map(|p| emitted_binder(p.as_str(), Some(map)))
+            .collect();
         format!("<{}>", escaped.join(", "))
     }
 }
@@ -395,6 +524,7 @@ fn is_ts_property_identifier(name: &str) -> bool {
 /// vars; a class type var is already in scope on the enclosing class.
 fn fn_type_sig(
     generics: &[String],
+    generic_map: &TypeVarMap,
     names: &[&str],
     tys: &[TranslatedType],
     defaults: &[Option<FunctionArgumentDefault>],
@@ -425,7 +555,11 @@ fn fn_type_sig(
     } else {
         ret_expr.to_string()
     };
-    format!("{}({}) => {ret}", generic_decl(generics), params.join(", "))
+    format!(
+        "{}({}) => {ret}",
+        generic_decl(generics, generic_map),
+        params.join(", ")
+    )
 }
 
 // ── Public entry point ──
@@ -439,9 +573,13 @@ pub(crate) fn render_index_ts(
 ) -> String {
     let ctx = TranslateCtx {
         current_leaf: body.leaf.clone(),
+        type_var_map: None,
     };
     let mut state = RenderState::default();
     let callable_child_aliases = body.callable_child_aliases(kids);
+    // Module-scope bindings a generic binder must not shadow. Computed once per
+    // leaf and only ever consulted for a reserved-word type parameter.
+    let module_names = module_scope_names(body, kids);
 
     // Render symbol bodies first so the import preamble can be computed.
     let mut body_str = String::new();
@@ -456,6 +594,7 @@ pub(crate) fn render_index_ts(
             &ctx,
             &mut state,
             &callable_child_aliases,
+            &module_names,
             runtime_package,
         );
         prev = Some(key);
@@ -639,6 +778,7 @@ fn render_symbol_ts(
     ctx: &TranslateCtx,
     state: &mut RenderState,
     callable_child_aliases: &BTreeMap<String, String>,
+    module_names: &BTreeSet<String>,
     runtime_package: &str,
 ) {
     match sym {
@@ -646,7 +786,7 @@ fn render_symbol_ts(
             if let Some(rust_name) = runtime_owned_reexport_name(c) {
                 render_media_reexport_ts(out, &c.name, rust_name, runtime_package);
             } else {
-                render_class_ts(out, c, ctx, state);
+                render_class_ts(out, c, ctx, state, module_names);
             }
         }
         EmittedSymbol::Enum(e) => render_enum(out, e),
@@ -656,6 +796,7 @@ fn render_symbol_ts(
             f,
             ctx,
             state,
+            module_names,
             callable_child_aliases.get(&f.name).map(String::as_str),
         ),
     }
@@ -701,16 +842,22 @@ fn render_class_ts(
     c: &TypeScriptClass,
     ctx: &TranslateCtx,
     state: &mut RenderState,
+    module_names: &BTreeSet<String>,
 ) {
     write_class_doc(out, c);
-    let generics = generic_decl(&c.generic_params);
+    // The class's type parameters are one generic scope: allocate their binders
+    // once, then render the `<…>` list, every field type, and every instance
+    // method signature through the same map.
+    let class_map = std::rc::Rc::new(allocate_binders(&c.generic_params, None, module_names));
+    let class_ctx = ctx.with_type_vars(&class_map);
+    let generics = generic_decl(&c.generic_params, &class_map);
 
     // Translate each property type once; reuse for field + constructor.
     let props: Vec<(&str, TranslatedType)> = c
         .properties
         .iter()
         .map(|p| {
-            let t = translate_ty(&p.ty, ctx);
+            let t = translate_ty(&p.ty, &class_ctx);
             state.merge(&t);
             (p.name.as_str(), t)
         })
@@ -771,10 +918,26 @@ fn render_class_ts(
 
     // Static + instance method bindings, as class fields.
     for m in &c.static_methods {
-        render_method_binding_ts(out, m, &c.generic_params, ctx, state);
+        render_method_binding_ts(
+            out,
+            m,
+            &c.generic_params,
+            &class_map,
+            ctx,
+            state,
+            module_names,
+        );
     }
     for m in &c.instance_methods {
-        render_method_binding_ts(out, m, &c.generic_params, ctx, state);
+        render_method_binding_ts(
+            out,
+            m,
+            &c.generic_params,
+            &class_map,
+            ctx,
+            state,
+            module_names,
+        );
     }
 
     out.push_str("}\n");
@@ -844,14 +1007,35 @@ fn render_method_binding_ts(
     out: &mut String,
     m: &TypeScriptMethodBinding,
     class_generics: &[String],
+    class_map: &TypeVarMap,
     ctx: &TranslateCtx,
     state: &mut RenderState,
+    module_names: &BTreeSet<String>,
 ) {
     write_doc_with_raises(out, m.docstring.as_deref(), &m.raises_names);
-    let (names, tys, defaults, ret) = binding_surface(m, ctx, state);
     let is_async = m.mode == SyncAsync::Async;
     let sig_generics = method_sig_generics(m, class_generics);
-    let sig = fn_type_sig(&sig_generics, &names, &tys, &defaults, &ret.expr, is_async);
+    // A static method re-declares the class parameters as its own (TS2302), so
+    // its scope is the flat `sig_generics` list with no enclosing map. An
+    // instance method binds only its own parameters on top of the class scope,
+    // so the class map is the outer scope and its binders are reserved against.
+    // `sig_generics` is exactly the scope's own parameter list in both cases.
+    let outer = match m.kind {
+        MethodKind::Static => None,
+        MethodKind::Instance => Some(class_map),
+    };
+    let sig_map = std::rc::Rc::new(allocate_binders(&sig_generics, outer, module_names));
+    let method_ctx = ctx.with_type_vars(&sig_map);
+    let (names, tys, defaults, ret) = binding_surface(m, &method_ctx, state);
+    let sig = fn_type_sig(
+        &sig_generics,
+        &sig_map,
+        &names,
+        &tys,
+        &defaults,
+        &ret.expr,
+        is_async,
+    );
     let required_params = m.runtime_required_names();
     let optional_params = m.optional_names();
     let required_params_lit = param_names_literal(&required_params);
@@ -894,25 +1078,30 @@ fn render_function_ts(
     f: &TypeScriptFunction,
     ctx: &TranslateCtx,
     state: &mut RenderState,
+    module_names: &BTreeSet<String>,
     child_namespace_alias: Option<&str>,
 ) {
     write_doc_with_raises(out, f.docstring.as_deref(), &f.raises_names);
     state.uses_define_function = true;
+    // A free function's type parameters are one generic scope of their own.
+    let fn_map = std::rc::Rc::new(allocate_binders(&f.generic_params, None, module_names));
+    let fn_ctx = ctx.with_type_vars(&fn_map);
     let tys: Vec<TranslatedType> = f
         .arg_tys
         .iter()
         .map(|t| {
-            let tt = translate_ty(t, ctx);
+            let tt = translate_ty(t, &fn_ctx);
             state.merge(&tt);
             tt
         })
         .collect();
-    let ret = translate_ty(&f.return_ty, ctx);
+    let ret = translate_ty(&f.return_ty, &fn_ctx);
     state.merge(&ret);
     let names: Vec<&str> = f.param_names.iter().map(String::as_str).collect();
     let is_async = f.mode == SyncAsync::Async;
     let sig = fn_type_sig(
         &f.generic_params,
+        &fn_map,
         &names,
         &tys,
         &f.arg_defaults,
@@ -1145,11 +1334,114 @@ mod tests {
 
     #[test]
     fn generic_decl_escapes_reserved_type_parameters() {
-        assert_eq!(generic_decl(&[]), "");
-        assert_eq!(generic_decl(&["T".to_string()]), "<T>");
-        assert_eq!(
-            generic_decl(&["package".to_string(), "T".to_string()]),
-            "<package_, T>"
+        let decl = |params: &[&str]| {
+            let raw: Vec<String> = params.iter().map(ToString::to_string).collect();
+            let map = allocate_binders(&raw, None, &BTreeSet::new());
+            generic_decl(&raw, &map)
+        };
+        assert_eq!(decl(&[]), "");
+        assert_eq!(decl(&["T"]), "<T>");
+        assert_eq!(decl(&["package", "T"]), "<package_, T>");
+    }
+
+    /// The `{package, package_}` twin: the stateless escape maps BOTH raw names
+    /// onto `package_`, so the binder list would read `<package_, package_>` —
+    /// TS2300 duplicate identifier, which kills the whole generated file. The
+    /// allocator reserves the sibling raw name, so `package` bumps past it.
+    #[test]
+    fn reserved_and_underscore_twin_get_distinct_binders() {
+        let raw = vec!["package".to_string(), "package_".to_string()];
+        // Control: the stateless escape collapses the twin.
+        assert_eq!(safe_decl_name("package"), safe_decl_name("package_"));
+
+        let map = allocate_binders(&raw, None, &BTreeSet::new());
+        assert_eq!(map.get("package").map(String::as_str), Some("package__"));
+        assert_eq!(map.get("package_").map(String::as_str), Some("package_"));
+        assert_eq!(generic_decl(&raw, &map), "<package__, package_>");
+    }
+
+    /// Declaration order does not matter: whichever reserved-word parameter is
+    /// allocated first still bumps past the sibling that maps to itself.
+    #[test]
+    fn twin_binders_are_distinct_in_either_declaration_order() {
+        let raw = vec!["package_".to_string(), "package".to_string()];
+        let map = allocate_binders(&raw, None, &BTreeSet::new());
+        assert_eq!(generic_decl(&raw, &map), "<package_, package__>");
+    }
+
+    /// A binder never lands on a module-scope declaration name in the same leaf.
+    #[test]
+    fn binder_does_not_shadow_a_module_scope_declaration() {
+        let module_names: BTreeSet<String> = ["package_".to_string()].into_iter().collect();
+        let raw = vec!["package".to_string()];
+        let map = allocate_binders(&raw, None, &module_names);
+        assert_eq!(generic_decl(&raw, &map), "<package__>");
+    }
+
+    /// Keyword-free schemas are untouched: a non-reserved raw name maps to
+    /// itself unconditionally, so the reservation set is never consulted and
+    /// output stays byte-identical to the stateless escape it replaces.
+    #[test]
+    fn non_reserved_binders_are_never_bumped() {
+        let module_names: BTreeSet<String> =
+            ["T".to_string(), "U".to_string()].into_iter().collect();
+        let raw = vec!["T".to_string(), "U".to_string()];
+        let map = allocate_binders(&raw, None, &module_names);
+        assert_eq!(generic_decl(&raw, &map), "<T, U>");
+    }
+
+    /// End-to-end through `render_index_ts`: a generic class declaring both
+    /// `package` and `package_` renders distinct binders, and every use site
+    /// (field types, the constructor init object) resolves to the binder its
+    /// declaration allocated rather than re-deriving a colliding escape.
+    #[test]
+    fn generic_class_with_reserved_twin_renders_distinct_binders() {
+        let type_var = |n: &str| {
+            Ty::TypeVar(
+                baml_codegen_types::ParamTy::new(0, BaseName::new(n)),
+                baml_base::TyAttr::EMPTY,
+            )
+        };
+        let c = TypeScriptClass {
+            name: "Pair".to_string(),
+            source: name("user", &["lorem"], "Pair"),
+            generic_params: vec!["package".to_string(), "package_".to_string()],
+            docstring: None,
+            properties: vec![
+                crate::emit::class::TypeScriptClassProperty {
+                    name: "first".to_string(),
+                    ty: type_var("package"),
+                    docstring: None,
+                },
+                crate::emit::class::TypeScriptClassProperty {
+                    name: "second".to_string(),
+                    ty: type_var("package_"),
+                    docstring: None,
+                },
+            ],
+            static_methods: Vec::new(),
+            instance_methods: Vec::new(),
+        };
+        let b = body(&["lorem"], vec![EmittedSymbol::Class(c)]);
+        let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
+
+        assert!(
+            ts.contains("export class Pair<package__, package_> {"),
+            "binders collided or were not allocated:\n{ts}"
+        );
+        assert!(
+            ts.contains("first!: package__;"),
+            "`package` use site did not resolve to its binder:\n{ts}"
+        );
+        assert!(
+            ts.contains("second!: package_;"),
+            "`package_` use site did not resolve to its binder:\n{ts}"
+        );
+        // The wire channels stay RAW — the encoder positions `$types` bindings
+        // by the BAML spelling, not the TypeScript identifier.
+        assert!(
+            ts.contains("static readonly $generic = [\"package\", \"package_\"] as const;"),
+            "raw generic names must survive on the wire channel:\n{ts}"
         );
     }
 
