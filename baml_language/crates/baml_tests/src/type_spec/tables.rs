@@ -33,11 +33,15 @@ fn kind(resolution: &MemberResolution<'_>) -> &'static str {
         MemberResolution::Field { .. } => "Field",
         MemberResolution::Variant { .. } => "Variant",
         MemberResolution::Free { .. } => "Free",
+        MemberResolution::CompiledFree { .. } => "CompiledFree",
         MemberResolution::BoundMethod { .. } => "BoundMethod",
         MemberResolution::UnboundMethod { .. } => "UnboundMethod",
+        MemberResolution::CompiledBoundMethod { .. } => "CompiledBoundMethod",
+        MemberResolution::CompiledUnboundMethod { .. } => "CompiledUnboundMethod",
         MemberResolution::InterfaceVirtualMethod { .. } => "InterfaceVirtualMethod",
         MemberResolution::InterfaceConcreteMethod { .. } => "InterfaceConcreteMethod",
         MemberResolution::InterfaceVirtualField { .. } => "InterfaceVirtualField",
+        MemberResolution::CompiledInterfaceVirtualField { .. } => "CompiledInterfaceVirtualField",
     }
 }
 

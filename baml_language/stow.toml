@@ -88,7 +88,10 @@ name = "baml"
 approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "lsp2", "type"]
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
 # the same shape), not a prefix + word.
-approved_suffixes = ["compiler2_hir_ty"]
+# `package_interface` (the semantic ABI a compiled package exports) and
+# `stdlib_artifacts` (the stdlib's embedded package artifacts) are each one
+# name for one concept, not a prefix + word.
+approved_suffixes = ["compiler2_hir_ty", "package_interface", "stdlib_artifacts"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring
@@ -102,7 +105,10 @@ allowed_prefixes = ["compiler", "compiler2"]
 # `baml_surface` is the semantic-surface API boundary over the compiler
 # (handles + export IR); it wraps compiler queries so downstream consumers
 # don't have to be on this list.
-allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions", "baml_builtins2_codegen", "baml_surface"]
+# `baml_package_interface` is the semantic ABI the compiler both produces and
+# consumes, and `baml_stdlib_artifacts` runs the compiler at build time to
+# produce the stdlib's artifacts; both sit below the query surface, not on it.
+allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions", "baml_builtins2_codegen", "baml_surface", "baml_package_interface", "baml_stdlib_artifacts"]
 reason = "Use baml_db, baml_project, or baml_surface to access compiler interfaces."
 
 [[namespaces.dependency_rules]]
@@ -117,7 +123,10 @@ reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_project", "baml_cli", "baml_exec", "baml_pack_host"]
+# `baml_artifact` stores compilation units in a package artifact's code section
+# and `baml_stdlib_artifacts` links them, so both name the same data layer the
+# emitters do.
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_project", "baml_cli", "baml_exec", "baml_pack_host", "baml_artifact", "baml_stdlib_artifacts"]
 reason = "Only compiler_emit and baml_project crates should depend on bex_vm_types (pure data layer)."
 
 

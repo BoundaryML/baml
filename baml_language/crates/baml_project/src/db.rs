@@ -149,21 +149,18 @@ pub struct ProjectDatabase {
     /// the memo. Mutating via the setter bumps the revision and correctly
     /// invalidates dependents.
     seeded_throw_facts: Option<baml_workspace::SeededThrowFacts>,
-    /// Stdlib packages' typed interfaces seeded from a previous compile
-    /// (bytecode cache).
+    /// Typed interfaces loaded from compiled package artifacts.
     ///
-    /// Same present-from-construction discipline as `seeded_throw_facts` above: a
-    /// real `#[salsa::input]` handle created **once** (empty) in the constructors
-    /// and thereafter mutated in place via its Salsa setter, so it is always
-    /// `Some` and `package_interface::package_interface` reads the seed through a
-    /// **tracked** dependency (an absent-then-added handle would leave a stale
-    /// memo on a reused database, e.g. the LSP's long-lived `ProjectDatabase`).
+    /// Compiled packages are installed before queries run. Keeping this absent
+    /// for source-only projects avoids adding an input to the normal path.
+    compiled_package_interfaces: Option<baml_workspace::CompiledPackageInterfaces>,
+    /// Legacy Borsh-encoded stdlib interfaces seeded by the bytecode cache.
     seeded_stdlib_interface: Option<baml_workspace::SeededStdlibInterface>,
     /// Per-function `callable_throws` values seeded from a previous compile
     /// (bytecode cache).
     ///
     /// Same present-from-construction discipline as `seeded_throw_facts` and
-    /// `seeded_stdlib_interface` above: a real `#[salsa::input]` handle created
+    /// `compiled_package_interfaces` above: a real `#[salsa::input]` handle created
     /// **once** (empty) in the constructors and thereafter mutated in place via
     /// its Salsa setter, so it is always `Some` and `callable::callable_throws`
     /// reads the seed through a **tracked** dependency (an absent-then-added
@@ -216,6 +213,10 @@ impl baml_workspace::Db for ProjectDatabase {
 
     fn seeded_throw_facts(&self) -> Option<baml_workspace::SeededThrowFacts> {
         self.seeded_throw_facts
+    }
+
+    fn compiled_package_interfaces(&self) -> Option<baml_workspace::CompiledPackageInterfaces> {
+        self.compiled_package_interfaces
     }
 
     fn seeded_stdlib_interface(&self) -> Option<baml_workspace::SeededStdlibInterface> {
@@ -294,7 +295,7 @@ impl ProjectDatabase {
         Self::from_storage(salsa::Storage::new(Some(callback)))
     }
 
-    /// Build a database over `storage`, installing the three seed inputs empty
+    /// Build a database over `storage`, installing the cache seed inputs empty
     /// from construction. Holding each `#[salsa::input]` handle present (not
     /// `None`) from the start is what lets the seed-reading queries record a
     /// *tracked* dependency on the initially-empty seed maps, so a later
@@ -308,6 +309,7 @@ impl ProjectDatabase {
             project: None,
             compiler2_extra_files: None,
             seeded_throw_facts: None,
+            compiled_package_interfaces: None,
             seeded_stdlib_interface: None,
             seeded_callable_throws: None,
             file_map: Arc::new(HashMap::new()),
@@ -356,23 +358,46 @@ impl ProjectDatabase {
         seeds.set_by_path(self).to(by_path);
     }
 
-    /// Seed the stdlib packages' typed interfaces from a previous compile;
-    /// keys are package names, values are `borsh(PackageInterface)`.
-    ///
-    /// Mutates the always-present `SeededStdlibInterface` input (created in
-    /// `new`) through its Salsa setter, so it bumps the revision and correctly
-    /// invalidates any already-computed `package_interface` memo — it is safe to
-    /// call before *or* after queries have run. Only stdlib package names ever
-    /// appear in the map, so user packages are never seeded and always derive
-    /// their interface honestly.
+    /// Install compiled package interfaces before setting the project root.
+    /// Builtin packages present here are not instantiated as source files.
+    pub fn set_compiled_package_interfaces(
+        &mut self,
+        by_package: std::collections::BTreeMap<
+            baml_base::Name,
+            baml_package_interface::PackageInterface,
+        >,
+    ) {
+        self.update_compiled_package_interfaces(by_package);
+    }
+
+    fn update_compiled_package_interfaces(
+        &mut self,
+        by_package: std::collections::BTreeMap<
+            baml_base::Name,
+            baml_package_interface::PackageInterface,
+        >,
+    ) {
+        match self.compiled_package_interfaces {
+            Some(compiled) => {
+                compiled.set_by_package(self).to(by_package);
+            }
+            None => {
+                self.compiled_package_interfaces = Some(
+                    baml_workspace::CompiledPackageInterfaces::new(self, by_package),
+                );
+            }
+        }
+    }
+
+    /// Compatibility adapter for the previous stdlib-interface cache format.
     pub fn set_seeded_stdlib_interface(
         &mut self,
         by_package: std::collections::BTreeMap<String, Vec<u8>>,
     ) {
-        let seeds = self
+        let seeded = self
             .seeded_stdlib_interface
             .expect("SeededStdlibInterface input is created in ProjectDatabase::new");
-        seeds.set_by_package(self).to(by_package);
+        seeded.set_by_package(self).to(by_package);
     }
 
     /// Seed per-function `callable_throws` values from a previous compile of
@@ -547,8 +572,17 @@ impl ProjectDatabase {
             .map(|(_, f)| *f)
             .collect();
 
-        // Load compiler2 builtin stub files.
-        let v2_builtin_files = self.load_builtin_baml_files();
+        let compiled_packages = self
+            .compiled_package_interfaces
+            .map(|interfaces| {
+                interfaces
+                    .by_package(self)
+                    .keys()
+                    .cloned()
+                    .collect::<std::collections::BTreeSet<_>>()
+            })
+            .unwrap_or_default();
+        let v2_builtin_files = self.load_builtin_baml_files(&compiled_packages);
 
         // Create and set the project (user files only, no builtins in project.files())
         let project = Project::new(self, canonical_root, user_files);
@@ -568,9 +602,15 @@ impl ProjectDatabase {
     ///
     /// These are stored in `compiler2_file_map` (NOT `file_map`) so that
     /// `get_source_files()` does NOT return them.
-    fn load_builtin_baml_files(&mut self) -> Vec<SourceFile> {
+    fn load_builtin_baml_files(
+        &mut self,
+        compiled_packages: &std::collections::BTreeSet<baml_base::Name>,
+    ) -> Vec<SourceFile> {
         let mut v2_builtin_files = Vec::new();
-        for builtin in baml_builtins2::ALL {
+        for builtin in baml_builtins2::ALL
+            .iter()
+            .filter(|builtin| !compiled_packages.contains(&baml_base::Name::new(builtin.package)))
+        {
             let virtual_path = builtin.virtual_path();
             let path = PathBuf::from(&virtual_path);
             let file = self.add_file_internal(&path, builtin.contents);
@@ -1257,7 +1297,11 @@ impl ProjectDatabase {
             Some(
                 MemberResolution::Field { .. }
                 | MemberResolution::Variant { .. }
-                | MemberResolution::InterfaceVirtualField { .. },
+                | MemberResolution::CompiledFree { .. }
+                | MemberResolution::CompiledBoundMethod { .. }
+                | MemberResolution::CompiledUnboundMethod { .. }
+                | MemberResolution::InterfaceVirtualField { .. }
+                | MemberResolution::CompiledInterfaceVirtualField { .. },
             )
             | None => None,
         }
@@ -1344,15 +1388,16 @@ impl ProjectDatabase {
         };
         let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(self, &interned)
             .into_iter()
-            .filter(|resolved| {
-                baml_compiler2_hir_ty::interfaces::impl_data(self, resolved.block)
+            .filter_map(|resolved| resolved.source().map(|(block, _)| block))
+            .filter(|block| {
+                baml_compiler2_hir_ty::interfaces::impl_data(self, *block)
                     .as_ref()
                     .is_ok_and(|data| data.interface == iface_loc)
             })
-            .filter_map(|resolved| {
+            .filter_map(|block| {
                 // The impl's own override wins; an inherited interface
                 // default method fills the slot otherwise.
-                baml_compiler2_hir_ty::interfaces::impl_data(self, resolved.block)
+                baml_compiler2_hir_ty::interfaces::impl_data(self, block)
                     .as_ref()
                     .ok()
                     .and_then(|data| data.methods.iter().find(|loc| method_of(loc)).copied())
@@ -2093,6 +2138,72 @@ impl std::fmt::Debug for ProjectDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compiled_package_interfaces_replace_derived_interfaces() {
+        use baml_compiler2_hir::package::PackageId;
+        use baml_compiler2_hir_ty::package_interface::package_interface;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let interfaces = baml_builtins2::stdlib_package_names()
+            .iter()
+            .map(|name| {
+                let name = baml_base::Name::new(*name);
+                let package_id = PackageId::new(&db, name.clone());
+                (name, package_interface(&db, package_id).clone())
+            })
+            .collect();
+
+        db.set_compiled_package_interfaces(interfaces);
+
+        assert!(!baml_compiler2_hir::compiler2_all_files(&db).is_empty());
+        for name in baml_builtins2::stdlib_package_names() {
+            let package_id = PackageId::new(&db, baml_base::Name::new(*name));
+            let interface = package_interface(&db, package_id);
+            assert!(!interface.types.is_empty() || !interface.functions.is_empty());
+        }
+    }
+
+    #[test]
+    fn compiled_stdlib_packages_do_not_instantiate_sources() {
+        use baml_compiler2_hir::package::PackageId;
+        use baml_compiler2_hir_ty::package_interface::package_interface;
+
+        let mut source_db = ProjectDatabase::new();
+        source_db.set_project_root(std::path::Path::new("/tmp/source-stdlib"));
+        let interfaces = baml_builtins2::stdlib_package_names()
+            .iter()
+            .map(|name| {
+                let name = baml_base::Name::new(*name);
+                let package_id = PackageId::new(&source_db, name.clone());
+                (name, package_interface(&source_db, package_id).clone())
+            })
+            .collect();
+
+        let mut db = ProjectDatabase::new();
+        db.set_compiled_package_interfaces(interfaces);
+        db.set_project_root(std::path::Path::new("/tmp/source-free-stdlib"));
+        assert!(baml_compiler2_hir::compiler2_all_files(&db).is_empty());
+
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/source-free-stdlib/main.baml"),
+            concat!(
+                "function length(value: string) -> int { value.length() }\n",
+                "function render() -> string { baml.json.stringify(1) }\n",
+                "function identity(value: baml.json.json) -> baml.json.json { value }\n",
+                "function add() -> int { 1 + 2 }\n",
+                "function equal() -> bool { 1 == 2 }\n",
+                "function sum() -> int { [1, 2, 3].sum() }\n",
+            ),
+        );
+        let diagnostics = crate::collect_compiler2_diagnostics(&db);
+        assert!(
+            diagnostics.iter().all(|diagnostic| diagnostic.severity
+                != baml_compiler_diagnostics::diagnostic::Severity::Error),
+            "{diagnostics:#?}"
+        );
+    }
 
     #[test]
     fn removed_files_are_revived_not_recreated() {

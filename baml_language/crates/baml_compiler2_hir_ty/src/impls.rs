@@ -97,6 +97,77 @@ pub struct ImplFacts<'db> {
     pub methods: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompiledImplFacts {
+    pub interface: InterfaceRef,
+    pub for_ty_pattern: Ty,
+    pub generic_params: Vec<(ParamTy, Vec<InterfaceRef>)>,
+    pub associated_types: Vec<(Name, Ty)>,
+    pub methods: Vec<baml_package_interface::ExportedImplMethod>,
+}
+
+impl CompiledImplFacts {
+    fn from_exported(exported: &baml_package_interface::ExportedImpl) -> Self {
+        Self {
+            interface: InterfaceRef::from_constraint(&exported.interface),
+            for_ty_pattern: Ty::from_plain(&exported.for_ty_pattern),
+            generic_params: exported
+                .generic_params
+                .iter()
+                .map(|(param, bounds)| {
+                    (
+                        param.clone(),
+                        bounds.iter().map(InterfaceRef::from_constraint).collect(),
+                    )
+                })
+                .collect(),
+            associated_types: exported
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+                .collect(),
+            methods: exported.methods.clone(),
+        }
+    }
+}
+
+trait ImplRule {
+    fn interface(&self) -> &InterfaceRef;
+    fn for_ty_pattern(&self) -> &Ty;
+    fn generic_params(&self) -> &[(ParamTy, Vec<InterfaceRef>)];
+    fn associated_types(&self) -> &[(Name, Ty)];
+}
+
+impl ImplRule for ImplFacts<'_> {
+    fn interface(&self) -> &InterfaceRef {
+        &self.interface
+    }
+    fn for_ty_pattern(&self) -> &Ty {
+        &self.for_ty_pattern
+    }
+    fn generic_params(&self) -> &[(ParamTy, Vec<InterfaceRef>)] {
+        &self.generic_params
+    }
+    fn associated_types(&self) -> &[(Name, Ty)] {
+        &self.associated_types
+    }
+}
+
+impl ImplRule for CompiledImplFacts {
+    fn interface(&self) -> &InterfaceRef {
+        &self.interface
+    }
+    fn for_ty_pattern(&self) -> &Ty {
+        &self.for_ty_pattern
+    }
+    fn generic_params(&self) -> &[(ParamTy, Vec<InterfaceRef>)] {
+        &self.generic_params
+    }
+    fn associated_types(&self) -> &[(Name, Ty)] {
+        &self.associated_types
+    }
+}
+
 // SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
 #[allow(unsafe_code)]
 unsafe impl salsa::Update for ImplFacts<'_> {
@@ -326,20 +397,52 @@ pub(crate) fn is_concrete_receiver(ty: &Ty) -> bool {
 
 /// One resolved impl: the block plus the generic instantiation the match
 /// pinned.
+pub enum ResolvedImplOrigin<'db> {
+    Source {
+        block: ImplLoc<'db>,
+        facts: &'db ImplFacts<'db>,
+    },
+    Compiled(CompiledImplFacts),
+}
+
 pub struct ResolvedImpl<'db> {
-    pub block: ImplLoc<'db>,
-    pub facts: &'db ImplFacts<'db>,
+    pub origin: ResolvedImplOrigin<'db>,
     pub bindings: FxHashMap<ParamTy, Ty>,
 }
 
-impl ResolvedImpl<'_> {
+impl<'db> ResolvedImpl<'db> {
+    fn rule(&self) -> &dyn ImplRule {
+        match &self.origin {
+            ResolvedImplOrigin::Source { facts, .. } => *facts,
+            ResolvedImplOrigin::Compiled(facts) => facts,
+        }
+    }
+
+    pub fn source(&self) -> Option<(ImplLoc<'db>, &'db ImplFacts<'db>)> {
+        match &self.origin {
+            ResolvedImplOrigin::Source { block, facts } => Some((*block, *facts)),
+            ResolvedImplOrigin::Compiled(_) => None,
+        }
+    }
+
+    pub fn compiled(&self) -> Option<&CompiledImplFacts> {
+        match &self.origin {
+            ResolvedImplOrigin::Compiled(facts) => Some(facts),
+            ResolvedImplOrigin::Source { .. } => None,
+        }
+    }
+
+    pub fn generic_params(&self) -> &[(ParamTy, Vec<InterfaceRef>)] {
+        self.rule().generic_params()
+    }
+
     /// The interface this impl provides, realized through the match's
     /// bindings. Associated members carry only what the HEADER wrote -
     /// block-level `type X = ...` bindings and defaults resolve
     /// per-member (`resolved_pin`); [`Self::implemented_view`] is the
     /// complete spelling.
     pub fn implemented(&self) -> InterfaceRef {
-        realized(&self.facts.interface, &self.bindings)
+        realized(self.rule().interface(), &self.bindings)
     }
 
     /// The COMPLETE realized view of the implemented interface for
@@ -384,8 +487,8 @@ pub(crate) fn resolved_pin(
     member: &Name,
 ) -> Option<Ty> {
     if let Some((_, declared)) = resolved
-        .facts
-        .associated_types
+        .rule()
+        .associated_types()
         .iter()
         .find(|(name, _)| name == member)
     {
@@ -409,12 +512,24 @@ pub(crate) fn realized_assoc_default(
     self_ty: &Ty,
     member: &Name,
 ) -> Option<Ty> {
-    let (interface, data) = assoc_realization_env(db, target)?;
-    let lowered = crate::lower::interface_assoc_default(db, interface, member.clone())
-        .0
+    if let Some((interface, data)) = assoc_realization_env(db, target) {
+        let lowered = crate::lower::interface_assoc_default(db, interface, member.clone())
+            .0
+            .as_ref()?;
+        let instantiation =
+            crate::method_resolution::interface_instantiation(self_ty, target, data);
+        return Some(crate::lower::substitute_params(lowered, &instantiation));
+    }
+    let (frame, _, associated_types, _, _) = compiled_interface_data(db, target)?;
+    let default = associated_types
+        .iter()
+        .find(|associated| associated.name == *member)?
+        .default
         .as_ref()?;
-    let instantiation = crate::method_resolution::interface_instantiation(self_ty, target, data);
-    Some(crate::lower::substitute_params(lowered, &instantiation))
+    Some(substitute_bindings(
+        &Ty::from_plain(default),
+        &compiled_interface_bindings(self_ty, target, &frame, &associated_types),
+    ))
 }
 
 /// The declared BOUND of `member` (`type member extends J`), realized at
@@ -426,12 +541,92 @@ pub(crate) fn realized_assoc_bound(
     self_ty: &Ty,
     member: &Name,
 ) -> Option<Ty> {
-    let (interface, data) = assoc_realization_env(db, target)?;
-    let lowered = crate::lower::interface_assoc_bound(db, interface, member.clone())
-        .0
+    if let Some((interface, data)) = assoc_realization_env(db, target) {
+        let lowered = crate::lower::interface_assoc_bound(db, interface, member.clone())
+            .0
+            .as_ref()?;
+        let instantiation =
+            crate::method_resolution::interface_instantiation(self_ty, target, data);
+        return Some(crate::lower::substitute_params(lowered, &instantiation));
+    }
+    let (frame, _, associated_types, _, _) = compiled_interface_data(db, target)?;
+    let bound = associated_types
+        .iter()
+        .find(|associated| associated.name == *member)?
+        .bound
         .as_ref()?;
-    let instantiation = crate::method_resolution::interface_instantiation(self_ty, target, data);
-    Some(crate::lower::substitute_params(lowered, &instantiation))
+    Some(substitute_bindings(
+        &Ty::from_plain(bound),
+        &compiled_interface_bindings(self_ty, target, &frame, &associated_types),
+    ))
+}
+
+type CompiledInterfaceData = (
+    Vec<ParamTy>,
+    Vec<InterfaceRef>,
+    Vec<baml_package_interface::ExportedAssociatedType>,
+    Vec<(Name, Ty)>,
+    Vec<baml_package_interface::ExportedInterfaceMethod>,
+);
+
+fn compiled_interface_data(
+    db: &dyn baml_compiler2_ppir::Db,
+    target: &InterfaceRef,
+) -> Option<CompiledInterfaceData> {
+    let compiled = db.compiled_package_interfaces()?;
+    let package = compiled.by_package(db).get(target.name.package())?;
+    let exported = package.lookup_type(target.name.namespace(), target.name.name())?;
+    let baml_package_interface::ExportedType::Interface {
+        frame,
+        generic_params,
+        requires,
+        associated_types,
+        fields,
+        methods,
+        ..
+    } = exported
+    else {
+        return None;
+    };
+    if generic_params.len() != target.generics.len() {
+        return None;
+    }
+    Some((
+        frame.clone(),
+        requires.iter().map(InterfaceRef::from_constraint).collect(),
+        associated_types.clone(),
+        fields
+            .iter()
+            .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+            .collect(),
+        methods.clone(),
+    ))
+}
+
+fn compiled_interface_bindings(
+    self_ty: &Ty,
+    target: &InterfaceRef,
+    frame: &[ParamTy],
+    associated_types: &[baml_package_interface::ExportedAssociatedType],
+) -> FxHashMap<ParamTy, Ty> {
+    let mut actuals = vec![self_ty.clone()];
+    actuals.extend(target.generics.iter().cloned());
+    actuals.extend(associated_types.iter().map(|associated| {
+        target
+            .associated_types
+            .iter()
+            .find(|(name, _)| *name == associated.name)
+            .map(|(_, ty)| ty.clone())
+            .unwrap_or_else(|| {
+                Ty::intern(TyKind::AssociatedTypeProjection {
+                    base: self_ty.clone(),
+                    interface: target.clone(),
+                    member: associated.name.clone(),
+                    attr: baml_type::TyAttr::default(),
+                })
+            })
+    }));
+    frame.iter().cloned().zip(actuals).collect()
 }
 
 /// The interface definition and its data for a realization, arity-gated
@@ -531,10 +726,54 @@ pub fn impls_for_type<'db>(
                 continue;
             }
             out.push(ResolvedImpl {
-                block,
-                facts,
+                origin: ResolvedImplOrigin::Source { block, facts },
                 bindings,
             });
+        }
+    }
+    if let Some(compiled) = db.compiled_package_interfaces() {
+        for package in compiled.by_package(db).values() {
+            for exported in &package.impls {
+                let facts = CompiledImplFacts::from_exported(exported);
+                let params: Vec<ParamTy> = facts
+                    .generic_params
+                    .iter()
+                    .map(|(param, _)| param.clone())
+                    .collect();
+                if let TyKind::TypeVar(param, _) = facts.for_ty_pattern.kind()
+                    && params.contains(param)
+                    && !is_concrete_receiver(concrete)
+                {
+                    continue;
+                }
+                let mut bindings = FxHashMap::default();
+                if !match_pattern(&facts.for_ty_pattern, concrete, &params, &mut bindings, &eq) {
+                    continue;
+                }
+                if !bounds_hold(
+                    db,
+                    &facts,
+                    &bindings,
+                    BLANKET_IMPL_BOUND_DEPTH,
+                    &mut Vec::new(),
+                ) {
+                    continue;
+                }
+                let undetermined = |ty: &Ty| !pattern_fully_bound(ty, &params, &bindings);
+                if facts.interface.generics.iter().any(&undetermined)
+                    || facts
+                        .interface
+                        .associated_types
+                        .iter()
+                        .any(|(_, ty)| undetermined(ty))
+                {
+                    continue;
+                }
+                out.push(ResolvedImpl {
+                    origin: ResolvedImplOrigin::Compiled(facts),
+                    bindings,
+                });
+            }
         }
     }
     out
@@ -683,11 +922,28 @@ fn resolve_within_depth<'db>(
                 continue;
             }
             resolved = Some(ResolvedImpl {
-                block,
-                facts,
+                origin: ResolvedImplOrigin::Source { block, facts },
                 bindings,
             });
             break 'search;
+        }
+        if let Some(compiled) = db.compiled_package_interfaces()
+            && let Some(package_interface) = compiled.by_package(db).get(&package.name(db))
+        {
+            for exported in &package_interface.impls {
+                let facts = CompiledImplFacts::from_exported(exported);
+                let Some(bindings) = match_impl_head(db, &facts, concrete, interface, &eq) else {
+                    continue;
+                };
+                if !bounds_hold(db, &facts, &bindings, depth, in_progress) {
+                    continue;
+                }
+                resolved = Some(ResolvedImpl {
+                    origin: ResolvedImplOrigin::Compiled(facts),
+                    bindings,
+                });
+                break 'search;
+            }
         }
     }
     in_progress.pop();
@@ -753,34 +1009,34 @@ fn collect_packages(ty: &Ty, out: &mut Vec<Name>) {
 /// then the associated-pin gate. Declared bounds are NOT checked here.
 fn match_impl_head(
     db: &dyn baml_compiler2_ppir::Db,
-    facts: &ImplFacts<'_>,
+    facts: &dyn ImplRule,
     concrete: &Ty,
     interface: &InterfaceRef,
     eq: &AliasOnlyFacts<'_>,
 ) -> Option<FxHashMap<ParamTy, Ty>> {
-    if facts.interface.name != interface.name
-        || facts.interface.generics.len() != interface.generics.len()
+    if facts.interface().name != interface.name
+        || facts.interface().generics.len() != interface.generics.len()
     {
         return None;
     }
     // Bare-blanket guard: `implement<T> I for T` applies only to
     // concrete receivers - never existentials, unions, or vars.
-    if let TyKind::TypeVar(param, _) = facts.for_ty_pattern.kind()
-        && facts.generic_params.iter().any(|(p, _)| p == param)
+    if let TyKind::TypeVar(param, _) = facts.for_ty_pattern().kind()
+        && facts.generic_params().iter().any(|(p, _)| p == param)
         && !is_concrete_receiver(concrete)
     {
         return None;
     }
     let params: Vec<ParamTy> = facts
-        .generic_params
+        .generic_params()
         .iter()
         .map(|(param, _)| param.clone())
         .collect();
     let mut bindings = FxHashMap::default();
-    if !match_pattern(&facts.for_ty_pattern, concrete, &params, &mut bindings, eq) {
+    if !match_pattern(facts.for_ty_pattern(), concrete, &params, &mut bindings, eq) {
         return None;
     }
-    for (pattern, target) in facts.interface.generics.iter().zip(&interface.generics) {
+    for (pattern, target) in facts.interface().generics.iter().zip(&interface.generics) {
         if !match_pattern(pattern, target, &params, &mut bindings, eq) {
             return None;
         }
@@ -792,13 +1048,13 @@ fn match_impl_head(
     // fails closed - the request pins something this impl cannot supply.
     for (name, requested) in &interface.associated_types {
         let supplied = match facts
-            .associated_types
+            .associated_types()
             .iter()
             .find(|(declared_name, _)| declared_name == name)
         {
             Some((_, declared)) => Some(substitute_bindings(declared, &bindings)),
             None => {
-                let implemented = realized(&facts.interface, &bindings);
+                let implemented = realized(facts.interface(), &bindings);
                 realized_assoc_default(db, &implemented, concrete, name)
             }
         };
@@ -1103,12 +1359,12 @@ pub fn substitute_bindings(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
 /// obligation); realized ones recurse with the budget.
 fn bounds_hold(
     db: &dyn baml_compiler2_ppir::Db,
-    facts: &ImplFacts<'_>,
+    facts: &dyn ImplRule,
     bindings: &FxHashMap<ParamTy, Ty>,
     depth: u32,
     in_progress: &mut Vec<(Ty, InterfaceRef)>,
 ) -> bool {
-    for (param, bounds) in &facts.generic_params {
+    for (param, bounds) in facts.generic_params() {
         let Some(actual) = bindings.get(param) else {
             continue;
         };
@@ -1208,41 +1464,49 @@ fn direct_requires(
     of: &InterfaceRef,
     self_ty: &Ty,
 ) -> Vec<InterfaceRef> {
-    let Some((interface, data)) = assoc_realization_env(db, of) else {
+    if let Some((interface, data)) = assoc_realization_env(db, of) {
+        let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
+            .with_frame(crate::lower::interface_frame(db, interface))
+            .with_bounds(crate::lower::interface_scope_bounds(db, interface));
+        let instantiation = crate::method_resolution::interface_instantiation(self_ty, of, data);
+        return data
+            .requires
+            .iter()
+            .filter_map(|&required| {
+                let target = InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+                    &data.type_refs,
+                    required,
+                    crate::lower::TypePosition::ConstraintHead,
+                ))?;
+                Some(InterfaceRef::new(
+                    target.name.clone(),
+                    target
+                        .generics
+                        .iter()
+                        .map(|arg| crate::lower::substitute_params(arg, &instantiation))
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice(),
+                    target
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| {
+                            (
+                                name.clone(),
+                                crate::lower::substitute_params(ty, &instantiation),
+                            )
+                        })
+                        .collect(),
+                ))
+            })
+            .collect();
+    }
+    let Some((frame, requires, associated_types, _, _)) = compiled_interface_data(db, of) else {
         return Vec::new();
     };
-    let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
-        .with_frame(crate::lower::interface_frame(db, interface))
-        .with_bounds(crate::lower::interface_scope_bounds(db, interface));
-    let instantiation = crate::method_resolution::interface_instantiation(self_ty, of, data);
-    data.requires
-        .iter()
-        .filter_map(|&required| {
-            let target = InterfaceRef::of_ty(&ctx.lower_type_ref_at(
-                &data.type_refs,
-                required,
-                crate::lower::TypePosition::ConstraintHead,
-            ))?;
-            Some(InterfaceRef::new(
-                target.name.clone(),
-                target
-                    .generics
-                    .iter()
-                    .map(|arg| crate::lower::substitute_params(arg, &instantiation))
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice(),
-                target
-                    .associated_types
-                    .iter()
-                    .map(|(name, ty)| {
-                        (
-                            name.clone(),
-                            crate::lower::substitute_params(ty, &instantiation),
-                        )
-                    })
-                    .collect(),
-            ))
-        })
+    let bindings = compiled_interface_bindings(self_ty, of, &frame, &associated_types);
+    requires
+        .into_iter()
+        .map(|required| realized(&required, &bindings))
         .collect()
 }
 

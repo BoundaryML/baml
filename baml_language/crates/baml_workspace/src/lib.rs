@@ -57,17 +57,10 @@ pub trait Db: salsa::Database {
         None
     }
 
-    /// The stdlib packages' resolved typed interfaces from a previous compile,
-    /// keyed by package name.
-    ///
-    /// When present, `package_interface::package_interface` returns the seeded
-    /// interface for a stdlib package instead of re-deriving it from source —
-    /// removing the cold-typecheck floor a fresh process otherwise pays to
-    /// re-normalize every stdlib signature/class/alias before it can typecheck
-    /// user code. The stdlib is a compiler-build constant (no user file can
-    /// contribute to a stdlib package), so the CLI caches this once per compiler
-    /// build under `bex_cache::stdlib_interface_key` and seeds it back on every
-    /// compile. Defaults to `None`: every other database compiles honestly.
+    fn compiled_package_interfaces(&self) -> Option<CompiledPackageInterfaces> {
+        None
+    }
+
     fn seeded_stdlib_interface(&self) -> Option<SeededStdlibInterface> {
         None
     }
@@ -100,9 +93,7 @@ pub struct SeededThrowFacts {
 /// keyed by source-file path string (`SourceFile::path` display form) then by
 /// item-tree `LocalItemId::as_u32`.
 ///
-/// Holds a typed `baml_type::Ty` — not opaque bytes like [`SeededStdlibInterface`]
-/// — because `Ty` is a low-crate type this workspace crate can already name
-/// (same as [`SeededThrowFacts`]). The `LocalItemId` key is a content-derived,
+/// Holds a typed `baml_type::Ty`. The `LocalItemId` key is a content-derived,
 /// process-independent item-tree index, so a byte-identical file's functions map
 /// to the same keys across compiles. `callable_throws` reads it through a
 /// *tracked* dependency (present-from-construction, empty until seeded), so a
@@ -113,16 +104,15 @@ pub struct SeededCallableThrows {
     pub by_path: std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>>,
 }
 
-/// Input: the stdlib packages' resolved `PackageInterface`s from a previous
-/// compile, keyed by package name; each value is `borsh(PackageInterface)`.
-///
-/// The value is opaque bytes rather than the typed interface because
-/// `PackageInterface` lives in `baml_compiler2_hir_ty`, which depends on this
-/// crate — naming it here would be a dependency cycle. `baml_compiler2_hir_ty`
-/// deserializes the relevant package's bytes on a seed hit. Per-package (not
-/// whole-map) bytes keep the short-circuit's deserialize cost to one package
-/// per query call. This mirrors [`SeededThrowFacts`], which holds a type its
-/// low crate can name; `PackageInterface` has no such low-crate home.
+/// Input: resolved semantic interfaces supplied by compiled packages.
+#[salsa::input]
+pub struct CompiledPackageInterfaces {
+    #[returns(ref)]
+    pub by_package:
+        std::collections::BTreeMap<baml_base::Name, baml_package_interface::PackageInterface>,
+}
+
+/// Input: legacy cached stdlib interfaces, encoded individually with Borsh.
 #[salsa::input]
 pub struct SeededStdlibInterface {
     #[returns(ref)]

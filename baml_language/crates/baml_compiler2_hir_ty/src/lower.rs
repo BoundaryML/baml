@@ -604,6 +604,9 @@ impl<'db> LowerCtx<'db> {
         if let Some(def) = self.resolve_type(segments) {
             return self.lower_definition(def, short, args, bindings, position);
         }
+        if let Some(exported) = self.resolve_compiled_type(segments) {
+            return self.lower_compiled_type(exported, short, args, bindings, position);
+        }
 
         // Fallback 1: a single segment naming an in-scope generic param
         // (inner frames shadow outer: search in reverse).
@@ -939,6 +942,125 @@ impl<'db> LowerCtx<'db> {
         }
     }
 
+    fn lower_compiled_type(
+        &self,
+        exported: baml_package_interface::ExportedType,
+        short: &Name,
+        mut args: Vec<Ty>,
+        bindings: Vec<(Name, Ty)>,
+        position: TypePosition,
+    ) -> Ty {
+        let attr = TyAttr::default;
+        match exported {
+            baml_package_interface::ExportedType::Class {
+                qtn,
+                generic_params,
+                ..
+            } => {
+                self.record_arity(short, args.len(), generic_params.len());
+                enforce_arity(&mut args, generic_params.len());
+                class_ty(qtn, args)
+            }
+            baml_package_interface::ExportedType::Enum { qtn, .. } => {
+                Ty::intern(TyKind::Enum(qtn, attr()))
+            }
+            baml_package_interface::ExportedType::TypeAlias { qtn, .. } => {
+                Ty::intern(TyKind::TypeAlias(qtn, attr()))
+            }
+            baml_package_interface::ExportedType::Interface {
+                qtn,
+                generic_params,
+                associated_types,
+                ..
+            } => {
+                self.record_arity(short, args.len(), generic_params.len());
+                enforce_arity(&mut args, generic_params.len());
+                let mut checked = Vec::new();
+                for (name, value) in bindings {
+                    if !associated_types
+                        .iter()
+                        .any(|associated| associated.name == name)
+                    {
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::UnresolvedType {
+                                name,
+                                suggestions: associated_types
+                                    .iter()
+                                    .map(|associated| associated.name.clone())
+                                    .collect(),
+                            },
+                        ]);
+                        continue;
+                    }
+                    if checked.iter().any(|(seen, _)| *seen == name) {
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::DuplicateAssociatedTypeBinding {
+                                interface: qtn.clone(),
+                                name,
+                            },
+                        ]);
+                        continue;
+                    }
+                    checked.push((name, value));
+                }
+                if position == TypePosition::Existential && !associated_types.is_empty() {
+                    let mut frame_names = vec![Name::new("Self")];
+                    frame_names.extend(generic_params.iter().map(|param| param.name().clone()));
+                    frame_names.extend(
+                        associated_types
+                            .iter()
+                            .map(|associated| associated.name.clone()),
+                    );
+                    let frame = interface_generic_frame_params(&frame_names);
+                    let self_param = frame[0].clone();
+                    let associated_params = &frame[1 + generic_params.len()..];
+                    let mut substitutions = baml_type::unify::bind_type_vars(
+                        &generic_params,
+                        &args.iter().map(Ty::to_plain).collect::<Vec<_>>(),
+                    );
+                    for (associated, param) in associated_types.iter().zip(associated_params) {
+                        if let Some((_, value)) =
+                            checked.iter().find(|(name, _)| *name == associated.name)
+                        {
+                            substitutions.insert(param.clone(), value.to_plain());
+                            continue;
+                        }
+                        let Some(default) = &associated.default else {
+                            continue;
+                        };
+                        let self_ty = Ty::intern(TyKind::Interface(
+                            qtn.clone(),
+                            args.clone().into_boxed_slice(),
+                            checked.clone().into_boxed_slice(),
+                            attr(),
+                        ))
+                        .to_plain();
+                        substitutions.insert(self_param.clone(), self_ty);
+                        let realized = baml_type::unify::substitute_ty(default, &substitutions);
+                        substitutions.insert(param.clone(), realized.clone());
+                        checked.push((associated.name.clone(), Ty::from_plain(&realized)));
+                    }
+                    let missing = associated_types
+                        .iter()
+                        .map(|associated| associated.name.clone())
+                        .filter(|name| !checked.iter().any(|(bound, _)| bound == name))
+                        .collect::<Vec<_>>();
+                    if !missing.is_empty() {
+                        checked.extend(missing.iter().cloned().map(|name| (name, Ty::error())));
+                        self.record_type_errors(vec![
+                            crate::diagnostics::TirTypeError::MissingAssociatedTypeBindings {
+                                interface: qtn.clone(),
+                                missing,
+                            },
+                        ]);
+                    }
+                }
+                checked.sort_by(|(left, _), (right, _)| left.cmp(right));
+                Ty::intern(TyKind::Interface(qtn, args.into(), checked.into(), attr()))
+            }
+        }
+    }
+
     /// TIR's `resolve_type_in`, mirrored: (1) namespace-relative in the
     /// current package (no outward walk); (2) `root.`-absolute or
     /// package-prefixed; (3) the `$stream` companion fallback.
@@ -1014,6 +1136,78 @@ impl<'db> LowerCtx<'db> {
             }
         }
         None
+    }
+
+    pub fn resolve_compiled_function(
+        &self,
+        segments: &[Name],
+    ) -> Option<(
+        baml_package_interface::PackageItemId,
+        baml_package_interface::ExportedFunction,
+    )> {
+        if segments.len() < 2 {
+            return None;
+        }
+        let package = if segments[0].as_str() == "root" {
+            self.package_items.package.clone()
+        } else {
+            segments[0].clone()
+        };
+        let own_id = PackageId::new(self.db, self.package_items.package.clone());
+        if package != self.package_items.package
+            && !baml_compiler2_hir::package::package_dependencies(self.db, own_id)
+                .iter()
+                .any(|dependency| dependency.name(self.db) == package)
+        {
+            return None;
+        }
+        let namespace = segments[1..segments.len() - 1].to_vec();
+        let name = segments.last()?.clone();
+        let function = self
+            .db
+            .compiled_package_interfaces()?
+            .by_package(self.db)
+            .get(&package)?
+            .lookup_function(&namespace, &name)?
+            .clone();
+        Some((
+            baml_package_interface::PackageItemId {
+                package,
+                namespace,
+                name,
+            },
+            function,
+        ))
+    }
+
+    pub fn resolve_compiled_type(
+        &self,
+        segments: &[Name],
+    ) -> Option<baml_package_interface::ExportedType> {
+        if segments.len() < 2 {
+            return None;
+        }
+        let package = if segments[0].as_str() == "root" {
+            self.package_items.package.clone()
+        } else {
+            segments[0].clone()
+        };
+        let own_id = PackageId::new(self.db, self.package_items.package.clone());
+        if package != self.package_items.package
+            && !baml_compiler2_hir::package::package_dependencies(self.db, own_id)
+                .iter()
+                .any(|dependency| dependency.name(self.db) == package)
+        {
+            return None;
+        }
+        let namespace = &segments[1..segments.len() - 1];
+        let name = segments.last()?;
+        self.db
+            .compiled_package_interfaces()?
+            .by_package(self.db)
+            .get(&package)?
+            .lookup_type(namespace, name)
+            .cloned()
     }
 
     /// Type-namespace resolution, exposed for constructor and member typing.

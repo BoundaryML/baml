@@ -369,6 +369,9 @@ pub enum MemberResolution<'db> {
     Free {
         func: baml_compiler2_hir::loc::FunctionLoc<'db>,
     },
+    CompiledFree {
+        function: baml_package_interface::PackageItemId,
+    },
     /// A method on a VALUE receiver (`p.get_name`): `self` is bound.
     BoundMethod {
         class: baml_compiler2_hir::loc::ClassLoc<'db>,
@@ -379,6 +382,14 @@ pub enum MemberResolution<'db> {
     UnboundMethod {
         class: baml_compiler2_hir::loc::ClassLoc<'db>,
         func: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    },
+    CompiledBoundMethod {
+        class: baml_type::TypeName,
+        method: baml_type::Name,
+    },
+    CompiledUnboundMethod {
+        class: baml_type::TypeName,
+        method: baml_type::Name,
     },
     /// A VIRTUAL interface-method call: only the slot (interface +
     /// member) is statically known; dispatch resolves to the receiver's
@@ -399,6 +410,12 @@ pub enum MemberResolution<'db> {
     /// at `field_index` in that interface's own declared field list.
     InterfaceVirtualField {
         interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        view: Ty,
+        field_index: u32,
+        field: baml_type::Name,
+    },
+    CompiledInterfaceVirtualField {
+        interface: baml_type::TypeName,
         view: Ty,
         field_index: u32,
         field: baml_type::Name,
@@ -4341,6 +4358,21 @@ impl<'db> InferenceContext<'db> {
                 self.write_member_resolution(callee, MemberResolution::Free { func: function });
                 return (fn_ty, false);
             }
+            if let Some((function_id, function)) = self.lower.resolve_compiled_function(segments) {
+                let instantiation =
+                    self.instantiation_args(call, &function.generic_params, Some(&function.name));
+                self.register_compiled_bounds(&function.generic_bounds, &instantiation, 0, call);
+                self.write_call_type_args(call, &instantiation, 0);
+                let fn_ty = compiled_function_value_ty(&function, &instantiation);
+                self.result.type_of_expr.insert(callee, fn_ty.clone());
+                self.write_member_resolution(
+                    callee,
+                    MemberResolution::CompiledFree {
+                        function: function_id,
+                    },
+                );
+                return (fn_ty, false);
+            }
             // A type-qualified method path (`Array.filled(3, 0)`,
             // `baml.Array.generate(...)`): statics call directly, and the
             // UFCS spelling of an instance method takes the receiver as
@@ -4693,33 +4725,86 @@ impl<'db> InferenceContext<'db> {
             }
             return (field, false, field_resolution, false);
         };
-        let signature = function_signature(self.db, candidate.method);
-        let class_count = candidate.class_args.len();
-        let own_params = signature.generic_params[class_count..].to_vec();
-        let method_name = baml_compiler2_ppir::item_data::function_data(self.db, candidate.method)
-            .name
-            .clone();
-        let mut instantiation = candidate.class_args;
-        instantiation.extend(self.instantiation_args(call, &own_params, Some(&method_name)));
-        self.register_call_bounds(candidate.method, &instantiation, call);
-        self.write_call_type_args(call, &instantiation, class_count);
-        let fn_ty = function_value_ty(signature, &instantiation);
-        let bound = signature
-            .params
-            .first()
-            .is_some_and(|param| param.name.as_str() == "self");
-        let resolution = if bound {
-            MemberResolution::BoundMethod {
-                class: candidate.class,
-                func: candidate.method,
+        match candidate.target {
+            crate::method_resolution::MethodCandidateTarget::Source { method, class } => {
+                let signature = function_signature(self.db, method);
+                let class_count = candidate.class_args.len();
+                let own_params = signature.generic_params[class_count..].to_vec();
+                let method_name = baml_compiler2_ppir::item_data::function_data(self.db, method)
+                    .name
+                    .clone();
+                let mut instantiation = candidate.class_args;
+                instantiation.extend(self.instantiation_args(
+                    call,
+                    &own_params,
+                    Some(&method_name),
+                ));
+                self.register_call_bounds(method, &instantiation, call);
+                self.write_call_type_args(call, &instantiation, class_count);
+                let fn_ty = function_value_ty(signature, &instantiation);
+                let bound = signature
+                    .params
+                    .first()
+                    .is_some_and(|param| param.name.as_str() == "self");
+                let resolution = if bound {
+                    MemberResolution::BoundMethod {
+                        class,
+                        func: method,
+                    }
+                } else {
+                    MemberResolution::UnboundMethod {
+                        class,
+                        func: method,
+                    }
+                };
+                (fn_ty, bound, Some(resolution), false)
             }
-        } else {
-            MemberResolution::UnboundMethod {
-                class: candidate.class,
-                func: candidate.method,
+            crate::method_resolution::MethodCandidateTarget::Compiled {
+                class,
+                class_generic_params,
+                class_generic_bounds,
+                method,
+            } => {
+                let class_count = class_generic_params.len();
+                let mut instantiation = candidate.class_args;
+                instantiation.extend(self.instantiation_args(
+                    call,
+                    &method.generic_params,
+                    Some(&method.name),
+                ));
+                self.register_compiled_bounds(
+                    &class_generic_bounds,
+                    &instantiation,
+                    usize::MAX,
+                    call,
+                );
+                self.register_compiled_bounds(
+                    &method.generic_bounds,
+                    &instantiation,
+                    class_count,
+                    call,
+                );
+                self.write_call_type_args(call, &instantiation, class_count);
+                let fn_ty = compiled_function_value_ty(&method, &instantiation);
+                let bound = method
+                    .params
+                    .first()
+                    .and_then(|param| param.name.as_ref())
+                    .is_some_and(|name| name.as_str() == "self");
+                let resolution = if bound {
+                    MemberResolution::CompiledBoundMethod {
+                        class,
+                        method: method.name,
+                    }
+                } else {
+                    MemberResolution::CompiledUnboundMethod {
+                        class,
+                        method: method.name,
+                    }
+                };
+                (fn_ty, bound, Some(resolution), false)
             }
-        };
-        (fn_ty, bound, Some(resolution), false)
+        }
     }
 
     /// The `default` receiver's meaning inside an `implements` block:
@@ -4813,19 +4898,46 @@ impl<'db> InferenceContext<'db> {
         call: ExprId,
     ) -> (Ty, bool) {
         if let Some(pending) = interface_member.pending_own {
-            let signature = function_signature(self.db, pending.method);
-            let own_offset = pending.prefix.len();
-            let own_params = signature.generic_params[own_offset..].to_vec();
-            let method_name =
-                baml_compiler2_ppir::item_data::function_data(self.db, pending.method)
-                    .name
-                    .clone();
-            let mut instantiation = pending.prefix;
-            instantiation.extend(self.instantiation_args(call, &own_params, Some(&method_name)));
-            self.register_call_bounds(pending.method, &instantiation, call);
-            self.write_call_type_args(call, &instantiation, own_offset);
-            let fn_ty = function_value_ty(signature, &instantiation);
-            return (fn_ty, interface_member.is_method);
+            match pending {
+                crate::method_resolution::PendingOwnGenerics::Source { method, prefix } => {
+                    let signature = function_signature(self.db, method);
+                    let own_offset = prefix.len();
+                    let own_params = signature.generic_params[own_offset..].to_vec();
+                    let method_name =
+                        baml_compiler2_ppir::item_data::function_data(self.db, method)
+                            .name
+                            .clone();
+                    let mut instantiation = prefix;
+                    instantiation.extend(self.instantiation_args(
+                        call,
+                        &own_params,
+                        Some(&method_name),
+                    ));
+                    self.register_call_bounds(method, &instantiation, call);
+                    self.write_call_type_args(call, &instantiation, own_offset);
+                    let fn_ty = function_value_ty(signature, &instantiation);
+                    return (fn_ty, interface_member.is_method);
+                }
+                crate::method_resolution::PendingOwnGenerics::Compiled {
+                    method,
+                    mut bindings,
+                } => {
+                    let own_args =
+                        self.instantiation_args(call, &method.generic_params, Some(&method.name));
+                    bindings.extend(method.generic_params.iter().cloned().zip(own_args.clone()));
+                    self.register_compiled_interface_method_bounds(
+                        &method.generic_bounds,
+                        &bindings,
+                        call,
+                    );
+                    self.write_call_type_args(call, &own_args, 0);
+                    let fn_ty = crate::impls::substitute_bindings(
+                        &Ty::from_plain(&method.function_ty),
+                        &bindings,
+                    );
+                    return (fn_ty, interface_member.is_method);
+                }
+            }
         }
         (interface_member.ty, interface_member.is_method)
     }
@@ -4955,6 +5067,21 @@ impl<'db> InferenceContext<'db> {
             self.write_member_resolution(expr, MemberResolution::Free { func: function });
             return function_value_ty(signature, &instantiation);
         }
+        if let Some((function_id, function)) = self.lower.resolve_compiled_function(segments) {
+            let instantiation: Vec<Ty> = function
+                .generic_params
+                .iter()
+                .map(|param| self.fresh_generic_arg(param))
+                .collect();
+            self.register_compiled_bounds(&function.generic_bounds, &instantiation, 0, expr);
+            self.write_member_resolution(
+                expr,
+                MemberResolution::CompiledFree {
+                    function: function_id,
+                },
+            );
+            return compiled_function_value_ty(&function, &instantiation);
+        }
         // A type-qualified static as a VALUE (`let f = float.nan;`,
         // `Array.filled`): the same tier the call spellings use, with
         // the own suffix fresh (only a call site can spell turbofish).
@@ -5012,6 +5139,7 @@ impl<'db> InferenceContext<'db> {
         // type (clients, top-level lets outside their tier) is not
         // unresolved - it stays the silent sentinel it always was.
         if self.lower.resolve_value(segments).is_none()
+            && self.lower.resolve_compiled_function(segments).is_none()
             && !self.suppressed_unresolved.contains(&expr)
         {
             // When a proper prefix resolves (`baml.media.Image.missing`
@@ -5022,7 +5150,8 @@ impl<'db> InferenceContext<'db> {
             let failed = (1..segments.len()).rev().find_map(|cut| {
                 let prefix = &segments[..cut];
                 (self.lower.resolve_type_definition(prefix).is_some()
-                    || self.lower.resolve_value(prefix).is_some())
+                    || self.lower.resolve_value(prefix).is_some()
+                    || self.lower.resolve_compiled_function(prefix).is_some())
                 .then(|| segments[cut].clone())
             });
             let name = failed.unwrap_or_else(|| {
@@ -5566,6 +5695,82 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    fn register_compiled_bounds(
+        &mut self,
+        bounds: &baml_package_interface::GenericBounds,
+        instantiation: &[Ty],
+        own_start: usize,
+        at: ExprId,
+    ) {
+        for (param, param_bounds) in bounds {
+            let Some(arg) = instantiation.get(param.index() as usize) else {
+                continue;
+            };
+            for bound in param_bounds {
+                let bound = InterfaceRef::from_constraint(bound);
+                let interface = InterfaceRef::new(
+                    bound.name,
+                    bound
+                        .generics
+                        .iter()
+                        .map(|generic| substitute_params(generic, instantiation))
+                        .collect(),
+                    bound
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), substitute_params(ty, instantiation)))
+                        .collect(),
+                );
+                self.register_obligation(obligations::Obligation::Implements {
+                    ty: arg.clone(),
+                    interface,
+                    at,
+                    not_concrete_rejects: (param.index() as usize) >= own_start,
+                });
+            }
+        }
+    }
+
+    fn register_compiled_interface_method_bounds(
+        &mut self,
+        bounds: &baml_package_interface::GenericBounds,
+        bindings: &rustc_hash::FxHashMap<baml_type::ParamTy, Ty>,
+        at: ExprId,
+    ) {
+        for (param, param_bounds) in bounds {
+            let Some(arg) = bindings.get(param) else {
+                continue;
+            };
+            for bound in param_bounds {
+                let bound = InterfaceRef::from_constraint(bound);
+                let interface = InterfaceRef::new(
+                    bound.name,
+                    bound
+                        .generics
+                        .iter()
+                        .map(|generic| crate::impls::substitute_bindings(generic, bindings))
+                        .collect(),
+                    bound
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| {
+                            (
+                                name.clone(),
+                                crate::impls::substitute_bindings(ty, bindings),
+                            )
+                        })
+                        .collect(),
+                );
+                self.register_obligation(obligations::Obligation::Implements {
+                    ty: arg.clone(),
+                    interface,
+                    at,
+                    not_concrete_rejects: true,
+                });
+            }
+        }
+    }
+
     /// [`Self::register_call_bounds`] for a class instantiation: one
     /// Implements obligation per declared bound of the class's generic
     /// frame (`class Holder<T extends Named & Sized>` registers BOTH
@@ -5892,25 +6097,59 @@ impl<'db> InferenceContext<'db> {
                 }
                 return (Ty::error(), None);
             }
-            let signature = function_signature(self.db, candidate.method);
-            let mut instantiation = candidate.class_args;
-            let own: Vec<Ty> = signature.generic_params[instantiation.len()..]
-                .iter()
-                .map(|param| self.fresh_generic_arg(param))
-                .collect();
-            instantiation.extend(own);
-            // r-a registers required obligations at EVERY value
-            // instantiation, whatever the spelling - a method read as a
-            // VALUE obligates its own generics' bounds exactly as a
-            // call would (add_required_obligations_for_value_path).
-            self.register_call_bounds(candidate.method, &instantiation, at);
-            return (
-                bind_receiver(function_value_ty(signature, &instantiation)),
-                Some(MemberResolution::BoundMethod {
-                    class: candidate.class,
-                    func: candidate.method,
-                }),
-            );
+            return match candidate.target {
+                crate::method_resolution::MethodCandidateTarget::Source { method, class } => {
+                    let signature = function_signature(self.db, method);
+                    let mut instantiation = candidate.class_args;
+                    let own: Vec<Ty> = signature.generic_params[instantiation.len()..]
+                        .iter()
+                        .map(|param| self.fresh_generic_arg(param))
+                        .collect();
+                    instantiation.extend(own);
+                    self.register_call_bounds(method, &instantiation, at);
+                    (
+                        bind_receiver(function_value_ty(signature, &instantiation)),
+                        Some(MemberResolution::BoundMethod {
+                            class,
+                            func: method,
+                        }),
+                    )
+                }
+                crate::method_resolution::MethodCandidateTarget::Compiled {
+                    class,
+                    class_generic_params,
+                    class_generic_bounds,
+                    method,
+                } => {
+                    let class_count = class_generic_params.len();
+                    let mut instantiation = candidate.class_args;
+                    instantiation.extend(
+                        method
+                            .generic_params
+                            .iter()
+                            .map(|param| self.fresh_generic_arg(param)),
+                    );
+                    self.register_compiled_bounds(
+                        &class_generic_bounds,
+                        &instantiation,
+                        usize::MAX,
+                        at,
+                    );
+                    self.register_compiled_bounds(
+                        &method.generic_bounds,
+                        &instantiation,
+                        class_count,
+                        at,
+                    );
+                    (
+                        bind_receiver(compiled_function_value_ty(&method, &instantiation)),
+                        Some(MemberResolution::CompiledBoundMethod {
+                            class,
+                            method: method.name,
+                        }),
+                    )
+                }
+            };
         }
         match crate::method_resolution::lookup_interface_member(
             self.db,
@@ -6092,6 +6331,33 @@ impl<'db> InferenceContext<'db> {
                 })
             }
             MemberDeclarer::ImplField { .. } => None,
+            MemberDeclarer::CompiledVirtualField {
+                interface,
+                realized,
+                field_index,
+            } => Some(MemberResolution::CompiledInterfaceVirtualField {
+                interface: interface.clone(),
+                view: realized.existential(),
+                field_index: *field_index,
+                field: member.clone(),
+            }),
+            MemberDeclarer::CompiledVirtualMethod { interface, method } => {
+                Some(MemberResolution::CompiledBoundMethod {
+                    class: interface.clone(),
+                    method: method.clone(),
+                })
+            }
+            MemberDeclarer::CompiledImplMethod { method } => {
+                Some(MemberResolution::CompiledBoundMethod {
+                    class: baml_type::TypeName::new(
+                        method.package.clone(),
+                        method.namespace.clone(),
+                        method.class.clone(),
+                    ),
+                    method: method.name.clone(),
+                })
+            }
+            MemberDeclarer::CompiledImplField => None,
         }
     }
 
@@ -6182,14 +6448,33 @@ impl<'db> InferenceContext<'db> {
         interface_member: crate::method_resolution::InterfaceMember<'db>,
     ) -> Ty {
         if let Some(pending) = interface_member.pending_own {
-            let signature = function_signature(self.db, pending.method);
-            let own: Vec<Ty> = signature.generic_params[pending.prefix.len()..]
-                .iter()
-                .map(|param| self.fresh_generic_arg(param))
-                .collect();
-            let mut instantiation = pending.prefix;
-            instantiation.extend(own);
-            return bind_receiver(function_value_ty(signature, &instantiation));
+            return match pending {
+                crate::method_resolution::PendingOwnGenerics::Source { method, prefix } => {
+                    let signature = function_signature(self.db, method);
+                    let own: Vec<Ty> = signature.generic_params[prefix.len()..]
+                        .iter()
+                        .map(|param| self.fresh_generic_arg(param))
+                        .collect();
+                    let mut instantiation = prefix;
+                    instantiation.extend(own);
+                    bind_receiver(function_value_ty(signature, &instantiation))
+                }
+                crate::method_resolution::PendingOwnGenerics::Compiled {
+                    method,
+                    mut bindings,
+                } => {
+                    let own = method
+                        .generic_params
+                        .iter()
+                        .map(|param| self.fresh_generic_arg(param))
+                        .collect::<Vec<_>>();
+                    bindings.extend(method.generic_params.iter().cloned().zip(own));
+                    bind_receiver(crate::impls::substitute_bindings(
+                        &Ty::from_plain(&method.function_ty),
+                        &bindings,
+                    ))
+                }
+            };
         }
         if interface_member.is_method {
             return bind_receiver(interface_member.ty);
@@ -8381,7 +8666,13 @@ impl<'db> InferenceContext<'db> {
             .get_or_init(|| {
                 self.body_owner_id
                     .and_then(|owner| baml_compiler2_ppir::body_source_map(self.db, owner))
-                    .map(|source_map| source_map.property_shorthand_exprs.iter().copied().collect())
+                    .map(|source_map| {
+                        source_map
+                            .property_shorthand_exprs
+                            .iter()
+                            .copied()
+                            .collect()
+                    })
                     .unwrap_or_default()
             })
             .contains(&expr)
@@ -8729,6 +9020,27 @@ fn function_value_ty(signature: &crate::lower::FunctionSignature, instantiation:
         params,
         ret: substitute_params(&signature.ret, instantiation),
         throws: substitute_params(&signature.throws, instantiation),
+        attr: TyAttr::default(),
+    })
+}
+
+fn compiled_function_value_ty(
+    function: &baml_package_interface::ExportedFunction,
+    instantiation: &[Ty],
+) -> Ty {
+    let params = function
+        .params
+        .iter()
+        .map(|param| baml_type::interned::FunctionParam {
+            name: param.name.clone(),
+            ty: substitute_params(&Ty::from_plain(&param.ty), instantiation),
+            mode: param.mode,
+        })
+        .collect();
+    Ty::intern(TyKind::Function {
+        params,
+        ret: substitute_params(&Ty::from_plain(&function.return_type), instantiation),
+        throws: substitute_params(&Ty::from_plain(&function.callable_throws), instantiation),
         attr: TyAttr::default(),
     })
 }

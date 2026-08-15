@@ -8,17 +8,24 @@
 //! `PackageResolutionContext` bundles a package's own `PackageItems` with its
 //! dependencies' `PackageInterface`s, providing unified lookup methods.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::BuiltinKind;
 use baml_compiler2_hir::{
     contributions::Definition,
     file_package,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, TypeAliasLoc},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
     package::{PackageId, PackageItems, package_dependencies},
 };
-use baml_type::{FunctionParamMode, FunctionParamTy, ParamTy, QualifiedTypeName, Ty, TyAttr};
+pub use baml_package_interface::{
+    CallableThrowsFragment, ExportedAssociatedType, ExportedFunction, ExportedImpl,
+    ExportedImplMethod, ExportedInterfaceMethod, ExportedType, FunctionThrowSets, GenericBounds,
+    PackageInterface, PackageItemId, PackageMethodId, ThrowFact,
+};
+use baml_type::{
+    FunctionParamMode, FunctionParamTy, Interface, ParamTy, QualifiedTypeName, Ty, TyAttr,
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::lower::qualify_def;
@@ -38,60 +45,6 @@ pub fn stdlib_honest_derivations() -> usize {
     STDLIB_HONEST_DERIVATIONS.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-// ── Data types ─────────────────────────────────────────────────────────────
-
-/// Fully-resolved typed interface for a package.
-/// Consumers never touch dependency `ItemTree` or raw `TypeExpr`.
-///
-/// Serializes with Borsh so the six stdlib packages' interfaces can be cached
-/// once per compiler build (B-694 "export data") and seeded back into a fresh
-/// database, skipping the cold re-derivation. Every leaf (`Ty`,
-/// `QualifiedTypeName`, `Name`, `FunctionParamTy`, `BuiltinKind`,
-/// `FunctionThrowSets`) is Borsh-ready; the `FxHashMap` members serialize
-/// deterministically because Borsh sorts map entries by key.
-#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
-pub struct PackageInterface {
-    /// All exported types: namespace path -> name -> `ExportedType`
-    pub types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>>,
-    /// All exported free functions: namespace path -> name -> `ExportedFunction`
-    pub functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>>,
-    /// Throw sets for all functions in this package (transitive, fully inferred).
-    pub throw_sets: FunctionThrowSets,
-}
-
-/// A type exported from a package.
-#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
-pub enum ExportedType {
-    Class {
-        qtn: QualifiedTypeName,
-        fields: Vec<(Name, Ty)>,
-        methods: Vec<ExportedFunction>,
-        generic_params: Vec<ParamTy>,
-    },
-    Enum {
-        qtn: QualifiedTypeName,
-        variants: Vec<Name>,
-    },
-    TypeAlias {
-        qtn: QualifiedTypeName,
-        resolved: Ty,
-    },
-}
-
-/// A function exported from a package (free function or method).
-#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
-pub struct ExportedFunction {
-    pub name: Name,
-    pub params: Vec<FunctionParamTy>,
-    pub return_type: Ty,
-    pub declared_throws: Option<Ty>,
-    pub callable_throws: Ty,
-    /// Function-level generic parameters, including any synthetic callback
-    /// effect parameters introduced by bounded signature elaboration.
-    pub generic_params: Vec<ParamTy>,
-    pub builtin_kind: Option<BuiltinKind>,
-}
-
 /// The typed export surface a single file contributes to its package.
 ///
 /// Structural entries are keyed by `Name` with keep-first semantics, exactly
@@ -106,15 +59,6 @@ pub struct FileInterfaceFragment {
     pub types: FxHashMap<Name, ExportedType>,
     /// Free functions this file exports: name -> `ExportedFunction` (first wins).
     pub functions: FxHashMap<Name, ExportedFunction>,
-}
-
-/// The only per-file interface data consumed across CLI process boundaries.
-/// Exported types and function signatures are derived through the normal Salsa
-/// package-interface queries; persisting them in each bytecode unit duplicated
-/// work without seeding those queries.
-#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
-pub struct CallableThrowsFragment {
-    pub by_id: BTreeMap<u32, Ty>,
 }
 
 /// Distinguishes own-package results from dependency results.
@@ -161,24 +105,6 @@ pub struct PackageResolutionContext<'db> {
 // ── Salsa Update impls ─────────────────────────────────────────────────────
 
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for PackageInterface {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
-#[allow(unsafe_code)]
 unsafe impl salsa::Update for FileInterfaceFragment {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         #[allow(unsafe_code)]
@@ -210,46 +136,6 @@ unsafe impl salsa::Update for PackageResolutionContext<'_> {
                 std::ptr::write(old_pointer, new_value);
             }
             true
-        }
-    }
-}
-
-// ── PackageInterface lookup helpers ────────────────────────────────────────
-
-impl PackageInterface {
-    /// Look up a type by explicit namespace and item name.
-    ///
-    /// Single hash lookup — no split-loop ambiguity.
-    pub fn lookup_type(&self, namespace: &[Name], item: &Name) -> Option<&ExportedType> {
-        self.types.get(namespace)?.get(item)
-    }
-
-    /// Look up a function by explicit namespace and item name.
-    pub fn lookup_function(&self, namespace: &[Name], item: &Name) -> Option<&ExportedFunction> {
-        self.functions.get(namespace)?.get(item)
-    }
-}
-
-impl ExportedType {
-    /// Convert to a Ty (for type resolution results).
-    pub fn to_ty(&self) -> Ty {
-        match self {
-            // Declared generics live on the type as `TypeVar` args (an
-            // unspecialized generic class is `Foo<T>`), not on the name.
-            ExportedType::Class {
-                qtn,
-                generic_params,
-                ..
-            } => Ty::Class(
-                qtn.clone(),
-                generic_params
-                    .iter()
-                    .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
-                    .collect(),
-                TyAttr::default(),
-            ),
-            ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
-            ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
         }
     }
 }
@@ -382,16 +268,54 @@ fn exported_function<'db>(
         baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
         _ => None,
     };
+    let generic_params =
+        sig.generic_params[enclosing_param_count.min(sig.generic_params.len())..].to_vec();
     ExportedFunction {
         name: name.clone(),
         params,
         return_type: reduce_ground_projections(db, &sig.ret.to_plain(), 8),
         declared_throws,
         callable_throws,
-        generic_params: sig.generic_params[enclosing_param_count.min(sig.generic_params.len())..]
-            .to_vec(),
+        generic_bounds: generic_bounds(
+            &generic_params,
+            &crate::lower::function_generic_bounds(db, func_loc),
+        ),
+        generic_params,
         builtin_kind,
     }
+}
+
+fn plain_interface(interface: &baml_type::interned::InterfaceRef) -> Interface {
+    Interface::new(
+        interface.name.clone(),
+        interface
+            .generics
+            .iter()
+            .map(baml_type::interned::Ty::to_plain)
+            .collect(),
+        interface
+            .associated_types
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty.to_plain()))
+            .collect(),
+    )
+}
+
+fn generic_bounds(
+    params: &[ParamTy],
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+) -> GenericBounds {
+    params
+        .iter()
+        .filter_map(|param| {
+            bounds.get(param).map(|interfaces| {
+                (
+                    param.clone(),
+                    interfaces.iter().map(plain_interface).collect(),
+                )
+            })
+        })
+        .collect()
 }
 
 // ── Per-item lowering helpers ──────────────────────────────────────────────
@@ -439,7 +363,123 @@ fn lower_class_export<'db>(
         qtn,
         fields,
         methods,
+        generic_bounds: generic_bounds(
+            &class_frame,
+            &crate::lower::class_generic_bounds(db, class_loc),
+        ),
         generic_params: class_frame,
+    }
+}
+
+fn lower_interface_export<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface_loc: InterfaceLoc<'db>,
+    name: &Name,
+) -> ExportedType {
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface_loc);
+    let frame = crate::lower::interface_frame(db, interface_loc);
+    let generic_params = crate::lower::interface_declared_params(db, interface_loc);
+    let qtn = qualify_def(db, Definition::Interface(interface_loc), name);
+    let lower_ctx = crate::lower::lower_ctx_for_file(db, interface_loc.file(db))
+        .with_frame(frame.clone())
+        .with_bounds(crate::lower::interface_scope_bounds(db, interface_loc));
+
+    let requires = data
+        .requires
+        .iter()
+        .filter_map(|type_ref| {
+            lower_ctx
+                .lower_type_ref_at(
+                    &data.type_refs,
+                    *type_ref,
+                    crate::lower::TypePosition::ConstraintHead,
+                )
+                .to_plain()
+                .as_interface()
+        })
+        .collect();
+    let fields = data
+        .fields
+        .iter()
+        .map(|field| {
+            (
+                field.name.clone(),
+                lower_ctx
+                    .lower_type_ref(&data.type_refs, field.type_ref)
+                    .to_plain(),
+            )
+        })
+        .collect();
+    let associated_types = data
+        .associated_types
+        .iter()
+        .map(|associated| ExportedAssociatedType {
+            name: associated.name.clone(),
+            bound: crate::lower::interface_assoc_bound(db, interface_loc, associated.name.clone())
+                .0
+                .as_ref()
+                .map(baml_type::interned::Ty::to_plain),
+            default: crate::lower::interface_assoc_default(
+                db,
+                interface_loc,
+                associated.name.clone(),
+            )
+            .0
+            .as_ref()
+            .map(baml_type::interned::Ty::to_plain),
+        })
+        .collect();
+    let methods = data
+        .methods
+        .iter()
+        .map(|method_loc| {
+            let method_name = baml_compiler2_ppir::item_data::function_data(db, *method_loc)
+                .name
+                .clone();
+            let signature = crate::callable::function_signature_ty(db, *method_loc);
+            let method_bounds = generic_bounds(
+                &signature.generic_params,
+                &crate::lower::function_generic_bounds(db, *method_loc),
+            );
+            let throws = signature
+                .declared_throws
+                .clone()
+                .unwrap_or_else(|| Ty::BuiltinUnknown {
+                    attr: TyAttr::default(),
+                });
+            let function_ty = Ty::Function {
+                params: signature.params.clone(),
+                ret: Box::new(signature.return_type.clone()),
+                throws: Box::new(throws),
+                attr: TyAttr::default(),
+            };
+            let default_impl =
+                (!baml_compiler2_ppir::item_data::is_required_interface_method(db, *method_loc))
+                    .then(|| exported_function(db, *method_loc, &method_name, frame.len()));
+            ExportedInterfaceMethod {
+                name: method_name,
+                function_ty,
+                generic_params: signature.generic_params
+                    [frame.len().min(signature.generic_params.len())..]
+                    .to_vec(),
+                generic_bounds: method_bounds,
+                default_impl,
+            }
+        })
+        .collect();
+
+    ExportedType::Interface {
+        qtn,
+        frame,
+        generic_bounds: generic_bounds(
+            &generic_params,
+            &crate::lower::interface_scope_bounds(db, interface_loc),
+        ),
+        generic_params,
+        requires,
+        fields,
+        associated_types,
+        methods,
     }
 }
 
@@ -478,6 +518,62 @@ fn lower_function_export<'db>(
     name: &Name,
 ) -> ExportedFunction {
     exported_function(db, func_loc, name, 0)
+}
+
+fn exported_method_symbol<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    method: FunctionLoc<'db>,
+) -> PackageMethodId {
+    use baml_compiler2_ppir::item_data::{ImplSubjectData, MethodOwner};
+
+    let package = file_package::file_package(db, method.file(db));
+    let method_name = baml_compiler2_ppir::item_data::function_data(db, method)
+        .name
+        .clone();
+    let (class, name) = match baml_compiler2_ppir::item_data::method_owner(db, method) {
+        Some(MethodOwner::Class(class)) => {
+            let class_name = baml_compiler2_ppir::item_data::class_data(db, class)
+                .name
+                .clone();
+            let name = baml_compiler2_ppir::item_data::method_interface_target(db, method)
+                .as_ref()
+                .map(|target| {
+                    Name::new(format!(
+                        "{}.{method_name}",
+                        target.type_refs.display(target.target)
+                    ))
+                })
+                .unwrap_or_else(|| method_name.clone());
+            (class_name, name)
+        }
+        Some(MethodOwner::Interface(interface)) => (
+            baml_compiler2_ppir::item_data::interface_data(db, interface)
+                .name
+                .clone(),
+            method_name,
+        ),
+        Some(MethodOwner::FreeImpl(impl_loc)) => {
+            let block = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
+            let ImplSubjectData::Free { for_target, .. } = &block.subject else {
+                unreachable!("free impl method must have a free impl subject")
+            };
+            (
+                Name::new(format!(
+                    "{}$for${}",
+                    block.type_refs.display(block.interface_target),
+                    block.type_refs.display(*for_target)
+                )),
+                method_name,
+            )
+        }
+        None => unreachable!("impl method must have a method owner"),
+    };
+    PackageMethodId {
+        package: package.package,
+        namespace: package.namespace_path,
+        class,
+        name,
+    }
 }
 
 // ── file_interface_fragment Salsa query ────────────────────────────────────
@@ -533,6 +629,7 @@ pub fn file_interface_fragment(
         let exported = match contrib.definition {
             Definition::Class(class_loc) => lower_class_export(db, pkg_items, class_loc, name),
             Definition::Enum(enum_loc) => lower_enum_export(db, enum_loc, name),
+            Definition::Interface(interface_loc) => lower_interface_export(db, interface_loc, name),
             Definition::TypeAlias(ta_loc) => lower_alias_export(db, pkg_items, ta_loc, name),
             _ => continue,
         };
@@ -566,21 +663,16 @@ pub fn package_interface<'db>(
 ) -> PackageInterface {
     let pkg_name = pkg_id.name(db);
 
-    // Seed short-circuit (B-694). `seeds.by_package(db)` is a *tracked* read of
-    // the `SeededStdlibInterface` input: databases that seed (the CLI, the LSP)
-    // hold the input from construction (empty until seeded), so this memo records
-    // a dependency on the seed map and a later `set_seeded_stdlib_interface`
-    // reliably invalidates it. Only stdlib package names appear in the map, so a
-    // user package never hits the seed and derives normally. Because the entire
-    // stdlib derivation cluster (signature lowering, `callable_throws` /
-    // body inference, throw-set solving) is reachable only through this query,
-    // short-circuiting here skips all of it. This stays ABOVE the fragment fold.
-    if let Some(seeds) = db.seeded_stdlib_interface() {
-        if let Some(bytes) = seeds.by_package(db).get(pkg_name.as_str()) {
-            if let Ok(iface) = borsh::from_slice::<PackageInterface>(bytes) {
-                return iface;
-            }
-            // corrupt/stale seed → fall through to honest derivation
+    if let Some(compiled) = db.compiled_package_interfaces() {
+        if let Some(interface) = compiled.by_package(db).get(&pkg_name) {
+            return interface.clone();
+        }
+    }
+    if let Some(seeded) = db.seeded_stdlib_interface() {
+        if let Some(bytes) = seeded.by_package(db).get(pkg_name.as_str())
+            && let Ok(interface) = borsh::from_slice(bytes)
+        {
+            return interface;
         }
     }
 
@@ -636,53 +728,45 @@ fn fold_package_interface<'db>(
     }
 
     let throw_sets = function_throw_sets(db, pkg_id).clone();
+    let impls = crate::impls::package_impl_locs(db, pkg_id)
+        .iter()
+        .filter_map(|block| crate::impls::impl_facts(db, *block).as_ref())
+        .map(|facts| ExportedImpl {
+            interface: plain_interface(&facts.interface),
+            for_ty_pattern: facts.for_ty_pattern.to_plain(),
+            generic_params: facts
+                .generic_params
+                .iter()
+                .map(|(param, bounds)| {
+                    (param.clone(), bounds.iter().map(plain_interface).collect())
+                })
+                .collect(),
+            associated_types: facts
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                .collect(),
+            methods: facts
+                .methods
+                .iter()
+                .map(|method| ExportedImplMethod {
+                    name: baml_compiler2_ppir::item_data::function_data(db, *method)
+                        .name
+                        .clone(),
+                    symbol: exported_method_symbol(db, *method),
+                })
+                .collect(),
+        })
+        .collect();
     PackageInterface {
         types,
         functions,
+        impls,
         throw_sets,
     }
 }
 
 // ── Throw sets (the runtime's per-function throw metadata) ─────────────────
-
-/// One throw fact: a single (leaf) thrown type.
-pub type ThrowFact = Ty;
-
-/// Per-package throw sets, keyed by the dotted function key
-/// (`throw_set_key`). Derived from `callable_throws` - the transitive
-/// caller-facing surface - so `direct` and `transitive` coincide here
-/// (TIR's two-tier solver is subsumed by the salsa fixpoint).
-#[derive(Debug, Clone, Default, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
-pub struct FunctionThrowSets {
-    pub direct: BTreeMap<Name, BTreeSet<ThrowFact>>,
-    pub transitive: BTreeMap<Name, BTreeSet<ThrowFact>>,
-}
-
-// Safety: comparison-based replacement for Salsa early cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for FunctionThrowSets {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: pointer is Salsa-owned and valid for replacement.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
-impl FunctionThrowSets {
-    pub fn transitive_for(&self, key: &Name) -> Option<&BTreeSet<ThrowFact>> {
-        self.transitive.get(key)
-    }
-}
 
 /// Build the throw-set lookup key for a function given its namespace path
 /// and short name: the short name alone at top level, dotted otherwise.

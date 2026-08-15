@@ -1,17 +1,11 @@
 [package]
-name = "baml_workspace"
+name = "baml_artifact"
 version = { workspace = true }
 publish = false
-authors = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
-homepage = { workspace = true }
-documentation = { workspace = true }
-repository = { workspace = true }
 license = { workspace = true }
-
-[lib]
-doctest = false
+build = "build.rs"
 
 [lints]
 workspace = true
@@ -19,6 +13,14 @@ workspace = true
 [dependencies]
 baml_base = { workspace = true }
 baml_package_interface = { workspace = true }
-baml_type = { workspace = true }
-salsa = { workspace = true }
+bex_vm_types = { workspace = true }
+borsh = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+
+[build-dependencies]
+sha2 = { workspace = true }
 walkdir = { workspace = true }
+
+[dev-dependencies]
+rustc-hash = { workspace = true }

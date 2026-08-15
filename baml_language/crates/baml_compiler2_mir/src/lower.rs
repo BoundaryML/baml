@@ -1093,6 +1093,11 @@ fn resolution_to_item_ref(
                 name: func_data.name.clone(),
             })
         }
+        MemberResolution::CompiledFree { function } => Some(ItemRef::Free {
+            package: function.package.clone(),
+            namespace: function.namespace.clone(),
+            name: function.name.clone(),
+        }),
         MemberResolution::BoundMethod {
             class_loc,
             func_loc,
@@ -1101,6 +1106,13 @@ fn resolution_to_item_ref(
             class_loc,
             func_loc,
         } => Some(method_item_ref(db, *class_loc, *func_loc)),
+        MemberResolution::CompiledBoundMethod { class, method }
+        | MemberResolution::CompiledUnboundMethod { class, method } => Some(ItemRef::Method {
+            package: class.package().clone(),
+            namespace: class.namespace().clone(),
+            class: class.name().clone(),
+            name: method.clone(),
+        }),
         MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
             // A virtual interface-method call: the ItemRef names the interface + method, and
             // the runtime dispatches on the receiver's actual impl.
@@ -1143,7 +1155,8 @@ fn resolution_to_item_ref(
         }
         MemberResolution::Field { .. }
         | MemberResolution::Variant { .. }
-        | MemberResolution::InterfaceVirtualField { .. } => None,
+        | MemberResolution::InterfaceVirtualField { .. }
+        | MemberResolution::CompiledInterfaceVirtualField { .. } => None,
     }
 }
 
@@ -1160,10 +1173,14 @@ fn resolution_func_loc<'db>(
         | MemberResolution::BoundMethod { func_loc, .. }
         | MemberResolution::UnboundMethod { func_loc, .. }
         | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => Some(*func_loc),
+        MemberResolution::CompiledFree { .. }
+        | MemberResolution::CompiledBoundMethod { .. }
+        | MemberResolution::CompiledUnboundMethod { .. } => None,
         MemberResolution::InterfaceVirtualMethod { .. }
         | MemberResolution::Field { .. }
         | MemberResolution::Variant { .. }
-        | MemberResolution::InterfaceVirtualField { .. } => None,
+        | MemberResolution::InterfaceVirtualField { .. }
+        | MemberResolution::CompiledInterfaceVirtualField { .. } => None,
     }
 }
 
@@ -2511,11 +2528,16 @@ impl<'db> LoweringContext<'db> {
     /// every arm shares and is not recoverable from the receiver type alone.
     fn tir_virtual_field_view(&self, key: ExprMetadataKey) -> Option<(InterfaceTypeView, u32)> {
         use crate::inference_provider::MemberResolution;
-        let MemberResolution::InterfaceVirtualField {
+        let (MemberResolution::InterfaceVirtualField {
             interface,
             field_index,
             ..
-        } = self.tir_resolution(key)?
+        }
+        | MemberResolution::CompiledInterfaceVirtualField {
+            interface,
+            field_index,
+            ..
+        }) = self.tir_resolution(key)?
         else {
             return None;
         };
@@ -5449,7 +5471,10 @@ impl<'db> LoweringContext<'db> {
                 // Note: for paths like `user.profile.items.slice`, the member_resolutions
                 // are [Field{profile}, Field{items}, BoundMethod{slice}], so we check last().
                 match member_resolutions.last() {
-                    Some(MemberResolution::BoundMethod { .. }) => {
+                    Some(
+                        MemberResolution::BoundMethod { .. }
+                        | MemberResolution::CompiledBoundMethod { .. },
+                    ) => {
                         // Bound method reference: lower receiver and emit MakeBoundMethod.
                         let resolution = member_resolutions.into_iter().last().unwrap();
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
@@ -5491,7 +5516,9 @@ impl<'db> LoweringContext<'db> {
                     ) if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
                     Some(
                         MemberResolution::UnboundMethod { .. }
+                        | MemberResolution::CompiledUnboundMethod { .. }
                         | MemberResolution::Free { .. }
+                        | MemberResolution::CompiledFree { .. }
                         | MemberResolution::InterfaceVirtualMethod { .. }
                         | MemberResolution::InterfaceConcreteMethod { .. },
                     ) => {
@@ -5512,7 +5539,8 @@ impl<'db> LoweringContext<'db> {
                     }
                     Some(
                         MemberResolution::Variant { .. }
-                        | MemberResolution::InterfaceVirtualField { .. },
+                        | MemberResolution::InterfaceVirtualField { .. }
+                        | MemberResolution::CompiledInterfaceVirtualField { .. },
                     ) => {
                         // Handled by expr_types check below (a virtual field read on an
                         // existential falls through to the general member-access lowering).
@@ -5529,7 +5557,8 @@ impl<'db> LoweringContext<'db> {
             {
                 use crate::inference_provider::MemberResolution;
                 match &resolution {
-                    MemberResolution::BoundMethod { .. } => {
+                    MemberResolution::BoundMethod { .. }
+                    | MemberResolution::CompiledBoundMethod { .. } => {
                         // Bound method reference via flat resolutions: emit MakeBoundMethod.
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             let receiver_segments = &segments[..segments.len() - 1];
@@ -5565,7 +5594,9 @@ impl<'db> LoweringContext<'db> {
                     | MemberResolution::InterfaceConcreteMethod { .. }
                         if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
                     MemberResolution::UnboundMethod { .. }
+                    | MemberResolution::CompiledUnboundMethod { .. }
                     | MemberResolution::Free { .. }
+                    | MemberResolution::CompiledFree { .. }
                     | MemberResolution::InterfaceVirtualMethod { .. }
                     | MemberResolution::InterfaceConcreteMethod { .. } => {
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
@@ -5577,7 +5608,8 @@ impl<'db> LoweringContext<'db> {
                         }
                     }
                     MemberResolution::Variant { .. }
-                    | MemberResolution::InterfaceVirtualField { .. } => {
+                    | MemberResolution::InterfaceVirtualField { .. }
+                    | MemberResolution::CompiledInterfaceVirtualField { .. } => {
                         // Handled by expr_types check below (a virtual field read on an
                         // existential falls through to the general lowering).
                     }
@@ -9527,7 +9559,8 @@ impl<'db> LoweringContext<'db> {
         {
             use crate::inference_provider::MemberResolution;
             match &resolution {
-                MemberResolution::BoundMethod { .. } => {
+                MemberResolution::BoundMethod { .. }
+                | MemberResolution::CompiledBoundMethod { .. } => {
                     // Bound method reference: lower receiver and emit MakeBoundMethod.
                     let item = resolution_to_item_ref(self.db, &resolution);
                     if let Some(item) = item {
@@ -9542,7 +9575,10 @@ impl<'db> LoweringContext<'db> {
                         return;
                     }
                 }
-                MemberResolution::UnboundMethod { .. } | MemberResolution::Free { .. } => {
+                MemberResolution::UnboundMethod { .. }
+                | MemberResolution::CompiledUnboundMethod { .. }
+                | MemberResolution::Free { .. }
+                | MemberResolution::CompiledFree { .. } => {
                     // Unbound method or free function reference: emit a plain function constant.
                     let item = resolution_to_item_ref(self.db, &resolution);
                     if let Some(item) = item {
@@ -9561,7 +9597,8 @@ impl<'db> LoweringContext<'db> {
                 }
                 MemberResolution::Field { .. }
                 | MemberResolution::Variant { .. }
-                | MemberResolution::InterfaceVirtualField { .. } => {
+                | MemberResolution::InterfaceVirtualField { .. }
+                | MemberResolution::CompiledInterfaceVirtualField { .. } => {
                     // Fall through — handled by the existing field / enum-variant / interface
                     // virtual-field lowering below (a virtual field read on an existential).
                 }

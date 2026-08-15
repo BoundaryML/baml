@@ -26,6 +26,7 @@ baml_lsp2_actions = { workspace = true }
 baml_lsp_server = { workspace = true }
 baml_project = { workspace = true }
 baml_release = { workspace = true }
+baml_stdlib_artifacts = { workspace = true }
 baml_surface = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }

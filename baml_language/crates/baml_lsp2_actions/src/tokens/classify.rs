@@ -121,11 +121,15 @@ pub(super) fn classify_member(res: &MemberResolution<'_>) -> (SemanticTokenType,
     use MemberResolution as M;
     use SemanticTokenType as T;
     let token_type = match res {
-        M::Field { .. } | M::InterfaceVirtualField { .. } => T::Property,
+        M::Field { .. }
+        | M::InterfaceVirtualField { .. }
+        | M::CompiledInterfaceVirtualField { .. } => T::Property,
         M::Variant { .. } => T::EnumMember,
-        M::Free { .. } => T::Function,
+        M::Free { .. } | M::CompiledFree { .. } => T::Function,
         M::BoundMethod { .. }
         | M::UnboundMethod { .. }
+        | M::CompiledBoundMethod { .. }
+        | M::CompiledUnboundMethod { .. }
         | M::InterfaceConcreteMethod { .. }
         | M::InterfaceVirtualMethod { .. } => T::Method,
     };

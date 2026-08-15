@@ -48,6 +48,9 @@ pub(crate) enum MemberResolution<'db> {
     },
     /// A free item accessed via a package/namespace path.
     Free { func_loc: FunctionLoc<'db> },
+    CompiledFree {
+        function: baml_compiler2_hir_ty::package_interface::PackageItemId,
+    },
     /// A bound method reference: root is a value; type has `self` stripped.
     BoundMethod {
         class_loc: ClassLoc<'db>,
@@ -57,6 +60,14 @@ pub(crate) enum MemberResolution<'db> {
     UnboundMethod {
         class_loc: ClassLoc<'db>,
         func_loc: FunctionLoc<'db>,
+    },
+    CompiledBoundMethod {
+        class: baml_type::TypeName,
+        method: Name,
+    },
+    CompiledUnboundMethod {
+        class: baml_type::TypeName,
+        method: Name,
     },
     /// A VIRTUAL interface-method call: only the slot (interface + member)
     /// is statically known; dispatch resolves to the receiver's runtime impl.
@@ -72,6 +83,11 @@ pub(crate) enum MemberResolution<'db> {
     /// A VIRTUAL interface-field access through the realized declaring view.
     InterfaceVirtualField {
         iface_loc: InterfaceLoc<'db>,
+        interface: Tir2Ty,
+        field_index: u32,
+        field: Name,
+    },
+    CompiledInterfaceVirtualField {
         interface: Tir2Ty,
         field_index: u32,
         field: Name,
@@ -376,6 +392,9 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
             variant_name: variant.clone(),
         },
         hir_infer::MemberResolution::Free { func } => MemberResolution::Free { func_loc: *func },
+        hir_infer::MemberResolution::CompiledFree { function } => MemberResolution::CompiledFree {
+            function: function.clone(),
+        },
         hir_infer::MemberResolution::BoundMethod { class, func } => MemberResolution::BoundMethod {
             class_loc: *class,
             func_loc: *func,
@@ -384,6 +403,18 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
             MemberResolution::UnboundMethod {
                 class_loc: *class,
                 func_loc: *func,
+            }
+        }
+        hir_infer::MemberResolution::CompiledBoundMethod { class, method } => {
+            MemberResolution::CompiledBoundMethod {
+                class: class.clone(),
+                method: method.clone(),
+            }
+        }
+        hir_infer::MemberResolution::CompiledUnboundMethod { class, method } => {
+            MemberResolution::CompiledUnboundMethod {
+                class: class.clone(),
+                method: method.clone(),
             }
         }
         hir_infer::MemberResolution::InterfaceVirtualMethod { interface, method } => {
@@ -405,6 +436,16 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
             field,
         } => MemberResolution::InterfaceVirtualField {
             iface_loc: *interface,
+            interface: view.to_plain(),
+            field_index: *field_index,
+            field: field.clone(),
+        },
+        hir_infer::MemberResolution::CompiledInterfaceVirtualField {
+            view,
+            field_index,
+            field,
+            ..
+        } => MemberResolution::CompiledInterfaceVirtualField {
             interface: view.to_plain(),
             field_index: *field_index,
             field: field.clone(),

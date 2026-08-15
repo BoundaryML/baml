@@ -1293,6 +1293,49 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
+    generate_project_bytecode_with_reuse_artifacts_impl(
+        db,
+        options,
+        opt,
+        base,
+        None,
+        prev_units,
+        clean_files,
+    )
+}
+
+/// Reuse compile variant for a program emitted on dependency package artifacts.
+/// The returned program contains the dependency packages followed by the
+/// assembled user package.
+pub fn generate_project_bytecode_with_reuse_package_units(
+    db: &dyn crate::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: &Program,
+    dependency_packages: &[Vec<CompilationUnit>],
+    prev_units: &[CompilationUnit],
+    clean_files: &HashSet<String>,
+) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
+    generate_project_bytecode_with_reuse_artifacts_impl(
+        db,
+        options,
+        opt,
+        base,
+        Some(dependency_packages),
+        prev_units,
+        clean_files,
+    )
+}
+
+fn generate_project_bytecode_with_reuse_artifacts_impl(
+    db: &dyn crate::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: &Program,
+    dependency_packages: Option<&[Vec<CompilationUnit>]>,
+    prev_units: &[CompilationUnit],
+    clean_files: &HashSet<String>,
+) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
     let mismatches = reuse_throws_mismatches(db, prev_units, clean_files);
     let effective_clean;
     let clean_files = if mismatches.is_empty() {
@@ -1314,7 +1357,7 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     // so a dirty tail-producing file no longer aborts reuse.
     let partial = generate_impl(db, options, opt, Some(base), false, Some(clean_files))?;
 
-    let mut fresh_units = decompose_units(db, options, &partial)?;
+    let mut fresh_units = decompose_units_with_base(db, options, &partial, base)?;
 
     // The freshly-synthesized (symbolic) tail: whichever fresh unit the
     // decomposition placed it on. It reflects the *current* project's lets/tests
@@ -1383,8 +1426,14 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
         carrier.init_tail = Some(tail);
     }
 
-    let program = bex_vm_types::link::link(&assembled)
-        .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
+    let program = if let Some(dependency_packages) = dependency_packages {
+        let mut packages = dependency_packages.to_vec();
+        packages.push(assembled.clone());
+        bex_vm_types::link::link_packages(&packages)
+    } else {
+        bex_vm_types::link::link(&assembled)
+    }
+    .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
     Ok((program, assembled))
 }
 
@@ -1483,7 +1532,30 @@ pub fn decompose_units(
     options: &CompileOptions,
     program: &Program,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let all_files = compiler2_all_files(db);
+    decompose_units_after_base(db, options, program, 0)
+}
+
+/// Decompose only the user portion of a program emitted on top of `base`.
+/// References into `base` become symbolic imports in the resulting units.
+pub fn decompose_units_with_base(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    program: &Program,
+    base: &Program,
+) -> Result<Vec<CompilationUnit>, LoweringError> {
+    decompose_units_after_base(db, options, program, base.objects.len())
+}
+
+fn decompose_units_after_base(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    program: &Program,
+    object_start: usize,
+) -> Result<Vec<CompilationUnit>, LoweringError> {
+    let mut all_files = compiler2_all_files(db);
+    if object_start > 0 {
+        all_files.retain(|file| !file.path(db).to_string_lossy().starts_with("<builtin>/"));
+    }
     let n_files = all_files.len();
 
     // ---- Per-file identity maps ---------------------------------------------
@@ -1576,18 +1648,18 @@ pub fn decompose_units(
             // No regular functions at all (e.g. a dirty-only emit whose sole
             // tail-producing file declares only a top-level `let`): the tail
             // begins right after the class/enum/interface definition prefix.
-            tail_start = class_owner.len() + enum_owner.len() + iface_owner.len();
+            tail_start = object_start + class_owner.len() + enum_owner.len() + iface_owner.len();
         }
     }
 
     // ---- Attribute every regular pool object to a file ----------------------
     let mut obj_owner: Vec<usize> = vec![usize::MAX; n_obj];
-    let mut obj_kind: Vec<PoolObjKind> = Vec::with_capacity(tail_start);
+    let mut obj_kind: Vec<Option<PoolObjKind>> = (0..n_obj).map(|_| None).collect();
     let (mut ci, mut ei, mut ii) = (0usize, 0usize, 0usize);
     // The index drives three sequences (pool read, `obj_owner` write, `obj_kind`
     // push), so a range loop is clearer than juggling parallel iterators.
     #[allow(clippy::needless_range_loop)]
-    for idx in 0..tail_start {
+    for idx in object_start..tail_start {
         let obj = &program.objects[ObjectIndex::from_raw(idx)];
         let (owner, kind) = match obj {
             Object::Class(_) => {
@@ -1656,13 +1728,13 @@ pub fn decompose_units(
             }
         };
         obj_owner[idx] = owner;
-        obj_kind.push(kind);
+        obj_kind[idx] = Some(kind);
     }
     // Leading-literal attribution: a literal belongs to the NEXT function object
     // in the pool (a function's constants are interned before its own object is
     // pushed). Scan backwards, carrying the most recent function's owner.
     let mut next_func_owner = usize::MAX;
-    for idx in (0..tail_start).rev() {
+    for idx in (object_start..tail_start).rev() {
         match &program.objects[ObjectIndex::from_raw(idx)] {
             Object::Function(_) => next_func_owner = obj_owner[idx],
             Object::String(_)
@@ -1690,11 +1762,11 @@ pub fn decompose_units(
         })
         .collect();
     // Per pool object: its LocalRef within its owning unit (bucket + offset).
-    let mut obj_localref: Vec<LocalRef> = Vec::with_capacity(tail_start);
-    for (idx, kind) in obj_kind.iter().enumerate() {
+    let mut obj_localref: Vec<Option<LocalRef>> = (0..n_obj).map(|_| None).collect();
+    for idx in object_start..tail_start {
         let u = obj_owner[idx];
         let obj = program.objects[ObjectIndex::from_raw(idx)].clone();
-        let local_ref = match kind {
+        let local_ref = match obj_kind[idx].as_ref().expect("regular object kind") {
             PoolObjKind::Class => {
                 let off = units[u].classes.len();
                 units[u].classes.push(obj);
@@ -1716,7 +1788,7 @@ pub fn decompose_units(
                 LocalRef::Code(u32::try_from(off).expect("code offset fits u32"))
             }
         };
-        obj_localref.push(local_ref);
+        obj_localref[idx] = Some(local_ref);
     }
 
     // ---- Global slot -> owner + local flat index ----------------------------
@@ -1733,8 +1805,8 @@ pub fn decompose_units(
     // order, `let` ordinals follow file order.
     let mut name_to_local_global: HashMap<String, (usize, u32)> = HashMap::new();
     let mut func_next: Vec<u32> = vec![0; n_files];
-    for idx in 0..tail_start {
-        if let PoolObjKind::NamedFn(name) = &obj_kind[idx] {
+    for idx in object_start..tail_start {
+        if let Some(PoolObjKind::NamedFn(name)) = &obj_kind[idx] {
             // Only functions that own a global slot participate.
             if program.function_global_indices.contains_key(name) {
                 let u = obj_owner[idx];
@@ -1776,7 +1848,7 @@ pub fn decompose_units(
         // Precompute this unit's flat-local index for each pool object it owns.
         // (Captured references keep the closure `Fn`.)
         let flat_local = |abs: usize| -> usize {
-            match obj_localref[abs] {
+            match obj_localref[abs].expect("local object reference") {
                 LocalRef::Class(k) => k as usize,
                 LocalRef::Enum(k) => c + k as usize,
                 LocalRef::Interface(k) => c + e + k as usize,
@@ -1791,7 +1863,7 @@ pub fn decompose_units(
                     if obj_owner[target] == u {
                         Ok(flat_local(target))
                     } else {
-                        let sym = object_symbol(program, target, &obj_kind, &slot_to_name)?;
+                        let sym = object_symbol(program, target, &fn_obj_name, &slot_to_name)?;
                         let import_idx = intern_import(
                             &mut object_imports,
                             &mut obj_import_idx,
@@ -1847,18 +1919,21 @@ pub fn decompose_units(
     }
 
     // ---- Export tables ------------------------------------------------------
-    for idx in 0..tail_start {
+    for idx in object_start..tail_start {
         let u = obj_owner[idx];
-        match &obj_kind[idx] {
+        match obj_kind[idx].as_ref().expect("regular object kind") {
             PoolObjKind::Class | PoolObjKind::Enum | PoolObjKind::Interface => {
                 let fq = def_object_fq(&program.objects[ObjectIndex::from_raw(idx)]);
-                units[u].exports.objects.push((fq, obj_localref[idx]));
+                units[u]
+                    .exports
+                    .objects
+                    .push((fq, obj_localref[idx].expect("definition local ref")));
             }
             PoolObjKind::NamedFn(name) => {
                 units[u]
                     .exports
                     .objects
-                    .push((name.clone(), obj_localref[idx]));
+                    .push((name.clone(), obj_localref[idx].expect("function local ref")));
             }
             PoolObjKind::CodeAnon => {}
         }
@@ -1880,7 +1955,7 @@ pub fn decompose_units(
         let tail = build_init_tail(
             program,
             tail_start,
-            &obj_kind,
+            &fn_obj_name,
             &slot_to_name,
             &let_name_to_file,
         )?;
@@ -1901,8 +1976,10 @@ pub fn decompose_units(
         package_first_unit.entry(pkg.clone()).or_insert(u);
     }
     for (pkg_name, pkg) in &program.packages {
+        let Some(&carrier) = package_first_unit.get(pkg_name) else {
+            continue;
+        };
         let frag = build_package_fragment(program, pkg, &fn_obj_name)?;
-        let carrier = package_first_unit.get(pkg_name).copied().unwrap_or(0);
         units[carrier].package_fragment = frag;
     }
 
@@ -2100,7 +2177,7 @@ fn tail_generic_dupes_clean(
 fn object_symbol(
     program: &Program,
     target: usize,
-    obj_kind: &[PoolObjKind],
+    fn_obj_name: &HashMap<usize, String>,
     slot_to_name: &[Option<String>],
 ) -> Result<Symbol, LoweringError> {
     let obj = &program.objects[ObjectIndex::from_raw(target)];
@@ -2133,15 +2210,14 @@ fn object_symbol(
                 Object::Class(c) => (SymbolKind::Class, c.name.to_string()),
                 Object::Enum(e) => (SymbolKind::Enum, e.name.to_string()),
                 Object::Interface(i) => (SymbolKind::Interface, i.name.to_string()),
-                Object::Function(_) => match &obj_kind[target] {
-                    PoolObjKind::NamedFn(name) => (SymbolKind::Function, name.clone()),
-                    PoolObjKind::CodeAnon => {
+                Object::Function(_) => match fn_obj_name.get(&target) {
+                    Some(name) => (SymbolKind::Function, name.clone()),
+                    None => {
                         return Err(LoweringError::Internal(format!(
                             "cross-unit reference to lambda object {target} (lambdas \
                              are never cross-unit)"
                         )));
                     }
-                    _ => unreachable!("function object with non-function kind"),
                 },
                 _ => {
                     return Err(LoweringError::Internal(format!(
@@ -2239,7 +2315,7 @@ fn build_package_fragment(
 fn build_init_tail(
     program: &Program,
     tail_start: usize,
-    obj_kind: &[PoolObjKind],
+    fn_obj_name: &HashMap<usize, String>,
     slot_to_name: &[Option<String>],
     let_name_to_file: &HashMap<String, usize>,
 ) -> Result<bex_vm_types::InitTail, LoweringError> {
@@ -2306,7 +2382,7 @@ fn build_init_tail(
                 if t >= tail_start {
                     Ok(t - tail_start)
                 } else {
-                    let sym = object_symbol(program, t, obj_kind, slot_to_name)?;
+                    let sym = object_symbol(program, t, fn_obj_name, slot_to_name)?;
                     let import_idx = intern_import(
                         &mut object_imports,
                         &mut obj_import_idx,
@@ -2491,7 +2567,10 @@ fn generate_impl(
         // precompiled slice; whole-program products it carries (template
         // macros, packages) are recomputed by the trailing passes below,
         // exactly as a full compile would.
-        Some(base) => (base.clone(), EmitTables::from_stdlib_program(base)),
+        Some(base) => (
+            base.clone(),
+            EmitTables::from_stdlib_program(base, db.compiled_package_interfaces().is_some()),
+        ),
         None => (Program::new(), EmitTables::default()),
     };
     if base.is_none() {
@@ -2622,11 +2701,10 @@ impl EmitTables {
     /// recoverable from the artifact: name→slot maps are stored on the
     /// `Program`; class/enum/interface metadata (field order, variant order)
     /// lives in the pool objects; class type tags are content hashes stored on
-    /// each class object. Per-package
-    /// `impl_rules` and `recursive_type_aliases` are cleared — the trailing
-    /// whole-program passes regenerate them from all files exactly as a full
-    /// compile does (keeping them would double the rule vectors).
-    fn from_stdlib_program(base: &Program) -> Self {
+    /// each class object. Source-backed compiles clear whole-program package
+    /// products so trailing passes can regenerate them. Artifact-backed compiles
+    /// retain them because their package sources are intentionally absent.
+    fn from_stdlib_program(base: &Program, retain_package_products: bool) -> Self {
         let mut tables = EmitTables::default();
 
         for (name, &slot) in &base.function_global_indices {
@@ -2675,8 +2753,10 @@ impl EmitTables {
             .iter()
             .map(|(pkg_name, pkg)| {
                 let mut pkg = pkg.clone();
-                pkg.impl_rules.clear();
-                pkg.recursive_type_aliases.clear();
+                if !retain_package_products {
+                    pkg.impl_rules.clear();
+                    pkg.recursive_type_aliases.clear();
+                }
                 (pkg_name.clone(), pkg)
             })
             .collect();

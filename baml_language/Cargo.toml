@@ -94,6 +94,9 @@ baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
 baml_compiler2_ppir = { path = "crates/baml_compiler2_ppir" }
 baml_compiler2_hir_ty = { path = "crates/baml_compiler2_hir_ty" }
+baml_package_interface = { path = "crates/baml_package_interface" }
+baml_artifact = { path = "crates/baml_artifact" }
+baml_stdlib_artifacts = { path = "crates/baml_stdlib_artifacts" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }

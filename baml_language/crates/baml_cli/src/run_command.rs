@@ -298,11 +298,13 @@ impl RunArgs {
 
     /// Compile `db` to bytecode and build a `BexEngine`.
     fn compile_to_engine(&self, db: &ProjectDatabase, argv: Vec<String>) -> Result<BexEngine> {
-        let bytecode = baml_compiler2_emit::generate_project_bytecode(
+        let bytecode = crate::bytecode_cache::compile_program(
             db,
             &baml_compiler2_emit::CompileOptions {
                 emit_test_cases: false,
             },
+            None,
+            None,
         )
         .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), argv)
@@ -863,8 +865,7 @@ impl RunArgs {
         // Project root is the file's parent so relative imports resolve.
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
 
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(parent);
+        let mut db = crate::project_load::new_project_database(parent);
         db.add_or_update_file(&canonical, &content);
 
         // Keep standalone compilation quiet for `baml run`; diagnostics still
@@ -918,8 +919,7 @@ impl RunArgs {
         // library. Compiling them in an isolated database means neither loading
         // nor diagnosing every project file, and therefore unrelated project
         // errors cannot prevent evaluation.
-        let mut isolated_db = ProjectDatabase::new();
-        isolated_db.set_project_root(&isolated_root);
+        let mut isolated_db = crate::project_load::new_project_database(&isolated_root);
         isolated_db.add_or_update_file(&isolated_root.join("__expr__.baml"), &synthetic);
         let isolated_diagnostics = baml_project::collect_diagnostics(&isolated_db);
         let isolated_has_errors = isolated_diagnostics

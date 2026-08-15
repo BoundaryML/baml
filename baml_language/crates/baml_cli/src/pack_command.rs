@@ -271,11 +271,13 @@ impl PackArgs {
             // cache seam — always a cold compile, same as `baml run --file`.
             let (db, needs_format_hint) = self.load_standalone(file)?;
             check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
-            let program = baml_compiler2_emit::generate_project_bytecode(
+            let program = crate::bytecode_cache::compile_program(
                 &db,
                 &baml_compiler2_emit::CompileOptions {
                     emit_test_cases: false,
                 },
+                None,
+                None,
             )
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
             return Ok((db, program, needs_format_hint));
@@ -374,8 +376,7 @@ impl PackArgs {
             .with_context(|| format!("failed to read {}", canonical.display()))?;
         let needs_format_hint = crate::run_command::source_needs_format_hint(&content);
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(parent);
+        let mut db = crate::project_load::new_project_database(parent);
         db.add_or_update_file(&canonical, &content);
         Ok((db, needs_format_hint))
     }

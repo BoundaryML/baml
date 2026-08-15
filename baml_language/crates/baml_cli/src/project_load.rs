@@ -219,9 +219,8 @@ pub(crate) fn load_project_or_default(
         }
         None => {
             let canonical = resolve_search_start(from)?;
-            let mut db = ProjectDatabase::new();
             let root = project_search_dir(&canonical);
-            db.set_project_root(&root);
+            let db = new_project_database(&root);
             Ok((db, root, Vec::new()))
         }
     }
@@ -386,8 +385,7 @@ pub(crate) fn build_db_from_sources(
     resolved: &ResolvedProject,
     on_file: impl Fn(&Path),
 ) -> ProjectDatabase {
-    let mut db = ProjectDatabase::new();
-    db.set_project_root(&resolved.root);
+    let mut db = new_project_database(&resolved.root);
     for (path, _) in &resolved.files {
         on_file(path);
     }
@@ -399,6 +397,15 @@ pub(crate) fn build_db_from_sources(
             .iter()
             .map(|(path, content)| (path.as_path(), content.as_str())),
     );
+    db
+}
+
+pub(crate) fn new_project_database(root: &Path) -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    let interfaces = baml_stdlib_artifacts::package_interfaces()
+        .expect("embedded stdlib package interfaces must be compatible");
+    db.set_compiled_package_interfaces(interfaces);
+    db.set_project_root(root);
     db
 }
 

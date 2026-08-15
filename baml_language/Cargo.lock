@@ -672,6 +672,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_artifact"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_package_interface",
+ "bex_vm_types",
+ "borsh",
+ "rustc-hash 2.1.2",
+ "sha2",
+ "thiserror 2.0.18",
+ "walkdir",
+]
+
+[[package]]
 name = "baml_base"
 version = "0.0.0-beta"
 dependencies = [
@@ -738,6 +752,7 @@ dependencies = [
  "baml_lsp_server",
  "baml_project",
  "baml_release",
+ "baml_stdlib_artifacts",
  "baml_surface",
  "baml_tests",
  "baml_type",
@@ -864,6 +879,7 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_ppir",
+ "baml_package_interface",
  "baml_type",
  "baml_type_runtime",
  "borsh",
@@ -1108,6 +1124,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_package_interface"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_compiler2_ast",
+ "baml_type",
+ "borsh",
+ "rustc-hash 2.1.2",
+ "salsa",
+]
+
+[[package]]
 name = "baml_project"
 version = "0.0.0-beta"
 dependencies = [
@@ -1124,6 +1152,7 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_db",
  "baml_lsp2_actions",
+ "baml_package_interface",
  "baml_surface",
  "baml_type",
  "baml_workspace",
@@ -1152,6 +1181,22 @@ dependencies = [
  "thiserror 2.0.18",
  "toml 0.8.23",
  "zip",
+]
+
+[[package]]
+name = "baml_stdlib_artifacts"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_artifact",
+ "baml_base",
+ "baml_builtins2",
+ "baml_compiler2_emit",
+ "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
+ "baml_package_interface",
+ "baml_project",
+ "bex_vm_types",
+ "borsh",
 ]
 
 [[package]]
@@ -1258,6 +1303,7 @@ name = "baml_workspace"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "baml_package_interface",
  "baml_type",
  "salsa",
  "walkdir",

@@ -30,12 +30,21 @@ use crate::facts::Facts;
 /// instantiation of its owning class's generic params (the frame prefix
 /// that `function_generic_frame` prepends for methods).
 pub struct MethodCandidate<'db> {
-    pub method: FunctionLoc<'db>,
-    /// The declaring class - the resolution's identity for the recorded
-    /// tables (r-a's `write_method_resolution` records the target the
-    /// probe chose; the class was already computed here either way).
-    pub class: ClassLoc<'db>,
+    pub target: MethodCandidateTarget<'db>,
     pub class_args: Vec<Ty>,
+}
+
+pub enum MethodCandidateTarget<'db> {
+    Source {
+        method: FunctionLoc<'db>,
+        class: ClassLoc<'db>,
+    },
+    Compiled {
+        class: TypeName,
+        class_generic_params: Vec<ParamTy>,
+        class_generic_bounds: baml_package_interface::GenericBounds,
+        method: Box<baml_package_interface::ExportedFunction>,
+    },
 }
 
 /// Finds `name` among the methods of `receiver`'s owning class. The
@@ -47,6 +56,20 @@ pub fn lookup_method<'db>(
     receiver: &Ty,
     name: &Name,
 ) -> Option<MethodCandidate<'db>> {
+    if let Some((class, class_generic_params, class_generic_bounds, methods, class_args)) =
+        compiled_receiver_class(facts, receiver, 8)
+        && let Some(method) = methods.into_iter().find(|method| method.name == *name)
+    {
+        return Some(MethodCandidate {
+            target: MethodCandidateTarget::Compiled {
+                class,
+                class_generic_params,
+                class_generic_bounds,
+                method: Box::new(method),
+            },
+            class_args,
+        });
+    }
     let (class, class_args) = receiver_class(facts, receiver, 8)?;
     // Implements-block methods resolve here too (static dispatch to the
     // override, builtin-backed receivers included); the AMBIGUITY rule -
@@ -59,10 +82,98 @@ pub fn lookup_method<'db>(
         .copied()
         .find(|&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)?;
     Some(MethodCandidate {
-        method,
-        class,
+        target: MethodCandidateTarget::Source { method, class },
         class_args,
     })
+}
+
+type CompiledReceiverClass = (
+    TypeName,
+    Vec<ParamTy>,
+    baml_package_interface::GenericBounds,
+    Vec<baml_package_interface::ExportedFunction>,
+    Vec<Ty>,
+);
+
+fn compiled_receiver_class(
+    facts: &Facts<'_>,
+    receiver: &Ty,
+    fuel: u32,
+) -> Option<CompiledReceiverClass> {
+    let builtin = |namespace: &[&str], name: &str, args: Vec<Ty>| {
+        let qtn = TypeName::new(
+            Name::new("baml"),
+            namespace.iter().map(Name::new).collect(),
+            Name::new(name),
+        );
+        let baml_package_interface::ExportedType::Class {
+            generic_params,
+            generic_bounds,
+            methods,
+            ..
+        } = facts.compiled_type(&qtn)?
+        else {
+            return None;
+        };
+        Some((qtn, generic_params, generic_bounds, methods, args))
+    };
+    match receiver.kind() {
+        TyKind::Class(qtn, args, _) => {
+            let baml_package_interface::ExportedType::Class {
+                generic_params,
+                generic_bounds,
+                methods,
+                ..
+            } = facts.compiled_type(qtn)?
+            else {
+                return None;
+            };
+            Some((
+                qtn.clone(),
+                generic_params,
+                generic_bounds,
+                methods,
+                args.to_vec(),
+            ))
+        }
+        TyKind::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
+        TyKind::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
+        TyKind::Future(value, error, _) => {
+            builtin(&["future"], "Future", vec![value.clone(), error.clone()])
+        }
+        TyKind::String { .. } | TyKind::Literal(Literal::String(_), _, _) => {
+            builtin(&[], "String", Vec::new())
+        }
+        TyKind::Int { .. } | TyKind::Literal(Literal::Int(_), _, _) => {
+            builtin(&[], "Int", Vec::new())
+        }
+        TyKind::Bigint { .. } | TyKind::Literal(Literal::Bigint(_), _, _) => {
+            builtin(&[], "Bigint", Vec::new())
+        }
+        TyKind::Float { .. } | TyKind::Literal(Literal::Float(_), _, _) => {
+            builtin(&[], "Float", Vec::new())
+        }
+        TyKind::Bool { .. } | TyKind::Literal(Literal::Bool(_), _, _) => {
+            builtin(&[], "Bool", Vec::new())
+        }
+        TyKind::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
+        TyKind::Type { .. } => builtin(&[], "TypeValue", Vec::new()),
+        TyKind::Media(kind, _) => {
+            let class = match kind {
+                MediaKind::Image => "Image",
+                MediaKind::Audio => "Audio",
+                MediaKind::Video => "Video",
+                MediaKind::Pdf => "Pdf",
+                MediaKind::Generic => return None,
+            };
+            builtin(&["media"], class, Vec::new())
+        }
+        TyKind::TypeAlias(qtn, _) => {
+            let expanded = facts.alias_def(qtn)?;
+            compiled_receiver_class(facts, &Ty::from_plain(&expanded), fuel.checked_sub(1)?)
+        }
+        _ => None,
+    }
 }
 
 /// The class whose declaration owns `receiver`'s methods, with the generic
@@ -185,15 +296,36 @@ pub enum MemberDeclarer<'db> {
     /// A concrete receiver's interface FIELD through a matched impl.
     /// The backing class-field link is not resolved here yet, so
     /// consumers record nothing for this case (S16 follow-up).
-    ImplField { block: ImplLoc<'db> },
+    ImplField {
+        block: ImplLoc<'db>,
+    },
+    CompiledVirtualField {
+        interface: TypeName,
+        realized: InterfaceRef,
+        field_index: u32,
+    },
+    CompiledVirtualMethod {
+        interface: TypeName,
+        method: Name,
+    },
+    CompiledImplMethod {
+        method: baml_package_interface::PackageMethodId,
+    },
+    CompiledImplField,
 }
 
 /// The pieces the call site needs to finish a default method's
 /// instantiation: the method and the interface-frame prefix
 /// (`[Self, args.., assoc..]`) already pinned by the receiver.
-pub struct PendingOwnGenerics<'db> {
-    pub method: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    pub prefix: Vec<Ty>,
+pub enum PendingOwnGenerics<'db> {
+    Source {
+        method: baml_compiler2_hir::loc::FunctionLoc<'db>,
+        prefix: Vec<Ty>,
+    },
+    Compiled {
+        method: Box<baml_package_interface::ExportedInterfaceMethod>,
+        bindings: rustc_hash::FxHashMap<ParamTy, Ty>,
+    },
 }
 
 /// The outcome of an interface-member lookup. Ambiguity is a DISTINCT
@@ -400,6 +532,13 @@ fn lookup_impl_member<'db>(
             continue;
         }
         let implemented = resolved.implemented();
+        let compiled_method = resolved.compiled().and_then(|impl_facts| {
+            impl_facts
+                .methods
+                .iter()
+                .find(|method| method.name == *name)
+                .map(|method| method.symbol.clone())
+        });
         if let Some(mut member) =
             member_on_interface(db, facts, &implemented, receiver, name, false)
             && !providers.iter().any(|(seen, _)| *seen == implemented)
@@ -408,10 +547,9 @@ fn lookup_impl_member<'db>(
             // method resolves to the impl's override when it provides
             // one, else the interface's default body (the recorded
             // callable IS the body the call runs).
-            member.declarer = match member.declarer {
-                MemberDeclarer::VirtualMethod { method, .. } => {
-                    let func = resolved
-                        .facts
+            member.declarer = match (member.declarer, resolved.source(), compiled_method) {
+                (MemberDeclarer::VirtualMethod { method, .. }, Some((block, impl_facts)), _) => {
+                    let func = impl_facts
                         .methods
                         .iter()
                         .copied()
@@ -420,15 +558,21 @@ fn lookup_impl_member<'db>(
                                 == *name
                         })
                         .unwrap_or(method);
-                    MemberDeclarer::ImplMethod {
-                        block: resolved.block,
-                        func,
-                    }
+                    MemberDeclarer::ImplMethod { block, func }
                 }
-                MemberDeclarer::VirtualField { .. } => MemberDeclarer::ImplField {
-                    block: resolved.block,
-                },
-                concrete => concrete,
+                (MemberDeclarer::VirtualField { .. }, Some((block, _)), _) => {
+                    MemberDeclarer::ImplField { block }
+                }
+                (MemberDeclarer::CompiledVirtualMethod { .. }, None, Some(method)) => {
+                    MemberDeclarer::CompiledImplMethod { method }
+                }
+                (MemberDeclarer::CompiledVirtualMethod { interface, method }, None, None) => {
+                    MemberDeclarer::CompiledVirtualMethod { interface, method }
+                }
+                (MemberDeclarer::CompiledVirtualField { .. }, None, _) => {
+                    MemberDeclarer::CompiledImplField
+                }
+                (declarer, _, _) => declarer,
             };
             providers.push((implemented, member));
         }
@@ -535,7 +679,7 @@ fn env_discharges_rigid_bounds<'db>(
     facts: &Facts<'db>,
     resolved: &crate::impls::ResolvedImpl<'db>,
 ) -> bool {
-    for (param, bounds) in &resolved.facts.generic_params {
+    for (param, bounds) in resolved.generic_params() {
         let Some(actual) = resolved.bindings.get(param) else {
             continue;
         };
@@ -600,7 +744,7 @@ pub(crate) fn member_on_interface<'db>(
     existential: bool,
 ) -> Option<InterfaceMember<'db>> {
     let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
-        return None;
+        return compiled_member_on_interface(facts, target, receiver, name, existential);
     };
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
     let instantiation = interface_instantiation(receiver, target, data);
@@ -644,11 +788,12 @@ pub(crate) fn member_on_interface<'db>(
         // The interface frame is the receiver's business; the method's
         // OWN generics (frame suffix, `map<R, E2>`, `seen<U>`) are the
         // call site's - hand them back for turbofish/fresh-var filling.
-        let pending_own =
-            (signature.generic_params.len() > instantiation.len()).then(|| PendingOwnGenerics {
+        let pending_own = (signature.generic_params.len() > instantiation.len()).then(|| {
+            PendingOwnGenerics::Source {
                 method,
                 prefix: instantiation.clone(),
-            });
+            }
+        });
         return Some(InterfaceMember {
             ty: instantiate_signature(signature, &instantiation),
             is_method: true,
@@ -658,6 +803,106 @@ pub(crate) fn member_on_interface<'db>(
     }
 
     None
+}
+
+fn compiled_member_on_interface<'db>(
+    facts: &Facts<'db>,
+    target: &InterfaceRef,
+    receiver: &Ty,
+    name: &Name,
+    existential: bool,
+) -> Option<InterfaceMember<'db>> {
+    let baml_package_interface::ExportedType::Interface {
+        frame,
+        generic_params,
+        associated_types,
+        fields,
+        methods,
+        ..
+    } = facts.compiled_type(&target.name)?
+    else {
+        return None;
+    };
+    if generic_params.len() != target.generics.len() {
+        return None;
+    }
+    let mut actuals = vec![receiver.clone()];
+    actuals.extend(target.generics.iter().cloned());
+    actuals.extend(associated_types.iter().map(|associated| {
+        target
+            .associated_types
+            .iter()
+            .find(|(pin, _)| *pin == associated.name)
+            .map(|(_, ty)| ty.clone())
+            .unwrap_or_else(|| {
+                Ty::intern(TyKind::AssociatedTypeProjection {
+                    base: receiver.clone(),
+                    interface: target.clone(),
+                    member: associated.name.clone(),
+                    attr: TyAttr::default(),
+                })
+            })
+    }));
+    let bindings = frame
+        .iter()
+        .cloned()
+        .zip(actuals)
+        .collect::<rustc_hash::FxHashMap<_, _>>();
+
+    if let Some((index, (_, field_ty))) = fields
+        .iter()
+        .enumerate()
+        .find(|(_, (field, _))| field == name)
+    {
+        return Some(InterfaceMember {
+            ty: crate::impls::substitute_bindings(&Ty::from_plain(field_ty), &bindings),
+            is_method: false,
+            pending_own: None,
+            declarer: MemberDeclarer::CompiledVirtualField {
+                interface: target.name.clone(),
+                realized: target.clone(),
+                field_index: u32::try_from(index).expect("interface field count fits u32"),
+            },
+        });
+    }
+
+    let method = methods.into_iter().find(|method| method.name == *name)?;
+    let method_ty =
+        crate::impls::substitute_bindings(&Ty::from_plain(&method.function_ty), &bindings);
+    if existential && compiled_signature_breaks_one_self(&method_ty) {
+        return None;
+    }
+    let pending_own = (!method.generic_params.is_empty()).then(|| PendingOwnGenerics::Compiled {
+        method: Box::new(method.clone()),
+        bindings,
+    });
+    Some(InterfaceMember {
+        ty: method_ty,
+        is_method: true,
+        pending_own,
+        declarer: MemberDeclarer::CompiledVirtualMethod {
+            interface: target.name.clone(),
+            method: method.name,
+        },
+    })
+}
+
+fn compiled_signature_breaks_one_self(function_ty: &Ty) -> bool {
+    let TyKind::Function {
+        params,
+        ret,
+        throws,
+        ..
+    } = function_ty.kind()
+    else {
+        return false;
+    };
+    params
+        .iter()
+        .skip(1)
+        .any(|param| self_occurs(&param.ty, false))
+        || self_occurs(ret, true)
+        || self_occurs(throws, true)
 }
 
 /// The interface frame's instantiation vector for a receiver:

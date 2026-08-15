@@ -90,8 +90,7 @@ impl ProjectSession {
             Some(resolved) => Ok(Self::from_resolved(resolved, cache_use)),
             None => {
                 let root = crate::project_load::projectless_search_dir(from)?;
-                let mut db = ProjectDatabase::new();
-                db.set_project_root(&root);
+                let db = crate::project_load::new_project_database(&root);
                 Ok(Self {
                     resolved: ResolvedProject {
                         root,

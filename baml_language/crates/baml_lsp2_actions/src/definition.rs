@@ -419,6 +419,9 @@ fn resolve_field_access_at(
                 range: name_span,
             })
         }
+        MemberResolution::CompiledBoundMethod { .. }
+        | MemberResolution::CompiledUnboundMethod { .. }
+        | MemberResolution::CompiledFree { .. } => None,
         MemberResolution::InterfaceVirtualMethod {
             interface: iface_loc,
             method,
@@ -464,6 +467,7 @@ fn resolve_field_access_at(
                 range: *source_map.field_name_spans.get(*field_index as usize)?,
             })
         }
+        MemberResolution::CompiledInterfaceVirtualField { .. } => None,
     }
 }
 

@@ -23,8 +23,9 @@
 //!
 //! The linker interleaves each unit's buckets bucket-by-bucket across the units
 //! of its group, in file order, reproducing that exact pool order. Units are
-//! partitioned into groups by their [`CompilationUnit::source_file`]: builtin
-//! files carry a `<builtin>/…` path.
+//! [`link`] preserves the legacy two-group layout by recognizing builtin source
+//! paths. Package artifacts use [`link_packages`], whose dependency-ordered
+//! groups are explicit and do not depend on virtual paths.
 
 use std::collections::HashMap;
 
@@ -263,25 +264,50 @@ fn sole_init_tail(units: &[CompilationUnit], group: &[usize]) -> Result<Option<u
 /// name.
 #[allow(clippy::too_many_lines)]
 pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
-    // ---- Group ordering (design §9 R3) --------------------------------------
-    // Process builtin units first, then user units; within each group the passes
-    // interleave bucket-by-bucket across units in file order.
     let group_order: Vec<usize> = (0..units.len())
         .filter(|&u| is_builtin_unit(&units[u]))
         .chain((0..units.len()).filter(|&u| !is_builtin_unit(&units[u])))
         .collect();
-    // The two group slices, as index ranges into `group_order`.
     let builtin_len = units.iter().filter(|u| is_builtin_unit(u)).count();
-    let groups: [&[usize]; 2] = [&group_order[..builtin_len], &group_order[builtin_len..]];
+    let groups = vec![
+        group_order[..builtin_len].to_vec(),
+        group_order[builtin_len..].to_vec(),
+    ];
+    link_grouped(units, &groups)
+}
+
+/// Link compilation units grouped in dependency order.
+///
+/// Each package is one group. Objects remain pass-major within a package, and
+/// package init tails are appended after that package's regular code.
+pub fn link_packages(packages: &[Vec<CompilationUnit>]) -> Result<Program, LinkError> {
+    let units = packages.iter().flatten().cloned().collect::<Vec<_>>();
+    let mut offset = 0usize;
+    let groups = packages
+        .iter()
+        .map(|package| {
+            let group = (offset..offset + package.len()).collect::<Vec<_>>();
+            offset += package.len();
+            group
+        })
+        .collect::<Vec<_>>();
+    link_grouped(&units, &groups)
+}
+
+#[allow(clippy::too_many_lines)]
+fn link_grouped(units: &[CompilationUnit], groups: &[Vec<usize>]) -> Result<Program, LinkError> {
+    // ---- Group ordering (design §9 R3) --------------------------------------
+    // Groups are supplied in dependency order. Within a group the passes
+    // interleave bucket-by-bucket across units in file order.
 
     // The `$init`/`$init_test` tail of each group is carried on one of its units
     // (at most one). It is placed after the group's regular code (design §9 R2).
     // Two tails in one group would drop bytecode, so it is an error rather than a
     // silent first-wins.
-    let group_tail: [Option<usize>; 2] = [
-        sole_init_tail(units, groups[0])?,
-        sole_init_tail(units, groups[1])?,
-    ];
+    let group_tail = groups
+        .iter()
+        .map(|group| sole_init_tail(units, group))
+        .collect::<Result<Vec<_>, _>>()?;
 
     // ---- Per-unit func/let counts -------------------------------------------
     let code_names: Vec<std::collections::HashSet<&str>> = units
@@ -332,19 +358,19 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     let mut layout = vec![UnitLayout::default(); units.len()];
     let mut obj_cursor = 0usize;
     for (g, group) in groups.iter().enumerate() {
-        for &u in *group {
+        for &u in group {
             layout[u].class_base = obj_cursor;
             obj_cursor += units[u].classes.len();
         }
-        for &u in *group {
+        for &u in group {
             layout[u].enum_base = obj_cursor;
             obj_cursor += units[u].enums.len();
         }
-        for &u in *group {
+        for &u in group {
             layout[u].iface_base = obj_cursor;
             obj_cursor += units[u].interfaces.len();
         }
-        for &u in *group {
+        for &u in group {
             layout[u].code_base = obj_cursor;
             let unit = &units[u];
             let n_local_globals = func_count[u] + let_count[u];
@@ -385,14 +411,14 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     // ---- Global-slot bases (functions then lets, then $init tail) -----------
     let mut slot_cursor = 0usize;
     // Absolute slot where each group's `$init` tail slots begin.
-    let mut tail_slot_base = [0usize; 2];
+    let mut tail_slot_base = vec![0usize; groups.len()];
     for (g, group) in groups.iter().enumerate() {
-        for &u in *group {
+        for &u in group {
             layout[u].func_count = func_count[u];
             layout[u].func_gbase = slot_cursor;
             slot_cursor += func_count[u];
         }
-        for &u in *group {
+        for &u in group {
             layout[u].let_gbase = slot_cursor;
             slot_cursor += let_count[u];
         }
@@ -507,7 +533,7 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
 
     let mut resolved_tail_imports: Vec<Option<ResolvedTailImports>> =
         Vec::with_capacity(group_tail.len());
-    for tail_unit in group_tail {
+    for &tail_unit in &group_tail {
         let Some(tail) = tail_unit.and_then(|u| units[u].init_tail.as_ref()) else {
             resolved_tail_imports.push(None);
             continue;
@@ -536,23 +562,23 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     // a shadow that is skipped here and whose references resolve to the canonical
     // via `code_abs` / `canonical_pos`.
     for (g, group) in groups.iter().enumerate() {
-        for &u in *group {
+        for &u in group {
             for object in &units[u].classes {
                 program.objects.push(object.clone());
             }
         }
-        for &u in *group {
+        for &u in group {
             for object in &units[u].enums {
                 program.objects.push(object.clone());
             }
         }
-        for &u in *group {
+        for &u in group {
             for object in &units[u].interfaces {
                 program.objects.push(object.clone());
             }
         }
         // ---- Code placement (design §3b step 3) -----------------------------
-        for &u in *group {
+        for &u in group {
             let unit = &units[u];
             let n_local_objects =
                 unit.classes.len() + unit.enums.len() + unit.interfaces.len() + unit.code.len();

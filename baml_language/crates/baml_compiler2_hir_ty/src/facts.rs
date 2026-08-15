@@ -51,27 +51,47 @@ impl<'db> Facts<'db> {
         baml_compiler2_ppir::package_items(self.db, package)
             .lookup_type(name.namespace(), name.name())
     }
+
+    pub fn compiled_type(
+        &self,
+        name: &QualifiedTypeName,
+    ) -> Option<baml_package_interface::ExportedType> {
+        self.db
+            .compiled_package_interfaces()?
+            .by_package(self.db)
+            .get(name.package())?
+            .lookup_type(name.namespace(), name.name())
+            .cloned()
+    }
 }
 
 impl TypeContext for Facts<'_> {
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
-        let Some(Definition::TypeAlias(alias)) = self.definition_of(name) else {
-            return None;
-        };
-        Some(crate::lower::type_alias_value(self.db, alias).to_plain())
+        match self.definition_of(name) {
+            Some(Definition::TypeAlias(alias)) => {
+                Some(crate::lower::type_alias_value(self.db, alias).to_plain())
+            }
+            _ => match self.compiled_type(name)? {
+                baml_package_interface::ExportedType::TypeAlias { resolved, .. } => Some(resolved),
+                _ => None,
+            },
+        }
     }
 
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
-        let Some(Definition::Enum(enum_loc)) = self.definition_of(name) else {
-            return None;
-        };
-        Some(
-            baml_compiler2_ppir::item_data::enum_data(self.db, enum_loc)
-                .variants
-                .iter()
-                .map(|variant| variant.name.clone())
-                .collect(),
-        )
+        match self.definition_of(name) {
+            Some(Definition::Enum(enum_loc)) => Some(
+                baml_compiler2_ppir::item_data::enum_data(self.db, enum_loc)
+                    .variants
+                    .iter()
+                    .map(|variant| variant.name.clone())
+                    .collect(),
+            ),
+            _ => match self.compiled_type(name)? {
+                baml_package_interface::ExportedType::Enum { variants, .. } => Some(variants),
+                _ => None,
+            },
+        }
     }
 
     // -- Interface facts (I1: the impl registry answers; bounds and

@@ -41,9 +41,9 @@ use std::{
 use baml_db::{
     SourceFile,
     baml_compiler2_emit::{
-        CompileOptions, LoweringError, OptLevel, decompose_units, generate_project_bytecode,
-        generate_project_bytecode_with_reuse_artifacts, generate_project_bytecode_with_stdlib,
-        generate_stdlib_program, reuse_throws_mismatches,
+        CompileOptions, LoweringError, OptLevel, decompose_units_with_base,
+        generate_project_bytecode_with_reuse_package_units, generate_project_bytecode_with_stdlib,
+        reuse_throws_mismatches,
     },
     baml_compiler2_hir, baml_compiler2_ppir,
 };
@@ -590,26 +590,29 @@ pub(crate) fn compile_program_artifacts(
     cache: Option<&CacheContext>,
     plan: Option<&ReusePlan>,
 ) -> Result<CompiledArtifacts, LoweringError> {
-    let Some(ctx) = cache else {
-        return generate_project_bytecode(db, options).map(|program| CompiledArtifacts {
-            program,
-            units: None,
-        });
-    };
-    let base = match ctx.cache.load_shared(&ctx.stdlib_key) {
-        Some(base) => base,
-        None => {
-            let base = generate_stdlib_program(db, CLI_OPT_LEVEL)?;
-            let _ = ctx.cache.store_shared(&ctx.stdlib_key, &base);
-            base
-        }
-    };
+    let dependency_packages = baml_stdlib_artifacts::package_codes()
+        .map_err(|error| LoweringError::Internal(format!("load embedded stdlib: {error}")))?;
+    let dependency_packages = dependency_packages
+        .into_iter()
+        .map(|(_, code)| code.units)
+        .collect::<Vec<_>>();
+    let embedded_base = bex_vm_types::link::link_packages(&dependency_packages)
+        .map_err(|error| LoweringError::Internal(format!("link embedded stdlib: {error}")))?;
+    if cache.is_none() {
+        return generate_project_bytecode_with_stdlib(db, options, CLI_OPT_LEVEL, &embedded_base)
+            .map(|program| CompiledArtifacts {
+                program,
+                units: None,
+            });
+    }
+    let base = embedded_base;
     if let Some(plan) = plan {
-        match generate_project_bytecode_with_reuse_artifacts(
+        match generate_project_bytecode_with_reuse_package_units(
             db,
             options,
             CLI_OPT_LEVEL,
             &base,
+            &dependency_packages,
             &plan.prev_units,
             &plan.clean_files,
         ) {
@@ -629,11 +632,11 @@ pub(crate) fn compile_program_artifacts(
             }
         }
     }
-    generate_project_bytecode_with_stdlib(db, options, CLI_OPT_LEVEL, &base).map(|program| {
-        CompiledArtifacts {
-            program,
-            units: None,
-        }
+    let program = generate_project_bytecode_with_stdlib(db, options, CLI_OPT_LEVEL, &base)?;
+    let units = decompose_units_with_base(db, options, &program, &base)?;
+    Ok(CompiledArtifacts {
+        program,
+        units: Some(units),
     })
 }
 
@@ -1647,9 +1650,13 @@ impl CacheContext {
                 let options = CompileOptions {
                     emit_test_cases: self.emit_test_cases,
                 };
-                owned_units = decompose_units(db, &options, program).map_err(|error| {
-                    std::io::Error::other(format!("unit decomposition failed: {error}"))
+                let base = baml_stdlib_artifacts::linked_program().map_err(|error| {
+                    std::io::Error::other(format!("load embedded stdlib: {error}"))
                 })?;
+                owned_units =
+                    decompose_units_with_base(db, &options, program, &base).map_err(|error| {
+                        std::io::Error::other(format!("unit decomposition failed: {error}"))
+                    })?;
                 &owned_units
             }
         };
@@ -3540,7 +3547,8 @@ mod tests {
             "class Point {\n  x int\n  y int\n}\n\
              function diff(p: Point) -> int {\n  p.x - p.y\n}\n",
         )]);
-        let base = generate_stdlib_program(&db, CLI_OPT_LEVEL).expect("stdlib compiles");
+        let base = baml_db::baml_compiler2_emit::generate_stdlib_program(&db, CLI_OPT_LEVEL)
+            .expect("stdlib compiles");
         let program = generate_project_bytecode_with_stdlib(&db, &opts(), CLI_OPT_LEVEL, &base)
             .expect("project compiles");
         let refs = referenced_names_by_file(&program);
@@ -3743,6 +3751,7 @@ mod tests {
         let sentinel = PackageInterface {
             types: Default::default(),
             functions: Default::default(),
+            impls: Default::default(),
             throw_sets: FunctionThrowSets {
                 direct: Default::default(),
                 transitive: Default::default(),

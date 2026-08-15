@@ -1460,7 +1460,11 @@ fn deserialize_media(
             ));
         }
         Some(_) => {
-            return Err(raise_decode(vm, "media object `kind` must be a string", path));
+            return Err(raise_decode(
+                vm,
+                "media object `kind` must be a string",
+                path,
+            ));
         }
     }
 
