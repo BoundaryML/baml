@@ -102,7 +102,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.ComplexUnions> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -158,7 +158,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.DiscriminatedUnions> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -214,7 +214,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.PrimitiveUnions> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -270,7 +270,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.UnionArrays> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -341,7 +341,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.ComplexUnions, types.ComplexUnions>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {
@@ -415,7 +415,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.DiscriminatedUnions, types.DiscriminatedUnions>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {
@@ -489,7 +489,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.PrimitiveUnions, types.PrimitiveUnions>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {
@@ -563,7 +563,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.UnionArrays, types.UnionArrays>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {

@@ -102,7 +102,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.SimpleArrays {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -152,7 +152,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.SimpleArrays {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -202,7 +202,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.MixedArrays {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -252,7 +252,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.NestedArrays {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -302,7 +302,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.ObjectArrays {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -352,7 +352,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.SimpleArrays {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -402,7 +402,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): string[][][] {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -452,7 +452,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): Record<string, number>[] {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -502,7 +502,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): boolean[] {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -552,7 +552,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): string[] {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -602,7 +602,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): number[] {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -652,7 +652,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): number[] {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -702,7 +702,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): (string | number | boolean)[] {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -752,7 +752,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): number[][] {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -802,7 +802,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): (string | null)[] {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -852,7 +852,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.User[] {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -902,7 +902,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): string[] {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {

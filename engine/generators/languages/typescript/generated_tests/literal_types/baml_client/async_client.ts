@@ -102,7 +102,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.BooleanLiterals> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -158,7 +158,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.ComplexLiterals> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -214,7 +214,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.IntegerLiterals> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -270,7 +270,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.MixedLiterals> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -326,7 +326,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.StringLiterals> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -397,7 +397,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.BooleanLiterals, types.BooleanLiterals>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {
@@ -471,7 +471,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.ComplexLiterals, types.ComplexLiterals>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {
@@ -545,7 +545,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.IntegerLiterals, types.IntegerLiterals>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {
@@ -619,7 +619,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.MixedLiterals, types.MixedLiterals>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {
@@ -693,7 +693,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.StringLiterals, types.StringLiterals>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {

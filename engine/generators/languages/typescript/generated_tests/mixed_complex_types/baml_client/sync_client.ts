@@ -102,7 +102,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.KitchenSink {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -152,7 +152,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.Node {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -202,7 +202,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.UltraComplex {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {

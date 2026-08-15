@@ -102,7 +102,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.BooleanLiterals {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -152,7 +152,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.ComplexLiterals {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -202,7 +202,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.IntegerLiterals {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -252,7 +252,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.MixedLiterals {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
@@ -302,7 +302,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.StringLiterals {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {

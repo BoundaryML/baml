@@ -86,7 +86,7 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<{{ func.event_type_param() }}>
   ): {{func.return_type.serialize_type(pkg)}} {
     try {
-      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
       const __signal__ = __options__.signal;
 
       if (__signal__?.aborted) {
