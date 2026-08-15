@@ -4,7 +4,7 @@
 use std::{
     collections::{BTreeMap, HashSet},
     fmt::Write as _,
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -34,6 +34,48 @@ use rowan::ast::AstNode;
 
 type RuntimeLinkStub = (Vec<Name>, Name, String);
 type EnrichedRuntimeMount = (Vec<u8>, Vec<RuntimeLinkStub>);
+
+const RUNTIME_VIRTUAL_ROOT: &str = "<runtime>";
+const BUILTIN_VIRTUAL_ROOT: &str = "<builtin>";
+
+/// Construct a compiler virtual path without consulting the host OS separator.
+///
+/// Runtime file names are identifiers in the compiler's slash-oriented path
+/// domain, not native filesystem paths. Normalizing backslashes also keeps
+/// requests produced on Windows stable when they cross a process boundary.
+fn runtime_source_virtual_path(path: &str) -> PathBuf {
+    let path = path.replace('\\', "/");
+    PathBuf::from(format!(
+        "{RUNTIME_VIRTUAL_ROOT}/{}",
+        path.trim_start_matches('/')
+    ))
+}
+
+/// Construct the virtual source path for a link stub in a mounted package.
+fn runtime_mount_virtual_path(
+    alias: &str,
+    namespace: &[Name],
+    mount_index: usize,
+    stub_index: usize,
+) -> PathBuf {
+    let mut path = format!("{BUILTIN_VIRTUAL_ROOT}/{alias}");
+    for segment in namespace {
+        write!(&mut path, "/ns_{}", segment.as_str()).expect("writing to String is infallible");
+    }
+    write!(&mut path, "/runtime_mount_{mount_index}_{stub_index}.baml")
+        .expect("writing to String is infallible");
+    PathBuf::from(path)
+}
+
+/// Hide the synthetic runtime root in diagnostics using virtual-path rules.
+fn runtime_relative_virtual_path(path: &Path) -> String {
+    let normalized = path.to_string_lossy().replace('\\', "/");
+    normalized
+        .strip_prefix(RUNTIME_VIRTUAL_ROOT)
+        .map(|path| path.strip_prefix('/').unwrap_or(path))
+        .unwrap_or(&normalized)
+        .to_string()
+}
 
 fn enrich_runtime_mount(
     alias: &str,
@@ -454,11 +496,7 @@ fn owned_diagnostic(
     let span = diagnostic.primary_span().and_then(|span| {
         db.file_id_to_path(span.file_id)
             .map(|path| RuntimeSourceSpan {
-                file: path
-                    .strip_prefix("<runtime>")
-                    .unwrap_or(path)
-                    .to_string_lossy()
-                    .into_owned(),
+                file: runtime_relative_virtual_path(path),
                 start: usize::from(span.range.start()),
                 end: usize::from(span.range.end()),
             })
@@ -1465,7 +1503,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         // This local is the transience guarantee: no handle to `db` occurs in
         // either return type, and all retained values below are deep-owned.
         let mut db = ProjectDatabase::new();
-        db.set_project_root(Path::new("<runtime>"));
+        db.set_project_root(Path::new(RUNTIME_VIRTUAL_ROOT));
         let enriched = packages
             .into_iter()
             .map(|(name, package)| {
@@ -1488,11 +1526,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 continue;
             }
             for (stub_index, (namespace, _name, source)) in stubs.iter().enumerate() {
-                let mut path = std::path::PathBuf::from(format!("<builtin>/{alias}"));
-                for segment in namespace {
-                    path.push(format!("ns_{segment}"));
-                }
-                path.push(format!("runtime_mount_{mount_index}_{stub_index}.baml"));
+                let path = runtime_mount_virtual_path(alias, namespace, mount_index, stub_index);
                 db.add_compiler2_virtual_file(path, source);
             }
         }
@@ -1501,7 +1535,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             // the synthetic root makes `ns_foo/` namespace derivation behave
             // exactly like an ordinary project without exposing the synthetic
             // prefix in diagnostics.
-            let path = Path::new("<runtime>").join(path);
+            let path = runtime_source_virtual_path(&path);
             if is_session {
                 db.add_session_file(path, &source);
             } else {
@@ -1603,5 +1637,82 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             session: session_artifact,
             session_lease,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_compiler2_hir::file_package::file_package;
+
+    use super::*;
+
+    #[test]
+    fn runtime_virtual_paths_are_slash_oriented() {
+        let source = runtime_source_virtual_path(r"ns_tools\ns_nested\main.baml");
+        assert_eq!(
+            source.to_string_lossy(),
+            "<runtime>/ns_tools/ns_nested/main.baml"
+        );
+
+        let mount =
+            runtime_mount_virtual_path("app", &[Name::new("tools"), Name::new("nested")], 7, 9);
+        assert_eq!(
+            mount.to_string_lossy(),
+            "<builtin>/app/ns_tools/ns_nested/runtime_mount_7_9.baml"
+        );
+        assert!(!source.to_string_lossy().contains('\\'));
+        assert!(!mount.to_string_lossy().contains('\\'));
+    }
+
+    #[test]
+    fn runtime_virtual_paths_derive_packages_and_namespaces() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(Path::new(RUNTIME_VIRTUAL_ROOT));
+
+        let source = db.add_file(
+            runtime_source_virtual_path(r"ns_tools\ns_nested\main.baml"),
+            "",
+        );
+        let source_package = file_package(&db, source);
+        assert_eq!(source_package.package.as_str(), "user");
+        assert_eq!(
+            source_package
+                .namespace_path
+                .iter()
+                .map(Name::as_str)
+                .collect::<Vec<_>>(),
+            ["tools", "nested"]
+        );
+
+        let mount = db.add_compiler2_virtual_file(
+            runtime_mount_virtual_path("app", &[Name::new("tools"), Name::new("nested")], 0, 0),
+            "",
+        );
+        let mount_package = file_package(&db, mount);
+        assert_eq!(mount_package.package.as_str(), "app");
+        assert_eq!(
+            mount_package
+                .namespace_path
+                .iter()
+                .map(Name::as_str)
+                .collect::<Vec<_>>(),
+            ["tools", "nested"]
+        );
+    }
+
+    #[test]
+    fn runtime_diagnostic_paths_tolerate_backslashes() {
+        assert_eq!(
+            runtime_relative_virtual_path(Path::new(r"<runtime>\ns_tools\main.baml")),
+            "ns_tools/main.baml"
+        );
+        assert_eq!(
+            runtime_relative_virtual_path(Path::new("<runtime>/main.baml")),
+            "main.baml"
+        );
+        assert_eq!(
+            runtime_relative_virtual_path(Path::new(RUNTIME_VIRTUAL_ROOT)),
+            ""
+        );
     }
 }
