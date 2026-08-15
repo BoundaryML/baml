@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] E0158
+  [type] E0163
 
   × client `DirectEnvRead` reaches `baml.env.get`, which performs io, through `baml.env.get_or_panic` — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at
   │ request time instead — e.g. `env.X`, a late-bound reference read only when the request is made
@@ -11,7 +11,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ·               ─────────────────────
     ╰────
 
-  [type] E0158
+  [type] E0163
 
   × client `RawSysop` calls `baml.env.get`, which performs io — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at request time instead — e.g. `env.X`, a
   │ late-bound reference read only when the request is made
@@ -20,7 +20,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ·               ────────────
     ╰────
 
-  [type] E0158
+  [type] E0163
 
   × client `ViaHelper` reaches `baml.env.get`, which performs io, through `load_secret` — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at request time
   │ instead — e.g. `env.X`, a late-bound reference read only when the request is made
@@ -29,7 +29,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ·               ───────────
     ╰────
 
-  [type] E0158
+  [type] E0163
 
   × client `ViaFetch` reaches `baml.http._fetch`, which performs io, through `baml.http.fetch` — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at
   │ request time instead — e.g. `env.X`, a late-bound reference read only when the request is made
@@ -38,7 +38,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ·               ───────────────
     ╰────
 
-  [type] E0158
+  [type] E0163
 
   × client `InvokedThunk` reaches `baml.env.get`, which performs io, through `baml.env.get_or_panic` — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at
   │ request time instead — e.g. `env.X`, a late-bound reference read only when the request is made
@@ -47,7 +47,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                        ─────────────────────
     ╰────
 
-  [type] E0158
+  [type] E0163
 
   × client `ViaSpawn` reaches `baml.env.get`, which performs io, through `spawned_secret` — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at request
   │ time instead — e.g. `env.X`, a late-bound reference read only when the request is made

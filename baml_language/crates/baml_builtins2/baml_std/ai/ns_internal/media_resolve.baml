@@ -34,11 +34,21 @@ function _media_mime_type(explicit: string?, source_value: string, kind: string)
     } else if (source.includes(".mov")) {
         "video/quicktime"
     } else if (source.includes(".mp4")) {
-        "video/mp4"
+        // .mp4 and .mkv are containers for audio too (Bedrock expects
+        // audio/mp4 for m4a-style input); branch on kind like .webm.
+        if (kind == "audio") {
+            "audio/mp4"
+        } else {
+            "video/mp4"
+        }
     } else if (source.includes(".avi")) {
         "video/x-msvideo"
     } else if (source.includes(".mkv")) {
-        "video/x-matroska"
+        if (kind == "audio") {
+            "audio/x-matroska"
+        } else {
+            "video/x-matroska"
+        }
     } else if (source.includes(".pdf")) {
         "application/pdf"
     } else if (kind == "audio") {
@@ -112,7 +122,17 @@ function _resolve_media_content(
         if (!fetch_url || media_url.starts_with("gs://")) {
             return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime };
         }
-        let response = baml.http.fetch(media_url);
+        // A remote fetch gets a bounded deadline (the default is unbounded) and
+        // its raw Io/Timeout failures become a typed, classified NetworkFailure.
+        let response = baml.http.fetch(media_url, timeout = baml.time.Duration.from_seconds(30)) catch_all (e) {
+            _ => {
+                throw root.errors.NetworkFailure {
+                    provider: "media",
+                    detail: `media URL ${media_url} could not be fetched: ${e.to_string()}`,
+                    raw_body: null,
+                }
+            },
+        };
         if (!response.ok()) {
             throw root.errors.NetworkFailure {
                 provider: "media",
@@ -121,10 +141,21 @@ function _resolve_media_content(
             }
         }
         let response_mime = response.headers.get("content-type") ?? mime;
+        let body = response.bytes() catch_all (e) {
+            _ => {
+                throw root.errors.NetworkFailure {
+                    provider: "media",
+                    detail: `media URL ${media_url} body could not be read: ${e.to_string()}`,
+                    raw_body: null,
+                }
+            },
+        };
         return root.wire.ResolvedMedia {
             url: null,
-            base64: response.bytes().to_base64(),
-            mime_type: response_mime.split(";").at(0) ?? mime,
+            base64: body.to_base64(),
+            // HTTP allows whitespace around the `;` parameter separator, so the
+            // subtype must be trimmed or providers reject the declared type.
+            mime_type: (response_mime.split(";").at(0) ?? mime).trim(),
         };
     }
     throw baml.errors.InvalidArgument { message: "media has no URL, file, or base64 content" }

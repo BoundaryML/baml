@@ -3101,7 +3101,7 @@ function ai.internal._media_mime_type(explicit: string | null, source_value: str
     load_var _4
     narrow_bind string, slot=4
     pop_jump_if_false L0
-    jump L41
+    jump L45
 
   L0:
     load_var source_value
@@ -3121,91 +3121,91 @@ function ai.internal._media_mime_type(explicit: string | null, source_value: str
 
   L2:
     pop_jump_if_false L3
-    jump L40
+    jump L44
 
   L3:
     load_var source
     load_const ".png"
     call baml.String.includes
     pop_jump_if_false L4
-    jump L39
+    jump L43
 
   L4:
     load_var source
     load_const ".webp"
     call baml.String.includes
     pop_jump_if_false L5
-    jump L38
+    jump L42
 
   L5:
     load_var source
     load_const ".gif"
     call baml.String.includes
     pop_jump_if_false L6
-    jump L37
+    jump L41
 
   L6:
     load_var source
     load_const ".svg"
     call baml.String.includes
     pop_jump_if_false L7
-    jump L36
+    jump L40
 
   L7:
     load_var source
     load_const ".wav"
     call baml.String.includes
     pop_jump_if_false L8
-    jump L35
+    jump L39
 
   L8:
     load_var source
     load_const ".mp3"
     call baml.String.includes
     pop_jump_if_false L9
-    jump L34
+    jump L38
 
   L9:
     load_var source
     load_const ".flac"
     call baml.String.includes
     pop_jump_if_false L10
-    jump L33
+    jump L37
 
   L10:
     load_var source
     load_const ".ogg"
     call baml.String.includes
     pop_jump_if_false L11
-    jump L32
+    jump L36
 
   L11:
     load_var source
     load_const ".webm"
     call baml.String.includes
     pop_jump_if_false L12
-    jump L29
+    jump L33
 
   L12:
     load_var source
     load_const ".mov"
     call baml.String.includes
     pop_jump_if_false L13
-    jump L28
+    jump L32
 
   L13:
     load_var source
     load_const ".mp4"
     call baml.String.includes
     pop_jump_if_false L14
-    jump L27
+    jump L29
 
   L14:
     load_var source
     load_const ".avi"
     call baml.String.includes
     pop_jump_if_false L15
-    jump L26
+    jump L28
 
   L15:
     load_var source
@@ -3244,39 +3244,42 @@ function ai.internal._media_mime_type(explicit: string | null, source_value: str
 
   L20:
     load_const "image/png"
-    jump L42
+    jump L46
 
   L21:
     load_const "application/pdf"
-    jump L42
+    jump L46
 
   L22:
     load_const "video/mp4"
-    jump L42
+    jump L46
 
   L23:
     load_const "audio/mpeg"
-    jump L42
+    jump L46
 
   L24:
     load_const "application/pdf"
-    jump L42
+    jump L46
 
   L25:
-    load_const "video/x-matroska"
-    jump L42
+    load_var kind
+    load_const "audio"
+    cmp_op ==
+    pop_jump_if_false L26
+    jump L27
 
   L26:
-    load_const "video/x-msvideo"
-    jump L42
+    load_const "video/x-matroska"
+    jump L46
 
   L27:
-    load_const "video/mp4"
-    jump L42
+    load_const "audio/x-matroska"
+    jump L46
 
   L28:
-    load_const "video/quicktime"
-    jump L42
+    load_const "video/x-msvideo"
+    jump L46
 
   L29:
     load_var kind
@@ -3286,53 +3289,72 @@ function ai.internal._media_mime_type(explicit: string | null, source_value: str
     jump L31
 
   L30:
-    load_const "video/webm"
-    jump L42
+    load_const "video/mp4"
+    jump L46
 
   L31:
-    load_const "audio/webm"
-    jump L42
+    load_const "audio/mp4"
+    jump L46
 
   L32:
-    load_const "audio/ogg"
-    jump L42
+    load_const "video/quicktime"
+    jump L46
 
   L33:
-    load_const "audio/flac"
-    jump L42
+    load_var kind
+    load_const "audio"
+    cmp_op ==
+    pop_jump_if_false L34
+    jump L35
 
   L34:
-    load_const "audio/mpeg"
-    jump L42
+    load_const "video/webm"
+    jump L46
 
   L35:
-    load_const "audio/wav"
-    jump L42
+    load_const "audio/webm"
+    jump L46
 
   L36:
-    load_const "image/svg+xml"
-    jump L42
+    load_const "audio/ogg"
+    jump L46
 
   L37:
-    load_const "image/gif"
-    jump L42
+    load_const "audio/flac"
+    jump L46
 
   L38:
-    load_const "image/webp"
-    jump L42
+    load_const "audio/mpeg"
+    jump L46
 
   L39:
-    load_const "image/png"
-    jump L42
+    load_const "audio/wav"
+    jump L46
 
   L40:
-    load_const "image/jpeg"
-    jump L42
+    load_const "image/svg+xml"
+    jump L46
 
   L41:
-    load_var _4
+    load_const "image/gif"
+    jump L46
 
   L42:
+    load_const "image/webp"
+    jump L46
+
+  L43:
+    load_const "image/png"
+    jump L46
+
+  L44:
+    load_const "image/jpeg"
+    jump L46
+
+  L45:
+    load_var _4
+
+  L46:
     return
 }
 
@@ -3988,14 +4010,14 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     load_var _6
     narrow_bind string, slot=6
     pop_jump_if_false L0
-    jump L20
+    jump L22
 
   L0:
     load_var inline
     load_const ""
     cmp_op !=
     pop_jump_if_false L1
-    jump L19
+    jump L21
 
   L1:
     load_var url
@@ -4017,7 +4039,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     load_const "data:"
     call baml.String.starts_with
     pop_jump_if_false L4
-    jump L13
+    jump L15
 
   L4:
     load_var fetch_url
@@ -4033,76 +4055,35 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
 
   L6:
     pop_jump_if_false L7
-    jump L12
+    jump L14
 
   L7:
-    load_var media_url
-    load_const <omitted>
+    load_const 30
+    call baml.time.Duration.from_seconds
+    store_var _69
+    load_var2 19 31
     call baml.http.fetch
     store_var response
-    load_var response
-    call baml.http.Response.ok
-    unary_op !
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_type string
-    load_type string
-    load_var response
-    load_field .headers
-    load_const "content-type"
-    call baml.Map.get
-    store_var_load_var _81
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L9
-    load_var mime
-    store_var _81
-
-  L9:
-    load_var _81
-    store_var response_mime
-    load_var response
-    sys_op baml.http.Response.bytes
-    call baml.Uint8Array.to_base64
-    store_var _87
-    load_var response_mime
-    load_const ";"
-    call baml.String.split
-    store_var _92
-    load_type string
-    load_var _92
-    load_const 0
-    call baml.Array.at
-    store_var_load_var _90
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L10
-    load_var mime
-    store_var _90
-
-  L10:
-    load_const null
-    load_var2 34 35
-    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L23
-
-  L11:
+    jump L8
+    load_var e
+    throw_if_panic
     load_type string
     load_var media_url
     call baml.String.from
     store_var _74
-    load_type int
-    load_var response
-    load_field .status_code
+    load_type baml.errors.Io | baml.errors.Timeout
+    load_var e
+    call baml.String.from
+    store_var _78
+    load_type string
+    load_var _78
     call baml.String.from
     store_var _77
     load_const "media"
     load_const "media URL "
     load_var _74
     bin_op +
-    load_const " returned HTTP "
+    load_const " could not be fetched: "
     bin_op +
     load_var _77
     bin_op +
@@ -4110,37 +4091,139 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
     throw
 
+  L8:
+    load_var response
+    call baml.http.Response.ok
+    unary_op !
+    pop_jump_if_false L9
+    jump L13
+
+  L9:
+    load_type string
+    load_type string
+    load_var response
+    load_field .headers
+    load_const "content-type"
+    call baml.Map.get
+    store_var_load_var _94
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L10
+    load_var mime
+    store_var _94
+
+  L10:
+    load_var _94
+    store_var response_mime
+    load_var response
+    sys_op baml.http.Response.bytes
+    jump L11
+    load_var e
+    throw_if_panic
+    load_type string
+    load_var media_url
+    call baml.String.from
+    store_var _106
+    load_type baml.errors.Io
+    load_var e
+    call baml.String.from
+    store_var _110
+    load_type string
+    load_var _110
+    call baml.String.from
+    store_var _109
+    load_const "media"
+    load_const "media URL "
+    load_var _106
+    bin_op +
+    load_const " body could not be read: "
+    bin_op +
+    load_var _109
+    bin_op +
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+
+  L11:
+    call baml.Uint8Array.to_base64
+    store_var _113
+    load_var response_mime
+    load_const ";"
+    call baml.String.split
+    store_var _118
+    load_type string
+    load_var _118
+    load_const 0
+    call baml.Array.at
+    store_var_load_var _116
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L12
+    load_var mime
+    store_var _116
+
   L12:
+    load_var _116
+    call baml.String.trim
+    store_var _114
+    load_const null
+    load_var2 43 44
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+    jump L25
+
+  L13:
+    load_type string
+    load_var media_url
+    call baml.String.from
+    store_var _87
+    load_type int
+    load_var response
+    load_field .status_code
+    call baml.String.from
+    store_var _90
+    load_const "media"
+    load_const "media URL "
+    load_var _87
+    bin_op +
+    load_const " returned HTTP "
+    bin_op +
+    load_var _90
+    bin_op +
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+
+  L14:
     load_var media_url
     load_const null
     load_var mime
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L23
+    jump L25
 
-  L13:
+  L15:
     load_var media_url
     load_const ";base64,"
     call baml.String.index_of
     store_var _44
     load_var _44
     narrow_bind int, slot=20
-    pop_jump_if_false L14
-    jump L18
+    pop_jump_if_false L16
+    jump L20
 
-  L14:
+  L16:
     load_var media_url
     call baml.String.length
     load_const 48
     cmp_int_op >
-    pop_jump_if_false L15
-    jump L16
+    pop_jump_if_false L17
+    jump L18
 
-  L15:
+  L17:
     load_var media_url
     store_var preview
-    jump L17
+    jump L19
 
-  L16:
+  L18:
     load_var media_url
     load_const 0
     load_const 48
@@ -4153,7 +4236,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     bin_op +
     store_var preview
 
-  L17:
+  L19:
     load_type string
     load_var preview
     call baml.String.from
@@ -4164,7 +4247,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     init_instance baml.errors.InvalidArgument .message
     throw
 
-  L18:
+  L20:
     load_var _44
     store_var_load_var separator
     load_const 8
@@ -4185,21 +4268,21 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     load_const null
     load_var2 22 25
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L23
+    jump L25
 
-  L19:
+  L21:
     load_const null
     load_var2 3 4
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L23
+    jump L25
 
-  L20:
+  L22:
     load_var _6
     store_var_load_var path
     load_const "r"
     sys_op baml.fs.open
     store_var handle
-    jump L21
+    jump L23
     load_var e
     throw_if_panic
     load_type string
@@ -4224,12 +4307,12 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     init_instance baml.errors.InvalidArgument .message
     throw
 
-  L21:
+  L23:
     load_var handle
     sys_op baml.fs.File.bytes
     call baml.Uint8Array.to_base64
     store_var data
-    jump L22
+    jump L24
     load_var e
     throw_if_panic
     load_var handle
@@ -4257,7 +4340,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     init_instance baml.errors.InvalidArgument .message
     throw
 
-  L22:
+  L24:
     load_var handle
     sys_op baml.fs.File.close
     pop 1
@@ -4265,7 +4348,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     load_var2 13 4
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
 
-  L23:
+  L25:
     return
 }
 

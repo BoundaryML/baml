@@ -1571,10 +1571,6 @@ struct InferenceContext<'db> {
     /// function - the resolver for owner-scoped receivers (`default`
     /// inside an `implements` block, like `self`).
     body_owner: Option<baml_compiler2_hir::loc::FunctionLoc<'db>>,
-    /// The body owner this run walks, for the rare queries that need the
-    /// owner's `AstSourceMap` (property-shorthand identification). Set for
-    /// every owner kind, unlike `body_owner`.
-    body_owner_id: Option<BodyOwnerId<'db>>,
     /// Whether this run infers a parameter-default arena: the semantic
     /// index keys those expressions under
     /// `ExprMetadataScope::ParameterDefault` (the builder's
@@ -1667,7 +1663,6 @@ impl<'db> InferenceContext<'db> {
             obligations: Vec::new(),
             obligation_anchor: None,
             body_owner: None,
-            body_owner_id: None,
             defaults_owner: false,
             chain_nullable: Vec::new(),
             property_shorthand_values: FxHashMap::default(),

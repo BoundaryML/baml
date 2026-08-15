@@ -101,7 +101,7 @@ class Agent<Out> {
     // `parse_llm_output_for_target`: nothing to build from means fall back to
     // the ordinary text parse. Always false when `Out` holds no media.
     function _has_media_output(self, turn: ModelTurn) -> bool {
-        let shape = root.internal._media_shape(reflect.type_of<Out>());
+        let shape = root.internal._media_shape(type.of<Out>());
         let form = shape.split(":").at(0) ?? "";
         if (form == "") {
             return false;
@@ -116,7 +116,7 @@ class Agent<Out> {
     // when `_has_media_output` holds; the shape-specific errors below are the
     // ported sys_llm messages, thrown after the turn is already on the record.
     function _media_value(self, turn: ModelTurn, provider: string) -> Out {
-        let t = reflect.type_of<Out>();
+        let t = type.of<Out>();
         let shape = root.internal._media_shape(t);
         let form = shape.split(":").at(0) ?? "";
         let kind = shape.split(":").at(1) ?? "";

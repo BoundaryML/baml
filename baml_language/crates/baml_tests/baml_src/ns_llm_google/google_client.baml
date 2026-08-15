@@ -448,7 +448,7 @@ function vertex_media_url_passthrough() -> string {
         prompt: GoogleVision$spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.type_of<string>(),
+        output_type: type.of<string>(),
     };
     let cl = google.VertexClient.new(
         model = "gemini-2.5-flash",
@@ -483,7 +483,7 @@ function google_media_url_inlined() -> string {
         prompt: GoogleVision$spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.type_of<string>(),
+        output_type: type.of<string>(),
     };
             let cl = google.GoogleClient.new(
                 model = "gemini-2.5-flash",
@@ -513,7 +513,7 @@ function google_media_youtube_passthrough() -> string {
         prompt: GoogleWatch$spec(clip).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.type_of<string>(),
+        output_type: type.of<string>(),
     };
     let cl = google.GoogleClient.new(
         model = "gemini-2.5-flash",
@@ -759,7 +759,7 @@ function vertex_claude_raw_predict() -> string {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.type_of<string>(),
+        output_type: type.of<string>(),
     };
     let cl = google.VertexClient.new(
         model = "claude-sonnet-4-5",
@@ -795,7 +795,7 @@ function vertex_claude_model_override() -> string {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.type_of<string>(),
+        output_type: type.of<string>(),
     };
     let cl = google.VertexClient.new(
         model = "claude-sonnet-4-5",
@@ -988,7 +988,7 @@ function google_missing_key_invoke() -> string {
         prompt: GoogleEcho$spec("Say pong.").prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.type_of<string>(),
+        output_type: type.of<string>(),
     };
     // The concrete classes, not the `ai.errors.Failure` interface: a
     // configuration error and a transport error are both typed, and matching

@@ -72,7 +72,7 @@ function main() -> string {{
     prompt: spec.prompt_template,
     journal: ai.Journal {{ log: [] }},
     toolbox: ai.tools.Toolbox.new([]),
-    output_type: reflect.type_of<string>(),
+    output_type: type.of<string>(),
   }}
   {expr}.body
 }}
@@ -228,7 +228,7 @@ function main() -> string {
     prompt: spec.prompt_template,
     journal: ai.Journal { log: [] },
     toolbox: ai.tools.Toolbox.new([]),
-    output_type: reflect.type_of<string>(),
+    output_type: type.of<string>(),
   }
   anthropic.internal._anthropic_request(
     anthropic.AnthropicClient.new(model = "claude-test", api_key = "test-key"),

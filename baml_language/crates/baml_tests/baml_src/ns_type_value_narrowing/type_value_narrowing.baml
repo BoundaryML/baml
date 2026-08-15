@@ -4,7 +4,7 @@
 // Regression coverage for the emitter bug where the `type` leaf had no arm in
 // the `is`-lowering dispatch and fell into the tagless-leaf fallback of
 // `is_type`, compiling every `type` test to constant-FALSE: `v is type` was
-// false for an actual `reflect.type_of<...>()` value, and in a `match` over
+// false for an actual `type.of<...>()` value, and in a `match` over
 // `type | int` no `type` arm ever fired (the last arm swallowed the value, so
 // a `type` came out through the `int` arm). The `type` leaf now reports its
 // coarse type tag (`typetag::TYPE`) — the same tag the MIR switch path
@@ -17,7 +17,7 @@
 // ── Group A: `is type` on a bare `type` value ─────────────────────────────────
 
 function type_is_type() -> string {
-    let v = reflect.type_of<int>()
+    let v = type.of<int>()
     `${v is type}|${v is int}|${v is string}`
 }
 
@@ -39,9 +39,9 @@ test "non_type_values_are_not_type" {
 
 // A `type` value stays a `type` whichever type it reflects.
 function type_of_various_is_type() -> string {
-    let a = reflect.type_of<string>()
-    let b = reflect.type_of<int[]>()
-    let c = reflect.type_of<map<string, int>>()
+    let a = type.of<string>()
+    let b = type.of<int[]>()
+    let c = type.of<map<string, int>>()
     `${a is type}|${b is type}|${c is type}`
 }
 
@@ -52,7 +52,7 @@ test "type_of_any_argument_is_type" {
 // ── Group B: `type | int` union, both directions ──────────────────────────────
 
 function union_holding_type_is() -> string {
-    let v: type | int = reflect.type_of<int>()
+    let v: type | int = type.of<int>()
     `${v is type}|${v is int}`
 }
 
@@ -71,7 +71,7 @@ test "union_holding_int_narrows_to_int" {
 
 // `if let` over the union, both inhabitants.
 function union_if_let_type() -> string {
-    let v: type | int = reflect.type_of<bool>()
+    let v: type | int = type.of<bool>()
     if let t: type = v {
         `type:${t.to_string()}`
     } else {
@@ -105,7 +105,7 @@ function union_match_type_first(v: type | int) -> string {
 }
 
 test "union_match_type_arm_fires_for_type" {
-    assert.equal(union_match_type_first(reflect.type_of<string>()), "type:string")
+    assert.equal(union_match_type_first(type.of<string>()), "type:string")
 }
 
 test "union_match_int_arm_fires_for_int" {
@@ -122,7 +122,7 @@ function union_match_int_first(v: type | int) -> string {
 }
 
 test "reversed_match_type_arm_fires_for_type" {
-    assert.equal(union_match_int_first(reflect.type_of<int>()), "type:int")
+    assert.equal(union_match_int_first(type.of<int>()), "type:int")
 }
 
 test "reversed_match_int_arm_fires_for_int" {
@@ -139,7 +139,7 @@ function union_three_way(v: type | int | string) -> string {
 }
 
 test "three_way_union_dispatches_type" {
-    assert.equal(union_three_way(reflect.type_of<bool>()), "type:bool")
+    assert.equal(union_three_way(type.of<bool>()), "type:bool")
 }
 
 test "three_way_union_dispatches_string" {
@@ -153,7 +153,7 @@ test "three_way_union_dispatches_int" {
 // ── Group C: `type?` optionals ────────────────────────────────────────────────
 
 function optional_type_present() -> string {
-    let v: type? = reflect.type_of<float>()
+    let v: type? = type.of<float>()
     let is_t = v is type
     if let t: type = v {
         `${is_t}|${t.to_string()}`
@@ -184,9 +184,9 @@ test "optional_type_absent_does_not_narrow" {
 
 function classify_mixed_list() -> string {
     let items: (type | string)[] = [
-        reflect.type_of<int>(),
+        type.of<int>(),
         "plain",
-        reflect.type_of<bool[]>(),
+        type.of<bool[]>(),
     ]
     let out: string[] = []
     for (let item in items) {
@@ -205,9 +205,9 @@ test "mixed_list_classifies_each_element" {
 
 function render_mixed_list() -> string {
     let items: (type | string)[] = [
-        reflect.type_of<int>(),
+        type.of<int>(),
         "plain",
-        reflect.type_of<bool[]>(),
+        type.of<bool[]>(),
     ]
     let out: string[] = []
     for (let item in items) {
@@ -223,12 +223,12 @@ test "mixed_list_match_renders_each_element" {
     assert.equal(render_mixed_list(), "int,plain,bool[]")
 }
 
-// ── Group E: `reflect.type_of` equality is unaffected ─────────────────────────
+// ── Group E: `type.of` equality is unaffected ─────────────────────────
 
 function type_equality() -> string {
-    let a = reflect.type_of<int>()
-    let b = reflect.type_of<int>()
-    let c = reflect.type_of<string>()
+    let a = type.of<int>()
+    let b = type.of<int>()
+    let c = type.of<string>()
     `${a == b}|${a == c}|${a != c}`
 }
 
@@ -237,7 +237,7 @@ test "type_values_compare_structurally" {
 }
 
 function type_to_string_after_narrowing() -> string {
-    let v: type | int = reflect.type_of<map<string, int>>()
+    let v: type | int = type.of<map<string, int>>()
     if let t: type = v {
         t.to_string()
     } else {

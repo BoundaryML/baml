@@ -2777,10 +2777,12 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     let _24: bool
     let _25: bool
     let _26: bool
+    let _27: bool
+    let _28: bool
 
     bb0: {
         _4 = copy _1;
-        _4 = narrow_bind copy _4 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb58, bb1];
+        _4 = narrow_bind copy _4 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb62, bb1];
     }
 
     bb1: {
@@ -2800,7 +2802,7 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb5: {
-        branch copy _7 -> [bb57, bb6];
+        branch copy _7 -> [bb61, bb6];
     }
 
     bb6: {
@@ -2808,7 +2810,7 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb7: {
-        branch copy _9 -> [bb56, bb8];
+        branch copy _9 -> [bb60, bb8];
     }
 
     bb8: {
@@ -2816,7 +2818,7 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb9: {
-        branch copy _10 -> [bb55, bb10];
+        branch copy _10 -> [bb59, bb10];
     }
 
     bb10: {
@@ -2824,7 +2826,7 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb11: {
-        branch copy _11 -> [bb54, bb12];
+        branch copy _11 -> [bb58, bb12];
     }
 
     bb12: {
@@ -2832,7 +2834,7 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb13: {
-        branch copy _12 -> [bb53, bb14];
+        branch copy _12 -> [bb57, bb14];
     }
 
     bb14: {
@@ -2840,7 +2842,7 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb15: {
-        branch copy _13 -> [bb52, bb16];
+        branch copy _13 -> [bb56, bb16];
     }
 
     bb16: {
@@ -2848,7 +2850,7 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb17: {
-        branch copy _14 -> [bb51, bb18];
+        branch copy _14 -> [bb55, bb18];
     }
 
     bb18: {
@@ -2856,7 +2858,7 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb19: {
-        branch copy _15 -> [bb50, bb20];
+        branch copy _15 -> [bb54, bb20];
     }
 
     bb20: {
@@ -2864,7 +2866,7 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb21: {
-        branch copy _16 -> [bb49, bb22];
+        branch copy _16 -> [bb53, bb22];
     }
 
     bb22: {
@@ -2872,7 +2874,7 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb23: {
-        branch copy _17 -> [bb46, bb24];
+        branch copy _17 -> [bb50, bb24];
     }
 
     bb24: {
@@ -2880,7 +2882,7 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb25: {
-        branch copy _19 -> [bb45, bb26];
+        branch copy _19 -> [bb49, bb26];
     }
 
     bb26: {
@@ -2888,160 +2890,180 @@ fn ai.internal._media_mime_type(explicit: string | null, source_value: string, k
     }
 
     bb27: {
-        branch copy _20 -> [bb44, bb28];
+        branch copy _20 -> [bb46, bb28];
     }
 
     bb28: {
-        _21 = call const fn baml.String.includes(copy _6, const ".avi") -> [bb29];
+        _22 = call const fn baml.String.includes(copy _6, const ".avi") -> [bb29];
     }
 
     bb29: {
-        branch copy _21 -> [bb43, bb30];
+        branch copy _22 -> [bb45, bb30];
     }
 
     bb30: {
-        _22 = call const fn baml.String.includes(copy _6, const ".mkv") -> [bb31];
+        _23 = call const fn baml.String.includes(copy _6, const ".mkv") -> [bb31];
     }
 
     bb31: {
-        branch copy _22 -> [bb42, bb32];
+        branch copy _23 -> [bb42, bb32];
     }
 
     bb32: {
-        _23 = call const fn baml.String.includes(copy _6, const ".pdf") -> [bb33];
+        _25 = call const fn baml.String.includes(copy _6, const ".pdf") -> [bb33];
     }
 
     bb33: {
-        branch copy _23 -> [bb41, bb34];
+        branch copy _25 -> [bb41, bb34];
     }
 
     bb34: {
-        _24 = copy _3 == const "audio";
-        branch copy _24 -> [bb40, bb35];
+        _26 = copy _3 == const "audio";
+        branch copy _26 -> [bb40, bb35];
     }
 
     bb35: {
-        _25 = copy _3 == const "video";
-        branch copy _25 -> [bb39, bb36];
+        _27 = copy _3 == const "video";
+        branch copy _27 -> [bb39, bb36];
     }
 
     bb36: {
-        _26 = copy _3 == const "pdf";
-        branch copy _26 -> [bb38, bb37];
+        _28 = copy _3 == const "pdf";
+        branch copy _28 -> [bb38, bb37];
     }
 
     bb37: {
         _0 = const "image/png";
-        goto -> bb59;
+        goto -> bb63;
     }
 
     bb38: {
         _0 = const "application/pdf";
-        goto -> bb59;
+        goto -> bb63;
     }
 
     bb39: {
         _0 = const "video/mp4";
-        goto -> bb59;
+        goto -> bb63;
     }
 
     bb40: {
         _0 = const "audio/mpeg";
-        goto -> bb59;
+        goto -> bb63;
     }
 
     bb41: {
         _0 = const "application/pdf";
-        goto -> bb59;
+        goto -> bb63;
     }
 
     bb42: {
-        _0 = const "video/x-matroska";
-        goto -> bb59;
+        _24 = copy _3 == const "audio";
+        branch copy _24 -> [bb44, bb43];
     }
 
     bb43: {
-        _0 = const "video/x-msvideo";
-        goto -> bb59;
+        _0 = const "video/x-matroska";
+        goto -> bb63;
     }
 
     bb44: {
-        _0 = const "video/mp4";
-        goto -> bb59;
+        _0 = const "audio/x-matroska";
+        goto -> bb63;
     }
 
     bb45: {
-        _0 = const "video/quicktime";
-        goto -> bb59;
+        _0 = const "video/x-msvideo";
+        goto -> bb63;
     }
 
     bb46: {
-        _18 = copy _3 == const "audio";
-        branch copy _18 -> [bb48, bb47];
+        _21 = copy _3 == const "audio";
+        branch copy _21 -> [bb48, bb47];
     }
 
     bb47: {
-        _0 = const "video/webm";
-        goto -> bb59;
+        _0 = const "video/mp4";
+        goto -> bb63;
     }
 
     bb48: {
-        _0 = const "audio/webm";
-        goto -> bb59;
+        _0 = const "audio/mp4";
+        goto -> bb63;
     }
 
     bb49: {
-        _0 = const "audio/ogg";
-        goto -> bb59;
+        _0 = const "video/quicktime";
+        goto -> bb63;
     }
 
     bb50: {
-        _0 = const "audio/flac";
-        goto -> bb59;
+        _18 = copy _3 == const "audio";
+        branch copy _18 -> [bb52, bb51];
     }
 
     bb51: {
-        _0 = const "audio/mpeg";
-        goto -> bb59;
+        _0 = const "video/webm";
+        goto -> bb63;
     }
 
     bb52: {
-        _0 = const "audio/wav";
-        goto -> bb59;
+        _0 = const "audio/webm";
+        goto -> bb63;
     }
 
     bb53: {
-        _0 = const "image/svg+xml";
-        goto -> bb59;
+        _0 = const "audio/ogg";
+        goto -> bb63;
     }
 
     bb54: {
-        _0 = const "image/gif";
-        goto -> bb59;
+        _0 = const "audio/flac";
+        goto -> bb63;
     }
 
     bb55: {
-        _0 = const "image/webp";
-        goto -> bb59;
+        _0 = const "audio/mpeg";
+        goto -> bb63;
     }
 
     bb56: {
-        _0 = const "image/png";
-        goto -> bb59;
+        _0 = const "audio/wav";
+        goto -> bb63;
     }
 
     bb57: {
-        _0 = const "image/jpeg";
-        goto -> bb59;
+        _0 = const "image/svg+xml";
+        goto -> bb63;
     }
 
     bb58: {
-        _5 = copy _4;
-        _0 = copy _5;
-        goto -> bb59;
+        _0 = const "image/gif";
+        goto -> bb63;
     }
 
     bb59: {
+        _0 = const "image/webp";
+        goto -> bb63;
+    }
+
+    bb60: {
+        _0 = const "image/png";
+        goto -> bb63;
+    }
+
+    bb61: {
+        _0 = const "image/jpeg";
+        goto -> bb63;
+    }
+
+    bb62: {
+        _5 = copy _4;
+        _0 = copy _5;
+        goto -> bb63;
+    }
+
+    bb63: {
         return;
     }
 }
@@ -3115,9 +3137,9 @@ fn ai.internal._resolve_media_content(url: string | null, file: string | null, i
     let _64: bool
     let _65: string
     let _66: baml.http.Response // response
-    let _67: string
-    let _68: bool
-    let _69: bool
+    let _67: unknown // e
+    let _68: string
+    let _69: baml.time.Duration
     let _70: ai.errors.NetworkFailure
     let _71: string
     let _72: string
@@ -3126,33 +3148,59 @@ fn ai.internal._resolve_media_content(url: string | null, file: string | null, i
     let _75: string
     let _76: type
     let _77: string
-    let _78: int
+    let _78: string
     let _79: type
-    let _80: string // response_mime
-    let _81: string
-    let _82: string | null
-    let _83: (map<string, string>, string) -> string | null throws never
-    let _84: type
-    let _85: type
-    let _86: bool
+    let _80: type
+    let _81: bool
+    let _82: bool
+    let _83: ai.errors.NetworkFailure
+    let _84: string
+    let _85: string
+    let _86: string
     let _87: string
-    let _88: uint8array
-    let _89: string
+    let _88: string
+    let _89: type
     let _90: string
-    let _91: string | null
-    let _92: string[]
-    let _93: type
-    let _94: bool
-    let _95: baml.errors.InvalidArgument
+    let _91: int
+    let _92: type
+    let _93: string // response_mime
+    let _94: string
+    let _95: string | null
+    let _96: (map<string, string>, string) -> string | null throws never
+    let _97: type
+    let _98: type
+    let _99: bool
+    let _100: uint8array // body
+    let _101: unknown // e
+    let _102: ai.errors.NetworkFailure
+    let _103: string
+    let _104: string
+    let _105: string
+    let _106: string
+    let _107: string
+    let _108: type
+    let _109: string
+    let _110: string
+    let _111: type
+    let _112: type
+    let _113: string
+    let _114: string
+    let _115: string
+    let _116: string
+    let _117: string | null
+    let _118: string[]
+    let _119: type
+    let _120: bool
+    let _121: baml.errors.InvalidArgument
 
     bb0: {
         _6 = copy _2;
-        _6 = narrow_bind copy _6 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb41, bb1];
+        _6 = narrow_bind copy _6 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb43, bb1];
     }
 
     bb1: {
         _39 = copy _3 != const "";
-        branch copy _39 -> [bb40, bb2];
+        branch copy _39 -> [bb42, bb2];
     }
 
     bb2: {
@@ -3161,8 +3209,8 @@ fn ai.internal._resolve_media_content(url: string | null, file: string | null, i
     }
 
     bb3: {
-        _95 = baml.errors.InvalidArgument { const "media has no URL, file, or base64 content" };
-        throw copy _95;
+        _121 = baml.errors.InvalidArgument { const "media has no URL, file, or base64 content" };
+        throw copy _121;
     }
 
     bb4: {
@@ -3171,7 +3219,7 @@ fn ai.internal._resolve_media_content(url: string | null, file: string | null, i
     }
 
     bb5: {
-        branch copy _42 -> [bb26, bb6];
+        branch copy _42 -> [bb28, bb6];
     }
 
     bb6: {
@@ -3184,263 +3232,327 @@ fn ai.internal._resolve_media_content(url: string | null, file: string | null, i
     }
 
     bb8: {
-        branch copy _63 -> [bb25, bb9];
+        branch copy _63 -> [bb27, bb9];
     }
 
     bb9: {
-        _67 = copy _41;
-        _66 = call const fn baml.http.fetch(copy _67, const <omitted>) -> [bb10];
+        _68 = copy _41;
+        _69 = call const fn baml.time.Duration.from_seconds(const 30_i64) -> [bb10, unwind: bb60];
     }
 
     bb10: {
-        _69 = call const fn baml.http.Response.ok(copy _66) -> [bb11];
+        _66 = call const fn baml.http.fetch(copy _68, copy _69) -> [bb11, unwind: bb60];
     }
 
     bb11: {
-        _68 = !copy _69;
-        branch copy _68 -> [bb22, bb12];
+        _82 = call const fn baml.http.Response.ok(copy _66) -> [bb12];
     }
 
     bb12: {
-        _83 = copy _66.1;
-        _84 = load_type(string);
-        _85 = load_type(string);
-        _82 = call const fn baml.Map.get<copy _84, copy _85>(copy _83, const "content-type") -> [bb13];
+        _81 = !copy _82;
+        branch copy _81 -> [bb24, bb13];
     }
 
     bb13: {
-        _81 = copy _82;
-        _86 = copy _81 == const null;
-        branch copy _86 -> [bb14, bb15];
+        _96 = copy _66.1;
+        _97 = load_type(string);
+        _98 = load_type(string);
+        _95 = call const fn baml.Map.get<copy _97, copy _98>(copy _96, const "content-type") -> [bb14];
     }
 
     bb14: {
-        _81 = copy _4;
-        goto -> bb15;
+        _94 = copy _95;
+        _99 = copy _94 == const null;
+        branch copy _99 -> [bb15, bb16];
     }
 
     bb15: {
-        _80 = copy _81;
-        _88 = sys_op const fn baml.http.Response.bytes(copy _66) -> bb16;
+        _94 = copy _4;
+        goto -> bb16;
     }
 
     bb16: {
-        _87 = call const fn baml.Uint8Array.to_base64(copy _88) -> [bb17];
+        _93 = copy _94;
+        _100 = sys_op const fn baml.http.Response.bytes(copy _66) -> bb17 unwind bb65;
     }
 
     bb17: {
-        _92 = call const fn baml.String.split(copy _80, const ";") -> [bb18];
+        _113 = call const fn baml.Uint8Array.to_base64(copy _100) -> [bb18];
     }
 
     bb18: {
-        _93 = load_type(string);
-        _91 = call const fn baml.Array.at<copy _93>(copy _92, const 0_i64) -> [bb19];
+        _118 = call const fn baml.String.split(copy _93, const ";") -> [bb19];
     }
 
     bb19: {
-        _90 = copy _91;
-        _94 = copy _90 == const null;
-        branch copy _94 -> [bb20, bb21];
+        _119 = load_type(string);
+        _117 = call const fn baml.Array.at<copy _119>(copy _118, const 0_i64) -> [bb20];
     }
 
     bb20: {
-        _90 = copy _4;
-        goto -> bb21;
+        _116 = copy _117;
+        _120 = copy _116 == const null;
+        branch copy _120 -> [bb21, bb22];
     }
 
     bb21: {
-        _89 = copy _90;
-        _0 = ai.wire.ResolvedMedia { const null, copy _87, copy _89 };
-        goto -> bb46;
+        _116 = copy _4;
+        goto -> bb22;
     }
 
     bb22: {
-        _75 = copy _41;
-        _76 = load_type(string);
-        _74 = call const fn baml.String.from<copy _76>(copy _75) -> [bb23];
+        _115 = copy _116;
+        _114 = call const fn baml.String.trim(copy _115) -> [bb23];
     }
 
     bb23: {
-        _73 = const "media URL " + copy _74;
-        _72 = copy _73 + const " returned HTTP ";
-        _78 = copy _66.0;
-        _79 = load_type(int);
-        _77 = call const fn baml.String.from<copy _79>(copy _78) -> [bb24];
+        _0 = ai.wire.ResolvedMedia { const null, copy _113, copy _114 };
+        goto -> bb48;
     }
 
     bb24: {
-        _71 = copy _72 + copy _77;
-        _70 = ai.errors.NetworkFailure { const "media", copy _71, const null };
-        throw copy _70;
+        _88 = copy _41;
+        _89 = load_type(string);
+        _87 = call const fn baml.String.from<copy _89>(copy _88) -> [bb25];
     }
 
     bb25: {
-        _65 = copy _41;
-        _0 = ai.wire.ResolvedMedia { copy _65, const null, copy _4 };
-        goto -> bb46;
+        _86 = const "media URL " + copy _87;
+        _85 = copy _86 + const " returned HTTP ";
+        _91 = copy _66.0;
+        _92 = load_type(int);
+        _90 = call const fn baml.String.from<copy _92>(copy _91) -> [bb26];
     }
 
     bb26: {
-        _43 = call const fn baml.String.index_of(copy _41, const ";base64,") -> [bb27];
+        _84 = copy _85 + copy _90;
+        _83 = ai.errors.NetworkFailure { const "media", copy _84, const null };
+        throw copy _83;
     }
 
     bb27: {
-        _44 = copy _43;
-        _44 = narrow_bind copy _44 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb36, bb28];
+        _65 = copy _41;
+        _0 = ai.wire.ResolvedMedia { copy _65, const null, copy _4 };
+        goto -> bb48;
     }
 
     bb28: {
-        _54 = call const fn baml.String.length(copy _41) -> [bb29];
+        _43 = call const fn baml.String.index_of(copy _41, const ";base64,") -> [bb29];
     }
 
     bb29: {
-        _53 = copy _54 > const 48_i64;
-        branch copy _53 -> [bb31, bb30];
+        _44 = copy _43;
+        _44 = narrow_bind copy _44 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb38, bb30];
     }
 
     bb30: {
-        _52 = copy _41;
-        goto -> bb34;
+        _54 = call const fn baml.String.length(copy _41) -> [bb31];
     }
 
     bb31: {
-        _56 = call const fn baml.String.slice(copy _41, const 0_i64, const 48_i64) -> [bb32];
+        _53 = copy _54 > const 48_i64;
+        branch copy _53 -> [bb33, bb32];
     }
 
     bb32: {
-        _57 = load_type(string);
-        _55 = call const fn baml.String.from<copy _57>(copy _56) -> [bb33];
+        _52 = copy _41;
+        goto -> bb36;
     }
 
     bb33: {
-        _52 = copy _55 + const "...";
-        goto -> bb34;
+        _56 = call const fn baml.String.slice(copy _41, const 0_i64, const 48_i64) -> [bb34];
     }
 
     bb34: {
-        _61 = copy _52;
-        _62 = load_type(string);
-        _60 = call const fn baml.String.from<copy _62>(copy _61) -> [bb35];
+        _57 = load_type(string);
+        _55 = call const fn baml.String.from<copy _57>(copy _56) -> [bb35];
     }
 
     bb35: {
+        _52 = copy _55 + const "...";
+        goto -> bb36;
+    }
+
+    bb36: {
+        _61 = copy _52;
+        _62 = load_type(string);
+        _60 = call const fn baml.String.from<copy _62>(copy _61) -> [bb37];
+    }
+
+    bb37: {
         _59 = const "media carries a data: URL with no ;base64, marker, which has no payload to send: " + copy _60;
         _58 = baml.errors.InvalidArgument { copy _59 };
         throw copy _58;
     }
 
-    bb36: {
+    bb38: {
         _45 = copy _44;
         _48 = copy _45;
         _47 = copy _48 + const 8_i64;
-        _49 = call const fn baml.String.length(copy _41) -> [bb37];
-    }
-
-    bb37: {
-        _46 = call const fn baml.String.slice(copy _41, copy _47, copy _49) -> [bb38];
-    }
-
-    bb38: {
-        _51 = copy _45;
-        _50 = call const fn baml.String.slice(copy _41, const 5_i64, copy _51) -> [bb39];
+        _49 = call const fn baml.String.length(copy _41) -> [bb39];
     }
 
     bb39: {
-        _0 = ai.wire.ResolvedMedia { const null, copy _46, copy _50 };
-        goto -> bb46;
+        _46 = call const fn baml.String.slice(copy _41, copy _47, copy _49) -> [bb40];
     }
 
     bb40: {
-        _0 = ai.wire.ResolvedMedia { const null, copy _3, copy _4 };
-        goto -> bb46;
+        _51 = copy _45;
+        _50 = call const fn baml.String.slice(copy _41, const 5_i64, copy _51) -> [bb41];
     }
 
     bb41: {
-        _7 = copy _6;
-        _10 = copy _7;
-        _8 = sys_op const fn baml.fs.open(copy _10, const "r") -> bb42 unwind bb47;
+        _0 = ai.wire.ResolvedMedia { const null, copy _46, copy _50 };
+        goto -> bb48;
     }
 
     bb42: {
-        _24 = sys_op const fn baml.fs.File.bytes(copy _8) -> bb43 unwind bb52;
+        _0 = ai.wire.ResolvedMedia { const null, copy _3, copy _4 };
+        goto -> bb48;
     }
 
     bb43: {
-        _22 = call const fn baml.Uint8Array.to_base64(copy _24) -> [bb44, unwind: bb52];
+        _7 = copy _6;
+        _10 = copy _7;
+        _8 = sys_op const fn baml.fs.open(copy _10, const "r") -> bb44 unwind bb49;
     }
 
     bb44: {
-        _37 = sys_op const fn baml.fs.File.close(copy _8) -> bb45;
+        _24 = sys_op const fn baml.fs.File.bytes(copy _8) -> bb45 unwind bb54;
     }
 
     bb45: {
-        _38 = copy _22;
-        _0 = ai.wire.ResolvedMedia { const null, copy _38, copy _4 };
-        goto -> bb46;
+        _22 = call const fn baml.Uint8Array.to_base64(copy _24) -> [bb46, unwind: bb54];
     }
 
     bb46: {
-        return;
+        _37 = sys_op const fn baml.fs.File.close(copy _8) -> bb47;
     }
 
     bb47: {
-        throw_if_panic copy _9 -> bb48;
+        _38 = copy _22;
+        _0 = ai.wire.ResolvedMedia { const null, copy _38, copy _4 };
+        goto -> bb48;
     }
 
     bb48: {
-        _16 = copy _7;
-        _17 = load_type(string);
-        _15 = call const fn baml.String.from<copy _17>(copy _16) -> [bb49];
+        return;
     }
 
     bb49: {
-        _14 = const "media file " + copy _15;
-        _13 = copy _14 + const " could not be opened: ";
-        _20 = load_type(baml.errors.InvalidArgument | baml.errors.Io);
-        _19 = call const fn baml.String.from<copy _20>(copy _9) -> [bb50];
+        throw_if_panic copy _9 -> bb50;
     }
 
     bb50: {
-        _21 = load_type(string);
-        _18 = call const fn baml.String.from<copy _21>(copy _19) -> [bb51];
+        _16 = copy _7;
+        _17 = load_type(string);
+        _15 = call const fn baml.String.from<copy _17>(copy _16) -> [bb51];
     }
 
     bb51: {
+        _14 = const "media file " + copy _15;
+        _13 = copy _14 + const " could not be opened: ";
+        _20 = load_type(baml.errors.InvalidArgument | baml.errors.Io);
+        _19 = call const fn baml.String.from<copy _20>(copy _9) -> [bb52];
+    }
+
+    bb52: {
+        _21 = load_type(string);
+        _18 = call const fn baml.String.from<copy _21>(copy _19) -> [bb53];
+    }
+
+    bb53: {
         _12 = copy _13 + copy _18;
         _11 = baml.errors.InvalidArgument { copy _12 };
         throw copy _11;
     }
 
-    bb52: {
-        throw_if_panic copy _23 -> bb53;
-    }
-
-    bb53: {
-        _25 = sys_op const fn baml.fs.File.close(copy _8) -> bb54;
-    }
-
     bb54: {
-        _31 = copy _7;
-        _32 = load_type(string);
-        _30 = call const fn baml.String.from<copy _32>(copy _31) -> [bb55];
+        throw_if_panic copy _23 -> bb55;
     }
 
     bb55: {
-        _29 = const "media file " + copy _30;
-        _28 = copy _29 + const " could not be read: ";
-        _35 = load_type(baml.errors.InvalidArgument | baml.errors.Io);
-        _34 = call const fn baml.String.from<copy _35>(copy _23) -> [bb56];
+        _25 = sys_op const fn baml.fs.File.close(copy _8) -> bb56;
     }
 
     bb56: {
-        _36 = load_type(string);
-        _33 = call const fn baml.String.from<copy _36>(copy _34) -> [bb57];
+        _31 = copy _7;
+        _32 = load_type(string);
+        _30 = call const fn baml.String.from<copy _32>(copy _31) -> [bb57];
     }
 
     bb57: {
+        _29 = const "media file " + copy _30;
+        _28 = copy _29 + const " could not be read: ";
+        _35 = load_type(baml.errors.InvalidArgument | baml.errors.Io);
+        _34 = call const fn baml.String.from<copy _35>(copy _23) -> [bb58];
+    }
+
+    bb58: {
+        _36 = load_type(string);
+        _33 = call const fn baml.String.from<copy _36>(copy _34) -> [bb59];
+    }
+
+    bb59: {
         _27 = copy _28 + copy _33;
         _26 = baml.errors.InvalidArgument { copy _27 };
         throw copy _26;
+    }
+
+    bb60: {
+        throw_if_panic copy _67 -> bb61;
+    }
+
+    bb61: {
+        _75 = copy _41;
+        _76 = load_type(string);
+        _74 = call const fn baml.String.from<copy _76>(copy _75) -> [bb62];
+    }
+
+    bb62: {
+        _73 = const "media URL " + copy _74;
+        _72 = copy _73 + const " could not be fetched: ";
+        _79 = load_type(baml.errors.Io | baml.errors.Timeout);
+        _78 = call const fn baml.String.from<copy _79>(copy _67) -> [bb63];
+    }
+
+    bb63: {
+        _80 = load_type(string);
+        _77 = call const fn baml.String.from<copy _80>(copy _78) -> [bb64];
+    }
+
+    bb64: {
+        _71 = copy _72 + copy _77;
+        _70 = ai.errors.NetworkFailure { const "media", copy _71, const null };
+        throw copy _70;
+    }
+
+    bb65: {
+        throw_if_panic copy _101 -> bb66;
+    }
+
+    bb66: {
+        _107 = copy _41;
+        _108 = load_type(string);
+        _106 = call const fn baml.String.from<copy _108>(copy _107) -> [bb67];
+    }
+
+    bb67: {
+        _105 = const "media URL " + copy _106;
+        _104 = copy _105 + const " body could not be read: ";
+        _111 = load_type(baml.errors.Io);
+        _110 = call const fn baml.String.from<copy _111>(copy _101) -> [bb68];
+    }
+
+    bb68: {
+        _112 = load_type(string);
+        _109 = call const fn baml.String.from<copy _112>(copy _110) -> [bb69];
+    }
+
+    bb69: {
+        _103 = copy _104 + copy _109;
+        _102 = ai.errors.NetworkFailure { const "media", copy _103, const null };
+        throw copy _102;
     }
 }
 

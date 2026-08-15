@@ -67,6 +67,9 @@ function user.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<#0> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.RuntimeEnumClient
+    call ai.clients.resolve
+    store_var _6
     load_const "RuntimeClassify"
     load_deref ?1
     load_const "input"
@@ -76,8 +79,7 @@ function user.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<#0> {
     load_type #0
     load_var input
     make_closure .<lambda(RuntimeClassify$spec, 0)>, captures=1, ntypeargs=1
-    load_var _4
-    load_global user.RuntimeEnumClient
+    load_var2 2 3
     load_type #0
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

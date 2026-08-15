@@ -439,6 +439,7 @@ fn user.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<T> {
     let _3: (string) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
+    let _6: ai.Client
 
     bb0: {
         _2 = { const "input": copy _1 }: map<string, unknown>;
@@ -448,11 +449,15 @@ fn user.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<T> {
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<#0> { const "RuntimeClassify", copy _2, copy _3, copy _4, const item user.RuntimeEnumClient };
-        goto -> bb2;
+        _6 = call const fn ai.clients.resolve(const item user.RuntimeEnumClient) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<#0> { const "RuntimeClassify", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

@@ -242,6 +242,13 @@ fn resolved_function<'db>(
         | MemberResolution::Variant { .. }
         | MemberResolution::InterfaceVirtualMethod { .. }
         | MemberResolution::InterfaceVirtualField { .. } => None,
+        // BEP-066 source-less (externally minted) members: no FunctionLoc to
+        // walk, so the analysis skips them — same deliberate under-
+        // approximation as virtual dispatch (module docs).
+        MemberResolution::External(_)
+        | MemberResolution::ExternalField { .. }
+        | MemberResolution::ExternalVariant { .. }
+        | MemberResolution::ExternalInterfaceVirtualField { .. } => None,
     }
 }
 

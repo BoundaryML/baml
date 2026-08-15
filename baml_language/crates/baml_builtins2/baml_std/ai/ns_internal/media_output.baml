@@ -15,37 +15,37 @@
 // shapes are enumerated. The nullable list/union forms behave exactly like
 // their non-null counterparts once decoded, so they share a form.
 function _media_shape(t: type) -> string {
-    if (t == reflect.type_of<image>()) {
+    if (t == type.of<image>()) {
         return "one:image";
     }
-    if (t == reflect.type_of<audio>()) {
+    if (t == type.of<audio>()) {
         return "one:audio";
     }
-    if (t == reflect.type_of<video>()) {
+    if (t == type.of<video>()) {
         return "one:video";
     }
-    if (t == reflect.type_of<pdf>()) {
+    if (t == type.of<pdf>()) {
         return "one:pdf";
     }
-    if (t == reflect.type_of<image?>()) {
+    if (t == type.of<image?>()) {
         return "opt:image";
     }
-    if (t == reflect.type_of<audio?>()) {
+    if (t == type.of<audio?>()) {
         return "opt:audio";
     }
-    if (t == reflect.type_of<video?>()) {
+    if (t == type.of<video?>()) {
         return "opt:video";
     }
-    if (t == reflect.type_of<pdf?>()) {
+    if (t == type.of<pdf?>()) {
         return "opt:pdf";
     }
-    if (t == reflect.type_of<image[]>() || t == reflect.type_of<image[]?>()) {
+    if (t == type.of<image[]>() || t == type.of<image[]?>()) {
         return "list:image";
     }
-    if (t == reflect.type_of<(string | image)[]>() || t == reflect.type_of<(string | image)[]?>()) {
+    if (t == type.of<(string | image)[]>() || t == type.of<(string | image)[]?>()) {
         return "mixedlist:image";
     }
-    if (t == reflect.type_of<string | image>() || t == reflect.type_of<(string | image)?>()) {
+    if (t == type.of<string | image>() || t == type.of<(string | image)?>()) {
         return "mixed:image";
     }
     ""
