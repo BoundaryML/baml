@@ -16,6 +16,27 @@
 // added — `AnthropicBodyParams` + `request_body` express exactly that.
 
 // ---------------------------------------------------------------------------
+// Local rejections.
+
+/// Every LOCAL, pre-send rejection in the Anthropic client throws ONE error
+/// identity: `ai.errors.InvalidRequest` with a null status code — the class
+/// the Responses, Google, Images and Bedrock clients already use.
+///
+/// It matters that this is an `ai.errors.Failure` and not
+/// `baml.errors.InvalidArgument`: `ai.errors.normalize` flattens a non-Failure
+/// into an untyped `baml.errors.UnknownError`, and `ai.Fallback` only advances
+/// to the next member on a TYPED failure. A missing key in one member of a
+/// fallback chain has to fall through, not abort the chain.
+function reject(detail: string) -> ai.errors.InvalidRequest {
+    ai.errors.InvalidRequest {
+        provider: "anthropic",
+        status_code: null,
+        detail: detail,
+        raw_body: null,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Request: the typed wire model of POST /v1/messages.
 
 // A media payload source. `type` selects which of the other fields the API
@@ -291,9 +312,9 @@ function _anthropic_media_block(media: ai.MediaPart, block_type: string) -> Anth
         AnthSource { type: "url", media_type: null, data: null, url: url }
     } else {
         if (block_type == "image" && !_anth_supported_image_mime(resolved.mime_type)) {
-            throw baml.errors.InvalidArgument {
-                message: `Anthropic does not accept ${resolved.mime_type} images: the Messages API supports image/jpeg, image/png, image/gif and image/webp`,
-            }
+            throw reject(
+                `Anthropic does not accept ${resolved.mime_type} images: the Messages API supports image/jpeg, image/png, image/gif and image/webp`,
+            )
         }
         AnthSource {
             type: "base64",
@@ -319,9 +340,9 @@ function _anthropic_prompt_blocks(message: ai.PromptMessage, role: string) -> An
             },
             let image: baml.media.Image => {
                 if (role != "user") {
-                    throw baml.errors.InvalidArgument {
-                        message: `Anthropic only supports image input in user messages, found ${role}`,
-                    }
+                    throw reject(
+                        `Anthropic only supports image input in user messages, found ${role}`,
+                    )
                 }
                 blocks.push(_anthropic_media_block(image, "image"));
                 null
@@ -333,23 +354,21 @@ function _anthropic_prompt_blocks(message: ai.PromptMessage, role: string) -> An
             // a guaranteed provider 400; it is a client-side error now, exactly
             // like video below.
             let audio: baml.media.Audio => {
-                throw baml.errors.InvalidArgument {
-                    message: "Anthropic does not support audio prompt input: the Messages API has no audio content block",
-                }
+                throw reject(
+                    "Anthropic does not support audio prompt input: the Messages API has no audio content block",
+                )
             },
             let pdf: baml.media.Pdf => {
                 if (role != "user") {
-                    throw baml.errors.InvalidArgument {
-                        message: `Anthropic only supports PDF input in user messages, found ${role}`,
-                    }
+                    throw reject(
+                        `Anthropic only supports PDF input in user messages, found ${role}`,
+                    )
                 }
                 blocks.push(_anthropic_media_block(pdf, "document"));
                 null
             },
             let video: baml.media.Video => {
-                throw baml.errors.InvalidArgument {
-                    message: "Anthropic does not support video prompt input",
-                }
+                throw reject("Anthropic does not support video prompt input")
             },
         };
     }
@@ -501,10 +520,29 @@ function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
     msgs
 }
 
+// The API wants user and assistant to alternate, and several paths here can
+// leave two of the same role side by side: a dropped assistant turn (a
+// reasoning-only reply lowers to no blocks) leaves the user turns that
+// bracketed it adjacent, and the rendered prompt can end on the role the
+// journal opens with. The leading-role repair above only fixes an
+// assistant-FIRST list, so a mid-conversation clash reached the wire.
+//
+// Concatenating the block lists of same-role neighbours repairs every such
+// shape. Block order is preserved and messages are joined in order, so a
+// `cache_control` marker still sits on exactly the block it was placed on.
+// `_anthropic_push_tool_result`'s grouping becomes a special case of this.
 function _anthropic_render_messages(msgs: AnthropicMessage[]) -> AnthMessageParam[] {
     let out: AnthMessageParam[] = [];
     for (let m in msgs) {
-        out.push(AnthMessageParam { role: m.role, content: m.blocks });
+        if let last: AnthMessageParam = out.at(out.length() - 1) {
+            if (last.role == m.role) {
+                for (let block in m.blocks) {
+                    last.content.push(block);
+                }
+                continue;
+            }
+        }
+        out.push(AnthMessageParam { role: m.role, content: m.blocks.concat([]) });
     }
     out
 }

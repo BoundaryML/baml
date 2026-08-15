@@ -915,6 +915,34 @@ function _system_as_user(system: SystemContentBlock[]) -> Message {
     Message { role: "user", content: content }
 }
 
+// Converse requires strict user/assistant alternation, and several paths here
+// can put two same-role messages side by side: a dropped assistant turn (a
+// reasoning-only reply lowers to no content) leaves the user turns that
+// bracketed it adjacent, the rendered prompt can end on the same role the
+// journal opens with, and consecutive toolResults arrive as separate `user`
+// messages when a journal-only event splits their group.
+//
+// Merging by concatenating content lists repairs every one of those, not just
+// the shape each guard was written for. Block order inside each message is
+// preserved and messages are joined in order, so a `cachePoint` still sits
+// after exactly the blocks it was marking. `_push_tool_result`'s grouping
+// becomes a special case of this.
+function _merge_adjacent_roles(messages: Message[]) -> Message[] {
+    let out: Message[] = [];
+    for (let message in messages) {
+        if let last: Message = out.at(out.length() - 1) {
+            if (last.role == message.role) {
+                for (let block in message.content) {
+                    last.content.push(block);
+                }
+                continue;
+            }
+        }
+        out.push(Message { role: message.role, content: message.content.concat([]) });
+    }
+    out
+}
+
 /// The typed Converse body for one model turn, before serialization.
 function converse_request(
     client: root.BedrockClient,
@@ -946,13 +974,17 @@ function converse_request(
     //     synthesize the leading user turn the API insists on. Without this
     //     the request is a guaranteed ValidationException.
     let synthesized = messages.length() > 0 && leading_role != "user" && system.length() == 0;
-    let wire_messages = if (folded) {
-        [_system_as_user(system)].concat(messages)
-    } else if (synthesized) {
-        [Message { role: "user", content: [ContentBlock.of_text("(continue)")] }].concat(messages)
-    } else {
-        messages
-    };
+    let wire_messages = _merge_adjacent_roles(
+        if (folded) {
+            [_system_as_user(system)].concat(messages)
+        } else if (synthesized) {
+            [Message { role: "user", content: [ContentBlock.of_text("(continue)")] }].concat(
+                messages,
+            )
+        } else {
+            messages
+        },
+    );
     if (wire_messages.length() == 0) {
         throw _reject("the rendered prompt and journal produced no message content")
     }

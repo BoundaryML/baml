@@ -185,8 +185,11 @@ test "env_ref_base_url_resolves_at_request_time" {
 
 function unset_ref_base_url_is_a_configuration_error() -> string {
     let cl = openai.GenericClient.new(model = "m", base_url = env.BAML_TEST_ENV_REF_UNSET_BASE_URL);
+    // A TYPED `ai.errors.InvalidRequest`, not `baml.errors.InvalidArgument`:
+    // the class survives `ai.errors.normalize`, which is what lets an
+    // `ai.Fallback` skip a misconfigured member instead of aborting.
     cl.resolved_base_url() catch (e) {
-        baml.errors.InvalidArgument => e.message,
+        ai.errors.InvalidRequest => e.detail,
     }
 }
 
@@ -206,7 +209,7 @@ test "unset_ref_base_url_is_a_configuration_error" {
 function unset_base_url_is_the_same_configuration_error() -> string {
     let cl = openai.GenericClient.new(model = "m");
     cl.resolved_base_url() catch (e) {
-        baml.errors.InvalidArgument => e.message,
+        ai.errors.InvalidRequest => e.detail,
     }
 }
 

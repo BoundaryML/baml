@@ -362,6 +362,51 @@ test "anthropic_reasoning_only_turn_is_dropped" {
     assert.contains(got, "empty=false")
 }
 
+// Dropping that turn MID-conversation left the user turns that bracketed it
+// adjacent, and the leading-role repair in `anthropic_messages_request` only
+// fixes an assistant-FIRST list. `_anthropic_render_messages` merges same-role
+// neighbours, so the roles alternate and both user payloads survive in order
+// inside one message.
+function anthropic_reasoning_only_turn_mid_conversation() -> string {
+    let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let journal = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [ai.content.Text { text: "4" }],
+                client_id: "anthropic/claude-haiku-4-5",
+            },
+            ai.events.UserMessage { content: "And 3+3?" },
+            ai.events.AssistantMessage {
+                content: [ai.content.Reasoning { summary: "quietly thinking" }],
+                client_id: "anthropic/claude-haiku-4-5",
+            },
+            ai.events.UserMessage { content: "And 4+4?" },
+        ],
+    };
+    let body = anth_render_body(cl, AnthMockPlain@spec(), journal);
+    [
+        `count=${baml.json.path_or<int>(body, ".messages.length", -1)}`,
+        `role0=${baml.json.path_or<string>(body, ".messages[0].role", "-")}`,
+        `role1=${baml.json.path_or<string>(body, ".messages[1].role", "-")}`,
+        `role2=${baml.json.path_or<string>(body, ".messages[2].role", "-")}`,
+        `role3=${baml.json.path_or<string>(body, ".messages[3].role", "-")}`,
+        `text0=${baml.json.path_or<string>(body, ".messages[2].content[0].text", "-")}`,
+        `text1=${baml.json.path_or<string>(body, ".messages[2].content[1].text", "-")}`,
+    ].join("|")
+}
+
+test "anthropic_reasoning_only_turn_mid_conversation" {
+    let got = anthropic_reasoning_only_turn_mid_conversation();
+    assert.contains(got, "role0=user|");
+    assert.contains(got, "role1=assistant|");
+    assert.contains(got, "role2=user|");
+    // exactly three messages: the fourth slot is empty
+    assert.contains(got, "role3=-|");
+    // both orphaned user payloads ride in the merged message, in order
+    assert.contains(got, "text0=And 3+3?|");
+    assert.contains(got, "text1=And 4+4?")
+}
+
 // An orphaned tool call — one with no result before the next user turn — is
 // closed by ai.wire.sanitize_for_client rather than sent unanswered.
 function anthropic_orphaned_tool_call_is_closed() -> string {

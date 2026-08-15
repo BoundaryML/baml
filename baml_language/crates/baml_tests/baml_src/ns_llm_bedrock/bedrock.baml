@@ -464,7 +464,12 @@ test "bedrock_multi_turn" {
 // `ai.content.Reasoning` cannot reproduce) and drops `Media`. Nothing upstream
 // removes the turn either — `ai.wire.sanitize_for_client` KEEPS reasoning whose
 // `client_id` matches, which is why the journal below uses this client's own
-// id. So the three messages here must lower to two.
+// id.
+//
+// Dropping it leaves the prompt's user turn adjacent to the journal's user
+// turn, and Converse rejects two consecutive `user` messages just as firmly as
+// an empty one. `_merge_adjacent_roles` folds them into ONE user message
+// carrying both text blocks in order.
 function bedrock_reasoning_only_turn_is_dropped() -> string {
     let log: ai.events.Event[] = [
         ai.events.AssistantMessage {
@@ -478,13 +483,55 @@ function bedrock_reasoning_only_turn_is_dropped() -> string {
     [
         `messages=${_array_len(body, ".messages")}`,
         baml.json.path<string>(body, ".messages[0].role"),
-        baml.json.path<string>(body, ".messages[1].role"),
-        baml.json.path<string>(body, ".messages[1].content[0].text"),
+        `blocks=${_array_len(body, ".messages[0].content")}`,
+        baml.json.path<string>(body, ".messages[0].content[0].text"),
+        baml.json.path<string>(body, ".messages[0].content[1].text"),
     ].join("|")
 }
 
 test "bedrock_reasoning_only_turn_is_dropped" {
-    assert.equal(bedrock_reasoning_only_turn_is_dropped(), "messages=2|user|user|And 3+3?")
+    assert.equal(
+        bedrock_reasoning_only_turn_is_dropped(),
+        "messages=1|user|blocks=2|What is 2+2?|And 3+3?",
+    )
+}
+
+// The same drop, mid-conversation. `converse_request`'s leading-role repair
+// only fixes an assistant-FIRST list, so before the merge a reasoning-only
+// turn between two user turns shipped `user, assistant, user, user` — a
+// ValidationException on an ordinary replay. Roles must alternate strictly,
+// with the two orphaned user payloads carried in one message.
+function bedrock_reasoning_only_turn_mid_conversation() -> string {
+    let log: ai.events.Event[] = [
+        ai.events.AssistantMessage {
+            content: [ai.content.Text { text: "4" }],
+            client_id: `bedrock/${_model()}`,
+        },
+        ai.events.UserMessage { content: "And 3+3?" },
+        ai.events.AssistantMessage {
+            content: [ai.content.Reasoning { summary: "thinking about it" }],
+            client_id: `bedrock/${_model()}`,
+        },
+        ai.events.UserMessage { content: "And 4+4?" },
+    ];
+    let journal = ai.Journal { log: log };
+    let body = _body(_client(null), _turn_input(BedrockEcho@spec("What is 2+2?"), journal, _no_tools()));
+    [
+        `messages=${_array_len(body, ".messages")}`,
+        baml.json.path<string>(body, ".messages[0].role"),
+        baml.json.path<string>(body, ".messages[1].role"),
+        baml.json.path<string>(body, ".messages[2].role"),
+        `blocks=${_array_len(body, ".messages[2].content")}`,
+        baml.json.path<string>(body, ".messages[2].content[0].text"),
+        baml.json.path<string>(body, ".messages[2].content[1].text"),
+    ].join("|")
+}
+
+test "bedrock_reasoning_only_turn_mid_conversation" {
+    assert.equal(
+        bedrock_reasoning_only_turn_mid_conversation(),
+        "messages=3|user|assistant|user|blocks=2|And 3+3?|And 4+4?",
+    )
 }
 
 // The same guard on the PROMPT side. A rendered prompt emits blank text parts
@@ -589,26 +636,29 @@ function bedrock_tool_replay() -> string {
     let journal = ai.Journal { log: log };
     let body = _body(_client(null), _turn_input(BedrockUserOnly@spec("go"), journal, _weather_tools()));
     [
-        baml.json.path<string>(body, ".messages[2].content[0].toolUse.toolUseId"),
-        baml.json.path<string>(body, ".messages[2].content[0].toolUse.name"),
-        baml.json.path<string>(body, ".messages[2].content[0].toolUse.input.city"),
+        baml.json.path<string>(body, ".messages[1].content[0].toolUse.toolUseId"),
+        baml.json.path<string>(body, ".messages[1].content[0].toolUse.name"),
+        baml.json.path<string>(body, ".messages[1].content[0].toolUse.input.city"),
         // both results land in ONE user message, in order
-        baml.json.path<string>(body, ".messages[3].role"),
-        baml.json.path<string>(body, ".messages[3].content[0].toolResult.toolUseId"),
-        baml.json.path<string>(body, ".messages[3].content[0].toolResult.content[0].text"),
-        baml.json.path<string>(body, ".messages[3].content[0].toolResult.status"),
-        baml.json.path<string>(body, ".messages[3].content[1].toolResult.toolUseId"),
-        baml.json.path<string>(body, ".messages[3].content[1].toolResult.status"),
-        // prompt user + journal user + assistant + ONE grouped tool-result user
+        baml.json.path<string>(body, ".messages[2].role"),
+        baml.json.path<string>(body, ".messages[2].content[0].toolResult.toolUseId"),
+        baml.json.path<string>(body, ".messages[2].content[0].toolResult.content[0].text"),
+        baml.json.path<string>(body, ".messages[2].content[0].toolResult.status"),
+        baml.json.path<string>(body, ".messages[2].content[1].toolResult.toolUseId"),
+        baml.json.path<string>(body, ".messages[2].content[1].toolResult.status"),
+        // The prompt's user turn and the journal's user turn are the same role
+        // back to back, so they merge: ONE user message with both texts, then
+        // assistant, then ONE grouped tool-result user. Roles alternate.
         _array_len(body, ".messages").to_string(),
-        _array_len(body, ".messages[3].content").to_string(),
+        _array_len(body, ".messages[0].content").to_string(),
+        _array_len(body, ".messages[2].content").to_string(),
     ].join("|")
 }
 
 test "bedrock_tool_replay" {
     assert.equal(
         bedrock_tool_replay(),
-        "tu_1|get_weather|SF|user|tu_1|sunny|success|tu_2|error|4|2",
+        "tu_1|get_weather|SF|user|tu_1|sunny|success|tu_2|error|3|2|2",
     )
 }
 

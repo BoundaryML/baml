@@ -64,7 +64,7 @@ class GenericClient {
         ai.wire.resolve_credential(self.api_key, null)
     }
 
-    // Throws `baml.errors.InvalidArgument` when no base_url resolves. A
+    // Throws `ai.errors.InvalidRequest` when no base_url resolves. A
     // `base_url = env.NAME` naming an UNSET variable resolves to null and lands
     // here too, so it reports the same clear configuration error rather than a
     // mystery request to nowhere.
@@ -76,9 +76,10 @@ class GenericClient {
         // into a mystery request, so it raises the same error a plainly-unset
         // base_url does — plus the names it consulted, so the ref's own
         // variable is reported.
-        throw baml.errors.InvalidArgument {
-            message: `openai.GenericClient requires base_url (a literal or env.NAME naming a set variable): the endpoint of the OpenAI-compatible server, e.g. "http://localhost:8000/v1". Checked: ${ai.wire.credential_sources(self.base_url, null)}`,
-        }
+        throw root.internal._reject(
+            "openai-generic",
+            `openai.GenericClient requires base_url (a literal or env.NAME naming a set variable): the endpoint of the OpenAI-compatible server, e.g. "http://localhost:8000/v1". Checked: ${ai.wire.credential_sources(self.base_url, null)}`,
+        )
     }
 
     function compat(self) -> root.internal.ChatCompat {

@@ -22,6 +22,34 @@
 // key. Everything else is structural.
 
 // ---------------------------------------------------------------------------
+// Local rejections.
+
+/// Every LOCAL, pre-send rejection in the chat family throws ONE error
+/// identity: `ai.errors.InvalidRequest` with a null status code — the class
+/// `ResponsesClient`, `GoogleClient`, `ImageClient` and the Bedrock client
+/// already use.
+///
+/// It matters that this is an `ai.errors.Failure` and not
+/// `baml.errors.InvalidArgument`: `ai.errors.normalize` flattens a non-Failure
+/// into an untyped `baml.errors.UnknownError`, and `ai.Fallback` only advances
+/// to the next member on a TYPED failure. A missing key in one member of a
+/// fallback chain has to fall through, not abort the chain.
+function _reject(provider: string, detail: string) -> ai.errors.InvalidRequest {
+    ai.errors.InvalidRequest {
+        provider: provider,
+        status_code: null,
+        detail: detail,
+        raw_body: null,
+    }
+}
+
+/// `_reject` for the Azure wrapper, whose config errors are raised before a
+/// `ChatCompat` exists to name the provider.
+function _azure_reject(detail: string) -> ai.errors.InvalidRequest {
+    _reject("azure", detail)
+}
+
+// ---------------------------------------------------------------------------
 // Compat record + per-request parameters.
 
 // How the endpoint authenticates. Sniffing the scheme from the key's shape (the
@@ -527,9 +555,10 @@ function _chat_media_part(media: ai.MediaPart, compat: ChatCompat) -> ChatConten
             // `file_data` would be a silently blank document, so say so.
             let data = match (resolved.base64) {
                 let inline: string => inline,
-                null => throw baml.errors.InvalidArgument {
-                    message: `OpenAI Chat Completions has no document-by-URL content part, so a PDF must be inlined, and ${resolved.url ?? "this document"} is not a URL this client can fetch (gs:// and other non-HTTP schemes are not supported here). Pass the PDF as base64 or a local file.`,
-                },
+                null => throw _reject(
+                    compat.provider,
+                    `OpenAI Chat Completions has no document-by-URL content part, so a PDF must be inlined, and ${resolved.url ?? "this document"} is not a URL this client can fetch (gs:// and other non-HTTP schemes are not supported here). Pass the PDF as base64 or a local file.`,
+                ),
             };
             ChatFilePart {
                 type: "file",
@@ -544,9 +573,10 @@ function _chat_media_part(media: ai.MediaPart, compat: ChatCompat) -> ChatConten
             }
         },
         let video: baml.media.Video => {
-            throw baml.errors.InvalidArgument {
-                message: "OpenAI Chat Completions has no video input part; extract frames as images, or use the Realtime API",
-            }
+            throw _reject(
+                compat.provider,
+                "OpenAI Chat Completions has no video input part; extract frames as images, or use the Realtime API",
+            )
         },
     }
 }
@@ -922,9 +952,10 @@ function _chat_headers(compat: ChatCompat, params: ChatParams) -> map<string, st
     }
     let key = params.api_key;
     if (key == null && compat.api_key_required) {
-        throw baml.errors.InvalidArgument {
-            message: `${compat.provider} needs an API key: pass api_key, or set ${compat.api_key_env ?? "the provider's environment variable"}`,
-        }
+        throw _reject(
+            compat.provider,
+            `${compat.provider} needs an API key: pass api_key, or set ${compat.api_key_env ?? "the provider's environment variable"}`,
+        )
     }
     if let credential: string = key {
         match (compat.auth) {

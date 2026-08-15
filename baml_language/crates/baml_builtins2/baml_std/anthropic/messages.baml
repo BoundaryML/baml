@@ -143,9 +143,9 @@ class AnthropicClient {
         if let k: string = ai.wire.resolve_credential(self.api_key, "ANTHROPIC_API_KEY") {
             return k;
         }
-        throw baml.errors.InvalidArgument {
-            message: `anthropic needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "ANTHROPIC_API_KEY")}`,
-        }
+        throw root.internal.reject(
+            `anthropic needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "ANTHROPIC_API_KEY")}`,
+        )
     }
 
     // The request-time base URL, or null for the provider default.

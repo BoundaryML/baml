@@ -18,7 +18,10 @@ class AzureClient {
     model: string,
     // Azure resource name — the `{name}` in `{name}.openai.azure.com`.
     resource_name: string?,
-    // The deployment to call.
+    // The deployment to call. Unset defaults to `model`: Azure deployments are
+    // overwhelmingly named after the model they serve, and that convention is
+    // what lets `client: "azure/gpt-4o"` — which can only carry a model —
+    // reach a real deployment.
     deployment_id: string?,
     // The `api-version` query parameter. Defaults to the current GA dated
     // version, `2024-10-21`: every preview before `2024-09-01-preview` predates
@@ -92,38 +95,59 @@ class AzureClient {
         ai.wire.resolve_credential(self.api_key, "AZURE_OPENAI_API_KEY")
     }
 
-    // base_url XOR (resource_name AND deployment_id). The engine reports this
-    // at compile time with per-key spans; a BAML constructor can only report it
-    // when the request is built, so the message names every accepted shape.
+    // The deployment segment: the caller's `deployment_id`, else the model.
+    function resolved_deployment_id(self) -> string {
+        self.deployment_id ?? self.model
+    }
+
+    /// The deployment base this client posts to, resolved in the order Azure
+    /// users actually configure things:
+    ///
+    ///   1. an explicit `base_url` (a literal or an `env.NAME` ref), used
+    ///      verbatim — it already names the deployment;
+    ///   2. `resource_name`, which builds
+    ///      `https://{resource}.openai.azure.com/openai/deployments/{deployment}`;
+    ///   3. `AZURE_OPENAI_ENDPOINT` — the variable the official Azure OpenAI
+    ///      SDKs read — treated as the resource ORIGIN and given the same
+    ///      `/openai/deployments/{deployment}` path as rung 2.
+    ///
+    /// Rung 3 is what makes the `"azure/<model>"` shorthand viable. The
+    /// shorthand can only supply a model, and every other provider's shorthand
+    /// works off ambient credentials; without an endpoint fallback this client
+    /// could never send. With `deployment_id` defaulting to `model`, ambient
+    /// `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` is a complete config.
+    ///
+    /// The engine reports the mutually-exclusive shapes at compile time with
+    /// per-key spans; a BAML constructor can only report at request time, so
+    /// the error names every source that was checked.
     function resolved_base_url(self) -> string {
         // A `base_url = env.NAME` ref resolves here, at request time; an unset
         // variable behaves exactly like no base_url at all.
         if let explicit: string = ai.wire.resolve_credential(self.base_url, null) {
             if (self.resource_name != null || self.deployment_id != null) {
-                throw baml.errors.InvalidArgument {
-                    message: "openai.AzureClient takes base_url OR both resource_name and deployment_id, not both",
-                }
+                throw root.internal._azure_reject(
+                    "openai.AzureClient takes base_url OR resource_name/deployment_id, not both",
+                )
             }
             return explicit;
         }
-        let resource = self.resource_name;
-        let deployment = self.deployment_id;
-        if let resource_name: string = resource {
-            if let deployment_id: string = deployment {
-                return `https://${resource_name}.openai.azure.com/openai/deployments/${deployment_id}`;
-            }
-            throw baml.errors.InvalidArgument {
-                message: "openai.AzureClient needs deployment_id when resource_name is set",
-            }
+        let deployment = self.resolved_deployment_id();
+        if let resource_name: string = self.resource_name {
+            return `https://${resource_name}.openai.azure.com/openai/deployments/${deployment}`;
         }
-        if (deployment != null) {
-            throw baml.errors.InvalidArgument {
-                message: "openai.AzureClient needs resource_name when deployment_id is set",
-            }
+        // Azure prints the endpoint with a trailing slash in the portal, so
+        // accept it either way rather than emitting a doubled separator.
+        if let endpoint: string = ai.wire.resolve_credential(null, "AZURE_OPENAI_ENDPOINT") {
+            let origin = if (endpoint.ends_with("/")) {
+                endpoint.slice(0, endpoint.length() - 1)
+            } else {
+                endpoint
+            };
+            return `${origin}/openai/deployments/${deployment}`;
         }
-        throw baml.errors.InvalidArgument {
-            message: "openai.AzureClient needs either base_url or both resource_name and deployment_id",
-        }
+        throw root.internal._azure_reject(
+            "openai.AzureClient needs a deployment endpoint: set base_url, or resource_name, or the AZURE_OPENAI_ENDPOINT environment variable",
+        )
     }
 
     function compat(self) -> root.internal.ChatCompat {
