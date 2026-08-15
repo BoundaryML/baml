@@ -317,4 +317,20 @@ mod layout_tests {
             );
         }
     }
+
+    /// The OpenAI Responses client is `openai.ResponsesClient`. Canary still
+    /// ships the pre-rename `OpenAiClient` spelling, so merges keep trying to
+    /// reintroduce it — reject it at the source.
+    #[test]
+    fn no_openai_client_spelling() {
+        for f in ALL {
+            assert!(
+                !f.contents.contains("OpenAiClient") && !f.contents.contains("OpenAIClient"),
+                "{} references the removed `OpenAiClient` — the client is \
+                 `openai.ResponsesClient` (renamed in the sys_llm native \
+                 migration); re-resolve the merge instead of restoring it",
+                f.virtual_path()
+            );
+        }
+    }
 }

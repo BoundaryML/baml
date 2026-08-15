@@ -570,9 +570,9 @@ impl OutputFormatContent {
             // as `UnsupportedType` named the same way `RuntimeTy`'s `Display` renders
             // them (`type`, or the fixed qualified name).
             RuntimeTy::Type { .. } => Err(RenderError::UnsupportedType("type".to_string())),
-            RuntimeTy::Resource { .. } => Err(RenderError::UnsupportedType(
-                "ai.Resource".to_string(),
-            )),
+            RuntimeTy::Resource { .. } => {
+                Err(RenderError::UnsupportedType("ai.Resource".to_string()))
+            }
             RuntimeTy::PromptAst { .. } => {
                 Err(RenderError::UnsupportedType("ai.Prompt".to_string()))
             }
