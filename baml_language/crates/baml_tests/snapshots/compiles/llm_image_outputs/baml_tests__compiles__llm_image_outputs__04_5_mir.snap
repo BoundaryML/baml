@@ -526,7 +526,7 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: null | ai.Client) ->
     }
 
     bb2: {
-        _6 = load_type((string | image)[]);
+        _6 = load_type((image | string)[]);
         _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
@@ -555,7 +555,7 @@ fn user.GenerateMixedImageNarrative$parse(json: string) -> (string | image)[] {
     let _2: type
 
     bb0: {
-        _2 = load_type((string | image)[]);
+        _2 = load_type((image | string)[]);
         _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
     }
 
@@ -745,8 +745,8 @@ fn user.GenerateMixedImageNarrative$stream(prompt: string, client: null | ai.str
     }
 
     bb3: {
-        _5 = load_type((string | image)[]);
-        _6 = load_type((string | image)[]);
+        _5 = load_type((image | string)[]);
+        _6 = load_type((image | string)[]);
         _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
     }
 

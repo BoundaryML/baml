@@ -199,7 +199,7 @@ function user.GenerateMixedImageNarrative(prompt: string, client: ai.Client | nu
     store_var client
 
   L0:
-    load_type (string | image)[]
+    load_type (image | string)[]
     load_const <omitted>
     load_var client
     load_const <omitted>
@@ -220,7 +220,7 @@ function user.GenerateMixedImageNarrative(prompt: string, client: ai.Client | nu
 }
 
 function user.GenerateMixedImageNarrative$parse(json: string) -> (image | string)[] {
-    load_type (string | image)[]
+    load_type (image | string)[]
     load_var json
     call baml.sap.parse
     return
@@ -274,8 +274,8 @@ function user.GenerateMixedImageNarrative$stream(prompt: string, client: ai.stre
     load_var prompt
     call user.GenerateMixedImageNarrative$spec
     store_var _4
-    load_type (string | image)[]
-    load_type (string | image)[]
+    load_type (image | string)[]
+    load_type (image | string)[]
     load_var2 3 2
     call ai.stream.from_spec
     return
