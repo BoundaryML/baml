@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/type_spec/fixtures.rs
-assertion_line: 71
 expression: outcome.dump
 ---
 413..421 'untagged': throws never
@@ -15,16 +14,16 @@ expression: outcome.dump
 494..495 '2': 2
 520..521 's': string
 534..540 'tagged': throws never
-563..713 '{\n   ...  0\n}': 0
-569..579 'let render': (baml.prompt.Context) -> ai.Prompt throws never
-582..588 'prompt': (body: (role: (string) -> baml.prompt.Role throws never, ctx: baml.prompt.Context) -> baml.TaggedString throws never) -> ((baml.prompt.Context) -> ai.Prompt throws never) throws never
-582..641 'prompt...)}Hi!`': (baml.prompt.Context) -> ai.Prompt throws never
-590..606 '{role(...tem")}': baml.prompt.Role
-591..595 'role': (string) -> baml.prompt.Role throws never
-591..605 'role("system")': baml.prompt.Role
+563..704 '{\n   ...  0\n}': 0
+569..579 'let render': (ai.Context) -> ai.Prompt throws never
+582..588 'prompt': (body: (role: (string) -> ai.Role throws never, ctx: ai.Context) -> baml.TaggedString throws never) -> ((ai.Context) -> ai.Prompt throws never) throws never
+582..641 'prompt...)}Hi!`': (ai.Context) -> ai.Prompt throws never
+590..606 '{role(...tem")}': ai.Role
+591..595 'role': (string) -> ai.Role throws never
+591..605 'role("system")': ai.Role
 596..604 '"system"': "system"
-623..637 '{role("user")}': baml.prompt.Role
-624..628 'role': (string) -> baml.prompt.Role throws never
-624..636 'role("user")': baml.prompt.Role
+623..637 '{role("user")}': ai.Role
+624..628 'role': (string) -> ai.Role throws never
+624..636 'role("user")': ai.Role
 629..635 '"user"': "user"
-710..711 '0': 0
+701..702 '0': 0
