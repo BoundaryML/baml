@@ -355,6 +355,19 @@ fn reserved_in(scope_kind: CppNameKind, token: &str) -> bool {
 const CPP_KEYWORDS: &[&str] = &[
     "alignas",
     "alignof",
+    // Alternative operator tokens ([lex.key] — `or` et al. are full keywords;
+    // a method named `or` fails to parse, which `baml.env.Ref.or` proved).
+    "and",
+    "and_eq",
+    "bitand",
+    "bitor",
+    "compl",
+    "not",
+    "not_eq",
+    "or",
+    "or_eq",
+    "xor",
+    "xor_eq",
     "asm",
     "auto",
     "bool",

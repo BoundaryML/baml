@@ -32,7 +32,11 @@ function main() -> string {{
     serde_json::from_str(&body).expect("provider request body should be valid JSON")
 }
 
-async fn media_request_body(expr: &str, include_video: bool, include_audio: bool) -> serde_json::Value {
+async fn media_request_body(
+    expr: &str,
+    include_video: bool,
+    include_audio: bool,
+) -> serde_json::Value {
     let video_parameter = if include_video { ", movie: video" } else { "" };
     let video_prompt = if include_video { "${movie}" } else { "" };
     let video_argument = if include_video {

@@ -723,7 +723,10 @@ impl<T> io::IoNamespacePrompt for T {
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         // BEP-049 §10 (M5b): the `ctx.output_format` schema string.
-        SysOpOutput::ok(crate::output_format::render_output_format(&return_type, ctx))
+        SysOpOutput::ok(crate::output_format::render_output_format(
+            &return_type,
+            ctx,
+        ))
     }
 
     fn build_output_format(

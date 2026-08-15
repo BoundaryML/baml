@@ -60,7 +60,7 @@ impl std::error::Error for ExtractNativeBuiltinsError {}
 const EXTRA_IO_PACKAGES: &[&str] = &["ai"];
 
 /// Marker whose presence in a file's source selects it for the extra-package
-/// IO scan (see [`EXTRA_IO_PACKAGES`]).
+/// IO scan (see `EXTRA_IO_PACKAGES`).
 const IO_BUILTIN_MARKER: &str = "$rust_io_function";
 
 /// Parse, lower, and extract all `$rust_function` and `$rust_io_function` builtins
@@ -70,7 +70,7 @@ const IO_BUILTIN_MARKER: &str = "$rust_io_function";
 /// - `vm_builtins`: `$rust_function` builtins of the `baml` package
 ///   (synchronous, run inline in VM)
 /// - `io_builtins`: `$rust_io_function` builtins (async, dispatched via engine)
-///   of the `baml` package plus [`EXTRA_IO_PACKAGES`]
+///   of the `baml` package plus `EXTRA_IO_PACKAGES`
 /// - `class_defs`: `baml`-package class definitions with fields (for view/owned
 ///   struct generation)
 ///

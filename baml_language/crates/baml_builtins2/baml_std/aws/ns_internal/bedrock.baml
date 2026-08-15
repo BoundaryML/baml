@@ -231,11 +231,24 @@ class InferenceConfig {
     stopSequences: string[]?,
 }
 
-/// A tool's parameter schema. `json` is genuinely open-ended (an arbitrary
+/// A tool's parameter schema. The schema is genuinely open-ended (arbitrary
 /// JSON Schema authored by the tool), so it is one of the two `baml.json.json`
 /// escape hatches in this file — see `_prune_nulls`.
+///
+/// The Converse wire key is `json`, but that name collides with
+/// `pydantic.BaseModel.json` in generated Python SDKs, so the field is
+/// `schema` with an explicit wire mapping (the same reserved-word pattern as
+/// the chat client's `fn` ↔ `"function"`).
 class ToolInputSchema {
-    json: baml.json.json,
+    json_schema: baml.json.json,
+
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json {
+            let out: map<string, baml.json.json> = {  };
+            let _ = out.set("json", self.json_schema);
+            out
+        }
+    }
 }
 
 class ToolSpec {
@@ -827,7 +840,7 @@ function _tool_config(
                 ToolSpec {
                     name: tool.name,
                     description: tool.description,
-                    inputSchema: ToolInputSchema { json: baml.json.to_json(tool.input_schema) },
+                    inputSchema: ToolInputSchema { json_schema: baml.json.to_json(tool.input_schema) },
                 },
             ),
         );

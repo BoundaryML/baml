@@ -9785,7 +9785,7 @@ function Foo() -> {
     fn real_llm_bodies_still_classify_with_string_aware_scan() {
         let sources = [
             "function F(raw: string) -> string {\n  client: Fast\n  prompt: `hi ${raw}`\n}\n",
-            "function F(raw: string) -> string {\n  client Fast\n  prompt #\"hi\"#\n}\n",
+            "function F(raw: string) -> string {\n  client: Fast\n  prompt: #\"hi\"#\n}\n",
             // prompt first, and a prompt mentioning `client` / braces
             "function F(raw: string) -> string {\n  prompt: `client {x} ${raw} ${ctx.output_format}`\n  client: Fast\n}\n",
         ];
