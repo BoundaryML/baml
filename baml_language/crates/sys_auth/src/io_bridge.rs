@@ -50,6 +50,10 @@ use sys_types::{BexExternalValue, runtime_io::RuntimeIo};
 const CREDENTIAL_REQUEST_TIMEOUT_NANOS: i64 = 5_000_000_000;
 
 /// The env var that opts a host in to running `credential_process` commands.
+///
+/// Native-only: `run_command` cannot spawn a subprocess on wasm, so there is
+/// nothing there to opt in to.
+#[cfg(not(target_arch = "wasm32"))]
 const CREDENTIAL_PROCESS_OPT_IN: &str = "BAML_AWS_CREDENTIAL_PROCESS";
 
 /// Split a `credential_process` command line into program + arguments, honoring
@@ -61,6 +65,9 @@ const CREDENTIAL_PROCESS_OPT_IN: &str = "BAML_AWS_CREDENTIAL_PROCESS";
 /// the same treatment botocore gives the option (`shlex.split`, then spawn
 /// without a shell). Returns `None` when the command is blank or a quote is
 /// left open.
+///
+/// Native-only, like the spawn it feeds.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn split_command(command: &str) -> Option<Vec<String>> {
     let mut parts: Vec<String> = Vec::new();
     let mut current = String::new();
@@ -277,7 +284,7 @@ impl aws_config::CredentialIo for BamlAuthIo {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::split_command;
 
