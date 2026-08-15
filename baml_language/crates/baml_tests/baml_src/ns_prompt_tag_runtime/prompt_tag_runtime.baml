@@ -241,7 +241,7 @@ test "prompt_parent_tostring_override_owns_media_subtree" {
 // wire it by hand and assert the assembled prompt embeds the schema.
 function pt_ctx_output_format_fn() -> string {
     let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let of = baml.prompt.render_output_format(type.of<Person>())
+    let of = ai.internal.render_output_format(type.of<Person>())
     let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: of }
     let render = ai.prompt`Answer using this schema:
 ${ctx.output_format}`
@@ -334,7 +334,7 @@ test "spec_prompt_render_keeps_media_in_promptast" {
 function pt_output_format_with_prefix_fn() -> string {
     let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
     let rt = type.of<Person>()
-    let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
+    let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
     let render = ai.prompt`${ctx.output_format_with(prefix = "Use this exact schema:")}`
     render(ctx).text()
 }
@@ -356,7 +356,7 @@ test "prompt_interpolates_ctx_output_format_with" {
 function pt_output_format_with_omitted_leading_fn() -> string {
     let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
     let rt = type.of<Person>()
-    let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
+    let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
     let render = ai.prompt`${ctx.output_format_with(quote_class_fields = true)}`
     render(ctx).text()
 }
@@ -372,7 +372,7 @@ test "prompt_output_format_with_omits_leading_optional_arg" {
 function pt_output_format_with_null_as_omit_fn() -> string {
     let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
     let rt = type.of<PersonNick>()
-    let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
+    let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
     let render = ai.prompt`${ctx.output_format_with(render_null_as = "omit")}`
     render(ctx).text()
 }

@@ -402,6 +402,19 @@ function ai.internal._resolve_media_content(url: string?, file: string?, inline:
   { if let path: string = file { let handle = baml.fs.open(path, "r") catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } }; let data = handle.bytes().to_base64() catch_all (e) { _ => { handle.close(); throw baml.errors.InvalidArgument { message: `...` } } }; handle.close(); return root.wire.ResolvedMedia { url: null, base64: data, mime_type: mime } }; if (inline Ne "") { return root.wire.ResolvedMedia { url: null, base64: inline, mime_type: mime } }; if let media_url: string = url { if (media_url.starts_with("data:")) { if let separator: int = media_url.index_of(";base64,") { return root.wire.ResolvedMedia { url: null, base64: media_url.slice(separator Add 8, media_url.length()), mime_type: media_url.slice(5, separator) } }; let preview = if (media_url.length() Gt 48) {  } `...` else {  } media_url; throw baml.errors.InvalidArgument { message: `...` } }; if (Not fetch_url Or media_url.starts_with("gs://")) { return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime } }; let response = baml.http.fetch(media_url, timeout = baml.time.Duration.from_seconds(30)) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } } }; if (Not response.ok()) { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } }; let response_mime = response.headers.get("content-type") NullCoalesce mime; let body = response.bytes() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } } }; return root.wire.ResolvedMedia { url: null, base64: body.to_base64(), mime_type: response_mime.split(";").at(0) NullCoalesce mime.trim() } }; throw baml.errors.InvalidArgument { message: "media has no URL,..." } }
 }
 
+--- <builtin>/ai/ns_internal/prompt.baml ---
+type ai.internal.OutputFormat = baml.prompt.OutputFormat
+type ai.internal.OutputFormat$stream = baml.prompt.OutputFormat$stream
+function ai.internal.build_output_format(return_type: type) -> ai.internal.OutputFormat  [builtin]
+function ai.internal.get_return_type(function_name: string) -> type  [builtin]
+function ai.internal.make_role(name: string) -> baml.prompt.Role  [expr] {
+  {  } baml.prompt.Role { name: name, metadata: map {  } }
+}
+function ai.internal.render_output_format(return_type: type) -> string  [builtin]
+function ai.internal.validate_output_type(return_type: type) -> void  [expr] {
+  { return_type._validate_renderable() } match (return_type.as_enum()) { enum_type: baml.reflect.enum.Type => {  } if (enum_type.values().length() Eq 0) { let message = "empty enum `" Add return_type.to_string() Add "` cannot be rende..."; throw baml.reflect.errors.CompilationError { message: message, diagnostics: [baml.reflect.Diagnostic { code: "E0159", span: null, message: message }] } }, null => null }
+}
+
 --- <builtin>/ai/ns_internal/wire.baml ---
 function ai.internal._configured(value: string) -> string?  [expr] {
   {  } if (value.trim() Eq "") {  } null else {  } value
@@ -642,7 +655,7 @@ function ai.wire.redact_url_secrets(text: string) -> string  [expr] {
   { let keys = root.internal._redact_after(text, "key="); let tokens = root.internal._redact_after(keys, "token=") } root.internal._redact_after(tokens, "secret=")
 }
 function ai.wire.render_output_format(t: type) -> string  [expr] {
-  { baml.prompt.validate_output_type(t) } baml.prompt.render_output_format(t)
+  { root.internal.validate_output_type(t) } root.internal.render_output_format(t)
 }
 function ai.wire.resolve_credential(cred: root.Credential?, env_fallback: string?) -> string?  [expr] {
   { let explicit: string? = match (cred) { literal: string => root.internal._configured(literal), named: baml.env.Ref => root.internal._configured(named.get() NullCoalesce ""), null => null }; if let value: string = explicit { return value }; if let fallback: string = env_fallback { return root.internal._configured(baml.env.get(fallback) NullCoalesce "") } } null
@@ -759,10 +772,10 @@ function ai.name(self: ?) -> string  [expr] {
   {  } self.spec_name
 }
 function ai.output_type(self: ?) -> type  [expr] {
-  { let output_type = type.of(); baml.prompt.validate_output_type(output_type) } output_type
+  { let output_type = type.of(); root.internal.validate_output_type(output_type) } output_type
 }
 function ai.prompt(body: (role: (string) -> baml.prompt.Role throws never, ctx: baml.prompt.Context) -> baml.TaggedString throws never) -> (baml.prompt.Context) -> ai.Prompt throws never  [expr] {
-  { let render = (ctx: baml.prompt.Context) -> { { let tagged = body(baml.prompt.make_role, ctx) } root.internal.assemble_prompt(tagged.parts, tagged.values) } } render
+  { let render = (ctx: baml.prompt.Context) -> { { let tagged = body(root.internal.make_role, ctx) } root.internal.assemble_prompt(tagged.parts, tagged.values) } } render
 }
 function ai.prompt(self: ?, output_format: string = "") -> ai.Prompt  [expr] {
   {  } self.prompt_template(output_format)

@@ -82,7 +82,7 @@ function prompt(
     ) -> baml.TaggedString throws never,
 ) -> (baml.prompt.Context) -> Prompt throws never {
     let render = (ctx: baml.prompt.Context) -> {
-        let tagged = body(baml.prompt.make_role, ctx);
+        let tagged = body(root.internal.make_role, ctx);
         root.internal.assemble_prompt(tagged.parts, tagged.values)
     };
     render
@@ -110,7 +110,7 @@ class FunctionSpec<Out> {
 
     function output_type(self) -> type throws baml.reflect.errors.CompilationError {
         let output_type = type.of<Out>();
-        baml.prompt.validate_output_type(output_type);
+        root.internal.validate_output_type(output_type);
         output_type
     }
 

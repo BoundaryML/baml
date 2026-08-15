@@ -1237,8 +1237,8 @@ mod tests {
         assert_eq!(make("baml.sys.panic").sys_op_variant_name(), "BamlSysPanic");
         assert_eq!(make("ai.Prompt.text").sys_op_variant_name(), "AiPromptText");
         assert_eq!(
-            make("baml.prompt.render_output_format").sys_op_variant_name(),
-            "BamlPromptRenderOutputFormat"
+            make("ai.internal.render_output_format").sys_op_variant_name(),
+            "AiInternalRenderOutputFormat"
         );
     }
 

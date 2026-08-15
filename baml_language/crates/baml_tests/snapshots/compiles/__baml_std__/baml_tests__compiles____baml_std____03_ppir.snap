@@ -1707,16 +1707,7 @@ class baml.prompt.Role$stream {
   name: string | null
   metadata: map<string, unknown>
 }
-function baml.prompt.build_output_format(return_type: type) -> baml.prompt.OutputFormat  [builtin]
-function baml.prompt.get_return_type(function_name: string) -> type  [builtin]
-function baml.prompt.make_role(name: string) -> baml.prompt.Role  [expr] {
-  {  } baml.prompt.Role { name: name, metadata: map {  } }
-}
 function baml.prompt.output_format_with(self: ?, prefix: string? = null, or_splitter: string? = null, enum_value_prefix: string? = null, hoisted_class_prefix: string? = null, always_hoist_enums: bool? = null, quote_class_fields: bool? = null, hoist_classes: string[]? = null, map_style: string? = null, render_null_as: string? = null) -> string  [builtin]
-function baml.prompt.render_output_format(return_type: type) -> string  [builtin]
-function baml.prompt.validate_output_type(return_type: type) -> void  [expr] {
-  { return_type._validate_renderable() } match (return_type.as_enum()) { enum_type: baml.reflect.enum.Type => {  } if (enum_type.values().length() Eq 0) { let message = "empty enum `" Add return_type.to_string() Add "` cannot be rende..."; throw baml.reflect.errors.CompilationError { message: message, diagnostics: [baml.reflect.Diagnostic { code: "E0159", span: null, message: message }] } }, null => null }
-}
 
 --- <builtin>/baml/ns_random/random.baml ---
 class baml.random.ChaCha20 {

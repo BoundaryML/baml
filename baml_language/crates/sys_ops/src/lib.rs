@@ -714,47 +714,43 @@ mod schema {
     }
 }
 
-impl<T> io::IoNamespacePrompt for T {
-    fn render_output_format(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        return_type: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        // BEP-049 §10 (M5b): the `ctx.output_format` schema string.
-        SysOpOutput::ok(crate::output_format::render_output_format(
-            &return_type,
-            ctx,
-        ))
-    }
+/// `baml.prompt` itself has no free IO functions left — the plumbing moved to
+/// `ai.internal` — but the generated package trait still requires the
+/// (now method-only) namespace trait.
+impl<T> io::IoNamespacePrompt for T {}
 
-    fn build_output_format(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        return_type: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::prompt::OutputFormat> {
-        // BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
-        // carries; `output_format_with(...)` renders it with caller options.
-        let content = crate::output_format::build_output_format_content(&return_type, ctx);
-        SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
-    }
+// The `ai.internal` prompt-rendering sys-ops are pure (no platform IO), so
+// both `DefaultIoOps` and `NativeSysOps` delegate their `IoNamespaceAiInternal`
+// prompt methods to these shared implementations.
 
-    fn get_return_type(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::RuntimeTy> {
-        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
-        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
-            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
-        };
-        SysOpOutput::ok(info.return_type.clone())
-    }
+/// BEP-049 §10 (M5b): the `ctx.output_format` schema string.
+pub fn render_output_format_op(
+    return_type: &baml_type::RuntimeTy,
+    ctx: &SysOpContext,
+) -> SysOpOutput<String> {
+    SysOpOutput::ok(crate::output_format::render_output_format(return_type, ctx))
+}
+
+/// BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
+/// carries; `output_format_with(...)` renders it with caller options.
+pub fn build_output_format_op(
+    return_type: &baml_type::RuntimeTy,
+    ctx: &SysOpContext,
+) -> SysOpOutput<io::owned::prompt::OutputFormat> {
+    let content = crate::output_format::build_output_format_content(return_type, ctx);
+    SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
+}
+
+/// Look up an LLM function's declared return type by name.
+pub fn get_return_type_op(
+    function_name: &str,
+    ctx: &SysOpContext,
+) -> SysOpOutput<baml_type::RuntimeTy> {
+    let outcome = lookup_llm_function(function_name, &ctx.llm_functions);
+    let sys_types::ResolveOutcome::Found(_, info) = outcome else {
+        return SysOpOutput::err(llm_function_lookup_error(function_name, &outcome));
+    };
+    SysOpOutput::ok(info.return_type.clone())
 }
 
 /// Schema-aligned parsing operations back both public `baml.sap.parse` and
@@ -1891,6 +1887,33 @@ impl io::IoClassRandomSystemRandom for DefaultIoOps {
 impl io::IoNamespaceRandom for DefaultIoOps {}
 
 impl io::IoNamespaceAiInternal for DefaultIoOps {
+    fn render_output_format(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        render_output_format_op(&return_type, ctx)
+    }
+    fn build_output_format(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::prompt::OutputFormat> {
+        build_output_format_op(&return_type, ctx)
+    }
+    fn get_return_type(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<baml_type::RuntimeTy> {
+        get_return_type_op(&function_name, ctx)
+    }
     fn _gcp_access_token(
         &self,
         _h: &Arc<BexHeap>,

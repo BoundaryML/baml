@@ -203,8 +203,8 @@ function get_prompt() -> string {{
     let render_ctx = baml.prompt.Context {{
         client: cc,
         tags: {{}},
-        output_format: baml.prompt.render_output_format(rt),
-        _output_format: baml.prompt.build_output_format(rt),
+        output_format: ai.internal.render_output_format(rt),
+        _output_format: ai.internal.build_output_format(rt),
     }};
     let render = ai.prompt`test
 ${{render_ctx.output_format_with({kwargs})}}`;

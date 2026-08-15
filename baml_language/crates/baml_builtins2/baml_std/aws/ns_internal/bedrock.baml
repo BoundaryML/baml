@@ -603,7 +603,7 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
 /// is a cache *point*, so the key is `cache_point` — any non-null value
 /// (`true` is the idiomatic one) turns the checkpoint on.
 ///
-/// NOTE: `baml.prompt.make_role` currently builds every role marker with empty
+/// NOTE: `ai.internal.make_role` currently builds every role marker with empty
 /// metadata, so nothing populates this yet from the prompt DSL. Until that
 /// lands, use the client's `cache_system_prompt` / `cache_tools` options,
 /// which do not depend on per-message metadata.

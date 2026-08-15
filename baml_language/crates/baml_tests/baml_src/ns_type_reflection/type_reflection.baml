@@ -1,8 +1,8 @@
-// Tests for `Object::Type` structural equality via `baml.prompt.get_return_type`.
+// Tests for `Object::Type` structural equality via `ai.internal.get_return_type`.
 //
 // Converted from crates/baml_tests/tests/type_reflection.rs.
 //
-// `baml.prompt.get_return_type(name)` is a pure static lookup — it does NOT
+// `ai.internal.get_return_type(name)` is a pure static lookup — it does NOT
 // make an actual LLM network call. The client declaration is required by the
 // compiler (LLM functions must declare a client) but no request is sent.
 //
@@ -30,8 +30,8 @@ function GetBar() -> Bar {
 // ─── Equality / inequality tests ─────────────────────────────────────────────
 
 function eq_type_values_same_fn() -> bool {
-    let a = baml.prompt.get_return_type("GetFoo");
-    let b = baml.prompt.get_return_type("GetFoo");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetFoo");
     a == b
 }
 
@@ -40,8 +40,8 @@ test "eq_type_values_same" {
 }
 
 function eq_type_values_different_fn() -> bool {
-    let a = baml.prompt.get_return_type("GetFoo");
-    let b = baml.prompt.get_return_type("GetBar");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetBar");
     a == b
 }
 
@@ -50,8 +50,8 @@ test "eq_type_values_different" {
 }
 
 function neq_type_values_same_fn() -> bool {
-    let a = baml.prompt.get_return_type("GetFoo");
-    let b = baml.prompt.get_return_type("GetFoo");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetFoo");
     a != b
 }
 
@@ -60,8 +60,8 @@ test "neq_type_values_same" {
 }
 
 function neq_type_values_different_fn() -> bool {
-    let a = baml.prompt.get_return_type("GetFoo");
-    let b = baml.prompt.get_return_type("GetBar");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetBar");
     a != b
 }
 

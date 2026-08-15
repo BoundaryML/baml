@@ -3250,6 +3250,36 @@ fn auth_error(err: sys_auth::AuthError) -> VmBamlError {
 }
 
 impl io::IoNamespaceAiInternal for NativeSysOps {
+    fn render_output_format(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        sys_ops::render_output_format_op(&return_type, ctx)
+    }
+
+    fn build_output_format(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::prompt::OutputFormat> {
+        sys_ops::build_output_format_op(&return_type, ctx)
+    }
+
+    fn get_return_type(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<baml_type::RuntimeTy> {
+        sys_ops::get_return_type_op(&function_name, ctx)
+    }
+
     fn _gcp_access_token(
         &self,
         _heap: &Arc<BexHeap>,

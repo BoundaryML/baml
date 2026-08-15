@@ -1365,7 +1365,7 @@ function ai.FunctionSpec.output_type(self: ai.FunctionSpec<#0>) -> type {
     load_type #0
     store_var output_type
     load_var output_type
-    call baml.prompt.validate_output_type
+    call ai.internal.validate_output_type
     pop 1
     load_var output_type
     return
@@ -4593,6 +4593,77 @@ function ai.internal._wire_blocks(content: (ai.content.Text | ai.content.Reasoni
 function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> ai.Prompt {
 }
 
+function ai.internal.build_output_format(return_type: type) -> baml.prompt.OutputFormat {
+}
+
+function ai.internal.get_return_type(function_name: string) -> type {
+}
+
+function ai.internal.make_role(name: string) -> baml.prompt.Role {
+    load_var name
+    load_type string
+    load_type unknown
+    alloc_map 0
+    init_instance baml.prompt.Role .name, .metadata
+    return
+}
+
+function ai.internal.render_output_format(return_type: type) -> string {
+}
+
+function ai.internal.validate_output_type(return_type: type) -> void {
+    load_var return_type
+    call baml.TypeValue._validate_renderable
+    pop 1
+    load_var return_type
+    call baml.TypeValue.as_enum
+    store_var _4
+    load_var _4
+    narrow_bind baml.reflect.enum.Type, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L3
+
+  L1:
+    load_var _4
+    call baml.reflect.enum.Type.values
+    container_len
+    store_var _7
+    load_var _7
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L4
+
+  L2:
+    load_const null
+
+  L3:
+    return
+
+  L4:
+    load_var return_type
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _11
+    load_const "empty enum `"
+    load_var _11
+    bin_op +
+    load_const "` cannot be rendered as an LLM output schema"
+    bin_op +
+    store_var_load_var message
+    load_const "E0159"
+    load_const null
+    load_var message
+    init_instance baml.reflect.Diagnostic .code, .span, .message
+    load_type baml.reflect.Diagnostic
+    alloc_array 1
+    init_instance baml.reflect.errors.CompilationError .message, .diagnostics
+    throw
+}
+
 function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, params: map<string, unknown>) -> baml.json.json {
     load_var self
     load_field .next_id
@@ -6244,10 +6315,10 @@ function ai.wire.redact_url_secrets(text: string) -> string {
 
 function ai.wire.render_output_format(t: type) -> string {
     load_var t
-    call baml.prompt.validate_output_type
+    call ai.internal.validate_output_type
     pop 1
     load_var t
-    sys_op baml.prompt.render_output_format
+    sys_op ai.internal.render_output_format
     return
 }
 

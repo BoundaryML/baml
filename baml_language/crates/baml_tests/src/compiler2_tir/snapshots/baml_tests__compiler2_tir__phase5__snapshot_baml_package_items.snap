@@ -268,11 +268,6 @@ namespace baml.prompt:
   class ContextClient { methods: [] }
   class OutputFormat { methods: [] }
   class Role { methods: [] }
-  function build_output_format
-  function get_return_type
-  function make_role
-  function render_output_format
-  function validate_output_type
 namespace baml.random:
   class ChaCha20 { methods: [new, _new, random, random_int] }
   type Rng

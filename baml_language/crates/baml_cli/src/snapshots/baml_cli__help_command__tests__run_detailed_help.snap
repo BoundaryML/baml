@@ -1,6 +1,6 @@
 ---
 source: crates/baml_cli/src/help_command.rs
-expression: "render_for_test(&[\"run\"])"
+expression: "normalize_snapshot(&render_for_test(&[\"run\"]))"
 ---
 Run a BAML function, script, or expression.
 

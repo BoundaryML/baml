@@ -374,7 +374,7 @@ class Person {
 
 function main() -> ai.Prompt {
   let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-  let of = baml.prompt.render_output_format(type.of<Person>())
+  let of = ai.internal.render_output_format(type.of<Person>())
   let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: of }
   let render = ai.prompt`Answer using this schema:
 ${ctx.output_format}`
@@ -411,7 +411,7 @@ class Person {
 function main() -> ai.Prompt {
   let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
   let rt = type.of<Person>()
-  let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
+  let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
   let render = ai.prompt`${ctx.output_format_with(prefix = "Use this exact schema:")}`
   render(ctx)
 }
@@ -447,7 +447,7 @@ class Person {
 function main() -> ai.Prompt {
   let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
   let rt = type.of<Person>()
-  let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
+  let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
   let render = ai.prompt`${ctx.output_format_with(quote_class_fields = true)}`
   render(ctx)
 }
@@ -472,7 +472,7 @@ class Person {
 function main() -> ai.Prompt {
   let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
   let rt = type.of<Person>()
-  let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
+  let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
   let render = ai.prompt`${ctx.output_format_with(render_null_as = "omit")}`
   render(ctx)
 }

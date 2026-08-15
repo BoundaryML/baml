@@ -248,11 +248,6 @@ class            baml.prompt.OutputFormat         <builtin>/baml/ns_prompt/promp
 class            baml.prompt.Role                 <builtin>/baml/ns_prompt/prompt.baml:8
 class            baml.prompt.ContextClient        <builtin>/baml/ns_prompt/prompt.baml:15
 class            baml.prompt.Context              <builtin>/baml/ns_prompt/prompt.baml:23
-function         baml.prompt.validate_output_type <builtin>/baml/ns_prompt/prompt.baml:47
-function         baml.prompt.render_output_format <builtin>/baml/ns_prompt/prompt.baml:68
-function         baml.prompt.build_output_format  <builtin>/baml/ns_prompt/prompt.baml:73
-function         baml.prompt.make_role            <builtin>/baml/ns_prompt/prompt.baml:78
-function         baml.prompt.get_return_type      <builtin>/baml/ns_prompt/prompt.baml:84
 interface        baml.random.Rng                  <builtin>/baml/ns_random/random.baml:7
 class            baml.random.SystemRandom         <builtin>/baml/ns_random/random.baml:45
 class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:68

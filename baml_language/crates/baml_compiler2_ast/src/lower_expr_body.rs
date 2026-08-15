@@ -478,8 +478,8 @@ pub(crate) fn synthesize_llm_spec_body(
         .collect();
     for callee in role_callees {
         ctx.exprs[callee] = Expr::Path(vec![
-            Name::new("baml"),
-            Name::new("prompt"),
+            Name::new("ai"),
+            Name::new("internal"),
             Name::new("make_role"),
         ]);
     }

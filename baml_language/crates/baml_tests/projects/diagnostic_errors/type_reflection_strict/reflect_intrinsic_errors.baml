@@ -1,6 +1,6 @@
 // Negative cases for the `type.of` compiler intrinsic itself.
 // These complement `strict_normalization.baml` (which exercises Ty::Type
-// strictness via `baml.prompt.get_return_type`) by hitting the intrinsic path
+// strictness via `ai.internal.get_return_type`) by hitting the intrinsic path
 // directly.
 
 class User { name string }

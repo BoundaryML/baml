@@ -191,6 +191,9 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("ai", "ns_internal/wire.baml"),
     builtin!("ai", "ns_internal/clients.baml"),
     builtin!("ai", "ns_internal/http_errors.baml"),
+    // Prompt-rendering plumbing shared by `ai.*` and the `prompt` tag desugar;
+    // lives here so `describe baml.prompt` stays classes-only.
+    builtin!("ai", "ns_internal/prompt.baml"),
     // --- provider client packages ---
     builtin!("openai", "responses.baml"),
     builtin!("openai", "ns_internal/responses.baml"),
