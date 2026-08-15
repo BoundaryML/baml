@@ -9857,7 +9857,7 @@ function Foo() -> {
     }
 
     /// The LLM-vs-expression classifier walks raw tokens, where string
-    /// CONTENTS lex as ordinary tokens (`client` even lexes as KW_CLIENT).
+    /// CONTENTS lex as ordinary tokens (`client` even lexes as `KW_CLIENT`).
     /// Prose that happens to mention `client`/`prompt`/`tools` must never
     /// flip a plain function into an LLM body — that produced a cascade of
     /// "Only 'client', 'tools' and 'prompt' allowed in LLM function" errors.
