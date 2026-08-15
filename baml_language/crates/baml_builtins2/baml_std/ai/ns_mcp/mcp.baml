@@ -9,19 +9,6 @@
 // visible to on_event — with any client.
 // Mirrors _planv2/pages/03_how_to/06_use_mcp_tools_with_any_client.md.
 
-// A tools/call proxy bound to one tool name. A helper function rather than
-// an inline closure in the tools() loop: a closure in a loop captures the
-// loop variable's slot, so every tool would proxy the last catalog entry;
-// a parameter is a fresh binding per call.
-function _proxy(
-    conn: McpConnection,
-    name: string,
-) -> (map<string, unknown>) -> string throws unknown {
-    (args: map<string, unknown>) -> {
-        conn.call_tool(name, args)
-    }
-}
-
 // One JSON-RPC message as one line. Pure; tested with literal values.
 function rpc_line(id: int?, method: string, params: map<string, unknown>?) -> string {
     let m: map<string, unknown> = { "jsonrpc": "2.0", "method": method };
@@ -169,7 +156,7 @@ class McpConnection {
                     tool_name,
                     baml.json.path_or<string>(t, ".description", ""),
                     schema,
-                    _proxy(self, tool_name),
+                    root.internal._proxy(self, tool_name),
                 ),
             );
         }

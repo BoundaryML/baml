@@ -597,7 +597,7 @@ function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
 // `tool_choice` for both Required and Available, so the two modes only ever
 // differed in that one is unreachable — one predicate is enough.
 function _openai_wants_image(output_type: type) -> bool {
-    ai._media_shape(output_type).ends_with(":image")
+    ai.internal._media_shape(output_type).ends_with(":image")
 }
 
 function _openai_tools(toolbox: ai.tools.Toolbox, wants_image: bool) -> OaTool[]? {

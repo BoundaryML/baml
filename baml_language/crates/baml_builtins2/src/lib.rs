@@ -171,6 +171,14 @@ pub const ALL: &[BuiltinFile] = &[
     // Provider auth sys-ops (`ai.internal._gcp_*` / `ai.internal._aws_*`),
     // implemented in `crates/sys_auth`.
     builtin!("ai", "ns_internal/auth.baml"),
+    // `ai.internal` is where the package's PRIVATE free functions live, so that
+    // `baml describe ai` / `ai.wire` / `ai.errors` / `ai.clients` list only the
+    // public surface. Each file backs the like-named public namespace.
+    builtin!("ai", "ns_internal/media_output.baml"),
+    builtin!("ai", "ns_internal/media_resolve.baml"),
+    builtin!("ai", "ns_internal/wire.baml"),
+    builtin!("ai", "ns_internal/clients.baml"),
+    builtin!("ai", "ns_internal/http_errors.baml"),
     // --- provider client packages ---
     builtin!("openai", "responses.baml"),
     builtin!("openai", "ns_internal/responses.baml"),
@@ -198,6 +206,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("claude_code", "ns_internal/cli.baml"),
     // ai.mcp: MCP servers as ordinary ai tools (part of the ai package).
     builtin!("ai", "ns_mcp/mcp.baml"),
+    builtin!("ai", "ns_internal/mcp.baml"),
 ];
 
 /// The distinct standard-library / builtin package names, derived from the

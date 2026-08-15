@@ -829,7 +829,7 @@ test "anthropic_audio_input_rejected" {
 
 // A base64 image whose media_type is outside the API's allowed set
 // (jpeg/png/gif/webp) is a client-side error naming the type, not an opaque
-// provider 400 — `.svg` sources reach `_media_mime_type` as image/svg+xml.
+// provider 400 — `.svg` sources reach `ai.internal._media_mime_type` as image/svg+xml.
 function anthropic_svg_image_rejected() -> string {
     let picture = baml.media.Image.from_base64("PHN2Zy8+", "image/svg+xml");
     let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
