@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 15867
 ---
 function user.NamedTools(q: string, client: ai.Client | null) -> Answer {
     load_var client
@@ -59,8 +58,6 @@ function user.NamedTools$spec(q: string) -> ai.FunctionSpec<Answer> {
     call ai.tools.Toolbox.new
     store_var _4
     load_const "claude-haiku-4-5"
-    load_const <omitted>
-    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -147,8 +144,6 @@ function user.PlainChat$spec(q: string) -> ai.FunctionSpec<string> {
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4o-mini"
-    load_const <omitted>
-    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -260,8 +255,6 @@ function user.SpecAgent$spec(q: string) -> ai.FunctionSpec<Answer> {
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4o-mini"
-    load_const <omitted>
-    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>

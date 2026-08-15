@@ -472,7 +472,7 @@ function openai_prompt_metadata(prompt: ai.Prompt) -> map<string, baml.json.json
 function _openai_merge_onto_last_part(
     item: baml.json.json,
     directives: map<string, baml.json.json>,
-) -> null {
+) -> void {
     match (item) {
         let message: map<string, baml.json.json> => {
             match (message.get("content")) {
@@ -505,7 +505,7 @@ function _openai_apply_message_metadata(
                     let index = 0;
                     for (let directives in metadata) {
                         if (directives.keys().length() > 0) {
-                            let _ = _openai_merge_onto_last_part(items.at(index), directives);
+                            _openai_merge_onto_last_part(items.at(index), directives);
                         }
                         index += 1;
                     }
@@ -673,7 +673,7 @@ function _openai_headers(c: root.ResponsesClient) -> map<string, string> {
 function _openai_url(c: root.ResponsesClient) -> string {
     let base = c.resolved_base_url() ?? "https://api.openai.com/v1";
     let trimmed = if (base.ends_with("/")) {
-        base.substring(0, base.length() - 1)
+        base.slice(0, base.length() - 1)
     } else {
         base
     };
@@ -1096,16 +1096,16 @@ function _openai_sse_failure(error: unknown) -> ai.errors.Failure {
     };
     let marker = "SSE request failed with status ";
     if let at: int = text.index_of(marker) {
-        let rest = text.substring(at + marker.length(), text.length());
+        let rest = text.slice(at + marker.length(), text.length());
         if let separator: int = rest.index_of(":") {
-            let code = baml.Int.parse(rest.substring(0, separator).trim()) catch_all (e) {
+            let code = baml.Int.parse(rest.slice(0, separator).trim()) catch_all (e) {
                 _ => 0,
             };
             if (code > 0) {
                 return ai.errors.classify_http(
                     "openai",
                     code,
-                    rest.substring(separator + 1, rest.length()).trim(),
+                    rest.slice(separator + 1, rest.length()).trim(),
                 );
             };
         };

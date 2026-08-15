@@ -221,7 +221,7 @@ fn ai.clients._from_shorthand(shorthand: string) -> ai.Client {
     bb6: {
         _4 = copy _3;
         _6 = copy _4;
-        _5 = call const fn baml.String.substring(copy _1, const 0_i64, copy _6) -> [bb7];
+        _5 = call const fn baml.String.slice(copy _1, const 0_i64, copy _6) -> [bb7];
     }
 
     bb7: {
@@ -231,7 +231,7 @@ fn ai.clients._from_shorthand(shorthand: string) -> ai.Client {
     }
 
     bb8: {
-        _7 = call const fn baml.String.substring(copy _1, copy _8, copy _10) -> [bb9];
+        _7 = call const fn baml.String.slice(copy _1, copy _8, copy _10) -> [bb9];
     }
 
     bb9: {
@@ -306,57 +306,57 @@ fn ai.clients._from_shorthand(shorthand: string) -> ai.Client {
 
     bb23: {
         _33 = copy _7;
-        _11 = call const fn vercel.AiGatewayImageClient.new(copy _33, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn vercel.AiGatewayImageClient.new(copy _33, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb24: {
         _31 = copy _7;
-        _11 = call const fn aws.BedrockClient.new(copy _31, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn aws.BedrockClient.new(copy _31, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb25: {
         _29 = copy _7;
-        _11 = call const fn google.VertexClient.new(copy _29, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn google.VertexClient.new(copy _29, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb26: {
         _27 = copy _7;
-        _11 = call const fn google.GoogleClient.new(copy _27, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn google.GoogleClient.new(copy _27, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb27: {
         _25 = copy _7;
-        _11 = call const fn anthropic.AnthropicClient.new(copy _25, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn anthropic.AnthropicClient.new(copy _25, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb28: {
         _23 = copy _7;
-        _11 = call const fn openai.OpenRouterClient.new(copy _23, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn openai.OpenRouterClient.new(copy _23, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb29: {
         _21 = copy _7;
-        _11 = call const fn openai.OllamaClient.new(copy _21, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn openai.OllamaClient.new(copy _21, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb30: {
         _19 = copy _7;
-        _11 = call const fn openai.AzureClient.new(copy _19, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn openai.AzureClient.new(copy _19, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb31: {
         _17 = copy _7;
-        _11 = call const fn openai.ImageClient.new(copy _17, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn openai.ImageClient.new(copy _17, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb32: {
         _15 = copy _7;
-        _11 = call const fn openai.ChatClient.new(copy _15, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn openai.ChatClient.new(copy _15, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb33: {
         _13 = copy _7;
-        _11 = call const fn openai.ResponsesClient.new(copy _13, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn openai.ResponsesClient.new(copy _13, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb34: {
@@ -2081,7 +2081,7 @@ fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], t
     let _22: map<string, string>
     let _23: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _24: map<string, unknown>
-    let _25: null
+    let _25: void
     let _26: string
 
     bb0: {
@@ -2153,9 +2153,9 @@ fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], t
     }
 }
 
-fn ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> null {
+fn ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: ai.mcp.McpConnection // self // param
     let _2: string // line // param
     let _3: string // framed
@@ -2232,7 +2232,7 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
     let _2: string // method // param
     let _3: map<string, unknown> // params // param
     let _4: int // id
-    let _5: null
+    let _5: void
     let _6: string
     let _7: int
     let _8: string | baml.iter.Done // next
@@ -2749,18 +2749,24 @@ fn ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string, args
     }
 }
 
-fn ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> null {
+fn ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: ai.mcp.McpConnection // self // param
-    let _2: (baml.sys.Process) -> null throws never
+    let _2: null
+    let _3: (baml.sys.Process) -> null throws never
 
     bb0: {
-        _2 = copy _1.1;
-        _0 = sys_op const fn baml.sys.Process.close(copy _2) -> bb1;
+        _3 = copy _1.1;
+        _2 = sys_op const fn baml.sys.Process.close(copy _3) -> bb1;
     }
 
     bb1: {
+        _0 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }
@@ -2841,13 +2847,14 @@ fn ai.stream.TurnStream.from_chunks(chunks: string[]) -> ai.stream.TurnStream {
     }
 }
 
-fn ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> null {
+fn ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: ai.stream.TurnStream // self // param
     let _2: null | baml.http.SseStream
     let _3: null | baml.http.SseStream
     let _4: baml.http.SseStream // sse
+    let _5: null
 
     bb0: {
         _1.10 = const true;
@@ -2858,22 +2865,27 @@ fn ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> null {
 
     bb1: {
         _0 = const null;
-        goto -> bb3;
+        goto -> bb4;
     }
 
     bb2: {
         _4 = copy _3;
-        _0 = sys_op const fn baml.http.SseStream.close(copy _4) -> bb3;
+        _5 = sys_op const fn baml.http.SseStream.close(copy _4) -> bb3;
     }
 
     bb3: {
+        _0 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
 
-fn ai.stream.TurnStream._check_terminal(self: ai.stream.TurnStream) -> null {
+fn ai.stream.TurnStream._check_terminal(self: ai.stream.TurnStream) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: ai.stream.TurnStream // self // param
     let _2: string | null
     let _3: string | null
@@ -2989,14 +3001,14 @@ fn ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.stream.D
     let _28: int | null
     let _29: int // o
     let _30: null | ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta
-    let _31: null
+    let _31: void
     let _32: null | baml.http.SseStream
     let _33: null | baml.http.SseStream
     let _34: baml.http.SseStream // sse
     let _35: string | null
     let _36: bool
-    let _37: null
-    let _38: null
+    let _37: void
+    let _38: void
     let _39: string // batch
     let _40: null | ((string) -> (ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta)[] throws unknown)
     let _41: null | ((string) -> (ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta)[] throws unknown)
@@ -3025,7 +3037,7 @@ fn ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.stream.D
     let _64: string
     let _65: string
     let _66: type
-    let _67: null
+    let _67: void
 
     bb0: {
         goto -> bb1;
@@ -3268,7 +3280,7 @@ fn ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.ModelTurn {
     let _1: ai.stream.TurnStream // self // param
     let _2: string | ai.stream.Done
     let _3: string | ai.stream.Done
-    let _4: null
+    let _4: void
     let _5: null | ai.events.Usage // usage
     let _6: bool
     let _7: bool
@@ -4295,90 +4307,72 @@ fn ai.wire.resolve_credential(cred: string | null | baml.env.Ref, env_fallback: 
     }
 }
 
-fn ai.wire.credential_sources(cred: string | null | baml.env.Ref, legacy_env: string | null, canonical_env: string | null) -> string {
+fn ai.wire.credential_sources(cred: string | null | baml.env.Ref, canonical_env: string | null) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string | null | baml.env.Ref // cred // param
-    let _2: string | null // legacy_env // param
-    let _3: string | null // canonical_env // param
-    let _4: string[] // names
-    let _5: string | null | baml.env.Ref
-    let _6: baml.env.Ref // named
-    let _7: int
-    let _8: string
-    let _9: type
-    let _10: string | null
-    let _11: string // legacy
-    let _12: int
-    let _13: string
-    let _14: type
-    let _15: string | null
-    let _16: string // canonical
-    let _17: int
-    let _18: string
-    let _19: type
-    let _20: bool
-    let _21: int
-    let _22: type
+    let _2: string | null // canonical_env // param
+    let _3: string[] // names
+    let _4: string | null | baml.env.Ref
+    let _5: baml.env.Ref // named
+    let _6: int
+    let _7: string
+    let _8: type
+    let _9: string | null
+    let _10: string // canonical
+    let _11: int
+    let _12: string
+    let _13: type
+    let _14: bool
+    let _15: int
+    let _16: type
 
     bb0: {
-        _4 = []: string[];
-        _5 = copy _1;
-        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["env"], name: "Ref" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb1, bb2];
+        _3 = []: string[];
+        _4 = copy _1;
+        _4 = narrow_bind copy _4 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["env"], name: "Ref" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb1, bb2];
     }
 
     bb1: {
-        _6 = copy _5;
-        _8 = copy _6.0;
-        _9 = load_type(string);
-        _7 = call const fn baml.Array.push<copy _9>(copy _4, copy _8) -> [bb2];
+        _5 = copy _4;
+        _7 = copy _5.0;
+        _8 = load_type(string);
+        _6 = call const fn baml.Array.push<copy _8>(copy _3, copy _7) -> [bb2];
     }
 
     bb2: {
-        _10 = copy _2;
-        _10 = narrow_bind copy _10 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb4];
+        _9 = copy _2;
+        _9 = narrow_bind copy _9 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb4];
     }
 
     bb3: {
-        _11 = copy _10;
-        _13 = copy _11;
-        _14 = load_type(string);
-        _12 = call const fn baml.Array.push<copy _14>(copy _4, copy _13) -> [bb4];
+        _10 = copy _9;
+        _12 = copy _10;
+        _13 = load_type(string);
+        _11 = call const fn baml.Array.push<copy _13>(copy _3, copy _12) -> [bb4];
     }
 
     bb4: {
-        _15 = copy _3;
-        _15 = narrow_bind copy _15 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb5, bb6];
+        _15 = len(_3);
+        goto -> bb5;
     }
 
     bb5: {
-        _16 = copy _15;
-        _18 = copy _16;
-        _19 = load_type(string);
-        _17 = call const fn baml.Array.push<copy _19>(copy _4, copy _18) -> [bb6];
+        _14 = copy _15 == const 0_i64;
+        branch copy _14 -> [bb7, bb6];
     }
 
     bb6: {
-        _21 = len(_4);
-        goto -> bb7;
+        _16 = load_type(string);
+        _0 = call const fn baml.Array.join<copy _16>(copy _3, const ", ") -> [bb8];
     }
 
     bb7: {
-        _20 = copy _21 == const 0_i64;
-        branch copy _20 -> [bb9, bb8];
+        _0 = const "(no environment variable was named)";
+        goto -> bb8;
     }
 
     bb8: {
-        _22 = load_type(string);
-        _0 = call const fn baml.Array.join<copy _22>(copy _4, const ", ") -> [bb10];
-    }
-
-    bb9: {
-        _0 = const "(no environment variable was named)";
-        goto -> bb10;
-    }
-
-    bb10: {
         return;
     }
 }
@@ -5016,12 +5010,12 @@ fn ai.wire._resolve_media_content(url: string | null, file: string | null, inlin
     }
 
     bb29: {
-        _21 = call const fn baml.String.substring(copy _16, copy _22, copy _24) -> [bb30];
+        _21 = call const fn baml.String.slice(copy _16, copy _22, copy _24) -> [bb30];
     }
 
     bb30: {
         _26 = copy _20;
-        _25 = call const fn baml.String.substring(copy _16, const 5_i64, copy _26) -> [bb31];
+        _25 = call const fn baml.String.slice(copy _16, const 5_i64, copy _26) -> [bb31];
     }
 
     bb31: {
@@ -5671,9 +5665,9 @@ fn ai.wire._wire_blocks(content: (ai.content.Media | ai.content.Reasoning | ai.c
     }
 }
 
-fn ai.wire._flush_orphaned_calls(out: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[], pending: string[]) -> null {
+fn ai.wire._flush_orphaned_calls(out: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[], pending: string[]) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // out // param
     let _2: string[] // pending // param
     let _3: baml.iter.Iterator<Error = never, Item = string>
@@ -5685,7 +5679,8 @@ fn ai.wire._flush_orphaned_calls(out: (ai.events.AssistantMessage | ai.events.Fi
     let _9: ai.events.ToolFailed
     let _10: string
     let _11: type
-    let _12: type
+    let _12: null
+    let _13: type
 
     bb0: {
         _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _2) -> [bb1];
@@ -5711,18 +5706,23 @@ fn ai.wire._flush_orphaned_calls(out: (ai.events.AssistantMessage | ai.events.Fi
     }
 
     bb4: {
-        _12 = load_type(string);
-        _0 = call const fn baml.Array.clear<copy _12>(copy _2) -> [bb5];
+        _13 = load_type(string);
+        _12 = call const fn baml.Array.clear<copy _13>(copy _2) -> [bb5];
     }
 
     bb5: {
+        _0 = const null;
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
 
-fn ai.wire._resolve_pending_call(pending: string[], id: string) -> null {
+fn ai.wire._resolve_pending_call(pending: string[], id: string) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: string[] // pending // param
     let _2: string // id // param
     let _3: int | null
@@ -5740,22 +5740,27 @@ fn ai.wire._resolve_pending_call(pending: string[], id: string) -> null {
 
     bb1: {
         _5 = copy _3;
-        _5 = narrow_bind copy _5 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb3];
+        _5 = narrow_bind copy _5 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb2];
     }
 
     bb2: {
-        _6 = copy _5;
-        _8 = copy _6;
-        _9 = load_type(string);
-        _7 = call const fn baml.Array.remove_at<copy _9>(copy _1, copy _8) -> [bb3];
+        _0 = const null;
+        goto -> bb5;
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb4;
+        _6 = copy _5;
+        _8 = copy _6;
+        _9 = load_type(string);
+        _7 = call const fn baml.Array.remove_at<copy _9>(copy _1, copy _8) -> [bb4];
     }
 
     bb4: {
+        _0 = const null;
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -5775,7 +5780,7 @@ fn ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal {
     let _10: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage // event
     let _11: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
     let _12: ai.events.AssistantMessage // assistant
-    let _13: null
+    let _13: void
     let _14: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
     let _15: string[]
     let _16: (ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse)[] // blocks
@@ -5802,7 +5807,7 @@ fn ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal {
     let _37: type
     let _38: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
     let _39: ai.events.UserMessage // user
-    let _40: null
+    let _40: void
     let _41: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
     let _42: string[]
     let _43: int
@@ -5810,7 +5815,7 @@ fn ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal {
     let _45: type
     let _46: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
     let _47: ai.events.ToolCompleted // completed
-    let _48: null
+    let _48: void
     let _49: string[]
     let _50: string
     let _51: int
@@ -5818,7 +5823,7 @@ fn ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal {
     let _53: type
     let _54: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
     let _55: ai.events.ToolFailed // failed
-    let _56: null
+    let _56: void
     let _57: string[]
     let _58: string
     let _59: int
@@ -5827,7 +5832,7 @@ fn ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal {
     let _62: int
     let _63: ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolRequested | ai.events.Usage
     let _64: type
-    let _65: null
+    let _65: void
     let _66: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
     let _67: string[]
     let _68: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
@@ -6622,9 +6627,9 @@ fn ai._media_join_text(items: baml.json.json[]) -> int | float | string | bool |
     }
 }
 
-fn ai._media_reject_mixed(turn: ai.ModelTurn, kind: string, provider: string) -> null {
+fn ai._media_reject_mixed(turn: ai.ModelTurn, kind: string, provider: string) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: ai.ModelTurn // turn // param
     let _2: string // kind // param
     let _3: string // provider // param
@@ -6860,9 +6865,9 @@ fn .<lambda(Agent.new, 0)>(e: ai.events.AssistantMessage | ai.events.FinalProduc
     }
 }
 
-fn ai.Agent._run_one_tool(self: ai.Agent, tb: ai.tools.Toolbox, call: ai.content.ToolUse, j: ai.Journal) -> null {
+fn ai.Agent._run_one_tool(self: ai.Agent, tb: ai.tools.Toolbox, call: ai.content.ToolUse, j: ai.Journal) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: ai.Agent // self // param
     let _2: ai.tools.Toolbox // tb // param
     let _3: ai.content.ToolUse // call // param
@@ -7234,13 +7239,13 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     let _48: type
     let _49: bool
     let _50: string
-    let _51: null
+    let _51: void
     let _52: string
     let _53: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // items
     let _54: string
     let _55: baml.json.json[] // parts
     let _56: string
-    let _57: null
+    let _57: void
     let _58: string
     let _59: bool
     let _60: int
@@ -8227,14 +8232,14 @@ fn ai.Agent.Runner<Out>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.Ru
     let _29: int
     let _30: int // before
     let _31: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
-    let _32: future<null, ai.errors.ToolFailedError>[] // futures
-    let _33: (ai.content.ToolUse) -> future<null, ai.errors.ToolFailedError> throws never
+    let _32: future<void, ai.errors.ToolFailedError>[] // futures
+    let _33: (ai.content.ToolUse) -> future<void, ai.errors.ToolFailedError> throws never
     let _34: type
     let _35: type
     let _36: type
-    let _37: null[]
+    let _37: void[]
     let _38: null
-    let _39: future<null, ai.errors.ToolFailedError>[]
+    let _39: future<void, ai.errors.ToolFailedError>[]
     let _40: type
     let _41: type
     let _42: ai.Journal
@@ -8496,7 +8501,7 @@ fn ai.Agent.Runner<Out>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.Ru
 
     bb28: {
         _33 = make_closure lambda[0]<1 type_args>(copy _1, copy _2, copy _7);
-        _34 = load_type(future<null, ai.errors.ToolFailedError>);
+        _34 = load_type(future<void, ai.errors.ToolFailedError>);
         _35 = load_type(never);
         _36 = load_type(ai.content.ToolUse);
         _32 = call const fn baml.Array.map<copy _36, copy _34, copy _35>(copy _27, copy _33) -> [bb29];
@@ -8504,7 +8509,7 @@ fn ai.Agent.Runner<Out>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.Ru
 
     bb29: {
         _39 = copy _32;
-        _40 = load_type(null);
+        _40 = load_type(void);
         _41 = load_type(ai.errors.ToolFailedError);
         _38 = call const fn baml.future.all<copy _40, copy _41>(copy _39) -> [bb30];
     }
@@ -8673,16 +8678,16 @@ fn ai.Agent.Runner<Out>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.Ru
 }
 
 // lambda[0]
-fn .<lambda(Agent.run, 0)>(call: ai.content.ToolUse) -> future<null, ai.errors.ToolFailedError> {
+fn .<lambda(Agent.run, 0)>(call: ai.content.ToolUse) -> future<void, ai.errors.ToolFailedError> {
     // Locals:
-    let _0: future<null, ai.errors.ToolFailedError> // _0 // return
+    let _0: future<void, ai.errors.ToolFailedError> // _0 // return
     let _1: ai.content.ToolUse // call // param [captured]
     let _2: null
-    let _3: future<null, ai.errors.ToolFailedError>
+    let _3: future<void, ai.errors.ToolFailedError>
 
     bb0: {
         _2 = make_closure lambda[0]<1 type_args>(copy capture[0], copy capture[1], copy _1, copy capture[2]);
-        _3 = spawn<null, ai.errors.ToolFailedError> copy _2 name=const null -> bb1;
+        _3 = spawn<void, ai.errors.ToolFailedError> copy _2 name=const null -> bb1;
     }
 
     bb1: {
@@ -8696,9 +8701,9 @@ fn .<lambda(Agent.run, 0)>(call: ai.content.ToolUse) -> future<null, ai.errors.T
 }
 
 // lambda[0]
-fn .<lambda(<lambda(Agent.run, 0)>, 1)>() -> null {
+fn .<lambda(<lambda(Agent.run, 0)>, 1)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: ai.tools.Toolbox
     let _2: type
     let _3: ai.content.ToolUse

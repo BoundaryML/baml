@@ -67,12 +67,6 @@ class AnthropicClient {
     // and a `Ref` keeps the secret out of the client value entirely.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
-    // DEPRECATED — names of environment variables to read INSTEAD, at request
-    // time. Prefer `api_key = env.NAME` / `base_url = env.NAME`, which name the
-    // variable inline and are read at request time just the same; these are
-    // kept for compatibility and are consulted after an explicit credential.
-    api_key_env: string?,
-    base_url_env: string?,
 
     // First-class typed parameters. Each is lowered into the typed request
     // ONLY when non-null, so an unset option never reaches the wire.
@@ -109,8 +103,6 @@ class AnthropicClient {
         model: string = "claude-haiku-4-5",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
-        api_key_env: string? = null,
-        base_url_env: string? = null,
         max_tokens: int = 8192,
         temperature: float? = null,
         top_p: float? = null,
@@ -126,8 +118,6 @@ class AnthropicClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
-            api_key_env: api_key_env,
-            base_url_env: base_url_env,
             max_tokens: max_tokens,
             temperature: temperature,
             top_p: top_p,
@@ -141,8 +131,8 @@ class AnthropicClient {
         }
     }
 
-    // The request-time credential: an explicit value, else the named env
-    // var, else the provider's canonical one.
+    // The request-time credential: an explicit value, else the provider's
+    // canonical one.
     //
     // A missing credential is a CATCHABLE configuration error, thrown the same
     // way the chat family reports one (`_chat_headers`): `baml.env.get_or_panic`
@@ -150,31 +140,17 @@ class AnthropicClient {
     // bypassed this client's own `invoke` normalize wrapper and turned the one
     // misconfiguration every deployment hits first into a process-level failure.
     function resolved_api_key(self) -> string {
-        if let k: string = ai.wire.resolve_credential(self.api_key, null) {
+        if let k: string = ai.wire.resolve_credential(self.api_key, "ANTHROPIC_API_KEY") {
             return k;
         }
-        if let name: string = self.api_key_env {
-            if let v: string = baml.env.get(name) {
-                return v;
-            }
-        }
-        if let v: string = baml.env.get("ANTHROPIC_API_KEY") {
-            return v;
-        }
         throw baml.errors.InvalidArgument {
-            message: `anthropic needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, self.api_key_env, "ANTHROPIC_API_KEY")}`,
+            message: `anthropic needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "ANTHROPIC_API_KEY")}`,
         }
     }
 
     // The request-time base URL, or null for the provider default.
     function resolved_base_url(self) -> string? {
-        if let u: string = ai.wire.resolve_credential(self.base_url, null) {
-            return u;
-        }
-        if let name: string = self.base_url_env {
-            return baml.env.get(name);
-        }
-        null
+        ai.wire.resolve_credential(self.base_url, null)
     }
 
     implements ai.Client {

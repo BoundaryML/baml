@@ -15,8 +15,8 @@
 ///     name, looked up with `baml.env.get`. A `null` `env_fallback` means the
 ///     provider has no canonical variable and the result is `null`.
 ///
-/// Clients keep their own chain around this: explicit credential (here) →
-/// legacy `*_env` name → canonical variable (here, as `env_fallback`).
+/// This IS the whole chain a client needs: explicit credential (a literal or an
+/// `env.NAME` ref) → the provider's canonical variable (`env_fallback`).
 function resolve_credential(cred: root.Credential?, env_fallback: string?) -> string? {
     let explicit: string? = match (cred) {
         let literal: string => {
@@ -47,17 +47,10 @@ function resolve_credential(cred: root.Credential?, env_fallback: string?) -> st
 /// without this the error would name only the provider's canonical variable and
 /// never mention the one the caller actually asked for. Values are never
 /// included — only names.
-function credential_sources(
-    cred: root.Credential?,
-    legacy_env: string?,
-    canonical_env: string?,
-) -> string {
+function credential_sources(cred: root.Credential?, canonical_env: string?) -> string {
     let names: string[] = [];
     if let named: baml.env.Ref = cred {
         names.push(named.name);
-    }
-    if let legacy: string = legacy_env {
-        names.push(legacy);
     }
     if let canonical: string = canonical_env {
         names.push(canonical);
@@ -184,8 +177,8 @@ function _resolve_media_content(
             if let separator: int = media_url.index_of(";base64,") {
                 return ResolvedMedia {
                     url: null,
-                    base64: media_url.substring(separator + 8, media_url.length()),
-                    mime_type: media_url.substring(5, separator),
+                    base64: media_url.slice(separator + 8, media_url.length()),
+                    mime_type: media_url.slice(5, separator),
                 };
             }
         }
@@ -407,19 +400,18 @@ function _wire_blocks(
 // the pending list. `out` and `pending` are mutated in place. The repair is a
 // FAILED result rather than a successful empty one: the model must be able to
 // tell that the call did not run.
-function _flush_orphaned_calls(out: root.events.Event[], pending: string[]) -> null {
+function _flush_orphaned_calls(out: root.events.Event[], pending: string[]) -> void {
     for (let id in pending) {
         out.push(root.events.ToolFailed { id: id, message: "No result provided" });
     }
-    pending.clear()
+    pending.clear();
 }
 
 // Mark one tool call answered.
-function _resolve_pending_call(pending: string[], id: string) -> null {
+function _resolve_pending_call(pending: string[], id: string) -> void {
     if let index: int = pending.index_of(id) {
         let _ = pending.remove_at(index);
     }
-    null
 }
 
 /// Make one run's journal safe to replay to `client_id`, and return the
@@ -452,7 +444,7 @@ function sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal
     for (let event in j.entries()) {
         match (event) {
             let assistant: root.events.AssistantMessage => {
-                let _ = _flush_orphaned_calls(out, pending);
+                _flush_orphaned_calls(out, pending);
                 let blocks = _wire_blocks(assistant.content, assistant.client_id == client_id);
                 if (blocks.length() > 0) {
                     out.push(
@@ -473,17 +465,17 @@ function sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal
                 null
             },
             let user: root.events.UserMessage => {
-                let _ = _flush_orphaned_calls(out, pending);
+                _flush_orphaned_calls(out, pending);
                 out.push(user);
                 null
             },
             let completed: root.events.ToolCompleted => {
-                let _ = _resolve_pending_call(pending, completed.id);
+                _resolve_pending_call(pending, completed.id);
                 out.push(completed);
                 null
             },
             let failed: root.events.ToolFailed => {
-                let _ = _resolve_pending_call(pending, failed.id);
+                _resolve_pending_call(pending, failed.id);
                 out.push(failed);
                 null
             },
@@ -493,6 +485,6 @@ function sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal
             },
         };
     }
-    let _ = _flush_orphaned_calls(out, pending);
+    _flush_orphaned_calls(out, pending);
     root.Journal { log: out }
 }

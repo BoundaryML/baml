@@ -40,13 +40,12 @@ class BedrockClient {
     /// Replaces `https://bedrock-runtime.<region>.amazonaws.com` — a VPC
     /// endpoint, a LocalStack instance, or a test server. A trailing slash is
     /// tolerated. Setting it bypasses region resolution for the URL.
-    endpoint_url: string?,
-    /// Name of an environment variable to read the endpoint from INSTEAD, at
-    /// request time. A `client Name = ...` declaration is evaluated during
-    /// `$init`, which cannot run io sysops — naming the variable keeps the
-    /// declaration pure while still letting a deployment point the client
-    /// somewhere else.
-    endpoint_url_env: string?,
+    ///
+    /// A literal string, or `env.NAME` (a late-bound `baml.env.Ref` read at
+    /// request time) so a `client Name = ...` declaration — evaluated during
+    /// `$init`, which cannot run io sysops — stays pure while a deployment
+    /// still points the client somewhere else.
+    endpoint_url: ai.Credential?,
 
     // --- inference parameters (Converse `inferenceConfig`) ------------------
     /// Maximum tokens to generate. Wire type is a 32-bit int.
@@ -100,8 +99,7 @@ class BedrockClient {
         access_key_id: string? = null,
         secret_access_key: string? = null,
         session_token: string? = null,
-        endpoint_url: string? = null,
-        endpoint_url_env: string? = null,
+        endpoint_url: ai.Credential? = null,
         max_tokens: int? = null,
         temperature: float? = null,
         top_p: float? = null,
@@ -122,7 +120,6 @@ class BedrockClient {
             secret_access_key: secret_access_key,
             session_token: session_token,
             endpoint_url: endpoint_url,
-            endpoint_url_env: endpoint_url_env,
             max_tokens: max_tokens,
             temperature: temperature,
             top_p: top_p,
@@ -137,16 +134,11 @@ class BedrockClient {
         }
     }
 
-    /// The request-time endpoint override: an explicit value, else the named
-    /// environment variable, else null (build the regional host).
+    /// The request-time endpoint override: the explicit value (a literal, or
+    /// the value of the variable an `env.NAME` ref points at), else null
+    /// (build the regional host). Bedrock has no canonical endpoint variable.
     function resolved_endpoint_url(self) -> string? {
-        if let endpoint: string = self.endpoint_url {
-            return endpoint;
-        }
-        if let name: string = self.endpoint_url_env {
-            return baml.env.get(name);
-        }
-        null
+        ai.wire.resolve_credential(self.endpoint_url, null)
     }
 
     implements ai.Client {

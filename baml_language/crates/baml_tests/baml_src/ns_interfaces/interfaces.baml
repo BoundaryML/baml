@@ -767,16 +767,15 @@ test "match_open_interface_with_wildcard_works" {
 
 // generic_interface_concrete_type_param_runtime
 interface GictContainer<T> {
-    function add(self, item: T) -> null throws never
+    function add(self, item: T) -> void throws never
     function get(self, index: int) -> T? throws never
     function size(self) -> int throws never
 }
 class GictIntStack {
     items: int[]
     implements GictContainer<int> {
-        function add(self, item: int) -> null {
+        function add(self, item: int) -> void {
             self.items.push(item)
-            return null
         }
         function get(self, index: int) -> int? {
             return self.items[index]

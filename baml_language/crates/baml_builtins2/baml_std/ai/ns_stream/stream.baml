@@ -187,12 +187,10 @@ class TurnStream {
         }
     }
 
-    function _finish(self) -> null {
+    function _finish(self) -> void {
         self._done = true;
         if let sse: baml.http.SseStream = self._sse {
-            sse.close()
-        } else {
-            null
+            sse.close();
         }
     }
 
@@ -200,7 +198,7 @@ class TurnStream {
     // explicit terminal event and the stream ended without one, in which case
     // the truncated turn is reported as the transport failure it is instead of
     // being passed off as complete. Called on every end-of-stream path.
-    function _check_terminal(self) -> null {
+    function _check_terminal(self) -> void {
         if let provider: string = self._require_terminal {
             if (!self._saw_terminal) {
                 let partial: string? = if (self._text == "") {
@@ -214,9 +212,6 @@ class TurnStream {
                     raw_body: partial,
                 }
             }
-            null
-        } else {
-            null
         }
     }
 
@@ -250,7 +245,7 @@ class TurnStream {
                     },
                     let d: TurnDone => {
                         self._saw_terminal = true;
-                        let _ = self._finish();
+                        self._finish();
                         return Done {  };
                     },
                     null => null,
@@ -264,8 +259,8 @@ class TurnStream {
                             // end of connection. On a strict stream with no
                             // TurnDone decoded this is a truncated turn, and
                             // _check_terminal throws rather than completing it.
-                            let _ = self._finish();
-                            let _ = self._check_terminal();
+                            self._finish();
+                            self._check_terminal();
                             return Done {  };
                         },
                         let batch: string => {
@@ -291,7 +286,7 @@ class TurnStream {
                             return c;
                         },
                         null => {
-                            let _ = self._finish();
+                            self._finish();
                             return Done {  };
                         },
                     }
@@ -320,7 +315,7 @@ class TurnStream {
         // next() throws on the truncated path it discovers itself; this also
         // covers a stream finished by some other route (a Done delivered from
         // an already-closed stream) before the terminal event was seen.
-        let _ = self._check_terminal();
+        self._check_terminal();
         let usage: root.events.Usage? = if (self._input_tokens != null || self._output_tokens != null) {
             root.events.Usage {
                 input_tokens: self._input_tokens ?? 0,

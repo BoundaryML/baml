@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 15341
 ---
 function user.GenerateImage(prompt: string, client: ai.Client | null) -> image {
     load_var client
@@ -60,8 +59,6 @@ function user.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-image-1"
-    load_const <omitted>
-    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -185,8 +182,6 @@ function user.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
     call openai.ImageClient.new
     store_var _6
     load_const "GenerateImageSet"
@@ -280,8 +275,6 @@ function user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpe
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4.1"
-    load_const <omitted>
-    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>

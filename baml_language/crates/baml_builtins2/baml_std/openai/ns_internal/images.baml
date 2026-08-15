@@ -201,7 +201,7 @@ function _oai_images_response_format(model: string, explicit: string?) -> string
 
 function _oai_images_trim_slash(url: string) -> string {
     if (url.ends_with("/")) {
-        return url.substring(0, url.length() - 1);
+        return url.slice(0, url.length() - 1);
     }
     url
 }

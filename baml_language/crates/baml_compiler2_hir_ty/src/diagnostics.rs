@@ -1905,8 +1905,8 @@ impl fmt::Display for TirTypeError {
                     f,
                     "{kind} `{declaration}` {reach} — top-level declarations are evaluated at \
                      startup (`$init`), where io is unavailable; resolve at request time \
-                     instead — e.g. `env.X` (a late-bound reference) or the client's `*_env` \
-                     option"
+                     instead — e.g. `env.X`, a late-bound reference read only when the \
+                     request is made"
                 )
             }
         }

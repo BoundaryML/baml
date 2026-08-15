@@ -1779,7 +1779,7 @@ function baml.csv._to_markdown_records(records: string[][], headers: string[] | 
 function baml.csv._try_decode(rec: baml.csv.CsvRecord, r: baml.csv.CsvReader) -> #0 | baml.csv.CsvSkip {
 }
 
-function baml.csv._validate_columns(r: baml.csv.CsvReader) -> null {
+function baml.csv._validate_columns(r: baml.csv.CsvReader) -> void {
 }
 
 function baml.csv._writer(file: baml.fs.File, options: baml.csv.WriterOptions | null, owns_file: bool) -> baml.csv.CsvWriter {

@@ -1612,7 +1612,7 @@ fn baml.csv.CsvReader.rows(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error
     let _0: baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = T> // _0 // return
     let _1: baml.csv.CsvReader // self // param
     let _2: null | string[]
-    let _3: null
+    let _3: void
     let _4: type
 
     bb0: {

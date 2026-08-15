@@ -14,17 +14,11 @@
 class GenericClient {
     model: string,
     // Required: the endpoint's base, up to and including any version prefix,
-    // e.g. "http://localhost:8000/v1". May be a literal, an `env.NAME` ref read
-    // at request time, or come from base_url_env. An `env.NAME` whose variable
-    // is unset is the same configuration error as no base_url at all.
+    // e.g. "http://localhost:8000/v1". May be a literal or an `env.NAME` ref
+    // read at request time. An `env.NAME` whose variable is unset is the same
+    // configuration error as no base_url at all.
     base_url: ai.Credential?,
     api_key: ai.Credential?,
-    // DEPRECATED — names of environment variables to read INSTEAD, at request
-    // time. Prefer `api_key = env.NAME` / `base_url = env.NAME`, which name the
-    // variable inline and are read at request time just the same; these are
-    // kept for compatibility and are consulted after an explicit credential.
-    api_key_env: string?,
-    base_url_env: string?,
 
     request_body: baml.json.json?,
     headers: map<string, string>?,
@@ -40,8 +34,6 @@ class GenericClient {
         model: string,
         base_url: ai.Credential? = null,
         api_key: ai.Credential? = null,
-        api_key_env: string? = null,
-        base_url_env: string? = null,
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
@@ -55,8 +47,6 @@ class GenericClient {
             model: model,
             base_url: base_url,
             api_key: api_key,
-            api_key_env: api_key_env,
-            base_url_env: base_url_env,
             request_body: request_body,
             headers: headers,
             query_params: query_params,
@@ -71,32 +61,23 @@ class GenericClient {
     // No canonical variable: an unauthenticated request is the normal case for
     // a self-hosted server, so a missing key is not an error here.
     function resolved_api_key(self) -> string? {
-        root.internal.chat_resolve_api_key(
-            ai.wire.resolve_credential(self.api_key, null),
-            self.api_key_env,
-            null,
-        )
+        ai.wire.resolve_credential(self.api_key, null)
     }
 
-    // Throws `baml.errors.InvalidArgument` when neither base_url nor a set
-    // base_url_env supplies one. A `base_url = env.NAME` naming an UNSET
-    // variable resolves to null and lands here too, so it reports the same
-    // clear configuration error rather than a mystery request to nowhere.
+    // Throws `baml.errors.InvalidArgument` when no base_url resolves. A
+    // `base_url = env.NAME` naming an UNSET variable resolves to null and lands
+    // here too, so it reports the same clear configuration error rather than a
+    // mystery request to nowhere.
     function resolved_base_url(self) -> string {
         if let explicit: string = ai.wire.resolve_credential(self.base_url, null) {
             return explicit;
         }
-        if let name: string = self.base_url_env {
-            if let value: string = baml.env.get(name) {
-                return value;
-            }
-        }
-        // Deliberately the same error `root.internal.chat_require_base_url`
-        // raises for a plainly-unset base_url — a `base_url = env.NAME` whose
-        // variable is not set must not degrade into a mystery request — plus
-        // the names it consulted, so the ref's own variable is reported.
+        // A `base_url = env.NAME` whose variable is not set must not degrade
+        // into a mystery request, so it raises the same error a plainly-unset
+        // base_url does — plus the names it consulted, so the ref's own
+        // variable is reported.
         throw baml.errors.InvalidArgument {
-            message: `openai.GenericClient requires base_url (or base_url_env naming a set variable): the endpoint of the OpenAI-compatible server, e.g. "http://localhost:8000/v1". Checked: ${ai.wire.credential_sources(self.base_url, self.base_url_env, null)}`,
+            message: `openai.GenericClient requires base_url (a literal or env.NAME naming a set variable): the endpoint of the OpenAI-compatible server, e.g. "http://localhost:8000/v1". Checked: ${ai.wire.credential_sources(self.base_url, null)}`,
         }
     }
 

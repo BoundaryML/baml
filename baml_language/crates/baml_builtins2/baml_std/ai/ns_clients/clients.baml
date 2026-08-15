@@ -44,8 +44,8 @@ function _shorthand_prefixes() -> string {
 function _from_shorthand(shorthand: string) -> root.Client {
     let separator = shorthand.index_of("/");
     if let index: int = separator {
-        let prefix = shorthand.substring(0, index);
-        let model = shorthand.substring(index + 1, shorthand.length());
+        let prefix = shorthand.slice(0, index);
+        let model = shorthand.slice(index + 1, shorthand.length());
         let selected: root.Client? = match (prefix) {
             "openai" => openai.ResponsesClient.new(model = model),
             "openai-chat" => openai.ChatClient.new(model = model),

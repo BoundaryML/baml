@@ -39,12 +39,6 @@ class GoogleClient {
     // never touches env, so declaring/constructing a client is always safe.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
-    // DEPRECATED — names of environment variables to read INSTEAD, at request
-    // time. Prefer `api_key = env.NAME` / `base_url = env.NAME`, which name the
-    // variable inline and are read at request time just the same; these are
-    // kept for compatibility and are consulted after an explicit credential.
-    api_key_env: string?,
-    base_url_env: string?,
 
     // ── passthrough (PLAN P0.3) ──────────────────────────────────────────
     // Deep-merged into the serialized request as the LAST step, so it can
@@ -76,8 +70,6 @@ class GoogleClient {
         model: string = "gemini-2.5-flash",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
-        api_key_env: string? = null,
-        base_url_env: string? = null,
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
@@ -93,8 +85,6 @@ class GoogleClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
-            api_key_env: api_key_env,
-            base_url_env: base_url_env,
             request_body: request_body,
             headers: headers,
             query_params: query_params,
@@ -108,29 +98,15 @@ class GoogleClient {
         }
     }
 
-    // The request-time credential: an explicit value, else the named env
-    // var, else the provider's canonical one.
+    // The request-time credential: an explicit value, else the provider's
+    // canonical one.
     function resolved_api_key(self) -> string {
-        if let k: string = ai.wire.resolve_credential(self.api_key, null) {
-            return k;
-        }
-        if let name: string = self.api_key_env {
-            if let v: string = baml.env.get(name) {
-                return v;
-            }
-        }
-        baml.env.get_or_panic("GOOGLE_API_KEY")
+        ai.wire.resolve_credential(self.api_key, null) ?? baml.env.get_or_panic("GOOGLE_API_KEY")
     }
 
     // The request-time base URL, or null for the provider default.
     function resolved_base_url(self) -> string? {
-        if let u: string = ai.wire.resolve_credential(self.base_url, null) {
-            return u;
-        }
-        if let name: string = self.base_url_env {
-            return baml.env.get(name);
-        }
-        null
+        ai.wire.resolve_credential(self.base_url, null)
     }
 
     implements ai.Client {

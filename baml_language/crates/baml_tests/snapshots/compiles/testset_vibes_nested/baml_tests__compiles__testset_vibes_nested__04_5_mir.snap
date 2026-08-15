@@ -155,7 +155,7 @@ fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 1)>, 2)>() -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: Sentiment // result
-    let _2: null
+    let _2: void
     let _3: string
 
     bb0: {
@@ -287,7 +287,7 @@ fn .<lambda(<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>, 5)>() -> voi
     // Locals:
     let _0: void // _0 // return
     let _1: Sentiment // result
-    let _2: null
+    let _2: void
     let _3: string
 
     bb0: {

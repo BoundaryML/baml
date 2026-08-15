@@ -499,7 +499,7 @@ function baml.csv._reader(source: string | uint8array | root.fs.File, options: b
 function baml.csv._to_markdown(rows: T[], max_rows: int) -> string  [builtin]
 function baml.csv._to_markdown_records(records: string[][], headers: string[]?, max_rows: int) -> string  [builtin]
 function baml.csv._try_decode(rec: baml.csv.CsvRecord, r: baml.csv.CsvReader) -> T | baml.csv.CsvSkip  [builtin]
-function baml.csv._validate_columns(r: baml.csv.CsvReader) -> null  [builtin]
+function baml.csv._validate_columns(r: baml.csv.CsvReader) -> void  [builtin]
 function baml.csv._writer(file: root.fs.File, options: baml.csv.WriterOptions?, owns_file: bool) -> baml.csv.CsvWriter  [builtin]
 function baml.csv.buffer(options: baml.csv.WriterOptions? = null) -> baml.csv.CsvWriter  [expr] {
   {  } _buffer(options = options)

@@ -40,12 +40,6 @@ class AzureClient {
     base_url: ai.Credential?,
 
     api_key: ai.Credential?,
-    // DEPRECATED — names of environment variables to read INSTEAD, at request
-    // time. Prefer `api_key = env.NAME` / `base_url = env.NAME`, which name the
-    // variable inline and are read at request time just the same; these are
-    // kept for compatibility and are consulted after an explicit credential.
-    api_key_env: string?,
-    base_url_env: string?,
 
     request_body: baml.json.json?,
     headers: map<string, string>?,
@@ -65,8 +59,6 @@ class AzureClient {
         api_version: string? = "2024-10-21",
         base_url: ai.Credential? = null,
         api_key: ai.Credential? = null,
-        api_key_env: string? = null,
-        base_url_env: string? = null,
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
@@ -84,8 +76,6 @@ class AzureClient {
             api_version: api_version,
             base_url: base_url,
             api_key: api_key,
-            api_key_env: api_key_env,
-            base_url_env: base_url_env,
             request_body: request_body,
             headers: headers,
             query_params: query_params,
@@ -99,11 +89,7 @@ class AzureClient {
     }
 
     function resolved_api_key(self) -> string? {
-        root.internal.chat_resolve_api_key(
-            ai.wire.resolve_credential(self.api_key, null),
-            self.api_key_env,
-            "AZURE_OPENAI_API_KEY",
-        )
+        ai.wire.resolve_credential(self.api_key, "AZURE_OPENAI_API_KEY")
     }
 
     // base_url XOR (resource_name AND deployment_id). The engine reports this
@@ -119,11 +105,6 @@ class AzureClient {
                 }
             }
             return explicit;
-        }
-        if let name: string = self.base_url_env {
-            if let value: string = baml.env.get(name) {
-                return value;
-            }
         }
         let resource = self.resource_name;
         let deployment = self.deployment_id;

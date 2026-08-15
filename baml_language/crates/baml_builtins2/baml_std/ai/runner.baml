@@ -138,7 +138,7 @@ function _media_join_text(items: baml.json.json[]) -> baml.json.json {
 
 // sys_llm's `reject_mixed_media_only_output`: a media-only output type refuses
 // to silently drop whatever else the model said.
-function _media_reject_mixed(turn: ModelTurn, kind: string, provider: string) -> null {
+function _media_reject_mixed(turn: ModelTurn, kind: string, provider: string) -> void {
     let unexpected = 0;
     for (let b in turn.content) {
         match (b) {
@@ -163,7 +163,6 @@ function _media_reject_mixed(turn: ModelTurn, kind: string, provider: string) ->
             raw_output: `Expected only ${kind} output parts, got ${unexpected} non-${kind} part(s). Use a text/image union return type to preserve mixed outputs.`,
         }
     }
-    null
 }
 
 // The default runner. A spec-mode LLM function's direct call runs
@@ -202,7 +201,7 @@ class Agent<Out> {
         tb: root.tools.Toolbox,
         call: root.content.ToolUse,
         j: Journal,
-    ) -> null {
+    ) -> void {
         match (tb.get(call.name)) {
             let t: root.tools.Tool => {
                 let outcome: string? = t.call(call.args) catch_all (e) {
@@ -291,12 +290,12 @@ class Agent<Out> {
                 }
             }
         } else if (form == "list") {
-            let _ = _media_reject_mixed(turn, kind, provider);
+            _media_reject_mixed(turn, kind, provider);
             let items: baml.json.json = _media_of_kind(turn, kind);
             items
         } else {
             let parts = _media_of_kind(turn, kind);
-            let _ = _media_reject_mixed(turn, kind, provider);
+            _media_reject_mixed(turn, kind, provider);
             if (parts.length() != 1) {
                 throw root.errors.ParseFailed {
                     provider: provider,

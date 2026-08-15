@@ -19,12 +19,6 @@ class ImageClient {
     // never touches env, so declaring/constructing a client is always safe.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
-    // DEPRECATED — names of environment variables to read INSTEAD, at request
-    // time. Prefer `api_key = env.NAME` / `base_url = env.NAME`, which name the
-    // variable inline and are read at request time just the same; these are
-    // kept for compatibility and are consulted after an explicit credential.
-    api_key_env: string?,
-    base_url_env: string?,
 
     // First-class Images API parameters. Each is lowered into the typed
     // request only when non-null, so an unset option is absent on the wire and
@@ -79,8 +73,6 @@ class ImageClient {
         model: string = "gpt-image-1",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
-        api_key_env: string? = null,
-        base_url_env: string? = null,
         n: int? = null,
         size: string? = null,
         quality: string? = null,
@@ -99,8 +91,6 @@ class ImageClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
-            api_key_env: api_key_env,
-            base_url_env: base_url_env,
             n: n,
             size: size,
             quality: quality,
@@ -117,39 +107,25 @@ class ImageClient {
         }
     }
 
-    // The request-time credential: an explicit value, else the named env
-    // var, else the provider's canonical one. A missing credential is a
-    // catchable ai.errors.InvalidRequest rather than a panic, so the caller's
+    // The request-time credential: an explicit value, else the provider's
+    // canonical one. A missing credential is a catchable
+    // ai.errors.InvalidRequest rather than a panic, so the caller's
     // `catch_all` can fall back to another client.
     function resolved_api_key(self) -> string {
-        if let key: string = ai.wire.resolve_credential(self.api_key, null) {
+        if let key: string = ai.wire.resolve_credential(self.api_key, "OPENAI_API_KEY") {
             return key;
-        }
-        if let name: string = self.api_key_env {
-            if let value: string = baml.env.get(name) {
-                return value;
-            }
-        }
-        if let value: string = baml.env.get("OPENAI_API_KEY") {
-            return value;
         }
         throw ai.errors.InvalidRequest {
             provider: "openai-images",
             status_code: null,
-            detail: `no OpenAI API key: set the client's api_key (a literal or env.NAME), or export one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, self.api_key_env, "OPENAI_API_KEY")}`,
+            detail: `no OpenAI API key: set the client's api_key (a literal or env.NAME), or export one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "OPENAI_API_KEY")}`,
             raw_body: null,
         }
     }
 
     // The request-time base URL, or null for the provider default.
     function resolved_base_url(self) -> string? {
-        if let url: string = ai.wire.resolve_credential(self.base_url, null) {
-            return url;
-        }
-        if let name: string = self.base_url_env {
-            return baml.env.get(name);
-        }
-        null
+        ai.wire.resolve_credential(self.base_url, null)
     }
 
     implements ai.Client {

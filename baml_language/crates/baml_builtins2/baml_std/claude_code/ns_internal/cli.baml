@@ -159,7 +159,7 @@ function _preview(text: string) -> string {
 }
 
 // One log line per Claude Code JSONL event: the harness's own transcript.
-function _log_cc_event(raw: json) -> null {
+function _log_cc_event(raw: json) -> void {
     let kind = baml.json.path_or<string>(raw, ".type", "?");
     if (kind == "system") {
         let subtype = baml.json.path_or<string>(raw, ".subtype", "?");
@@ -193,11 +193,10 @@ function _log_cc_event(raw: json) -> null {
         }
         log.info(`cc event: ${kind} [${parts.join(" | ")}]`);
     } else if (kind == "result") {
-        null // logged separately with cost and session
+        // logged separately with cost and session
     } else {
         log.info(`cc event: ${kind}`);
     };
-    null
 }
 
 // The client's mcp_servers as one --mcp-config JSON string, or null when no

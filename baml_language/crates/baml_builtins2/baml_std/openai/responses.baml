@@ -30,14 +30,6 @@ class ResponsesClient {
     // always safe — and a `Ref` keeps the secret out of the client value.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
-    // DEPRECATED — names of environment variables to read INSTEAD, at request
-    // time. `api_key = env.NAME` says the same thing inline and is preferred;
-    // these are kept for compatibility and are consulted after an explicit
-    // credential. (A `client Name = ...` declaration is evaluated during
-    // `$init`, which cannot run io sysops, which is why naming a variable —
-    // rather than reading one — was needed in the first place.)
-    api_key_env: string?,
-    base_url_env: string?,
 
     // --- typed request parameters (omitted from the body when null) --------
     temperature: float?,
@@ -71,8 +63,6 @@ class ResponsesClient {
         model: string = "gpt-4o-mini",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
-        api_key_env: string? = null,
-        base_url_env: string? = null,
         temperature: float? = null,
         top_p: float? = null,
         max_output_tokens: int? = null,
@@ -89,8 +79,6 @@ class ResponsesClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
-            api_key_env: api_key_env,
-            base_url_env: base_url_env,
             temperature: temperature,
             top_p: top_p,
             max_output_tokens: max_output_tokens,
@@ -106,29 +94,16 @@ class ResponsesClient {
     }
 
     // The request-time credential: an explicit value (a literal, or the value
-    // of the variable an `env.NAME` ref points at), else the named env var,
-    // else the provider's canonical one. Nothing here runs before the request.
+    // of the variable an `env.NAME` ref points at), else the provider's
+    // canonical one. Nothing here runs before the request.
     function resolved_api_key(self) -> string {
-        if let k: string = ai.wire.resolve_credential(self.api_key, null) {
-            return k;
-        }
-        if let name: string = self.api_key_env {
-            if let v: string = baml.env.get(name) {
-                return v;
-            }
-        }
-        baml.env.get_or_panic("OPENAI_API_KEY")
+        ai.wire.resolve_credential(self.api_key, null)
+            ?? baml.env.get_or_panic("OPENAI_API_KEY")
     }
 
     // The request-time base URL, or null for the provider default.
     function resolved_base_url(self) -> string? {
-        if let u: string = ai.wire.resolve_credential(self.base_url, null) {
-            return u;
-        }
-        if let name: string = self.base_url_env {
-            return baml.env.get(name);
-        }
-        null
+        ai.wire.resolve_credential(self.base_url, null)
     }
 
     implements ai.Client {

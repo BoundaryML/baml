@@ -77,7 +77,7 @@ class McpConnection {
         conn
     }
 
-    function _send(self, line: string) -> null {
+    function _send(self, line: string) -> void {
         // Template literals trim trailing whitespace, so `${line}\n` would
         // lose the newline the protocol frames on; the newline is a quoted
         // string, appended before the single write.
@@ -91,7 +91,6 @@ class McpConnection {
                 }
             },
         };
-        null
     }
 
     // One request/response round-trip. Server notifications and unrelated
@@ -195,7 +194,7 @@ class McpConnection {
         joined
     }
 
-    function close(self) -> null {
-        self.p.close()
+    function close(self) -> void {
+        self.p.close();
     }
 }

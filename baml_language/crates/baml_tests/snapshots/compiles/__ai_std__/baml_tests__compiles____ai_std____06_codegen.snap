@@ -190,7 +190,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     container_len
     store_var before
     load_type ai.content.ToolUse
-    load_type future<null, ai.errors.ToolFailedError>
+    load_type future<void, ai.errors.ToolFailedError>
     load_type never
     load_var calls
     load_type #0
@@ -199,7 +199,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     make_closure .<lambda(Agent.run, 0)>, captures=3, ntypeargs=1
     call baml.Array.map
     store_var futures
-    load_type null
+    load_type void
     load_type ai.errors.ToolFailedError
     load_var futures
     call baml.future.all
@@ -1168,7 +1168,7 @@ function ai.Agent._parses(self: ai.Agent<#0>, turn: ai.ModelTurn, candidate: str
     return
 }
 
-function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: ai.content.ToolUse, j: ai.Journal) -> null {
+function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: ai.content.ToolUse, j: ai.Journal) -> void {
     load_var2 2 3
     load_field .name
     call ai.tools.Toolbox.get
@@ -1798,7 +1798,7 @@ function ai._media_of_kind(turn: ai.ModelTurn, kind: string) -> baml.json.json[]
     return
 }
 
-function ai._media_reject_mixed(turn: ai.ModelTurn, kind: string, provider: string) -> null {
+function ai._media_reject_mixed(turn: ai.ModelTurn, kind: string, provider: string) -> void {
     load_const 0
     store_var unexpected
     load_var turn
@@ -2587,7 +2587,7 @@ function ai.clients._from_shorthand(shorthand: string) -> ai.Client {
     load_var shorthand
     load_const 0
     load_var index
-    call baml.String.substring
+    call baml.String.slice
     store_var prefix
     load_var index
     load_const 1
@@ -2598,7 +2598,7 @@ function ai.clients._from_shorthand(shorthand: string) -> ai.Client {
     store_var _10
     load_var2 1 6
     load_var _10
-    call baml.String.substring
+    call baml.String.slice
     store_var model
     load_var prefix
     load_const "openai"
@@ -2709,14 +2709,11 @@ function ai.clients._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
     call vercel.AiGatewayImageClient.new
     jump L26
 
   L16:
     load_var model
-    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -2755,15 +2752,11 @@ function ai.clients._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
     call google.VertexClient.new
     jump L26
 
   L18:
     load_var model
-    load_const <omitted>
-    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -2793,15 +2786,11 @@ function ai.clients._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
     call anthropic.AnthropicClient.new
     jump L26
 
   L20:
     load_var model
-    load_const <omitted>
-    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -2827,15 +2816,11 @@ function ai.clients._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
     call openai.OllamaClient.new
     jump L26
 
   L22:
     load_var model
-    load_const <omitted>
-    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -2870,8 +2855,6 @@ function ai.clients._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
     call openai.ImageClient.new
     jump L26
 
@@ -2888,15 +2871,11 @@ function ai.clients._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
     call openai.ChatClient.new
     jump L26
 
   L25:
     load_var model
-    load_const <omitted>
-    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -3761,7 +3740,7 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
     throw
 }
 
-function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> null {
+function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> void {
     load_type string
     load_var line
     load_const "\n"
@@ -3903,10 +3882,12 @@ function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string
     throw
 }
 
-function ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> null {
+function ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> void {
     load_var self
     load_field .p
     sys_op baml.sys.Process.close
+    pop 1
+    load_const null
     return
 }
 
@@ -4255,7 +4236,7 @@ function ai.stream.Stream.next(self: ai.stream.Stream<#0, #1>) -> #0 | ai.stream
     return
 }
 
-function ai.stream.TurnStream._check_terminal(self: ai.stream.TurnStream) -> null {
+function ai.stream.TurnStream._check_terminal(self: ai.stream.TurnStream) -> void {
     load_var self
     load_field ._require_terminal
     store_var _3
@@ -4321,7 +4302,7 @@ function ai.stream.TurnStream._check_terminal(self: ai.stream.TurnStream) -> nul
     throw
 }
 
-function ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> null {
+function ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> void {
     load_var self
     load_const true
     store_field ._done
@@ -4340,6 +4321,8 @@ function ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> null {
   L1:
     load_var _3
     sys_op baml.http.SseStream.close
+    pop 1
+    load_const null
 
   L2:
     return
@@ -5155,7 +5138,7 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
     throw
 }
 
-function ai.wire._flush_orphaned_calls(out: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced)[], pending: string[]) -> null {
+function ai.wire._flush_orphaned_calls(out: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced)[], pending: string[]) -> void {
     load_var pending
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
@@ -5186,6 +5169,8 @@ function ai.wire._flush_orphaned_calls(out: (ai.events.RunStarted | ai.events.Us
     load_type string
     load_var pending
     call baml.Array.clear
+    pop 1
+    load_const null
     return
 }
 
@@ -5711,12 +5696,12 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     store_var _24
     load_var2 10 14
     load_var _24
-    call baml.String.substring
+    call baml.String.slice
     store_var _21
     load_var media_url
     load_const 5
     load_var separator
-    call baml.String.substring
+    call baml.String.slice
     store_var _25
     load_const null
     load_var2 13 16
@@ -5749,7 +5734,7 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     return
 }
 
-function ai.wire._resolve_pending_call(pending: string[], id: string) -> null {
+function ai.wire._resolve_pending_call(pending: string[], id: string) -> void {
     load_type string
     load_var2 1 2
     call baml.Array.index_of
@@ -5757,13 +5742,20 @@ function ai.wire._resolve_pending_call(pending: string[], id: string) -> null {
     load_var _5
     narrow_bind int, slot=3
     pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
     load_type string
     load_var2 1 3
     call baml.Array.remove_at
     pop 1
-
-  L0:
     load_const null
+
+  L2:
     return
 }
 
@@ -5848,64 +5840,53 @@ function ai.wire._wire_blocks(content: (ai.content.Text | ai.content.Reasoning |
     return
 }
 
-function ai.wire.credential_sources(cred: string | baml.env.Ref | null, legacy_env: string | null, canonical_env: string | null) -> string {
+function ai.wire.credential_sources(cred: string | baml.env.Ref | null, canonical_env: string | null) -> string {
     load_type string
     alloc_array 0
     store_var names
     load_var cred
-    store_var _5
-    load_var _5
-    narrow_bind baml.env.Ref, slot=5
+    store_var _4
+    load_var _4
+    narrow_bind baml.env.Ref, slot=4
     pop_jump_if_false L0
     load_type string
-    load_var2 4 5
+    load_var2 3 4
     load_field .name
     call baml.Array.push
     pop 1
 
   L0:
-    load_var legacy_env
-    store_var _10
-    load_var _10
-    narrow_bind string, slot=6
+    load_var canonical_env
+    store_var _9
+    load_var _9
+    narrow_bind string, slot=5
     pop_jump_if_false L1
     load_type string
-    load_var2 4 6
+    load_var2 3 5
     call baml.Array.push
     pop 1
 
   L1:
-    load_var canonical_env
-    store_var _15
-    load_var _15
-    narrow_bind string, slot=7
-    pop_jump_if_false L2
-    load_type string
-    load_var2 4 7
-    call baml.Array.push
-    pop 1
-
-  L2:
     load_var names
     container_len
-    store_var _21
-    load_var _21
+    store_var _15
+    load_var _15
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
+    pop_jump_if_false L2
+    jump L3
 
-  L3:
+  L2:
     load_type string
     load_var names
     load_const ", "
     call baml.Array.join
-    jump L5
+    jump L4
 
-  L4:
+  L3:
     load_const "(no environment variable was named)"
 
-  L5:
+  L4:
     return
 }
 

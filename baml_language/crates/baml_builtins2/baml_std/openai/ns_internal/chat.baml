@@ -162,69 +162,6 @@ class ChatParams {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Option resolution helpers. The wrappers own the *names* (env vars, defaults);
-// the resolution ORDER is written once, here.
-
-/// Explicit value, then the caller-named env var, then the provider's canonical
-/// one. Null when nothing resolved — the core decides whether that is fatal.
-function chat_resolve_api_key(
-    api_key: string?,
-    api_key_env: string?,
-    default_env: string?,
-) -> string? {
-    if let explicit: string = api_key {
-        return explicit;
-    }
-    if let name: string = api_key_env {
-        if let value: string = baml.env.get(name) {
-            return value;
-        }
-    }
-    if let name: string = default_env {
-        return baml.env.get(name);
-    }
-    null
-}
-
-/// Explicit value, then the caller-named env var, then the provider default.
-function chat_resolve_base_url(
-    base_url: string?,
-    base_url_env: string?,
-    default_base_url: string,
-) -> string {
-    if let explicit: string = base_url {
-        return explicit;
-    }
-    if let name: string = base_url_env {
-        if let value: string = baml.env.get(name) {
-            return value;
-        }
-    }
-    default_base_url
-}
-
-/// The same resolution for an endpoint that has no sensible default: an
-/// unconfigured base URL is a configuration error, not a silent fallback to
-/// api.openai.com (PLAN §5 — the engine's behaviour, not sys_llm's).
-function chat_require_base_url(
-    base_url: string?,
-    base_url_env: string?,
-    who: string,
-) -> string {
-    if let explicit: string = base_url {
-        return explicit;
-    }
-    if let name: string = base_url_env {
-        if let value: string = baml.env.get(name) {
-            return value;
-        }
-    }
-    throw baml.errors.InvalidArgument {
-        message: `${who} requires base_url (or base_url_env naming a set variable): the endpoint of the OpenAI-compatible server, e.g. "http://localhost:8000/v1"`,
-    }
-}
-
 /// `provider/model` — the client identity used for `ai.Client.id()`, journal
 /// attribution, and `ai.wire.sanitize_for_client`.
 function chat_client_id(compat: ChatCompat, params: ChatParams) -> string {
@@ -510,7 +447,7 @@ function _chat_media_url(resolved: ai.wire.ResolvedMedia) -> string {
 // engine's behaviour; sys_llm hard-errored on anything but wav/mp3).
 function _chat_audio_format(mime_type: string) -> string {
     let subtype = if (mime_type.starts_with("audio/")) {
-        mime_type.substring(6, mime_type.length())
+        mime_type.slice(6, mime_type.length())
     } else {
         mime_type
     };
@@ -633,14 +570,13 @@ function _chat_prompt_parts(message: ai.PromptMessage, compat: ChatCompat) -> Ch
 function _chat_apply_metadata(
     parts: ChatContentPart[],
     metadata: map<string, baml.json.json>,
-) -> null {
+) -> void {
     if (metadata.keys().length() == 0) {
-        return null;
+        return;
     }
     if let last: ChatContentPart = parts.pop() {
         parts.push(ChatExtraPart { part: last, extra: metadata });
     }
-    null
 }
 
 // Every part is text — the precondition for `collapse_text_content`. A
@@ -698,7 +634,7 @@ function chat_lower_prompt(prompt: ai.Prompt, compat: ChatCompat) -> ChatMessage
         // Placement happens BEFORE the adjacent-same-role merge, so a directive
         // stays on the part it was authored after even when this message is
         // folded into the previous one.
-        let _ = _chat_apply_metadata(parts, message.metadata);
+        _chat_apply_metadata(parts, message.metadata);
         let merged = false;
         if let last: ChatPromptMessage = lowered.at(lowered.length() - 1) {
             if (last.role == role) {
@@ -899,7 +835,7 @@ function _chat_percent_encode(value: string) -> string {
             let hex = character.to_utf8().to_hex().to_upper_case();
             let i = 0;
             while (i < hex.length()) {
-                out = `${out}%${hex.substring(i, i + 2)}`;
+                out = `${out}%${hex.slice(i, i + 2)}`;
                 i += 2;
             }
         }
@@ -1107,8 +1043,8 @@ function _chat_media_block(url: string) -> ai.content.Media {
         if let separator: int = url.index_of(";base64,") {
             return ai.content.Media.new(
                 value = baml.media.Image.from_base64(
-                    url.substring(separator + 8, url.length()),
-                    url.substring(5, separator),
+                    url.slice(separator + 8, url.length()),
+                    url.slice(5, separator),
                 ),
             );
         }
@@ -1134,7 +1070,7 @@ function _chat_push_tool_uses(
     content: ai.content.Block[],
     calls: CcToolCall[],
     provider: string,
-) -> null {
+) -> void {
     for (let call in calls) {
         let empty: map<string, unknown> = {  };
         let args = match (call.fn?.arguments) {
@@ -1151,7 +1087,6 @@ function _chat_push_tool_uses(
             ai.content.ToolUse { id: call.id ?? "", name: call.fn?.name ?? "", args: args },
         );
     }
-    null
 }
 
 /// One decoded response -> canonical content blocks, stop reason and usage.
@@ -1236,7 +1171,7 @@ function chat_parse(
         }
     }
     let calls: CcToolCall[] = message.tool_calls ?? [];
-    let _ = _chat_push_tool_uses(content, calls, provider);
+    _chat_push_tool_uses(content, calls, provider);
     if let refusal: string = message.refusal {
         content.push(ai.content.Text { text: refusal });
     }
@@ -1383,7 +1318,7 @@ class ChatStreamDecoder {
     }
 
     // Extend (or open) the buffer for one tool-call delta.
-    function _absorb_call(self, delta: CcToolCall, position: int) -> null {
+    function _absorb_call(self, delta: CcToolCall, position: int) -> void {
         let index = delta.index ?? position;
         let existing: ChatToolCallBuffer? = self.calls.find(
             (call) -> {
@@ -1407,7 +1342,6 @@ class ChatStreamDecoder {
         if let fragment: string = delta.fn?.arguments {
             buffer.arguments = `${buffer.arguments}${fragment}`;
         }
-        null
     }
 
     /// One `SseStream.next()` batch -> provider-agnostic stream events.
@@ -1447,7 +1381,7 @@ class ChatStreamDecoder {
                             let deltas: CcToolCall[] = choice.delta?.tool_calls ?? [];
                             let position = 0;
                             for (let call in deltas) {
-                                let _ = self._absorb_call(call, position);
+                                self._absorb_call(call, position);
                                 position += 1;
                             }
                             if let reason: string = choice.finish_reason {
@@ -1500,16 +1434,16 @@ class ChatStreamDecoder {
 function _chat_stream_failure(provider: string, detail: string) -> ai.errors.Failure {
     let marker = "SSE request failed with status ";
     if let start: int = detail.index_of(marker) {
-        let rest = detail.substring(start + marker.length(), detail.length());
+        let rest = detail.slice(start + marker.length(), detail.length());
         if let colon: int = rest.index_of(":") {
-            let code = int.parse(rest.substring(0, colon)) catch_all (e) {
+            let code = int.parse(rest.slice(0, colon)) catch_all (e) {
                 _ => 0,
             };
             if (code > 0) {
                 return ai.errors.classify_http(
                     provider,
                     code,
-                    rest.substring(colon + 1, rest.length()).trim(),
+                    rest.slice(colon + 1, rest.length()).trim(),
                 );
             }
         }

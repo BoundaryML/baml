@@ -218,7 +218,7 @@ function _gw_images_input(prompt: ai.Prompt, journal: ai.Journal) -> GwImagesInp
 
 function _gw_images_trim_slash(url: string) -> string {
     if (url.ends_with("/")) {
-        return url.substring(0, url.length() - 1);
+        return url.slice(0, url.length() - 1);
     }
     url
 }
@@ -363,12 +363,12 @@ function _gw_images_mime(format: string?) -> string {
 function _gw_images_value(encoded: string, fallback_mime: string) -> image {
     if (encoded.starts_with("data:")) {
         if let marker: int = encoded.index_of(";base64,") {
-            let mime = encoded.substring(5, marker);
-            let data = encoded.substring(marker + 8, encoded.length());
+            let mime = encoded.slice(5, marker);
+            let data = encoded.slice(marker + 8, encoded.length());
             return baml.media.Image.from_base64(data, mime);
         }
         let preview = if (encoded.length() > 48) {
-            `${encoded.substring(0, 48)}...`
+            `${encoded.slice(0, 48)}...`
         } else {
             encoded
         };

@@ -548,7 +548,7 @@ function _gm_encode_call_id(id: string, signature: string?) -> string {
 function _gm_call_id_signature(id: string) -> string? {
     let marker = _gm_sig_marker();
     if let at: int = id.index_of(marker) {
-        id.substring(at + marker.length(), id.length())
+        id.slice(at + marker.length(), id.length())
     } else {
         null
     }
@@ -912,14 +912,14 @@ function _gm_sse_failure(provider: string, error: unknown) -> ai.errors.Failure 
     };
     let marker = "failed with status ";
     if let start: int = text.index_of(marker) {
-        let rest = text.substring(start + marker.length(), text.length());
+        let rest = text.slice(start + marker.length(), text.length());
         let head = rest.split(":").at(0) ?? "";
         let status = baml.Int.parse(head.trim()) catch_all (e) {
             _ => 0,
         };
         if (status > 0) {
             let body = if let colon: int = rest.index_of(":") {
-                rest.substring(colon + 1, rest.length()).trim()
+                rest.slice(colon + 1, rest.length()).trim()
             } else {
                 ""
             };

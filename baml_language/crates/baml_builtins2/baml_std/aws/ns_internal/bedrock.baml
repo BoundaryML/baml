@@ -60,7 +60,8 @@ function encode_path_label(value: string) -> string {
         if (_is_unreserved_byte(byte)) {
             out.push(baml.String.from_code_points([byte]));
         } else {
-            out.push(`%${hex.char_at(byte / 16)}${hex.char_at(byte % 16)}`);
+            // `at` is index-checked; both indices are provably 0..15 here.
+            out.push(`%${hex.at(byte / 16) ?? ""}${hex.at(byte % 16) ?? ""}`);
         }
     }
     out.join("")
@@ -727,7 +728,7 @@ function _push_tool_result(
     output: string,
     is_error: bool,
     with_status: bool,
-) -> null {
+) -> void {
     let status: string? = if (!with_status) {
         null
     } else if (is_error) {
@@ -746,13 +747,12 @@ function _push_tool_result(
     if let last: PendingMessage = pending.at(pending.length() - 1) {
         if (last.tool_results) {
             last.message.content.push(block);
-            return null;
+            return;
         }
     }
     pending.push(
         PendingMessage { message: Message { role: "user", content: [block] }, tool_results: true },
     );
-    null
 }
 
 // `ai.RunStarted` / `ai.ToolRequested` / `ai.Usage` / `ai.FinalProduced` are
@@ -786,10 +786,10 @@ function _lower_journal(journal: ai.Journal, with_status: bool) -> Message[] {
                 null
             },
             let completed: ai.events.ToolCompleted => {
-                _push_tool_result(pending, completed.id, completed.output, false, with_status)
+                _push_tool_result(pending, completed.id, completed.output, false, with_status);
             },
             let failed: ai.events.ToolFailed => {
-                _push_tool_result(pending, failed.id, failed.message, true, with_status)
+                _push_tool_result(pending, failed.id, failed.message, true, with_status);
             },
             _ => null,
         };
@@ -972,7 +972,7 @@ function converse_url(client: root.BedrockClient) -> string {
     if let endpoint: string = client.resolved_endpoint_url() {
         // A trailing slash on the override would double up with the path.
         let base = if (endpoint.ends_with("/")) {
-            endpoint.substring(0, endpoint.length() - 1)
+            endpoint.slice(0, endpoint.length() - 1)
         } else {
             endpoint
         };

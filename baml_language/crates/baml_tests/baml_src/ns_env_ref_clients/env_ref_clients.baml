@@ -134,29 +134,41 @@ test "plain_string_api_key_still_works" {
 }
 
 // `base_url` takes the same union, and its ref resolves at request time too.
+//
+// BAML has no `env.set`, and the mock's port is ephemeral, so a ref cannot be
+// made to *carry* the mock URL. What is asserted instead is the two halves of
+// the same claim: constructing with a ref to an UNSET variable is fine, and at
+// REQUEST time that ref resolves to "not configured" (null — the client's next
+// rung) rather than blowing up; and a literal in the same option reaches the
+// wire.
 function env_ref_base_url_resolves_at_request_time() -> string {
     let canned = `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":3,"output_tokens":1}}`;
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(canned)],
         (mock: root.llm_mock.MockJsonServer) -> {
-            // BAML has no `env.set`, so the ref names an UNSET variable and the
-            // client falls through to the explicit URL the mock handed us —
-            // the point being that the ref was consulted at request time and
-            // did not blow up at construction.
+            // construction never reads env: this is safe even though the
+            // variable does not exist anywhere ...
+            let unset_ref = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = env.BAML_TEST_ENV_REF_UNSET_BASE_URL,
+            );
+            // ... and the read happens HERE, resolving to null — "not
+            // configured", which is what selects the provider default.
+            let fell_through = unset_ref.resolved_base_url() == null;
             let cl = openai.ResponsesClient.new(
                 model = "gpt-4o-mini",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                base_url_env = "BAML_TEST_ENV_REF_UNSET_BASE_URL",
             );
             let result = ai.Agent<string>.new(client = cl).run(EnvRefEcho@spec("Say pong."));
-            `${result.value}|${mock.last_request().path()}`
+            `${fell_through}|${result.value}|${mock.last_request().path()}`
         },
     )
 }
 
 test "env_ref_base_url_resolves_at_request_time" {
-    assert.equal(env_ref_base_url_resolves_at_request_time(), "pong|/responses")
+    assert.equal(env_ref_base_url_resolves_at_request_time(), "true|pong|/responses")
 }
 
 // ---------------------------------------------------------------------------
@@ -199,8 +211,8 @@ test "unset_base_url_is_the_same_configuration_error" {
 
 // ---------------------------------------------------------------------------
 // 4. `ai.wire.resolve_credential` — the union collapse every client routes
-//    through. Order: explicit credential, then the caller's `*_env` name, then
-//    the provider's canonical variable.
+//    through, and the WHOLE chain: the explicit credential (a literal, or an
+//    `env.NAME` ref read here), then the provider's canonical variable.
 
 function resolve_credential_arms() -> string {
     [
@@ -232,17 +244,50 @@ test "resolve_credential_arms" {
 
 function credential_sources_names_every_variable() -> string {
     [
-        ai.wire.credential_sources(env.MY_KEY, "LEGACY_KEY", "CANONICAL_KEY"),
-        ai.wire.credential_sources("sk-literal", null, "CANONICAL_KEY"),
-        ai.wire.credential_sources(null, null, null),
+        ai.wire.credential_sources(env.MY_KEY, "CANONICAL_KEY"),
+        ai.wire.credential_sources("sk-literal", "CANONICAL_KEY"),
+        ai.wire.credential_sources(null, null),
     ].join(" / ")
 }
 
 test "credential_sources_names_every_variable" {
     let got = credential_sources_names_every_variable();
-    assert.contains(got, "MY_KEY, LEGACY_KEY, CANONICAL_KEY");
+    // the ref's own variable comes first, then the provider's canonical one
+    assert.contains(got, "MY_KEY, CANONICAL_KEY");
     assert.contains(got, "CANONICAL_KEY");
     assert.contains(got, "(no environment variable was named)")
+}
+
+// The same two-rung chain, asserted once per CLIENT FAMILY: an explicit
+// credential — a literal, or an `env.NAME` ref to a SET variable — wins over
+// the provider's canonical variable, whether or not that variable happens to be
+// exported in the shell running the corpus. HOME stands in for the set variable
+// (see the header note); every client below reads it through the same
+// `ai.wire.resolve_credential` chain, so a family that grew its own resolution
+// order would show up here.
+function explicit_credential_wins_per_client_family() -> string {
+    [
+        openai.ResponsesClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
+        openai.ChatClient.new(model = "m", api_key = env.HOME).resolved_api_key() ?? "<null>",
+        openai.ImageClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
+        openai.AzureClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
+        openai.OpenRouterClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
+        openai.OllamaClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
+        openai.GenericClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
+        anthropic.AnthropicClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
+        google.GoogleClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
+        google.VertexClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
+        vercel.AiGatewayImageClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
+    ].join("|")
+}
+
+test "explicit_credential_wins_per_client_family" {
+    let home = baml.env.get_or_panic("HOME");
+    let literal = "sk-explicit";
+    assert.equal(
+        explicit_credential_wins_per_client_family(),
+        [literal, home, literal, literal, literal, literal, literal, literal, literal, literal, literal].join("|"),
+    )
 }
 
 // ---------------------------------------------------------------------------

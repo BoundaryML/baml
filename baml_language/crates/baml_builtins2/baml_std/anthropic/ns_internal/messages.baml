@@ -244,7 +244,7 @@ class AnthropicPrompt {
 // { "cache_control": ... } }}`). The engine's rule, ported: the directive
 // attaches to that message's LAST content block, so everything up to and
 // including it is the cached prefix.
-function _anth_apply_cache_control(blocks: AnthBlock[], cache_control: baml.json.json?) -> null {
+function _anth_apply_cache_control(blocks: AnthBlock[], cache_control: baml.json.json?) -> void {
     match (cache_control) {
         null => null,
         _ => {
@@ -252,26 +252,20 @@ function _anth_apply_cache_control(blocks: AnthBlock[], cache_control: baml.json
                 match (last) {
                     let text: AnthTextBlock => {
                         text.cache_control = cache_control;
-                        null
                     },
                     let media: AnthMediaBlock => {
                         media.cache_control = cache_control;
-                        null
                     },
                     let use: AnthToolUseBlock => {
                         use.cache_control = cache_control;
-                        null
                     },
                     let result: AnthToolResultBlock => {
                         result.cache_control = cache_control;
-                        null
                     },
-                }
-            } else {
-                null
+                };
             }
         },
-    }
+    };
 }
 
 // One media part -> its `{type, source}` block. `resolve_media(_, false)`
@@ -369,7 +363,7 @@ function _anthropic_lower_prompt(prompt: ai.Prompt) -> AnthropicPrompt {
         let cache_control = message.metadata.get("cache_control");
         if (message.role == "system") {
             let blocks = _anthropic_prompt_blocks(message, "system");
-            let _ = _anth_apply_cache_control(blocks, cache_control);
+            _anth_apply_cache_control(blocks, cache_control);
             for (let block in blocks) {
                 system.push(block);
             }
@@ -381,7 +375,7 @@ function _anthropic_lower_prompt(prompt: ai.Prompt) -> AnthropicPrompt {
                 "user"
             };
             let blocks = _anthropic_prompt_blocks(message, role);
-            let _ = _anth_apply_cache_control(blocks, cache_control);
+            _anth_apply_cache_control(blocks, cache_control);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a 400.
             if (blocks.length() > 0) {
@@ -440,7 +434,7 @@ function _anthropic_push_tool_result(
     id: string,
     content: string,
     is_error: bool,
-) -> null {
+) -> void {
     let block = AnthToolResultBlock {
         type: "tool_result",
         tool_use_id: id,
@@ -452,14 +446,11 @@ function _anthropic_push_tool_result(
     if let m: AnthropicMessage = msgs.at(msgs.length() - 1) {
         if (m.tool_results) {
             m.blocks.push(block);
-            null
         } else {
             msgs.push(AnthropicMessage { role: "user", tool_results: true, blocks: [block] });
-            null
         }
     } else {
         msgs.push(AnthropicMessage { role: "user", tool_results: true, blocks: [block] });
-        null
     }
 }
 
@@ -499,9 +490,11 @@ function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
                 null
             },
             let c: ai.events.ToolCompleted => {
-                _anthropic_push_tool_result(msgs, c.id, c.output, false)
+                _anthropic_push_tool_result(msgs, c.id, c.output, false);
             },
-            let f: ai.events.ToolFailed => _anthropic_push_tool_result(msgs, f.id, f.message, true),
+            let f: ai.events.ToolFailed => {
+                _anthropic_push_tool_result(msgs, f.id, f.message, true);
+            },
             _ => null,
         };
     }
@@ -1146,16 +1139,16 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
 function _anthropic_sse_failure(message: string) -> ai.errors.Failure {
     let prefix = "SSE request failed with status ";
     if (message.starts_with(prefix)) {
-        let rest = message.substring(prefix.length(), message.length());
+        let rest = message.slice(prefix.length(), message.length());
         if let separator: int = rest.index_of(":") {
-            let status = baml.Int.parse(rest.substring(0, separator)) catch_all (e) {
+            let status = baml.Int.parse(rest.slice(0, separator)) catch_all (e) {
                 _ => 0,
             };
             if (status > 0) {
                 return ai.errors.classify_http(
                     "anthropic",
                     status,
-                    rest.substring(separator + 1, rest.length()).trim(),
+                    rest.slice(separator + 1, rest.length()).trim(),
                 );
             }
         }

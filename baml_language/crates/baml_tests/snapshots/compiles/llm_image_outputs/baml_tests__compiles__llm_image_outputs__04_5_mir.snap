@@ -112,7 +112,7 @@ fn user.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
     }
 
     bb1: {
-        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
@@ -342,7 +342,7 @@ fn user.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> {
     }
 
     bb1: {
-        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
@@ -572,7 +572,7 @@ fn user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpec<(str
     }
 
     bb1: {
-        _6 = call const fn openai.ResponsesClient.new(const "gpt-4.1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+        _6 = call const fn openai.ResponsesClient.new(const "gpt-4.1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {

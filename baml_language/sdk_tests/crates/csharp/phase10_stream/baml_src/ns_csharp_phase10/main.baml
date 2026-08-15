@@ -1,12 +1,12 @@
 // A `client Name = ...` declaration is evaluated during `$init`, which cannot
-// run io sysops — so it names the env vars instead of reading them and the
-// provider resolves them at request time. The harness parent process sets
+// run io sysops — so `env.NAME` names the variables instead of reading them and
+// the provider resolves them at request time. The harness parent process sets
 // BAML_CSHARP_REPLAY_* before spawning the native child, so the child's
 // requests land on the in-process replay server.
 client DeterministicReplayClient = openai.ResponsesClient.new(
   model = "gpt-5.4-nano",
-  api_key_env = "BAML_CSHARP_REPLAY_API_KEY",
-  base_url_env = "BAML_CSHARP_REPLAY_BASE_URL",
+  api_key = env.BAML_CSHARP_REPLAY_API_KEY,
+  base_url = env.BAML_CSHARP_REPLAY_BASE_URL,
 );
 
 class StreamEnvelope {
