@@ -1,7 +1,7 @@
 //! Resource registry for managing native Tokio resources.
 
 #[cfg(feature = "bundle-http")]
-use std::sync::atomic::AtomicBool;
+use std::sync::{OnceLock, atomic::AtomicBool};
 use std::{
     collections::HashMap,
     sync::{
@@ -38,29 +38,72 @@ pub struct SseStreamResource {
 type SseStreamParts = (Arc<TokioMutex<SseBuffer>>, Arc<Notify>, Arc<AtomicBool>);
 
 #[cfg(feature = "bundle-http")]
-type WsTransport =
+pub type WsTransport =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 #[cfg(feature = "bundle-http")]
-type WsSink = futures::stream::SplitSink<WsTransport, tokio_tungstenite::tungstenite::Message>;
+pub type WsSink = futures::stream::SplitSink<WsTransport, tokio_tungstenite::tungstenite::Message>;
 #[cfg(feature = "bundle-http")]
-type WsSource = futures::stream::SplitStream<WsTransport>;
+pub type WsSource = futures::stream::SplitStream<WsTransport>;
 
+/// How a WebSocket connection ended, as reported to BAML by
+/// `baml.ws.WebSocket.next` (a `baml.ws.CloseEvent`).
+#[cfg(feature = "bundle-http")]
+#[derive(Clone, Debug)]
+pub struct WsClose {
+    /// RFC 6455 status code. `1005` ("no status received") when the peer's
+    /// close frame carried no code and `1006` ("abnormal closure") when the
+    /// stream ended with no closing handshake at all — the same two synthetic
+    /// codes a browser reports on its `CloseEvent`.
+    pub code: u16,
+    pub reason: String,
+}
+
+/// A connected WebSocket.
+///
+/// Both transport halves are `Option` because the closing handshake releases
+/// the socket eagerly: [`WsStreamResource::finish`] publishes `close` and drops
+/// the halves together, so a terminated stream is never polled again and every
+/// later `send`/`next` answers from `close` alone.
 #[cfg(feature = "bundle-http")]
 pub struct WsStreamResource {
-    pub sink: Arc<TokioMutex<WsSink>>,
-    pub source: Arc<TokioMutex<WsSource>>,
+    pub sink: TokioMutex<Option<WsSink>>,
+    pub source: TokioMutex<Option<WsSource>>,
+    pub close: OnceLock<WsClose>,
     pub url: String,
 }
 
 #[cfg(feature = "bundle-http")]
-type WsStreamParts = (Arc<TokioMutex<WsSink>>, Arc<TokioMutex<WsSource>>);
+impl WsStreamResource {
+    /// End the connection: complete the closing handshake, release the socket,
+    /// and publish `close`.
+    ///
+    /// Closing the sink flushes the close frame tungstenite queues in reply to
+    /// the peer's, which `read` alone leaves pending — without it the peer sees
+    /// the connection vanish mid-handshake.
+    ///
+    /// The read half calls this the moment the connection ends, handing over
+    /// its own `source` guard. Holding that guard across the whole call is what
+    /// makes "the transport is gone" and "the close event is published"
+    /// inseparable: no other caller can reach the source without the guard, and
+    /// by then `close` is set.
+    pub async fn finish(&self, source: &mut Option<WsSource>, close: WsClose) -> &WsClose {
+        use futures::SinkExt;
+
+        if let Some(mut sink) = self.sink.lock().await.take() {
+            // Best effort — the peer may already be gone.
+            let _ = sink.close().await;
+        }
+        *source = None;
+        self.close.get_or_init(|| close)
+    }
+}
 
 /// Registry entry for a resource.
 pub enum RegistryEntry {
     #[cfg(feature = "bundle-http")]
     SseStream(SseStreamResource),
     #[cfg(feature = "bundle-http")]
-    WsStream(WsStreamResource),
+    WsStream(Arc<WsStreamResource>),
 }
 
 /// Global resource registry.
@@ -116,8 +159,8 @@ impl ResourceRegistry {
     #[cfg(feature = "bundle-http")]
     pub fn register_ws_stream(
         self: &Arc<Self>,
-        sink: Arc<TokioMutex<WsSink>>,
-        source: Arc<TokioMutex<WsSource>>,
+        sink: WsSink,
+        source: WsSource,
         url: String,
     ) -> ResourceHandle {
         let key = self.next_key.fetch_add(1, Ordering::SeqCst);
@@ -126,11 +169,12 @@ impl ResourceRegistry {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
                 key,
-                RegistryEntry::WsStream(WsStreamResource {
-                    sink,
-                    source,
+                RegistryEntry::WsStream(Arc::new(WsStreamResource {
+                    sink: TokioMutex::new(Some(sink)),
+                    source: TokioMutex::new(Some(source)),
+                    close: OnceLock::new(),
                     url: url.clone(),
-                }),
+                })),
             );
 
         ResourceHandle::new(
@@ -142,15 +186,13 @@ impl ResourceRegistry {
     }
 
     #[cfg(feature = "bundle-http")]
-    pub fn get_ws_stream(&self, key: usize) -> Option<WsStreamParts> {
+    pub fn get_ws_stream(&self, key: usize) -> Option<Arc<WsStreamResource>> {
         let entries = self
             .entries
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         match entries.get(&key) {
-            Some(RegistryEntry::WsStream(stream)) => {
-                Some((stream.sink.clone(), stream.source.clone()))
-            }
+            Some(RegistryEntry::WsStream(stream)) => Some(Arc::clone(stream)),
             _ => None,
         }
     }
