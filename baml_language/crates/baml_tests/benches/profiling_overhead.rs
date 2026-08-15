@@ -48,15 +48,19 @@ fn main() {
         // SAFETY: as above.
         unsafe { std::env::set_var("BAML_RING_MAX_OVERFLOW_BYTES", "4294967296") };
     }
-    if std::env::var_os("BAML_PROFILE_DIR").is_none() {
-        let dir = std::env::temp_dir().join(format!(
-            "baml-profiling-overhead-bench-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).expect("failed to create profile sink dir");
+    // Drop-backed so the sink and its artifacts are removed when the run ends;
+    // only used when the caller didn't choose a sink of their own.
+    let _sink_dir = if std::env::var_os("BAML_PROFILE_DIR").is_none() {
+        let dir = tempfile::Builder::new()
+            .prefix("baml-profiling-overhead-bench-")
+            .tempdir()
+            .expect("failed to create profile sink dir");
         // SAFETY: as above.
-        unsafe { std::env::set_var("BAML_PROFILE_DIR", &dir) };
-    }
+        unsafe { std::env::set_var("BAML_PROFILE_DIR", dir.path()) };
+        Some(dir)
+    } else {
+        None
+    };
     divan::main();
 }
 
