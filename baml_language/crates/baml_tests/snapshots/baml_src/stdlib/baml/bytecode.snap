@@ -8540,19 +8540,19 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
 function baml.type.of_value(v: unknown) -> type {
 }
 
-function baml.ws.WsStream.close(self: baml.ws.WsStream) -> null {
+function baml.ws.WebSocket.close(self: baml.ws.WebSocket, code: int, reason: string) -> void {
 }
 
-function baml.ws.WsStream.next(self: baml.ws.WsStream) -> string | null {
+function baml.ws.WebSocket.next(self: baml.ws.WebSocket) -> string | uint8array | baml.ws.CloseEvent {
 }
 
-function baml.ws.WsStream.send(self: baml.ws.WsStream, text: string) -> null {
+function baml.ws.WebSocket.send(self: baml.ws.WebSocket, data: string | uint8array) -> void {
 }
 
-function baml.ws._connect(url: string, headers: map<string, string>, timeout_nanos: bigint) -> baml.ws.WsStream {
+function baml.ws._connect(url: string, headers: map<string, string>, timeout_nanos: bigint) -> baml.ws.WebSocket {
 }
 
-function baml.ws.connect(url: string, headers: map<string, string>, timeout: baml.time.Duration) -> baml.ws.WsStream {
+function baml.ws.connect(url: string, headers: map<string, string>, timeout: baml.time.Duration) -> baml.ws.WebSocket {
     load_var timeout
     load_const <omitted>
     cmp_op ==

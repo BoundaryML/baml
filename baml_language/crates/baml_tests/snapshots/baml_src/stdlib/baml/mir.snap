@@ -12704,15 +12704,15 @@ fn baml.type.of = builtin(intrinsic)
 
 fn baml.type.of_value = builtin(vm)
 
-fn baml.ws.WsStream.send = builtin(io)
+fn baml.ws.WebSocket.send = builtin(io)
 
-fn baml.ws.WsStream.next = builtin(io)
+fn baml.ws.WebSocket.next = builtin(io)
 
-fn baml.ws.WsStream.close = builtin(io)
+fn baml.ws.WebSocket.close = builtin(io)
 
-fn baml.ws.connect(url: string, headers: map<string, string>, timeout: baml.time.Duration) -> baml.ws.WsStream {
+fn baml.ws.connect(url: string, headers: map<string, string>, timeout: baml.time.Duration) -> baml.ws.WebSocket {
     // Locals:
-    let _0: baml.ws.WsStream // _0 // return
+    let _0: baml.ws.WebSocket // _0 // return
     let _1: string // url // param
     let _2: map<string, string> // headers // param
     let _3: baml.time.Duration // timeout // param

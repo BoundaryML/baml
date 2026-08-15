@@ -2716,19 +2716,27 @@ function baml.type.of() -> type  [builtin]
 function baml.type.of_value(v: unknown) -> type  [builtin]
 
 --- <builtin>/baml/ns_ws/ws.baml ---
-class baml.ws.WsStream {
+class baml.ws.CloseEvent {
+  code: int
+  reason: string
+}
+class baml.ws.CloseEvent$stream {
+  code: int | null
+  reason: string | null
+}
+class baml.ws.WebSocket {
   _handle: $rust_type
 }
-class baml.ws.WsStream$stream {
+class baml.ws.WebSocket$stream {
   _handle: $rust_type
 }
-function baml.ws._connect(url: string, headers: map<string, string>, timeout_nanos: bigint) -> baml.ws.WsStream  [builtin]
-function baml.ws.close(self: ?) -> null  [builtin]
-function baml.ws.connect(url: string, headers: map<string, string>, timeout: root.time.Duration = root.time.Duration.from_seconds(30)) -> baml.ws.WsStream  [expr] {
+function baml.ws._connect(url: string, headers: map<string, string>, timeout_nanos: bigint) -> baml.ws.WebSocket  [builtin]
+function baml.ws.close(self: ?, code: int, reason: string) -> void  [builtin]
+function baml.ws.connect(url: string, headers: map<string, string>, timeout: root.time.Duration = root.time.Duration.from_seconds(30)) -> baml.ws.WebSocket  [expr] {
   {  } _connect(url, headers, timeout.to_nanoseconds())
 }
-function baml.ws.next(self: ?) -> string?  [builtin]
-function baml.ws.send(self: ?, text: string) -> null  [builtin]
+function baml.ws.next(self: ?) -> string | uint8array | baml.ws.CloseEvent  [builtin]
+function baml.ws.send(self: ?, data: string | uint8array) -> void  [builtin]
 
 --- <builtin>/baml/ns_yaml/yaml.baml ---
 class baml.yaml.YamlParseError {

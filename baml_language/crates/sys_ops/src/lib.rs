@@ -25,13 +25,13 @@ pub mod io {
     use std::sync::Arc;
 
     pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
-    pub use bex_vm_types::SysOp;
+    pub use bex_vm_types::{ObjectType, SysOp, types::Type};
     // Owned structs are generated once in sys_types and re-exported here
     // so that `io::owned::ai::*` paths continue to work.
     pub use sys_types::generated::owned;
     pub use sys_types::{
         AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, SysOpContext, SysOpFn,
-        SysOpOutput, SysOpResult, VmBamlError, VmPanic, VmRustFnError,
+        SysOpOutput, SysOpResult, VmBamlError, VmInternalError, VmPanic, VmRustFnError,
     };
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
@@ -1334,13 +1334,13 @@ impl io::IoNamespaceHttp for DefaultIoOps {
     }
 }
 
-impl io::IoClassWsWsStream for DefaultIoOps {
+impl io::IoClassWsWebSocket for DefaultIoOps {
     fn send(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _stream: io::owned::ws::WsStream,
-        _text: String,
+        _websocket: io::owned::ws::WebSocket,
+        _data: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -1352,9 +1352,9 @@ impl io::IoClassWsWsStream for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _stream: io::owned::ws::WsStream,
+        _websocket: io::owned::ws::WebSocket,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
+    ) -> SysOpOutput<BexExternalValue> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
@@ -1364,7 +1364,9 @@ impl io::IoClassWsWsStream for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _stream: io::owned::ws::WsStream,
+        _websocket: io::owned::ws::WebSocket,
+        _code: i64,
+        _reason: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -1382,7 +1384,7 @@ impl io::IoNamespaceWs for DefaultIoOps {
         _headers: indexmap::IndexMap<String, String>,
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::ws::WsStream> {
+    ) -> SysOpOutput<io::owned::ws::WebSocket> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })

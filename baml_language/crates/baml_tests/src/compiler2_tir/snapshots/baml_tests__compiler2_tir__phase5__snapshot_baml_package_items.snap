@@ -383,7 +383,8 @@ namespace baml.type:
   function of<T>
   function of_value
 namespace baml.ws:
-  class WsStream { methods: [send, next, close] }
+  class CloseEvent { methods: [] }
+  class WebSocket { methods: [send, next, close] }
   function _connect
   function connect
 namespace baml.yaml:
