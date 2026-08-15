@@ -256,7 +256,10 @@ class Agent<Out> {
                     };
                     let value_json = baml.json.to_json(value) catch_all (e) {
                         _ => {
-                            throw baml.errors.UnknownError { data: e, message: [e.to_string()] }
+                            throw baml.errors.UnknownError.with_message<never>(
+                                e,
+                                "final value serialization failed",
+                            )
                         },
                     };
                     j.append_all(

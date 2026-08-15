@@ -166,7 +166,7 @@ implements<T> Iterable<T, never> for T[] {
 }
 
 interface OutOfBodyValue<T> {
-  function get(self) -> T throws unknown
+  function get(self) -> T throws never
 }
 
 class OutOfBodyBox<T> {
@@ -178,7 +178,7 @@ class OutOfBodyBox<T> {
 }
 
 implements<T> OutOfBodyValue<T> for OutOfBodyBox<T> {
-  function get(self) -> T throws unknown {
+  function get(self) -> T {
     self.value
   }
 }
@@ -305,14 +305,6 @@ function hovers() -> void {
 //  156 │ ╭─▶     function next(self) -> T | Done throws E {
 //  157 │ │         Done {}
 //  158 │ ╰─▶     }
-//      ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[iterator_generics_inference.baml:181:42]
-//  181 │ ╭─▶   function get(self) -> T throws unknown {
-//  182 │ │       self.value
-//  183 │ ╰─▶   }
 //      ╰────
 //
 //- on_hover expressions

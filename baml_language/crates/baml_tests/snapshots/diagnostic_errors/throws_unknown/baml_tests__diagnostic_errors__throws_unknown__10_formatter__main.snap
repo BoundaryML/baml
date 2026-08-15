@@ -1,0 +1,32 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+type OpenErrors = unknown;
+
+function direct() -> null throws unknown {
+    null
+}
+
+function union_member() -> null throws string | unknown {
+    null
+}
+
+function aliased() -> null throws OpenErrors {
+    null
+}
+
+interface Service {
+    function run(self) -> null throws unknown
+}
+
+function plain_unknown(value: unknown) -> unknown {
+    value
+}
+
+function callback_boundary(
+    callback: () -> null throws unknown,
+) -> null throws baml.errors.UnknownError {
+    callback() catch_all (error) {
+        _ => throw baml.errors.UnknownError.from<never>(error),
+    }
+}

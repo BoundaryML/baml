@@ -10,7 +10,7 @@
 // A client that can render the same request as `invoke` but streamed.
 // Implementors must also implement Client (`requires`).
 interface StreamingClient requires root.Client {
-    function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream throws unknown
+    function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream throws root.errors.Failure | baml.errors.UnknownError
 }
 
 // One decoded raw SSE event, as produced by `baml.http.SseStream.next()`:

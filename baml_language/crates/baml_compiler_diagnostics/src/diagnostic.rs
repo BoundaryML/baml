@@ -309,6 +309,12 @@ pub enum DiagnosticId {
     /// callback parameter of a function declaration may omit it (rule 4).
     FunctionTypeMissingThrows,
 
+    // Open declaration throws contract (E0155)
+    /// A function or method declaration explicitly uses `unknown` as its
+    /// error contract. Open callback types may still use `throws unknown`, but
+    /// declarations must expose a closed error channel.
+    ThrowsUnknownNotAllowed,
+
     // Serialized-key collision (E0149)
     /// Two or more fields of a class serialize to the same JSON key — either two
     /// fields share an `@alias`, or one field's name equals another field's
@@ -526,6 +532,7 @@ impl DiagnosticId {
 
             // Function-type throws requirement
             DiagnosticId::FunctionTypeMissingThrows => "E0151",
+            DiagnosticId::ThrowsUnknownNotAllowed => "E0155",
 
             // Numeric literal validation
             DiagnosticId::InvalidNumericLiteral => "E0152",

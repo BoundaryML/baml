@@ -38,7 +38,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface Cursor<T> {
-  function head(self) -> T throws unknown
+  function head(self) -> T throws never
 
   // Default method, inherited by every implementor. It constructs a generic
   // `SingleCursor<T>` from the interface's own `T`. The resulting instance MUST
@@ -46,7 +46,7 @@ interface Cursor<T> {
   // `take_one_then_head` resolves to `ArrayCursor.head` — which indexes an
   // `arr` field that `SingleCursor` does not have — instead of
   // `SingleCursor.head`.
-  function take_one(self) -> Cursor<T> throws unknown {
+  function take_one(self) -> Cursor<T> throws never {
     return SingleCursor<T> { value: self.head() }
   }
 }
@@ -61,7 +61,7 @@ class ArrayCursor<T> {
     }
 
     implements Cursor<T> {
-        function head(self) -> T throws unknown {
+        function head(self) -> T throws never {
             return self.arr[0];
         }
     }
@@ -71,7 +71,7 @@ class SingleCursor<T> {
     value: T,
 
     implements Cursor<T> {
-        function head(self) -> T throws unknown {
+        function head(self) -> T throws never {
             return self.value;
         }
     }
@@ -81,7 +81,7 @@ class SingleCursor<T> {
 // element via the inherited default method, then read the head back — entirely
 // through the `Cursor<int>` interface. Exercises inferred static-ctor type args
 // AND a default method that builds a generic from the interface's `T`.
-function take_one_then_head() -> int throws unknown {
+function take_one_then_head() -> int throws never {
     let cursor: Cursor<int> = ArrayCursor.of([10, 20, 30]);
     let single: Cursor<int> = cursor.take_one();
     single.head()
@@ -139,7 +139,7 @@ test "inferred_static_ctor_dispatches_to_correct_implementor" {
 // ─── Inferred static constructor + generic interface, mismatched shapes ───
 
 interface Bag<T> {
-  function first(self) -> T throws unknown
+  function first(self) -> T throws never
 }
 
 class ArrBag<T> {
@@ -151,7 +151,7 @@ class ArrBag<T> {
     }
 
     implements Bag<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.arr[0];
         }
     }
@@ -161,7 +161,7 @@ class OneBag<T> {
     only: T,
 
     implements Bag<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.only;
         }
     }
@@ -170,7 +170,7 @@ class OneBag<T> {
 // A mis-dispatch would read `only` off an `ArrBag` (or index `arr` on a
 // `OneBag`) — different layouts, so the wrong arm panics rather than silently
 // returning a bad value.
-function inferred_static_ctor_first() -> int throws unknown {
+function inferred_static_ctor_first() -> int throws never {
     let s: Bag<int> = ArrBag.make([5, 6, 7]);
     s.first()
 }
@@ -182,7 +182,7 @@ test "inferred_static_ctor_dispatches_through_generic_interface" {
 // ─── Interface default method can read the interface's type var at runtime ───
 
 interface Named<T> {
-  function first(self) -> T throws unknown
+  function first(self) -> T throws never
   function tname(self) -> string throws never {
     return reflect.type_of<T>().to_string()
   }
@@ -192,7 +192,7 @@ class ArrNamed<T> {
     arr: T[],
     idx: int,
     implements Named<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.arr[0];
         }
     }
@@ -201,7 +201,7 @@ class ArrNamed<T> {
 class OneNamed<T> {
     only: T,
     implements Named<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.only;
         }
     }
@@ -209,7 +209,7 @@ class OneNamed<T> {
 
 // `tname` is a default method dispatched through `Named<int>`; it must see
 // `T == int`, not `unknown`/`void`.
-function default_method_typevar_name() -> string throws unknown {
+function default_method_typevar_name() -> string throws never {
     let s: Named<int> = ArrNamed<int> { arr: [5, 6, 7], idx: 0 };
     s.tname()
 }
@@ -221,7 +221,7 @@ test "interface_default_method_sees_interface_type_var" {
 // ─── Class-owned (non-default) method that builds a generic from class `T` ───
 
 interface Wrap<T> {
-  function first(self) -> T throws unknown
+  function first(self) -> T throws never
 }
 
 class SrcWrap<T> {
@@ -230,12 +230,12 @@ class SrcWrap<T> {
 
     // A regular class method (not an interface default) that constructs a
     // generic `Boxed<T>` from the class-level `T`.
-    function boxed(self) -> Wrap<T> throws unknown {
+    function boxed(self) -> Wrap<T> throws never {
         return Boxed<T> { val: self.arr[0] };
     }
 
     implements Wrap<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.arr[0];
         }
     }
@@ -244,13 +244,13 @@ class SrcWrap<T> {
 class Boxed<T> {
     val: T,
     implements Wrap<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.val;
         }
     }
 }
 
-function class_method_builds_generic() -> int throws unknown {
+function class_method_builds_generic() -> int throws never {
     let s: SrcWrap<int> = SrcWrap<int> { arr: [5, 6, 7], idx: 0 };
     let w: Wrap<int> = s.boxed();
     w.first()
@@ -369,7 +369,7 @@ test "free_function_sees_inferred_type_arg" {
 
 // The inferred-ctor instance must pass a runtime `IsType ArrBag<int>` test —
 // NOT fall through to the wildcard arm.
-function inferred_ctor_instance_is_typed() -> int throws unknown {
+function inferred_ctor_instance_is_typed() -> int throws never {
     let s: Bag<int> = ArrBag.make([5, 6, 7]);
     match (s) {
         let a: ArrBag<int> => 1,
@@ -442,7 +442,7 @@ class LoneIter<T> {
     }
 }
 
-function inferred_ctor_collect_count() -> int throws unknown {
+function inferred_ctor_collect_count() -> int throws never {
     let it: NextIter<int, never> = ArrIter.of([1, 2, 3]);
     it.collect2().length()
 }
@@ -488,7 +488,7 @@ class EchoB {
     }
 }
 
-function nested_self_inferred_binding() -> string throws unknown {
+function nested_self_inferred_binding() -> string throws never {
     let e: SelfEcho = EchoA { n: 1 };
     e.nested_self_type()
 }
@@ -535,118 +535,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 
 //----
 //- diagnostics
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//     ╭─[interfaces_inferred_generic_type_args.baml:64:49]
-//  64 │ ╭─▶         function head(self) -> T throws unknown {
-//  65 │ │               return self.arr[0];
-//  66 │ ╰─▶         }
-//     ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//     ╭─[interfaces_inferred_generic_type_args.baml:74:49]
-//  74 │ ╭─▶         function head(self) -> T throws unknown {
-//  75 │ │               return self.value;
-//  76 │ ╰─▶         }
-//     ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[interfaces_inferred_generic_type_args.baml:154:50]
-//  154 │ ╭─▶         function first(self) -> T throws unknown {
-//  155 │ │               return self.arr[0];
-//  156 │ ╰─▶         }
-//      ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[interfaces_inferred_generic_type_args.baml:164:50]
-//  164 │ ╭─▶         function first(self) -> T throws unknown {
-//  165 │ │               return self.only;
-//  166 │ ╰─▶         }
-//      ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[interfaces_inferred_generic_type_args.baml:195:50]
-//  195 │ ╭─▶         function first(self) -> T throws unknown {
-//  196 │ │               return self.arr[0];
-//  197 │ ╰─▶         }
-//      ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[interfaces_inferred_generic_type_args.baml:204:50]
-//  204 │ ╭─▶         function first(self) -> T throws unknown {
-//  205 │ │               return self.only;
-//  206 │ ╰─▶         }
-//      ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[interfaces_inferred_generic_type_args.baml:212:65]
-//  212 │ ╭─▶ function default_method_typevar_name() -> string throws unknown {
-//  213 │ │       let s: Named<int> = ArrNamed<int> { arr: [5, 6, 7], idx: 0 };
-//  214 │ │       s.tname()
-//  215 │ ╰─▶ }
-//      ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[interfaces_inferred_generic_type_args.baml:233:52]
-//  233 │ ╭─▶     function boxed(self) -> Wrap<T> throws unknown {
-//  234 │ │           return Boxed<T> { val: self.arr[0] };
-//  235 │ ╰─▶     }
-//      ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[interfaces_inferred_generic_type_args.baml:238:50]
-//  238 │ ╭─▶         function first(self) -> T throws unknown {
-//  239 │ │               return self.arr[0];
-//  240 │ ╰─▶         }
-//      ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[interfaces_inferred_generic_type_args.baml:247:50]
-//  247 │ ╭─▶         function first(self) -> T throws unknown {
-//  248 │ │               return self.val;
-//  249 │ ╰─▶         }
-//      ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[interfaces_inferred_generic_type_args.baml:372:66]
-//  372 │ ╭─▶ function inferred_ctor_instance_is_typed() -> int throws unknown {
-//  373 │ │       let s: Bag<int> = ArrBag.make([5, 6, 7]);
-//  374 │ │       match (s) {
-//  375 │ │           let a: ArrBag<int> => 1,
-//  376 │ │           let o: OneBag<int> => 2,
-//  377 │ │           _ => 9,
-//  378 │ │       }
-//  379 │ ╰─▶ }
-//      ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[interfaces_inferred_generic_type_args.baml:445:62]
-//  445 │ ╭─▶ function inferred_ctor_collect_count() -> int throws unknown {
-//  446 │ │       let it: NextIter<int, never> = ArrIter.of([1, 2, 3]);
-//  447 │ │       it.collect2().length()
-//  448 │ ╰─▶ }
-//      ╰────
-// E0097
-//
-//   ⚠ extraneous throws declaration: unknown
-//      ╭─[interfaces_inferred_generic_type_args.baml:491:66]
-//  491 │ ╭─▶ function nested_self_inferred_binding() -> string throws unknown {
-//  492 │ │       let e: SelfEcho = EchoA { n: 1 };
-//  493 │ │       e.nested_self_type()
-//  494 │ ╰─▶ }
-//      ╰────
+// <no-diagnostics-expected>
 //
 //- semantic_tokens
 // interfaces_inferred_generic_type_args.baml:1:1 (comment) len=58 "// End-to-end tests for the generic-type-arg dispatch fix."
@@ -696,7 +585,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:41:17 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:41:26 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:41:28 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:41:35 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:41:35 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:43:3 (comment) len=74 "// Default method, inherited by every implementor. It constructs a generic"
 // interfaces_inferred_generic_type_args.baml:44:3 (comment) len=78 "// `SingleCursor<T>` from the interface's own `T`. The resulting instance MUST"
 // interfaces_inferred_generic_type_args.baml:45:3 (comment) len=75 "// carry `class_type_args = [T]`; otherwise the `single.head()` dispatch in"
@@ -711,7 +600,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:49:37 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:49:38 (operator) len=1 ">"
 // interfaces_inferred_generic_type_args.baml:49:40 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:49:47 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:49:47 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:50:5 (keyword) len=6 "return"
 // interfaces_inferred_generic_type_args.baml:50:12 (class) len=12 "SingleCursor"
 // interfaces_inferred_generic_type_args.baml:50:24 (operator) len=1 "<"
@@ -757,7 +646,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:64:23 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:64:32 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:64:34 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:64:41 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:64:41 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:65:13 (keyword) len=6 "return"
 // interfaces_inferred_generic_type_args.baml:65:20 (parameter) len=4 "self"
 // interfaces_inferred_generic_type_args.baml:65:25 (property) len=3 "arr"
@@ -779,7 +668,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:74:23 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:74:32 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:74:34 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:74:41 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:74:41 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:75:13 (keyword) len=6 "return"
 // interfaces_inferred_generic_type_args.baml:75:20 (parameter) len=4 "self"
 // interfaces_inferred_generic_type_args.baml:75:25 (property) len=5 "value"
@@ -791,7 +680,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:84:10 (function) [declaration] len=18 "take_one_then_head"
 // interfaces_inferred_generic_type_args.baml:84:34 (type) [defaultLibrary] len=3 "int"
 // interfaces_inferred_generic_type_args.baml:84:38 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:84:45 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:84:45 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:85:5 (keyword) len=3 "let"
 // interfaces_inferred_generic_type_args.baml:85:9 (variable) [declaration] len=6 "cursor"
 // interfaces_inferred_generic_type_args.baml:85:17 (interface) len=6 "Cursor"
@@ -908,7 +797,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:142:18 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:142:27 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:142:29 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:142:36 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:142:36 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:145:1 (keyword) len=5 "class"
 // interfaces_inferred_generic_type_args.baml:145:7 (class) [declaration] len=6 "ArrBag"
 // interfaces_inferred_generic_type_args.baml:145:13 (operator) len=1 "<"
@@ -945,7 +834,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:154:24 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:154:33 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:154:35 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:154:42 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:154:42 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:155:13 (keyword) len=6 "return"
 // interfaces_inferred_generic_type_args.baml:155:20 (parameter) len=4 "self"
 // interfaces_inferred_generic_type_args.baml:155:25 (property) len=3 "arr"
@@ -967,7 +856,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:164:24 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:164:33 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:164:35 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:164:42 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:164:42 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:165:13 (keyword) len=6 "return"
 // interfaces_inferred_generic_type_args.baml:165:20 (parameter) len=4 "self"
 // interfaces_inferred_generic_type_args.baml:165:25 (property) len=4 "only"
@@ -978,7 +867,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:173:10 (function) [declaration] len=26 "inferred_static_ctor_first"
 // interfaces_inferred_generic_type_args.baml:173:42 (type) [defaultLibrary] len=3 "int"
 // interfaces_inferred_generic_type_args.baml:173:46 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:173:53 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:173:53 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:174:5 (keyword) len=3 "let"
 // interfaces_inferred_generic_type_args.baml:174:9 (variable) [declaration] len=1 "s"
 // interfaces_inferred_generic_type_args.baml:174:12 (interface) len=3 "Bag"
@@ -1011,7 +900,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:185:18 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:185:27 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:185:29 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:185:36 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:185:36 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:186:3 (keyword) len=8 "function"
 // interfaces_inferred_generic_type_args.baml:186:12 (method) [declaration] len=5 "tname"
 // interfaces_inferred_generic_type_args.baml:186:18 (parameter) [declaration] len=4 "self"
@@ -1045,7 +934,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:195:24 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:195:33 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:195:35 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:195:42 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:195:42 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:196:13 (keyword) len=6 "return"
 // interfaces_inferred_generic_type_args.baml:196:20 (parameter) len=4 "self"
 // interfaces_inferred_generic_type_args.baml:196:25 (property) len=3 "arr"
@@ -1067,7 +956,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:204:24 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:204:33 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:204:35 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:204:42 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:204:42 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:205:13 (keyword) len=6 "return"
 // interfaces_inferred_generic_type_args.baml:205:20 (parameter) len=4 "self"
 // interfaces_inferred_generic_type_args.baml:205:25 (property) len=4 "only"
@@ -1077,7 +966,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:212:10 (function) [declaration] len=27 "default_method_typevar_name"
 // interfaces_inferred_generic_type_args.baml:212:43 (type) [defaultLibrary] len=6 "string"
 // interfaces_inferred_generic_type_args.baml:212:50 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:212:57 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:212:57 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:213:5 (keyword) len=3 "let"
 // interfaces_inferred_generic_type_args.baml:213:9 (variable) [declaration] len=1 "s"
 // interfaces_inferred_generic_type_args.baml:213:12 (interface) len=5 "Named"
@@ -1115,7 +1004,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:224:18 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:224:27 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:224:29 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:224:36 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:224:36 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:227:1 (keyword) len=5 "class"
 // interfaces_inferred_generic_type_args.baml:227:7 (class) [declaration] len=7 "SrcWrap"
 // interfaces_inferred_generic_type_args.baml:227:14 (operator) len=1 "<"
@@ -1135,7 +1024,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:233:34 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:233:35 (operator) len=1 ">"
 // interfaces_inferred_generic_type_args.baml:233:37 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:233:44 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:233:44 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:234:9 (keyword) len=6 "return"
 // interfaces_inferred_generic_type_args.baml:234:16 (class) len=5 "Boxed"
 // interfaces_inferred_generic_type_args.baml:234:21 (operator) len=1 "<"
@@ -1155,7 +1044,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:238:24 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:238:33 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:238:35 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:238:42 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:238:42 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:239:13 (keyword) len=6 "return"
 // interfaces_inferred_generic_type_args.baml:239:20 (parameter) len=4 "self"
 // interfaces_inferred_generic_type_args.baml:239:25 (property) len=3 "arr"
@@ -1177,7 +1066,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:247:24 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:247:33 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:247:35 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:247:42 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:247:42 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:248:13 (keyword) len=6 "return"
 // interfaces_inferred_generic_type_args.baml:248:20 (parameter) len=4 "self"
 // interfaces_inferred_generic_type_args.baml:248:25 (property) len=3 "val"
@@ -1185,7 +1074,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:253:10 (function) [declaration] len=27 "class_method_builds_generic"
 // interfaces_inferred_generic_type_args.baml:253:43 (type) [defaultLibrary] len=3 "int"
 // interfaces_inferred_generic_type_args.baml:253:47 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:253:54 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:253:54 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:254:5 (keyword) len=3 "let"
 // interfaces_inferred_generic_type_args.baml:254:9 (variable) [declaration] len=1 "s"
 // interfaces_inferred_generic_type_args.baml:254:12 (class) len=7 "SrcWrap"
@@ -1433,7 +1322,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:372:10 (function) [declaration] len=31 "inferred_ctor_instance_is_typed"
 // interfaces_inferred_generic_type_args.baml:372:47 (type) [defaultLibrary] len=3 "int"
 // interfaces_inferred_generic_type_args.baml:372:51 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:372:58 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:372:58 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:373:5 (keyword) len=3 "let"
 // interfaces_inferred_generic_type_args.baml:373:9 (variable) [declaration] len=1 "s"
 // interfaces_inferred_generic_type_args.baml:373:12 (interface) len=3 "Bag"
@@ -1611,7 +1500,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:445:10 (function) [declaration] len=27 "inferred_ctor_collect_count"
 // interfaces_inferred_generic_type_args.baml:445:43 (type) [defaultLibrary] len=3 "int"
 // interfaces_inferred_generic_type_args.baml:445:47 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:445:54 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:445:54 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:446:5 (keyword) len=3 "let"
 // interfaces_inferred_generic_type_args.baml:446:9 (variable) [declaration] len=2 "it"
 // interfaces_inferred_generic_type_args.baml:446:13 (interface) len=8 "NextIter"
@@ -1703,7 +1592,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:491:10 (function) [declaration] len=28 "nested_self_inferred_binding"
 // interfaces_inferred_generic_type_args.baml:491:44 (type) [defaultLibrary] len=6 "string"
 // interfaces_inferred_generic_type_args.baml:491:51 (keyword) len=6 "throws"
-// interfaces_inferred_generic_type_args.baml:491:58 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_inferred_generic_type_args.baml:491:58 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:492:5 (keyword) len=3 "let"
 // interfaces_inferred_generic_type_args.baml:492:9 (variable) [declaration] len=1 "e"
 // interfaces_inferred_generic_type_args.baml:492:12 (interface) len=8 "SelfEcho"

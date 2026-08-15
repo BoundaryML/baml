@@ -358,7 +358,7 @@ async fn defer_runs_once_when_a_panic_unwinds_through_it() {
     // again in the pad.
     let output = baml_test!(
         r#"
-function risky(log: string[]) -> int throws unknown {
+function risky(log: string[]) -> int {
   defer { log.push("D") }
   return 10 / 0
 }
@@ -378,7 +378,7 @@ async fn nested_defers_run_once_each_when_a_panic_unwinds() {
     // The whole chain ran twice (`inner,outer,inner,outer`) for the same reason.
     let output = baml_test!(
         r#"
-function risky(log: string[]) -> int throws unknown {
+function risky(log: string[]) -> int {
   defer { log.push("outer") }
   defer { log.push("inner") }
   return 10 / 0
@@ -406,7 +406,7 @@ async fn defer_runs_once_when_a_call_free_body_sees_a_panic() {
         r#"
 class Counter { n: int }
 
-function risky(c: Counter) -> int throws unknown {
+function risky(c: Counter) -> int {
   defer { c.n = c.n - 1 }
   return 10 / 0
 }
@@ -427,7 +427,7 @@ async fn a_panicking_binding_runs_before_later_side_effects() {
     // it is bound, before the `push` that follows it.
     let output = baml_test!(
         r#"
-function risky(log: string[]) -> int throws unknown {
+function risky(log: string[]) -> int {
   let x = 10 / 0
   log.push("after")
   return x

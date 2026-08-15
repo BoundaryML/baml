@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+type user.OpenErrors = unknown
+type user.OpenErrors$stream = unknown
+function user.aliased() -> null  [expr] {
+  {  } null
+}
+function user.callback_boundary(callback: () -> null throws unknown) -> null  [expr] {
+  {  } callback() catch_all (error) { _ => throw baml.errors.UnknownError.from(error) }
+}
+function user.direct() -> null  [expr] {
+  {  } null
+}
+function user.plain_unknown(value: unknown) -> unknown  [expr] {
+  {  } value
+}
+function user.run(self: ?) -> null  [missing]
+function user.union_member() -> null  [expr] {
+  {  } null
+}

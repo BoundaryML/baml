@@ -15,11 +15,7 @@ interface Failure {
 // already-normalized unknown errors retain their identity; everything else is
 // captured in the standard untyped wrapper.
 function normalize(error: unknown) -> Failure | baml.errors.UnknownError throws never {
-    match (error) {
-        let failure: Failure => failure,
-        let unknown_error: baml.errors.UnknownError => unknown_error,
-        _ => baml.errors.UnknownError { data: error, message: [error.to_string()] },
-    }
+    baml.errors.UnknownError.from<Failure>(error)
 }
 
 class RateLimited {

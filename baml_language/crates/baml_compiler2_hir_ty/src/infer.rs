@@ -6950,6 +6950,7 @@ impl<'db> InferenceContext<'db> {
         if let Some(declared) = self.declared_throws.clone()
             && !self.declared_throws_open
             && !declared.has_error()
+            && !crate::lower::is_open_throws_contract(self.db, &declared)
             && let Some(root) = self.body_root
         {
             // Coverage compares WIDENED facts (TIR's fact grain: a thrown

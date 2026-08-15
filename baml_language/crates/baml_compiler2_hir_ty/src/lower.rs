@@ -34,7 +34,7 @@ use baml_type::{
     Freshness, Name, ParamTy, TyAttr, TypeName,
     interned::{FunctionParam, Ty, TyKind},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Everything needed to lower type syntax appearing in one file, for one
 /// generic frame.
@@ -1744,6 +1744,29 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
     }
 }
 
+pub(crate) fn is_open_throws_contract(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> bool {
+    fn visit(
+        facts: &crate::facts::Facts<'_>,
+        ty: &Ty,
+        seen_aliases: &mut FxHashSet<TypeName>,
+    ) -> bool {
+        match ty.kind() {
+            TyKind::Unknown { .. } => true,
+            TyKind::Union(members, _) => members
+                .iter()
+                .any(|member| visit(facts, member, seen_aliases)),
+            TyKind::TypeAlias(name, _) if seen_aliases.insert(name.clone()) => {
+                baml_type::normalize::TypeContext::alias_def(facts, name)
+                    .map(|target| visit(facts, &Ty::from_plain(&target), seen_aliases))
+                    .unwrap_or(false)
+            }
+            _ => false,
+        }
+    }
+
+    visit(&crate::facts::Facts::new(db), ty, &mut FxHashSet::default())
+}
+
 pub fn signature_lowering_diagnostics<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
@@ -1785,6 +1808,7 @@ pub fn signature_lowering_diagnostics<'db>(
         {
             wf.push((elaborated_map.type_refs.span(type_ref), error));
         }
+        lowered
     };
     for param in &data.params {
         // The unannotated-`self` slot lowers as Unknown by elaboration;
@@ -1794,13 +1818,19 @@ pub fn signature_lowering_diagnostics<'db>(
         {
             continue;
         }
-        lower_and_judge(param.type_ref);
+        let _ = lower_and_judge(param.type_ref);
     }
     if let Some(ret) = data.return_type {
-        lower_and_judge(ret);
+        let _ = lower_and_judge(ret);
     }
     if let Some(throws) = data.throws {
-        lower_and_judge(throws);
+        let lowered = lower_and_judge(throws);
+        if is_open_throws_contract(db, &lowered) {
+            wf.push((
+                elaborated_map.type_refs.span(throws),
+                TirTypeError::ThrowsUnknownNotAllowed,
+            ));
+        }
     }
     let mut out: Vec<(text_size::TextRange, TirTypeError)> = ctx
         .take_diagnostics()
@@ -2069,6 +2099,18 @@ pub fn interface_lowering_diagnostics<'db>(
             for error in crate::interfaces::type_generic_bound_errors(db, &env, &method.function_ty)
             {
                 out.push((span, error));
+            }
+            if let (Some(throws_ref), baml_type::Ty::Function { throws, .. }) = (
+                data.required_methods
+                    .get(index)
+                    .and_then(|signature| signature.throws),
+                &method.function_ty,
+            ) && is_open_throws_contract(db, &Ty::from_plain(throws))
+            {
+                out.push((
+                    source_map.type_refs.span(throws_ref),
+                    TirTypeError::ThrowsUnknownNotAllowed,
+                ));
             }
         }
     }

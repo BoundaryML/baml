@@ -50,6 +50,7 @@ mod time;
 mod toml;
 mod type_class;
 mod uint8array;
+mod unknown_error;
 mod yaml;
 
 use std::collections::HashMap;

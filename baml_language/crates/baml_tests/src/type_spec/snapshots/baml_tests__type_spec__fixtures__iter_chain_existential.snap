@@ -2,26 +2,26 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-85..94 'ice_chain': throws unknown
-121..369 '{\n   ...  c\n}': int[]
-127..179 'let a:...never>': baml.iter.Iterator<Error = never, Item = int>
-134..179 'baml.i...never>': baml.iter.Iterator<Error = never, Item = int>
-182..209 'baml.i...or.new': (arr: int[]) -> baml.iter.ArrayIterator<int> throws never
-182..217 'baml.i...1, 2])': baml.iter.ArrayIterator<int>
-210..216 '[1, 2]': int[]
-211..212 '1': 1
-214..215 '2': 2
-222..274 'let b:...never>': baml.iter.Iterator<Error = never, Item = int>
-229..274 'baml.i...never>': baml.iter.Iterator<Error = never, Item = int>
-277..304 'baml.i...or.new': (arr: int[]) -> baml.iter.ArrayIterator<int> throws never
-277..312 'baml.i...3, 4])': baml.iter.ArrayIterator<int>
-305..311 '[3, 4]': int[]
-306..307 '3': 3
-309..310 '4': 4
-317..322 'let c': int[]
-325..332 'a.chain': (self: baml.iter.Iterator<Error = never, Item = int>, other: baml.iter.Iterable<Error = never, Item = int>) -> baml.iter.Iterator<Error = never, Item = int> throws never
-325..335 'a.chain(b)': baml.iter.Iterator<Error = never, Item = int>
-325..343 'a.chai...ollect': (self: baml.iter.Iterator<Error = never, Item = int>) -> int[] throws never
-325..345 'a.chai...lect()': int[]
-333..334 'b': baml.iter.Iterator<Error = never, Item = int>
-366..367 'c': int[]
+85..94 'ice_chain': throws never
+106..354 '{\n   ...  c\n}': int[]
+112..164 'let a:...never>': baml.iter.Iterator<Error = never, Item = int>
+119..164 'baml.i...never>': baml.iter.Iterator<Error = never, Item = int>
+167..194 'baml.i...or.new': (arr: int[]) -> baml.iter.ArrayIterator<int> throws never
+167..202 'baml.i...1, 2])': baml.iter.ArrayIterator<int>
+195..201 '[1, 2]': int[]
+196..197 '1': 1
+199..200 '2': 2
+207..259 'let b:...never>': baml.iter.Iterator<Error = never, Item = int>
+214..259 'baml.i...never>': baml.iter.Iterator<Error = never, Item = int>
+262..289 'baml.i...or.new': (arr: int[]) -> baml.iter.ArrayIterator<int> throws never
+262..297 'baml.i...3, 4])': baml.iter.ArrayIterator<int>
+290..296 '[3, 4]': int[]
+291..292 '3': 3
+294..295 '4': 4
+302..307 'let c': int[]
+310..317 'a.chain': (self: baml.iter.Iterator<Error = never, Item = int>, other: baml.iter.Iterable<Error = never, Item = int>) -> baml.iter.Iterator<Error = never, Item = int> throws never
+310..320 'a.chain(b)': baml.iter.Iterator<Error = never, Item = int>
+310..328 'a.chai...ollect': (self: baml.iter.Iterator<Error = never, Item = int>) -> int[] throws never
+310..330 'a.chai...lect()': int[]
+318..319 'b': baml.iter.Iterator<Error = never, Item = int>
+351..352 'c': int[]
