@@ -476,13 +476,13 @@ function prompt_tag_runtime.pt_class_array_interp_fn() -> string {
     load_const "system"
     load_type string
     alloc_array 1
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_const null
     load_const null
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -514,7 +514,7 @@ function prompt_tag_runtime.pt_ctx_output_format_fn() -> string {
     make_cell
     store_var ?2
     load_type prompt_tag_runtime.Person
-    sys_op baml.prompt.render_output_format
+    sys_op ai.internal.render_output_format
     store_var of
     load_const "c"
     load_const "openai"
@@ -522,13 +522,13 @@ function prompt_tag_runtime.pt_ctx_output_format_fn() -> string {
     load_const "user"
     load_type string
     alloc_array 1
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_var of
     load_const null
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     store_deref ?2
     load_var ctx
     make_closure .<tagged(pt_ctx_output_format_fn, 0)>, 1
@@ -599,13 +599,13 @@ function prompt_tag_runtime.pt_nested_media_fn() -> string {
     load_const "user"
     load_type string
     alloc_array 1
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_const null
     load_const null
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -635,13 +635,13 @@ function prompt_tag_runtime.pt_nested_tostring_and_media_fn() -> string {
     load_const "user"
     load_type string
     alloc_array 1
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_const null
     load_const null
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -655,10 +655,10 @@ function prompt_tag_runtime.pt_output_format_with_null_as_omit_fn() -> string {
     load_type prompt_tag_runtime.PersonNick
     store_var rt
     load_var rt
-    sys_op baml.prompt.render_output_format
+    sys_op ai.internal.render_output_format
     store_var _7
     load_var rt
-    sys_op baml.prompt.build_output_format
+    sys_op ai.internal.build_output_format
     store_var _9
     load_const "c"
     load_const "openai"
@@ -666,12 +666,12 @@ function prompt_tag_runtime.pt_output_format_with_null_as_omit_fn() -> string {
     load_const "user"
     load_type string
     alloc_array 1
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_var2 3 4
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     store_deref ?2
     load_var ctx
     make_closure .<tagged(pt_output_format_with_null_as_omit_fn, 0)>, 1
@@ -691,10 +691,10 @@ function prompt_tag_runtime.pt_output_format_with_omitted_leading_fn() -> string
     load_type prompt_tag_runtime.Person
     store_var rt
     load_var rt
-    sys_op baml.prompt.render_output_format
+    sys_op ai.internal.render_output_format
     store_var _7
     load_var rt
-    sys_op baml.prompt.build_output_format
+    sys_op ai.internal.build_output_format
     store_var _9
     load_const "c"
     load_const "openai"
@@ -702,12 +702,12 @@ function prompt_tag_runtime.pt_output_format_with_omitted_leading_fn() -> string
     load_const "user"
     load_type string
     alloc_array 1
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_var2 3 4
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     store_deref ?2
     load_var ctx
     make_closure .<tagged(pt_output_format_with_omitted_leading_fn, 0)>, 1
@@ -727,10 +727,10 @@ function prompt_tag_runtime.pt_output_format_with_prefix_fn() -> string {
     load_type prompt_tag_runtime.Person
     store_var rt
     load_var rt
-    sys_op baml.prompt.render_output_format
+    sys_op ai.internal.render_output_format
     store_var _7
     load_var rt
-    sys_op baml.prompt.build_output_format
+    sys_op ai.internal.build_output_format
     store_var _9
     load_const "c"
     load_const "openai"
@@ -738,12 +738,12 @@ function prompt_tag_runtime.pt_output_format_with_prefix_fn() -> string {
     load_const "user"
     load_type string
     alloc_array 1
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_var2 3 4
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     store_deref ?2
     load_var ctx
     make_closure .<tagged(pt_output_format_with_prefix_fn, 0)>, 1
@@ -775,13 +775,13 @@ function prompt_tag_runtime.pt_parent_tostring_owns_media_fn() -> string {
     load_const "user"
     load_type string
     alloc_array 1
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_const null
     load_const null
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -801,12 +801,12 @@ function prompt_tag_runtime.pt_render_prompt_messages_fn() -> ai.PromptMessage[]
     return
 }
 
-function prompt_tag_runtime.pt_role_construction_fn() -> baml.prompt.Role {
+function prompt_tag_runtime.pt_role_construction_fn() -> ai.Role {
     load_const "system"
     load_type string
     load_type unknown
     alloc_map 0
-    init_instance baml.prompt.Role .name, .metadata
+    init_instance ai.Role .name, .metadata
     return
 }
 
@@ -826,13 +826,13 @@ function prompt_tag_runtime.pt_role_messages_fn() -> string {
     load_const "user"
     load_type string
     alloc_array 1
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_const null
     load_const null
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -886,13 +886,13 @@ function prompt_tag_runtime.pt_tostring_override_fn() -> string {
     load_const "user"
     load_type string
     alloc_array 2
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_const null
     load_const null
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -915,13 +915,13 @@ function prompt_tag_runtime.pt_unqualified_prompt_fn() -> string {
     load_const "user"
     load_type string
     alloc_array 1
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_const null
     load_const null
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text

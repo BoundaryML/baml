@@ -4264,7 +4264,7 @@ impl<'a> Parser<'a> {
             // - A quoted "provider/model" string: client: "openai/gpt-4o"
             // - An expression evaluating to an ai.Client: a declared client
             //   name (`client: Fast`), a constructor call
-            //   (`client: openai.OpenAiClient.new(...)`), a wrapper
+            //   (`client: openai.ResponsesClient.new(...)`), a wrapper
             //   (`client: ai.Retry.new(Fast)`), etc.
             //
             // The unquoted `client: openai/gpt-4o` shorthand of the legacy

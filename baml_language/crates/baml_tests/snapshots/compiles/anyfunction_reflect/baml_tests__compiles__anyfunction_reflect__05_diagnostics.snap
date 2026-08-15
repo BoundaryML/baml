@@ -2,10 +2,4 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] E0003
-
-  × unresolved name: `openai.OpenAiClient.new`
-    ╭─[main.baml:79:28]
- 79 │ client RuntimeEnumClient = openai.OpenAiClient.new(
-    ·                            ───────────────────────
-    ╰────
+No errors found.

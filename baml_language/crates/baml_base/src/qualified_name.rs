@@ -12,7 +12,7 @@ use crate::Name;
 /// Prefix used for standard library items in qualified names.
 ///
 /// All `Namespace::BamlStd` and standard `Namespace::Builtin` items
-/// are displayed with this prefix (e.g., `baml.prompt.OutputFormat`).
+/// are displayed with this prefix (e.g., `baml.media.Image`).
 pub const BAML_STD_PREFIX: &str = "baml.";
 
 /// FQN (as a display string) of the recursive `json` type alias defined in

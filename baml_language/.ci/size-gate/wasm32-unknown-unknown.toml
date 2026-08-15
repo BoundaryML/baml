@@ -2,6 +2,8 @@ version = 1
 recorded_at = "2026-08-12T05:04:16Z"
 git_sha = "a51ffdf12b5caf288cc7028fa5fbd86449c0d518"
 
+# Re-recorded from CI run 31906918242: BEP-066 VM+bytecode surface plus the
+# native provider stdlib additions since the 2026-08-12 record.
 [artifacts.bridge_wasm]
-file_bytes = "16.3 MiB"
-gzip_bytes = "4.4 MiB"
+file_bytes = 17870725
+gzip_bytes = 4775286

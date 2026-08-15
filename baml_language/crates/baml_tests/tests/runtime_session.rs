@@ -239,7 +239,7 @@ function declaration_redefinition_keeps_earlier_resolution() -> bool throws unkn
 function client_declaration_is_lazy() -> bool throws unknown {
   let s = reflect.Session.new()
   s.eval(#"
-    client NeverContacted = openai.OpenAiClient.new(
+    client NeverContacted = openai.ResponsesClient.new(
     model = "no-network-during-declaration",
     api_key = "unused",
     base_url = "http://127.0.0.1:1",

@@ -81,7 +81,7 @@ fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
         _ => return None,
     };
     let (name_index, metadata_index) = match vm.get_object(class_ptr) {
-        Object::Class(class) if class.name.render_dotted(false) == "baml.prompt.Role" => (
+        Object::Class(class) if class.name.render_dotted(false) == "ai.Role" => (
             class.fields.iter().position(|field| field.name == "name")?,
             class
                 .fields

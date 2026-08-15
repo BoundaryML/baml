@@ -82,16 +82,26 @@ fn io_package_name(builtin: &NativeBuiltin) -> &str {
     builtin.path.split('.').next().unwrap_or("")
 }
 
-/// Extract the namespace name from an IO builtin path (the second segment):
+/// Extract the namespace name from an IO builtin path (the segments between
+/// the package and the item):
 /// - "baml.fs.open" → "fs"
 /// - "baml.fs.File.read" → "fs"
 /// - `"ai.internal._gcp_access_token"` → `"internal"`
+/// - `"ai.Context.output_format_with"` → `""` (top-level class method)
 fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
     let after_package = builtin
         .path
         .split_once('.')
         .map_or(builtin.path.as_str(), |(_, rest)| rest);
-    after_package.split('.').next().unwrap_or("")
+    if let Some(receiver) = &builtin.receiver {
+        // The namespace is everything before the receiver class segment; a
+        // top-level class (`ai.Context`) has an empty namespace.
+        after_package
+            .split_once(&format!("{}.", receiver.class_name))
+            .map_or("", |(before, _)| before.trim_end_matches('.'))
+    } else {
+        after_package.split('.').next().unwrap_or("")
+    }
 }
 
 /// Key a namespace node (and every identifier derived from it) by package +
@@ -106,6 +116,10 @@ fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
 fn io_ns_key(package: &str, namespace: &str) -> String {
     if package == "baml" {
         namespace.to_string()
+    } else if namespace.is_empty() {
+        // Top-level items of a non-`baml` package (e.g. `ai.Context`) key on
+        // the bare package name: `owned::ai::Context`, `IoClassAiContext`.
+        package.to_string()
     } else {
         format!("{package}_{namespace}")
     }
@@ -1340,7 +1354,14 @@ fn emit_class_traits(
             node.classes.iter().map(move |(class_name, methods)| {
                 emit_one_class_trait(
                     ns_key,
-                    &node.namespace,
+                    // Top-level classes of a non-`baml` package (empty
+                    // namespace, e.g. `ai.Context`) live in the module named
+                    // after the package, which equals their `ns_key`.
+                    if node.namespace.is_empty() {
+                        ns_key
+                    } else {
+                        &node.namespace
+                    },
                     class_name,
                     methods,
                     class_ns_map,
@@ -2048,17 +2069,29 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
         .map(|(package, namespaces)| {
             let ns_arms: Vec<TokenStream> = namespaces
                 .iter()
+                .filter(|(ns_str, _)| !ns_str.is_empty())
                 .map(|(ns_str, dispatch_fn_ident)| {
                     quote! {
                         Some((#ns_str, rest)) => self.#dispatch_fn_ident(rest, heap, permit, args, ctx, call_id)
                     }
                 })
                 .collect();
+            // A package's top-level classes (empty namespace, e.g.
+            // `ai.Context.output_format_with`) have no namespace segment to
+            // consume: route the full `{Class}.{method}` rest to the
+            // package-root dispatcher instead of `None`.
+            let fallback = namespaces
+                .iter()
+                .find(|(ns_str, _)| ns_str.is_empty())
+                .map(|(_, dispatch_fn_ident)| {
+                    quote! { _ => self.#dispatch_fn_ident(rest, heap, permit, args, ctx, call_id) }
+                })
+                .unwrap_or_else(|| quote! { _ => None });
             quote! {
                 Some((#package, rest)) => {
                     match rest.split_once('.') {
                         #(#ns_arms,)*
-                        _ => None,
+                        #fallback,
                     }
                 }
             }
@@ -2363,8 +2396,11 @@ fn emit_runtime_io_trait(
         // they take no receiver param — the adapter synthesizes their `self`.
         if let Some(ref receiver) = builtin.receiver {
             if receiver.instance_backed {
-                let ns = io_namespace_name(builtin);
-                let handle = handle_type_name(ns, &receiver.class_name);
+                // Key by package+namespace so top-level classes of non-`baml`
+                // packages (`ai.Context` → `AiContextHandle`) match the
+                // handle-definition loop, which iterates tree keys.
+                let ns = io_ns_key(io_package_name(builtin), io_namespace_name(builtin));
+                let handle = handle_type_name(&ns, &receiver.class_name);
                 let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
                 params.push(quote! { #param_ident: &#handle });
             }
@@ -2505,9 +2541,9 @@ fn emit_adapter_impl(
         let mut arg_exprs = Vec::new();
 
         if let Some(ref receiver) = builtin.receiver {
-            let ns = io_namespace_name(builtin);
+            let ns = io_ns_key(io_package_name(builtin), io_namespace_name(builtin));
             if receiver.instance_backed {
-                let handle = handle_type_name(ns, &receiver.class_name);
+                let handle = handle_type_name(&ns, &receiver.class_name);
                 let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
                 params.push(quote! { #param_ident: &#handle });
                 ext_bindings.push(quote! { let __recv_raw = #param_ident.raw.clone(); });

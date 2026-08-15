@@ -3266,7 +3266,7 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
         _call_id: CallId,
         return_type: baml_type::RuntimeTy,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::prompt::OutputFormat> {
+    ) -> SysOpOutput<owned::ai::OutputFormat> {
         sys_ops::build_output_format_op(&return_type, ctx)
     }
 

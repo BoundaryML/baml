@@ -639,7 +639,7 @@ fn same_namespace_resolution_no_prefix() {
 }
 
 /// Nested ns_* folders: ns_llm/ns_openai/ creates namespace ["llm", "openai"].
-/// Resolve root.llm.openai.OpenAIClient from root namespace.
+/// Resolve root.llm.openai.ResponsesClient from root namespace.
 #[test]
 fn nested_namespace_resolution() {
     let mut db = make_db();
@@ -647,7 +647,7 @@ fn nested_namespace_resolution() {
     let _root_file = db.add_file("main.baml", "class Config { key string }");
     let _nested_file = db.add_file(
         "ns_llm/ns_openai/client.baml",
-        "class OpenAIClient { model string }",
+        "class ResponsesClient { model string }",
     );
 
     let pkg_id = PackageId::new(&db, Name::new("user"));
@@ -661,12 +661,12 @@ fn nested_namespace_resolution() {
         "Nested namespace ['llm', 'openai'] should exist"
     );
 
-    // Resolve root.llm.openai.OpenAIClient from root namespace
+    // Resolve root.llm.openai.ResponsesClient from root namespace
     let segments = vec![
         Name::new("root"),
         Name::new("llm"),
         Name::new("openai"),
-        Name::new("OpenAIClient"),
+        Name::new("ResponsesClient"),
     ];
     let (ty, diags) = lower_type_expr_hir_in(
         &db,
@@ -681,12 +681,12 @@ fn nested_namespace_resolution() {
     );
     assert!(
         diags.is_empty(),
-        "root.llm.openai.OpenAIClient should resolve, got: {:?}",
+        "root.llm.openai.ResponsesClient should resolve, got: {:?}",
         diags
     );
     assert!(
         !matches!(ty, baml_type::Ty::Unknown { .. }),
-        "root.llm.openai.OpenAIClient should not resolve to Unknown"
+        "root.llm.openai.ResponsesClient should not resolve to Unknown"
     );
 }
 

@@ -28,7 +28,7 @@ function AnthMockAsk(question: string) -> string {
 // authored by interpolating the typed marker class directly.
 function AnthMockCached(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${baml.prompt.Role { name: "system", metadata: { "cache_control": { "type": "ephemeral" } } }}Follow the rules.${role("user")}${question}`
+    prompt: `${ai.Role { name: "system", metadata: { "cache_control": { "type": "ephemeral" } } }}Follow the rules.${role("user")}${question}`
 }
 
 // An assistant-first prompt with NO system content: the shape that used to

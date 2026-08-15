@@ -41,7 +41,7 @@ class PromptMessage {
     /// readable `content` projection so media survives prompt rendering.
     parts: PromptPart[],
     /// Per-message provider directives, carried verbatim from the
-    /// `baml.prompt.Role.metadata` of the `${role(...)}` marker that opened
+    /// `root.Role.metadata` of the `${role(...)}` marker that opened
     /// this message — Anthropic `cache_control`, for example. Empty when the
     /// message carried none.
     metadata: map<string, baml.json.json>,
@@ -77,11 +77,11 @@ class Prompt {
 //baml:tagged_string
 function prompt(
     body: (
-        role: (string) -> baml.prompt.Role throws never,
-        ctx: baml.prompt.Context,
+        role: (string) -> root.Role throws never,
+        ctx: root.Context,
     ) -> baml.TaggedString throws never,
-) -> (baml.prompt.Context) -> Prompt throws never {
-    let render = (ctx: baml.prompt.Context) -> {
+) -> (root.Context) -> Prompt throws never {
+    let render = (ctx: root.Context) -> {
         let tagged = body(root.internal.make_role, ctx);
         root.internal.assemble_prompt(tagged.parts, tagged.values)
     };

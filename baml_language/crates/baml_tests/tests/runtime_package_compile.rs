@@ -10,7 +10,7 @@ use bex_engine::{
 use sys_native::SysOpsExt;
 
 const SCENARIO_SOURCE: &str = r####"
-client TestClient = openai.OpenAiClient.new(
+client TestClient = openai.ResponsesClient.new(
     model = "unused-network-free-companions",
     api_key = "unused",
 );
@@ -79,7 +79,7 @@ function namespace_and_dependency_mounts() -> bool throws unknown {
 const SUCCESSFUL_INIT_SOURCE: &str = r####"
 function main() -> bool throws unknown {
   let pkg = reflect.Package.compile({ "schema.baml": #"
-client InitClient = openai.OpenAiClient.new(
+client InitClient = openai.ResponsesClient.new(
     model = "unused-network-free-init-check",
     api_key = "unused",
 );
@@ -97,7 +97,7 @@ class Ready { value string }
 const REJECTED_INIT_SOURCE: &str = r####"
 function main() -> null throws unknown {
   reflect.Package.compile({ "schema.baml": #"
-client InitClient = openai.OpenAiClient.new(
+client InitClient = openai.ResponsesClient.new(
     model = "unused-network-free-init-check",
     api_key = "unused",
 );

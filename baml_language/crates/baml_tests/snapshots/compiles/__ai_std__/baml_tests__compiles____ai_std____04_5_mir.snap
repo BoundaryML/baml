@@ -4,6 +4,8 @@ source: crates/baml_tests/src/generated_tests.rs
 === MIR2 ===
 
 === MIR2 (package ai) ===
+fn ai.Context.output_format_with = builtin(io)
+
 fn ai.Journal.entries(self: ai.Journal) -> (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] {
     // Locals:
     let _0: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // _0 // return
@@ -3638,15 +3640,15 @@ fn ai.internal.render_output_format = builtin(io)
 
 fn ai.internal.build_output_format = builtin(io)
 
-fn ai.internal.make_role(name: string) -> baml.prompt.Role {
+fn ai.internal.make_role(name: string) -> ai.Role {
     // Locals:
-    let _0: baml.prompt.Role // _0 // return
+    let _0: ai.Role // _0 // return
     let _1: string // name // param
     let _2: map<string, unknown>
 
     bb0: {
         _2 = {  }: map<string, unknown>;
-        _0 = baml.prompt.Role { copy _1, copy _2 };
+        _0 = ai.Role { copy _1, copy _2 };
         goto -> bb1;
     }
 
@@ -9364,11 +9366,11 @@ fn ai.Prompt.baml.ToString.to_string(self: ai.Prompt) -> string {
     }
 }
 
-fn ai.prompt(body: ((string) -> baml.prompt.Role throws never, baml.prompt.Context) -> baml.TaggedString throws never) -> (baml.prompt.Context) -> ai.Prompt throws never {
+fn ai.prompt(body: ((string) -> ai.Role throws never, ai.Context) -> baml.TaggedString throws never) -> (ai.Context) -> ai.Prompt throws never {
     // Locals:
-    let _0: (baml.prompt.Context) -> ai.Prompt throws never // _0 // return
-    let _1: ((string) -> baml.prompt.Role throws never, baml.prompt.Context) -> baml.TaggedString throws never // body // param [captured]
-    let _2: (baml.prompt.Context) -> ai.Prompt throws never // render
+    let _0: (ai.Context) -> ai.Prompt throws never // _0 // return
+    let _1: ((string) -> ai.Role throws never, ai.Context) -> baml.TaggedString throws never // body // param [captured]
+    let _2: (ai.Context) -> ai.Prompt throws never // render
 
     bb0: {
         _2 = make_closure lambda[0](copy _1);
@@ -9382,12 +9384,12 @@ fn ai.prompt(body: ((string) -> baml.prompt.Role throws never, baml.prompt.Conte
 }
 
 // lambda[0]
-fn .<lambda(prompt, 0)>(ctx: baml.prompt.Context) -> ai.Prompt {
+fn .<lambda(prompt, 0)>(ctx: ai.Context) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
-    let _1: baml.prompt.Context // ctx // param
+    let _1: ai.Context // ctx // param
     let _2: baml.TaggedString // tagged
-    let _3: ((string) -> baml.prompt.Role throws never, baml.prompt.Context) -> baml.TaggedString throws never
+    let _3: ((string) -> ai.Role throws never, ai.Context) -> baml.TaggedString throws never
     let _4: string[]
     let _5: unknown[]
 

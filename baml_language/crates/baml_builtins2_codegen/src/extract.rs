@@ -52,8 +52,8 @@ impl std::error::Error for ExtractNativeBuiltinsError {}
 /// the `IoNamespace*` traits, `RuntimeIo`).
 ///
 /// Scanning is deliberately narrow: only the files that actually contain a
-/// `$rust_io_function` are parsed, and only their IO builtins are kept — a
-/// package's classes and `$rust_function` (VM) builtins keep coming from its
+/// `$rust_io_function` are parsed, and only their IO builtins and class defs
+/// are kept — a package's `$rust_function` (VM) builtins keep coming from its
 /// own per-package extraction (`extract_native_builtins_for`, used by
 /// `bex_vm`'s build script), so nothing else about these packages is dragged
 /// into the IO codegen.
@@ -80,12 +80,20 @@ const IO_BUILTIN_MARKER: &str = "$rust_io_function";
 pub fn extract_native_builtins()
 -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
 {
-    let (vm_builtins, mut io_builtins, class_defs) =
+    let (vm_builtins, mut io_builtins, mut class_defs) =
         extract_native_builtins_for(baml_builtins2::PACKAGE_BAML)?;
     for package in EXTRA_IO_PACKAGES {
-        let (_vm, extra_io, _classes) =
+        let (_vm, extra_io, extra_classes) =
             extract_scoped(package, |f| f.contents.contains(IO_BUILTIN_MARKER))?;
         io_builtins.extend(extra_io);
+        // Classes declared alongside extra-package IO builtins (e.g. the
+        // `ai.Context` render-context surface) participate in owned/view
+        // struct generation so receiver methods and typed returns marshal
+        // through generated structs, exactly like `baml`-package classes.
+        // `filter_io_class_defs` still drops anything in a namespace without
+        // IO builtins, and `sys_op_variant_name` keys are package-qualified,
+        // so this cannot collide with `baml` names.
+        class_defs.extend(extra_classes);
     }
     Ok((vm_builtins, io_builtins, class_defs))
 }

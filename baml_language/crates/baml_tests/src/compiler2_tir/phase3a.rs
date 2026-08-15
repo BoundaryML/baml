@@ -198,7 +198,7 @@ fn new_mode_failures_have_good_diagnostics() {
     // surface a diagnostic that points at the user's `${…}` source with a
     // user-facing message — never a `0..0` span and never a leaked internal
     // desugaring type. The prompt body is lowered into a synthesized
-    // `(ctx: baml.prompt.Context) -> PromptAst` closure, so the risk is that
+    // `(ctx: ai.Context) -> PromptAst` closure, so the risk is that
     // errors land on compiler-generated nodes. These cases pin that they don't.
     //
     // `expect_substr` is asserted; the span column is checked to be non-`0..0`
@@ -2135,7 +2135,7 @@ fn explicit_unknown_list_annotation_pins_element_type() {
         r#"
 function main() -> int {
   let xs: unknown[] = []
-  let r = baml.prompt.Role { name: "x", metadata: {} }
+  let r = ai.Role { name: "x", metadata: {} }
   xs.push(r)
   xs.push("hello")
   return 0

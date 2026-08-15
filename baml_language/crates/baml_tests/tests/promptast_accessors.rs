@@ -15,8 +15,8 @@ fn prompt_expr_src(expr: &str) -> String {
     format!(
         r#"
 function main() -> string {{
-  let cc = baml.prompt.ContextClient {{ name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }}
-  let ctx = baml.prompt.Context {{ client: cc, tags: {{}} }}
+  let cc = ai.ContextClient {{ name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }}
+  let ctx = ai.Context {{ client: cc, tags: {{}} }}
   let render = prompt`${{role("system")}}You are helpful.${{role("user")}}Hi World!`
   let ast = render(ctx)
   {expr}
@@ -75,8 +75,8 @@ async fn messages_yields_promptmessage_instances() {
     let output = baml_test!(
         r#"
 function main() -> ai.PromptMessage[] {
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
-  let ctx = baml.prompt.Context { client: cc, tags: {} }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
+  let ctx = ai.Context { client: cc, tags: {} }
   let render = prompt`Just a system prompt.`
   let ast = render(ctx)
   ast.messages()
@@ -104,16 +104,16 @@ function main() -> ai.PromptMessage[] {
 
 #[tokio::test]
 async fn message_metadata_survives_prompt_assembly() {
-    // `baml.prompt.Role.metadata` is the per-message channel providers read for
+    // `ai.Role.metadata` is the per-message channel providers read for
     // directives like Anthropic `cache_control`. `collect_structured_messages`
     // used to drop it; it must reach `ai.PromptMessage.metadata` intact, and a
     // message that carried none must read as an empty map (never null).
     let output = run_string(
         r#"
 function main() -> string {
-  let cc = baml.prompt.ContextClient { name: "c", provider: "anthropic", default_role: "user", allowed_roles: ["system", "user"] }
-  let ctx = baml.prompt.Context { client: cc, tags: {} }
-  let cached = baml.prompt.Role { name: "system", metadata: { "cache_control": { "type": "ephemeral" } } }
+  let cc = ai.ContextClient { name: "c", provider: "anthropic", default_role: "user", allowed_roles: ["system", "user"] }
+  let ctx = ai.Context { client: cc, tags: {} }
+  let cached = ai.Role { name: "system", metadata: { "cache_control": { "type": "ephemeral" } } }
   let render = prompt`${cached}Long shared preamble.${role("user")}Hi World!`
   let out: string[] = []
   for (let m in render(ctx).messages()) {
@@ -135,8 +135,8 @@ async fn message_parts_preserve_all_media_structurally() {
     let output = run_string(
         r#"
 function main() -> string {
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-  let ctx = baml.prompt.Context { client: cc, tags: {} }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let ctx = ai.Context { client: cc, tags: {} }
   let img = image.from_url("https://example.com/photo.png", "image/png")
   let sound = audio.from_url("https://example.com/sound.mp3", "audio/mpeg")
   let movie = video.from_url("https://example.com/movie.mp4", "video/mp4")

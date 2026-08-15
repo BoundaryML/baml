@@ -263,11 +263,6 @@ namespace baml.panics:
   class StackOverflow { methods: [] }
   class Unreachable { methods: [] }
   class UserPanic { methods: [] }
-namespace baml.prompt:
-  class Context { methods: [output_format_with] }
-  class ContextClient { methods: [] }
-  class OutputFormat { methods: [] }
-  class Role { methods: [] }
 namespace baml.random:
   class ChaCha20 { methods: [new, _new, random, random_int] }
   type Rng

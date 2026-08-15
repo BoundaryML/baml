@@ -7310,8 +7310,6 @@ fn baml.ops.__union_rem = builtin(vm)
 
 fn baml.ops.__union_neg = builtin(vm)
 
-fn baml.prompt.Context.output_format_with = builtin(io)
-
 fn baml.random.Rng.random(_1: void, _2: void) -> void {
     // Locals:
     let _0: void // return

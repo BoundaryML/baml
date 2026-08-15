@@ -1668,47 +1668,6 @@ class baml.panics.UserPanic$stream {
 type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.HostContractViolation | baml.panics.IntegerOverflow
 type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.InvalidFieldAccess$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream | baml.panics.HostContractViolation$stream | baml.panics.IntegerOverflow$stream
 
---- <builtin>/baml/ns_prompt/prompt.baml ---
-class baml.prompt.Context {
-  client: baml.prompt.ContextClient
-  tags: map<string, unknown>
-  output_format: string
-  _output_format: baml.prompt.OutputFormat
-}
-class baml.prompt.Context$stream {
-  client: baml.prompt.ContextClient$stream | null
-  tags: map<string, unknown>
-  output_format: string | null
-  _output_format: baml.prompt.OutputFormat$stream | null
-}
-class baml.prompt.ContextClient {
-  name: string
-  provider: string
-  default_role: string
-  allowed_roles: string[]
-}
-class baml.prompt.ContextClient$stream {
-  name: string | null
-  provider: string | null
-  default_role: string | null
-  allowed_roles: string[]
-}
-class baml.prompt.OutputFormat {
-  _data: $rust_type
-}
-class baml.prompt.OutputFormat$stream {
-  _data: $rust_type
-}
-class baml.prompt.Role {
-  name: string
-  metadata: map<string, unknown>
-}
-class baml.prompt.Role$stream {
-  name: string | null
-  metadata: map<string, unknown>
-}
-function baml.prompt.output_format_with(self: ?, prefix: string? = null, or_splitter: string? = null, enum_value_prefix: string? = null, hoisted_class_prefix: string? = null, always_hoist_enums: bool? = null, quote_class_fields: bool? = null, hoist_classes: string[]? = null, map_style: string? = null, render_null_as: string? = null) -> string  [builtin]
-
 --- <builtin>/baml/ns_random/random.baml ---
 class baml.random.ChaCha20 {
   _state: $rust_type

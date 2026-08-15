@@ -261,7 +261,7 @@ class AnthropicPrompt {
 }
 
 // Anthropic places a cache breakpoint on a CONTENT BLOCK, but the authored
-// directive lives on a MESSAGE (`${baml.prompt.Role { name: "user", metadata:
+// directive lives on a MESSAGE (`${ai.Role { name: "user", metadata:
 // { "cache_control": ... } }}`). The engine's rule, ported: the directive
 // attaches to that message's LAST content block, so everything up to and
 // including it is the cached prefix.

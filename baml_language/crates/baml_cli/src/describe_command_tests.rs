@@ -429,12 +429,14 @@ fn render_builtin_namespace_env() {
     insta::assert_snapshot!(output);
 }
 
-/// `baml describe baml.prompt` — list items in the `prompt` sub-namespace.
+/// `baml describe ai.internal` — list items in the `ai.internal` namespace,
+/// the home of the package-private helpers and the prompt-rendering plumbing
+/// (there is deliberately no `baml.prompt` namespace).
 #[test]
-fn render_builtin_namespace_prompt() {
+fn render_builtin_namespace_ai_internal() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
-    let ns_path = vec![baml_db::Name::new("prompt")];
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("ai"));
+    let ns_path = vec![baml_db::Name::new("internal")];
     let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);

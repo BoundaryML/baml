@@ -118,7 +118,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
     builtin!("baml", "ns_csv/csv.baml"),
-    builtin!("baml", "ns_prompt/prompt.baml"),
     builtin!("baml", "ns_sap/sap.baml"),
     builtin!("baml", "ns_ws/ws.baml"),
     builtin!("baml", "ns_iter/iter.baml"),
@@ -171,6 +170,9 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("ai", "ns_content/content.baml"),
     builtin!("ai", "ns_events/events.baml"),
     builtin!("ai", "journal.baml"),
+    // Render-context surface (`ai.Context`, `ai.Role`, `ai.OutputFormat`,
+    // `ai.ContextClient`) — the `ctx` object LLM prompt bodies touch.
+    builtin!("ai", "context.baml"),
     builtin!("ai", "spec.baml"),
     builtin!("ai", "ns_tools/tools.baml"),
     builtin!("ai", "turn.baml"),
@@ -192,7 +194,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("ai", "ns_internal/clients.baml"),
     builtin!("ai", "ns_internal/http_errors.baml"),
     // Prompt-rendering plumbing shared by `ai.*` and the `prompt` tag desugar;
-    // lives here so `describe baml.prompt` stays classes-only.
+    // lives here; the render-context classes sit in ai/context.baml.
     builtin!("ai", "ns_internal/prompt.baml"),
     // --- provider client packages ---
     builtin!("openai", "responses.baml"),
@@ -271,3 +273,48 @@ mod adt;
 mod media;
 pub use adt::*;
 pub use media::{MediaContent, MediaValue};
+
+#[cfg(test)]
+mod layout_tests {
+    use super::ALL;
+
+    /// There is deliberately NO `baml.prompt` namespace. The render-context
+    /// classes (`Context`, `Role`, `OutputFormat`, `ContextClient`) live on
+    /// the public `ai` surface (`ai/context.baml`), and the prompt-rendering
+    /// plumbing (validate_output_type, render_output_format,
+    /// build_output_format, make_role, get_return_type) lives in
+    /// `ai.internal` (`ai/ns_internal/prompt.baml`). A canary merge that
+    /// resurrects `baml/ns_prompt/` (or a `baml/ns_internal/`) must be
+    /// re-resolved in favor of the `ai` layout, not merged.
+    #[test]
+    fn no_baml_prompt_namespace() {
+        assert!(
+            !ALL.iter().any(|f| f.package == "baml"
+                && (f.relative_path.starts_with("ns_prompt/")
+                    || f.relative_path.starts_with("ns_internal/"))),
+            "the baml package must not contain ns_prompt/ or ns_internal/ — \
+             the prompt surface lives in the ai package (ai/context.baml + \
+             ai/ns_internal/prompt.baml)"
+        );
+        let ai_context = ALL
+            .iter()
+            .find(|f| f.package == "ai" && f.relative_path == "context.baml")
+            .expect("ai/context.baml must exist (render-context classes)");
+        for name in ["Context", "Role", "OutputFormat", "ContextClient"] {
+            assert!(
+                ai_context.contents.contains(&format!("class {name}")),
+                "`{name}` missing from ai/context.baml"
+            );
+        }
+        let ai_prompt = ALL
+            .iter()
+            .find(|f| f.package == "ai" && f.relative_path == "ns_internal/prompt.baml")
+            .expect("ai/ns_internal/prompt.baml must exist (prompt plumbing home)");
+        for name in ["make_role", "render_output_format", "get_return_type"] {
+            assert!(
+                ai_prompt.contents.contains(&format!("function {name}")),
+                "`{name}` missing from ai/ns_internal/prompt.baml"
+            );
+        }
+    }
+}

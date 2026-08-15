@@ -5,6 +5,47 @@ source: crates/baml_tests/src/generated_tests.rs
 
 === PPIR (package ai) ===
 
+--- <builtin>/ai/context.baml ---
+class ai.Context {
+  client: ai.ContextClient
+  tags: map<string, unknown>
+  output_format: string
+  _output_format: ai.OutputFormat
+}
+class ai.Context$stream {
+  client: ai.ContextClient$stream | null
+  tags: map<string, unknown>
+  output_format: string | null
+  _output_format: ai.OutputFormat$stream | null
+}
+class ai.ContextClient {
+  name: string
+  provider: string
+  default_role: string
+  allowed_roles: string[]
+}
+class ai.ContextClient$stream {
+  name: string | null
+  provider: string | null
+  default_role: string | null
+  allowed_roles: string[]
+}
+class ai.OutputFormat {
+  _data: $rust_type
+}
+class ai.OutputFormat$stream {
+  _data: $rust_type
+}
+class ai.Role {
+  name: string
+  metadata: map<string, unknown>
+}
+class ai.Role$stream {
+  name: string | null
+  metadata: map<string, unknown>
+}
+function ai.output_format_with(self: ?, prefix: string? = null, or_splitter: string? = null, enum_value_prefix: string? = null, hoisted_class_prefix: string? = null, always_hoist_enums: bool? = null, quote_class_fields: bool? = null, hoist_classes: string[]? = null, map_style: string? = null, render_null_as: string? = null) -> string  [builtin]
+
 --- <builtin>/ai/journal.baml ---
 class ai.Journal {
   log: root.events.Event[]
@@ -403,12 +444,12 @@ function ai.internal._resolve_media_content(url: string?, file: string?, inline:
 }
 
 --- <builtin>/ai/ns_internal/prompt.baml ---
-type ai.internal.OutputFormat = baml.prompt.OutputFormat
-type ai.internal.OutputFormat$stream = baml.prompt.OutputFormat$stream
+type ai.internal.OutputFormat = root.OutputFormat
+type ai.internal.OutputFormat$stream = root.OutputFormat$stream
 function ai.internal.build_output_format(return_type: type) -> ai.internal.OutputFormat  [builtin]
 function ai.internal.get_return_type(function_name: string) -> type  [builtin]
-function ai.internal.make_role(name: string) -> baml.prompt.Role  [expr] {
-  {  } baml.prompt.Role { name: name, metadata: map {  } }
+function ai.internal.make_role(name: string) -> root.Role  [expr] {
+  {  } root.Role { name: name, metadata: map {  } }
 }
 function ai.internal.render_output_format(return_type: type) -> string  [builtin]
 function ai.internal.validate_output_type(return_type: type) -> void  [expr] {
@@ -774,8 +815,8 @@ function ai.name(self: ?) -> string  [expr] {
 function ai.output_type(self: ?) -> type  [expr] {
   { let output_type = type.of(); root.internal.validate_output_type(output_type) } output_type
 }
-function ai.prompt(body: (role: (string) -> baml.prompt.Role throws never, ctx: baml.prompt.Context) -> baml.TaggedString throws never) -> (baml.prompt.Context) -> ai.Prompt throws never  [expr] {
-  { let render = (ctx: baml.prompt.Context) -> { { let tagged = body(root.internal.make_role, ctx) } root.internal.assemble_prompt(tagged.parts, tagged.values) } } render
+function ai.prompt(body: (role: (string) -> root.Role throws never, ctx: root.Context) -> baml.TaggedString throws never) -> (root.Context) -> ai.Prompt throws never  [expr] {
+  { let render = (ctx: root.Context) -> { { let tagged = body(root.internal.make_role, ctx) } root.internal.assemble_prompt(tagged.parts, tagged.values) } } render
 }
 function ai.prompt(self: ?, output_format: string = "") -> ai.Prompt  [expr] {
   {  } self.prompt_template(output_format)

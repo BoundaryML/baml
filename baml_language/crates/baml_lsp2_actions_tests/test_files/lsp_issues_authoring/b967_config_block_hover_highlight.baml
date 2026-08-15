@@ -11,9 +11,9 @@ client OtherClient = openai.OpenAiCl<[CURSOR]ient.n<[CURSOR]ew(model = "gpt-4o")
 //- diagnostics
 // E0003
 //
-//   × unresolved name: `openai.OpenAiClient.new`
+//   × unresolved name: `openai.ResponsesClient.new`
 //    ╭─[b967_config_block_hover_highlight.baml:8:22]
-//  8 │ client OtherClient = openai.OpenAiClient.new(model = "gpt-4o");
+//  8 │ client OtherClient = openai.ResponsesClient.new(model = "gpt-4o");
 //    ·                      ───────────────────────
 //    ╰────
 //

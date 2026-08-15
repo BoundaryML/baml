@@ -27,7 +27,7 @@ pub mod io {
     pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
     pub use bex_vm_types::SysOp;
     // Owned structs are generated once in sys_types and re-exported here
-    // so that `io::owned::prompt::*` paths continue to work.
+    // so that `io::owned::ai::*` paths continue to work.
     pub use sys_types::generated::owned;
     pub use sys_types::{
         AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, SysOpContext, SysOpFn,
@@ -177,13 +177,13 @@ impl<T> io::IoClassSapParseCache for T {
 /// Blanket impl — `Context.output_format_with(...)` re-renders the return
 /// type's schema with caller options (BEP-049 §10 / M5b.2). `Context._output_format`
 /// carries the prebuilt schema as an opaque handle, so this only re-renders it.
-impl<T> io::IoClassPromptContext for T {
+impl<T> io::IoClassAiContext for T {
     #[allow(clippy::too_many_arguments)]
     fn output_format_with(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        context: io::owned::prompt::Context,
+        context: io::owned::ai::Context,
         prefix: Option<String>,
         or_splitter: Option<String>,
         enum_value_prefix: Option<String>,
@@ -714,10 +714,10 @@ mod schema {
     }
 }
 
-/// `baml.prompt` itself has no free IO functions left — the plumbing moved to
-/// `ai.internal` — but the generated package trait still requires the
-/// (now method-only) namespace trait.
-impl<T> io::IoNamespacePrompt for T {}
+/// The `ai` package root has no free IO functions — its IO surface is the
+/// `ai.Context` class methods (`IoClassAiContext`) — but the generated package
+/// trait still requires the (method-only) namespace trait.
+impl<T> io::IoNamespaceAi for T {}
 
 // The `ai.internal` prompt-rendering sys-ops are pure (no platform IO), so
 // both `DefaultIoOps` and `NativeSysOps` delegate their `IoNamespaceAiInternal`
@@ -736,7 +736,7 @@ pub fn render_output_format_op(
 pub fn build_output_format_op(
     return_type: &baml_type::RuntimeTy,
     ctx: &SysOpContext,
-) -> SysOpOutput<io::owned::prompt::OutputFormat> {
+) -> SysOpOutput<io::owned::ai::OutputFormat> {
     let content = crate::output_format::build_output_format_content(return_type, ctx);
     SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
 }
@@ -803,19 +803,19 @@ impl<T> io::IoNamespaceSap for T {
     }
 }
 
-/// Wrap an `OutputFormatContent` into the generated `owned::prompt::OutputFormat` handle.
+/// Wrap an `OutputFormatContent` into the generated `owned::ai::OutputFormat` handle.
 fn wrap_output_format(
     content: std::sync::Arc<crate::output_format::OutputFormatContent>,
-) -> io::owned::prompt::OutputFormat {
-    io::owned::prompt::OutputFormat {
+) -> io::owned::ai::OutputFormat {
+    io::owned::ai::OutputFormat {
         _data: content as std::sync::Arc<dyn std::any::Any + Send + Sync>,
     }
 }
 
-/// Unwrap a generated `owned::prompt::OutputFormat` handle back to its `OutputFormatContent`.
+/// Unwrap a generated `owned::ai::OutputFormat` handle back to its `OutputFormatContent`.
 #[allow(clippy::used_underscore_binding)]
 fn unwrap_output_format(
-    owned: &io::owned::prompt::OutputFormat,
+    owned: &io::owned::ai::OutputFormat,
 ) -> std::sync::Arc<crate::output_format::OutputFormatContent> {
     owned
         ._data
@@ -1902,7 +1902,7 @@ impl io::IoNamespaceAiInternal for DefaultIoOps {
         _c: CallId,
         return_type: baml_type::RuntimeTy,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::prompt::OutputFormat> {
+    ) -> SysOpOutput<io::owned::ai::OutputFormat> {
         build_output_format_op(&return_type, ctx)
     }
     fn get_return_type(

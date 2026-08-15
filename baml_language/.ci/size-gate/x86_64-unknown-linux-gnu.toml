@@ -7,6 +7,8 @@ file_bytes = "26.4 MiB"
 stripped_bytes = "26.4 MiB"
 gzip_bytes = "11.2 MiB"
 
+# Re-recorded from CI run 31906918242: BEP-066 VM+bytecode surface plus the
+# native provider stdlib additions since the 2026-08-12 record.
 [artifacts.packed-program]
-file_bytes = "18.8 MiB"
-gzip_bytes = "7.7 MiB"
+file_bytes = 21617224
+gzip_bytes = 8505842

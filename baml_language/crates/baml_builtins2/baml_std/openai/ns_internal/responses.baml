@@ -443,7 +443,7 @@ function openai_lower_prompt(prompt: ai.Prompt) -> OaInputItem[] {
 }
 
 // Per-message provider directives (`ai.PromptMessage.metadata`, authored as
-// `${baml.prompt.Role { name: "user", metadata: { … } }}`), in prompt order and
+// `${ai.Role { name: "user", metadata: { … } }}`), in prompt order and
 // aligned one-to-one with the items `openai_lower_prompt` produced — the prompt
 // items are always the FIRST items of `input`, the journal's are appended after.
 //

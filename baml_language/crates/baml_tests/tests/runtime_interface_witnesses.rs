@@ -68,7 +68,7 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
             email: string
         }
 
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",
@@ -126,7 +126,7 @@ async fn bounded_unreflect_fails_before_rendering() {
             email: string
         }
 
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",
@@ -267,7 +267,7 @@ async fn equivalent_witnessed_definitions_render_and_parse_identically() {
             email: string
         }
 
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",
@@ -324,7 +324,7 @@ async fn open_interface_occurrence_fails_at_render_boundary() {
             person PersonAnchor
         }
 
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",

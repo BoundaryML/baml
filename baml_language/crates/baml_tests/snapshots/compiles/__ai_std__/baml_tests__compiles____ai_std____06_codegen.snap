@@ -1349,6 +1349,9 @@ function ai.Agent.new(max_steps: int, client: ai.Client | null, tool_errors: ai.
     return
 }
 
+function ai.Context.output_format_with(self: ai.Context, prefix: string | null, or_splitter: string | null, enum_value_prefix: string | null, hoisted_class_prefix: string | null, always_hoist_enums: bool | null, quote_class_fields: bool | null, hoist_classes: string[] | null, map_style: string | null, render_null_as: string | null) -> string {
+}
+
 function ai.FunctionSpec.arguments(self: ai.FunctionSpec<#0>) -> map<string, unknown> {
     load_var self
     load_field .args
@@ -4593,18 +4596,18 @@ function ai.internal._wire_blocks(content: (ai.content.Text | ai.content.Reasoni
 function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> ai.Prompt {
 }
 
-function ai.internal.build_output_format(return_type: type) -> baml.prompt.OutputFormat {
+function ai.internal.build_output_format(return_type: type) -> ai.OutputFormat {
 }
 
 function ai.internal.get_return_type(function_name: string) -> type {
 }
 
-function ai.internal.make_role(name: string) -> baml.prompt.Role {
+function ai.internal.make_role(name: string) -> ai.Role {
     load_var name
     load_type string
     load_type unknown
     alloc_map 0
-    init_instance baml.prompt.Role .name, .metadata
+    init_instance ai.Role .name, .metadata
     return
 }
 
@@ -5213,7 +5216,7 @@ function ai.mcp.rpc_line(id: int | null, method: string, params: map<string, unk
     return
 }
 
-function ai.prompt(body: ((string) -> baml.prompt.Role throws never, baml.prompt.Context) -> baml.TaggedString throws never) -> (baml.prompt.Context) -> ai.Prompt throws never {
+function ai.prompt(body: ((string) -> ai.Role throws never, ai.Context) -> baml.TaggedString throws never) -> (ai.Context) -> ai.Prompt throws never {
     load_var ?1
     make_cell
     store_var ?1

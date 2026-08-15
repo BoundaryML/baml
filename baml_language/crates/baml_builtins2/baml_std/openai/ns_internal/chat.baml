@@ -235,7 +235,7 @@ class ChatFilePart {
 }
 
 // A content part carrying the per-message provider directives authored on
-// `${baml.prompt.Role { name: …, metadata: { … } }}`. Chat completions places
+// `${ai.Role { name: …, metadata: { … } }}`. Chat completions places
 // such directives ON A CONTENT PART (`prompt_cache_breakpoint` for OpenAI,
 // OpenRouter's Anthropic-style `cache_control`), while the authored directive
 // lives on the MESSAGE — so, exactly as the Anthropic client does, the metadata

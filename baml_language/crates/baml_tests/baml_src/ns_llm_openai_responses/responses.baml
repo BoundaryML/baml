@@ -51,7 +51,7 @@ function OaiSystemLook(pic: image) -> string {
 // authored by interpolating the typed marker class directly.
 function OaiMetaEcho(question: string) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${baml.prompt.Role { name: "system", metadata: { "cache_hint": "ephemeral" } }}Follow the rules.${role("user")}${question}`
+    prompt: `${ai.Role { name: "system", metadata: { "cache_hint": "ephemeral" } }}Follow the rules.${role("user")}${question}`
 }
 
 // ─── canned provider bodies ──────────────────────────────────────────────────

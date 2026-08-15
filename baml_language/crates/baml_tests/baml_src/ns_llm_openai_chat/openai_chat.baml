@@ -1170,7 +1170,7 @@ test "chat_terminated_stream_still_completes" {
 // would drop it.
 function ChatCached(question: string) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${baml.prompt.Role { name: "system", metadata: { "prompt_cache_breakpoint": { "type": "enabled" } } }}Follow the rules.${role("user")}${question}`
+    prompt: `${ai.Role { name: "system", metadata: { "prompt_cache_breakpoint": { "type": "enabled" } } }}Follow the rules.${role("user")}${question}`
 }
 
 function _chat_cached_input() -> ai.ModelTurnInput {
@@ -1236,7 +1236,7 @@ test "chat_metadata_rides_last_content_part" {
 // is why the directives ride a parked, opaque subtree until after the prune.
 function ChatCachedNull(question: string) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${baml.prompt.Role { name: "system", metadata: { "cache_control": null, "keep": "yes" } }}Follow the rules.${role("user")}${question}`
+    prompt: `${ai.Role { name: "system", metadata: { "cache_control": null, "keep": "yes" } }}Follow the rules.${role("user")}${question}`
 }
 
 function chat_authored_null_directive_survives_pruning() -> string {

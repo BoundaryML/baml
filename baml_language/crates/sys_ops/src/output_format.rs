@@ -571,7 +571,7 @@ impl OutputFormatContent {
             // them (`type`, or the fixed qualified name).
             RuntimeTy::Type { .. } => Err(RenderError::UnsupportedType("type".to_string())),
             RuntimeTy::Resource { .. } => Err(RenderError::UnsupportedType(
-                "baml.prompt.Resource".to_string(),
+                "ai.Resource".to_string(),
             )),
             RuntimeTy::PromptAst { .. } => {
                 Err(RenderError::UnsupportedType("ai.Prompt".to_string()))

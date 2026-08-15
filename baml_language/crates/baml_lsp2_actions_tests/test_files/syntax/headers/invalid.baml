@@ -44,7 +44,7 @@ function HeaderInStringLiteral() -> string {
     x + y
 }
 
-client GPT4 = openai.OpenAiClient.new(
+client GPT4 = openai.ResponsesClient.new(
     model = "gpt-4",
     api_key = env.OPENAI_API_KEY,
 );
@@ -77,8 +77,8 @@ client GPT4 = openai.OpenAiClient.new(
 //     ╰────
 // E0003
 //
-//   × unresolved name: `openai.OpenAiClient.new`
+//   × unresolved name: `openai.ResponsesClient.new`
 //     ╭─[headers_invalid.baml:47:15]
-//  47 │ client GPT4 = openai.OpenAiClient.new(
+//  47 │ client GPT4 = openai.ResponsesClient.new(
 //     ·               ───────────────────────
 //     ╰────

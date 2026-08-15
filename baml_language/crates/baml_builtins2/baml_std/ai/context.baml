@@ -1,3 +1,7 @@
+// The render-context surface shared by LLM function bodies and standalone
+// `prompt` tag closures: the `ctx` object, chat-role markers, and the opaque
+// output-format handle.
+
 /// Opaque handle to a prebuilt output-format schema. This supports the
 /// standalone `prompt` tag's parameterized output-format rendering.
 class OutputFormat {
