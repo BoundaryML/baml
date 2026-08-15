@@ -84,11 +84,11 @@ fn removed_reader_spellings_are_ordinary_unresolved_names() {
     let errors = compile_errors(
         r#"
 function old_type_reader() -> type {
-  type.of<int>()
+  reflect.type_of<int>()
 }
 
 function old_value_reader(value: unknown) -> type {
-  type.of_value(value)
+  reflect.type_of_value(value)
 }
 "#,
     );
