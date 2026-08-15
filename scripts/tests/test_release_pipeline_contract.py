@@ -1029,6 +1029,7 @@ class WorkflowGraphTests(unittest.TestCase):
         nuget = job_block(workflow, "publish-csharp-sdk")
         crates_io = job_block(workflow, "publish-crates-io")
         wrapper_release = job_block(workflow, "publish-wrapper-release")
+        winget = job_block(workflow, "publish-winget")
         prerequisites = job_block(workflow, "release-prerequisites-complete")
         notify_slack = job_block(workflow, "notify-slack")
         complete = job_block(workflow, "release-complete")
@@ -1075,6 +1076,15 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertNotIn("\n  publish-aur:\n", workflow)
         self.assertNotRegex(prerequisites, r"(?m)^\s+- publish-aur\s*$")
         self.assertNotRegex(notify_slack, r"(?m)^\s+- publish-aur\s*$")
+        self.assertIn("needs: [plan, publish-wrapper-release]", winget)
+        self.assertIn("needs.plan.outputs.wrapper_changed == 'true'", winget)
+        self.assertIn("baml-wrapper-no-self-update-$version-x86_64-pc-windows-msvc.zip", winget)
+        self.assertIn("baml-wrapper-no-self-update-$version-aarch64-pc-windows-msvc.zip", winget)
+        self.assertIn("update BoundaryML.BAML", winget)
+        self.assertIn("--submit", winget)
+        self.assertIn("WINGET_CREATE_GITHUB_TOKEN", winget)
+        self.assertNotRegex(prerequisites, r"(?m)^\s+- publish-winget\s*$")
+        self.assertRegex(notify_slack, r"(?m)^\s+- publish-winget\s*$")
         self.assertIn(
             "needs: [plan, release-prerequisites-complete]",
             manifest,

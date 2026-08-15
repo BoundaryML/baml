@@ -2102,6 +2102,75 @@ jobs:
           git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || exit 0
           git push origin HEAD
 
+  publish-winget:
+    name: Submit WinGet wrapper update
+    needs: [plan, publish-wrapper-release]
+    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check for an existing WinGet version or update PR
+        id: existing
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          $manifestPath = "repos/microsoft/winget-pkgs/contents/manifests/b/BoundaryML/BAML/$env:WRAPPER_VERSION"
+          gh api $manifestPath *> $null
+          if ($LASTEXITCODE -eq 0) {
+            "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host "BoundaryML.BAML $env:WRAPPER_VERSION is already published"
+            exit 0
+          }
+
+          $query = "repo:microsoft/winget-pkgs is:pr is:open in:title BoundaryML.BAML $env:WRAPPER_VERSION"
+          $count = gh api search/issues --method GET -f "q=$query" --jq '.total_count'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to search for an existing WinGet update PR"
+          }
+          if ([int]$count -gt 0) {
+            "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host "A BoundaryML.BAML $env:WRAPPER_VERSION update PR is already open"
+          } else {
+            "skip=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+      - name: Download WingetCreate
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        shell: pwsh
+        run: Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+      - name: Submit WinGet update PR
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        shell: pwsh
+        env:
+          RELEASED_AT: ${{ needs.plan.outputs.released_at }}
+          WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINGET_CREATE_GITHUB_TOKEN)) {
+            throw "WINGET_CREATE_GITHUB_TOKEN must be a classic PAT with public_repo scope"
+          }
+
+          $version = $env:WRAPPER_VERSION
+          $releaseBase = "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-$version"
+          $x64Url = "$releaseBase/baml-wrapper-no-self-update-$version-x86_64-pc-windows-msvc.zip"
+          $arm64Url = "$releaseBase/baml-wrapper-no-self-update-$version-aarch64-pc-windows-msvc.zip"
+          $releaseNotesUrl = "https://github.com/BoundaryML/baml/releases/tag/baml-wrapper-$version"
+          $releaseDate = ([DateTimeOffset]::Parse($env:RELEASED_AT)).UtcDateTime.ToString("yyyy-MM-dd")
+
+          .\wingetcreate.exe update BoundaryML.BAML `
+            --version $version `
+            --urls "${x64Url}|x64" "${arm64Url}|arm64" `
+            --release-notes-url $releaseNotesUrl `
+            --release-date $releaseDate `
+            --prtitle "Update: BoundaryML.BAML to $version" `
+            --submit `
+            --no-open
+          if ($LASTEXITCODE -ne 0) {
+            throw "WingetCreate failed with exit code $LASTEXITCODE"
+          }
+
   # AUR publishing is temporarily disabled because aur.archlinux.org reports
   # maintenance and rejects SSH clones. Restore this job and its gate dependency
   # when AUR is available again.
@@ -2327,6 +2396,7 @@ jobs:
       - publish-pkg-boundaryml-com
       - smoke-go-release
       - publish-homebrew
+      - publish-winget
       # AUR is temporarily absent from the release graph during maintenance.
       # - publish-aur
       - dry-run-artifacts
