@@ -10892,6 +10892,39 @@ async fn wf3_union_member_method_call_works_pins() {
     );
 }
 
+/// A union may expose the same method through different roads: one member via
+/// an interface and another via an inherent method. Dispatch must stay
+/// per-member so the inherent-only receiver is not sent through the interface
+/// vtable selected for the first member.
+#[tokio::test]
+async fn heterogeneous_union_dispatch_calls_inherent_non_implementor_method() {
+    let output = baml_test!(
+        r#"
+        interface Speaker {
+            function speak(self) -> string throws never
+        }
+        class A {
+            implements Speaker {
+                function speak(self) -> string { return "interface" }
+            }
+        }
+        class B {
+            function speak(self) -> string { return "inherent" }
+        }
+        function speak(x: A | B) -> string {
+            return x.speak()
+        }
+        function main() -> string {
+            return speak(B {})
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("inherent".into())
+    );
+}
+
 /// wf3 pin: a class's own concrete field shadows same-named interface-field
 /// views — unqualified `i.name` reads the concrete field. Correct per the Group D
 /// shadow rule; pinned because the outcome silently flips based on whether a

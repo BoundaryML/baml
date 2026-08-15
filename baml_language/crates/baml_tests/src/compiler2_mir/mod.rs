@@ -86,15 +86,14 @@ interface Speaker {
 }
 
 class Dog {
-  function speak(self) -> int { 1 }
+  implements Speaker {
+    function speak(self) -> int { 1 }
+  }
 }
 
 class Cat {
   function speak(self) -> int { 2 }
 }
-
-implements Speaker for Dog {}
-implements Speaker for Cat {}
 
 function indirect(callback: (int) -> int throws never, id: boundary.LocalId) -> int {
   callback(1, $id = id)
@@ -163,15 +162,21 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
         .blocks
         .iter()
         .filter_map(|block| match block.terminator.as_ref() {
-            Some(
-                Terminator::Call { runtime_id, .. } | Terminator::VirtualCall { runtime_id, .. },
-            ) => Some(runtime_id),
+            Some(Terminator::Call { runtime_id, .. }) => Some(runtime_id),
             _ => None,
         })
         .collect::<Vec<_>>();
     assert!(
-        !union_calls.is_empty(),
-        "expected a union dispatch call: {}",
+        union_calls.len() >= 2,
+        "expected one direct call per heterogeneous union member: {}",
+        display_function(&union_mir)
+    );
+    assert!(
+        !union_body
+            .blocks
+            .iter()
+            .any(|block| matches!(block.terminator, Some(Terminator::VirtualCall { .. }))),
+        "heterogeneous union dispatch must not use the first member's interface: {}",
         display_function(&union_mir)
     );
     assert!(

@@ -87,7 +87,7 @@ function media_json_union.media_json_union_respects_reversed_order() -> string {
     load_var _2
     call baml.json.to_json
     store_var json
-    load_type image | audio
+    load_type audio | image
     load_var json
     call baml.json.from_json
     is_type audio

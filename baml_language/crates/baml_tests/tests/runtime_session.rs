@@ -360,6 +360,45 @@ async fn scoped_runtime_type_bindings_persist_and_rebind_between_submissions() {
 }
 
 #[tokio::test]
+async fn mutually_recursive_session_lets_diagnose_without_panicking() {
+    let output = baml_test!(
+        r##"
+function main() -> bool throws unknown {
+  let s = reflect.Session.new()
+  let diagnosed = false
+  let _ = s.eval(#"
+    let a = b
+    let b = a
+  "#) catch (e) {
+    baml.reflect.errors.CompilationError => {
+      diagnosed = e.diagnostics.length() > 0
+    },
+    _ => null,
+  }
+  diagnosed && s.eval<int>(#"1"#) == 1
+}
+"##
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn session_let_named_json_does_not_shadow_json_package_paths() {
+    let output = baml_test!(
+        r##"
+function main() -> bool throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let json = "local""#)
+  let local = s.eval<string>(#"json"#)
+  let encoded = s.eval<string>(#"json.stringify(7)"#)
+  local == "local" && encoded == "7"
+}
+"##
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 async fn s11_heap_liveness_probe_for_one_escaped_session_value() {
     let program = baml_project::testing::compile_source(S11_LIVENESS_PROBE);
     let engine = Arc::new(

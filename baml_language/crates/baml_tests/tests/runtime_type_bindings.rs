@@ -122,6 +122,45 @@ function main() -> bool {
 }
 
 #[tokio::test]
+async fn scoped_type_argument_without_value_args_enforces_runtime_bounds() {
+    let output = baml_test!(
+        r#"
+interface SomeInterface {
+  label string
+}
+
+function needs_bound<A extends SomeInterface>() -> string {
+  "ok"
+}
+
+function main() -> bool {
+  let witness = reflect.interface.implementation<SomeInterface>().field("label")
+  let conforming = reflect.class.new("Conforming", {
+    "label": type.of<string>(),
+  }, implementations = [witness])
+  let nonconforming = reflect.class.new("Nonconforming", {
+    "other": type.of<string>(),
+  })
+
+  let rejected = {
+    type T = unreflect(nonconforming.as_type());
+    let result = needs_bound<T>() catch (e) {
+      baml.reflect.errors.CompilationError => e.diagnostics[0].code
+    }
+    result is string && result == "E0001"
+  }
+  let accepted = {
+    type T = unreflect(conforming.as_type());
+    needs_bound<T>() == "ok"
+  }
+  rejected && accepted
+}
+"#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 #[should_panic(expected = "runtime type bindings are only allowed inside")]
 async fn top_level_runtime_type_binding_is_rejected() {
     let _ = baml_test!(

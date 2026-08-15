@@ -118,6 +118,7 @@ pub(crate) struct CallPlan {
 pub(crate) enum CallTypeArgPlan {
     Static {
         ty: Tir2Ty,
+        emission_ty: Tir2Ty,
     },
     Runtime {
         operand: AstExprId,
@@ -383,8 +384,11 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                     .slots
                     .iter()
                     .map(|slot| match slot {
-                        hir_infer::CallTypeArgPlan::Static { ty } => {
-                            CallTypeArgPlan::Static { ty: ty.to_plain() }
+                        hir_infer::CallTypeArgPlan::Static { ty, emission_ty } => {
+                            CallTypeArgPlan::Static {
+                                ty: ty.to_plain(),
+                                emission_ty: emission_ty.to_plain(),
+                            }
                         }
                         hir_infer::CallTypeArgPlan::Runtime {
                             operand,

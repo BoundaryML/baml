@@ -343,7 +343,7 @@ function rt_owner_use() -> RtBox<int> throws never {
             assert_eq!(plan.own_offset, 0);
             assert!(matches!(
                 plan.slots.as_slice(),
-                [CallTypeArgPlan::Static { ty }]
+                [CallTypeArgPlan::Static { ty, .. }]
                     if ty.to_plain().render_canonical() == "int"
             ));
             assert_eq!(
@@ -403,7 +403,7 @@ function rt_use(runtime_t: type, good: RtGood) -> RtAnchor throws never {
             ));
             assert!(matches!(
                 &plan.slots[1],
-                CallTypeArgPlan::Static { ty }
+                CallTypeArgPlan::Static { ty, .. }
                     if ty.to_plain().render_canonical() == "user.RtGood"
             ));
             assert_eq!(
@@ -485,7 +485,7 @@ function sc_sealed() -> baml.reflect.class.Type throws never {
             let snippet = &source[source_map.expr_span(call)];
             if snippet.starts_with("pkg.get_function") {
                 extraction_throws = plan.slots.first().and_then(|slot| match slot {
-                    CallTypeArgPlan::Static { ty } => match ty.kind() {
+                    CallTypeArgPlan::Static { ty, .. } => match ty.kind() {
                         baml_type::interned::TyKind::Function { throws, .. } => {
                             Some(throws.to_plain().render_canonical())
                         }

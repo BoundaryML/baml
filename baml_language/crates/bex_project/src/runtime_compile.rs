@@ -830,7 +830,12 @@ fn rewrite_identifiers(
                     .and_then(|p| significant.get(p))
                     .map(|&i| tokens[i].kind);
                 let next = significant.get(position + 1).map(|&i| tokens[i].kind);
-                if prev == Some(TokenKind::Dot) || next == Some(TokenKind::Colon) {
+                let reserved_package_root = next == Some(TokenKind::Dot)
+                    && matches!(token.text.as_str(), "json" | "reflect" | "type");
+                if prev == Some(TokenKind::Dot)
+                    || next == Some(TokenKind::Colon)
+                    || reserved_package_root
+                {
                     None
                 } else {
                     mapping.get(token.text.as_str())

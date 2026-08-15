@@ -9225,8 +9225,8 @@ impl LoweringContext<'_> {
             let mut operands = Vec::with_capacity(plan.slots.len().min(limit));
             for slot in plan.slots.iter().take(limit) {
                 match slot {
-                    crate::inference_provider::CallTypeArgPlan::Static { ty } => {
-                        let template = self.ty_to_template(ty, &generic_params);
+                    crate::inference_provider::CallTypeArgPlan::Static { emission_ty, .. } => {
+                        let template = self.ty_to_template(emission_ty, &generic_params);
                         let temp = self.builder.temp(RuntimeTy::type_type());
                         self.builder
                             .assign(Place::local(temp), Rvalue::LoadType(template));
@@ -10711,21 +10711,25 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
-    /// The declaring-interface view for a `method` call on a union receiver. The
-    /// checker's union member resolution admits the call only when every arm
-    /// provides the *same* realized interface (existential uniformity), so the
-    /// first member's provider speaks for the whole union — an interface member
-    /// carries its view directly; a concrete member resolves it through its impls.
+    /// The declaring-interface view for a `method` call on a union receiver.
+    /// Every member must provide the same realized interface; otherwise the
+    /// caller must retain per-member dispatch (or report the checker's error).
     fn union_virtual_dispatch_view(
         &self,
         members: &[Tir2Ty],
         method: &Name,
     ) -> Option<InterfaceTypeView> {
-        let first = members.first()?;
-        let view = self
-            .interface_dispatch_target_for_member(first, method)
-            .or_else(|| self.dispatch_target_for_concrete(first, method))?;
-        Some(self.interface_view_declaring_method(&view, method))
+        let declaring_view = |member: &Tir2Ty| {
+            self.interface_dispatch_target_for_member(member, method)
+                .or_else(|| self.dispatch_target_for_concrete(member, method))
+                .map(|view| self.interface_view_declaring_method(&view, method))
+        };
+        let first = declaring_view(members.first()?)?;
+        members
+            .iter()
+            .skip(1)
+            .all(|member| declaring_view(member).as_ref() == Some(&first))
+            .then_some(first)
     }
 
     /// Emit a class-tag dispatch switch for a method call whose receiver

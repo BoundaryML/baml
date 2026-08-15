@@ -2,7 +2,7 @@
 source: crates/baml_tests/tests/baml_src.rs
 ---
 function generic_union_returns.model_step_flattens_union_type_arg() -> bool {
-    load_type string | generic_union_returns.FinalValue
+    load_type generic_union_returns.FinalValue | string
     load_const "\"done\""
     call user.generic_union_returns.parse_model_step
     load_field .outcome
@@ -49,7 +49,7 @@ function generic_union_returns.model_step_flattens_union_type_arg() -> bool {
 }
 
 function generic_union_returns.parse_model_step(raw: string) -> generic_union_returns.ModelStep<#0> {
-    load_type generic_union_returns.PendingCalls | #0
+    load_type #0 | generic_union_returns.PendingCalls
     load_var raw
     call baml.sap.parse
     load_type #0
@@ -219,7 +219,7 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
 }
 
 function generic_union_returns.sap_parses_optional_json_null() -> bool {
-    load_type baml.json.json
+    load_type baml.json.json | null
     load_const "null"
     call baml.sap.parse
     store_var parsed
@@ -244,7 +244,7 @@ function generic_union_returns.sap_parses_optional_json_null() -> bool {
 }
 
 function generic_union_returns.sap_parses_optional_json_value() -> bool {
-    load_type baml.json.json
+    load_type baml.json.json | null
     load_const "true"
     call baml.sap.parse
     call baml.json.stringify
