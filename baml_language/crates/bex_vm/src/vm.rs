@@ -124,15 +124,30 @@ struct CallOptions<'a> {
     runtime_id: Option<Value>,
     type_args: &'a [baml_type::RealizedTy],
     type_defs: &'a DynTypeDefs,
-    type_values: &'a [TypeValue],
+    type_values: &'a [Option<TypeValue>],
     runtime_type_check: bool,
 }
 
 #[derive(Clone, Debug, Default)]
 struct TakenTypeArgs {
     tys: Vec<baml_type::RealizedTy>,
-    values: Vec<TypeValue>,
+    values: Vec<Option<TypeValue>>,
     defs: DynTypeDefs,
+}
+
+fn append_virtual_method_type_args(
+    frame_type_args: &mut Vec<baml_type::RealizedTy>,
+    method_type_args: &TakenTypeArgs,
+) -> Vec<Option<TypeValue>> {
+    let mut type_values = Vec::new();
+    if !method_type_args.values.is_empty() {
+        // The resolver-provided owner/impl slots precede method-level slots in
+        // the callee frame. Preserve that sparse alignment for exact values.
+        type_values.resize(frame_type_args.len(), None);
+        type_values.extend_from_slice(&method_type_args.values);
+    }
+    frame_type_args.extend_from_slice(&method_type_args.tys);
+    type_values
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -315,13 +330,6 @@ impl RootHaver for BytecodeFrame {
                 .values
                 .iter()
                 .flatten()
-                .flat_map(|value| value.defs().classes.values().copied()),
-        );
-        roots.extend(
-            metadata
-                .values
-                .iter()
-                .flatten()
                 .flat_map(|value| value.defs().enums.values().copied()),
         );
         roots.extend(
@@ -345,9 +353,6 @@ impl RootHaver for BytecodeFrame {
         }
         for value in metadata.values.iter_mut().flatten() {
             value.owner = roots.get(&value.owner).copied().unwrap_or(value.owner);
-            for ptr in value.defs_mut().classes.values_mut() {
-                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-            }
             for ptr in value.defs_mut().enums.values_mut() {
                 *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
             }
@@ -410,10 +415,13 @@ pub(crate) mod tests {
         EarlyYieldCheck, FunctionCaptureProps, FunctionKind, GlobalPool, HeapPtr, Object,
         ObjectIndex, RootHaver, Value, ValueKind, VmGlobals,
         bytecode::Bytecode,
-        types::{Function, FunctionOrigin, type_tags},
+        types::{DynTypeDefs, Function, FunctionOrigin, MintId, TypeValue, type_tags},
     };
 
-    use super::{BexVm, Frame, VmCaptureMask, VmExecState, value_type_tag};
+    use super::{
+        BexVm, Frame, FrameTypeMetadata, TakenTypeArgs, VmCaptureMask, VmExecState,
+        append_virtual_method_type_args, value_type_tag,
+    };
     use crate::{
         indexable::EvalStack,
         package_baml::{NativeCallResult, NativeFunction},
@@ -614,6 +622,73 @@ pub(crate) mod tests {
             !forwarding.contains_key(&trampoline),
             "unrooted trampoline function must not be forwarded after return"
         );
+    }
+
+    #[test]
+    fn frame_type_metadata_is_included_in_vm_gc_roots() {
+        let (mut vm, native_ptr) = vm_with_native_entry();
+        vm.set_entry_point(native_ptr, &[]);
+
+        let metadata_ptr = vm.tlab.alloc(native_function_object());
+        let metadata_name = baml_type::QualifiedTypeName::from_dotted_path("test.Metadata");
+        let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
+            panic!("expected trampoline bytecode frame");
+        };
+        frame.type_metadata = Some(Box::new(FrameTypeMetadata {
+            defs: DynTypeDefs::with_class(metadata_name.clone(), metadata_ptr),
+            values: Vec::new(),
+        }));
+
+        let mut roots = Vec::new();
+        vm.collect_roots(&mut roots);
+        assert!(
+            roots.contains(&metadata_ptr),
+            "active frame metadata must root referenced definitions"
+        );
+
+        let (_stats, _remapped_roots, forwarding) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&roots, CollectionLevel::Major)
+        };
+        let moved_metadata = forwarding
+            .get(&metadata_ptr)
+            .copied()
+            .expect("frame metadata definition must survive collection");
+        vm.forward_roots(&forwarding);
+
+        let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
+            panic!("expected trampoline bytecode frame");
+        };
+        let forwarded_metadata = frame
+            .type_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.defs.classes.get(&metadata_name))
+            .copied();
+        assert_eq!(forwarded_metadata, Some(moved_metadata));
+    }
+
+    #[test]
+    fn virtual_method_exact_type_values_follow_owner_slots() {
+        let exact = TypeValue::from_parts(baml_type::RealizedTy::string(), MintId::Runtime(7));
+        let method = TakenTypeArgs {
+            tys: vec![baml_type::RealizedTy::string()],
+            values: vec![Some(exact.clone())],
+            defs: DynTypeDefs::default(),
+        };
+        let mut frame_type_args = vec![baml_type::RealizedTy::int()];
+
+        let values = append_virtual_method_type_args(&mut frame_type_args, &method);
+
+        assert_eq!(
+            frame_type_args,
+            vec![
+                baml_type::RealizedTy::int(),
+                baml_type::RealizedTy::string()
+            ]
+        );
+        assert_eq!(values.len(), 2);
+        assert!(values[0].is_none(), "owner slot must remain reconstructed");
+        assert_eq!(values[1].as_ref().map(TypeValue::mint), Some(exact.mint()));
     }
 }
 
@@ -892,7 +967,7 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_type_args: Vec<baml_type::RealizedTy>,
-    pending_call_type_values: Vec<TypeValue>,
+    pending_call_type_values: Vec<Option<TypeValue>>,
 
     /// Memo for `MintId::Static` digests (BEP-066), keyed by the *spelled*
     /// `RealizedTy`. `LoadType` runs on every generic call, and the digest is
@@ -1547,7 +1622,7 @@ impl BexVm {
                 .into());
             };
             type_args.tys.push(type_value.ty.clone());
-            type_args.values.push(type_value.clone());
+            type_args.values.push(Some(type_value.clone()));
             type_args.defs.merge_from(type_value.defs());
         }
         drop(
@@ -1978,10 +2053,7 @@ impl BexVm {
     pub fn collect_frame_roots(&self) -> Vec<HeapPtr> {
         let mut roots = Vec::new();
         for frame in &self.frames {
-            roots.push(frame.function());
-            if let Frame::Native(nf) = frame {
-                roots.extend(nf.continuation.gc_roots());
-            }
+            frame.collect_roots(&mut roots);
         }
         roots
     }
@@ -2889,8 +2961,8 @@ impl BexVm {
         match callable_kind {
             FunctionKind::Bytecode => {
                 self.pending_call_type_args.clone_from(&effective_type_args);
-                self.pending_call_type_values =
-                    effective_type_values.iter().flatten().cloned().collect();
+                self.pending_call_type_values
+                    .clone_from(&effective_type_values);
                 let mut type_defs = DynTypeDefs::default();
                 for value in effective_type_values.iter().flatten() {
                     type_defs.merge_from(value.defs());
@@ -5625,7 +5697,8 @@ impl BexVm {
                 metadata.values.resize(initial_type_arg_count, None);
                 metadata.defs.merge_from(options.type_defs);
                 metadata.values.extend(
-                    (0..options.type_args.len()).map(|slot| options.type_values.get(slot).cloned()),
+                    (0..options.type_args.len())
+                        .map(|slot| options.type_values.get(slot).cloned().flatten()),
                 );
             }
         }
@@ -7133,9 +7206,9 @@ impl BexVm {
                         }
                         (callee, frame)
                     };
-                    if let Some(method_type_args) = &method_type_args {
-                        type_args.extend_from_slice(&method_type_args.tys);
-                    }
+                    let type_values = method_type_args.as_ref().map_or_else(Vec::new, |method| {
+                        append_virtual_method_type_args(&mut type_args, method)
+                    });
 
                     let locals_offset = StackIndex::from_raw(args_offset);
 
@@ -7172,7 +7245,7 @@ impl BexVm {
                                 runtime_id,
                                 type_args: &type_args,
                                 type_defs,
-                                type_values: &[],
+                                type_values: &type_values,
                                 runtime_type_check,
                             },
                             frame_idx,
@@ -8767,17 +8840,20 @@ impl ::bex_vm_types::RootHaver for BexVm {
         roots.extend(
             self.pending_call_type_values
                 .iter()
+                .flatten()
                 .map(|value| value.owner)
                 .filter(|owner| !owner.is_null()),
         );
         roots.extend(
             self.pending_call_type_values
                 .iter()
+                .flatten()
                 .flat_map(|value| value.defs().enums.values().copied()),
         );
         roots.extend(
             self.pending_call_type_values
                 .iter()
+                .flatten()
                 .flat_map(|value| value.defs().classes.values().copied()),
         );
         roots.extend(
@@ -8823,7 +8899,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 event.value = Value::object(new_ptr);
             }
         }
-        for value in &mut self.pending_call_type_values {
+        for value in self.pending_call_type_values.iter_mut().flatten() {
             value.owner = roots.get(&value.owner).copied().unwrap_or(value.owner);
             for ptr in value.defs_mut().enums.values_mut() {
                 *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
