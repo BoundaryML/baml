@@ -118,7 +118,9 @@ class VertexClient {
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-            root.internal.vertex_invoke_stream(self, input)
+            root.internal.vertex_invoke_stream(self, input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
         }
     }
 }

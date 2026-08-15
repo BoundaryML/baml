@@ -51,6 +51,20 @@ client InvokedThunk = openai.ResponsesClient.new(
     api_key = (() -> { baml.env.get_or_panic("OPENAI_API_KEY") })(),
 );
 
+// ── Tainted: a `spawn { … }` body runs during `$init` too ────────────────────
+// A spawn LOOKS like the stored thunk below — it lowers to a lambda — but it is
+// a launch, not a value, and `$init` has no scheduler turn to launch onto, so
+// io inside one is just as fatal as io written inline. The lambda-excluding
+// walk has to re-seed the spawn body explicitly to see this.
+function spawned_secret() -> string {
+    await spawn { baml.env.get_or_panic("OPENAI_API_KEY") }
+}
+
+client ViaSpawn = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = spawned_secret(),
+);
+
 // ── CLEAN: `env.X` is a late-bound reference, not a read ─────────────────────
 // `env.X` desugars to `baml.env.ref("X")`, which only constructs a
 // `baml.env.Ref` holding the variable's NAME. Nothing is read until the

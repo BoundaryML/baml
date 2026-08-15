@@ -719,6 +719,18 @@ function gemini_build_body(
         null
     };
 
+    // Gemini answers `contents: []` with an HTTP 400. Say so locally instead,
+    // the way the Anthropic (`anthropic_messages_request`) and Bedrock
+    // (`converse_request`) clients do for the same shape.
+    if (contents.length() == 0) {
+        throw ai.errors.InvalidRequest {
+            provider: "google",
+            status_code: null,
+            detail: "the rendered prompt and journal produced no message content",
+            raw_body: null,
+        }
+    }
+
     let tools: GmTool[]? = null;
     let tool_config: GmToolConfig? = null;
     if (!input.toolbox.is_empty()) {
@@ -906,10 +918,12 @@ function google_parse(resp: GmResponse, seq: int, provider: string = "google") -
 // NetworkFailure, or a Retry policy would replay an invalid request forever.
 function _gm_sse_failure(provider: string, error: unknown) -> ai.errors.Failure {
     // `baml.errors.Io.message` is the raw text; anything else is rendered.
-    let text = match (error) {
+    // Redacted because Vertex express mode signs the request with `?key=…` in
+    // the URL, and the rendered transport error can carry the URL.
+    let text = ai.wire.redact_url_secrets(match (error) {
         let io: baml.errors.Io => io.message,
         _ => error.to_string(),
-    };
+    });
     let marker = "failed with status ";
     if let start: int = text.index_of(marker) {
         let rest = text.slice(start + marker.length(), text.length());

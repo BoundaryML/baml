@@ -69,8 +69,11 @@ Everything is referenced `root.`-absolutely from another namespace:
 function mock_json_serve<T, E>(
     responses: root.llm_mock.MockResponse[],
     body: (mock: root.llm_mock.MockJsonServer) -> T throws E,
-) -> T throws E
+) -> T throws E | baml.errors.Io
 ```
+
+`baml.errors.Io` is in the throws set because `baml.http.Server.bind` can fail;
+a caller that catches only `E` does not handle a bind failure.
 
 Binds `127.0.0.1:0`, serves `responses` to **any** method/path (so the same
 helper answers `/responses`, `/v1/messages`, `/v1beta/models/x:generateContent`,
@@ -135,8 +138,10 @@ function mock_sse_serve<T, E>(
     events: string[],
     body: (mock: root.llm_mock.MockSseServer) -> T throws E,
     chunk_delay_ms: int = 10,
-) -> T throws E
+) -> T throws E | baml.errors.Io
 ```
+
+`baml.errors.Io` comes from `bind`, exactly as in §2.1.
 
 Each element of `events` is one SSE event **without** the trailing blank line;
 the mock appends the delimiter and flushes each event as its own socket write,

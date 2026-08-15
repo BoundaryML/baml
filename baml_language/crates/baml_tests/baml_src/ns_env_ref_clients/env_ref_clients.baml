@@ -77,12 +77,15 @@ function env_ref_keeps_the_secret_out_of_the_client() -> string {
     cl.to_string()
 }
 
-test "env_ref_keeps_the_secret_out_of_the_client" {
+// Both halves of that claim as one comparable string: the NAME is there, and
+// the VALUE is not.
+function env_ref_secret_visibility() -> string {
     let rendered = env_ref_keeps_the_secret_out_of_the_client();
-    // the NAME is there ...
-    assert.contains(rendered, "HOME");
-    // ... and the VALUE is not.
-    assert.is_true(!rendered.includes(baml.env.get_or_panic("HOME")))
+    `name=${rendered.includes("HOME")}|value=${rendered.includes(baml.env.get_or_panic("HOME"))}`
+}
+
+test "env_ref_keeps_the_secret_out_of_the_client" {
+    assert.equal(env_ref_secret_visibility(), "name=true|value=false")
 }
 
 // ---------------------------------------------------------------------------
@@ -188,10 +191,15 @@ function unset_ref_base_url_is_a_configuration_error() -> string {
 }
 
 test "unset_ref_base_url_is_a_configuration_error" {
-    let message = unset_ref_base_url_is_a_configuration_error();
-    assert.contains(message, "openai.GenericClient requires base_url");
+    assert.contains(
+        unset_ref_base_url_is_a_configuration_error(),
+        "openai.GenericClient requires base_url",
+    );
     // names the variable the caller actually asked for
-    assert.contains(message, "BAML_TEST_ENV_REF_UNSET_BASE_URL")
+    assert.contains(
+        unset_ref_base_url_is_a_configuration_error(),
+        "BAML_TEST_ENV_REF_UNSET_BASE_URL",
+    )
 }
 
 // The same error, with no ref involved at all: the two must not diverge.
@@ -234,12 +242,14 @@ function resolve_credential_arms() -> string {
     ].join("|")
 }
 
-test "resolve_credential_arms" {
+// The expected joined value, built where a local is safe.
+function resolve_credential_arms_expected() -> string {
     let home = baml.env.get_or_panic("HOME");
-    assert.equal(
-        resolve_credential_arms(),
-        `sk-literal|${home}|${home}|${home}|<null>|${home}|<null>|<null>`,
-    )
+    `sk-literal|${home}|${home}|${home}|<null>|${home}|<null>|<null>`
+}
+
+test "resolve_credential_arms" {
+    assert.equal(resolve_credential_arms(), resolve_credential_arms_expected())
 }
 
 function credential_sources_names_every_variable() -> string {
@@ -251,11 +261,55 @@ function credential_sources_names_every_variable() -> string {
 }
 
 test "credential_sources_names_every_variable" {
-    let got = credential_sources_names_every_variable();
     // the ref's own variable comes first, then the provider's canonical one
-    assert.contains(got, "MY_KEY, CANONICAL_KEY");
-    assert.contains(got, "CANONICAL_KEY");
-    assert.contains(got, "(no environment variable was named)")
+    assert.contains(credential_sources_names_every_variable(), "MY_KEY, CANONICAL_KEY");
+    assert.contains(credential_sources_names_every_variable(), "CANONICAL_KEY");
+    assert.contains(
+        credential_sources_names_every_variable(),
+        "(no environment variable was named)",
+    )
+}
+
+// Some providers authenticate through the URL rather than a header — Vertex AI
+// express mode signs with `?key=…` — and the native HTTP layer renders
+// `reqwest::Error`, whose text can embed the request URL. So the transport
+// failure a caller sees must not carry the key. `ai.wire.redact_url_secrets` is
+// what every such message goes through (`ai.wire.send_as`, `_gm_sse_failure`).
+function redact_url_secrets_scrubs_credentials() -> string {
+    [
+        ai.wire.redact_url_secrets(
+            "error sending request for url (https://x/v1/m:generateContent?alt=sse&key=SEKRIT): refused",
+        ),
+        ai.wire.redact_url_secrets("?api_key=abc&access_token=def&x=1"),
+        // nothing credential-shaped is left alone
+        ai.wire.redact_url_secrets("connection closed before message completed"),
+    ].join(" / ")
+}
+
+test "redact_url_secrets_scrubs_credentials" {
+    assert.equal(
+        redact_url_secrets_scrubs_credentials(),
+        "error sending request for url (https://x/v1/m:generateContent?alt=sse&key=REDACTED): refused"
+            + " / ?api_key=REDACTED&access_token=REDACTED&x=1"
+            + " / connection closed before message completed",
+    )
+}
+
+// A BLANK credential is "not configured" at every rung, not just the literal
+// one: `export KEY=` must reach the client's own "no credential configured"
+// error rather than putting `Authorization: Bearer ` on the wire. The blank
+// literal arm above covers the explicit spelling; this covers the ref, whose
+// variable is never set anywhere in the corpus.
+function blank_credential_is_unconfigured() -> string {
+    [
+        `literal=${ai.wire.resolve_credential("", null) ?? "<null>"}`,
+        `spaces=${ai.wire.resolve_credential("  \t ", null) ?? "<null>"}`,
+        `ref=${ai.wire.resolve_credential(env.BAML_TEST_ENV_REF_UNSET, null) ?? "<null>"}`,
+    ].join("|")
+}
+
+test "blank_credential_is_unconfigured" {
+    assert.equal(blank_credential_is_unconfigured(), "literal=<null>|spaces=<null>|ref=<null>")
 }
 
 // The same two-rung chain, asserted once per CLIENT FAMILY: an explicit
@@ -281,13 +335,16 @@ function explicit_credential_wins_per_client_family() -> string {
     ].join("|")
 }
 
-test "explicit_credential_wins_per_client_family" {
+// One entry per client in the list above, in the same order.
+function explicit_credential_expected() -> string {
     let home = baml.env.get_or_panic("HOME");
     let literal = "sk-explicit";
-    assert.equal(
-        explicit_credential_wins_per_client_family(),
-        [literal, home, literal, literal, literal, literal, literal, literal, literal, literal, literal].join("|"),
-    )
+    [literal, home, literal, literal, literal, literal, literal, literal, literal, literal, literal]
+        .join("|")
+}
+
+test "explicit_credential_wins_per_client_family" {
+    assert.equal(explicit_credential_wins_per_client_family(), explicit_credential_expected())
 }
 
 // ---------------------------------------------------------------------------
@@ -331,13 +388,18 @@ function resolve_unknown_prefix_is_typed() -> string {
 }
 
 test "resolve_unknown_prefix_is_typed" {
-    let got = resolve_unknown_prefix_is_typed();
-    assert.contains(got, "ai.clients|");
-    assert.contains(got, `no builtin provider for prefix "acme-inc"`);
+    assert.contains(resolve_unknown_prefix_is_typed(), "ai.clients|");
+    assert.contains(resolve_unknown_prefix_is_typed(), `no builtin provider for prefix "acme-inc"`);
     // every prefix the compile-time map knows, so the two stay visibly in sync
-    assert.contains(got, "openai, openai-chat, openai-images, azure, ollama, openrouter");
-    assert.contains(got, "anthropic, google, vertex, bedrock, ai-gateway-images, claude-code");
-    assert.contains(got, "openai.GenericClient")
+    assert.contains(
+        resolve_unknown_prefix_is_typed(),
+        "openai, openai-chat, openai-images, azure, ollama, openrouter",
+    );
+    assert.contains(
+        resolve_unknown_prefix_is_typed(),
+        "anthropic, google, vertex, bedrock, ai-gateway-images, claude-code",
+    );
+    assert.contains(resolve_unknown_prefix_is_typed(), "openai.GenericClient")
 }
 
 function resolve_without_a_slash_is_typed() -> string {
@@ -361,9 +423,11 @@ function resolve_of_a_ref_reads_at_call_time() -> string {
 }
 
 test "resolve_of_a_ref_reads_at_call_time" {
-    let detail = resolve_of_a_ref_reads_at_call_time();
-    assert.contains(detail, "client selector env.BAML_TEST_ENV_REF_UNSET_CLIENT is not set");
-    assert.contains(detail, "anthropic, google, vertex, bedrock")
+    assert.contains(
+        resolve_of_a_ref_reads_at_call_time(),
+        "client selector env.BAML_TEST_ENV_REF_UNSET_CLIENT is not set",
+    );
+    assert.contains(resolve_of_a_ref_reads_at_call_time(), "anthropic, google, vertex, bedrock")
 }
 
 // ---------------------------------------------------------------------------

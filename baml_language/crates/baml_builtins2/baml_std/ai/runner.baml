@@ -328,10 +328,16 @@ class Agent<Out> {
     }
 
     function _parses(self, turn: ModelTurn, candidate: string) -> bool {
-        // a media-shaped output is satisfied by the turn's blocks; SAP never
-        // coerces media, so re-asking on the text would be pure waste
-        if (_media_shape(reflect.type_of<Out>()) != "") {
-            return self._has_media_output(turn);
+        // A media-shaped `Out` is satisfied by the turn's blocks. When the turn
+        // carries NONE, this falls through to the ordinary text parse rather
+        // than declaring failure — that is sys_llm's `Ok(None)` -> SAP path
+        // (`lib.rs:594-645`), and SAP is what turns a media-less answer into
+        // `null` for `image?` and `[]` for `image[]`. Short-circuiting to
+        // `false` here made those shapes unrepresentable: the runner re-asked
+        // and then raised ParseFailed on a perfectly valid absence. Only a
+        // required `image` genuinely fails the text parse.
+        if (self._has_media_output(turn)) {
+            return true;
         }
         let _ = baml.sap.parse<Out>(candidate) catch_all (e) {
             _ => {
@@ -485,9 +491,13 @@ class Agent<Out> {
                     }
                 } else {
                     let candidate = turn.terminal_text() ?? "";
-                    // a media-shaped Out comes from the turn's media blocks;
+                    // A media-shaped Out comes from the turn's media blocks;
                     // everything else, including a media Out the turn produced
-                    // no media for, goes through the ordinary text parse
+                    // no media for, goes through the ordinary text parse. That
+                    // second branch is REACHABLE for a media Out and is how
+                    // absence is expressed: SAP answers `null` for `image?` /
+                    // `image[]?` and `[]` for `image[]`, and only a required
+                    // `image` fails there (`_parses` agrees, by construction).
                     let value = if (self._has_media_output(turn)) {
                         self._media_value(turn, selected.id())
                     } else {

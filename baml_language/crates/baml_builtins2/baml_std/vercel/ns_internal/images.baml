@@ -229,6 +229,10 @@ function _gw_images_escape_query(raw: string) -> string {
         .replace_all("%", "%25")
         .replace_all(" ", "%20")
         .replace_all("&", "%26")
+        // `+` decodes to a space in a query string on most servers, so a value
+        // containing one arrives altered unless it is escaped (the Gemini
+        // helper `_gm_encode_query` does the same).
+        .replace_all("+", "%2B")
         .replace_all("=", "%3D")
         .replace_all("?", "%3F")
         .replace_all("#", "%23");

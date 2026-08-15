@@ -456,6 +456,57 @@ test "bedrock_multi_turn" {
     assert.equal(bedrock_multi_turn(), "user|What is 2+2?|assistant|4|user|And 3+3?")
 }
 
+// An assistant turn that lowers to NOTHING is dropped, not sent as
+// `content: []` — Converse answers that shape with a ValidationException.
+//
+// A reasoning-only turn is exactly it: `_assistant_content` drops `Reasoning`
+// (Converse replays reasoning only with the provider's opaque signature, which
+// `ai.content.Reasoning` cannot reproduce) and drops `Media`. Nothing upstream
+// removes the turn either — `ai.wire.sanitize_for_client` KEEPS reasoning whose
+// `client_id` matches, which is why the journal below uses this client's own
+// id. So the three messages here must lower to two.
+function bedrock_reasoning_only_turn_is_dropped() -> string {
+    let log: ai.events.Event[] = [
+        ai.events.AssistantMessage {
+            content: [ai.content.Reasoning { summary: "thinking about it" }],
+            client_id: `bedrock/${_model()}`,
+        },
+        ai.events.UserMessage { content: "And 3+3?" },
+    ];
+    let journal = ai.Journal { log: log };
+    let body = _body(_client(null), _turn_input(BedrockEcho@spec("What is 2+2?"), journal, _no_tools()));
+    [
+        `messages=${_array_len(body, ".messages")}`,
+        baml.json.path<string>(body, ".messages[0].role"),
+        baml.json.path<string>(body, ".messages[1].role"),
+        baml.json.path<string>(body, ".messages[1].content[0].text"),
+    ].join("|")
+}
+
+test "bedrock_reasoning_only_turn_is_dropped" {
+    assert.equal(bedrock_reasoning_only_turn_is_dropped(), "messages=2|user|user|And 3+3?")
+}
+
+// The same guard on the PROMPT side. A rendered prompt emits blank text parts
+// around media as a matter of course (the newline and indentation that follow
+// `${picture}` in `BedrockVision`), and Converse rejects an empty `text`
+// member — so a blank part must produce no block at all rather than
+// `{"text":""}`. Exactly the two blocks that carry something survive.
+function bedrock_blank_prompt_parts_are_dropped() -> string {
+    let picture = baml.media.Image.from_base64("SGVsbG8=", "image/png");
+    let input = _turn_input(BedrockVision@spec(picture), _empty_journal(), _no_tools());
+    let body = _body(_client(null), input);
+    [
+        `blocks=${_array_len(body, ".messages[0].content")}`,
+        baml.json.path<string>(body, ".messages[0].content[0].text"),
+        `empty_text=${baml.json.stringify(body).includes(`"text":""`)}`,
+    ].join("|")
+}
+
+test "bedrock_blank_prompt_parts_are_dropped" {
+    assert.equal(bedrock_blank_prompt_parts_are_dropped(), "blocks=2|Look at |empty_text=false")
+}
+
 // ─── 5. toolConfig (NET-NEW — neither sys_llm nor the engine sent one) ────────
 
 function bedrock_tool_config() -> string {

@@ -96,9 +96,21 @@ class ResponsesClient {
     // The request-time credential: an explicit value (a literal, or the value
     // of the variable an `env.NAME` ref points at), else the provider's
     // canonical one. Nothing here runs before the request.
+    //
+    // A missing key is a CATCHABLE configuration error, not a panic:
+    // `baml.env.get_or_panic` unwinds past the `catch_all` +
+    // `ai.errors.normalize` wrapper below, so an unset variable would take the
+    // process down instead of surfacing as an `ai.errors.Failure`.
     function resolved_api_key(self) -> string {
-        ai.wire.resolve_credential(self.api_key, null)
-            ?? baml.env.get_or_panic("OPENAI_API_KEY")
+        if let k: string = ai.wire.resolve_credential(self.api_key, "OPENAI_API_KEY") {
+            return k;
+        }
+        throw ai.errors.InvalidRequest {
+            provider: "openai",
+            status_code: null,
+            detail: `openai needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "OPENAI_API_KEY")}`,
+            raw_body: null,
+        }
     }
 
     // The request-time base URL, or null for the provider default.

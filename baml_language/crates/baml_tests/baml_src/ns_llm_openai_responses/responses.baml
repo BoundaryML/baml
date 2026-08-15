@@ -916,6 +916,86 @@ test "oai_stream_content_index_parts" {
     assert.equal(oai_stream_content_index_parts(), "one+two")
 }
 
+// ─── missing credential ──────────────────────────────────────────────────────
+//
+// A missing OpenAI key must be a CATCHABLE `ai.errors.Failure`, not a panic.
+// `resolved_api_key` used to end in `baml.env.get_or_panic("OPENAI_API_KEY")`,
+// and a panic unwinds straight past `catch_all` — so an unconfigured
+// deployment took the process down instead of reaching this client's own
+// `invoke` normalize wrapper, and no `ai.Fallback` / `ai.Retry` composition
+// could route around it.
+//
+// The environment decides which branch runs: CI has no key and the typed error
+// fires; a live shell has OPENAI_API_KEY and the canonical fallback resolves
+// it. `base_url` points at a closed port, so neither branch reaches the
+// network. Both assert the same thing — no panic.
+function _oai_missing_key_client() -> openai.ResponsesClient {
+    // `env.NAME` naming a variable that exists nowhere: the ref resolves to
+    // null at REQUEST time and the client falls through to OPENAI_API_KEY.
+    openai.ResponsesClient.new(
+        model = "gpt-4o-mini",
+        api_key = env.BAML_OPENAI_KEY_THAT_IS_NEVER_SET,
+        base_url = "http://127.0.0.1:1",
+    )
+}
+
+function oai_missing_key_resolve() -> string {
+    let outcome = _oai_missing_key_client().resolved_api_key() catch_all (e) {
+        _ => `caught:${e.to_string()}`,
+    };
+    if (baml.env.get("OPENAI_API_KEY") != null) {
+        // the canonical variable is present: the fallback resolves it
+        let resolved = if (outcome.starts_with("caught:")) {
+            outcome
+        } else {
+            "resolved-from-env"
+        };
+        resolved
+    } else {
+        outcome
+    }
+}
+
+test "oai_missing_key_resolve" {
+    assert.is_true(
+        oai_missing_key_resolve() == "resolved-from-env"
+            || oai_missing_key_resolve().includes("OPENAI_API_KEY"),
+    )
+}
+
+// The same misconfiguration through `invoke`: caught at the client boundary and
+// classified, which is what wrapper-client composition needs.
+function oai_missing_key_invoke() -> string {
+    let cl = _oai_missing_key_client();
+    let input = _oai_input(OaiEcho@spec("Say pong."), ai.Journal { log: [] }, ai.tools.Toolbox.new([]));
+    // The concrete classes, not the `ai.errors.Failure` interface: a
+    // configuration error and a transport error are both typed, and matching
+    // them by class is what proves the failure was CLASSIFIED rather than
+    // escaping as a raw panic or an unknown.
+    let outcome = `turn:${cl.invoke(input).terminal_text() ?? ""}` catch_all (e) {
+        let f: ai.errors.InvalidRequest => `caught:InvalidRequest|${f.detail}`,
+        let f: ai.errors.NetworkFailure => `caught:NetworkFailure|${f.detail}`,
+        _ => `caught-unclassified:${e.to_string()}`,
+    };
+    if (baml.env.get("OPENAI_API_KEY") != null) {
+        // a key resolved: the request fails on transport against the closed
+        // port instead, which is still a caught, typed failure.
+        let labeled = `key-present:${outcome}`;
+        labeled
+    } else {
+        outcome
+    }
+}
+
+test "oai_missing_key_invoke" {
+    // never a completed turn, never a panic past catch_all, never untyped
+    assert.contains(oai_missing_key_invoke(), "caught:");
+    assert.is_true(
+        oai_missing_key_invoke().starts_with("key-present:")
+            || oai_missing_key_invoke().includes("OPENAI_API_KEY"),
+    )
+}
+
 // ─── live ────────────────────────────────────────────────────────────────────
 //
 // Real OpenAI calls, excluded by the default profile and registered only when

@@ -886,10 +886,12 @@ function chat_pdf_url_is_inlined() -> string {
     )
 }
 
+// The filename is DERIVED from the source (`.../doc.pdf` -> `doc.pdf`), the
+// same basename rule the Responses client uses, rather than a constant.
 test "chat_pdf_url_is_inlined" {
     assert.equal(
         chat_pdf_url_is_inlined(),
-        "file|document.pdf|data:application/pdf;base64,JVBERi0xLjQ=|absent|absent",
+        "file|doc.pdf|data:application/pdf;base64,JVBERi0xLjQ=|absent|absent",
     )
 }
 
@@ -1086,6 +1088,52 @@ test "chat_metadata_rides_last_content_part" {
     assert.equal(
         chat_metadata_rides_last_content_part(),
         "text|Follow the rules.|enabled|absent|enabled",
+    )
+}
+
+// "Forwarded verbatim" includes an explicitly authored `null`. A directive is
+// the caller telling the endpoint something; `null` is a thing to say (it is
+// how OpenRouter turns a cache breakpoint OFF for one message), and it is NOT
+// the same as omitting the key. The body's null-pruning pass exists to drop the
+// CLIENT's unset options — it must not reach into an authored directive, which
+// is why the directives ride a parked, opaque subtree until after the prune.
+function ChatCachedNull(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${baml.prompt.Role { name: "system", metadata: { "cache_control": null, "keep": "yes" } }}Follow the rules.${role("user")}${question}`
+}
+
+function chat_authored_null_directive_survives_pruning() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
+            let spec = ChatCachedNull@spec("hi");
+            let _ = cl.invoke(
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal { log: [] },
+                    toolbox: spec.tools(),
+                    output_type: spec.output_type(),
+                },
+            );
+            let raw = mock.last_request().body;
+            let body = mock.last_request().json();
+            [
+                // the authored null is ON the wire ...
+                `null_kept=${raw.includes(`"cache_control":null`)}`,
+                // ... alongside its non-null sibling ...
+                baml.json.path<string>(body, ".messages[0].content[0].keep"),
+                // ... and the reserved parking key never reaches it.
+                `parked=${raw.includes("__baml_directives")}`,
+            ].join("|")
+        },
+    )
+}
+
+test "chat_authored_null_directive_survives_pruning" {
+    assert.equal(
+        chat_authored_null_directive_survives_pruning(),
+        "null_kept=true|yes|parked=false",
     )
 }
 

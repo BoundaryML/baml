@@ -7,7 +7,7 @@
 // the function with an empty body that the VM entered and read past the end of.
 // These snapshots pin that both forms emit a real body.
 
-client QuotedPromptClient = openai.OpenAiClient.new(
+client QuotedPromptClient = openai.ResponsesClient.new(
     model = "gpt-4.1",
     api_key = "test-key",
 );

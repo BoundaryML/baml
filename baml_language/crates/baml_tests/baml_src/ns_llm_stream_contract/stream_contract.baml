@@ -148,14 +148,27 @@ function stream_contract_truncated_strict_throws() -> string {
     )
 }
 
-test "stream_contract_truncated_strict_throws" {
+// The three things the strict label must say, as one comparable string: the
+// classification, the reason, and the preserved prefix. Asserted from a
+// top-level function so the value is never a test-block local (the corpus rule
+// at the top of this file).
+function stream_contract_truncated_strict_label() -> string {
     let got = stream_contract_truncated_strict_throws();
-    // classified as a transport failure, safely retryable, named provider
-    assert.contains(got, "NetworkFailure|Safe|mockprovider|");
-    assert.contains(got, "stream ended before the provider's terminal event");
-    // the prefix that did arrive is preserved for debugging, not returned as
-    // the answer
-    assert.contains(got, "raw=partial")
+    [
+        // classified as a transport failure, safely retryable, named provider
+        `classified=${got.includes("NetworkFailure|Safe|mockprovider|")}`,
+        `reason=${got.includes("stream ended before the provider's terminal event")}`,
+        // the prefix that did arrive is preserved for debugging, not returned
+        // as the answer
+        `prefix=${got.includes("raw=partial")}`,
+    ].join("|")
+}
+
+test "stream_contract_truncated_strict_throws" {
+    assert.equal(
+        stream_contract_truncated_strict_label(),
+        "classified=true|reason=true|prefix=true",
+    )
 }
 
 // NOT opted in + truncated: unchanged legacy behavior. This is the guard that

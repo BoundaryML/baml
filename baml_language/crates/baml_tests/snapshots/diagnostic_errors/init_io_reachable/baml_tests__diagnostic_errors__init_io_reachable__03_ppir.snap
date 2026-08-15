@@ -8,3 +8,6 @@ function user.load_secret() -> string  [expr] {
 function user.pick_eager(eager: string, lazy: () -> string throws baml.errors.Io | baml.errors.ParseError) -> string  [expr] {
   {  } eager
 }
+function user.spawned_secret() -> string  [expr] {
+  {  } await spawn { () -> { {  } baml.env.get_or_panic("OPENAI_API_KEY") } }
+}

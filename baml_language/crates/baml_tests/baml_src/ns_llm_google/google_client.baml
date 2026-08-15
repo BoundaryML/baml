@@ -932,6 +932,92 @@ test "google_error_taxonomy" {
     assert.equal(google_error_taxonomy(), "InvalidRequest|RateLimited|NetworkFailure")
 }
 
+// ─── missing credential ──────────────────────────────────────────────────────
+//
+// A missing Google key must be a CATCHABLE `ai.errors.Failure`, not a panic.
+// This client used to end `resolved_api_key` with
+// `baml.env.get_or_panic("GOOGLE_API_KEY")`, and a panic unwinds straight past
+// `catch_all` — so an unconfigured deployment took the process down instead of
+// reaching the client's own `invoke` normalize wrapper, and no `ai.Fallback` /
+// `ai.Retry` composition could route around it.
+//
+// The environment decides which branch runs: CI has no key and the typed error
+// fires; a live shell has GOOGLE_API_KEY and the canonical fallback resolves
+// it. `base_url` points at a closed port, so neither branch reaches the
+// network. Both assert the same thing — no panic. (Mirrors
+// `anthropic_missing_key_resolve` / `_invoke`.)
+function _google_missing_key_client() -> google.GoogleClient {
+    // `env.NAME` naming a variable that exists nowhere: the ref resolves to
+    // null at REQUEST time and the client falls through to GOOGLE_API_KEY.
+    google.GoogleClient.new(
+        model = "gemini-2.5-flash",
+        api_key = env.BAML_GOOGLE_KEY_THAT_IS_NEVER_SET,
+        base_url = "http://127.0.0.1:1",
+    )
+}
+
+function google_missing_key_resolve() -> string {
+    let outcome = _google_missing_key_client().resolved_api_key() catch_all (e) {
+        _ => `caught:${e.to_string()}`,
+    };
+    if (baml.env.get("GOOGLE_API_KEY") != null) {
+        // the canonical variable is present: the fallback resolves it
+        let resolved = if (outcome.starts_with("caught:")) {
+            outcome
+        } else {
+            "resolved-from-env"
+        };
+        resolved
+    } else {
+        outcome
+    }
+}
+
+test "google_missing_key_resolve" {
+    assert.is_true(
+        google_missing_key_resolve() == "resolved-from-env"
+            || google_missing_key_resolve().includes("GOOGLE_API_KEY"),
+    )
+}
+
+// The same misconfiguration through `invoke`: caught at the client boundary and
+// classified, which is what wrapper-client composition needs.
+function google_missing_key_invoke() -> string {
+    let cl = _google_missing_key_client();
+    let input = ai.ModelTurnInput {
+        prompt: GoogleEcho$spec("Say pong.").prompt_template,
+        journal: ai.Journal { log: [] },
+        toolbox: ai.tools.Toolbox.new([]),
+        output_type: reflect.type_of<string>(),
+    };
+    // The concrete classes, not the `ai.errors.Failure` interface: a
+    // configuration error and a transport error are both typed, and matching
+    // them by class is what proves the failure was CLASSIFIED rather than
+    // escaping as a raw panic or an unknown.
+    let outcome = `turn:${cl.invoke(input).terminal_text() ?? ""}` catch_all (e) {
+        let f: ai.errors.InvalidRequest => `caught:InvalidRequest|${f.detail}`,
+        let f: ai.errors.NetworkFailure => `caught:NetworkFailure|${f.detail}`,
+        _ => `caught-unclassified:${e.to_string()}`,
+    };
+    if (baml.env.get("GOOGLE_API_KEY") != null) {
+        // a key resolved: the request fails on transport against the closed
+        // port instead, which is still a caught, typed failure.
+        let labeled = `key-present:${outcome}`;
+        labeled
+    } else {
+        outcome
+    }
+}
+
+test "google_missing_key_invoke" {
+    // never a completed turn, never a panic past catch_all, never untyped
+    assert.contains(google_missing_key_invoke(), "caught:");
+    assert.is_true(
+        google_missing_key_invoke().starts_with("key-present:")
+            || google_missing_key_invoke().includes("GOOGLE_API_KEY"),
+    )
+}
+
 // ─── live ────────────────────────────────────────────────────────────────────
 
 function LiveGeminiEcho(question: string) -> string {

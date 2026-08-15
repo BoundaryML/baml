@@ -528,7 +528,13 @@ function _prompt_content(message: ai.PromptMessage) -> ContentBlock[] {
     for (let part in message.parts) {
         match (part) {
             let text: string => {
-                blocks.push(ContentBlock.of_text(text));
+                // Converse rejects empty and whitespace-only text blocks, and a
+                // rendered prompt routinely produces them around media parts —
+                // the same filter the Anthropic client applies in
+                // `_anthropic_prompt_blocks`.
+                if (text.trim() != "") {
+                    blocks.push(ContentBlock.of_text(text));
+                }
                 null
             },
             let image: baml.media.Image => {
@@ -559,7 +565,11 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
     for (let part in message.parts) {
         match (part) {
             let text: string => {
-                blocks.push(SystemContentBlock.of_text(text));
+                // Blank text is dropped here too: Converse rejects an empty
+                // `text` member wherever it appears.
+                if (text.trim() != "") {
+                    blocks.push(SystemContentBlock.of_text(text));
+                }
                 null
             },
             _ => {
@@ -627,10 +637,15 @@ function _lower_prompt(prompt: ai.Prompt) -> BedrockPrompt {
             null
         } else {
             let content = _prompt_content(message);
-            if (_wants_cache_point(message)) {
-                content.push(ContentBlock.of_cache_point());
+            // A message that lowered to nothing (all-whitespace text) is
+            // dropped: `content: []` is a ValidationException, and a lone
+            // `cachePoint` with nothing to cache is no better.
+            if (content.length() > 0) {
+                if (_wants_cache_point(message)) {
+                    content.push(ContentBlock.of_cache_point());
+                }
+                messages.push(Message { role: _conversation_role(message.role), content: content });
             }
-            messages.push(Message { role: _conversation_role(message.role), content: content });
             null
         };
     }
@@ -748,15 +763,22 @@ function _lower_journal(journal: ai.Journal, with_status: bool) -> Message[] {
                 null
             },
             let assistant: ai.events.AssistantMessage => {
-                pending.push(
-                    PendingMessage {
-                        message: Message {
-                            role: "assistant",
-                            content: _assistant_content(assistant.content),
+                let content = _assistant_content(assistant.content);
+                // An assistant turn that lowers to nothing is dropped rather
+                // than sent as `content: []`, which Converse rejects with a
+                // ValidationException. A reasoning-only turn is exactly that
+                // shape: `_assistant_content` drops Reasoning and Media, and
+                // `ai.wire.sanitize_for_client` KEEPS same-client reasoning,
+                // so nothing upstream removes it. Mirrors the Anthropic
+                // client's guard in `_anthropic_lower_journal`.
+                if (content.length() > 0) {
+                    pending.push(
+                        PendingMessage {
+                            message: Message { role: "assistant", content: content },
+                            tool_results: false,
                         },
-                        tool_results: false,
-                    },
-                );
+                    );
+                }
                 null
             },
             let completed: ai.events.ToolCompleted => {

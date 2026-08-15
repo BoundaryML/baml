@@ -156,3 +156,42 @@ pub fn execute_sap_parse_partial(
         None => Ok(None),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::LlmOpError;
+
+    /// A parse failure must reach BAML as `LlmClient`, which is what
+    /// `ai.errors.normalize` classifies into `ai.errors.ParseFailed`. Mapping
+    /// it to `DevOther` instead would make a provider's bad answer look like an
+    /// internal defect and escape the client error taxonomy.
+    #[test]
+    fn parse_response_error_maps_to_llm_client() {
+        let mapped: ::sys_types::VmRustFnError =
+            LlmOpError::ParseResponseError("bad json".to_string()).into();
+        assert_eq!(
+            mapped,
+            ::sys_types::VmRustFnError::BamlError(::sys_types::VmBamlError::LlmClient {
+                message: "bad json".to_string(),
+            })
+        );
+    }
+
+    /// A shape mismatch is the CALLER's problem, so it maps to
+    /// `InvalidArgument` — a different `baml.errors.*` class, and catchable on
+    /// its own.
+    #[test]
+    fn type_error_maps_to_invalid_argument() {
+        let mapped: ::sys_types::VmRustFnError = LlmOpError::TypeError {
+            expected: "string",
+            actual: "int".to_string(),
+        }
+        .into();
+        assert_eq!(
+            mapped,
+            ::sys_types::VmRustFnError::BamlError(::sys_types::VmBamlError::InvalidArgument {
+                message: "expected string, got int".to_string(),
+            })
+        );
+    }
+}

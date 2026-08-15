@@ -215,8 +215,17 @@ class ChatFilePart {
 // the cached prefix.
 //
 // The keys are forwarded VERBATIM: this file does not maintain an allow-list of
-// which directives an OpenAI-compatible endpoint understands. `to_json` splats
-// them over the wrapped part's own object, so the part keeps its wire shape.
+// which directives an OpenAI-compatible endpoint understands, and "verbatim"
+// includes an explicitly authored `null`.
+//
+// Getting that last part right is why `to_json` PARKS the directives under
+// `_chat_directives_key()` rather than splatting them onto the part: the body
+// then goes through `_chat_prune_nulls`, whose job is to drop the CLIENT's
+// unset options, and it would take an authored `{"cache_control": null}` with
+// them. The parked key is opaque to that pass and `_chat_apply_directives`
+// splices it back onto the part immediately afterwards, so the key never
+// reaches the wire. (The sibling Responses client gets the same result by
+// applying its directives to the serialized body after its own prune.)
 class ChatExtraPart {
     part: ChatContentPart,
     extra: map<string, baml.json.json>,
@@ -230,8 +239,8 @@ class ChatExtraPart {
                     for (let key in object.keys()) {
                         let _ = out.set(key, object.get(key));
                     }
-                    for (let key in self.extra.keys()) {
-                        let _ = out.set(key, self.extra.get(key));
+                    if (self.extra.keys().length() > 0) {
+                        let _ = out.set(_chat_directives_key(), baml.json.to_json(self.extra));
                     }
                     out
                 },
@@ -239,6 +248,13 @@ class ChatExtraPart {
             }
         }
     }
+}
+
+// The reserved key `ChatExtraPart` parks per-message directives under between
+// serialization and `_chat_apply_directives`. It exists only inside that
+// window; nothing with this key is ever sent.
+function _chat_directives_key() -> string {
+    "__baml_directives"
 }
 
 type ChatContentPart = ChatTextPart
@@ -518,7 +534,11 @@ function _chat_media_part(media: ai.MediaPart, compat: ChatCompat) -> ChatConten
             ChatFilePart {
                 type: "file",
                 file: ChatFileData {
-                    filename: "document.pdf",
+                    // The API requires a filename; the basename of the source
+                    // is more useful than a constant, and this is the same
+                    // derivation the Responses client uses (query stripped,
+                    // `document.pdf` when there is nothing to derive).
+                    filename: _openai_file_name(pdf.file() ?? pdf.url()),
                     file_data: `data:${resolved.mime_type};base64,${data}`,
                 },
             }
@@ -771,7 +791,39 @@ function chat_lower_journal(j: ai.Journal) -> ChatMessage[] {
 // The `request_body` passthrough needs no entry here: it is merged AFTER the
 // prune (`chat_render_body`), so it is never walked.
 function _chat_is_opaque_key(key: string) -> bool {
-    key == "parameters"
+    // `parameters` is a caller-authored tool schema; the directives subtree is
+    // caller-authored too, and both mean exactly what they say — including a
+    // deliberate `null`.
+    key == "parameters" || key == _chat_directives_key()
+}
+
+// Splice each parked directives object back onto the content part that carries
+// it, dropping the reserved key. Runs right after `_chat_prune_nulls` and
+// before the `request_body` passthrough merge, so the authored directives sit
+// on the wire exactly as written and the caller's passthrough still wins last.
+function _chat_apply_directives(j: baml.json.json) -> baml.json.json {
+    match (j) {
+        let object: map<string, baml.json.json> => {
+            let out: map<string, baml.json.json> = {  };
+            for (let key in object.keys()) {
+                if (key != _chat_directives_key()) {
+                    let _ = out.set(key, _chat_apply_directives(object.get(key)));
+                }
+            }
+            match (object.get(_chat_directives_key())) {
+                let directives: map<string, baml.json.json> => {
+                    for (let key in directives.keys()) {
+                        let _ = out.set(key, directives.get(key));
+                    }
+                    null
+                },
+                _ => null,
+            };
+            out
+        },
+        let items: baml.json.json[] => items.map((item) -> { _chat_apply_directives(item) }),
+        _ => j,
+    }
 }
 
 // Drop every null-valued map entry, recursively. Typed request classes declare
@@ -994,7 +1046,7 @@ function chat_build_request(
 /// The serialized body: typed request -> json -> drop unset options -> apply the
 /// caller's `request_body` passthrough LAST (PLAN P0.3 / `ai.wire`).
 function chat_render_body(compat: ChatCompat, params: ChatParams, request: ChatRequest) -> string {
-    let body = _chat_prune_nulls(baml.json.from<ChatRequest>(request));
+    let body = _chat_apply_directives(_chat_prune_nulls(baml.json.from<ChatRequest>(request)));
     baml.json.stringify(ai.wire.merge_request_body(body, params.request_body))
 }
 

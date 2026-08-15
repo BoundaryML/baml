@@ -129,11 +129,23 @@ pub fn lower_file_with_path_and_test_owner(
                 // Legacy `client<llm> Name { ... }` config block: removed in
                 // the single-path world. Parse succeeded so the error is one
                 // targeted diagnostic, not a cascade.
-                let name = ast::ClientDef::cast(child.clone())
-                    .and_then(|c| c.name())
+                let def = ast::ClientDef::cast(child.clone());
+                let name = def
+                    .as_ref()
+                    .and_then(ast::ClientDef::name)
                     .map_or_else(|| "MyClient".to_string(), |t| t.text().to_string());
+                // The block's own `provider`, so the suggested replacement
+                // names the client class that speaks to it rather than
+                // defaulting every migration to OpenAI.
+                let provider = def.as_ref().and_then(|c| {
+                    c.config_block()?
+                        .items()
+                        .find(|item| item.key().is_some_and(|key| key.text() == "provider"))?
+                        .value_str()
+                });
                 diags.push(LoweringDiagnostic::ClientBlockRemoved {
                     name,
+                    provider,
                     span: child.span_range(),
                 });
             }

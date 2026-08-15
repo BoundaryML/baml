@@ -65,7 +65,7 @@ client<llm> ValidFallbackClient {
 //     ╰────
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client ValidStreamingClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client ValidStreamingClient = anthropic.AnthropicClient.new(model = "...");` (compose reliability with ai.Retry /
 //   │ ai.Fallback / ai.RoundRobin)
 //     ╭─[client_http_config_valid.baml:14:1]
 //  14 │ ╭─▶ client<llm> ValidStreamingClient {
@@ -98,8 +98,8 @@ client<llm> ValidFallbackClient {
 //     ╰────
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client ValidFallbackClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
-//   │ ai.Fallback / ai.RoundRobin)
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client ValidFallbackClient = ai.Fallback.new(members = [FirstClient, SecondClient]);` (compose reliability with
+//   │ ai.Retry / ai.Fallback / ai.RoundRobin)
 //     ╭─[client_http_config_valid.baml:37:1]
 //  37 │ ╭─▶ client<llm> ValidFallbackClient {
 //  38 │ │     provider fallback

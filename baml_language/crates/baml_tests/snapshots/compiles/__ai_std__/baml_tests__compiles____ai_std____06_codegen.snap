@@ -1138,9 +1138,8 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
 
 function ai.Agent._parses(self: ai.Agent<#0>, turn: ai.ModelTurn, candidate: string) -> bool {
     load_type #0
-    call ai._media_shape
-    load_const ""
-    cmp_op !=
+    load_var2 1 2
+    call ai.Agent._has_media_output
     pop_jump_if_false L0
     jump L2
 
@@ -1160,9 +1159,7 @@ function ai.Agent._parses(self: ai.Agent<#0>, turn: ai.ModelTurn, candidate: str
     jump L3
 
   L2:
-    load_type #0
-    load_var2 1 2
-    call ai.Agent._has_media_output
+    load_const true
 
   L3:
     return
@@ -5138,6 +5135,25 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
     throw
 }
 
+function ai.wire._configured(value: string) -> string | null {
+    load_var value
+    call baml.String.trim
+    load_const ""
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var value
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
 function ai.wire._flush_orphaned_calls(out: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced)[], pending: string[]) -> void {
     load_var pending
     load_type baml.iter.Iterable<Error = never, Item = string>
@@ -5543,26 +5559,148 @@ function ai.wire._merge_json(base: baml.json.json, patch: baml.json.json) -> bam
     return
 }
 
+function ai.wire._redact_after(text: string, marker: string) -> string {
+    load_const ""
+    store_var out
+    load_var text
+    store_var rest
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var out
+    jump L4
+
+  L2:
+    load_var2 4 2
+    call baml.String.index_of
+    store_var _6
+    load_var _6
+    narrow_bind int, slot=5
+    pop_jump_if_false L3
+    jump L5
+
+  L3:
+    load_var2 3 4
+    bin_op +
+
+  L4:
+    return
+
+  L5:
+    load_var _6
+    store_var _9
+    load_var marker
+    call baml.String.length
+    load_var _9
+    add_int
+    store_var head
+    load_var rest
+    load_const 0
+    load_var head
+    call baml.String.slice
+    store_var _11
+    load_var2 3 8
+    bin_op +
+    store_var out
+    load_var out
+    load_const "REDACTED"
+    bin_op +
+    store_var out
+    load_var rest
+    call baml.String.length
+    store_var _15
+    load_var2 4 6
+    load_var _15
+    call baml.String.slice
+    store_var tail
+    load_var tail
+    call ai.wire._redact_value_end
+    store_var _16
+    load_var tail
+    call baml.String.length
+    store_var _18
+    load_var2 9 11
+    load_var _18
+    call baml.String.slice
+    store_var rest
+    jump L0
+}
+
+function ai.wire._redact_value_end(tail: string) -> int {
+    load_var tail
+    call baml.String.length
+    store_var cut
+    load_const "&"
+    load_const " "
+    load_const "\""
+    load_const "'"
+    load_const ")"
+    load_const ","
+    load_const "\n"
+    load_const "\t"
+    load_type string
+    alloc_array 8
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 4
+    call baml.String.index_of
+    store_var _11
+    load_var _11
+    narrow_bind int, slot=5
+    pop_jump_if_false L0
+    load_var _11
+    store_var_load_var at
+    load_var cut
+    cmp_int_op <
+    pop_jump_if_false L0
+    load_var at
+    store_var cut
+    jump L0
+
+  L2:
+    load_var cut
+    return
+}
+
 function ai.wire._resolve_media_content(url: string | null, file: string | null, inline: string, mime: string, fetch_url: bool) -> ai.wire.ResolvedMedia {
     load_var file
     store_var _6
     load_var _6
     narrow_bind string, slot=6
     pop_jump_if_false L0
-    jump L15
+    jump L20
 
   L0:
     load_var inline
     load_const ""
     cmp_op !=
     pop_jump_if_false L1
-    jump L14
+    jump L19
 
   L1:
     load_var url
-    store_var _15
-    load_var _15
-    narrow_bind string, slot=9
+    store_var _40
+    load_var _40
+    narrow_bind string, slot=18
     pop_jump_if_false L2
     jump L3
 
@@ -5572,18 +5710,11 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     throw
 
   L3:
-    load_var _15
+    load_var _40
     store_var media_url
     load_var media_url
     load_const "data:"
     call baml.String.starts_with
-    pop_jump_if_false L4
-    load_var media_url
-    load_const ";base64,"
-    call baml.String.index_of
-    store_var _19
-    load_var _19
-    narrow_bind int, slot=11
     pop_jump_if_false L4
     jump L13
 
@@ -5621,58 +5752,58 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     load_field .headers
     load_const "content-type"
     call baml.Map.get
-    store_var_load_var _45
+    store_var_load_var _81
     load_const null
     cmp_op ==
     pop_jump_if_false L9
     load_var mime
-    store_var _45
+    store_var _81
 
   L9:
-    load_var _45
+    load_var _81
     store_var response_mime
     load_var response
     sys_op baml.http.Response.bytes
     call baml.Uint8Array.to_base64
-    store_var _51
+    store_var _87
     load_var response_mime
     load_const ";"
     call baml.String.split
-    store_var _56
+    store_var _92
     load_type string
-    load_var _56
+    load_var _92
     load_const 0
     call baml.Array.at
-    store_var_load_var _54
+    store_var_load_var _90
     load_const null
     cmp_op ==
     pop_jump_if_false L10
     load_var mime
-    store_var _54
+    store_var _90
 
   L10:
     load_const null
-    load_var2 22 23
+    load_var2 34 35
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L16
+    jump L23
 
   L11:
     load_type string
     load_var media_url
     call baml.String.from
-    store_var _38
+    store_var _74
     load_type int
     load_var response
     load_field .status_code
     call baml.String.from
-    store_var _41
+    store_var _77
     load_const "media"
     load_const "media URL "
-    load_var _38
+    load_var _74
     bin_op +
     load_const " returned HTTP "
     bin_op +
-    load_var _41
+    load_var _77
     bin_op +
     load_const null
     init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
@@ -5683,54 +5814,157 @@ function ai.wire._resolve_media_content(url: string | null, file: string | null,
     load_const null
     load_var mime
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L16
+    jump L23
 
   L13:
-    load_var _19
+    load_var media_url
+    load_const ";base64,"
+    call baml.String.index_of
+    store_var _44
+    load_var _44
+    narrow_bind int, slot=20
+    pop_jump_if_false L14
+    jump L18
+
+  L14:
+    load_var media_url
+    call baml.String.length
+    load_const 48
+    cmp_int_op >
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_var media_url
+    store_var preview
+    jump L17
+
+  L16:
+    load_var media_url
+    load_const 0
+    load_const 48
+    call baml.String.slice
+    store_var _56
+    load_type string
+    load_var _56
+    call baml.String.from
+    load_const "..."
+    bin_op +
+    store_var preview
+
+  L17:
+    load_type string
+    load_var preview
+    call baml.String.from
+    store_var _60
+    load_const "media carries a data: URL with no ;base64, marker, which has no payload to send: "
+    load_var _60
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L18:
+    load_var _44
     store_var_load_var separator
     load_const 8
     add_int
-    store_var _22
+    store_var _47
     load_var media_url
     call baml.String.length
-    store_var _24
-    load_var2 10 14
-    load_var _24
+    store_var _49
+    load_var2 19 23
+    load_var _49
     call baml.String.slice
-    store_var _21
+    store_var _46
     load_var media_url
     load_const 5
     load_var separator
     call baml.String.slice
-    store_var _25
+    store_var _50
     load_const null
-    load_var2 13 16
+    load_var2 22 25
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L16
+    jump L23
 
-  L14:
+  L19:
     load_const null
     load_var2 3 4
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
-    jump L16
+    jump L23
 
-  L15:
+  L20:
     load_var _6
+    store_var_load_var path
     load_const "r"
     sys_op baml.fs.open
     store_var handle
+    jump L21
+    load_var e
+    throw_if_panic
+    load_type string
+    load_var path
+    call baml.String.from
+    store_var _15
+    load_type baml.errors.InvalidArgument | baml.errors.Io
+    load_var e
+    call baml.String.from
+    store_var _19
+    load_type string
+    load_var _19
+    call baml.String.from
+    store_var _18
+    load_const "media file "
+    load_var _15
+    bin_op +
+    load_const " could not be opened: "
+    bin_op +
+    load_var _18
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L21:
     load_var handle
     sys_op baml.fs.File.bytes
     call baml.Uint8Array.to_base64
     store_var data
+    jump L22
+    load_var e
+    throw_if_panic
+    load_var handle
+    sys_op baml.fs.File.close
+    pop 1
+    load_type string
+    load_var path
+    call baml.String.from
+    store_var _30
+    load_type baml.errors.InvalidArgument | baml.errors.Io
+    load_var e
+    call baml.String.from
+    store_var _34
+    load_type string
+    load_var _34
+    call baml.String.from
+    store_var _33
+    load_const "media file "
+    load_var _30
+    bin_op +
+    load_const " could not be read: "
+    bin_op +
+    load_var _33
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L22:
     load_var handle
     sys_op baml.fs.File.close
     pop 1
     load_const null
-    load_var2 8 4
+    load_var2 13 4
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
 
-  L16:
+  L23:
     return
 }
 
@@ -5909,6 +6143,17 @@ function ai.wire.merge_request_body(base: baml.json.json, overrides: baml.json.j
     return
 }
 
+function ai.wire.redact_url_secrets(text: string) -> string {
+    load_var text
+    load_const "key="
+    call ai.wire._redact_after
+    load_const "token="
+    call ai.wire._redact_after
+    load_const "secret="
+    call ai.wire._redact_after
+    return
+}
+
 function ai.wire.render_output_format(t: type) -> string {
     load_var t
     sys_op baml.prompt.render_output_format
@@ -5919,75 +6164,77 @@ function ai.wire.resolve_credential(cred: string | baml.env.Ref | null, env_fall
     load_var cred
     store_var _4
     load_var _4
-    narrow_bind string, slot=4
+    narrow_bind string, slot=3
     pop_jump_if_false L0
-    jump L3
+    jump L4
 
   L0:
     load_var cred
-    store_var _8
-    load_var _8
-    narrow_bind baml.env.Ref, slot=6
+    store_var _7
+    load_var _7
+    narrow_bind baml.env.Ref, slot=4
     pop_jump_if_false L1
     jump L2
 
   L1:
     load_const null
-    store_var explicit
-    jump L6
+    jump L5
 
   L2:
-    load_var _8
+    load_var _7
     call baml.env.Ref.get
-    store_var explicit
-    jump L6
+    store_var_load_var _10
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const ""
+    store_var _10
 
   L3:
-    load_var _4
-    store_var literal
-    load_var literal
-    call baml.String.trim
-    load_const ""
-    cmp_op ==
-    pop_jump_if_false L4
+    load_var _10
+    call ai.wire._configured
     jump L5
 
   L4:
-    load_var literal
-    store_var explicit
-    jump L6
+    load_var _4
+    call ai.wire._configured
 
   L5:
-    load_const null
-    store_var explicit
-
-  L6:
-    load_var explicit
-    store_var _10
-    load_var _10
-    narrow_bind string, slot=7
-    pop_jump_if_false L7
+    store_var _13
+    load_var _13
+    narrow_bind string, slot=6
+    pop_jump_if_false L6
     jump L10
 
-  L7:
+  L6:
     load_var env_fallback
-    store_var _12
-    load_var _12
-    narrow_bind string, slot=8
-    pop_jump_if_false L8
-    jump L9
+    store_var _15
+    load_var _15
+    narrow_bind string, slot=7
+    pop_jump_if_false L7
+    jump L8
 
-  L8:
+  L7:
     load_const null
     jump L11
 
-  L9:
-    load_var _12
+  L8:
+    load_var _15
     sys_op baml.env.get
+    store_var_load_var _18
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L9
+    load_const ""
+    store_var _18
+
+  L9:
+    load_var _18
+    call ai.wire._configured
     jump L11
 
   L10:
-    load_var _10
+    load_var _13
 
   L11:
     return
@@ -6384,6 +6631,7 @@ function ai.wire.send_as(req: baml.http.Request, provider: string) -> #0 {
     load_type baml.errors.Io | baml.errors.Timeout
     load_var e
     call baml.String.from
+    call ai.wire.redact_url_secrets
     store_var _8
     load_type string
     load_var _8

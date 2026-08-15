@@ -414,8 +414,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client StringProviderClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
-  │ ai.Fallback / ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client StringProviderClient = openai.GenericClient.new(model = "...", base_url = "...");` (compose reliability with
+  │ ai.Retry / ai.Fallback / ai.RoundRobin)
     ╭─[config_decls.baml:25:1]
  25 │ ╭─▶ client<llm> StringProviderClient {
  26 │ │       provider "openai-generic"

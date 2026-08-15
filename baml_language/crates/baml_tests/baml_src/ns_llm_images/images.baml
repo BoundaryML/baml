@@ -461,6 +461,96 @@ test "openai_images_no_data_error" {
     )
 }
 
+// ─── the runner's media path when the turn carries NO media ──────────────────
+//
+// A media-shaped `Out` whose turn has no media block does NOT fail: it falls
+// through to the ordinary text parse, which is where absence is expressed.
+// `image?` becomes null and `image[]` becomes `[]` — sys_llm's `Ok(None)` ->
+// SAP path (`lib.rs:594-645`), and the documented contract for those shapes
+// ("0 or 1", "all image parts"). Only a required `image` genuinely fails.
+//
+// The client here is an ordinary chat client so the turn is text and nothing
+// else: the image endpoints never produce a media-less success (an empty
+// `data[]` is `openai_images_no_data_error` above), so they cannot exercise
+// this branch at all. `ai.Agent<Out>.new(client = …)` overrides the spec's
+// default client, which is what makes one spec usable with either.
+
+function ImagesMaybeDraw(subject: string) -> image? {
+    client: "openai-chat/gpt-4o-mini"
+    prompt: `
+        A studio photograph of ${subject}, if you can make one.
+    `
+}
+
+// A plain chat-completions answer with no media anywhere in it.
+function _images_text_answer() -> string {
+    let body = `{"id":"chatcmpl-1","object":"chat.completion","created":1,"model":"gpt-4o-mini","choices":[{"index":0,"message":{"role":"assistant","content":"I cannot draw that.","refusal":null},"finish_reason":"stop"}],"usage":{"prompt_tokens":9,"completion_tokens":5,"total_tokens":14}}`;
+    body
+}
+
+// `-> image?`: no media block is `null`, not a re-ask and a ParseFailed.
+function images_optional_accepts_absence() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_images_text_answer())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(api_key = "test-key", base_url = mock.base_url());
+            let answer = ai.Agent<image?>.new(client = cl)
+                .run(ImagesMaybeDraw@spec("a brass desk lamp"))
+                .value;
+            match (answer) {
+                null => "null",
+                let picture: image => `image:${picture.base64()}`,
+            } catch_all (e) {
+                _ => `unexpected: ${e.to_string()}`,
+            }
+        },
+    )
+}
+
+test "images_optional_accepts_absence" {
+    assert.equal(images_optional_accepts_absence(), "null")
+}
+
+// `-> image[]`: no media block is the empty list.
+function images_list_accepts_absence() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_images_text_answer())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(api_key = "test-key", base_url = mock.base_url());
+            let pictures = ai.Agent<image[]>.new(client = cl)
+                .run(ImagesDrawSet@spec("a brass desk lamp"))
+                .value;
+            `count=${pictures.length()}` catch_all (e) {
+                _ => `unexpected: ${e.to_string()}`,
+            }
+        },
+    )
+}
+
+test "images_list_accepts_absence" {
+    assert.equal(images_list_accepts_absence(), "count=0")
+}
+
+// The guard on the other side: a REQUIRED `image` is not satisfied by absence.
+// SAP rejects the media type outright, so the runner re-asks and then reports
+// ParseFailed with the text it was given.
+function images_required_rejects_absence() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_images_text_answer())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(api_key = "test-key", base_url = mock.base_url());
+            ai.Agent<image>.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
+                let failed: ai.errors.ParseFailed => `ParseFailed|${failed.raw_output}`,
+                _ => `unexpected error class: ${e.to_string()}`,
+            }
+        },
+    )
+}
+
+test "images_required_rejects_absence" {
+    assert.equal(images_required_rejects_absence(), "ParseFailed|I cannot draw that.")
+}
+
 // Media INPUT is rejected before anything is sent: /images/generations takes
 // text only (editing is a different, multipart endpoint).
 function openai_images_media_input_rejected() -> string {

@@ -15,27 +15,81 @@
 ///     name, looked up with `baml.env.get`. A `null` `env_fallback` means the
 ///     provider has no canonical variable and the result is `null`.
 ///
+/// A BLANK value is "not configured" at EVERY rung, not just the literal one:
+/// `export OPENAI_API_KEY=` otherwise resolved to `""` and every client built
+/// `Authorization: Bearer ` — a provider 401 in place of the local "no
+/// credential configured" error the same client raises when the variable is
+/// absent entirely. The two spellings of "I did not set this" now behave alike.
+///
 /// This IS the whole chain a client needs: explicit credential (a literal or an
 /// `env.NAME` ref) → the provider's canonical variable (`env_fallback`).
 function resolve_credential(cred: root.Credential?, env_fallback: string?) -> string? {
     let explicit: string? = match (cred) {
-        let literal: string => {
-            if (literal.trim() == "") {
-                null
-            } else {
-                literal
-            }
-        },
-        let named: baml.env.Ref => named.get(),
+        let literal: string => _configured(literal),
+        let named: baml.env.Ref => _configured(named.get() ?? ""),
         null => null,
     };
     if let value: string = explicit {
         return value;
     }
     if let fallback: string = env_fallback {
-        return baml.env.get(fallback);
+        return _configured(baml.env.get(fallback) ?? "");
     }
     null
+}
+
+// A credential value, or `null` when it is blank (see `resolve_credential`).
+function _configured(value: string) -> string? {
+    if (value.trim() == "") {
+        null
+    } else {
+        value
+    }
+}
+
+/// Scrub credential-bearing query parameters out of free text before it becomes
+/// an `ai.errors.Failure.detail`.
+///
+/// Providers that authenticate through the URL — Vertex AI express mode puts
+/// the key in `?key=…` — would otherwise leak it: the native HTTP layer renders
+/// `reqwest::Error`, whose `Display` embeds the request URL, straight into the
+/// transport-failure message.
+function redact_url_secrets(text: string) -> string {
+    // "key=" also covers "api_key="/"apikey=", "token=" covers
+    // "access_token="/"id_token=": the preceding characters are kept verbatim.
+    _redact_after(_redact_after(_redact_after(text, "key="), "token="), "secret=")
+}
+
+// Replace the value that follows each `marker` with `REDACTED`, up to the first
+// delimiter that can end a query value inside a rendered error string.
+function _redact_after(text: string, marker: string) -> string {
+    let out = "";
+    let rest = text;
+    while (true) {
+        let found = rest.index_of(marker);
+        if let start: int = found {
+            let head = start + marker.length();
+            out += rest.slice(0, head);
+            out += "REDACTED";
+            let tail = rest.slice(head, rest.length());
+            rest = tail.slice(_redact_value_end(tail), tail.length());
+        } else {
+            return out + rest;
+        }
+    }
+    out
+}
+
+function _redact_value_end(tail: string) -> int {
+    let cut = tail.length();
+    for (let delimiter in ["&", " ", "\"", "'", ")", ",", "\n", "\t"]) {
+        if let at: int = tail.index_of(delimiter) {
+            if (at < cut) {
+                cut = at;
+            }
+        }
+    }
+    cut
 }
 
 /// The environment variables a credential chain consulted, as a readable list,
@@ -69,7 +123,9 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
         _ => {
             throw root.errors.NetworkFailure {
             provider: provider,
-            detail: `transport failed before a response arrived: ${e.to_string()}`,
+            // redacted: the rendered transport error can embed the request URL,
+            // and some providers authenticate through a query parameter.
+            detail: `transport failed before a response arrived: ${redact_url_secrets(e.to_string())}`,
             raw_body: null,
         }
         },
@@ -164,8 +220,25 @@ function _resolve_media_content(
     fetch_url: bool,
 ) -> ResolvedMedia {
     if let path: string = file {
-        let handle = baml.fs.open(path, "r");
-        let data = handle.bytes().to_base64();
+        // `open` and `bytes` both throw. The handle must close on the failure
+        // path too — media resolution runs on every prompt carrying a local
+        // file, so a repeated failure would leak a handle per request — and the
+        // error is worth naming the path in.
+        let handle = baml.fs.open(path, "r") catch_all (e) {
+            _ => {
+                throw baml.errors.InvalidArgument {
+                    message: `media file ${path} could not be opened: ${e.to_string()}`,
+                }
+            },
+        };
+        let data = handle.bytes().to_base64() catch_all (e) {
+            _ => {
+                handle.close();
+                throw baml.errors.InvalidArgument {
+                    message: `media file ${path} could not be read: ${e.to_string()}`,
+                }
+            },
+        };
         handle.close();
         return ResolvedMedia { url: null, base64: data, mime_type: mime };
     }
@@ -180,6 +253,20 @@ function _resolve_media_content(
                     base64: media_url.slice(separator + 8, media_url.length()),
                     mime_type: media_url.slice(5, separator),
                 };
+            }
+            // A percent-encoded `data:` URL has no base64 payload to lift out.
+            // Falling through would either hand a provider a URL it cannot
+            // fetch or hand `baml.http.fetch` a scheme it does not speak, both
+            // of which surface as something unrelated to the real problem.
+            // (The Vercel images client rejects the same shape in
+            // `_gw_images_value`.)
+            let preview = if (media_url.length() > 48) {
+                `${media_url.slice(0, 48)}...`
+            } else {
+                media_url
+            };
+            throw baml.errors.InvalidArgument {
+                message: `media carries a data: URL with no ;base64, marker, which has no payload to send: ${preview}`,
             }
         }
         if (!fetch_url || media_url.starts_with("gs://")) {

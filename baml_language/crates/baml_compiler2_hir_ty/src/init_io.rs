@@ -170,6 +170,23 @@ fn evaluated_calls_impl<'db>(
     while let Some(root) = roots.pop() {
         for node in body.reachable_excluding_lambdas(root) {
             let BodyNode::Expr(id) = node else { continue };
+            // A `spawn { … }` body is a launch, not a stored thunk, so it runs
+            // during `$init` too (module docs, "Closures"). It is LOWERED as a
+            // lambda (`lower_spawn_expr`), which is exactly what the
+            // lambda-excluding walk stops at — so re-seed it here, the same way
+            // an IIFE is re-seeded below. Without this, io inside a spawn in a
+            // top-level initializer passes the check and dies at runtime as an
+            // opaque `InitFailed`, which is the failure this module exists to
+            // replace.
+            if let Expr::Spawn {
+                body: spawn_body, ..
+            } = &body.exprs[id]
+                && let Expr::Lambda(lambda) = &body.exprs[*spawn_body]
+                && let Some(lambda_body) = lambda.body
+                && seen_lambda_bodies.insert(lambda_body)
+            {
+                roots.push(lambda_body);
+            }
             let callee = match &body.exprs[id] {
                 Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => *callee,
                 _ => continue,

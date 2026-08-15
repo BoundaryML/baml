@@ -99,9 +99,20 @@ class GoogleClient {
     }
 
     // The request-time credential: an explicit value, else the provider's
-    // canonical one.
+    // canonical one. A missing key is a CATCHABLE configuration error, not a
+    // panic: `baml.env.get_or_panic` unwinds past the `catch_all` +
+    // `ai.errors.normalize` wrapper below, so an unset variable would take the
+    // process down instead of surfacing as an `ai.errors.Failure`.
     function resolved_api_key(self) -> string {
-        ai.wire.resolve_credential(self.api_key, null) ?? baml.env.get_or_panic("GOOGLE_API_KEY")
+        if let k: string = ai.wire.resolve_credential(self.api_key, "GOOGLE_API_KEY") {
+            return k;
+        }
+        throw ai.errors.InvalidRequest {
+            provider: "google",
+            status_code: null,
+            detail: `google needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "GOOGLE_API_KEY")}`,
+            raw_body: null,
+        }
     }
 
     // The request-time base URL, or null for the provider default.
@@ -123,7 +134,9 @@ class GoogleClient {
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-            root.internal.gemini_invoke_stream(self, input)
+            root.internal.gemini_invoke_stream(self, input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
         }
     }
 }

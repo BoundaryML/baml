@@ -2,14 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] E0003
-
-  × unresolved name: `openai.OpenAiClient.new`
-    ╭─[main.baml:10:29]
- 10 │ client QuotedPromptClient = openai.OpenAiClient.new(
-    ·                             ───────────────────────
-    ╰────
-
   [hir] E0010
 
   ⚠ `${...}` in a quoted prompt is sent to the model as literal text — `"..."` strings do not interpolate. Use a backtick prompt to interpolate, or write `\${...}` in a backtick prompt to keep the
