@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Experimental: the whole site becomes a whiteboard. A fixed canvas overlays
@@ -29,6 +30,29 @@ type Sticky = {
 
 // Board contents survive reloads.
 const STORAGE_KEY = 'xp-board-v1';
+// Dragged page-block offsets, keyed by pathname then block index.
+const BLOCKS_KEY = 'xp-blocks-v1';
+const ZOOM_KEY = 'xp-zoom-v1';
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 3;
+
+type BlockMap = Record<string, Record<string, [number, number]>>;
+
+function loadBlocks(): BlockMap {
+  try {
+    return JSON.parse(localStorage.getItem(BLOCKS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveBlocks(m: BlockMap) {
+  try {
+    localStorage.setItem(BLOCKS_KEY, JSON.stringify(m));
+  } catch {
+    /* fine */
+  }
+}
 
 type Action = { kind: 'stroke' } | { kind: 'sticky'; id: number };
 
@@ -62,8 +86,10 @@ const ICONS = {
     'M8 12V6.5a1.5 1.5 0 0 1 3 0V11m0-5.5a1.5 1.5 0 0 1 3 0V11m0-3.5a1.5 1.5 0 0 1 3 0V13c0 4-2.5 7-6.5 7S6 17 6 14v-3a1.5 1.5 0 0 1 2 0',
   ),
   hl: icon('M9 15l-4 4H3v-2l4-4m2 2l8-8 2 2-8 8m-4-4l4 4M14 5l3 3'),
+  minus: icon('M6 12h12'),
   note: icon('M4 5h16v10H10l-4 4v-4H4z'),
   pen: icon('M4 20l1-4L16 5l3 3L8 19zM14 7l3 3'),
+  plus: icon('M12 6v12M6 12h12'),
   trash: icon('M5 7h14M9 7V4h6v3m-8 0l1 13h8l1-13'),
   type: icon('M6 6h12M12 6v13M9 19h6'),
   undo: icon('M8 5L4 9l4 4M4 9h10a5 5 0 0 1 0 10h-3'),
@@ -80,8 +106,12 @@ const TOOL_BUTTONS: [Tool, JSX.Element, string][] = [
 ];
 
 export function Whiteboard() {
+  const pathname = usePathname();
   const [tool, setTool] = useState<Tool>('browse');
   const [color, setColor] = useState(COLORS[1]);
+  const [zoom, setZoom] = useState(1);
+  const zoomRef = useRef(1);
+  zoomRef.current = zoom;
   const [stickies, setStickies] = useState<Sticky[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -127,21 +157,69 @@ export function Whiteboard() {
     ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+    // Strokes live in layout space; project through the current zoom.
+    const z = zoomRef.current;
+    const sx = window.scrollX;
     const sy = window.scrollY;
     const paint = (s: Stroke) => {
       if (s.pts.length < 2) return;
       ctx.strokeStyle = s.color;
-      ctx.lineWidth = s.size;
+      ctx.lineWidth = s.size * z;
       ctx.globalAlpha = s.alpha;
       ctx.beginPath();
-      ctx.moveTo(s.pts[0][0], s.pts[0][1] - sy);
-      for (const [x, y] of s.pts.slice(1)) ctx.lineTo(x, y - sy);
+      ctx.moveTo(s.pts[0][0] * z - sx, s.pts[0][1] * z - sy);
+      for (const [x, y] of s.pts.slice(1)) ctx.lineTo(x * z - sx, y * z - sy);
       ctx.stroke();
     };
     for (const s of strokesRef.current) paint(s);
     if (liveRef.current) paint(liveRef.current);
     ctx.globalAlpha = 1;
   }, []);
+
+  // Zoom scales the page itself (css zoom); the fixed overlays counter-zoom
+  // so the toolbar and canvas stay viewport-true. Cmd/Ctrl+wheel also zooms.
+  useEffect(() => {
+    document.body.style.zoom = String(zoom);
+    redraw();
+    try {
+      localStorage.setItem(ZOOM_KEY, String(zoom));
+    } catch {
+      /* fine */
+    }
+  }, [zoom, redraw]);
+
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      e.preventDefault();
+      setZoom((z) =>
+        Math.min(
+          ZOOM_MAX,
+          Math.max(ZOOM_MIN, z * (e.deltaY < 0 ? 1.06 : 0.94)),
+        ),
+      );
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // Re-apply persisted block drags for this route (content mounts async).
+  useEffect(() => {
+    const apply = () => {
+      const saved = loadBlocks()[pathname || '/'] || {};
+      const blocks = document.querySelectorAll('main > *');
+      blocks.forEach((el, i) => {
+        const pos = saved[String(i)];
+        if (!pos) return;
+        const h = el as HTMLElement;
+        h.dataset.xpX = String(pos[0]);
+        h.dataset.xpY = String(pos[1]);
+        h.style.transform = `translate(${pos[0]}px, ${pos[1]}px)`;
+      });
+    };
+    const t = setTimeout(apply, 60);
+    return () => clearTimeout(t);
+  }, [pathname]);
 
   // Restore the persisted board once on mount.
   useEffect(() => {
@@ -153,6 +231,8 @@ export function Whiteboard() {
         stickies?: Sticky[];
       };
       strokesRef.current = data.strokes ?? [];
+      const z = Number(localStorage.getItem(ZOOM_KEY));
+      if (z >= ZOOM_MIN && z <= ZOOM_MAX) setZoom(z);
       const notes = (data.stickies ?? []).map((n) => ({
         ...n,
         kind: n.kind ?? ('note' as const),
@@ -228,7 +308,23 @@ export function Whiteboard() {
       d.el.style.transform = `translate(${x}px, ${y}px)`;
     };
     const up = () => {
-      dragRef.current?.el.classList.remove('xp-dragging');
+      const d = dragRef.current;
+      if (d) {
+        d.el.classList.remove('xp-dragging');
+        // Persist this block's offset under its route + index.
+        const blocks = Array.from(document.querySelectorAll('main > *'));
+        const idx = blocks.indexOf(d.el);
+        if (idx >= 0) {
+          const all = loadBlocks();
+          const page = all[pathname || '/'] || {};
+          page[String(idx)] = [
+            Number(d.el.dataset.xpX || 0),
+            Number(d.el.dataset.xpY || 0),
+          ];
+          all[pathname || '/'] = page;
+          saveBlocks(all);
+        }
+      }
       dragRef.current = null;
     };
     document.addEventListener('pointerdown', down);
@@ -240,12 +336,16 @@ export function Whiteboard() {
       document.removeEventListener('pointerup', up);
       up();
     };
-  }, [tool]);
+  }, [tool, pathname]);
 
   // Ink tools live on the canvas itself.
   const onCanvasDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const t = toolRef.current;
-    const doc: [number, number] = [e.clientX, e.clientY + window.scrollY];
+    const z = zoomRef.current;
+    const doc: [number, number] = [
+      (e.clientX + window.scrollX) / z,
+      (e.clientY + window.scrollY) / z,
+    ];
     if (t === 'text' || t === 'label') {
       e.preventDefault();
       const id = stickySeq++;
@@ -281,7 +381,7 @@ export function Whiteboard() {
   };
 
   const eraseAt = (p: [number, number]) => {
-    const r = 14;
+    const r = 14 / zoomRef.current;
     const before = strokesRef.current.length;
     strokesRef.current = strokesRef.current.filter(
       (s) => !s.pts.some(([x, y]) => Math.hypot(x - p[0], y - p[1]) < r),
@@ -292,7 +392,11 @@ export function Whiteboard() {
   const onCanvasMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const live = liveRef.current;
     if (!live) return;
-    const doc: [number, number] = [e.clientX, e.clientY + window.scrollY];
+    const z = zoomRef.current;
+    const doc: [number, number] = [
+      (e.clientX + window.scrollX) / z,
+      (e.clientY + window.scrollY) / z,
+    ];
     if (toolRef.current === 'eraser') {
       eraseAt(doc);
       return;
@@ -326,14 +430,31 @@ export function Whiteboard() {
   }, [redraw, save]);
 
   const clearAll = () => {
+    if (
+      !window.confirm(
+        'Clear the whole board? Ink, notes, and moved blocks reset.',
+      )
+    )
+      return;
     strokesRef.current = [];
     actionsRef.current = [];
     setStickies([]);
+    for (const el of document.querySelectorAll('main > *')) {
+      const h = el as HTMLElement;
+      if (h.dataset.xpX || h.dataset.xpY) {
+        h.style.transform = '';
+        delete h.dataset.xpX;
+        delete h.dataset.xpY;
+      }
+    }
     try {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(BLOCKS_KEY);
+      localStorage.removeItem(ZOOM_KEY);
     } catch {
       /* fine */
     }
+    setZoom(1);
     redraw();
   };
 
@@ -377,8 +498,8 @@ export function Whiteboard() {
           n.id === id
             ? {
                 ...n,
-                x: s.x + ev.clientX - startX,
-                y: s.y + ev.clientY - startY,
+                x: s.x + (ev.clientX - startX) / zoomRef.current,
+                y: s.y + (ev.clientY - startY) / zoomRef.current,
               }
             : n,
         ),
@@ -403,11 +524,15 @@ export function Whiteboard() {
     <>
       <canvas
         className="xp-canvas"
+        data-zoom={zoom}
         onPointerDown={onCanvasDown}
         onPointerMove={onCanvasMove}
         onPointerUp={onCanvasUp}
         ref={canvasRef}
-        style={{ pointerEvents: inking ? 'auto' : 'none' }}
+        style={{
+          pointerEvents: inking ? 'auto' : 'none',
+          zoom: 1 / zoom,
+        }}
       />
 
       {/* Doc-anchored layer for stickies (height 0, overflow visible). */}
@@ -468,7 +593,7 @@ export function Whiteboard() {
         ))}
       </div>
 
-      <div className="xp-toolbar">
+      <div className="xp-toolbar" style={{ zoom: 1 / zoom }}>
         {TOOL_BUTTONS.map(([t, icon, label]) => (
           <button
             aria-label={label}
@@ -561,6 +686,16 @@ export function Whiteboard() {
           border: 2px solid #FFFDF7; cursor: pointer; }
         .xp-swatch.on { outline: 2px solid #1A1612; }
         .xp-sep { width: 1px; height: 20px; background: #D9D3C4; margin: 0 4px; }
+        .xp-zoom { border: 0; background: none; cursor: pointer;
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-size: 11.5px; color: #5C5852; min-width: 40px; padding: 6px 2px; }
+        .xp-zoom:hover { color: #6D28D9; }
+        .xp-clear { display: inline-flex; align-items: center; gap: 6px;
+          border: 1px solid #B4342B; color: #B4342B; background: #FDF0EE;
+          border-radius: 8px; padding: 6px 11px; cursor: pointer;
+          font-size: 13px; font-weight: 600; line-height: 1;
+          font-family: inherit; }
+        .xp-clear:hover { background: #B4342B; color: #fff; }
         /* move mode: blocks feel like pinned board objects */
         body.xp-move main > * { cursor: grab; }
         body.xp-move main > *:hover { outline: 2px dashed #6D28D9;
