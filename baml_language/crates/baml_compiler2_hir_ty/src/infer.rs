@@ -1532,6 +1532,9 @@ struct InferenceContext<'db> {
     /// vars - for one `TypeRefId`. Without this, a `_` hole instantiates
     /// once per consumer and only the demand-connected copy solves.
     annotation_cache: FxHashMap<baml_compiler2_hir::type_ref::TypeRefId, Ty>,
+    /// Per-body memoization of ground canonical forms. Inference-bearing types
+    /// bypass it because their meaning changes as the table solves variables.
+    canonical_cache: baml_type::normalize::InternedCanonicalCache,
     /// Member-lookup PROBE depth (TIR's `suppress_member_lookup_errors`
     /// discipline): a failed lookup reports only when no fallback tier
     /// remains - probes increment, the committed frame reports.
@@ -1654,6 +1657,7 @@ impl<'db> InferenceContext<'db> {
             pending_diags: Vec::new(),
             hole_vars: Vec::new(),
             annotation_cache: FxHashMap::default(),
+            canonical_cache: baml_type::normalize::InternedCanonicalCache::default(),
             member_probe_depth: 0,
             or_probe_depth: 0,
             rest_reject_depth: 0,
@@ -3210,7 +3214,7 @@ impl<'db> InferenceContext<'db> {
                 let actual = self.table.resolve_completely(&actual);
                 let expected = self.table.resolve_completely(&expected);
                 if !actual.has_infer() && !expected.has_infer() {
-                    is_subtype_interned(&actual, &expected, &self.facts)
+                    self.cached_subtype(&actual, &expected)
                 } else {
                     // A SAME-INTERFACE pair with variables: identity is
                     // INVARIANT (args positional, pins by name) - rustc
@@ -3341,7 +3345,7 @@ impl<'db> InferenceContext<'db> {
             return true;
         }
         if !a.has_infer() && !b.has_infer() {
-            return equivalent_interned(&a, &b, &self.facts);
+            return self.cached_equivalent(&a, &b);
         }
         // A projection whose base still carries variables cannot relate
         // structurally - rustc keeps the pair as a lazy `Projection`
@@ -3355,6 +3359,20 @@ impl<'db> InferenceContext<'db> {
             return true;
         }
         self.table.unify(&a, &b).is_ok()
+    }
+
+    fn cached_equivalent(&self, a: &Ty, b: &Ty) -> bool {
+        if a.has_infer() || b.has_infer() {
+            return equivalent_interned(a, b, &self.facts);
+        }
+        self.canonical_cache.equivalent(a, b, &self.facts)
+    }
+
+    fn cached_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
+        if sub.has_infer() || sup.has_infer() {
+            return is_subtype_interned(sub, sup, &self.facts);
+        }
+        self.canonical_cache.is_subtype(sub, sup, &self.facts)
     }
 
     /// A union of members that may still contain inference variables. The
@@ -4257,10 +4275,10 @@ impl<'db> InferenceContext<'db> {
             !ty.has_infer() && !ty.has_error() && !matches!(ty.kind(), TyKind::Never { .. })
         };
         if ground(&inner) && ground(&rhs) {
-            if is_subtype_interned(&rhs, &inner, &self.facts) {
+            if self.cached_subtype(&rhs, &inner) {
                 return inner;
             }
-            if is_subtype_interned(&inner, &rhs, &self.facts) {
+            if self.cached_subtype(&inner, &rhs) {
                 return rhs;
             }
         }
@@ -5169,7 +5187,7 @@ impl<'db> InferenceContext<'db> {
             let ty = bind_receiver(function_value_ty(signature, &candidate.class_args));
             if joined
                 .as_ref()
-                .is_some_and(|current| !equivalent_interned(current, &ty, &self.facts))
+                .is_some_and(|current| !self.cached_equivalent(current, &ty))
             {
                 return None;
             }
@@ -8786,7 +8804,7 @@ impl<'db> InferenceContext<'db> {
             }
             let judged_actual = skolemize_infer(&actual);
             let judged_expected = skolemize_infer(&expected);
-            if !is_subtype_interned(&judged_actual, &judged_expected, &self.facts) {
+            if !self.cached_subtype(&judged_actual, &judged_expected) {
                 self.result
                     .type_mismatches
                     .entry(anchor)
@@ -8884,9 +8902,7 @@ impl<'db> InferenceContext<'db> {
         for (expr, expected, actual) in std::mem::take(&mut self.provisional_checks) {
             let expected = self.finalize_ty(&expected);
             let actual = self.finalize_ty(&actual);
-            if expected.has_error()
-                || actual.has_error()
-                || is_subtype_interned(&actual, &expected, &self.facts)
+            if expected.has_error() || actual.has_error() || self.cached_subtype(&actual, &expected)
             {
                 continue;
             }
@@ -8925,7 +8941,7 @@ impl<'db> InferenceContext<'db> {
                 // A check can fail MID-INFERENCE on still-open variables
                 // that later resolution satisfies; only a mismatch that
                 // HOLDS in the finalized world reports.
-                if is_subtype_interned(actual, expected, &self.facts) {
+                if self.cached_subtype(actual, expected) {
                     continue;
                 }
                 // The for-desugar's iterability failure reads as its own
@@ -9558,7 +9574,7 @@ impl<'db> InferenceContext<'db> {
                         // later resolution satisfies; cascades suppress.
                         if declared.has_error()
                             || extra.has_error()
-                            || is_subtype_interned(&extra, &declared, &self.facts)
+                            || self.cached_subtype(&extra, &declared)
                         {
                             continue;
                         }
@@ -10120,7 +10136,7 @@ impl<'db> InferenceContext<'db> {
             let minimum = uppers.iter().find(|candidate| {
                 uppers
                     .iter()
-                    .all(|upper| is_subtype_interned(candidate, upper, &self.facts))
+                    .all(|upper| self.cached_subtype(candidate, upper))
             });
             match minimum {
                 Some(minimum) => minimum.clone(),
@@ -10143,12 +10159,11 @@ impl<'db> InferenceContext<'db> {
                 .zip(&widened)
                 .map(|(lower, wide)| lower != wide)
                 .collect();
-            let facts = &self.facts;
             let maximum_of = |candidates: &[Ty]| -> Option<Ty> {
                 let subsumes_all = |candidate: &&Ty| {
                     candidates
                         .iter()
-                        .all(|lower| is_subtype_interned(lower, candidate, facts))
+                        .all(|lower| self.cached_subtype(lower, candidate))
                 };
                 // Prefer a non-widening witness: the solution's
                 // freshness decides binding-site widening later, and a
@@ -10179,11 +10194,7 @@ impl<'db> InferenceContext<'db> {
             // (`-> 42 { id(42) }` is `42`, not Error).
             let maximum = if widening.iter().all(|&flag| flag) {
                 maximum_of(&widened)
-                    .filter(|max| {
-                        uppers
-                            .iter()
-                            .all(|upper| is_subtype_interned(max, upper, facts))
-                    })
+                    .filter(|max| uppers.iter().all(|upper| self.cached_subtype(max, upper)))
                     .or_else(|| maximum_of(&lowers))
             } else {
                 maximum_of(&lowers).or_else(|| maximum_of(&widened))
@@ -10192,7 +10203,7 @@ impl<'db> InferenceContext<'db> {
                 Some(maximum)
                     if uppers
                         .iter()
-                        .all(|upper| is_subtype_interned(&maximum, upper, &self.facts)) =>
+                        .all(|upper| self.cached_subtype(&maximum, upper)) =>
                 {
                     maximum
                 }
@@ -10504,7 +10515,7 @@ impl<'db> InferenceContext<'db> {
                 // provenance is VarBounds' business. The quiescence
                 // tiering makes a failure here reachable only for
                 // genuinely ill-typed programs.
-                if !is_subtype_interned(&actual, &expected, &self.facts)
+                if !self.cached_subtype(&actual, &expected)
                     && let Some(anchor) = anchor
                 {
                     self.result

@@ -1621,6 +1621,47 @@ mod interned_entry {
         ));
     }
 
+    #[test]
+    fn canonical_cache_matches_uncached_interned_relations() {
+        let mut ctx = Ctx::default();
+        ctx.enums
+            .insert(qtn("Side"), vec![Name::new("L"), Name::new("R")]);
+        int_list_alias(&mut ctx, "JsonA");
+        int_list_alias(&mut ctx, "JsonB");
+
+        let pairs = [
+            (alias("JsonA"), alias("JsonB")),
+            (alias("JsonA"), Ty::int()),
+            (lit_int(1), Ty::int()),
+            (Ty::int(), union(vec![Ty::int(), Ty::string()])),
+            (
+                union(vec![variant("Side", "L"), variant("Side", "R")]),
+                enum_ty("Side"),
+            ),
+            (class("Left"), class("Right")),
+            (iface("Readable"), iface("Writable")),
+        ];
+        let pairs = pairs.map(|(a, b)| (it(&a), it(&b)));
+        let cache = InternedCanonicalCache::default();
+
+        // Run twice: the first pass populates canonical forms and the second
+        // proves that the warm path returns the same relation verdicts.
+        for _ in 0..2 {
+            for (a, b) in &pairs {
+                assert_eq!(
+                    cache.equivalent(a, b, &ctx),
+                    equivalent_interned(a, b, &ctx),
+                    "cached equivalence diverged for {a:?} == {b:?}"
+                );
+                assert_eq!(
+                    cache.is_subtype(a, b, &ctx),
+                    is_subtype_interned(a, b, &ctx),
+                    "cached subtyping diverged for {a:?} <: {b:?}"
+                );
+            }
+        }
+    }
+
     /// The plain entry gets the same spec rule (TYPE_SYSTEM.md:
     /// `(true | false) == bool`); the collapse lives in the shared algebra,
     /// not in an engine.

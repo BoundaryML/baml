@@ -30,7 +30,10 @@
 //! absorb, or equate, so a missing fact can only yield "not *necessarily*
 //! equivalent / subtype", never a false claim of equivalence or membership.
 
-use std::collections::HashSet;
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
 
 use crate::{
     FunctionParamMode, FunctionParamTy, Interface, Literal, MediaKind, Name, ParamTy,
@@ -2739,6 +2742,63 @@ mod tests;
 
 use crate::interned;
 
+/// Memoizes canonical forms for a sequence of interned relations evaluated
+/// under one immutable [`TypeContext`]. The cache deliberately takes the
+/// context at each call rather than owning it; callers are responsible for
+/// keeping one cache scoped to one fact set (compiler inference uses one per
+/// body). Inference-bearing types should be resolved before entering because
+/// their meaning is table-relative rather than a property of the handle alone.
+#[derive(Default)]
+pub struct InternedCanonicalCache {
+    canonical: RefCell<HashMap<interned::Ty, NormalTy>>,
+}
+
+impl InternedCanonicalCache {
+    fn canonical<C: TypeContext>(&self, ty: &interned::Ty, ctx: &C) -> NormalTy {
+        if let Some(canonical) = self.canonical.borrow().get(ty) {
+            return canonical.clone();
+        }
+        let canonical = NormalTy::canonical_interned(ty, ctx);
+        self.canonical
+            .borrow_mut()
+            .insert(ty.clone(), canonical.clone());
+        canonical
+    }
+
+    pub fn equivalent<C: TypeContext>(&self, a: &interned::Ty, b: &interned::Ty, ctx: &C) -> bool {
+        if a == b {
+            return true;
+        }
+        if interned_heads_definitely_differ(a, b) {
+            return false;
+        }
+        self.canonical(a, ctx) == self.canonical(b, ctx)
+    }
+
+    pub fn is_subtype<C: TypeContext>(
+        &self,
+        sub: &interned::Ty,
+        sup: &interned::Ty,
+        ctx: &C,
+    ) -> bool {
+        if sub == sup {
+            return true;
+        }
+        if !matches!(
+            (sub.kind(), sup.kind()),
+            (
+                interned::TyKind::Interface(..),
+                interned::TyKind::Interface(..)
+            )
+        ) && interned_heads_definitely_differ(sub, sup)
+        {
+            return false;
+        }
+        self.canonical(sub, ctx)
+            .is_subtype_of(&self.canonical(sup, ctx), ctx, &mut HashSet::new())
+    }
+}
+
 impl NormalTy {
     /// [`NormalTy::canonical_bottom_up`] for the interned representation: the
     /// same named-intermediate -> binder-resolution -> bottom-up-algebra
@@ -2948,6 +3008,16 @@ pub fn is_subtype_interned<C: TypeContext>(
     if sub == sup {
         return true;
     }
+    if !matches!(
+        (sub.kind(), sup.kind()),
+        (
+            interned::TyKind::Interface(..),
+            interned::TyKind::Interface(..)
+        )
+    ) && interned_heads_definitely_differ(sub, sup)
+    {
+        return false;
+    }
     let sub = NormalTy::canonical_interned(sub, ctx);
     let sup = NormalTy::canonical_interned(sup, ctx);
     sub.is_subtype_of(&sup, ctx, &mut HashSet::new())
@@ -2958,7 +3028,24 @@ pub fn equivalent_interned<C: TypeContext>(a: &interned::Ty, b: &interned::Ty, c
     if a == b {
         return true;
     }
+    if interned_heads_definitely_differ(a, b) {
+        return false;
+    }
     NormalTy::canonical_interned(a, ctx) == NormalTy::canonical_interned(b, ctx)
+}
+
+/// Interned counterpart of [`heads_definitely_differ`]. Hash-consing makes
+/// the identical-head fast path cheaper, but distinct nominal heads are still
+/// common during inference and cannot be changed by canonicalization.
+fn interned_heads_definitely_differ(a: &interned::Ty, b: &interned::Ty) -> bool {
+    use interned::TyKind as K;
+    match (a.kind(), b.kind()) {
+        (K::Class(q1, ..), K::Class(q2, ..))
+        | (K::Interface(q1, ..), K::Interface(q2, ..))
+        | (K::Enum(q1, ..), K::Enum(q2, ..)) => q1 != q2,
+        (K::EnumVariant(q1, v1, ..), K::EnumVariant(q2, v2, ..)) => q1 != q2 || v1 != v2,
+        _ => false,
+    }
 }
 
 /// [`TypeContext::normalize`] for interned types. Materializes once on the
