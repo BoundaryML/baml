@@ -57,7 +57,6 @@ const ICONS = {
   hl: icon('M9 15l-4 4H3v-2l4-4m2 2l8-8 2 2-8 8m-4-4l4 4M14 5l3 3'),
   note: icon('M4 5h16v10H10l-4 4v-4H4z'),
   pen: icon('M4 20l1-4L16 5l3 3L8 19zM14 7l3 3'),
-  squiggle: icon('M3 16c3-6 5-6 7-2s4 4 7-2 4-2 4-2'),
   trash: icon('M5 7h14M9 7V4h6v3m-8 0l1 13h8l1-13'),
   undo: icon('M8 5L4 9l4 4M4 9h10a5 5 0 0 1 0 10h-3'),
 };
@@ -74,7 +73,6 @@ const TOOL_BUTTONS: [Tool, JSX.Element, string][] = [
 export function Whiteboard() {
   const [tool, setTool] = useState<Tool>('browse');
   const [color, setColor] = useState(COLORS[1]);
-  const [sketchy, setSketchy] = useState(false);
   const [stickies, setStickies] = useState<Sticky[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -145,12 +143,6 @@ export function Whiteboard() {
       cancelAnimationFrame(raf);
     };
   }, [redraw]);
-
-  // Sketch mode flips a body class that the CSS below keys off.
-  useEffect(() => {
-    document.body.classList.toggle('xp-sketchy', sketchy);
-    return () => document.body.classList.remove('xp-sketchy');
-  }, [sketchy]);
 
   // Move mode: any direct child of a <main> is a draggable board object.
   useEffect(() => {
@@ -387,15 +379,6 @@ export function Whiteboard() {
         >
           {ICONS.trash}
         </button>
-        <button
-          aria-pressed={sketchy}
-          className={`xp-btn${sketchy ? ' on' : ''}`}
-          onClick={() => setSketchy((v) => !v)}
-          title="Sketchy mode"
-          type="button"
-        >
-          {ICONS.squiggle}
-        </button>
       </div>
 
       <style>{`
@@ -441,15 +424,6 @@ export function Whiteboard() {
           outline-offset: 6px; }
         .xp-dragging { cursor: grabbing !important; opacity: 0.92; z-index: 40;
           position: relative; }
-        /* sketchy mode: wobbly hand-drawn framing on the page's blocks */
-        body.xp-sketchy main > * { border: 2px solid #1A1612;
-          border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
-          padding: 18px 22px; background: #FFFDF7;
-          box-shadow: 4px 6px 0 rgba(26, 22, 18, 0.08); }
-        body.xp-sketchy main > *:nth-child(odd) { rotate: -0.4deg; }
-        body.xp-sketchy main > *:nth-child(even) { rotate: 0.35deg; }
-        body.xp-sketchy h1, body.xp-sketchy h2, body.xp-sketchy h3 {
-          font-family: 'Marker Felt', 'Comic Sans MS', cursive; }
       `}</style>
     </>
   );
