@@ -1632,15 +1632,6 @@ fn graft_session_submission(
         new_impl_rules.insert(interface, pointers);
     }
 
-    let type_values = allocate_runtime_declaration_types(
-        vm,
-        package_ptr,
-        &new_classes,
-        &new_enums,
-        &new_interfaces,
-    );
-    extra_owned.extend(type_values.values().copied());
-
     let mut object_name_updates = IndexMap::new();
     for (name, index) in &plan.program.function_indices {
         if name.starts_with("user.") {
@@ -1766,7 +1757,11 @@ fn graft_session_submission(
     runtime.object_names.extend(object_name_updates);
     runtime.global_names.extend(cached_import_names);
     runtime.global_names.extend(global_name_updates);
-    runtime.type_values.extend(type_values);
+    // Session declarations deliberately do not install package-owned
+    // created-once Type values. An evaluated `type.of<Declaration>()` must be
+    // an owner-free value so escaping it cannot retain the Session's history,
+    // globals, or mounted dependencies (the S-11 liveness contract). Runtime
+    // Package loading above still allocates created-once types as usual.
     runtime.diagnostics.clone_from(&artifact.diagnostics);
     Ok(actions)
 }

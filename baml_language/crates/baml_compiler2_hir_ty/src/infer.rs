@@ -5654,18 +5654,20 @@ impl<'db> InferenceContext<'db> {
             baml_type::Name::new("json"),
             baml_type::Name::new(name),
         ];
-        let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
+        if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
             self.lower.resolve_value(&segments)
-        else {
-            return None;
-        };
-        let signature = function_signature(self.db, function);
-        // The desugar targets are single-`<T>`-generic by contract;
-        // anything else is stdlib drift this tier must not paper over.
-        if signature.generic_params.len() != 1 {
-            return None;
+        {
+            let signature = function_signature(self.db, function);
+            // The desugar targets are single-`<T>`-generic by contract;
+            // anything else is stdlib drift this tier must not paper over.
+            if signature.generic_params.len() != 1 {
+                return None;
+            }
+            return Some(function_value_ty(signature, &[target]));
         }
-        Some(function_value_ty(signature, &[target]))
+        let function = self.lower.resolve_exported_value(&segments)?;
+        (function.generic_params.len() == 1)
+            .then(|| crate::method_resolution::instantiate_external_signature(&function, &[target]))
     }
 
     /// The source-level `$id = value` form is exactly a call to
@@ -5677,16 +5679,23 @@ impl<'db> InferenceContext<'db> {
             baml_type::Name::new("id"),
             baml_type::Name::new("set"),
         ];
-        let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
+        if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
             self.lower.resolve_value(&segments)
-        else {
+        {
+            let signature = function_signature(self.db, function);
+            let [param] = signature.params.as_slice() else {
+                return None;
+            };
+            return Some((param.ty.clone(), signature.throws.clone()));
+        }
+        let function = self.lower.resolve_exported_value(&segments)?;
+        let [param] = function.params.as_slice() else {
             return None;
         };
-        let signature = function_signature(self.db, function);
-        let [param] = signature.params.as_slice() else {
-            return None;
-        };
-        Some((param.ty.clone(), signature.throws.clone()))
+        Some((
+            Ty::from_plain(&param.ty),
+            Ty::from_plain(&function.callable_throws),
+        ))
     }
 
     /// The instantiated `string.from` callee backing the `to_string`
@@ -5694,23 +5703,42 @@ impl<'db> InferenceContext<'db> {
     /// resolved through the same static-class correspondence written
     /// `string.from(..)` calls use, its `T` pinned to the receiver.
     fn string_from_callee(&mut self, target: Ty) -> Option<Ty> {
-        let (class, _) =
-            self.static_class_for(std::slice::from_ref(&baml_type::Name::new("string")))?;
-        let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
-            .methods
-            .iter()
-            .copied()
-            .find(|&method| {
-                baml_compiler2_ppir::item_data::function_data(self.db, method)
-                    .name
-                    .as_str()
-                    == "from"
-            })?;
-        let signature = function_signature(self.db, method);
-        if signature.generic_params.len() != 1 {
-            return None;
+        if let Some((class, _)) =
+            self.static_class_for(std::slice::from_ref(&baml_type::Name::new("string")))
+        {
+            let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
+                .methods
+                .iter()
+                .copied()
+                .find(|&method| {
+                    baml_compiler2_ppir::item_data::function_data(self.db, method)
+                        .name
+                        .as_str()
+                        == "from"
+                })?;
+            let signature = function_signature(self.db, method);
+            if signature.generic_params.len() != 1 {
+                return None;
+            }
+            return Some(function_value_ty(signature, &[target]));
         }
-        Some(function_value_ty(signature, &[target]))
+        let qtn = baml_type::TypeName::new(
+            baml_type::Name::new("baml"),
+            Vec::new(),
+            baml_type::Name::new("String"),
+        );
+        let crate::package_interface::ExportedType::Class { methods, .. } =
+            crate::package_interface::mounted_type_row(self.db, &qtn)?
+        else {
+            return None;
+        };
+        let method = methods
+            .iter()
+            .find(|method| method.name.as_str() == "from")?;
+        let function =
+            crate::package_interface::resolved_exported_function(method, Vec::new(), Vec::new());
+        (function.generic_params.len() == 1)
+            .then(|| crate::method_resolution::instantiate_external_signature(&function, &[target]))
     }
 
     /// The one home for value-position path typing (rust-analyzer's
@@ -6005,7 +6033,22 @@ impl<'db> InferenceContext<'db> {
         anchor: ExprId,
         record_at: Option<ExprId>,
     ) -> Option<Ty> {
-        if let Some(exported) = self.lower.resolve_exported_type_definition(prefix)
+        // Preserve the ordinary source-backed fast path. Runtime compilation
+        // has no stdlib source classes, so only it falls through to the
+        // serialized external surface below.
+        if let Some(source) = self.source_class_static_value(prefix, member, own, anchor, record_at)
+        {
+            return Some(source);
+        }
+        let exported_class = self
+            .lower
+            .resolve_exported_type_definition(prefix)
+            .map(|exported| (exported, None))
+            .or_else(|| {
+                self.static_external_class_for(prefix)
+                    .map(|(exported, args)| (exported, Some(args)))
+            });
+        if let Some((exported, pinned)) = exported_class
             && let crate::package_interface::ExportedType::Class {
                 methods,
                 generic_params,
@@ -6030,8 +6073,21 @@ impl<'db> InferenceContext<'db> {
                 .chain(&external.generic_params)
                 .cloned()
                 .collect();
-            let instantiation = match own {
-                OwnArgs::Call(call) => {
+            let (instantiation, own_offset) = match (own, pinned) {
+                (OwnArgs::Call(call), Some(owner_args)) => {
+                    let own_args = self.instantiation_args_with_bounds(
+                        call,
+                        &external.generic_params,
+                        Some(member),
+                        &bounds,
+                        external_type_position(&external.target),
+                    );
+                    let own_offset = owner_args.len();
+                    let mut instantiation = owner_args;
+                    instantiation.extend(own_args);
+                    (instantiation, own_offset)
+                }
+                (OwnArgs::Call(call), None) => {
                     let instantiation = self.instantiation_args_with_bounds(
                         call,
                         &frame,
@@ -6039,22 +6095,40 @@ impl<'db> InferenceContext<'db> {
                         &bounds,
                         external_type_position(&external.target),
                     );
-                    let instantiation = self.write_call_type_args(call, &instantiation, 0);
-                    self.register_external_call_bounds(&external, &instantiation, anchor);
-                    self.record_external_runtime_dependent_arguments(
-                        call,
-                        &function,
-                        false,
-                        &instantiation,
-                    );
-                    self.result.call_plans.entry(call).or_default().target =
-                        Some(external.target.clone());
-                    instantiation
+                    (instantiation, 0)
                 }
-                OwnArgs::Fresh => frame
-                    .iter()
-                    .map(|param| self.fresh_generic_arg(param))
-                    .collect(),
+                (OwnArgs::Fresh, Some(mut owner_args)) => {
+                    owner_args.extend(
+                        external
+                            .generic_params
+                            .iter()
+                            .map(|param| self.fresh_generic_arg(param)),
+                    );
+                    let offset = owner_args.len() - external.generic_params.len();
+                    (owner_args, offset)
+                }
+                (OwnArgs::Fresh, None) => (
+                    frame
+                        .iter()
+                        .map(|param| self.fresh_generic_arg(param))
+                        .collect(),
+                    0,
+                ),
+            };
+            let instantiation = if let OwnArgs::Call(call) = own {
+                let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
+                self.register_external_call_bounds(&external, &instantiation, anchor);
+                self.record_external_runtime_dependent_arguments(
+                    call,
+                    &function,
+                    false,
+                    &instantiation,
+                );
+                self.result.call_plans.entry(call).or_default().target =
+                    Some(external.target.clone());
+                instantiation
+            } else {
+                instantiation
             };
             if let Some(record_at) = record_at {
                 self.write_member_resolution(record_at, MemberResolution::External(external));
@@ -6108,6 +6182,17 @@ impl<'db> InferenceContext<'db> {
                 return Some(fn_ty);
             }
         }
+        None
+    }
+
+    fn source_class_static_value(
+        &mut self,
+        prefix: &[baml_type::Name],
+        member: &baml_type::Name,
+        own: OwnArgs,
+        anchor: ExprId,
+        record_at: Option<ExprId>,
+    ) -> Option<Ty> {
         let (class, pinned) = self.static_class_for(prefix)?;
         let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
             .methods
@@ -6174,6 +6259,26 @@ impl<'db> InferenceContext<'db> {
             );
         }
         Some(function_value_ty(signature, &instantiation))
+    }
+
+    /// Source-less counterpart of [`Self::static_class_for`] for primitive or
+    /// alias qualifiers. Fully qualified external classes resolve in the
+    /// ordinary exported-type tier above; this bridge handles spellings such
+    /// as `string.from` whose methods live on `baml.String`.
+    fn static_external_class_for(
+        &self,
+        prefix: &[baml_type::Name],
+    ) -> Option<(Box<crate::package_interface::ExportedType>, Vec<Ty>)> {
+        if prefix
+            .first()
+            .is_some_and(|name| self.scoped_type_param(name).is_some())
+        {
+            return None;
+        }
+        let ty = self.static_qualifier_ty(prefix)?;
+        let (qtn, args) = crate::method_resolution::external_class_for_type(&self.facts, &ty, 8)?;
+        let exported = crate::package_interface::mounted_type_row(self.db, &qtn)?.clone();
+        Some((Box::new(exported), args))
     }
 
     /// TIER: an enum variant value (`Shape.Rectangle`) - the singleton
@@ -6321,14 +6426,18 @@ impl<'db> InferenceContext<'db> {
         if let Some(Definition::Class(class)) = self.lower.resolve_type_definition(prefix) {
             return Some((class, None));
         }
-        // Anything else the qualifier can denote - a primitive or
-        // media KEYWORD (annotation-grammar tokens, not paths), or an
-        // ALIAS (chains included) - becomes the TYPE it names, and the
-        // S11 receiver-class correspondence maps type to class, the
-        // same single table instance receivers use. rust-analyzer
-        // expands aliases at lowering so every consumer sees the
-        // target; our lazy-alias design expands at the demand point,
-        // and this is the static demand point.
+        let ty = self.static_qualifier_ty(prefix)?;
+        crate::method_resolution::receiver_class(&self.facts, &ty, 8)
+            .map(|(class, args)| (class, Some(args)))
+    }
+
+    /// Anything else a static qualifier can denote: a primitive or media
+    /// KEYWORD (annotation-grammar tokens, not paths), or an ALIAS (chains
+    /// included). It becomes the TYPE it names, and the S11 receiver-class
+    /// correspondence maps type to class, the same table instance receivers
+    /// use. rust-analyzer expands aliases at lowering so every consumer sees
+    /// the target; our lazy-alias design expands at the demand point.
+    fn static_qualifier_ty(&self, prefix: &[baml_type::Name]) -> Option<Ty> {
         let ty = match prefix {
             [single] => match single.as_str() {
                 "int" => Ty::intern(TyKind::Int {
@@ -6372,8 +6481,7 @@ impl<'db> InferenceContext<'db> {
         if ty.has_error() {
             return None;
         }
-        crate::method_resolution::receiver_class(&self.facts, &ty, 8)
-            .map(|(class, args)| (class, Some(args)))
+        Some(ty)
     }
 
     /// The method a TYPE-QUALIFIED interface path names

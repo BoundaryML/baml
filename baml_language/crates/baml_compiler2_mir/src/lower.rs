@@ -1212,6 +1212,15 @@ fn resolution_func_loc<'db>(
     }
 }
 
+fn resolution_external_callable<'a>(
+    res: &'a crate::inference_provider::MemberResolution<'_>,
+) -> Option<&'a baml_compiler2_hir_ty::callable::ExternalCallable> {
+    match res {
+        crate::inference_provider::MemberResolution::External(external) => Some(external),
+        _ => None,
+    }
+}
+
 // ─── LoweringContext ─────────────────────────────────────────────────────────
 
 // Re-use ExprId from baml_compiler2_ast (already imported above via ExprId)
@@ -1416,7 +1425,7 @@ fn class_type_tags_for_project(
 
     // Mounted packages have no source files, but use the same
     // content-addressed tag derived from their fully-qualified class name.
-    for pkg_name in baml_compiler2_hir::package::mounted_package_names(db) {
+    for pkg_name in baml_compiler2_hir::package::external_package_names(db) {
         let Some(mounted) =
             baml_compiler2_hir_ty::package_interface::mounted_interface(db, &pkg_name)
         else {
@@ -4536,6 +4545,29 @@ impl<'db> LoweringContext<'db> {
 // ─── 3.1b: Tagged-template lowering (BEP-049 §10 / M4e.1) ─────────────────────
 
 impl LoweringContext<'_> {
+    /// Source-less callable metadata for a callee expression, following the
+    /// same flat-vs-path-member precedence as the source-location helpers.
+    fn external_callee(
+        &self,
+        callee: AstExprId,
+    ) -> Option<&baml_compiler2_hir_ty::callable::ExternalCallable> {
+        let key = self.expr_metadata_key(callee);
+        match &self.body.exprs[callee] {
+            AstExpr::Path(segments) if segments.len() >= 2 => self
+                .tir_path_member_resolutions(key)
+                .and_then(|resolutions| resolutions.last())
+                .and_then(resolution_external_callable)
+                .or_else(|| {
+                    self.tir_resolution(key)
+                        .and_then(resolution_external_callable)
+                }),
+            AstExpr::MemberAccess { .. } => self
+                .tir_resolution(key)
+                .and_then(resolution_external_callable),
+            _ => None,
+        }
+    }
+
     /// Lower a tagged template (a `TAGGED_TEMPLATE_EXPR`) to a
     /// `tag(body = <closure>)` call, where the closure builds a
     /// `baml.TaggedString { parts, values }` from the template segments.
@@ -8847,6 +8879,12 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn callee_builtin_kind(&self, callee: AstExprId) -> Option<baml_compiler2_ast::BuiltinKind> {
+        if let Some(kind) = self
+            .external_callee(callee)
+            .and_then(|external| external.builtin_kind)
+        {
+            return Some(kind);
+        }
         // ── Path callee (single- or multi-segment) ─────────────────────────────
         if let AstExpr::Path(segments) = &self.body.exprs[callee] {
             let func_loc = if segments.len() == 1 {
@@ -8994,6 +9032,25 @@ impl<'db> LoweringContext<'db> {
     fn check_intrinsic(&self, callee: AstExprId) -> Option<IntrinsicOp> {
         use baml_compiler2_ast::BuiltinKind;
 
+        if let Some(external) = self.external_callee(callee)
+            && external.builtin_kind == Some(BuiltinKind::Intrinsic)
+            && let baml_compiler2_hir_ty::callable::ExternalCallTarget::Free {
+                package,
+                namespace,
+                name,
+            } = &external.target
+            && package.as_str() == "log"
+            && namespace.is_empty()
+        {
+            return match name.as_str() {
+                "info" => Some(IntrinsicOp::Log(LogLevel::Info)),
+                "debug" => Some(IntrinsicOp::Log(LogLevel::Debug)),
+                "warn" => Some(IntrinsicOp::Log(LogLevel::Warn)),
+                "error" => Some(IntrinsicOp::Log(LogLevel::Error)),
+                _ => None,
+            };
+        }
+
         // ── Path callee (single- or multi-segment) ─────────────────────────────
         if let AstExpr::Path(segments) = &self.body.exprs[callee] {
             let func_loc = if segments.len() == 1 {
@@ -9069,58 +9126,78 @@ impl LoweringContext<'_> {
         use baml_compiler2_ast::BuiltinKind;
 
         // ── 1. Check the callee resolves to `baml.reflect.type_of` ──────────
-        let func_loc = if let AstExpr::Path(segments) = &self.body.exprs[callee] {
-            if segments.len() == 1 {
-                let span_start = self
-                    .source_map
-                    .as_ref()
-                    .map(|sm| sm.expr_span(callee).start())
-                    .unwrap_or_default();
-                let resolved = resolve_name_at_in_scope(
-                    self.db,
-                    self.file,
-                    span_start,
-                    &segments[0],
-                    self.scope_func_name.as_ref(),
-                );
-                match resolved {
-                    ResolvedName::Builtin(
-                        baml_compiler2_hir::contributions::Definition::Function(fl),
-                    ) => Some(fl),
-                    ResolvedName::Item(
-                        baml_compiler2_hir::contributions::Definition::Function(fl),
-                    ) => Some(fl),
-                    _ => None,
-                }
-            } else {
-                let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
-                    .and_then(|res| resolution_func_loc(res));
-                if from_pmr.is_some() {
-                    from_pmr
+        let external_type_of = self.external_callee(callee).is_some_and(|external| {
+            external.builtin_kind == Some(BuiltinKind::Intrinsic)
+                && matches!(
+                    &external.target,
+                    baml_compiler2_hir_ty::callable::ExternalCallTarget::Free {
+                        package,
+                        namespace,
+                        name,
+                    } if package.as_str() == "baml"
+                        && namespace.as_slice() == [baml_type::Name::new("type")]
+                        && name.as_str() == "of"
+                )
+        });
+        let func_loc = (!external_type_of)
+            .then(|| {
+                if let AstExpr::Path(segments) = &self.body.exprs[callee] {
+                    if segments.len() == 1 {
+                        let span_start = self
+                            .source_map
+                            .as_ref()
+                            .map(|sm| sm.expr_span(callee).start())
+                            .unwrap_or_default();
+                        let resolved = resolve_name_at_in_scope(
+                            self.db,
+                            self.file,
+                            span_start,
+                            &segments[0],
+                            self.scope_func_name.as_ref(),
+                        );
+                        match resolved {
+                            ResolvedName::Builtin(
+                                baml_compiler2_hir::contributions::Definition::Function(fl),
+                            ) => Some(fl),
+                            ResolvedName::Item(
+                                baml_compiler2_hir::contributions::Definition::Function(fl),
+                            ) => Some(fl),
+                            _ => None,
+                        }
+                    } else {
+                        let from_pmr = self
+                            .tir_path_member_resolutions(self.expr_metadata_key(callee))
+                            .and_then(|resolutions| resolutions.last())
+                            .and_then(|res| resolution_func_loc(res));
+                        if from_pmr.is_some() {
+                            from_pmr
+                        } else {
+                            self.tir_resolution(self.expr_metadata_key(callee))
+                                .and_then(|res| resolution_func_loc(res))
+                        }
+                    }
                 } else {
-                    self.tir_resolution(self.expr_metadata_key(callee))
-                        .and_then(|res| resolution_func_loc(res))
+                    None
                 }
-            }
-        } else {
-            None
-        }?;
+            })
+            .flatten();
 
-        let body = baml_compiler2_ppir::function_body(self.db, func_loc);
-        if !matches!(
-            body.as_ref(),
-            baml_compiler2_hir::body::FunctionBody::Builtin(BuiltinKind::Intrinsic)
-        ) {
-            return None;
-        }
-        let item_ref = def_to_item_ref(
-            self.db,
-            baml_compiler2_hir::contributions::Definition::Function(func_loc),
-        );
-        if item_ref.to_string().as_str() != "baml.type.of" {
-            return None;
+        if !external_type_of {
+            let func_loc = func_loc?;
+            let body = baml_compiler2_ppir::function_body(self.db, func_loc);
+            if !matches!(
+                body.as_ref(),
+                baml_compiler2_hir::body::FunctionBody::Builtin(BuiltinKind::Intrinsic)
+            ) {
+                return None;
+            }
+            let item_ref = def_to_item_ref(
+                self.db,
+                baml_compiler2_hir::contributions::Definition::Function(func_loc),
+            );
+            if item_ref.to_string().as_str() != "baml.type.of" {
+                return None;
+            }
         }
 
         // ── 2. Extract the single type argument ─────────────────────────────

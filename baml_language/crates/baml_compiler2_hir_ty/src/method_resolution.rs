@@ -69,15 +69,13 @@ pub fn lookup_method<'db>(
             class_args,
         });
     }
-    let TyKind::Class(qtn, class_args, _) = receiver.kind() else {
-        return None;
-    };
+    let (qtn, class_args) = external_class_for_type(facts, receiver, 8)?;
     let crate::package_interface::ExportedType::Class {
         methods,
         generic_params,
         generic_param_bounds,
         ..
-    } = crate::package_interface::mounted_type_row(db, qtn)?
+    } = crate::package_interface::mounted_type_row(db, &qtn)?
     else {
         return None;
     };
@@ -90,7 +88,71 @@ pub fn lookup_method<'db>(
                 generic_param_bounds.clone(),
             ),
         )),
-        class_args: class_args.to_vec(),
+        class_args,
+    })
+}
+
+/// Source-less counterpart of [`receiver_class`]. It maps structural builtin
+/// types to the same canonical class names, but leaves the declaration lookup
+/// to the precompiled `PackageInterface` row.
+pub(crate) fn external_class_for_type(
+    facts: &Facts<'_>,
+    receiver: &Ty,
+    fuel: u32,
+) -> Option<(TypeName, Vec<Ty>)> {
+    let builtin = |namespace: &[&str], name: &str, args: Vec<Ty>| {
+        (
+            TypeName::new(
+                Name::new("baml"),
+                namespace.iter().map(Name::new).collect(),
+                Name::new(name),
+            ),
+            args,
+        )
+    };
+    Some(match receiver.kind() {
+        TyKind::Class(qtn, args, _) => (qtn.clone(), args.to_vec()),
+        TyKind::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
+        TyKind::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
+        TyKind::Future(value, error, _) => {
+            builtin(&["future"], "Future", vec![value.clone(), error.clone()])
+        }
+        TyKind::String { .. } | TyKind::Literal(Literal::String(_), _, _) => {
+            builtin(&[], "String", Vec::new())
+        }
+        TyKind::Int { .. } | TyKind::Literal(Literal::Int(_), _, _) => {
+            builtin(&[], "Int", Vec::new())
+        }
+        TyKind::Bigint { .. } | TyKind::Literal(Literal::Bigint(_), _, _) => {
+            builtin(&[], "Bigint", Vec::new())
+        }
+        TyKind::Float { .. } | TyKind::Literal(Literal::Float(_), _, _) => {
+            builtin(&[], "Float", Vec::new())
+        }
+        TyKind::Bool { .. } | TyKind::Literal(Literal::Bool(_), _, _) => {
+            builtin(&[], "Bool", Vec::new())
+        }
+        TyKind::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
+        TyKind::Type { .. } => builtin(&[], "TypeValue", Vec::new()),
+        TyKind::Media(kind, _) => {
+            let class = match kind {
+                MediaKind::Image => "Image",
+                MediaKind::Audio => "Audio",
+                MediaKind::Video => "Video",
+                MediaKind::Pdf => "Pdf",
+                MediaKind::Generic => return None,
+            };
+            builtin(&["media"], class, Vec::new())
+        }
+        TyKind::TypeAlias(qtn, _) => {
+            let expanded = facts.alias_def(qtn)?;
+            return external_class_for_type(
+                facts,
+                &Ty::from_plain(&expanded),
+                fuel.checked_sub(1)?,
+            );
+        }
+        _ => return None,
     })
 }
 

@@ -338,6 +338,7 @@ impl ProjectDatabase {
         db.mounted_packages = Some(baml_workspace::MountedPackages::new(
             &db,
             std::collections::BTreeMap::new(),
+            std::collections::BTreeSet::new(),
         ));
         db
     }
@@ -440,6 +441,37 @@ impl ProjectDatabase {
             .mounted_packages
             .expect("MountedPackages input is created in ProjectDatabase::new");
         mounts.set_by_package(self).to(by_package);
+        mounts
+            .set_immutable_precompiled(self)
+            .to(std::collections::BTreeSet::new());
+    }
+
+    /// Install compiler-built stdlib interfaces into the mounted-package
+    /// transport and mark them image-immutable.
+    ///
+    /// Only embedded stdlib names are accepted. Ordinary runtime mounts remain
+    /// replaceable and keep the conservative mounted impl-facts shape; these
+    /// rows are build artifacts from this exact compiler and can therefore be
+    /// re-hydrated like source-backed facts instead of being retained in every
+    /// impl-cache entry.
+    pub fn set_precompiled_stdlib_packages(
+        &mut self,
+        by_package: std::collections::BTreeMap<String, Vec<u8>>,
+    ) {
+        let mounts = self
+            .mounted_packages
+            .expect("MountedPackages input is created in ProjectDatabase::new");
+        let stdlib_names = baml_builtins2::stdlib_package_names();
+        let mut merged = mounts.by_package(self).clone();
+        let mut immutable = std::collections::BTreeSet::new();
+        for (name, bytes) in by_package {
+            if stdlib_names.contains(&name.as_str()) {
+                immutable.insert(name.clone());
+                merged.insert(name, bytes);
+            }
+        }
+        mounts.set_by_package(self).to(merged);
+        mounts.set_immutable_precompiled(self).to(immutable);
     }
 
     /// Get all source files in the database, sorted by `FileId` for deterministic ordering.
@@ -583,6 +615,20 @@ impl ProjectDatabase {
     ///
     /// Returns the created `Project`.
     pub fn set_project_root(&mut self, root: &std::path::Path) -> Project {
+        self.set_project_root_inner(root, true)
+    }
+
+    /// Set the project root without materializing embedded stdlib sources.
+    ///
+    /// This narrow entry point is for transient compilers that immediately
+    /// install the compiler-built stdlib `PackageInterface` blobs and emit on
+    /// top of the matching precompiled bytecode prefix. Ordinary compiler,
+    /// CLI, LSP, and test databases continue through [`Self::set_project_root`].
+    pub fn set_project_root_with_precompiled_stdlib(&mut self, root: &std::path::Path) -> Project {
+        self.set_project_root_inner(root, false)
+    }
+
+    fn set_project_root_inner(&mut self, root: &std::path::Path, load_builtins: bool) -> Project {
         let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
 
         // Collect existing user files that are under this root
@@ -594,7 +640,11 @@ impl ProjectDatabase {
             .collect();
 
         // Load compiler2 builtin stub files.
-        let v2_builtin_files = self.load_builtin_baml_files();
+        let v2_builtin_files = if load_builtins {
+            self.load_builtin_baml_files()
+        } else {
+            Vec::new()
+        };
 
         // Create and set the project (user files only, no builtins in project.files())
         let project = Project::new(self, canonical_root, user_files);

@@ -1973,12 +1973,21 @@ impl BexVm {
             if qtn.is_local() {
                 return Some(current);
             }
-            let dependency = current
-                .runtime
-                .as_ref()?
-                .dependency_names
-                .get(qtn.package().as_str())?;
-            return self.get_object(*dependency).as_package();
+            let runtime = current.runtime.as_ref()?;
+            if let Some(dependency) = runtime.dependency_names.get(qtn.package().as_str()) {
+                return self.get_object(*dependency).as_package();
+            }
+            // Runtime-compiled packages link stdlib symbols straight back to
+            // the immutable host image rather than copying stdlib packages
+            // into their dynamic dependency graph. Type/interface lookup must
+            // follow the same edge so virtual dispatch reaches the host's
+            // static, cacheable impl rules. Restrict the fallback to the
+            // compiler-owned stdlib set; undeclared user packages remain
+            // inaccessible.
+            if baml_builtins2::stdlib_package_names().contains(&qtn.package().as_str()) {
+                return self.package(qtn.package());
+            }
+            return None;
         }
         self.package(qtn.package())
     }
@@ -2633,6 +2642,63 @@ impl BexVm {
         self.value_concrete_ty(value)
             .map(baml_type::RealizedTy::from)
             .map(StaticVirtualReceiverKey::Other)
+    }
+
+    /// Runtime callers use the same immutable-rule cache as static callers,
+    /// but their movable function-object pointer is tagged for GC forwarding.
+    /// Keep this uncommon key construction out of the ordinary interpreter
+    /// path so static bytecode retains its existing hot-loop layout.
+    #[inline(never)]
+    fn runtime_virtual_call_cache_key(
+        &self,
+        function_object: HeapPtr,
+        iface_value: Value,
+        receiver: Value,
+    ) -> Result<Option<StaticVirtualCallKey>, VmError> {
+        let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
+        let Object::Type(type_value) = self.get_object(iface_ptr) else {
+            unreachable!("as_object_ptr(Type) guarantees a Type object")
+        };
+        let interface_args = match &type_value.ty {
+            baml_type::RealizedTy::Interface(_, args, _, _) => args.clone().into_boxed_slice(),
+            other => unreachable!(
+                "VirtualCall interface operand must be an Interface type, found {other:?}"
+            ),
+        };
+        Ok(match type_value.mint() {
+            MintId::Static(interface_mint) => {
+                self.static_virtual_receiver_key(receiver)
+                    .map(|receiver| StaticVirtualCallKey {
+                        caller_function_addr: function_object.as_ptr() as usize | 1,
+                        call_pc: self.cur_pc,
+                        receiver,
+                        interface_mint,
+                        interface_args,
+                    })
+            }
+            MintId::Runtime(_) => None,
+        })
+    }
+
+    #[inline(never)]
+    fn runtime_load_type_cache_key(
+        &self,
+        frame_idx: usize,
+        template: &baml_type::TyTemplate,
+        constant: usize,
+    ) -> Option<(usize, usize)> {
+        if <&baml_type::RealizedTy>::try_from(template).is_err()
+            || !matches!(&self.frames[frame_idx],
+                Frame::Bytecode(frame)
+                    if frame.type_metadata.as_ref()
+                        .is_none_or(|metadata| metadata.defs.is_empty()))
+        {
+            return None;
+        }
+        Some((
+            self.frames[frame_idx].function().as_ptr() as usize | 1,
+            constant,
+        ))
     }
 
     /// Runtime package that owns a value's nominal/callable definition.
@@ -7147,7 +7213,11 @@ impl BexVm {
                             MintId::Runtime(_) => None,
                         }
                     } else {
-                        None
+                        self.runtime_virtual_call_cache_key(
+                            self.frames[*frame_idx].function(),
+                            iface_value,
+                            receiver,
+                        )?
                     };
                     let cached_target = cache_key
                         .as_ref()
@@ -7835,6 +7905,9 @@ impl BexVm {
                                             .is_none_or(|metadata| metadata.defs.is_empty())) =>
                         {
                             Some((std::ptr::from_ref(*function) as usize, idx))
+                        }
+                        ConstValue::Type(template) if !function.runtime_package.is_null() => {
+                            self.runtime_load_type_cache_key(*frame_idx, template, idx)
                         }
                         _ => None,
                     };
@@ -8928,8 +9001,37 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 *value = Value::object(new_ptr);
             }
         }
-        for ptr in self.static_load_type_cache.values_mut() {
-            *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
+        let address_forwarding = roots
+            .iter()
+            .map(|(old, new)| (old.as_ptr() as usize, new.as_ptr() as usize))
+            .collect::<HashMap<_, _>>();
+        let old_load_type_cache = std::mem::take(&mut self.static_load_type_cache);
+        for ((identity, index), ptr) in old_load_type_cache {
+            let identity = if identity & 1 == 0 {
+                Some(identity)
+            } else {
+                address_forwarding
+                    .get(&(identity & !1))
+                    .map(|forwarded| forwarded | 1)
+            };
+            if let Some(identity) = identity {
+                self.static_load_type_cache
+                    .insert((identity, index), roots.get(&ptr).copied().unwrap_or(ptr));
+            }
+        }
+        let old_virtual_call_cache = std::mem::take(&mut self.static_virtual_call_cache);
+        for (mut key, target) in old_virtual_call_cache {
+            let identity = if key.caller_function_addr & 1 == 0 {
+                Some(key.caller_function_addr)
+            } else {
+                address_forwarding
+                    .get(&(key.caller_function_addr & !1))
+                    .map(|forwarded| forwarded | 1)
+            };
+            if let Some(identity) = identity {
+                key.caller_function_addr = identity;
+                self.static_virtual_call_cache.insert(key, target);
+            }
         }
         for (value, cause) in &mut self.thrown_value_causes {
             if let Some(ptr) = value.as_object_ptr()
