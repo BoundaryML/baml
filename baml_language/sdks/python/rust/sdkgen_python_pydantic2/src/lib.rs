@@ -975,7 +975,7 @@ mod tests {
         assert!(leaf.contains("import pydantic\n"));
         assert!(leaf.contains("class Resume(pydantic.BaseModel):\n"));
         assert!(leaf.contains(
-            "    model_config = pydantic.ConfigDict(extra=\"forbid\")\n    \
+            "    model_config = pydantic.ConfigDict(extra=\"ignore\")\n    \
              a: int\n"
         ));
         assert!(leaf.contains("__all__ = [\n    \"Resume\",\n]\n"));
@@ -1937,7 +1937,7 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         let expected = "class Resume(pydantic.BaseModel):\n\
-                        \x20   model_config = pydantic.ConfigDict(extra=\"forbid\")\n\
+                        \x20   model_config = pydantic.ConfigDict(extra=\"ignore\")\n\
                         \x20   name: str\n\
                         \x20   email: typing.Optional[str]\n\
                         \x20   tags: typing.List[str]\n";
@@ -1952,7 +1952,7 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         let expected = "class Empty(pydantic.BaseModel):\n\
-                        \x20   model_config = pydantic.ConfigDict(extra=\"forbid\")\n";
+                        \x20   model_config = pydantic.ConfigDict(extra=\"ignore\")\n";
         assert!(leaf.contains(expected));
     }
 
@@ -2162,7 +2162,7 @@ mod tests {
         // cross-leaf FQN form).
         let stream_leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
         let expected = "class Resume(pydantic.BaseModel):\n\
-                        \x20   model_config = pydantic.ConfigDict(extra=\"forbid\")\n\
+                        \x20   model_config = pydantic.ConfigDict(extra=\"ignore\")\n\
                         \x20   summary: typing.Optional[str]\n\
                         \x20   origin: lorem.Resume\n";
         assert!(
@@ -3808,6 +3808,16 @@ mod tests {
             leaf.contains("    contents: typing.List[Box[T]]"),
             "missing nested generic ref Box[T]:\n{leaf}",
         );
+        assert_eq!(
+            leaf.matches("    model_config = pydantic.ConfigDict(extra=\"ignore\")")
+                .count(),
+            2,
+            "every generated generic model should ignore extra fields:\n{leaf}",
+        );
+        assert!(
+            !leaf.contains("extra=\"forbid\""),
+            "generated generic models must not forbid extra fields:\n{leaf}",
+        );
 
         // TypeVar declaration appears once.
         assert_eq!(
@@ -3832,6 +3842,10 @@ mod tests {
                 "class Crate(pydantic.BaseModel, typing.Generic[T]):\n    contents: typing.List[Box[T]]\n",
             ),
             "pyi missing typed Crate body:\n{pyi}",
+        );
+        assert!(
+            !pyi.contains("model_config"),
+            "runtime Pydantic configuration should not be redeclared in stubs:\n{pyi}",
         );
     }
 

@@ -1061,7 +1061,7 @@ fn is_media_reexport(s: &EmittedSymbol) -> bool {
 {%- if let Some(doc) = docstring %}
     {{ doc }}
 {%- endif %}
-    model_config = pydantic.ConfigDict(extra="forbid")
+    model_config = pydantic.ConfigDict(extra="ignore")
 {%- for prop in properties %}
     {{ prop.name }}: {{ prop.ty_py }}
 {%- endfor %}
