@@ -750,10 +750,11 @@ impl RunArgs {
 
         if let Some(program) = session.try_cached_program() {
             self.vlog(format_args!("Bytecode cache hit — skipping compile"));
-            match BexEngine::new(
+            match BexEngine::new_with_runtime_compiler(
                 program,
                 Arc::new(sys_native::SysOps::native()),
                 argv.clone(),
+                bex_project::runtime_compiler(),
             ) {
                 Ok(engine) => return Ok((session.db, engine, needs_format_hint)),
                 Err(error) => crate::bytecode_cache::cache_debug(format_args!(
@@ -835,8 +836,13 @@ impl RunArgs {
             baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
         ));
         let program = compiled.program;
-        let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
-            .map_err(|e| anyhow!("failed to create engine: {e:?}"))?;
+        let engine = BexEngine::new_with_runtime_compiler(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            argv,
+            bex_project::runtime_compiler(),
+        )
+        .map_err(|e| anyhow!("failed to create engine: {e:?}"))?;
         self.vlog(format_args!(
             "Compiled {} user function(s)",
             engine.user_functions().len()
