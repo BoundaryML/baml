@@ -1,0 +1,131 @@
+# Provisions, heals and right-sizes the self-hosted ix runner pool.
+#
+# Setup (the whole of it): set IX_TOKEN in the repo's Actions
+# secrets and merge. The schedule bootstraps the pool on its first tick (the
+# reconcile self-raises the replacement cap while the pool is empty), and
+# keeps it converged from then on; pushes touching the runner config roll the
+# fleet (rate-capped, never under a running job).
+#
+# MERGING THIS TO THE DEFAULT BRANCH IS WHAT STARTS IT. GitHub registers
+# `schedule` and `workflow_run` triggers from the default branch ONLY, so
+# while this file lives on a feature branch the pool is reconciled solely by
+# hand (workflow_dispatch, which likewise needs the default branch). That is
+# why members have sat offline for hours: not a bug in the reconcile, which
+# has simply never been asked to run.
+#
+# The pool is defined ONCE, in nix/ix-pool.toml - name, size, region and
+# every autoscaling dial. The flake reads the same file, so its size cannot
+# be two different numbers in two places. Members are switched on and off to
+# follow the job queue; the machine set itself never changes.
+#
+# SECURITY: runs on GitHub-hosted runners ONLY - the secrets must never
+# reach the machines this manages. VMs are seeded exclusively with 1-hour
+# registration tokens; see github.com/indexable-inc/ix-runners.
+name: ix runners
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Health reconcile. Off the hour: GitHub's scheduler is congested at :00
+    # and drops ticks there.
+    #
+    # NOTE: like workflow_run below, this only fires once this file is on the
+    # DEFAULT branch. GitHub registers schedules from the default branch and
+    # nowhere else, so the cron does nothing until this PR's parent merges.
+    - cron: "17 */2 * * *"
+  workflow_run:
+    # Wake on demand. `requested` fires when a run is queued, not when it
+    # finishes, so the pool starts warming while the first jobs are still
+    # being handed out - worst case is one boot per wave, not one per job.
+    # The schedule alone would leave a wave waiting up to two hours.
+    #
+    # These ticks only ever ADD capacity. They fire before the run's jobs
+    # reach the queue, so the pool looks idle at precisely the moment a wave
+    # is landing; scaling down here would switch machines off at the start
+    # of a wave. The reconcile derives that from the event name itself, so
+    # there is nothing to configure - only the cron ticks scale down.
+    #
+    # Named explicitly rather than left to match every workflow: most runs in
+    # this repo never touch the pool, and waking for them burns hosted
+    # minutes. The cost is that renaming one of these silently stops waking
+    # the pool for it - min-warm is the backstop that keeps that a slowdown
+    # rather than an outage.
+    workflows:
+      - "CI - BAML Language"
+      - "ix cross builds"
+      - "Test Rust SDK Cross-Platform"
+      - "Test Go Client Windows Support"
+      - "TypeScript2"
+      - "Canary cache refresh"
+      - "BAML Release"
+    types: [requested]
+  push:
+    # Default branch only: a feature-branch push must not be able to roll the
+    # fleet onto an unreviewed runner config.
+    branches: [canary]
+    paths:
+      - "nix/**"
+      - "flake.nix"
+      - "flake.lock"
+      - ".github/workflows/ix-runners.yml"
+
+# Every GitHub MUTATION goes through a token ix vends for this run: the
+# reconcile proves which repository it is with the run's OIDC identity and
+# gets back an installation token scoped to this repo, expiring in about an
+# hour (the ix-runners GitHub App must stay installed here). GITHUB_TOKEN
+# reads the job queue for the autoscaler's demand signal and nothing else.
+permissions:
+  contents: read
+  actions: read
+  # How ix knows which repository is asking for a runner token.
+  id-token: write
+
+# Two reconciles racing would double-create pool members, or both decide to
+# replace the same one. cancel-in-progress: false also coalesces a burst:
+# GitHub keeps at most one run pending per group, so ten workflow_run wakes
+# arriving together become one reconcile after the current one, not ten.
+concurrency:
+  group: ix-runners
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile runner pool
+    # Default branch only, for dispatch and schedule alike: pool VMs are
+    # built from this ref, so an unrestricted dispatch would let anyone with
+    # write access roll the fleet onto an unreviewed runner config.
+    if: github.ref == 'refs/heads/canary'
+    runs-on: ubuntu-latest
+    # Worst case is a cold bootstrap: 32 creates at bounded concurrency, and
+    # a create wave can take ~30 min.
+    timeout-minutes: 180
+    steps:
+      # Repos that have not opted in (upstream, forks) skip quietly, before
+      # paying for the clone.
+      - name: Check opt-in
+        id: optin
+        env:
+          IX_TOKEN: ${{ secrets.IX_TOKEN }}
+        run: |
+          if [ -z "$IX_TOKEN" ]; then
+            echo "IX_TOKEN not configured; skipping"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        if: steps.optin.outputs.ok == 'true'
+        with:
+          # The reconcile pins pool VMs to the last commit touching the runner
+          # config; a shallow clone makes every commit read as touching it.
+          fetch-depth: 0
+          # That check reads the commit graph, never historical file contents.
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Reconcile
+        if: steps.optin.outputs.ok == 'true'
+        uses: indexable-inc/ix-runners@895b8e2df7b51eec062d31d5c8cf7e2a5d87857c
+        with:
+          ix-token: ${{ secrets.IX_TOKEN }}
+          token-source: ix

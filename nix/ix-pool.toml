@@ -1,0 +1,79 @@
+# BAML's ix runner pool. Read by BOTH the flake (which builds the members)
+# and .github/workflows/ix-runners.yml (which manages them), so the pool's
+# shape cannot be two different numbers in two files.
+#
+# Every key is optional; the defaults are in the ix-runners reconcile. An
+# unknown key is an error, not a default.
+
+# Pool identity. VM names are <pool-name>-runner-<N> and runner names are
+# <pool-name>-r<N>-<slot>; the reconcile matches on those, so renaming this
+# replaces the whole fleet.  (default: the repository's name)
+pool-name = "baml"
+
+# ix region the members live in.                    (default: "us-west-1")
+# us-west-hil: 3 compute hosts (384 cores) vs us-east's 2, and the region's
+# public v6 block actually answers NDP (the us-east blackhole class, ENG-10881,
+# does not apply here). Verified 2026-08-16. NOTE the reconcile matches members
+# by NAME only - a region flip alone moves nothing; it took effect here because
+# the same push changed the member config (labels), forcing full replacement.
+region = "us-west-1"
+
+# Members that exist, and the number of flake attrs mkPool generates. Most
+# of them are switched OFF most of the time - see min-warm.   (default: 8)
+pool-size = 32
+
+# -- autoscaling ------------------------------------------------------------
+# The member set never moves; only which members are powered on. A stopped
+# member keeps its disk and bills storage alone.
+
+# The label the reconcile matches queued jobs against while the pool has no
+# runners registered to read real labels off. MUST be one of
+# services.ix-runner.labels in ci-runner.nix - mkPool asserts it at build
+# time, because a label nothing advertises means the pool never wakes.
+runner-label = "ix"
+
+# Members kept on no matter how quiet it is. THIS IS THE ON/OFF SWITCH: set
+# it equal to pool-size and autoscaling stops entirely and no tick even
+# reads the job queue.
+#
+# Nine, because nine is the number of job families in nix/ci-runner.nix and
+# the families are dealt round-robin over the member indices: members 1-9 are
+# one of each. The autoscaler is label-blind - it sizes ONE global number
+# against the queue and then starts the lowest stopped index - so this is the
+# only dial that can promise a queued msrv job a warm msrv member. Lower it
+# and some family goes cold; raise it toward pool-size and the pool stops
+# scaling but every family stays warm.
+#                                                   (default: pool-size)
+min-warm = 9
+
+# Members kept on ABOVE current demand, so the next job finds a warm runner
+# rather than a boot.                                         (default: 2)
+scale-headroom = 2
+
+# Ceiling on members powered on at once.            (default: pool-size)
+max-online = 32
+
+# How long a member must have been idle before it is switched off. Derived
+# from GitHub's own job timestamps, so it is a real duration and does not
+# change length when the cron does.                         (default: 600)
+idle-grace-seconds = 600
+
+# Per-tick cap on stops. Starts are deliberately uncapped: being short of
+# capacity has a queue behind it, being long of it only costs money.
+#                                                              (default: 4)
+max-stops = 4
+
+# -- healing ----------------------------------------------------------------
+
+# Per-run cap on creations + replacements, so a bad config rev stalls loudly
+# after N boots instead of thrashing the fleet. A 32-member roll converges
+# over several ticks, like a rolling update. An empty pool raises this to
+# pool-size on its own to bootstrap.                          (default: 2)
+# Full-pool: one tick rolls everything. For a CI pool the worst case of a
+# bad config rev is a queued-jobs pause until the next roll, not an outage
+# of anything stateful - iteration speed wins here. Revisit for pools that
+# gate a merge queue.
+max-replacements = 32
+
+# Creates/replacements in flight at once within a run.        (default: 4)
+concurrency = 8
