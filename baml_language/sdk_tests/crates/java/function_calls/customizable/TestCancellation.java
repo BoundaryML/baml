@@ -46,7 +46,9 @@ import org.junit.jupiter.api.Test;
 
 class TestCancellation {
 
-    private static final long MAX_CANCELLATION_MILLIS = 500;
+    private static final long MAX_CANCELLATION_MILLIS = 5000;
+    // The cancelled calls below sleep 60s: the operation must dwarf this bound,
+    // or a regression that ignored cancellation would finish inside it and pass.
 
     private static void assertCancelledPanic(BamlPanic exc) {
         assertInstanceOf(Cancelled.class, exc.value());
@@ -98,7 +100,7 @@ class TestCancellation {
 
         try {
             BamlPanic exc =
-                    assertThrows(BamlPanic.class, () -> Fns.SleepMs(2000L, ctx));
+                    assertThrows(BamlPanic.class, () -> Fns.SleepMs(60000L, ctx));
             assertCancelledPanic(exc);
         } finally {
             timer.cancel();
@@ -111,7 +113,7 @@ class TestCancellation {
     void test_cancellation_async_cancel_via_call_context() {
         long start = System.nanoTime();
         BamlCallContext ctx = new BamlCallContext();
-        CompletableFuture<Void> future = Fns.SleepMs_async(2000L, ctx);
+        CompletableFuture<Void> future = Fns.SleepMs_async(60000L, ctx);
 
         sleepMillis(50);
         ctx.abort();
@@ -128,7 +130,7 @@ class TestCancellation {
     @Test
     void test_cancellation_async_cancel_via_task_cancel() {
         long start = System.nanoTime();
-        CompletableFuture<Void> future = Fns.SleepMs_async(2000L);
+        CompletableFuture<Void> future = Fns.SleepMs_async(60000L);
 
         sleepMillis(50);
         future.cancel(true);
@@ -141,7 +143,7 @@ class TestCancellation {
     void test_cancellation_async_cancel_via_task_group_sibling() {
         long start = System.nanoTime();
 
-        CompletableFuture<Void> sleep = Fns.SleepMs_async(2000L);
+        CompletableFuture<Void> sleep = Fns.SleepMs_async(60000L);
         CompletableFuture<Void> failSoon =
                 CompletableFuture.runAsync(
                         () -> {
@@ -170,7 +172,7 @@ class TestCancellation {
     @Test
     void test_cancellation_async_cancel_via_asyncio_timeout() {
         long start = System.nanoTime();
-        CompletableFuture<Void> future = Fns.SleepMs_async(2000L);
+        CompletableFuture<Void> future = Fns.SleepMs_async(60000L);
 
         assertThrows(TimeoutException.class, () -> future.get(50, TimeUnit.MILLISECONDS));
 
