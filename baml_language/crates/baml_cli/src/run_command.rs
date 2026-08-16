@@ -305,8 +305,13 @@ impl RunArgs {
             },
         )
         .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
-        BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), argv)
-            .map_err(|e| anyhow!("failed to create engine: {e:?}"))
+        BexEngine::new_with_runtime_compiler(
+            bytecode,
+            Arc::new(sys_native::SysOps::native()),
+            argv,
+            bex_project::runtime_compiler(),
+        )
+        .map_err(|e| anyhow!("failed to create engine: {e:?}"))
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {

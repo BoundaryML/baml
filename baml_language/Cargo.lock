@@ -783,6 +783,7 @@ dependencies = [
  "base64",
  "bex_cache",
  "bex_engine",
+ "bex_project",
  "bex_vm_types",
  "borsh",
  "clap",

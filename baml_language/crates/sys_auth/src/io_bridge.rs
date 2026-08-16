@@ -102,13 +102,11 @@ pub(crate) fn split_command(command: &str) -> Option<Vec<String>> {
                     quote = Some(c);
                     has_current = true;
                 }
-                '\\' => match chars.next() {
-                    Some(next) => {
-                        current.push(next);
-                        has_current = true;
-                    }
-                    None => return None,
-                },
+                '\\' => {
+                    let next = chars.next()?;
+                    current.push(next);
+                    has_current = true;
+                }
                 c if c.is_whitespace() => {
                     if has_current {
                         parts.push(std::mem::take(&mut current));
