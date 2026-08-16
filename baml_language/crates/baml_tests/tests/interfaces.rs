@@ -3000,6 +3000,51 @@ async fn same_generic_interface_different_type_params_disambiguated_with_as_proj
     assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
+/// A single generic function has one `VirtualCall` bytecode site even when it
+/// is invoked with heterogeneous interface arguments. The full VM fact context
+/// canonicalizes `Animal | Dog` to `Animal` because `Dog implements Animal`,
+/// but impl selection deliberately compares interface arguments under the
+/// fact-poor structural context. The dispatch cache must therefore retain the
+/// realized interface arguments in addition to the static type-value mint.
+#[tokio::test]
+async fn virtual_dispatch_cache_distinguishes_generic_interface_instantiations() {
+    let output = baml_test!(
+        r#"
+        interface Animal {}
+
+        class Dog {
+            implements Animal {}
+        }
+
+        interface Tagged<T> {
+            function tag(self) -> string throws never
+        }
+
+        class Both {
+            implements Tagged<Animal> {
+                function tag(self) -> string { return "animal" }
+            }
+            implements Tagged<Animal | Dog> {
+                function tag(self) -> string { return "animal-or-dog" }
+            }
+        }
+
+        function read_tag<T>(value: Tagged<T>) -> string {
+            return value.tag()
+        }
+
+        function main() -> string {
+            let value = Both {}
+            return read_tag<Animal>(value) + "|" + read_tag<Animal | Dog>(value)
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("animal|animal-or-dog".into())
+    );
+}
+
 #[tokio::test]
 async fn generic_bound_runtime() {
     // Interface-typed arrays preserve the interface field view and dispatch
