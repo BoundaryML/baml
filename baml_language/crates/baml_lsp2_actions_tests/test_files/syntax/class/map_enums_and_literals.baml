@@ -96,6 +96,27 @@ function InOutLiteralStringUnionMapKey(
 // E0067
 //
 //   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:76]
+//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//     ·                                                                            ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:27]
+//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//     ·                           ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:52]
+//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//     ·                                                    ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //     ╭─[class_map_enums_and_literals.baml:13:27]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
 //     ·                           ───────────────────
