@@ -1622,10 +1622,11 @@ mod interned_entry {
     }
 
     #[test]
-    fn canonical_cache_matches_uncached_interned_relations() {
+    fn canonical_cache_matches_reject_free_canonical_relations() {
         let mut ctx = Ctx::default();
         ctx.enums
             .insert(qtn("Side"), vec![Name::new("L"), Name::new("R")]);
+        ctx.requires.push((qtn("Readable"), qtn("Displayable")));
         int_list_alias(&mut ctx, "JsonA");
         int_list_alias(&mut ctx, "JsonB");
 
@@ -1639,23 +1640,29 @@ mod interned_entry {
                 enum_ty("Side"),
             ),
             (class("Left"), class("Right")),
-            (iface("Readable"), iface("Writable")),
+            // Distinct interface heads cannot be rejected: the context makes
+            // this pair a valid subtype through `requires`.
+            (iface("Readable"), iface("Displayable")),
+            (iface("Displayable"), iface("Readable")),
         ];
         let pairs = pairs.map(|(a, b)| (it(&a), it(&b)));
         let cache = InternedCanonicalCache::default();
 
         // Run twice: the first pass populates canonical forms and the second
-        // proves that the warm path returns the same relation verdicts.
+        // proves that the warm path returns the same relation verdicts. The
+        // oracle deliberately bypasses the interned-entry fast rejection.
         for _ in 0..2 {
             for (a, b) in &pairs {
+                let canonical_a = NormalTy::canonical_interned(a, &ctx);
+                let canonical_b = NormalTy::canonical_interned(b, &ctx);
                 assert_eq!(
                     cache.equivalent(a, b, &ctx),
-                    equivalent_interned(a, b, &ctx),
+                    canonical_a == canonical_b,
                     "cached equivalence diverged for {a:?} == {b:?}"
                 );
                 assert_eq!(
                     cache.is_subtype(a, b, &ctx),
-                    is_subtype_interned(a, b, &ctx),
+                    canonical_a.is_subtype_of(&canonical_b, &ctx, &mut HashSet::new()),
                     "cached subtyping diverged for {a:?} <: {b:?}"
                 );
             }

@@ -2755,6 +2755,7 @@ pub struct InternedCanonicalCache {
 
 impl InternedCanonicalCache {
     fn canonical<C: TypeContext>(&self, ty: &interned::Ty, ctx: &C) -> NormalTy {
+        debug_assert!(!ty.has_infer());
         if let Some(canonical) = self.canonical.borrow().get(ty) {
             return canonical.clone();
         }
