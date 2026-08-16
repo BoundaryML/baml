@@ -376,10 +376,11 @@ fn fill_package_slots(
     index
 }
 
-/// Look up a class or enum object pointer by its fully-qualified dotted name —
-/// package as the leading segment — through the package index. The free-function
-/// form of [`crate::vm::BexVm::lookup_type_by_fqn`], usable before a `BexVm`
-/// exists (e.g. to pre-resolve builtin error/panic classes in `BexVm::new`).
+/// Look up a class, enum, or interface object pointer by its fully-qualified
+/// dotted name — package as the leading segment — through the package index.
+/// The free-function form of [`crate::vm::BexVm::lookup_type_by_fqn`], usable
+/// before a `BexVm` exists (e.g. to pre-resolve builtin error/panic classes in
+/// `BexVm::new`).
 pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr> {
     let mut parts: Vec<Name> = fqn.split('.').map(Name::new).collect();
     let name = parts.pop()?;
@@ -399,6 +400,7 @@ pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr>
         .classes
         .get(&local)
         .or_else(|| package.enums.get(&local))
+        .or_else(|| package.interfaces.get(&local))
         .copied()
 }
 

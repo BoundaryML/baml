@@ -9,7 +9,6 @@ use std::collections::BTreeMap;
 
 use bex_vm_types::Program;
 
-const ARTIFACT_KEY: &str = concat!("bex-project-stdlib-prefix-v1:", env!("CARGO_PKG_VERSION"));
 const ARTIFACT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/stdlib_prefix.borsh"));
 
 pub(crate) struct PrecompiledStdlib {
@@ -21,9 +20,10 @@ pub(crate) fn load() -> Result<PrecompiledStdlib, String> {
     let (key, interfaces, program): (String, BTreeMap<String, Vec<u8>>, Program) =
         borsh::from_slice(ARTIFACT)
             .map_err(|error| format!("decode compiler-built stdlib artifact: {error}"))?;
-    if key != ARTIFACT_KEY {
+    let expected_key = crate::precompiled_stdlib_config::artifact_key();
+    if key != expected_key {
         return Err(format!(
-            "compiler-built stdlib artifact key mismatch: expected `{ARTIFACT_KEY}`, got `{key}`"
+            "compiler-built stdlib artifact key mismatch: expected `{expected_key}`, got `{key}`"
         ));
     }
     Ok(PrecompiledStdlib {

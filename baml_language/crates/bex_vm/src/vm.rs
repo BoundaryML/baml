@@ -421,7 +421,10 @@ pub(crate) mod tests {
         EarlyYieldCheck, FunctionCaptureProps, FunctionKind, GlobalPool, HeapPtr, Object,
         ObjectIndex, RootHaver, Value, ValueKind, VmGlobals,
         bytecode::Bytecode,
-        types::{DynTypeDefs, Function, FunctionOrigin, MintId, TypeValue, type_tags},
+        types::{
+            BoundMethod, Closure, DynTypeDefs, Function, FunctionOrigin, MintId, TypeValue,
+            type_tags,
+        },
     };
 
     use super::{
@@ -526,6 +529,48 @@ pub(crate) mod tests {
         let native_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
         vm.globals = VmGlobals::Owned(GlobalPool::from_vec(vec![Value::object(native_ptr)]));
         (vm, native_ptr)
+    }
+
+    #[test]
+    fn runtime_cache_identity_unwraps_callable_allocations() {
+        let (mut vm, function) = vm_with_native_entry();
+        let closure_a = vm.tlab.alloc(Object::Closure(Closure {
+            function,
+            captures: Box::default(),
+            captured_type_args: Box::default(),
+        }));
+        let closure_b = vm.tlab.alloc(Object::Closure(Closure {
+            function,
+            captures: Box::default(),
+            captured_type_args: Box::default(),
+        }));
+        let method = vm.tlab.alloc(Object::BoundMethod(BoundMethod {
+            function,
+            receiver: Value::int(1),
+            type_args: Box::default(),
+        }));
+
+        assert_ne!(
+            closure_a, closure_b,
+            "closures must be distinct allocations"
+        );
+        let function_addr = vm
+            .runtime_cache_function_addr(function)
+            .expect("function cache identity");
+        assert_eq!(
+            vm.runtime_cache_function_addr(closure_a),
+            Some(function_addr)
+        );
+        assert_eq!(
+            vm.runtime_cache_function_addr(closure_b),
+            Some(function_addr)
+        );
+        assert_eq!(vm.runtime_cache_function_addr(method), Some(function_addr));
+        assert_eq!(
+            function_addr & 1,
+            1,
+            "runtime cache keys use the GC tag bit"
+        );
     }
 
     fn trampoline_ptr(vm: &BexVm) -> HeapPtr {
@@ -1973,10 +2018,6 @@ impl BexVm {
             if qtn.is_local() {
                 return Some(current);
             }
-            let runtime = current.runtime.as_ref()?;
-            if let Some(dependency) = runtime.dependency_names.get(qtn.package().as_str()) {
-                return self.get_object(*dependency).as_package();
-            }
             // Runtime-compiled packages link stdlib symbols straight back to
             // the immutable host image rather than copying stdlib packages
             // into their dynamic dependency graph. Type/interface lookup must
@@ -1986,6 +2027,10 @@ impl BexVm {
             // inaccessible.
             if baml_builtins2::stdlib_package_names().contains(&qtn.package().as_str()) {
                 return self.package(qtn.package());
+            }
+            let runtime = current.runtime.as_ref()?;
+            if let Some(dependency) = runtime.dependency_names.get(qtn.package().as_str()) {
+                return self.get_object(*dependency).as_package();
             }
             return None;
         }
@@ -2022,10 +2067,11 @@ impl BexVm {
         self.package_for_type(qtn)?.interfaces.get(&local).copied()
     }
 
-    /// Look up a class or enum object by its fully-qualified dotted name, with the
-    /// package as the leading segment. For builtin (dependency-package) types
-    /// referenced by constant FQN; not valid for `user`-package types, whose
-    /// rendered name elides the package — use [`Self::lookup_type`] there.
+    /// Look up a class, enum, or interface object by its fully-qualified dotted
+    /// name, with the package as the leading segment. For builtin
+    /// (dependency-package) types referenced by constant FQN; not valid for
+    /// `user`-package types, whose rendered name elides the package — use
+    /// [`Self::lookup_type`] there.
     pub fn lookup_type_by_fqn(&self, fqn: &str) -> Option<HeapPtr> {
         crate::package_load::lookup_type_by_fqn(&self.packages, fqn)
     }
@@ -2648,13 +2694,30 @@ impl BexVm {
     /// but their movable function-object pointer is tagged for GC forwarding.
     /// Keep this uncommon key construction out of the ordinary interpreter
     /// path so static bytecode retains its existing hot-loop layout.
+    fn runtime_cache_function_addr(&self, callable: HeapPtr) -> Option<usize> {
+        let function_object = match self.get_object(callable) {
+            Object::Function(_) => callable,
+            Object::Closure(closure) => closure.function,
+            Object::BoundMethod(method) => method.function,
+            Object::GenericFunction(function) => self
+                .load_global_in(function.runtime_package, function.function)
+                .as_object_ptr()?,
+            _ => return None,
+        };
+        matches!(self.get_object(function_object), Object::Function(_))
+            .then_some(function_object.as_ptr() as usize | 1)
+    }
+
     #[inline(never)]
     fn runtime_virtual_call_cache_key(
         &self,
-        function_object: HeapPtr,
+        callable: HeapPtr,
         iface_value: Value,
         receiver: Value,
     ) -> Result<Option<StaticVirtualCallKey>, VmError> {
+        let Some(caller_function_addr) = self.runtime_cache_function_addr(callable) else {
+            return Ok(None);
+        };
         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
         let Object::Type(type_value) = self.get_object(iface_ptr) else {
             unreachable!("as_object_ptr(Type) guarantees a Type object")
@@ -2669,7 +2732,7 @@ impl BexVm {
             MintId::Static(interface_mint) => {
                 self.static_virtual_receiver_key(receiver)
                     .map(|receiver| StaticVirtualCallKey {
-                        caller_function_addr: function_object.as_ptr() as usize | 1,
+                        caller_function_addr,
                         call_pc: self.cur_pc,
                         receiver,
                         interface_mint,
@@ -2696,7 +2759,7 @@ impl BexVm {
             return None;
         }
         Some((
-            self.frames[frame_idx].function().as_ptr() as usize | 1,
+            self.runtime_cache_function_addr(self.frames[frame_idx].function())?,
             constant,
         ))
     }

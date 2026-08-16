@@ -164,7 +164,7 @@ function mismatched_function_contract() -> null throws unknown {
   null
 }
 
-function alias_order_and_reserved_names() -> string throws unknown {
+function alias_order_and_reserved_names() -> bool throws unknown {
   let root_package = reflect.Package.current()
   let generated = reflect.Package.compile(
     { "main.baml": #"
@@ -172,11 +172,21 @@ function Read(state: app.AgentState) -> string {
   app.Plan(state) + ":" + baml.Array.length(["o", "k"]).to_string()
 }
 "# },
-    packages = { "z_last": root_package, "baml": root_package, "app": root_package },
+    packages = { "z_last": root_package, "app": root_package },
   )
   let read = generated.get_function<(AgentState) -> string>("root.Read")
     ?? throw "missing root.Read"
-  read(AgentState { goal: "ordered", history: [] })
+  let ordered = read(AgentState { goal: "ordered", history: [] }) == "planned ordered:2"
+
+  let rejected = false
+  let _ = reflect.Package.compile(
+    { "main.baml": "function main() -> int { 1 }" },
+    packages = { "baml": root_package },
+  ) catch (e) {
+    baml.reflect.errors.CompilationError => { rejected = true },
+    _ => throw e,
+  }
+  ordered && rejected
 }
 
 test "enumerated package test" {
@@ -410,10 +420,7 @@ async fn get_function_mismatch_throws_compiler_subtyping_diagnostic() {
 #[tokio::test]
 async fn alias_maps_are_order_independent_and_cannot_shadow_stdlib() {
     let output = baml_test!(baml: SCENARIO_6_SOURCE, entry: "alias_order_and_reserved_names");
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("planned ordered:2".into()))
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
 #[tokio::test]

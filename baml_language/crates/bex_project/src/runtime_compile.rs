@@ -12,7 +12,7 @@ use baml_base::Name;
 use baml_compiler_diagnostics::{DiagnosticId, Severity};
 use baml_compiler_lexer::{TokenKind, lex_lossless};
 use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
-use baml_compiler2_emit::{CompileOptions, OptLevel, emit_units_with_stdlib};
+use baml_compiler2_emit::{CompileOptions, emit_units_with_stdlib};
 use baml_compiler2_hir::{
     body::{BodyOwnerId, LetBody, let_body},
     contributions::Definition,
@@ -1601,17 +1601,22 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             }]
         })?;
         let options = CompileOptions {
-            emit_test_cases: false,
+            emit_test_cases: crate::precompiled_stdlib_config::EMIT_TEST_CASES,
         };
-        let emitted = emit_units_with_stdlib(&db, &options, OptLevel::One, &stdlib.program)
-            .map_err(|error| {
-                vec![RuntimeCompileDiagnostic {
-                    code: "E_RUNTIME_EMIT".to_string(),
-                    message: error.to_string(),
-                    severity: RuntimeDiagnosticSeverity::Error,
-                    span: None,
-                }]
-            })?;
+        let emitted = emit_units_with_stdlib(
+            &db,
+            &options,
+            crate::precompiled_stdlib_config::OPT_LEVEL,
+            &stdlib.program,
+        )
+        .map_err(|error| {
+            vec![RuntimeCompileDiagnostic {
+                code: "E_RUNTIME_EMIT".to_string(),
+                message: error.to_string(),
+                severity: RuntimeDiagnosticSeverity::Error,
+                span: None,
+            }]
+        })?;
         let mut units: Vec<_> = emitted
             .into_iter()
             .filter(|unit| {

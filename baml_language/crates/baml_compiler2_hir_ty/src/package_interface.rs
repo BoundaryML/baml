@@ -981,7 +981,12 @@ pub fn package_interface<'db>(
 /// symbolic-link contract.
 fn mark_precompiled_callables_linkable(interface: &mut PackageInterface) {
     let mark = |function: &mut ExportedFunction| {
-        function.linkability = ExternalLinkability::Linkable;
+        if matches!(
+            function.builtin_kind,
+            Some(BuiltinKind::Vm | BuiltinKind::Io)
+        ) {
+            function.linkability = ExternalLinkability::Linkable;
+        }
     };
     for function in interface
         .functions

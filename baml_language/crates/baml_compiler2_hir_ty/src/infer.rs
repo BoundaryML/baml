@@ -4291,9 +4291,26 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn report_mounted_reserved_call(&mut self, call: ExprId, callee: ExprId) {
-        if let Some(MemberResolution::External(external)) =
+        let Some(MemberResolution::External(external)) =
             self.result.member_resolutions.get(&callee)
-            && external.linkability == crate::callable::ExternalLinkability::ReservedBuiltin
+        else {
+            return;
+        };
+        let package = match &external.target {
+            crate::callable::ExternalCallTarget::Free { package, .. }
+            | crate::callable::ExternalCallTarget::Method { package, .. } => package,
+            crate::callable::ExternalCallTarget::Interface { interface, .. } => interface.package(),
+        };
+        let trusted_callsite_lowering =
+            matches!(
+                external.builtin_kind,
+                Some(
+                    baml_compiler2_ast::BuiltinKind::Intrinsic
+                        | baml_compiler2_ast::BuiltinKind::AwaitAny
+                )
+            ) && baml_compiler2_hir::package::is_precompiled_package(self.db, package);
+        if external.linkability == crate::callable::ExternalLinkability::ReservedBuiltin
+            && !trusted_callsite_lowering
         {
             self.pending_diags
                 .push(PendingDiag::MountedPackageCallUnsupported {

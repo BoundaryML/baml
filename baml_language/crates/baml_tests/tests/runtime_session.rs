@@ -60,6 +60,10 @@ function LoadNotes() -> string {
   "raw notes"
 }
 
+function host_dispatch_session_value(value: baml.ToString) -> string throws never {
+  value.to_string()
+}
+
 function SaveDraft(title: string, body: string) -> string {
   log.info("SAVE:" + title + ":" + body)
   "draft-1"
@@ -260,6 +264,32 @@ function runtime_type_binding_persists() -> bool throws unknown {
   first && later && rebound
 }
 
+function session_declaration_mints_are_generative() -> bool throws unknown {
+  let left = reflect.Session.new()
+  let right = reflect.Session.new()
+  left.eval(#"class SameName { value string }"#)
+  right.eval(#"class SameName { value string }"#)
+  let left_type = left.eval<type>(#"type.of<SameName>()"#)
+  let right_type = right.eval<type>(#"type.of<SameName>()"#)
+  left_type != right_type
+}
+
+function host_dispatch_recovers_session_class_provenance() -> bool throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"
+    class SessionValue {
+      value string
+      implements baml.ToString {
+        function to_string(self) -> string throws never {
+          self.value
+        }
+      }
+    }
+  "#)
+  let value = s.eval<baml.ToString>(#"SessionValue { value: "from session" }"#)
+  host_dispatch_session_value(value) == "from session"
+}
+
 function perf_500() -> string throws unknown {
   let s = reflect.Session.new()
   let i = 0
@@ -360,6 +390,24 @@ async fn scoped_runtime_type_bindings_persist_and_rebind_between_submissions() {
 }
 
 #[tokio::test]
+async fn identical_declarations_in_two_sessions_have_distinct_mints() {
+    let output = baml_test!(
+        baml: SCENARIO_7,
+        entry: "session_declaration_mints_are_generative"
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn host_interface_dispatch_uses_session_class_provenance() {
+    let output = baml_test!(
+        baml: SCENARIO_7,
+        entry: "host_dispatch_recovers_session_class_provenance"
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 async fn mutually_recursive_session_lets_diagnose_without_panicking() {
     let output = baml_test!(
         r##"
@@ -399,7 +447,7 @@ function main() -> bool throws unknown {
 }
 
 #[tokio::test]
-async fn s11_heap_liveness_probe_for_one_escaped_session_value() {
+async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
     let program = baml_project::testing::compile_source(S11_LIVENESS_PROBE);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
@@ -503,22 +551,20 @@ async fn s11_heap_liveness_probe_for_one_escaped_session_value() {
     );
 
     assert!(
-        !owner_is_session,
-        "an escaped eval value must not retain its Session owner"
-    );
-    assert_eq!(
-        (
-            session_history,
-            retained_globals,
-            retained_dependencies,
-            retained_dependency_objects,
-        ),
-        (0, 0, 0, 0),
-        "the escaped value retained Session history, globals, or mounted Package state"
+        owner_is_session,
+        "a session declaration Type must retain its owning Session for nominal identity"
     );
     assert!(
-        definition_classes <= 1 && retained_objects <= 4 && escaped_graph_objects <= 4,
-        "the escaped value retained more than its own bounded definition closure"
+        session_history >= 1 && retained_globals >= 1 && retained_dependencies == 1,
+        "the retained Session provenance graph is incomplete"
+    );
+    assert!(
+        definition_classes == 1 && retained_objects >= 1 && retained_dependency_objects >= 1,
+        "the Type must retain its declaration and mounted dependency provenance"
+    );
+    assert!(
+        without_escape_gc.live_count < with_escape_gc.live_count && escaped_graph_objects > 0,
+        "dropping the escaped handle must release the retained Session provenance graph"
     );
 }
 

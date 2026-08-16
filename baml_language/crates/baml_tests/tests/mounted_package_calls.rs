@@ -509,6 +509,10 @@ fn mounted_builtin_call_stays_reserved() {
 function native_value() -> int throws never {
     $rust_function
 }
+
+function intrinsic_type<T>() -> type throws never {
+    $compiler_intrinsic
+}
 "#,
     );
     assert_no_diagnostic_errors(&lib_db);
@@ -523,6 +527,7 @@ function native_value() -> int throws never {
         r#"
 function main() -> int throws never {
     let reference = app.native_value
+    let intrinsic = app.intrinsic_type<int>()
     app.native_value()
 }
 "#,
@@ -537,7 +542,7 @@ function main() -> int throws never {
         .filter(|error| error.contains("E0158") && error.contains("mounted"))
         .count();
     assert_eq!(
-        reserved, 1,
-        "a bare reference is legal; invoking the reserved callable reports E0158, got:\n{errors:#?}"
+        reserved, 2,
+        "ordinary mounts cannot claim native or compiler-intrinsic trust; got:\n{errors:#?}"
     );
 }
