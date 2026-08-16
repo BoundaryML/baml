@@ -77,6 +77,10 @@ harness = false
 name = "cache_profile"
 harness = false
 
+[[bench]]
+name = "package_compile_benchmark"
+harness = false
+
 [features]
 default = [  ]
 heap_debug = [

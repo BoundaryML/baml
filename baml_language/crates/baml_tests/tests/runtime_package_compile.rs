@@ -233,6 +233,42 @@ async fn scenario_5_compiles_parses_and_encodes_runtime_schema() {
     );
 }
 
+/// The compiler-built stdlib remains the host image's immutable dispatch
+/// world: a runtime-compiled generic bound must resolve the same stdlib impl
+/// rule and inherited default method as statically compiled code.
+#[tokio::test]
+async fn runtime_compiled_code_dispatches_through_static_stdlib_impls() {
+    let output = baml_test!(
+        r####"
+function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws never {
+  let count = 0
+  for (let i = 0; i < n; i += 1) {
+    if value <= value { count += 1 } else { count -= 1 }
+  }
+  count
+}
+
+function main() -> bool throws unknown {
+  let package = reflect.Package.compile({ "dispatch.baml": #"
+function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws never {
+  let count = 0
+  for (let i = 0; i < n; i += 1) {
+    if value <= value { count += 1 } else { count -= 1 }
+  }
+  count
+}
+function run(n: int) -> int throws never { compare_hot<int>(7, n) }
+"# })
+  let run = package.get_function<(int) -> int>("root.run") ?? throw "missing run"
+  let before_gc = run(100)
+  baml.sys.collect_garbage()
+  compare_hot<int>(7, 100) == before_gc && before_gc == run(100)
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
 #[tokio::test]
 async fn exact_runtime_types_do_not_regress_static_generic_json_calls() {
     let output = baml_test!(
