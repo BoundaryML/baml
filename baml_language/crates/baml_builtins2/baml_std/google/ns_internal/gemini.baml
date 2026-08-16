@@ -988,11 +988,23 @@ function _gm_sse_failure(provider: string, error: unknown) -> ai.errors.Failure 
     }
 }
 
-// Open the SSE connection, classifying the failure precisely.
-function _gm_open_sse(req: baml.http.Request, provider: string) -> baml.http.SseStream {
-    baml.http.fetch_sse(req) catch_all (e) {
+// Route failures from the shared Google / Vertex stream opener. Timeout and
+// cancellation keep their typed control-flow meaning; only transport errors
+// enter the provider failure taxonomy.
+function _gm_route_sse_open(
+    provider: string,
+    open: () -> baml.http.SseStream throws unknown,
+) -> baml.http.SseStream {
+    open() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        let cancelled: baml.panics.Cancelled => throw cancelled,
         _ => throw _gm_sse_failure(provider, e),
     }
+}
+
+// Open the SSE connection, classifying the failure precisely.
+function _gm_open_sse(req: baml.http.Request, provider: string) -> baml.http.SseStream {
+    _gm_route_sse_open(provider, () -> { baml.http.fetch_sse(req) })
 }
 
 // One SseStream batch -> provider-agnostic stream events.
@@ -1124,7 +1136,14 @@ function _google_request(
     let url = _gm_apply_query(`${base}/models/${c.model}${gemini_method(stream)}`, c.query_params);
     let headers: map<string, string> = { "content-type": "application/json" };
     let with_user = _gm_apply_headers(headers, c.headers);
-    let _ = with_user.set("x-goog-api-key", c.resolved_api_key());
+    if (!preview || with_user.get("x-goog-api-key") == null) {
+        let api_key = if (preview) {
+            "<PREVIEW>"
+        } else {
+            c.resolved_api_key()
+        };
+        let _ = with_user.set("x-goog-api-key", api_key);
+    }
     baml.http.Request { method: "POST", url: url, headers: with_user, body: body }
 }
 

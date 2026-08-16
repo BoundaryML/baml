@@ -83,8 +83,23 @@ function _vertex_key_in_query(c: root.VertexClient) -> bool {
     c.query_params?.get("key") != null
 }
 
-function _vertex_is_express(c: root.VertexClient) -> bool {
-    _vertex_express_key(c) != null || _vertex_key_in_query(c)
+// Preview only needs to know that a key was configured. Inspecting the
+// Credential union avoids reading an env.Ref whose value may be absent or
+// secret; the live request still resolves it normally.
+function _vertex_has_configured_express_key(c: root.VertexClient) -> bool {
+    match (c.api_key) {
+        let literal: string => true,
+        let named: baml.env.Ref => true,
+        null => false,
+    }
+}
+
+function _vertex_is_express(c: root.VertexClient, preview: bool = false) -> bool {
+    if (preview) {
+        _vertex_has_configured_express_key(c) || _vertex_key_in_query(c)
+    } else {
+        _vertex_express_key(c) != null || _vertex_key_in_query(c)
+    }
 }
 
 /// The region the request is routed to: the explicit option, else
@@ -128,7 +143,7 @@ function vertex_project_id(c: root.VertexClient, preview: bool = false) -> strin
     if let configured: string = explicit {
         return configured;
     }
-    if (_vertex_is_express(c)) {
+    if (_vertex_is_express(c, preview = preview)) {
         return null;
     }
     if let from_env: string = baml.env.get("GOOGLE_CLOUD_PROJECT") {
@@ -188,7 +203,7 @@ function _vertex_models_base(c: root.VertexClient, preview: bool = false) -> str
     let project = vertex_project_id(c, preview = preview);
     if let resolved: string = project {
         `https://${host}/v1/projects/${resolved}/locations/${location}/publishers/${publisher}/models`
-    } else if (_vertex_is_express(c)) {
+    } else if (_vertex_is_express(c, preview = preview)) {
         // Express mode has no project: the key selects the tenant, and the
         // request goes to the project-less global endpoint.
         `https://aiplatform.googleapis.com/v1/publishers/${publisher}/models`
@@ -222,7 +237,10 @@ function vertex_url(c: root.VertexClient, stream: bool, preview: bool = false) -
         `${_vertex_models_base(c, preview = preview)}/${c.model}${_vertex_method(c, stream)}`,
         c.query_params,
     );
-    if let key: string = _vertex_express_key(c) {
+    if (preview && _vertex_has_configured_express_key(c)) {
+        let params: map<string, string> = { "key": "<PREVIEW>" };
+        root.internal._gm_apply_query(with_params, params)
+    } else if let key: string = _vertex_express_key(c) {
         let params: map<string, string> = { "key": key };
         root.internal._gm_apply_query(with_params, params)
     } else {
@@ -312,12 +330,14 @@ function _vertex_request(
     let url = vertex_url(c, stream, preview = preview);
     let headers: map<string, string> = { "content-type": "application/json" };
     let with_user = root.internal._gm_apply_headers(headers, c.headers);
-    if (_vertex_is_express(c)) {
+    if (_vertex_is_express(c, preview = preview)) {
         // The key rides the URL; nothing else to authenticate.
         null
     } else {
         if (preview) {
-            let _ = with_user.set("authorization", "Bearer <PREVIEW>");
+            if (with_user.get("authorization") == null) {
+                let _ = with_user.set("authorization", "Bearer <PREVIEW>");
+            }
         } else {
             let credentials = _vertex_credentials(c);
             let token = root.internal.gcp_access_token(credentials, _vertex_scope()) catch_all (e) {

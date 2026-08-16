@@ -758,14 +758,19 @@ function _anthropic_query_suffix(query_params: map<string, string>?) -> string {
 // `anthropic-beta` (and `anthropic-dangerous-direct-browser-access`, which the
 // WASM playground needs) are reachable and `anthropic-version` is overridable;
 // `x-api-key` is applied last so a stray header cannot break authentication.
-function _anthropic_headers(c: root.AnthropicClient) -> map<string, string> {
+function _anthropic_headers(
+    c: root.AnthropicClient,
+    preview: bool = false,
+) -> map<string, string> {
     let headers: map<string, string> = { "anthropic-version": "2023-06-01", "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
         for (let key in extra.keys()) {
             let _ = headers.set(key.to_lower_case(), extra.get(key) ?? "");
         }
     }
-    let _ = headers.set("x-api-key", c.resolved_api_key());
+    if (!preview) {
+        let _ = headers.set("x-api-key", c.resolved_api_key());
+    }
     headers
 }
 
@@ -781,7 +786,7 @@ function _anthropic_request(
     baml.http.Request {
         method: "POST",
         url: `${base}/v1/messages${_anthropic_query_suffix(c.query_params)}`,
-        headers: _anthropic_headers(c),
+        headers: _anthropic_headers(c, preview = preview),
         body: anthropic_messages_body(_anthropic_body_params(c), input, stream, preview = preview),
     }
 }
@@ -1229,19 +1234,22 @@ function _anthropic_sse_failure(message: string) -> ai.errors.Failure {
     }
 }
 
+function _anthropic_stream_open_failure(
+    error: baml.errors.Io | baml.errors.Timeout,
+) -> never {
+    match (error) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        let io: baml.errors.Io => throw _anthropic_sse_failure(io.message),
+    }
+}
+
 // The streaming entry point: the same request as `invoke` with
 // `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _anthropic_request(c, input, true, preview = false);
     let sse = baml.http.fetch_sse(req) catch (e) {
-        baml.errors.Io => throw _anthropic_sse_failure(e.message),
-        baml.errors.Timeout => {
-            throw ai.errors.NetworkFailure {
-                provider: "anthropic",
-                detail: `the streaming request timed out: ${e.to_string()}`,
-                raw_body: null,
-            }
-        },
+        baml.errors.Io => _anthropic_stream_open_failure(e),
+        baml.errors.Timeout => _anthropic_stream_open_failure(e),
     };
     let state = AnthStreamState.new();
     // `require_terminal`: the Messages stream ends with an explicit

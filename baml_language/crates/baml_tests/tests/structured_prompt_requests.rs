@@ -390,7 +390,22 @@ function main() -> string {
 
 #[tokio::test]
 async fn vertex_project_id_accepts_late_bound_env_ref_in_preview() {
-    unsafe { std::env::set_var("VERTEX_PROJECT_ID", "test-project") };
+    const CHILD_MARKER: &str = "BAML_VERTEX_PROJECT_PREVIEW_CHILD";
+    if std::env::var(CHILD_MARKER).as_deref() != Ok("1") {
+        let status = std::process::Command::new(
+            std::env::current_exe().expect("test binary path should be available"),
+        )
+        .arg("--exact")
+        .arg("vertex_project_id_accepts_late_bound_env_ref_in_preview")
+        .arg("--nocapture")
+        .env(CHILD_MARKER, "1")
+        .env("VERTEX_PROJECT_ID", "test-project")
+        .status()
+        .expect("isolated preview test process should start");
+        assert!(status.success(), "isolated preview test failed: {status}");
+        return;
+    }
+
     let source = r#"
 client Vertex = google.VertexClient.new(
   model = "gemini-test",

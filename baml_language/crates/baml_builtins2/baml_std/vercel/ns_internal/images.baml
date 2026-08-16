@@ -263,7 +263,10 @@ function _gw_images_with_query(url: string, params: map<string, string>?) -> str
 // Gateway protocol headers, then the user's `headers` (lowercased), then auth —
 // `authorization` + `ai-gateway-auth-method` are applied last so a passthrough
 // header cannot silently unset the credential.
-function _gw_images_headers(c: root.AiGatewayImageClient) -> map<string, string> {
+function _gw_images_headers(
+    c: root.AiGatewayImageClient,
+    preview: bool = false,
+) -> map<string, string> {
     let headers: map<string, string> = {
         "content-type": "application/json",
         "ai-gateway-protocol-version": "0.0.1",
@@ -275,8 +278,10 @@ function _gw_images_headers(c: root.AiGatewayImageClient) -> map<string, string>
             let _ = headers.set(name.to_lower_case(), extra.get(name) ?? "");
         }
     }
-    let _ = headers.set("authorization", `Bearer ${c.resolved_api_key()}`);
-    let _ = headers.set("ai-gateway-auth-method", "api-key");
+    if (!preview) {
+        let _ = headers.set("authorization", `Bearer ${c.resolved_api_key()}`);
+        let _ = headers.set("ai-gateway-auth-method", "api-key");
+    }
     headers
 }
 
@@ -319,7 +324,7 @@ function gateway_images_render(
     baml.http.Request {
         method: "POST",
         url: url,
-        headers: _gw_images_headers(c),
+        headers: _gw_images_headers(c, preview = preview),
         body: baml.json.stringify(merged),
     }
 }

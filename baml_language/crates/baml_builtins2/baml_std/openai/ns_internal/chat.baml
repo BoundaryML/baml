@@ -992,32 +992,38 @@ function _chat_url(compat: ChatCompat, params: ChatParams) -> string {
 
 // content-type, then the caller's headers, then the credential — so the
 // endpoint's own auth header always wins over a user override of the same name.
-function _chat_headers(compat: ChatCompat, params: ChatParams) -> map<string, string> {
+function _chat_headers(
+    compat: ChatCompat,
+    params: ChatParams,
+    preview: bool = false,
+) -> map<string, string> {
     let headers: map<string, string> = { "content-type": "application/json" };
     if let user_headers: map<string, string> = params.headers {
         for (let name in user_headers.keys()) {
             let _ = headers.set(name.to_lower_case(), user_headers.get(name) ?? "");
         }
     }
-    let key = params.api_key;
-    if (key == null && compat.api_key_required) {
-        throw _reject(
-            compat.provider,
-            `${compat.provider} needs an API key: pass api_key, or set ${compat.api_key_env ?? "the provider's environment variable"}`,
-        )
-    }
-    if let credential: string = key {
-        match (compat.auth) {
-            ChatAuth.Bearer => {
-                let _ = headers.set("authorization", `Bearer ${credential}`);
-                null
-            },
-            ChatAuth.ApiKeyHeader => {
-                let _ = headers.set("api-key", credential);
-                null
-            },
-            ChatAuth.NoAuth => null,
-        };
+    if (!preview) {
+        let key = params.api_key;
+        if (key == null && compat.api_key_required) {
+            throw _reject(
+                compat.provider,
+                `${compat.provider} needs an API key: pass api_key, or set ${compat.api_key_env ?? "the provider's environment variable"}`,
+            )
+        }
+        if let credential: string = key {
+            match (compat.auth) {
+                ChatAuth.Bearer => {
+                    let _ = headers.set("authorization", `Bearer ${credential}`);
+                    null
+                },
+                ChatAuth.ApiKeyHeader => {
+                    let _ = headers.set("api-key", credential);
+                    null
+                },
+                ChatAuth.NoAuth => null,
+            };
+        }
     }
     headers
 }
@@ -1159,7 +1165,7 @@ function chat_preview(
     baml.http.Request {
         method: "POST",
         url: _chat_url(compat, params),
-        headers: _chat_headers(compat, params),
+        headers: _chat_headers(compat, params, preview = true),
         body: chat_render_body(compat, params, request),
     }
 }
@@ -1590,6 +1596,14 @@ function _chat_stream_failure(provider: string, detail: string) -> ai.errors.Fai
     }
 }
 
+function _chat_stream_open_failure(provider: string, error: unknown) -> never {
+    match (error) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        let cancelled: baml.panics.Cancelled => throw cancelled,
+        _ => throw _chat_stream_failure(provider, error.to_string()),
+    }
+}
+
 /// The streaming entry point: the same request as `chat_invoke` with
 /// `stream: true`, wrapped in an `ai.stream.TurnStream` over the SSE connection.
 function chat_invoke_stream(
@@ -1600,7 +1614,7 @@ function chat_invoke_stream(
     let request = chat_render(compat, params, input, true);
     let decoder = ChatStreamDecoder.new(provider = compat.provider);
     let sse = baml.http.fetch_sse(request) catch_all (e) {
-        _ => throw _chat_stream_failure(compat.provider, e.to_string()),
+        _ => _chat_stream_open_failure(compat.provider, e),
     };
     // Chat completions has an explicit terminator — the literal `data: [DONE]`
     // — so a connection that ends without it lost data. `require_terminal` makes

@@ -190,6 +190,18 @@ impl BamlClassTypeValue for PackageBamlImpl {
             baml_type::RealizedTy::Class(name, _, _) => name.display_name().to_string(),
             _ => "output".to_string(),
         };
+        // Run the bounded specialization analysis first: the subsequent structural
+        // interface walk keys every realization and would otherwise follow a
+        // non-regular generic transform forever.
+        if let Some(message) = first_render_schema_error(vm, &type_value.ty, type_value.defs()) {
+            let diagnostic = super::type_kinds::compiler_diagnostic(
+                baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
+                message,
+            );
+            return Err(VmRustFnError::Thrown(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
         let mut visited = std::collections::HashSet::new();
         if let Some((field, open_ty)) =
             first_open_interface(vm, &type_value.ty, type_value.defs(), &root, &mut visited)
@@ -200,19 +212,6 @@ impl BamlClassTypeValue for PackageBamlImpl {
                 super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
             ));
         }
-
-        if let Some(name) = first_conflicting_render_name(vm, &type_value.ty, type_value.defs()) {
-            let diagnostic = super::type_kinds::compiler_diagnostic(
-                baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
-                format!(
-                    "type `{name}` has non-equivalent definitions in the same LLM render context"
-                ),
-            );
-            return Err(VmRustFnError::Thrown(
-                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-            ));
-        }
-
         let mut visited = std::collections::HashSet::new();
         if let Some((path, non_data_ty)) =
             first_non_data_type(vm, &type_value.ty, type_value.defs(), &root, &mut visited)
@@ -284,6 +283,40 @@ impl BamlClassTypeValue for PackageBamlImpl {
     }
 }
 
+fn realized_class_name(name: &baml_type::TypeName, args: &[baml_type::RealizedTy]) -> String {
+    let base = name.display_name();
+    if args.is_empty() {
+        base.to_string()
+    } else {
+        format!(
+            "{base}<{}>",
+            args.iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+fn rendered_realized_class_name(
+    class: &bex_vm_types::Class,
+    args: &[baml_type::RealizedTy],
+) -> String {
+    let display_name = class.name.display_name();
+    let base = class.alias.as_deref().unwrap_or(display_name.as_str());
+    if args.is_empty() {
+        base.to_string()
+    } else {
+        format!(
+            "{base}<{}>",
+            args.iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum RenderDefinition {
     Class(baml_type::TypeName),
@@ -291,31 +324,102 @@ enum RenderDefinition {
     TypeAlias(baml_type::TypeName),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct RealizedClassIdentity {
+    name: baml_type::TypeName,
+    args: Vec<baml_type::RealizedTy>,
+}
+
+struct RealizedClassFrame {
+    identity: RealizedClassIdentity,
+    name: baml_type::TypeName,
+    display_name: String,
+    arity: usize,
+}
+
+struct RenderedClass {
+    identity: RealizedClassIdentity,
+    display_name: String,
+    rendered_name: String,
+    definition: RenderDefinition,
+}
+
 struct RenderDefinitionValidator<'a> {
     vm: &'a BexVm,
     defs: &'a DynTypeDefs,
     by_display_name: std::collections::HashMap<String, RenderDefinition>,
     visited: std::collections::HashSet<RenderDefinition>,
+    class_ancestry: Vec<RealizedClassFrame>,
+    recursive_classes: std::collections::HashSet<RealizedClassIdentity>,
+    rendered_classes: Vec<RenderedClass>,
 }
 
 impl RenderDefinitionValidator<'_> {
-    fn visit(&mut self, ty: &baml_type::RealizedTy) -> Option<String> {
+    fn visit(
+        &mut self,
+        ty: &baml_type::RealizedTy,
+        origins: &baml_type::template::TyTemplateOrigins,
+    ) -> Option<String> {
         match ty {
             baml_type::RealizedTy::Class(name, args, _) => {
                 let definition = RenderDefinition::Class(name.clone());
                 if let Some(conflict) = self.check_name(&definition) {
                     return Some(conflict);
                 }
-                if !self.visited.insert(definition) {
+                let identity = RealizedClassIdentity {
+                    name: name.clone(),
+                    args: args.clone(),
+                };
+                if let Some(start) = self
+                    .class_ancestry
+                    .iter()
+                    .position(|ancestor| ancestor.identity == identity)
+                {
+                    self.recursive_classes.extend(
+                        self.class_ancestry[start..]
+                            .iter()
+                            .map(|ancestor| ancestor.identity.clone()),
+                    );
                     return None;
                 }
-                let class = find_render_class(self.vm, self.defs, name)?;
+
+                let display_name = realized_class_name(name, args);
+                for (index, ancestor) in self.class_ancestry.iter().enumerate() {
+                    if ancestor.name == *name
+                        && origins.class_transform_expands(index, name, ancestor.arity)
+                    {
+                        return Some(format!(
+                            "non-regular recursive generic class `{}` expands from `{}` to `{display_name}` and cannot be rendered as an LLM output schema",
+                            name.display_name(),
+                            ancestor.display_name,
+                        ));
+                    }
+                }
+
+                let class = find_render_class(self.vm, self.defs, name)?.clone();
+                let rendered_name = rendered_realized_class_name(&class, args);
+                self.rendered_classes.push(RenderedClass {
+                    identity: identity.clone(),
+                    display_name: display_name.clone(),
+                    rendered_name,
+                    definition,
+                });
+
+                self.class_ancestry.push(RealizedClassFrame {
+                    identity,
+                    name: name.clone(),
+                    display_name,
+                    arity: args.len(),
+                });
                 for field in &class.fields {
                     if field.skip {
                         continue;
                     }
                     if let Some(runtime) = &field.runtime_type {
-                        if let Some(conflict) = self.visit(&runtime.ty) {
+                        let runtime_origins = baml_type::template::TyTemplateOrigins::opaque(
+                            self.class_ancestry.len(),
+                        );
+                        if let Some(conflict) = self.visit(&runtime.ty, &runtime_origins) {
                             return Some(conflict);
                         }
                         continue;
@@ -325,12 +429,15 @@ impl RenderDefinitionValidator<'_> {
                         .substitute(args, self.vm)
                         .ok()
                         .or_else(|| baml_type::RealizedTy::try_from(field.field_type.clone()).ok());
-                    if let Some(field_ty) = field_ty
-                        && let Some(conflict) = self.visit(&field_ty)
-                    {
-                        return Some(conflict);
+                    if let Some(field_ty) = field_ty {
+                        let field_origins =
+                            origins.through_field(name, args.len(), &field.field_template);
+                        if let Some(conflict) = self.visit(&field_ty, &field_origins) {
+                            return Some(conflict);
+                        }
                     }
                 }
+                self.class_ancestry.pop();
                 None
             }
             baml_type::RealizedTy::Enum(name, _) => {
@@ -352,18 +459,32 @@ impl RenderDefinitionValidator<'_> {
                 self.vm
                     .recursive_type_alias(name)
                     .and_then(|alias| baml_type::RealizedTy::try_from(alias.clone()).ok())
-                    .and_then(|alias| self.visit(&alias))
+                    .and_then(|alias| {
+                        let alias_origins = baml_type::template::TyTemplateOrigins::opaque(
+                            self.class_ancestry.len(),
+                        );
+                        self.visit(&alias, &alias_origins)
+                    })
             }
-            baml_type::RealizedTy::List(element, _) => self.visit(element),
+            baml_type::RealizedTy::List(element, _) => {
+                let element_origins = origins.list_element();
+                self.visit(element, &element_origins)
+            }
             baml_type::RealizedTy::Map { key, value, .. } => {
-                self.visit(key).or_else(|| self.visit(value))
+                let key_origins = origins.map_key();
+                let value_origins = origins.map_value();
+                self.visit(key, &key_origins)
+                    .or_else(|| self.visit(value, &value_origins))
             }
             baml_type::RealizedTy::Union(members, _) => {
-                members.iter().find_map(|member| self.visit(member))
+                members.iter().enumerate().find_map(|(index, member)| {
+                    let member_origins = origins.union_member(index);
+                    self.visit(member, &member_origins)
+                })
             }
-            baml_type::RealizedTy::Future(value, error, _) => {
-                self.visit(value).or_else(|| self.visit(error))
-            }
+            baml_type::RealizedTy::Future(value, error, _) => self
+                .visit(value, &origins.future_value())
+                .or_else(|| self.visit(error, &origins.future_error())),
             baml_type::RealizedTy::Function {
                 params,
                 ret,
@@ -371,11 +492,40 @@ impl RenderDefinitionValidator<'_> {
                 ..
             } => params
                 .iter()
-                .find_map(|param| self.visit(&param.ty))
-                .or_else(|| self.visit(ret))
-                .or_else(|| self.visit(throws)),
+                .enumerate()
+                .find_map(|(index, param)| self.visit(&param.ty, &origins.function_param(index)))
+                .or_else(|| self.visit(ret, &origins.function_return()))
+                .or_else(|| self.visit(throws, &origins.function_throws())),
             _ => None,
         }
+    }
+
+    fn first_recursive_alias_collision(&self) -> Option<String> {
+        let mut by_rendered_name = std::collections::HashMap::<&str, &RenderedClass>::new();
+        for class in self
+            .rendered_classes
+            .iter()
+            .filter(|class| self.recursive_classes.contains(&class.identity))
+        {
+            if let Some(first) = by_rendered_name.get(class.rendered_name.as_str()) {
+                let equivalent = first.identity.args == class.identity.args
+                    && render_definitions_equivalent(
+                        self.vm,
+                        self.defs,
+                        &first.definition,
+                        &class.definition,
+                    );
+                if first.identity != class.identity && !equivalent {
+                    return Some(format!(
+                        "classes `{}` and `{}` both render as `{}` in the same LLM render context",
+                        first.display_name, class.display_name, class.rendered_name,
+                    ));
+                }
+            } else {
+                by_rendered_name.insert(class.rendered_name.as_str(), class);
+            }
+        }
+        None
     }
 
     fn check_name(&mut self, definition: &RenderDefinition) -> Option<String> {
@@ -384,7 +534,9 @@ impl RenderDefinitionValidator<'_> {
             if previous != definition
                 && !render_definitions_equivalent(self.vm, self.defs, previous, definition)
             {
-                return Some(display_name);
+                return Some(format!(
+                    "type `{display_name}` has non-equivalent definitions in the same LLM render context"
+                ));
             }
         } else {
             self.by_display_name
@@ -394,7 +546,7 @@ impl RenderDefinitionValidator<'_> {
     }
 }
 
-fn first_conflicting_render_name(
+fn first_render_schema_error(
     vm: &BexVm,
     ty: &baml_type::RealizedTy,
     defs: &DynTypeDefs,
@@ -404,8 +556,13 @@ fn first_conflicting_render_name(
         defs,
         by_display_name: std::collections::HashMap::new(),
         visited: std::collections::HashSet::new(),
+        class_ancestry: Vec::new(),
+        recursive_classes: std::collections::HashSet::new(),
+        rendered_classes: Vec::new(),
     };
-    validator.visit(ty)
+    validator
+        .visit(ty, &baml_type::template::TyTemplateOrigins::root())
+        .or_else(|| validator.first_recursive_alias_collision())
 }
 
 fn render_definition_display_name(definition: &RenderDefinition) -> String {
@@ -732,12 +889,12 @@ fn first_open_interface(
     ty: &baml_type::RealizedTy,
     defs: &DynTypeDefs,
     path: &str,
-    visited: &mut std::collections::HashSet<baml_type::TypeName>,
+    visited: &mut std::collections::HashSet<baml_type::RealizedTy>,
 ) -> Option<(String, String)> {
     match ty {
         baml_type::RealizedTy::Interface(..) => Some((path.to_string(), ty.to_string())),
         baml_type::RealizedTy::Class(name, args, _) => {
-            if !visited.insert(name.clone()) {
+            if !visited.insert(ty.clone()) {
                 return None;
             }
             let class_ptr = defs
@@ -797,7 +954,7 @@ fn first_open_interface(
             .or_else(|| first_open_interface(vm, ret, defs, path, visited))
             .or_else(|| first_open_interface(vm, throws, defs, path, visited)),
         baml_type::RealizedTy::TypeAlias(name, _) => {
-            if !visited.insert(name.clone()) {
+            if !visited.insert(ty.clone()) {
                 return None;
             }
             vm.recursive_type_alias(name)

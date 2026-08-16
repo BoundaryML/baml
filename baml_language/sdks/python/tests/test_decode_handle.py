@@ -138,3 +138,43 @@ async def test_stream_async_forwards_python_task_cancellation(monkeypatch):
         await task
 
     assert encoded_call_ids == call_ids == [17]
+
+
+@pytest.mark.asyncio
+async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
+    monkeypatch,
+):
+    entered = asyncio.Event()
+    call_ids: list[int] = []
+
+    class BlockingRuntime:
+        async def call_function(self, _args, _ctx, _collectors):
+            entered.set()
+            await asyncio.Future()
+
+    def fail_cancel(call_id: int) -> None:
+        call_ids.append(call_id)
+        raise RuntimeError("native cancellation failed")
+
+    monkeypatch.setattr(baml_bridge, "get_runtime", lambda: BlockingRuntime())
+    monkeypatch.setattr(baml_bridge, "cancel_function_call", fail_cancel)
+    monkeypatch.setattr(baml_bridge.baml_py, "new_function_call", lambda: 23)
+    monkeypatch.setattr(
+        baml_bridge.proto,
+        "encode_call_args",
+        lambda _args, _call_id, **_kwargs: b"encoded",
+    )
+    stream = BamlStream._from_pyhandle(
+        typing.cast(BamlPyHandle, object()),
+        "test.stream.Custom",
+    )
+
+    task = asyncio.create_task(stream.next_async())
+    await asyncio.wait_for(entered.wait(), timeout=1.0)
+    assert task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert task.cancelled()
+    assert call_ids == [23]

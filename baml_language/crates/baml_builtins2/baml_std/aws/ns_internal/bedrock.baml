@@ -1036,7 +1036,7 @@ function converse_request(
 /// The Converse endpoint for this client: the `endpoint_url` override when set
 /// (which bypasses region resolution entirely), else
 /// `https://bedrock-runtime.<region>.amazonaws.com`.
-function converse_url(client: root.BedrockClient) -> string {
+function converse_url(client: root.BedrockClient, preview: bool = false) -> string {
     let path = converse_model_path(client.model);
     if let endpoint: string = client.resolved_endpoint_url() {
         // A trailing slash on the override would double up with the path.
@@ -1052,6 +1052,9 @@ function converse_url(client: root.BedrockClient) -> string {
     // it keeps URL construction free of io when the caller was explicit.
     if let explicit: string = client.region {
         return `https://bedrock-runtime.${explicit}.amazonaws.com${path}`;
+    }
+    if (preview) {
+        return `https://bedrock-runtime.preview-region.amazonaws.com${path}`;
     }
     // Reading the profile can fail on io; that is a configuration problem, not
     // a transport one, so it stays a typed InvalidRequest rather than becoming
@@ -1136,7 +1139,7 @@ function build_request(
     let merged = ai.wire.merge_request_body(body, client.request_body);
     baml.http.Request {
         method: "POST",
-        url: _apply_query(converse_url(client), client.query_params),
+        url: _apply_query(converse_url(client, preview = preview), client.query_params),
         headers: _merge_headers(
             { "content-type": "application/json", "accept": "application/json" },
             client.headers,

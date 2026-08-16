@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use thiserror::Error;
 
 /// Error type for output format rendering.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum RenderError {
     #[error("Enum '{0}' not found")]
     EnumNotFound(String),
@@ -14,6 +14,22 @@ pub enum RenderError {
     ClassNotFound(String),
     #[error("Type '{0}' is not supported in outputs")]
     UnsupportedType(String),
+    #[error(
+        "Non-regular recursive generic class '{class}' expands from '{ancestor}' to '{instantiation}'"
+    )]
+    NonRegularRecursiveGeneric {
+        class: String,
+        ancestor: String,
+        instantiation: String,
+    },
+    #[error(
+        "Classes '{first}' and '{second}' both render as '{rendered_name}' in the output schema"
+    )]
+    RenderedClassNameCollision {
+        rendered_name: String,
+        first: String,
+        second: String,
+    },
 }
 
 /// A value within an enum definition for output format rendering.
@@ -60,6 +76,7 @@ pub struct OutputFormatContent {
     pub recursive_classes: indexmap::IndexSet<String>,
     /// Recursive type aliases: alias name → target type.
     pub recursive_type_aliases: IndexMap<String, RuntimeTy>,
+    build_error: Option<RenderError>,
 }
 
 impl OutputFormatContent {
@@ -71,6 +88,7 @@ impl OutputFormatContent {
             target,
             recursive_classes: indexmap::IndexSet::new(),
             recursive_type_aliases: IndexMap::new(),
+            build_error: None,
         }
     }
 
@@ -104,6 +122,10 @@ impl OutputFormatContent {
     }
 
     fn render_impl(&self, options: &RenderOptions) -> Result<Option<String>, RenderError> {
+        if let Some(error) = &self.build_error {
+            return Err(error.clone());
+        }
+
         if matches!(options.prefix, RenderSetting::Auto) {
             if let Some(instruction) = media_output_instruction(&self.target, options) {
                 return Ok(Some(instruction));
@@ -129,6 +151,7 @@ impl OutputFormatContent {
         // Compute which classes and enums to hoist
         let hoisted_classes = self.compute_hoisted_classes(options);
         let hoisted_enums = self.compute_hoisted_enums(options);
+        self.validate_hoisted_class_names(&hoisted_classes)?;
 
         let prefix = self.get_prefix(options, &hoisted_classes);
 
@@ -192,7 +215,7 @@ impl OutputFormatContent {
                     _ => String::new(),
                 };
 
-                let display_name = rendered_name(name, cls.alias.as_ref());
+                let display_name = rendered_hoisted_definition_name(name, cls);
 
                 // Render class description above the name for hoisted classes
                 let mut def = String::new();
@@ -232,15 +255,12 @@ impl OutputFormatContent {
         {
             let tn_display_name = tn.display_name();
             let class_key = class_instantiation_key(&self.target);
-            if hoisted_classes.contains(&class_key)
-                || hoisted_classes.contains(tn_display_name.as_str())
-            {
-                let display_name = self
-                    .find_class(&class_key)
-                    .or_else(|| self.find_class(tn_display_name.as_str()))
-                    .and_then(|cls| cls.alias.as_deref())
-                    .unwrap_or(tn_display_name.as_str());
-                Some(display_name.to_string())
+            if hoisted_classes.contains(&class_key) {
+                Some(rendered_hoisted_class_name(
+                    &self.target,
+                    self.find_class(&class_key)
+                        .or_else(|| self.find_class(tn_display_name.as_str())),
+                ))
             } else {
                 self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
             }
@@ -333,7 +353,16 @@ impl OutputFormatContent {
                 hoisted.extend(self.classes.keys().cloned());
             }
             HoistClasses::Subset(names) => {
-                hoisted.extend(names.iter().cloned());
+                for requested_name in names {
+                    hoisted.extend(
+                        self.classes
+                            .iter()
+                            .filter(|(definition_key, cls)| {
+                                *definition_key == requested_name || cls.name == *requested_name
+                            })
+                            .map(|(definition_key, _)| definition_key.clone()),
+                    );
+                }
             }
             HoistClasses::Auto => {
                 // Only recursive classes (already added above)
@@ -341,6 +370,31 @@ impl OutputFormatContent {
         }
 
         hoisted
+    }
+
+    fn validate_hoisted_class_names(
+        &self,
+        hoisted: &indexmap::IndexSet<String>,
+    ) -> Result<(), RenderError> {
+        let mut definitions_by_rendered_name = IndexMap::<String, String>::new();
+        for definition_key in hoisted {
+            let Some(cls) = self.find_class(definition_key) else {
+                continue;
+            };
+            let rendered_name = rendered_hoisted_definition_name(definition_key, cls);
+            if let Some(first) = definitions_by_rendered_name.get(&rendered_name) {
+                if first != definition_key {
+                    return Err(RenderError::RenderedClassNameCollision {
+                        rendered_name,
+                        first: first.clone(),
+                        second: definition_key.clone(),
+                    });
+                }
+            } else {
+                definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
+            }
+        }
+        Ok(())
     }
 
     fn get_prefix(
@@ -379,8 +433,8 @@ impl OutputFormatContent {
             RuntimeTy::List(..) => {
                 Some("Answer with a JSON Array using this schema:\n".to_string())
             }
-            RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
-                let end = if hoisted.contains(tn.display_name().as_str()) {
+            RuntimeTy::Class(_, _, _) | RuntimeTy::Interface(_, _, _, _) => {
+                let end = if class_is_hoisted(ty, hoisted) {
                     " "
                 } else {
                     "\n"
@@ -427,15 +481,12 @@ impl OutputFormatContent {
         if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) = ty {
             let tn_display_name = tn.display_name();
             let class_key = class_instantiation_key(ty);
-            if hoisted_classes.contains(&class_key)
-                || hoisted_classes.contains(tn_display_name.as_str())
-            {
-                let display_name = self
-                    .find_class(&class_key)
-                    .or_else(|| self.find_class(tn_display_name.as_str()))
-                    .and_then(|cls| cls.alias.as_deref())
-                    .unwrap_or(tn_display_name.as_str());
-                return Ok(Some(display_name.to_string()));
+            if hoisted_classes.contains(&class_key) {
+                return Ok(Some(rendered_hoisted_class_name(
+                    ty,
+                    self.find_class(&class_key)
+                        .or_else(|| self.find_class(tn_display_name.as_str())),
+                )));
             }
         }
 
@@ -459,9 +510,8 @@ impl OutputFormatContent {
 
                 // Determine if we need multiline rendering
                 let is_hoisted = match inner.as_ref() {
-                    RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
-                        hoisted_classes.contains(&class_instantiation_key(inner))
-                            || hoisted_classes.contains(tn.display_name().as_str())
+                    RuntimeTy::Class(..) | RuntimeTy::Interface(..) => {
+                        class_is_hoisted(inner, hoisted_classes)
                     }
                     RuntimeTy::TypeAlias(tn, _) => self
                         .recursive_type_aliases
@@ -568,7 +618,7 @@ impl OutputFormatContent {
                         false,
                     )?))
                 } else {
-                    Ok(Some(tn.display_name().to_string()))
+                    Ok(Some(class_instantiation_key(ty)))
                 }
             }
 
@@ -714,6 +764,28 @@ fn rendered_name<'a>(name: &'a str, alias: Option<&'a String>) -> &'a str {
     alias.map(String::as_str).unwrap_or(name)
 }
 
+fn rendered_hoisted_definition_name(definition_key: &str, cls: &Class) -> String {
+    let rendered_base = rendered_name(&cls.name, cls.alias.as_ref());
+    match definition_key.strip_prefix(&cls.name) {
+        Some("") => rendered_base.to_string(),
+        Some(type_args) if type_args.starts_with('<') => {
+            format!("{rendered_base}{type_args}")
+        }
+        _ => definition_key.to_string(),
+    }
+}
+
+fn rendered_hoisted_class_name(ty: &RuntimeTy, class_def: Option<&Class>) -> String {
+    let class_key = class_instantiation_key(ty);
+    class_def.map_or(class_key.clone(), |cls| {
+        rendered_hoisted_definition_name(&class_key, cls)
+    })
+}
+
+fn class_is_hoisted(ty: &RuntimeTy, hoisted: &indexmap::IndexSet<String>) -> bool {
+    hoisted.contains(&class_instantiation_key(ty))
+}
+
 /// Key a class definition by its realized generic instantiation. A generic
 /// class's display name alone is insufficient: `Box<int>` and `Box<string>`
 /// have different field schemas even though both are named `Box`.
@@ -729,28 +801,6 @@ fn class_instantiation_key(ty: &RuntimeTy) -> String {
         format!(
             "{}<{}>",
             type_name.display_name(),
-            type_args
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    }
-}
-
-/// Internal traversal identity for a realized class. Unlike the output label,
-/// this retains the canonical package-qualified type name.
-fn class_visit_key(ty: &RuntimeTy) -> String {
-    let (RuntimeTy::Class(type_name, type_args, _)
-    | RuntimeTy::Interface(type_name, type_args, _, _)) = ty
-    else {
-        unreachable!("class_visit_key called for a non-class type")
-    };
-    if type_args.is_empty() {
-        format!("class:{type_name}")
-    } else {
-        format!(
-            "class:{type_name}<{}>",
             type_args
                 .iter()
                 .map(ToString::to_string)
@@ -1007,7 +1057,16 @@ pub fn build_output_format_content(
     let mut visited = HashSet::new();
     let mut ancestry = Vec::new();
 
-    walk_ty(ty, ctx, &mut content, &mut visited, &mut ancestry);
+    if let Err(error) = walk_ty(
+        ty,
+        &baml_type::template::TyTemplateOrigins::root(),
+        ctx,
+        &mut content,
+        &mut visited,
+        &mut ancestry,
+    ) {
+        content.build_error = Some(error);
+    }
 
     content
 }
@@ -1057,36 +1116,56 @@ fn find_type_alias_definition<'a>(
     })
 }
 
-/// Recursive DFS walk of a type tree. `ancestry` tracks the class names
-/// currently on the call stack so mutual recursion (A → B → A) is detected.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum OutputVisitKey {
+    Enum(baml_type::TypeName),
+    TypeAlias(baml_type::TypeName),
+}
+
+struct ClassFrame {
+    ty: RuntimeTy,
+    name: baml_type::TypeName,
+    output_name: String,
+    arity: usize,
+}
+
+/// Recursive DFS walk of a type tree. `ancestry` tracks the realized classes
+/// currently on the call stack so mutual recursion (A → B → A) is detected and
+/// transformed generic recursion (`Box<int> → Box<Box<int>> → ...`) is
+/// rejected.
 fn walk_ty(
     ty: &baml_type::RuntimeTy,
+    origins: &baml_type::template::TyTemplateOrigins,
     ctx: &::sys_types::SysOpContext,
     content: &mut self::OutputFormatContent,
-    visited: &mut std::collections::HashSet<String>,
-    ancestry: &mut Vec<(String, String)>,
-) {
+    visited: &mut std::collections::HashSet<OutputVisitKey>,
+    ancestry: &mut Vec<ClassFrame>,
+) -> Result<(), RenderError> {
     use baml_type::RuntimeTy;
 
     match ty {
         RuntimeTy::Class(type_name, type_args, _) => {
-            // Runtime definitions carry a mint-qualified internal TypeName. Use
-            // that identity for traversal: the display name is an output label,
-            // not a definition key (BEP-066 R-3).
-            let key = class_visit_key(ty);
             let output_key = class_instantiation_key(ty);
 
             // If this class is already on the ancestry stack, it's a recursive cycle.
             // Only mark classes from the cycle start, not unrelated ancestors.
-            if let Some(start) = ancestry.iter().position(|(name, _)| name == &key) {
-                for (_, output_name) in &ancestry[start..] {
-                    content.recursive_classes.insert(output_name.clone());
+            if let Some(start) = ancestry.iter().position(|frame| frame.ty == *ty) {
+                for frame in &ancestry[start..] {
+                    content.recursive_classes.insert(frame.output_name.clone());
                 }
-                return;
+                return Ok(());
             }
 
-            if !visited.insert(key.clone()) {
-                return;
+            for (index, ancestor) in ancestry.iter().enumerate() {
+                if ancestor.name == *type_name
+                    && origins.class_transform_expands(index, type_name, ancestor.arity)
+                {
+                    return Err(RenderError::NonRegularRecursiveGeneric {
+                        class: type_name.display_name().to_string(),
+                        ancestor: ancestor.output_name.clone(),
+                        instantiation: output_key,
+                    });
+                }
             }
 
             if let Some(class_def) = find_class_definition(ctx, type_name) {
@@ -1129,17 +1208,32 @@ fn walk_ty(
                 );
 
                 // Push onto ancestry before recursing into fields
-                ancestry.push((key, output_key));
-                for field_type in &field_types {
-                    walk_ty(field_type, ctx, content, visited, ancestry);
+                ancestry.push(ClassFrame {
+                    ty: ty.clone(),
+                    name: type_name.clone(),
+                    output_name: output_key,
+                    arity: type_args.len(),
+                });
+                for (field, field_type) in class_def
+                    .fields
+                    .iter()
+                    .filter(|field| !field.skip)
+                    .zip(&field_types)
+                {
+                    let field_origins = if let Some(template) = &field.field_template {
+                        origins.through_field(type_name, type_args.len(), template)
+                    } else {
+                        baml_type::template::TyTemplateOrigins::opaque(ancestry.len())
+                    };
+                    walk_ty(field_type, &field_origins, ctx, content, visited, ancestry)?;
                 }
                 ancestry.pop();
             }
         }
         RuntimeTy::Enum(type_name, _) => {
-            let key = format!("enum:{type_name}");
+            let key = OutputVisitKey::Enum(type_name.clone());
             if !visited.insert(key) {
-                return;
+                return Ok(());
             }
             if let Some(enum_def) = find_enum_definition(ctx, type_name) {
                 // Skipped variants are already filtered out in bex_engine extraction.
@@ -1172,39 +1266,47 @@ fn walk_ty(
             // recurse into the alias body (which would diverge on the self-referential
             // `json[]` / `map<string, json>` arms).
             if type_name.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
-                visited.insert(format!("alias:{type_name}"));
-                return;
+                visited.insert(OutputVisitKey::TypeAlias(type_name.clone()));
+                return Ok(());
             }
-            let key = format!("alias:{type_name}");
+            let key = OutputVisitKey::TypeAlias(type_name.clone());
             if !visited.insert(key) {
-                return;
+                return Ok(());
             }
             if let Some(target_ty) = find_type_alias_definition(ctx, type_name) {
                 content
                     .recursive_type_aliases
                     .insert(type_name.display_name().to_string(), target_ty.clone());
-                walk_ty(target_ty, ctx, content, visited, ancestry);
+                let target_origins = baml_type::template::TyTemplateOrigins::opaque(ancestry.len());
+                walk_ty(target_ty, &target_origins, ctx, content, visited, ancestry)?;
             }
         }
         RuntimeTy::List(inner, _) => {
-            walk_ty(inner, ctx, content, visited, ancestry);
+            let inner_origins = origins.list_element();
+            walk_ty(inner, &inner_origins, ctx, content, visited, ancestry)?;
         }
         RuntimeTy::Map { key, value, .. } => {
-            walk_ty(key, ctx, content, visited, ancestry);
-            walk_ty(value, ctx, content, visited, ancestry);
+            let key_origins = origins.map_key();
+            let value_origins = origins.map_value();
+            walk_ty(key, &key_origins, ctx, content, visited, ancestry)?;
+            walk_ty(value, &value_origins, ctx, content, visited, ancestry)?;
         }
         RuntimeTy::Union(members, _) => {
-            for member in members {
-                walk_ty(member, ctx, content, visited, ancestry);
+            for (index, member) in members.iter().enumerate() {
+                let member_origins = origins.union_member(index);
+                walk_ty(member, &member_origins, ctx, content, visited, ancestry)?;
             }
         }
         _ => {}
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use baml_type::{Freshness, TyAttr, TypeName};
+    use std::sync::Arc;
 
     use super::*;
 
@@ -1790,6 +1892,13 @@ mod tests {
             TyAttr::default(),
         )
     }
+    fn ty_class_with_args(name: &str, args: Vec<RuntimeTy>) -> RuntimeTy {
+        RuntimeTy::Class(
+            baml_type::TypeName::local(name.into()),
+            args,
+            TyAttr::default(),
+        )
+    }
     fn ty_optional(inner: RuntimeTy) -> RuntimeTy {
         RuntimeTy::optional(inner)
     }
@@ -1863,6 +1972,33 @@ mod tests {
 
     fn mk_recursive(names: &[&str]) -> indexmap::IndexSet<String> {
         names.iter().map(std::string::ToString::to_string).collect()
+    }
+
+    fn ctx_class_field(
+        name: &str,
+        field_type: RuntimeTy,
+        field_template: Option<baml_type::TyTemplate>,
+    ) -> sys_types::ClassFieldDefinition {
+        sys_types::ClassFieldDefinition {
+            name: name.to_string(),
+            field_type,
+            field_template,
+            description: None,
+            alias: None,
+            skip: false,
+        }
+    }
+
+    fn ctx_class_definition(
+        name: &baml_type::TypeName,
+        fields: Vec<sys_types::ClassFieldDefinition>,
+    ) -> sys_types::ClassDefinition {
+        sys_types::ClassDefinition {
+            name: name.display_name().to_string(),
+            description: None,
+            alias: None,
+            fields,
+        }
     }
 
     // ========================================================================
@@ -2704,6 +2840,38 @@ Answer in JSON using this schema:
     }
 
     #[test]
+    fn test_render_hoisted_generic_class_family_subset() {
+        let box_int = ty_class_with_args("Box", vec![ty_int()]);
+        let box_string = ty_class_with_args("Box", vec![ty_string()]);
+        let mut content = OutputFormatContent::new(ty_class("Ret")).with_class(mk_class(
+            "Ret",
+            vec![
+                ("int_box", box_int.clone()),
+                ("string_box", box_string.clone()),
+            ],
+        ));
+        content.classes.insert(
+            class_instantiation_key(&box_int),
+            mk_class("Box", vec![("value", ty_int())]),
+        );
+        content.classes.insert(
+            class_instantiation_key(&box_string),
+            mk_class("Box", vec![("value", ty_string())]),
+        );
+
+        let options = RenderOptions {
+            hoist_classes: HoistClasses::Subset(vec!["Box".to_string()]),
+            ..Default::default()
+        };
+        let rendered = content.render(&options).unwrap().unwrap();
+
+        assert_eq!(rendered.matches("Box<int> {").count(), 1, "{rendered}");
+        assert_eq!(rendered.matches("Box<string> {").count(), 1, "{rendered}");
+        assert!(rendered.contains("int_box: Box<int>,"), "{rendered}");
+        assert!(rendered.contains("string_box: Box<string>,"), "{rendered}");
+    }
+
+    #[test]
     fn test_render_hoist_all_classes() {
         let content = OutputFormatContent::new(ty_class("Ret"))
             .with_class(mk_class("A", vec![("prop", ty_int())]))
@@ -3243,6 +3411,93 @@ Answer in JSON using this schema: Ret"#
         );
     }
 
+    #[test]
+    fn test_hoisted_generic_class_alias_preserves_type_arguments() {
+        let generic_key = "Box<int>";
+        let mut content = OutputFormatContent::new(ty_class("Wrapper"))
+            .with_class(mk_class(
+                "Wrapper",
+                vec![("value", ty_class_with_args("Box", vec![ty_int()]))],
+            ))
+            .with_class(Class {
+                name: "Box".to_string(),
+                alias: None,
+                description: None,
+                fields: vec![ClassField {
+                    name: "value".to_string(),
+                    alias: None,
+                    field_type: ty_int(),
+                    description: None,
+                }],
+            });
+        content.classes.swap_remove("Box");
+        content.classes.insert(
+            generic_key.to_string(),
+            Class {
+                name: "Box".to_string(),
+                alias: Some("Container".to_string()),
+                description: None,
+                fields: vec![ClassField {
+                    name: "value".to_string(),
+                    alias: None,
+                    field_type: ty_int(),
+                    description: None,
+                }],
+            },
+        );
+        content.recursive_classes = mk_recursive(&[generic_key]);
+
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        assert!(
+            rendered.contains("Container<int> {\n  value: int,\n}"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("value: Container<int>,"), "{rendered}");
+    }
+
+    #[test]
+    fn test_hoisted_generic_class_alias_collision_is_rejected() {
+        let box_int = ty_class_with_args("Box", vec![ty_int()]);
+        let crate_int = ty_class_with_args("Crate", vec![ty_int()]);
+        let mut content = OutputFormatContent::new(ty_class("Wrapper")).with_class(mk_class(
+            "Wrapper",
+            vec![("box", box_int.clone()), ("crate", crate_int.clone())],
+        ));
+        for (ty, name) in [(box_int, "Box"), (crate_int, "Crate")] {
+            content.classes.insert(
+                class_instantiation_key(&ty),
+                Class {
+                    name: name.to_string(),
+                    alias: Some("Container".to_string()),
+                    description: None,
+                    fields: vec![ClassField {
+                        name: "value".to_string(),
+                        alias: None,
+                        field_type: ty_int(),
+                        description: None,
+                    }],
+                },
+            );
+        }
+
+        let error = content
+            .render(&RenderOptions {
+                hoist_classes: HoistClasses::All,
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedClassNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "Container<int>"
+                && first == "Box<int>"
+                && second == "Crate<int>"
+        ));
+    }
+
     /// New test: class with @@description, verify comment rendered
     #[test]
     fn test_render_class_with_class_description() {
@@ -3395,6 +3650,209 @@ type C = A[]
 Answer in JSON using this type: A"#
             ))
         );
+    }
+
+    #[test]
+    fn test_build_output_format_preserves_exact_recursive_generic() {
+        let chain = baml_type::TypeName::local("Chain".into());
+        let target = RuntimeTy::Class(chain.clone(), vec![ty_int()], TyAttr::default());
+        let next_template =
+            baml_type::TyTemplate::class(chain.clone(), vec![baml_type::TyTemplate::TypeArgRef(0)]);
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            chain.clone(),
+            ctx_class_definition(
+                &chain,
+                vec![ctx_class_field("next", target.clone(), Some(next_template))],
+            ),
+        );
+
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&target, &ctx);
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        assert!(rendered.contains("Chain<int> {\n  next: Chain<int>,\n}"));
+    }
+
+    #[test]
+    fn test_build_output_format_preserves_finite_nested_generic() {
+        let boxed = baml_type::TypeName::local("Box".into());
+        let box_int = RuntimeTy::Class(boxed.clone(), vec![ty_int()], TyAttr::default());
+        let target = RuntimeTy::Class(boxed.clone(), vec![box_int], TyAttr::default());
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            boxed.clone(),
+            ctx_class_definition(
+                &boxed,
+                vec![ctx_class_field(
+                    "value",
+                    ty_int(),
+                    Some(baml_type::TyTemplate::TypeArgRef(0)),
+                )],
+            ),
+        );
+
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&target, &ctx);
+        assert!(content.classes.contains_key("Box<Box<int>>"));
+        assert!(content.classes.contains_key("Box<int>"));
+        assert!(content.render(&RenderOptions::default()).is_ok());
+    }
+
+    #[test]
+    fn test_build_output_format_preserves_finite_transformed_recursion() {
+        let step = baml_type::TypeName::local("Step".into());
+        let target = RuntimeTy::Class(
+            step.clone(),
+            vec![ty_string(), ty_bool()],
+            TyAttr::default(),
+        );
+        let next_template = baml_type::TyTemplate::class(
+            step.clone(),
+            vec![
+                baml_type::TyTemplate::list(baml_type::TyTemplate::TypeArgRef(1)),
+                baml_type::TyTemplate::from(baml_type::RealizedTy::int()),
+            ],
+        );
+        let next_realized = RuntimeTy::Class(
+            step.clone(),
+            vec![ty_list(ty_bool()), ty_int()],
+            TyAttr::default(),
+        );
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            step.clone(),
+            ctx_class_definition(
+                &step,
+                vec![ctx_class_field("next", next_realized, Some(next_template))],
+            ),
+        );
+
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&target, &ctx);
+        assert!(content.classes.contains_key("Step<string, bool>"));
+        assert!(content.classes.contains_key("Step<bool[], int>"));
+        assert!(content.classes.contains_key("Step<int[], int>"));
+        assert!(content.render(&RenderOptions::default()).is_ok());
+    }
+
+    #[test]
+    fn test_build_output_format_rejects_non_regular_recursive_generic() {
+        let chain = baml_type::TypeName::local("Chain".into());
+        let target = RuntimeTy::Class(chain.clone(), vec![ty_int()], TyAttr::default());
+        let next_template = baml_type::TyTemplate::class(
+            chain.clone(),
+            vec![baml_type::TyTemplate::class(
+                chain.clone(),
+                vec![baml_type::TyTemplate::TypeArgRef(0)],
+            )],
+        );
+        let next_realized = RuntimeTy::Class(
+            chain.clone(),
+            vec![RuntimeTy::Class(
+                chain.clone(),
+                vec![ty_int()],
+                TyAttr::default(),
+            )],
+            TyAttr::default(),
+        );
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            chain.clone(),
+            ctx_class_definition(
+                &chain,
+                vec![ctx_class_field("next", next_realized, Some(next_template))],
+            ),
+        );
+
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = content.render(&RenderOptions::default()).unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::NonRegularRecursiveGeneric {
+                class,
+                ancestor,
+                instantiation,
+            } if class == "Chain"
+                && ancestor == "Chain<int>"
+                && instantiation == "Chain<Chain<int>>"
+        ));
+    }
+
+    #[test]
+    fn test_build_output_format_rejects_mutually_expansive_recursive_generic() {
+        let a = baml_type::TypeName::local("A".into());
+        let b = baml_type::TypeName::local("B".into());
+        let target = RuntimeTy::Class(a.clone(), vec![ty_int()], TyAttr::default());
+        let b_int = RuntimeTy::Class(b.clone(), vec![ty_int()], TyAttr::default());
+        let a_a_int = RuntimeTy::Class(
+            a.clone(),
+            vec![RuntimeTy::Class(
+                a.clone(),
+                vec![ty_int()],
+                TyAttr::default(),
+            )],
+            TyAttr::default(),
+        );
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            a.clone(),
+            ctx_class_definition(
+                &a,
+                vec![ctx_class_field(
+                    "b",
+                    b_int,
+                    Some(baml_type::TyTemplate::class(
+                        b.clone(),
+                        vec![baml_type::TyTemplate::TypeArgRef(0)],
+                    )),
+                )],
+            ),
+        );
+        classes.insert(
+            b.clone(),
+            ctx_class_definition(
+                &b,
+                vec![ctx_class_field(
+                    "a",
+                    a_a_int,
+                    Some(baml_type::TyTemplate::class(
+                        a.clone(),
+                        vec![baml_type::TyTemplate::class(
+                            a,
+                            vec![baml_type::TyTemplate::TypeArgRef(0)],
+                        )],
+                    )),
+                )],
+            ),
+        );
+
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = content.render(&RenderOptions::default()).unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::NonRegularRecursiveGeneric {
+                class,
+                ancestor,
+                instantiation,
+            } if class == "A" && ancestor == "A<int>" && instantiation == "A<A<int>>"
+        ));
     }
 
     // ========================================================================

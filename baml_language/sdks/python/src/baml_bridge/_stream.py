@@ -104,7 +104,10 @@ class BamlStream(Generic[TStream, TFinal]):
         try:
             result_bytes = await rt.call_function(args_proto, None, None)
         except asyncio.CancelledError:
-            cancel_function_call(call_id)
+            try:
+                cancel_function_call(call_id)
+            except Exception:
+                pass
             raise
         return decode_call_result(result_bytes)
 

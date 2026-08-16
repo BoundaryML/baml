@@ -104,3 +104,277 @@ async fn recursive_and_equivalent_same_name_runtime_classes_still_render() {
         "equivalent field missing: {equivalent}"
     );
 }
+
+#[tokio::test]
+async fn non_regular_recursive_generic_fails_before_render() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+        class Chain<T> {
+            next Chain<Chain<T>>
+        }
+
+        function Render<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> string throws baml.reflect.errors.CompilationError {
+            let rendered = Render$render_prompt<Chain<int>>().text() catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    e.diagnostics[0].code + "|" + e.diagnostics[0].message
+                },
+                _ => "wrong render error",
+            }
+            if rendered is string {
+                return rendered
+            }
+            return "render did not throw"
+        }
+        "##
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "E0162|non-regular recursive generic class `Chain` expands from `Chain<int>` to `Chain<Chain<int>>` and cannot be rendered as an LLM output schema"
+                .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn interface_wrapped_recursive_generic_fails_before_interface_walk() {
+    let output = baml_test!(
+        r##"
+        interface Wrapped<T> {
+            value T
+        }
+
+        class Chain<T> {
+            next Chain<Wrapped<T>>
+        }
+
+        client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+        function Render<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> string {
+            let rendered = Render$render_prompt<Chain<int>>() catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    e.diagnostics[0].code + "|" + e.diagnostics[0].message
+                }
+            }
+            if rendered is string {
+                return rendered
+            }
+            return "render did not throw"
+        }
+        "##
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "E0162|non-regular recursive generic class `Chain` expands from `Chain<int>` to `Chain<Wrapped<int>>` and cannot be rendered as an LLM output schema"
+                .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn colliding_non_hoisted_generic_aliases_render_inline() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+        class Box<T> {
+            value T
+            @@alias("Container")
+        }
+
+        class Crate<T> {
+            value T
+            @@alias("Container")
+        }
+
+        class Both {
+            boxed Box<int>
+            crated Crate<int>
+        }
+
+        function Render<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> string {
+            return Render$render_prompt<Both>().text()
+        }
+        "##
+    );
+
+    let BexExternalValue::String(rendered) = output
+        .result
+        .expect("non-hoisted aliases do not create rendered definitions")
+    else {
+        panic!("expected rendered prompt")
+    };
+    assert!(rendered.contains("boxed:"), "{rendered}");
+    assert!(rendered.contains("crated:"), "{rendered}");
+    assert!(!rendered.contains("Container<int>"), "{rendered}");
+}
+
+#[tokio::test]
+async fn finite_transformed_recursion_reaches_an_exact_cycle() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+        class Step<A, B> {
+            next Step<B[], int>
+        }
+
+        function Render<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> string {
+            return Render$render_prompt<Step<string, bool>>().text()
+        }
+        "##
+    );
+
+    let BexExternalValue::String(rendered) = output
+        .result
+        .expect("finite specialization sequence should render")
+    else {
+        panic!("expected rendered prompt")
+    };
+    assert!(rendered.contains("Step<int[], int>"), "{rendered}");
+}
+
+#[tokio::test]
+async fn open_interface_in_second_generic_specialization_is_rejected() {
+    let output = baml_test!(
+        r##"
+        interface OpenValue {
+            value string
+        }
+
+        class Box<T> {
+            value T
+        }
+
+        class Envelope {
+            concrete Box<int>
+            open Box<OpenValue>
+        }
+
+        client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+        function Render<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> string {
+            let rendered = Render$render_prompt<Envelope>() catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    e.diagnostics[0].code + "|" + e.diagnostics[0].message
+                }
+            }
+            if rendered is string {
+                return rendered
+            }
+            return "render did not throw"
+        }
+        "##
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "E0161|field `Envelope.open.value` has open interface type `OpenValue`, which cannot be rendered as an LLM output schema"
+                .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn runtime_type_arguments_with_the_same_display_name_remain_distinct() {
+    let output = baml_test!(
+        r##"
+        class Box<T> {
+            value T
+            next Box<T>?
+            @@alias("Container")
+        }
+
+        client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+        function RenderPair<T, U>() -> Box<T> | Box<U> {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> string {
+            let left = reflect.class.new("Arg", {
+                "value": type.of<int>(),
+            })
+            let right = reflect.class.new("Arg", {
+                "value": type.of<int>(),
+            })
+            let rendered = RenderPair$render_prompt<
+                unreflect(left.as_type()),
+                unreflect(right.as_type()),
+            >() catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    e.diagnostics[0].code + "|" + e.diagnostics[0].message
+                }
+            }
+            if rendered is string {
+                return rendered
+            }
+            return "render did not throw"
+        }
+        "##
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "E0162|classes `Box<Arg>` and `Box<Arg>` both render as `Container<Arg>` in the same LLM render context"
+                .into()
+        ))
+    );
+}

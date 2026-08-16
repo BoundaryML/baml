@@ -92,12 +92,16 @@ class ChatClient {
             )
     }
 
-    function params(self) -> root.internal.ChatParams {
+    function params(self, preview: bool = false) -> root.internal.ChatParams {
         root.internal
             .ChatParams
             .new(
                 model = self.model,
-                api_key = self.resolved_api_key(),
+                api_key = if (preview) {
+                    null
+                } else {
+                    self.resolved_api_key()
+                },
                 temperature = self.temperature,
                 max_tokens = self.max_tokens,
                 max_completion_tokens = self.max_completion_tokens,
@@ -116,7 +120,7 @@ class ChatClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            openai.internal.chat_preview(self.compat(), self.params(), input) catch_all (e) {
+            openai.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

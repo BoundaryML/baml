@@ -241,21 +241,30 @@ function _oai_images_with_query(url: string, params: map<string, string>?) -> st
 }
 
 // Provider defaults, then the user's `headers` (lowercased, as the HTTP layer
-// stores them), then auth — the credential is applied last so a stray
-// passthrough header cannot silently unset it.
-function _oai_images_headers(c: root.ImageClient) -> map<string, string> {
+// stores them), then auth for a live request. A preview leaves user-supplied
+// auth intact without resolving or exposing the configured credential.
+function _oai_images_headers(
+    c: root.ImageClient,
+    preview: bool = false,
+) -> map<string, string> {
     let headers: map<string, string> = { "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
         for (let name in extra.keys()) {
             let _ = headers.set(name.to_lower_case(), extra.get(name) ?? "");
         }
     }
-    let _ = headers.set("authorization", `Bearer ${c.resolved_api_key()}`);
+    if (!preview) {
+        let _ = headers.set("authorization", `Bearer ${c.resolved_api_key()}`);
+    }
     headers
 }
 
 // ai.ModelTurnInput -> one Images API request.
-function images_render(c: root.ImageClient, input: ai.ModelTurnInput) -> baml.http.Request {
+function images_render(
+    c: root.ImageClient,
+    input: ai.ModelTurnInput,
+    preview: bool = false,
+) -> baml.http.Request {
     if (!input.toolbox.is_empty()) {
         throw ai.errors.InvalidRequest {
             provider: "openai-images",
@@ -292,7 +301,7 @@ function images_render(c: root.ImageClient, input: ai.ModelTurnInput) -> baml.ht
     baml.http.Request {
         method: "POST",
         url: url,
-        headers: _oai_images_headers(c),
+        headers: _oai_images_headers(c, preview = preview),
         body: baml.json.stringify(merged),
     }
 }

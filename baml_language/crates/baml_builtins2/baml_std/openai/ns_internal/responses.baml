@@ -705,14 +705,19 @@ function _openai_text(c: root.ResponsesClient) -> OaTextParams? {
 
 // content-type, then the caller's headers (lowercased), then authorization —
 // credentials are the client's own business and always win.
-function _openai_headers(c: root.ResponsesClient) -> map<string, string> {
+function _openai_headers(
+    c: root.ResponsesClient,
+    preview: bool = false,
+) -> map<string, string> {
     let headers: map<string, string> = { "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
         for (let name in extra.keys()) {
             let _ = headers.set(name.to_lower_case(), extra.get(name) ?? "");
         }
     };
-    let _ = headers.set("authorization", `Bearer ${c.resolved_api_key()}`);
+    if (!preview) {
+        let _ = headers.set("authorization", `Bearer ${c.resolved_api_key()}`);
+    }
     headers
 }
 
@@ -799,7 +804,7 @@ function _openai_request(
     baml.http.Request {
         method: "POST",
         url: _openai_url(c),
-        headers: _openai_headers(c),
+        headers: _openai_headers(c, preview = preview),
         body: baml.json.stringify(body),
     }
 }
@@ -1205,12 +1210,20 @@ function _openai_sse_failure(error: unknown) -> ai.errors.Failure {
     }
 }
 
+function _openai_stream_open_failure(error: unknown) -> never {
+    match (error) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        let cancelled: baml.panics.Cancelled => throw cancelled,
+        _ => throw _openai_sse_failure(error),
+    }
+}
+
 // The streaming entry point: the same request as `invoke` with `stream: true`,
 // wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _openai_request(c, input, true, preview = false);
     let sse = baml.http.fetch_sse(req) catch_all (e) {
-        _ => throw _openai_sse_failure(e),
+        _ => _openai_stream_open_failure(e),
     };
     let state = OaStreamState.new();
     // The Responses protocol always ends a live turn with an explicit terminal
