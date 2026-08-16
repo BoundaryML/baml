@@ -100,7 +100,7 @@ fn .<lambda(<lambda($init_test_main, 0)>, 1)>(testset: testing.TestCollector) ->
     let _13: string // ex
     let _14: void
     let _15: string
-    let _16: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure
+    let _16: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
         _4 = copy capture[0];
@@ -191,7 +191,7 @@ fn .<lambda(<lambda($init_test_main, 0)>, 3)>(testset: testing.TestCollector) ->
     let _8: string // sentiments [captured]
     let _9: void
     let _10: string
-    let _11: (testing.TestCollector) -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.UnknownError | baml.reflect.errors.CompilationError | testing.InvalidTestName | ai.errors.Failure
+    let _11: (testing.TestCollector) -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | testing.InvalidTestName | ai.errors.Failure
 
     bb0: {
         _2 = [const "happy", const "sad"]: string[];
@@ -242,7 +242,7 @@ fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>(testset: testing.Test
     let _9: string // ex
     let _10: void
     let _11: string
-    let _12: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure
+    let _12: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
         _3 = copy capture[0];
@@ -332,7 +332,7 @@ fn user.ClassifySentiment(text: string, client: null | ai.Client) -> Sentiment {
 
     bb2: {
         _6 = load_type(Sentiment);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -340,7 +340,7 @@ fn user.ClassifySentiment(text: string, client: null | ai.Client) -> Sentiment {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<Sentiment, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Sentiment>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<Sentiment, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Sentiment>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -596,7 +596,7 @@ fn user.GenerateTests(count: int, topic: string, client: null | ai.Client) -> st
 
     bb2: {
         _7 = load_type(string[]);
-        _6 = call const fn ai.Agent.new<copy _7>(const <omitted>, copy _3, const <omitted>, const <omitted>) -> [bb3];
+        _6 = call const fn ai.Agent.new<copy _7>(const <omitted>, const <omitted>, copy _3, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -604,7 +604,7 @@ fn user.GenerateTests(count: int, topic: string, client: null | ai.Client) -> st
     }
 
     bb4: {
-        _5 = virtual_call run as ai.Runner<string[], Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string[]>>(copy _6, copy _8) -> [bb5];
+        _5 = virtual_call run as ai.Runner<string[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string[]>>(copy _6, copy _8) -> [bb5];
     }
 
     bb5: {
@@ -933,7 +933,7 @@ fn user.ClassifySentiment2(text: string, client: null | ai.Client) -> string {
 
     bb2: {
         _6 = load_type(string);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -941,7 +941,7 @@ fn user.ClassifySentiment2(text: string, client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {

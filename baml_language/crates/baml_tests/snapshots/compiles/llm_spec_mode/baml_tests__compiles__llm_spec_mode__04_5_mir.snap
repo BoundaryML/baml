@@ -59,7 +59,7 @@ fn user.PlainChat(q: string, client: null | ai.Client) -> string {
 
     bb2: {
         _6 = load_type(string);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -67,7 +67,7 @@ fn user.PlainChat(q: string, client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -348,7 +348,7 @@ fn user.SpecAgent(q: string, client: null | ai.Client) -> Answer {
 
     bb2: {
         _6 = load_type(Answer);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -356,7 +356,7 @@ fn user.SpecAgent(q: string, client: null | ai.Client) -> Answer {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<Answer, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -604,7 +604,7 @@ fn user.NamedTools(q: string, client: null | ai.Client) -> Answer {
 
     bb2: {
         _6 = load_type(Answer);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -612,7 +612,7 @@ fn user.NamedTools(q: string, client: null | ai.Client) -> Answer {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<Answer, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {

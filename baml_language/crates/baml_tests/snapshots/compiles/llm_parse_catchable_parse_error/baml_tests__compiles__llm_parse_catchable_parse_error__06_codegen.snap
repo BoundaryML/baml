@@ -19,6 +19,7 @@ function user.ExtractInvoice(text: string, client: ai.Client | null) -> Invoice 
   L0:
     load_type Invoice
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -28,7 +29,7 @@ function user.ExtractInvoice(text: string, client: ai.Client | null) -> Invoice 
     call user.ExtractInvoice$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<Invoice, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Invoice>>
+    load_type ai.Runner<Invoice, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Invoice>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4

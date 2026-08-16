@@ -23,6 +23,7 @@ function user.AskGpt4o(question: string, client: ai.Client | null) -> string {
   L0:
     load_type string
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -32,7 +33,7 @@ function user.AskGpt4o(question: string, client: ai.Client | null) -> string {
     call user.AskGpt4o$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -134,6 +135,7 @@ function user.AskO1(question: string, client: ai.Client | null) -> string {
   L0:
     load_type string
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -143,7 +145,7 @@ function user.AskO1(question: string, client: ai.Client | null) -> string {
     call user.AskO1$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4

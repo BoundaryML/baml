@@ -257,7 +257,7 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: null | 
 
     bb2: {
         _8 = load_type(string);
-        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, copy _4, const <omitted>, const <omitted>) -> [bb3];
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _4, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -265,7 +265,7 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: null | 
     }
 
     bb4: {
-        _6 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _7, copy _9) -> [bb5];
+        _6 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _7, copy _9) -> [bb5];
     }
 
     bb5: {

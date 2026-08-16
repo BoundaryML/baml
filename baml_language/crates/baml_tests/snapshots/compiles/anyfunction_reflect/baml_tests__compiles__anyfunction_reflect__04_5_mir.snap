@@ -370,7 +370,7 @@ fn user.RuntimeClassify(input: string, client: null | ai.Client) -> T {
 
     bb2: {
         _6 = load_type(#0);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -379,7 +379,7 @@ fn user.RuntimeClassify(input: string, client: null | ai.Client) -> T {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<#0, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<#0, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
