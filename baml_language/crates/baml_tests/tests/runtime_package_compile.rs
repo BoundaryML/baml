@@ -74,6 +74,31 @@ function namespace_and_dependency_mounts() -> bool throws unknown {
     child.get_class("root.Child") != null &&
     child.diagnostics().length() == 0
 }
+
+function mounted_runtime_interface_and_return_types_stay_hidden() -> bool throws unknown {
+  let runtime_minted = reflect.class.new("RuntimeMinted", {
+    "value": type.of<string>(),
+  })
+  let app = reflect.Package.current().with_types({
+    "RuntimeMinted": runtime_minted,
+  })
+  let dependency = reflect.Package.compile({
+    "dependency.baml": #"
+interface CarriesRuntimeMint {
+  item app.RuntimeMinted
+}
+
+function make_runtime_minted() -> app.RuntimeMinted {
+  app.RuntimeMinted { value: "ok" }
+}
+"#
+  }, packages = { "app": app })
+  let consumer = reflect.Package.compile(
+    { "consumer.baml": "function ready() -> bool { true }" },
+    packages = { "dependency": dependency },
+  )
+  consumer.diagnostics().length() == 0
+}
 "####;
 
 const SUCCESSFUL_INIT_SOURCE: &str = r####"
@@ -324,6 +349,15 @@ async fn runtime_package_and_mint_survive_major_collection() {
 #[tokio::test]
 async fn runtime_compile_honors_namespaces_and_mounted_dependencies() {
     let output = baml_test!(baml: SCENARIO_SOURCE, entry: "namespace_and_dependency_mounts");
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn mounted_runtime_types_do_not_leak_into_phantom_stub_diagnostics() {
+    let output = baml_test!(
+        baml: SCENARIO_SOURCE,
+        entry: "mounted_runtime_interface_and_return_types_stay_hidden"
+    );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 

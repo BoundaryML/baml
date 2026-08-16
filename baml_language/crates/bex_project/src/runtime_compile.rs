@@ -77,6 +77,89 @@ fn runtime_relative_virtual_path(path: &Path) -> String {
         .to_string()
 }
 
+fn interface_contains_runtime_minted_name(interface: &baml_type::Interface) -> bool {
+    interface.name.is_runtime_minted()
+        || interface
+            .generics
+            .iter()
+            .any(type_contains_runtime_minted_name)
+        || interface
+            .associated_types
+            .iter()
+            .any(|(_, ty)| type_contains_runtime_minted_name(ty))
+}
+
+/// Whether rendering `ty` as source would expose a hidden runtime-mint name.
+///
+/// Runtime-minted names can occur below otherwise source-spellable containers,
+/// function types, or interface constraints, so this must inspect the complete
+/// type rather than only its outer nominal reference.
+fn type_contains_runtime_minted_name(ty: &baml_type::Ty) -> bool {
+    use baml_type::Ty;
+
+    match ty {
+        Ty::Class(name, generics, _) => {
+            name.is_runtime_minted() || generics.iter().any(type_contains_runtime_minted_name)
+        }
+        Ty::Interface(name, generics, associated_types, _) => {
+            name.is_runtime_minted()
+                || generics.iter().any(type_contains_runtime_minted_name)
+                || associated_types
+                    .iter()
+                    .any(|(_, ty)| type_contains_runtime_minted_name(ty))
+        }
+        Ty::Enum(name, _) | Ty::EnumVariant(name, ..) | Ty::TypeAlias(name, _) => {
+            name.is_runtime_minted()
+        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => type_contains_runtime_minted_name(inner),
+        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+            type_contains_runtime_minted_name(key) || type_contains_runtime_minted_name(value)
+        }
+        Ty::Union(members, _) => members.iter().any(type_contains_runtime_minted_name),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| type_contains_runtime_minted_name(&param.ty))
+                || type_contains_runtime_minted_name(ret)
+                || type_contains_runtime_minted_name(throws)
+        }
+        Ty::Future(value, throws, _) => {
+            type_contains_runtime_minted_name(value) || type_contains_runtime_minted_name(throws)
+        }
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            type_contains_runtime_minted_name(base)
+                || interface_contains_runtime_minted_name(interface)
+        }
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Literal(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Void { .. }
+        | Ty::TypeVar(..)
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::Infer { .. } => false,
+    }
+}
+
 fn enrich_runtime_mount(
     alias: &str,
     mut package: RuntimePackageMount,
@@ -178,9 +261,16 @@ fn enrich_runtime_mount(
             // this synthetic alias package.
             " throws unknown".to_string()
         };
+        // Mounted inference owns the real return type. Hide it only when its
+        // source spelling would expose a hidden runtime-minted name and produce
+        // diagnostics in a phantom `runtime_mount_*` file.
+        let return_type = if type_contains_runtime_minted_name(&function.return_type) {
+            "unknown".to_string()
+        } else {
+            function.return_type.to_string()
+        };
         let source = format!(
-            "function {name}{generic_suffix}({params}) -> {}{throws} {{ $rust_function }}\n",
-            function.return_type
+            "function {name}{generic_suffix}({params}) -> {return_type}{throws} {{ $rust_function }}\n"
         );
         stubs.push((namespace, name, source));
     }
@@ -286,6 +376,13 @@ fn enrich_runtime_mount(
                             .expect("writing to String is infallible");
                     }
                     for (field, ty, _) in fields {
+                        // Keep ordinary source-spellable ABI intact, but avoid
+                        // exposing a runtime-minted name from any nested type.
+                        let ty = if type_contains_runtime_minted_name(ty) {
+                            "unknown".to_string()
+                        } else {
+                            ty.to_string()
+                        };
                         writeln!(&mut source, "  {field}: {ty}")
                             .expect("writing to String is infallible");
                     }
@@ -1660,6 +1757,29 @@ mod tests {
     use baml_compiler2_hir::file_package::file_package;
 
     use super::*;
+
+    #[test]
+    fn runtime_minted_name_detection_is_recursive() {
+        let ordinary = baml_type::Ty::List(
+            Box::new(baml_type::Ty::Class(
+                baml_type::QualifiedTypeName::local(Name::new("SourceClass")),
+                Vec::new(),
+                baml_type::TyAttr::default(),
+            )),
+            baml_type::TyAttr::default(),
+        );
+        assert!(!type_contains_runtime_minted_name(&ordinary));
+
+        let nested_mint = baml_type::Ty::List(
+            Box::new(baml_type::Ty::Class(
+                baml_type::QualifiedTypeName::runtime_local(Name::new("RuntimeMinted"), 7),
+                Vec::new(),
+                baml_type::TyAttr::default(),
+            )),
+            baml_type::TyAttr::default(),
+        );
+        assert!(type_contains_runtime_minted_name(&nested_mint));
+    }
 
     #[test]
     fn runtime_virtual_paths_are_slash_oriented() {

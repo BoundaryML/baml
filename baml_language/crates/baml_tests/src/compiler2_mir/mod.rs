@@ -5,11 +5,14 @@
 
 use std::fmt::Write;
 
+use baml_base::Name;
+use baml_compiler2_hir::package::PackageId;
+use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::package_interface};
 use baml_compiler2_mir::{
     MirFunctionKind, OptLevel, Terminator, lower_function, pretty::display_function,
 };
 use baml_compiler2_ppir::item_data::{file_functions, function_data, function_source_map};
-use baml_project::ProjectDatabase;
+use baml_project::{ProjectDatabase, testing::assert_no_diagnostic_errors};
 
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_mir");
 
@@ -73,6 +76,67 @@ function main(call_id: boundary.LocalId, sysop_id: boundary.LocalId) -> int thro
             ..
         })
     )));
+}
+
+#[test]
+fn mounted_builtin_kind_is_trusted_only_for_precompiled_packages() {
+    let mut dependency = make_db();
+    dependency.add_compiler2_virtual_file(
+        "<builtin>/dependency/native.baml",
+        r#"
+function untrusted_io() -> int throws never {
+  $rust_io_function
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&dependency);
+    let mut interface = package_interface(
+        &dependency,
+        PackageId::new(&dependency, Name::new("dependency")),
+    )
+    .clone();
+    let exported = interface
+        .functions
+        .values_mut()
+        .flat_map(|namespace| namespace.values_mut())
+        .find(|function| function.name.as_str() == "untrusted_io")
+        .expect("exported IO builtin");
+    // Model a hostile/corrupt mounted blob that widens its own linkability.
+    // The builtin marker must still not grant compiler-owned lowering trust.
+    exported.linkability = ExternalLinkability::Linkable;
+
+    let mut db = make_db();
+    db.set_mounted_packages(
+        [("dependency".to_string(), borsh::to_vec(&interface).unwrap())].into(),
+    );
+    let file = db.add_file(
+        "test.baml",
+        "function main() -> int throws never { dependency.untrusted_io() }",
+    );
+    assert_no_diagnostic_errors(&db);
+    let main_loc = *file_functions(&db, file)
+        .iter()
+        .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
+        .expect("main function");
+    let mir = lower_function(&db, main_loc, OptLevel::Two);
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        panic!("main must lower to bytecode")
+    };
+    assert!(
+        body.blocks
+            .iter()
+            .any(|block| matches!(block.terminator, Some(Terminator::Call { .. }))),
+        "untrusted mounted builtin did not lower as an ordinary call: {}",
+        display_function(&mir)
+    );
+    assert!(
+        !body
+            .blocks
+            .iter()
+            .any(|block| matches!(block.terminator, Some(Terminator::SysOp { .. }))),
+        "untrusted mounted builtin marker selected compiler-owned lowering: {}",
+        display_function(&mir)
+    );
 }
 
 #[test]

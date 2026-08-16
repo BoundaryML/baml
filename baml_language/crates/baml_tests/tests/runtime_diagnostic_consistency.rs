@@ -34,6 +34,26 @@ function main() -> unknown {
     );
 }
 
+#[test]
+fn indirect_runtime_checked_call_is_rejected_before_emission() {
+    let rows = diagnostics(
+        r#"
+function main() -> int {
+  type T = unreflect(type.of<string>());
+  let indirect = (value: T) => { 1 }
+  indirect("checked at runtime")
+}
+"#,
+    );
+    assert!(
+        rows.iter().any(|(code, message)| {
+            code == "E0010"
+                && message == "runtime type arguments are not supported on indirect calls"
+        }),
+        "expected the indirect-call runtime-type diagnostic, got {rows:?}"
+    );
+}
+
 #[tokio::test]
 async fn m6_runtime_bound_diagnostic_matches_static_oracle_before_call() {
     let static_rows = diagnostics(

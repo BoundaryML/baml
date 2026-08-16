@@ -2309,10 +2309,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
                 } else {
-                    debug_assert!(
-                        !runtime_type_check,
-                        "unreflect type arguments on indirect calls require a checked indirect opcode"
-                    );
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
