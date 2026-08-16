@@ -72,7 +72,7 @@ public class BamlPlugin implements Plugin<Project> {
 
     /**
      * The full known set of native-jar platform classifiers, mirroring the
-     * targets {@code baml_bridge} publishes (release/platforms.json → the six
+     * targets {@code baml_bridge} publishes (baml_language/crates/baml_release/platforms.json → the six
      * non-experimental {@code java} targets). This is what the extension's
      * {@code nativePlatforms = ["all"]} expands to. Musl classifiers are
      * deliberately excluded (experimental, explicit-request only).

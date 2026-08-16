@@ -9,7 +9,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PLATFORMS = ROOT / "release" / "platforms.json"
+DEFAULT_PLATFORMS = ROOT / "baml_language" / "crates" / "baml_release" / "platforms.json"
 WRAPPER_VARIANTS = frozenset({"self-update", "no-self-update"})
 
 

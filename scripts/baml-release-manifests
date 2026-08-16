@@ -15,7 +15,7 @@ from baml_release_platforms import load_wrapper_targets, verify_wrapper_artifact
 def _toolchain_required_targets() -> list[str]:
     """Required toolchain target triples from the platform contract."""
     contract = json.loads(
-        (Path(__file__).resolve().parent.parent / "release" / "platforms.json").read_text()
+        (Path(__file__).resolve().parent.parent / "baml_language" / "crates" / "baml_release" / "platforms.json").read_text()
     )
     targets = []
     for target in contract["targets"]:
