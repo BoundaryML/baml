@@ -53,7 +53,7 @@ def get_json(url: str, token: str) -> tuple[dict[str, Any], str | None]:
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
-            "User-Agent": "baml-release-failure-notifier",
+            "User-Agent": "baml-release-notifier",
             "X-GitHub-Api-Version": "2022-11-28",
         },
     )
@@ -132,25 +132,32 @@ def main() -> int:
         slack_channel = required_env("SLACK_CHANNEL")
         slack_token = required_env("SLACK_BOT_TOKEN")
 
-        started_at = get_run_started_at(repository, run_id, run_attempt, github_token)
-        failures = find_failures(repository, run_id, run_attempt, github_token)
-        if not failures:
-            print("No failed jobs or steps found; skipping Slack notification.")
-            return 0
-
         version = os.environ.get("VERSION") or "unknown version"
         channel = os.environ.get("CHANNEL") or "unknown channel"
+        started_at = get_run_started_at(repository, run_id, run_attempt, github_token)
+        failures = find_failures(repository, run_id, run_attempt, github_token)
+        if not failures and channel != "canary":
+            print(f"Successful {channel} release; skipping Slack notification.")
+            return 0
+
         run_url = (
             f"https://github.com/{repository}/actions/runs/{run_id}"
             f"/attempts/{run_attempt}"
         )
-        failure_text = "\n".join(format_failure(failure) for failure in failures)
-        message = (
-            f"BAML {channel} release failed: {version}, "
-            f"started at {format_pacific_time(started_at)}\n\n"
-            f"*Failures:*\n{failure_text}\n\n"
-            f"*Run:* <{run_url}|View workflow run>"
-        )
+        if failures:
+            failure_text = "\n".join(format_failure(failure) for failure in failures)
+            message = (
+                f"❌ BAML {channel} release failed: {version}, "
+                f"started at {format_pacific_time(started_at)}\n\n"
+                f"*Failures:*\n{failure_text}\n\n"
+                f"*Run:* <{run_url}|View workflow run>"
+            )
+        else:
+            message = (
+                f"✅ BAML {channel} release succeeded: {version}, "
+                f"started at {format_pacific_time(started_at)}\n\n"
+                f"*Run:* <{run_url}|View workflow run>"
+            )
 
         WebClient(token=slack_token).chat_postMessage(
             channel=slack_channel,
@@ -166,7 +173,7 @@ def main() -> int:
     except SlackClientError as error:
         print(f"Slack request failed: {error}", file=sys.stderr)
     except (KeyError, RuntimeError, urllib.error.URLError) as error:
-        print(f"Release failure notification failed: {error}", file=sys.stderr)
+        print(f"Release notification failed: {error}", file=sys.stderr)
     return 1
 
 

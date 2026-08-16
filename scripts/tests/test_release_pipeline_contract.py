@@ -18,6 +18,7 @@ GO_RELEASE_SMOKE = ROOT / "scripts" / "smoke-go-release.py"
 GO_SDK_ASSEMBLER = ROOT / "scripts" / "assemble-go-sdk-mirror"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
+RELEASE_NOTIFIER = ROOT / "tools" / "notify-release-failure.py"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
 NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-release.yml"
 SIZE_POLICY = ROOT / "release" / "csharp-package-size-policy.json"
@@ -660,6 +661,16 @@ def step_inputs(step: str) -> dict[str, str]:
 
 
 class WorkflowGraphTests(unittest.TestCase):
+    def test_release_slack_notifications_cover_failures_and_canary_success(self) -> None:
+        workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        notifier = RELEASE_NOTIFIER.read_text(encoding="utf-8")
+        notify_slack = job_block(workflow, "notify-slack")
+
+        self.assertIn("always()", notify_slack)
+        self.assertIn('if not failures and channel != "canary"', notifier)
+        self.assertIn("❌ BAML {channel} release failed", notifier)
+        self.assertIn("✅ BAML {channel} release succeeded", notifier)
+
     def test_cpp_verifier_stamps_the_frozen_release_plan(self) -> None:
         workflow = CPP_VERIFIER.read_text(encoding="utf-8")
         verify = job_block(workflow, "verify")
