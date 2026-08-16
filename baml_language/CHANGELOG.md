@@ -6,6 +6,8 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Features
 
+- [review] Added runtime reflection and type construction, including compiling and mounting packages, invoking reflected callables, and isolating dynamic work in sessions. ([#4325](https://github.com/BoundaryML/baml/pull/4325)) - Antonio Sarosi
+- [review] Added native BAML clients for OpenAI, Anthropic, Google, Vertex AI, AWS Bedrock, Azure, Ollama, OpenRouter, and Vercel AI Gateway, including typed streaming, media outputs, AWS SigV4, and Google Cloud authentication. ([#4430](https://github.com/BoundaryML/baml/pull/4430)) - aaronvg
 - Added `baml.sys.pid()`, `baml.fs.chmod()`, and `baml.fs.symlink()`. ([#4427](https://github.com/BoundaryML/baml/pull/4427)) - 2kai2kai2
 - Added `baml.crypto.*` APIs for SHA-256 hashing, authenticated encryption, and key generation. ([#4431](https://github.com/BoundaryML/baml/pull/4431)) - 2kai2kai2
 - Added `baml toolchain pin <canary|nightly|version|path>` to select a project-local toolchain in the nearest `baml.toml` ([#4386](https://github.com/BoundaryML/baml/pull/4386)) - Sam Lijin
@@ -16,6 +18,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Breaking and compatibility changes
 
+- [review] Renamed `openai.OpenAiClient` to `openai.ResponsesClient`. ([#4430](https://github.com/BoundaryML/baml/pull/4430)) - aaronvg
 - Improved the string stdlib APIs: renamed `String.char_at` to `String.at`, kept negative indexing, and made out-of-range access return `null`; made `String.code_point_at` return `null` out of range; removed `String.matches` in favor of `String.includes`; renamed `String.substring` to `String.slice`; and added `String.last_index_of`. ([#4433](https://github.com/BoundaryML/baml/pull/4433)) - 2kai2kai2
 - Drop support for Jinja templates: BAML now has TS-style template literals that are much easier to use. ([#4367](https://github.com/BoundaryML/baml/pull/4367)) - Avery Townsend
 - LLM function fields now require colon-delimited `client:`, `prompt:`, and `tools:` syntax. ([#4317](https://github.com/BoundaryML/baml/pull/4317)) - Vaibhav Mittal
@@ -23,6 +26,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Fixes
 
+- [review] Enabled runtime package compilation from `baml run` scripts and expressions. ([#4451](https://github.com/BoundaryML/baml/pull/4451)) - Antonio Sarosi
 - Supported double-quoted LLM prompts as literal, non-interpolating prompts and fixed the segfault they could cause. ([#4432](https://github.com/BoundaryML/baml/pull/4432)) - 2kai2kai2
 - Made `Array.join` stringify non-string elements instead of silently replacing them with empty strings. ([#4433](https://github.com/BoundaryML/baml/pull/4433)) - 2kai2kai2
 - Fixed null-coalescing assignments, property shorthand scope, runtime type tests, and media kind validation. ([#4434](https://github.com/BoundaryML/baml/pull/4434)) - Avery Townsend
@@ -37,3 +41,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 - Corrected the no-project CLI diagnostic to recommend the supported `baml test --project <DIR>` option instead of the nonexistent `--file` option. ([#4410](https://github.com/BoundaryML/baml/pull/4410)) - Sam Lijin
 - Prevented required interface methods from being treated as callable default bodies. ([#4301](https://github.com/BoundaryML/baml/pull/4301)) - Avery Townsend
 -  Make `Array.sort_by` and `Array.sort_by_key` a stable O(n log n) merge sort. ([#4382](https://github.com/BoundaryML/baml/pull/4382)) - Sam Lijin
+
+### Performance
+
+- [review] Restored and improved compiler and VM performance after BEP-066, reducing overhead in package inference, calls, arrays, interface dispatch, and string operations. ([#4448](https://github.com/BoundaryML/baml/pull/4448); [#4450](https://github.com/BoundaryML/baml/pull/4450)) - Antonio Sarosi
