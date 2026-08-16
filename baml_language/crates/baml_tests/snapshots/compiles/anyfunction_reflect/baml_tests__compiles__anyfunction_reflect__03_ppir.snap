@@ -17,6 +17,9 @@ class user.ToolError$stream {
 function user.RuntimeClassify(input: string, client: ai.Client? = null) -> T  [llm] {
   ai.Agent.new(client = client).run(RuntimeClassify$spec(input)).value
 }
+function user.RuntimeClassify$build_request(input: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  RuntimeClassify$spec(input).build_request(override_client = client)
+}
 function user.RuntimeClassify$parse(json: string) -> T  [expr] {
   baml.sap.parse(json)
 }
@@ -24,7 +27,7 @@ function user.RuntimeClassify$render_prompt(input: string) -> ai.Prompt  [expr] 
   RuntimeClassify$spec(input).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<T>  [expr] {
-  ai.FunctionSpec { spec_name: "RuntimeClassify", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Choose a category...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_cur =  __tt_cur Add ".\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(RuntimeEnumClient) }
+  ai.FunctionSpec { spec_name: "RuntimeClassify", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Choose a category...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_cur =  __tt_cur Add ".\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(RuntimeEnumClient) }
 }
 function user.RuntimeClassify$stream(input: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<T | null, T>  [expr] {
   ai.stream.from_spec(RuntimeClassify$spec(input), client = client)

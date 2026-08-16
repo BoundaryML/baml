@@ -7,6 +7,24 @@ use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
 #[tokio::test]
+async fn call_any_infers_pins_from_function_value() {
+    let output = baml_test!(
+        r#"
+        function plain(required: string) -> string throws never {
+            required
+        }
+
+        function main() -> string throws never {
+            reflect.call_any(plain, { "required": "hello" }) catch (e) {
+                _ => "error"
+            }
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("hello".into())));
+}
+
+#[tokio::test]
 async fn call_any_dispatches_named_args() {
     let output = baml_test!(
         r#"

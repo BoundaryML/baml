@@ -1355,6 +1355,54 @@ function ai.FunctionSpec.arguments(self: ai.FunctionSpec<#0>) -> map<string, unk
     return
 }
 
+function ai.FunctionSpec.build_request(self: ai.FunctionSpec<#0>, override_client: ai.Client | null) -> baml.http.Request {
+    load_var override_client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var override_client
+
+  L0:
+    load_var override_client
+    store_var_load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_var self
+    load_field .default_client
+    store_var _5
+
+  L1:
+    load_var _5
+    store_var selected
+    load_var self
+    load_field .prompt_template
+    store_var _8
+    load_type #0
+    load_var self
+    call ai.Journal.new
+    store_var _9
+    load_type #0
+    load_var self
+    call ai.FunctionSpec.tools
+    store_var _11
+    load_type #0
+    load_var self
+    call ai.FunctionSpec.output_type
+    store_var _13
+    load_var2 4 6
+    load_var2 7 8
+    load_var _13
+    init_instance ai.ModelTurnInput .prompt, .journal, .toolbox, .output_type
+    load_type ai.Client
+    load_const "render"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
 function ai.FunctionSpec.name(self: ai.FunctionSpec<#0>) -> string {
     load_var self
     load_field .spec_name
@@ -1800,6 +1848,41 @@ function ai.clients.Fallback.root.Client.invoke(self: ai.clients.Fallback, input
     return
 }
 
+function ai.clients.Fallback.root.Client.render(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> baml.http.Request {
+    load_type ai.Client
+    load_var self
+    load_field .members
+    load_const 0
+    call baml.Array.at
+    store_var _7
+    load_var _7
+    narrow_bind ai.Client, slot=5
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Fallback needs at least one member"
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L1:
+    load_var2 5 2
+    load_type ai.Client
+    load_const "render"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L2
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize
+    throw
+
+  L2:
+    load_var _0
+    return
+}
+
 function ai.clients.Retry._attempt(self: ai.clients.Retry, input: ai.ModelTurnInput, remaining: int) -> ai.ModelTurn {
     load_var self
     load_field .inner
@@ -1964,6 +2047,26 @@ function ai.clients.Retry.root.Client.invoke(self: ai.clients.Retry, input: ai.M
     return
 }
 
+function ai.clients.Retry.root.Client.render(self: ai.clients.Retry, input: ai.ModelTurnInput) -> baml.http.Request {
+    load_var self
+    load_field .inner
+    load_var input
+    load_type ai.Client
+    load_const "render"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize
+    throw
+
+  L0:
+    load_var _0
+    return
+}
+
 function ai.clients.RoundRobin.new(members: ai.Client[]) -> ai.clients.RoundRobin {
     load_var members
     container_len
@@ -2049,6 +2152,41 @@ function ai.clients.RoundRobin.root.Client.invoke(self: ai.clients.RoundRobin, i
     load_var2 7 2
     load_type ai.Client
     load_const "invoke"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L2
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize
+    throw
+
+  L2:
+    load_var _0
+    return
+}
+
+function ai.clients.RoundRobin.root.Client.render(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> baml.http.Request {
+    load_type ai.Client
+    load_var self
+    load_field .members
+    load_const 0
+    call baml.Array.at
+    store_var _7
+    load_var _7
+    narrow_bind ai.Client, slot=5
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "RoundRobin needs at least one member"
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L1:
+    load_var2 5 2
+    load_type ai.Client
+    load_const "render"
     virtual_call nargs=2 ntypeargs=0
     store_var _0
     jump L2
@@ -2312,6 +2450,12 @@ function ai.errors.NetworkFailure.Failure.retry_safety(self: ai.errors.NetworkFa
 }
 
 function ai.errors.ParseFailed.Failure.retry_safety(self: ai.errors.ParseFailed) -> ai.errors.RetrySafety {
+    load_const ai.errors.RetrySafety.Safe
+    alloc_variant ai.errors.RetrySafety
+    return
+}
+
+function ai.errors.PreviewUnsupported.Failure.retry_safety(self: ai.errors.PreviewUnsupported) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
@@ -4340,6 +4484,111 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     return
 }
 
+function ai.internal._resolve_media_preview_content(url: string | null, file: string | null, inline: string, mime: string) -> ai.wire.ResolvedMedia {
+    load_var file
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=5
+    pop_jump_if_false L0
+    jump L10
+
+  L0:
+    load_var inline
+    load_const ""
+    cmp_op !=
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var url
+    store_var _13
+    load_var _13
+    narrow_bind string, slot=7
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "media-preview"
+    load_const "request preview received media without inline data, a file, or a URL"
+    init_instance ai.errors.PreviewUnsupported .provider, .detail
+    throw
+
+  L3:
+    load_var _13
+    store_var media_url
+    load_var media_url
+    load_const "data:"
+    call baml.String.starts_with
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var media_url
+    load_const null
+    load_var mime
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+    jump L9
+
+  L5:
+    load_var media_url
+    load_const ";base64,"
+    call baml.String.index_of
+    store_var _17
+    load_var _17
+    narrow_bind int, slot=9
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_const "media-preview"
+    load_const "request preview cannot represent a non-base64 data URL"
+    init_instance ai.errors.PreviewUnsupported .provider, .detail
+    throw
+
+  L7:
+    load_var _17
+    store_var_load_var separator
+    load_const 8
+    add_int
+    store_var _20
+    load_var media_url
+    call baml.String.length
+    store_var _22
+    load_var2 8 12
+    load_var _22
+    call baml.String.slice
+    store_var _19
+    load_var media_url
+    load_const 5
+    load_var separator
+    call baml.String.slice
+    store_var _23
+    load_const null
+    load_var2 11 14
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+    jump L9
+
+  L8:
+    load_const null
+    load_var2 3 4
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+
+  L9:
+    return
+
+  L10:
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _9
+    load_const "media-preview"
+    load_const "request preview cannot read local media file "
+    load_var _9
+    bin_op +
+    init_instance ai.errors.PreviewUnsupported .provider, .detail
+    throw
+}
+
 function ai.internal._resolve_pending_call(pending: string[], id: string) -> void {
     load_type string
     load_var2 1 2
@@ -4576,6 +4825,163 @@ function ai.internal._wire_blocks(content: (ai.content.Text | ai.content.Reasoni
   L6:
     load_var out
     return
+}
+
+function ai.internal.assemble_llm_prompt(parts: string[], values: unknown[]) -> ai.Prompt {
+    load_const -1
+    store_var first_role
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    store_var _6
+    load_var values
+    container_len
+    store_var _7
+    load_var2 5 6
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L16
+
+  L1:
+    load_var first_role
+    load_const 0
+    cmp_int_op <
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var first_role
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var parts
+    load_const 0
+    load_array_element
+    call baml.String.trim
+    load_const ""
+    cmp_op !=
+    jump L6
+
+  L4:
+    load_const true
+    jump L6
+
+  L5:
+    load_const true
+
+  L6:
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_var2 1 2
+    call ai.internal.assemble_prompt
+    jump L15
+
+  L8:
+    load_const ""
+    load_type string
+    alloc_array 1
+    store_var llm_parts
+    load_var parts
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _28
+
+  L9:
+    load_var _28
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _29
+    load_var _29
+    is_type baml.iter.Done
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_type string
+    load_var2 7 9
+    call baml.Array.push
+    pop 1
+    jump L9
+
+  L11:
+    load_const "system"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    init_instance ai.Role .name, .metadata
+    load_type unknown
+    alloc_array 1
+    store_var llm_values
+    load_var values
+    load_type baml.iter.Iterable<Error = never, Item = unknown>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _38
+
+  L12:
+    load_var _38
+    load_type baml.iter.Iterator<Error = never, Item = unknown>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _39
+    load_var _39
+    is_type baml.iter.Done
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_type unknown
+    load_var2 10 12
+    call baml.Array.push
+    pop 1
+    jump L12
+
+  L14:
+    load_var2 7 10
+    call ai.internal.assemble_prompt
+
+  L15:
+    return
+
+  L16:
+    load_var first_role
+    load_const 0
+    cmp_int_op <
+    jump_if_false L19
+    pop 1
+    load_var2 2 4
+    load_array_element
+    is_type ai.Role
+    pop_jump_if_false L17
+    jump L18
+
+  L17:
+    load_const false
+    jump L19
+
+  L18:
+    load_const true
+
+  L19:
+    pop_jump_if_false L20
+    load_var i
+    store_var first_role
+
+  L20:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
 }
 
 function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> ai.Prompt {
@@ -6594,6 +7000,211 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     load_var2 10 11
     load_var fetch_url
     call ai.internal._resolve_media_content
+
+  L14:
+    return
+}
+
+function ai.wire.resolve_media_preview(media: baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf) -> ai.wire.ResolvedMedia {
+    load_var media
+    store_var _2
+    load_var _2
+    narrow_bind baml.media.Image, slot=2
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var media
+    store_var _17
+    load_var _17
+    narrow_bind baml.media.Audio, slot=11
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var media
+    store_var _32
+    load_var _32
+    narrow_bind baml.media.Video, slot=20
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var media
+    call baml.media.Pdf.file
+    store_var_load_var _51
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_var media
+    call baml.media.Pdf.url
+    store_var _51
+
+  L3:
+    load_var _51
+    store_var_load_var _49
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const ""
+    store_var _49
+
+  L4:
+    load_var _49
+    store_var source
+    load_var media
+    call baml.media.Pdf.url
+    store_var _55
+    load_var media
+    call baml.media.Pdf.file
+    store_var _56
+    load_var media
+    call baml.media.Pdf.base64
+    store_var _57
+    load_var media
+    call baml.media.Pdf.mime_type
+    load_var source
+    load_const "pdf"
+    call ai.internal._media_mime_type
+    store_var _58
+    load_var2 32 33
+    load_var2 34 35
+    call ai.internal._resolve_media_preview_content
+    jump L14
+
+  L5:
+    load_var _32
+    store_var video
+    load_var video
+    call baml.media.Video.file
+    store_var_load_var _37
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L6
+    load_var video
+    call baml.media.Video.url
+    store_var _37
+
+  L6:
+    load_var _37
+    store_var_load_var _35
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
+    load_const ""
+    store_var _35
+
+  L7:
+    load_var _35
+    store_var source
+    load_var video
+    call baml.media.Video.url
+    store_var _41
+    load_var video
+    call baml.media.Video.file
+    store_var _42
+    load_var video
+    call baml.media.Video.base64
+    store_var _43
+    load_var video
+    call baml.media.Video.mime_type
+    load_var source
+    load_const "video"
+    call ai.internal._media_mime_type
+    store_var _44
+    load_var2 25 26
+    load_var2 27 28
+    call ai.internal._resolve_media_preview_content
+    jump L14
+
+  L8:
+    load_var _17
+    store_var audio
+    load_var audio
+    call baml.media.Audio.file
+    store_var_load_var _22
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L9
+    load_var audio
+    call baml.media.Audio.url
+    store_var _22
+
+  L9:
+    load_var _22
+    store_var_load_var _20
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L10
+    load_const ""
+    store_var _20
+
+  L10:
+    load_var _20
+    store_var source
+    load_var audio
+    call baml.media.Audio.url
+    store_var _26
+    load_var audio
+    call baml.media.Audio.file
+    store_var _27
+    load_var audio
+    call baml.media.Audio.base64
+    store_var _28
+    load_var audio
+    call baml.media.Audio.mime_type
+    load_var source
+    load_const "audio"
+    call ai.internal._media_mime_type
+    store_var _29
+    load_var2 16 17
+    load_var2 18 19
+    call ai.internal._resolve_media_preview_content
+    jump L14
+
+  L11:
+    load_var _2
+    store_var image
+    load_var image
+    call baml.media.Image.file
+    store_var_load_var _7
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L12
+    load_var image
+    call baml.media.Image.url
+    store_var _7
+
+  L12:
+    load_var _7
+    store_var_load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L13
+    load_const ""
+    store_var _5
+
+  L13:
+    load_var _5
+    store_var source
+    load_var image
+    call baml.media.Image.url
+    store_var _11
+    load_var image
+    call baml.media.Image.file
+    store_var _12
+    load_var image
+    call baml.media.Image.base64
+    store_var _13
+    load_var image
+    call baml.media.Image.mime_type
+    load_var source
+    load_const "image"
+    call ai.internal._media_mime_type
+    store_var _14
+    load_var2 7 8
+    load_var2 9 10
+    call ai.internal._resolve_media_preview_content
 
   L14:
     return

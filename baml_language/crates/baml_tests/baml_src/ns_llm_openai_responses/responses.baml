@@ -328,23 +328,19 @@ test "oai_media_input" {
     )
 }
 
-// Media outside a user message is refused as a typed InvalidRequest before any
-// HTTP call — sys_llm's pre-flight check, in the native taxonomy.
-function oai_media_role_rejected() -> string {
+// Responses compatibility permits image input in a system message. This is
+// important for role-less prompts, which the compiler lowers to system for
+// legacy parity, and for explicitly authored system prompts alike.
+function oai_system_image_input() -> string {
     let spec = OaiSystemLook@spec(baml.media.Image.from_base64("aW1n", "image/png"));
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
     let empty = ai.tools.Toolbox.new([]);
-    let rendered = _oai_render_body(cl, _oai_input(spec, ai.Journal.new(spec), empty)) catch_all (e) {
-        _ => _oai_error_name(e),
-    };
-    rendered
+    _oai_render_body(cl, _oai_input(spec, ai.Journal.new(spec), empty))
 }
 
-test "oai_media_role_rejected" {
-    assert.equal(
-        oai_media_role_rejected(),
-        "invalid_request:OpenAI Responses only supports image input in user messages, found system",
-    )
+test "oai_system_image_input" {
+    let got = oai_system_image_input();
+    assert.contains(got, `{"role":"system","content":[{"type":"input_image","image_url":"data:image/png;base64,aW1n","detail":"auto"}]}`)
 }
 
 // An `-> image` return type enables the provider-side image_generation tool and

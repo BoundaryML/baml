@@ -20,7 +20,7 @@ class VertexClient {
     model: string,
     // null resolves from GOOGLE_CLOUD_PROJECT / the credential document at
     // request time; construction never touches env or the filesystem.
-    project_id: string?,
+    project_id: ai.Credential?,
     // null resolves from GOOGLE_CLOUD_LOCATION / GOOGLE_CLOUD_REGION, else
     // the multi-region `global` endpoint.
     location: string?,
@@ -55,7 +55,7 @@ class VertexClient {
 
     function new(
         model: string = "gemini-2.5-flash",
-        project_id: string? = null,
+        project_id: ai.Credential? = null,
         location: string? = null,
         credentials_json: string? = null,
         credentials_file: string? = null,
@@ -107,6 +107,12 @@ class VertexClient {
     implements ai.Client {
         function id(self) -> string {
             `vertex/${self.model}`
+        }
+
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            google.internal.vertex_preview(self, input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {

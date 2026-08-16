@@ -3288,6 +3288,35 @@ impl<'db> InferenceContext<'db> {
                 ok &= self.sub(&throws.0, &throws.1);
                 ok
             }
+            // `baml.AnyFunction` is compiler-derived for concrete function
+            // values, rather than an ordinary impl obligation.  When a
+            // generic consumer such as `reflect.call_any<R, E>` receives a
+            // function value directly, carry its output channels into the
+            // requested associated pins so `R`/`E` are inferred from the
+            // function signature.  The generic-interface fallback below can
+            // prove conformance, but it has no way to recover these pins and
+            // leaves the call's type arguments as `Error`.
+            (
+                TyKind::Function {
+                    ret: actual_ret,
+                    throws: actual_throws,
+                    ..
+                },
+                TyKind::Interface(name, _, expected_pins, _),
+            ) if name.is_builtin_root_type("AnyFunction") => {
+                let mut ok = true;
+                for (pin, expected_pin) in expected_pins {
+                    let Some(actual_pin) = (match pin.as_str() {
+                        "Returns" => Some(actual_ret),
+                        "Throws" => Some(actual_throws),
+                        _ => None,
+                    }) else {
+                        continue;
+                    };
+                    ok &= self.sub(actual_pin, expected_pin);
+                }
+                ok
+            }
             _ => {
                 // Ground on both sides: one oracle verdict. Otherwise the
                 // pair is the deferred residue.

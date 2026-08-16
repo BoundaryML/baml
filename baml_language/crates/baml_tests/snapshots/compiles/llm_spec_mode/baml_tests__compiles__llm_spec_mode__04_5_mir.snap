@@ -80,6 +80,39 @@ fn user.PlainChat(q: string, client: null | ai.Client) -> string {
     }
 }
 
+fn user.PlainChat$build_request(q: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // q // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.PlainChat$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
 fn user.PlainChat$parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -249,7 +282,7 @@ fn .<lambda(PlainChat$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
         _30 = copy _31.0;
         _33 = copy _3;
         _32 = copy _33.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _30, copy _32) -> [bb6];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _30, copy _32) -> [bb6];
     }
 
     bb6: {
@@ -332,6 +365,39 @@ fn user.SpecAgent(q: string, client: null | ai.Client) -> Answer {
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.SpecAgent$build_request(q: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // q // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<Answer>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.SpecAgent$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(Answer);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -507,7 +573,7 @@ fn .<lambda(SpecAgent$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
         _29 = copy _30.0;
         _32 = copy _3;
         _31 = copy _32.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _29, copy _31) -> [bb6];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _29, copy _31) -> [bb6];
     }
 
     bb6: {
@@ -555,6 +621,39 @@ fn user.NamedTools(q: string, client: null | ai.Client) -> Answer {
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.NamedTools$build_request(q: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // q // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<Answer>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.NamedTools$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(Answer);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -728,7 +827,7 @@ fn .<lambda(NamedTools$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
         _29 = copy _30.0;
         _32 = copy _3;
         _31 = copy _32.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _29, copy _31) -> [bb6];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _29, copy _31) -> [bb6];
     }
 
     bb6: {

@@ -48,6 +48,23 @@ function parse_companions.ParseCompanionsParseAliasPayload(client: ai.Client | n
     return
 }
 
+function parse_companions.ParseCompanionsParseAliasPayload$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.parse_companions.ParseCompanionsParseAliasPayload$spec
+    store_var _3
+    load_type parse_companions.ParseCompanionsAliasPayload
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
 function parse_companions.ParseCompanionsParseAliasPayload$parse(json: string) -> parse_companions.ParseCompanionsAliasPayload {
     load_type parse_companions.ParseCompanionsAliasPayload
     load_var json
@@ -129,6 +146,23 @@ function parse_companions.ParseCompanionsParseOptPayload(client: ai.Client | nul
     store_var _3
     load_var _3
     load_field .value
+    return
+}
+
+function parse_companions.ParseCompanionsParseOptPayload$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.parse_companions.ParseCompanionsParseOptPayload$spec
+    store_var _3
+    load_type parse_companions.ParseCompanionsOptPayload
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
     return
 }
 

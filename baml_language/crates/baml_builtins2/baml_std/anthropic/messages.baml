@@ -49,7 +49,11 @@ class ToolChoice {
     /// The model must call exactly this tool.
     function tool(name: string, disable_parallel_tool_use: bool? = null) -> ToolChoice {
         let chosen = name;
-        ToolChoice { type: "tool", name: chosen, disable_parallel_tool_use: disable_parallel_tool_use }
+        ToolChoice {
+            type: "tool",
+            name: chosen,
+            disable_parallel_tool_use: disable_parallel_tool_use,
+        }
     }
 
     /// The model may not call a tool this turn.
@@ -156,6 +160,12 @@ class AnthropicClient {
     implements ai.Client {
         function id(self) -> string {
             `anthropic/${self.model}`
+        }
+
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            anthropic.internal.anthropic_preview(self, input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {

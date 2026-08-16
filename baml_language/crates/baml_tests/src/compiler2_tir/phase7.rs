@@ -127,6 +127,24 @@ fn narrow_truthiness_then_branch_non_null() {
     ");
 }
 
+#[test]
+fn strict_bool_conditions_reject_nullable_bool_and_null() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function optional(flag: bool?) -> string {
+  if (flag) { "taken" } else { "not-taken" }
+}
+
+function null_literal() -> string {
+  if (null) { "taken" } else { "not-taken" }
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(tir.contains("expected bool, got bool | null"), "{tir}");
+    assert!(tir.contains("expected bool, got null"), "{tir}");
+}
+
 // ── Negated narrowing: !(x == null) ──────────────────────────────────────────
 
 #[test]

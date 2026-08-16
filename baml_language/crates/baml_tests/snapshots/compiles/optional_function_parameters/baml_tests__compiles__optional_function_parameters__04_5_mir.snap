@@ -278,6 +278,41 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: null | 
     }
 }
 
+fn user.AskDocs$build_request(query: string, max_results: int, filter: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string // filter // param
+    let _4: null | ai.Client // client // param
+    let _5: bool
+    let _6: ai.FunctionSpec<string>
+    let _7: type
+
+    bb0: {
+        _5 = copy _4 == const <omitted>;
+        branch copy _5 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _4 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = call const fn user.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _7>(copy _6, copy _4) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
 fn user.AskDocs$parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -470,7 +505,7 @@ fn .<lambda(AskDocs$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
         _36 = copy _37.0;
         _39 = copy _2;
         _38 = copy _39.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _36, copy _38) -> [bb8];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _36, copy _38) -> [bb8];
     }
 
     bb8: {

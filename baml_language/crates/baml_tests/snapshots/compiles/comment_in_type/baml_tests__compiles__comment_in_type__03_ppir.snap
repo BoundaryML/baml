@@ -5,6 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.CommentAfterArrow(client: ai.Client? = null) -> string  [llm] {
   ai.Agent.new(client = client).run(CommentAfterArrow$spec()).value
 }
+function user.CommentAfterArrow$build_request(client: ai.Client? = null) -> baml.http.Request  [expr] {
+  CommentAfterArrow$spec().build_request(override_client = client)
+}
 function user.CommentAfterArrow$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
@@ -12,13 +15,16 @@ function user.CommentAfterArrow$render_prompt() -> ai.Prompt  [expr] {
   CommentAfterArrow$spec().prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.CommentAfterArrow$spec() -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "CommentAfterArrow", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }
+  ai.FunctionSpec { spec_name: "CommentAfterArrow", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }
 }
 function user.CommentAfterArrow$stream(client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
   ai.stream.from_spec(CommentAfterArrow$spec(), client = client)
 }
 function user.FunctionWithComments(a: string, b: int, client: ai.Client? = null) -> string  [llm] {
   ai.Agent.new(client = client).run(FunctionWithComments$spec(a, b)).value
+}
+function user.FunctionWithComments$build_request(a: string, b: int, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  FunctionWithComments$spec(a, b).build_request(override_client = client)
 }
 function user.FunctionWithComments$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
@@ -27,7 +33,7 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> ai.Prompt
   FunctionWithComments$spec(a, b).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "FunctionWithComments", args: map { "a": a, "b": b }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }
+  ai.FunctionSpec { spec_name: "FunctionWithComments", args: map { "a": a, "b": b }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }
 }
 function user.FunctionWithComments$stream(a: string, b: int, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
   ai.stream.from_spec(FunctionWithComments$spec(a, b), client = client)

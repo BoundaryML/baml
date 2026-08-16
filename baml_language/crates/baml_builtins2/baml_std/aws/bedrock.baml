@@ -146,6 +146,14 @@ class BedrockClient {
             `bedrock/${self.model}`
         }
 
+        // This is deliberately the unsigned Converse request. Signing is an
+        // invocation concern and would read credentials during a snapshot.
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            aws.internal.build_request(self, input, preview = true) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        }
+
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.invoke(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),

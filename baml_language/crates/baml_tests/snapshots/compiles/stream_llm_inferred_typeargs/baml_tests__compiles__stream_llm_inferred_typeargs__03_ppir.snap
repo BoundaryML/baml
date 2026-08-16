@@ -5,6 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.TestFunc(input: string, client: ai.Client? = null) -> string  [llm] {
   ai.Agent.new(client = client).run(TestFunc$spec(input)).value
 }
+function user.TestFunc$build_request(input: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  TestFunc$spec(input).build_request(override_client = client)
+}
 function user.TestFunc$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
@@ -12,7 +15,7 @@ function user.TestFunc$render_prompt(input: string) -> ai.Prompt  [expr] {
   TestFunc$spec(input).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.TestFunc$spec(input: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "TestFunc", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "hi ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }
+  ai.FunctionSpec { spec_name: "TestFunc", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "hi ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }
 }
 function user.TestFunc$stream(input: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
   ai.stream.from_spec(TestFunc$spec(input), client = client)

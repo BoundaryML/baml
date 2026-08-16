@@ -609,6 +609,39 @@ fn ai.clients.Retry.root.Client.id(self: ai.clients.Retry) -> string {
     }
 }
 
+fn ai.clients.Retry.root.Client.render(self: ai.clients.Retry, input: ai.ModelTurnInput) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: ai.clients.Retry // self // param
+    let _2: ai.ModelTurnInput // input // param
+    let _3: unknown // e
+    let _4: ai.Client
+    let _5: baml.errors.UnknownError | ai.errors.Failure
+    let _6: baml.errors.UnknownError | ai.errors.Failure
+
+    bb0: {
+        _4 = copy _1.0;
+        _0 = virtual_call render as ai.Client(copy _4, copy _2) -> [bb1, unwind: bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        throw_if_panic copy _3 -> bb3;
+    }
+
+    bb3: {
+        _6 = copy _3;
+        _5 = call const fn ai.errors.normalize(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        throw copy _5;
+    }
+}
+
 fn ai.clients.Retry.root.Client.invoke(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.ModelTurn {
     // Locals:
     let _0: ai.ModelTurn // _0 // return
@@ -708,6 +741,60 @@ fn ai.clients.RoundRobin.root.Client.id(self: ai.clients.RoundRobin) -> string {
 
     bb4: {
         return;
+    }
+}
+
+fn ai.clients.RoundRobin.root.Client.render(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: ai.clients.RoundRobin // self // param
+    let _2: ai.ModelTurnInput // input // param
+    let _3: unknown // e
+    let _4: null | ai.Client
+    let _5: (ai.Client[], int) -> null | ai.Client throws never
+    let _6: type
+    let _7: null | ai.Client
+    let _8: ai.Client // c
+    let _9: baml.errors.InvalidArgument
+    let _10: baml.errors.UnknownError | ai.errors.Failure
+    let _11: baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+
+    bb0: {
+        _5 = copy _1.0;
+        _6 = load_type(ai.Client);
+        _4 = call const fn baml.Array.at<copy _6>(copy _5, const 0_i64) -> [bb1, unwind: bb5];
+    }
+
+    bb1: {
+        _7 = copy _4;
+        _7 = narrow_bind copy _7 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: [], name: "Client" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
+    }
+
+    bb2: {
+        _9 = baml.errors.InvalidArgument { const "RoundRobin needs at least one member" };
+        throw copy _9;
+    }
+
+    bb3: {
+        _8 = copy _7;
+        _0 = virtual_call render as ai.Client(copy _8, copy _2) -> [bb4, unwind: bb5];
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        throw_if_panic copy _3 -> bb6;
+    }
+
+    bb6: {
+        _11 = copy _3;
+        _10 = call const fn ai.errors.normalize(copy _11) -> [bb7];
+    }
+
+    bb7: {
+        throw copy _10;
     }
 }
 
@@ -911,6 +998,60 @@ fn ai.clients.Fallback.root.Client.id(self: ai.clients.Fallback) -> string {
 
     bb4: {
         return;
+    }
+}
+
+fn ai.clients.Fallback.root.Client.render(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: ai.clients.Fallback // self // param
+    let _2: ai.ModelTurnInput // input // param
+    let _3: unknown // e
+    let _4: null | ai.Client
+    let _5: (ai.Client[], int) -> null | ai.Client throws never
+    let _6: type
+    let _7: null | ai.Client
+    let _8: ai.Client // c
+    let _9: baml.errors.InvalidArgument
+    let _10: baml.errors.UnknownError | ai.errors.Failure
+    let _11: baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+
+    bb0: {
+        _5 = copy _1.0;
+        _6 = load_type(ai.Client);
+        _4 = call const fn baml.Array.at<copy _6>(copy _5, const 0_i64) -> [bb1, unwind: bb5];
+    }
+
+    bb1: {
+        _7 = copy _4;
+        _7 = narrow_bind copy _7 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: [], name: "Client" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
+    }
+
+    bb2: {
+        _9 = baml.errors.InvalidArgument { const "Fallback needs at least one member" };
+        throw copy _9;
+    }
+
+    bb3: {
+        _8 = copy _7;
+        _0 = virtual_call render as ai.Client(copy _8, copy _2) -> [bb4, unwind: bb5];
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        throw_if_panic copy _3 -> bb6;
+    }
+
+    bb6: {
+        _11 = copy _3;
+        _10 = call const fn ai.errors.normalize(copy _11) -> [bb7];
+    }
+
+    bb7: {
+        throw copy _10;
     }
 }
 
@@ -1200,6 +1341,21 @@ fn ai.errors.InvalidRequest.Failure.retry_safety(self: ai.errors.InvalidRequest)
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.InvalidRequest // self // param
+
+    bb0: {
+        _0 = const ai.errors.RetrySafety.Safe;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn ai.errors.PreviewUnsupported.Failure.retry_safety(self: ai.errors.PreviewUnsupported) -> ai.errors.RetrySafety {
+    // Locals:
+    let _0: ai.errors.RetrySafety // _0 // return
+    let _1: ai.errors.PreviewUnsupported // self // param
 
     bb0: {
         _0 = const ai.errors.RetrySafety.Safe;
@@ -1773,6 +1929,215 @@ fn ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown
 }
 
 fn ai.internal.assemble_prompt = builtin(vm)
+
+fn ai.internal.assemble_llm_prompt(parts: string[], values: unknown[]) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string[] // parts // param
+    let _2: unknown[] // values // param
+    let _3: int // first_role
+    let _4: int // i
+    let _5: bool
+    let _6: int
+    let _7: int
+    let _8: bool
+    let _9: bool
+    let _10: int
+    let _11: unknown
+    let _12: unknown[]
+    let _13: int
+    let _14: bool
+    let _15: bool // needs_system
+    let _16: bool
+    let _17: int
+    let _18: bool
+    let _19: int
+    let _20: string
+    let _21: string
+    let _22: string[]
+    let _23: 0
+    let _24: bool
+    let _25: ai.Role // system
+    let _26: map<string, unknown>
+    let _27: string[] // llm_parts
+    let _28: baml.iter.Iterator<Error = never, Item = string>
+    let _29: unknown
+    let _30: bool
+    let _31: string
+    let _32: string // part
+    let _33: int
+    let _34: string
+    let _35: type
+    let _36: unknown[] // llm_values
+    let _37: ai.Role
+    let _38: baml.iter.Iterator<Error = never, Item = unknown>
+    let _39: unknown
+    let _40: bool
+    let _41: unknown
+    let _42: unknown // value
+    let _43: int
+    let _44: unknown
+    let _45: type
+    let _46: string[]
+    let _47: unknown[]
+
+    bb0: {
+        _3 = const -1_i64;
+        _4 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _6 = copy _4;
+        _7 = len(_2);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _6 < copy _7;
+        branch copy _5 -> [bb21, bb3];
+    }
+
+    bb3: {
+        _17 = copy _3;
+        _16 = copy _17 < const 0_i64;
+        branch copy _16 -> [bb8, bb4];
+    }
+
+    bb4: {
+        _19 = copy _3;
+        _18 = copy _19 > const 0_i64;
+        branch copy _18 -> [bb7, bb5];
+    }
+
+    bb5: {
+        _22 = copy _1;
+        _23 = const 0_i64;
+        _21 = copy _22[_23];
+        _20 = call const fn baml.String.trim(copy _21) -> [bb6];
+    }
+
+    bb6: {
+        _15 = copy _20 != const "";
+        goto -> bb9;
+    }
+
+    bb7: {
+        _15 = const true;
+        goto -> bb9;
+    }
+
+    bb8: {
+        _15 = const true;
+        goto -> bb9;
+    }
+
+    bb9: {
+        _24 = copy _15;
+        branch copy _24 -> [bb11, bb10];
+    }
+
+    bb10: {
+        _0 = call const fn ai.internal.assemble_prompt(copy _1, copy _2) -> [bb20];
+    }
+
+    bb11: {
+        _26 = {  }: map<string, unknown>;
+        _25 = ai.Role { const "system", copy _26 };
+        _27 = [const ""]: string[];
+        _28 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _1) -> [bb12];
+    }
+
+    bb12: {
+        _29 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _28) -> [bb13];
+    }
+
+    bb13: {
+        _30 = is_type(copy _29, baml.iter.Done);
+        branch copy _30 -> [bb15, bb14];
+    }
+
+    bb14: {
+        _31 = copy _29;
+        fresh_cell(_32);
+        _32 = copy _31;
+        _34 = copy _32;
+        _35 = load_type(string);
+        _33 = call const fn baml.Array.push<copy _35>(copy _27, copy _34) -> [bb12];
+    }
+
+    bb15: {
+        _37 = copy _25;
+        _36 = [copy _37]: unknown[];
+        _38 = virtual_call iter as baml.iter.Iterable<Error = never, Item = unknown>(copy _2) -> [bb16];
+    }
+
+    bb16: {
+        _39 = virtual_call next as baml.iter.Iterator<Error = never, Item = unknown>(copy _38) -> [bb17];
+    }
+
+    bb17: {
+        _40 = is_type(copy _39, baml.iter.Done);
+        branch copy _40 -> [bb19, bb18];
+    }
+
+    bb18: {
+        _41 = copy _39;
+        fresh_cell(_42);
+        _42 = copy _41;
+        _44 = copy _42;
+        _45 = load_type(unknown);
+        _43 = call const fn baml.Array.push<copy _45>(copy _36, copy _44) -> [bb16];
+    }
+
+    bb19: {
+        _46 = copy _27;
+        _47 = copy _36;
+        _0 = call const fn ai.internal.assemble_prompt(copy _46, copy _47) -> [bb20];
+    }
+
+    bb20: {
+        return;
+    }
+
+    bb21: {
+        _10 = copy _3;
+        _9 = copy _10 < const 0_i64;
+        _8 = short_circuit(&&) copy _9 -> [eval: bb22, join: bb25];
+    }
+
+    bb22: {
+        _12 = copy _2;
+        _13 = copy _4;
+        _11 = copy _12[_13];
+        _14 = is_type(copy _11, ai.Role);
+        branch copy _14 -> [bb24, bb23];
+    }
+
+    bb23: {
+        _8 = const false;
+        goto -> bb25;
+    }
+
+    bb24: {
+        _8 = const true;
+        goto -> bb25;
+    }
+
+    bb25: {
+        branch copy _8 -> [bb26, bb27];
+    }
+
+    bb26: {
+        _3 = copy _4;
+        goto -> bb27;
+    }
+
+    bb27: {
+        _4 = copy _4 + const 1_i64;
+        goto -> bb1;
+    }
+}
 
 fn ai.internal._header(headers: map<string, string>, lower: string, canonical: string) -> string | null {
     // Locals:
@@ -3555,6 +3920,130 @@ fn ai.internal._resolve_media_content(url: string | null, file: string | null, i
         _103 = copy _104 + copy _109;
         _102 = ai.errors.NetworkFailure { const "media", copy _103, const null };
         throw copy _102;
+    }
+}
+
+fn ai.internal._resolve_media_preview_content(url: string | null, file: string | null, inline: string, mime: string) -> ai.wire.ResolvedMedia {
+    // Locals:
+    let _0: ai.wire.ResolvedMedia // _0 // return
+    let _1: string | null // url // param
+    let _2: string | null // file // param
+    let _3: string // inline // param
+    let _4: string // mime // param
+    let _5: string | null
+    let _6: string // path
+    let _7: ai.errors.PreviewUnsupported
+    let _8: string
+    let _9: string
+    let _10: string
+    let _11: type
+    let _12: bool
+    let _13: string | null
+    let _14: string // media_url
+    let _15: bool
+    let _16: int | null
+    let _17: int | null
+    let _18: int // separator
+    let _19: string
+    let _20: int
+    let _21: int
+    let _22: int
+    let _23: string
+    let _24: int
+    let _25: ai.errors.PreviewUnsupported
+    let _26: string
+    let _27: ai.errors.PreviewUnsupported
+
+    bb0: {
+        _5 = copy _2;
+        _5 = narrow_bind copy _5 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb16, bb1];
+    }
+
+    bb1: {
+        _12 = copy _3 != const "";
+        branch copy _12 -> [bb14, bb2];
+    }
+
+    bb2: {
+        _13 = copy _1;
+        _13 = narrow_bind copy _13 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb4, bb3];
+    }
+
+    bb3: {
+        _27 = ai.errors.PreviewUnsupported { const "media-preview", const "request preview received media without inline data, a file, or a URL" };
+        throw copy _27;
+    }
+
+    bb4: {
+        _14 = copy _13;
+        _15 = call const fn baml.String.starts_with(copy _14, const "data:") -> [bb5];
+    }
+
+    bb5: {
+        branch copy _15 -> [bb7, bb6];
+    }
+
+    bb6: {
+        _26 = copy _14;
+        _0 = ai.wire.ResolvedMedia { copy _26, const null, copy _4 };
+        goto -> bb15;
+    }
+
+    bb7: {
+        _16 = call const fn baml.String.index_of(copy _14, const ";base64,") -> [bb8];
+    }
+
+    bb8: {
+        _17 = copy _16;
+        _17 = narrow_bind copy _17 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb10, bb9];
+    }
+
+    bb9: {
+        _25 = ai.errors.PreviewUnsupported { const "media-preview", const "request preview cannot represent a non-base64 data URL" };
+        throw copy _25;
+    }
+
+    bb10: {
+        _18 = copy _17;
+        _21 = copy _18;
+        _20 = copy _21 + const 8_i64;
+        _22 = call const fn baml.String.length(copy _14) -> [bb11];
+    }
+
+    bb11: {
+        _19 = call const fn baml.String.slice(copy _14, copy _20, copy _22) -> [bb12];
+    }
+
+    bb12: {
+        _24 = copy _18;
+        _23 = call const fn baml.String.slice(copy _14, const 5_i64, copy _24) -> [bb13];
+    }
+
+    bb13: {
+        _0 = ai.wire.ResolvedMedia { const null, copy _19, copy _23 };
+        goto -> bb15;
+    }
+
+    bb14: {
+        _0 = ai.wire.ResolvedMedia { const null, copy _3, copy _4 };
+        goto -> bb15;
+    }
+
+    bb15: {
+        return;
+    }
+
+    bb16: {
+        _6 = copy _5;
+        _10 = copy _6;
+        _11 = load_type(string);
+        _9 = call const fn baml.String.from<copy _11>(copy _10) -> [bb17];
+    }
+
+    bb17: {
+        _8 = const "request preview cannot read local media file " + copy _9;
+        _7 = ai.errors.PreviewUnsupported { const "media-preview", copy _8 };
+        throw copy _7;
     }
 }
 
@@ -7112,6 +7601,302 @@ fn ai.wire.resolve_media(media: baml.media.Audio | baml.media.Image | baml.media
     }
 }
 
+fn ai.wire.resolve_media_preview(media: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video) -> ai.wire.ResolvedMedia {
+    // Locals:
+    let _0: ai.wire.ResolvedMedia // _0 // return
+    let _1: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video // media // param
+    let _2: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _3: baml.media.Image // image
+    let _4: string // source
+    let _5: string
+    let _6: string | null
+    let _7: string | null
+    let _8: string | null
+    let _9: bool
+    let _10: bool
+    let _11: string | null
+    let _12: string | null
+    let _13: string
+    let _14: string
+    let _15: string | null
+    let _16: string
+    let _17: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _18: baml.media.Audio // audio
+    let _19: string // source
+    let _20: string
+    let _21: string | null
+    let _22: string | null
+    let _23: string | null
+    let _24: bool
+    let _25: bool
+    let _26: string | null
+    let _27: string | null
+    let _28: string
+    let _29: string
+    let _30: string | null
+    let _31: string
+    let _32: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _33: baml.media.Video // video
+    let _34: string // source
+    let _35: string
+    let _36: string | null
+    let _37: string | null
+    let _38: string | null
+    let _39: bool
+    let _40: bool
+    let _41: string | null
+    let _42: string | null
+    let _43: string
+    let _44: string
+    let _45: string | null
+    let _46: string
+    let _47: baml.media.Pdf // pdf
+    let _48: string // source
+    let _49: string
+    let _50: string | null
+    let _51: string | null
+    let _52: string | null
+    let _53: bool
+    let _54: bool
+    let _55: string | null
+    let _56: string | null
+    let _57: string
+    let _58: string
+    let _59: string | null
+    let _60: string
+
+    bb0: {
+        _2 = copy _1;
+        _2 = narrow_bind copy _2 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Image" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb36, bb1];
+    }
+
+    bb1: {
+        _17 = copy _1;
+        _17 = narrow_bind copy _17 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Audio" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb25, bb2];
+    }
+
+    bb2: {
+        _32 = copy _1;
+        _32 = narrow_bind copy _32 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Video" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb14, bb3];
+    }
+
+    bb3: {
+        _47 = copy _1;
+        _52 = call const fn baml.media.Pdf.file(copy _47) -> [bb4];
+    }
+
+    bb4: {
+        _51 = copy _52;
+        _53 = copy _51 == const null;
+        branch copy _53 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _51 = call const fn baml.media.Pdf.url(copy _47) -> [bb6];
+    }
+
+    bb6: {
+        _50 = copy _51;
+        _49 = copy _50;
+        _54 = copy _49 == const null;
+        branch copy _54 -> [bb7, bb8];
+    }
+
+    bb7: {
+        _49 = const "";
+        goto -> bb8;
+    }
+
+    bb8: {
+        _48 = copy _49;
+        _55 = call const fn baml.media.Pdf.url(copy _47) -> [bb9];
+    }
+
+    bb9: {
+        _56 = call const fn baml.media.Pdf.file(copy _47) -> [bb10];
+    }
+
+    bb10: {
+        _57 = call const fn baml.media.Pdf.base64(copy _47) -> [bb11];
+    }
+
+    bb11: {
+        _59 = call const fn baml.media.Pdf.mime_type(copy _47) -> [bb12];
+    }
+
+    bb12: {
+        _60 = copy _48;
+        _58 = call const fn ai.internal._media_mime_type(copy _59, copy _60, const "pdf") -> [bb13];
+    }
+
+    bb13: {
+        _0 = call const fn ai.internal._resolve_media_preview_content(copy _55, copy _56, copy _57, copy _58) -> [bb47];
+    }
+
+    bb14: {
+        _33 = copy _32;
+        _38 = call const fn baml.media.Video.file(copy _33) -> [bb15];
+    }
+
+    bb15: {
+        _37 = copy _38;
+        _39 = copy _37 == const null;
+        branch copy _39 -> [bb16, bb17];
+    }
+
+    bb16: {
+        _37 = call const fn baml.media.Video.url(copy _33) -> [bb17];
+    }
+
+    bb17: {
+        _36 = copy _37;
+        _35 = copy _36;
+        _40 = copy _35 == const null;
+        branch copy _40 -> [bb18, bb19];
+    }
+
+    bb18: {
+        _35 = const "";
+        goto -> bb19;
+    }
+
+    bb19: {
+        _34 = copy _35;
+        _41 = call const fn baml.media.Video.url(copy _33) -> [bb20];
+    }
+
+    bb20: {
+        _42 = call const fn baml.media.Video.file(copy _33) -> [bb21];
+    }
+
+    bb21: {
+        _43 = call const fn baml.media.Video.base64(copy _33) -> [bb22];
+    }
+
+    bb22: {
+        _45 = call const fn baml.media.Video.mime_type(copy _33) -> [bb23];
+    }
+
+    bb23: {
+        _46 = copy _34;
+        _44 = call const fn ai.internal._media_mime_type(copy _45, copy _46, const "video") -> [bb24];
+    }
+
+    bb24: {
+        _0 = call const fn ai.internal._resolve_media_preview_content(copy _41, copy _42, copy _43, copy _44) -> [bb47];
+    }
+
+    bb25: {
+        _18 = copy _17;
+        _23 = call const fn baml.media.Audio.file(copy _18) -> [bb26];
+    }
+
+    bb26: {
+        _22 = copy _23;
+        _24 = copy _22 == const null;
+        branch copy _24 -> [bb27, bb28];
+    }
+
+    bb27: {
+        _22 = call const fn baml.media.Audio.url(copy _18) -> [bb28];
+    }
+
+    bb28: {
+        _21 = copy _22;
+        _20 = copy _21;
+        _25 = copy _20 == const null;
+        branch copy _25 -> [bb29, bb30];
+    }
+
+    bb29: {
+        _20 = const "";
+        goto -> bb30;
+    }
+
+    bb30: {
+        _19 = copy _20;
+        _26 = call const fn baml.media.Audio.url(copy _18) -> [bb31];
+    }
+
+    bb31: {
+        _27 = call const fn baml.media.Audio.file(copy _18) -> [bb32];
+    }
+
+    bb32: {
+        _28 = call const fn baml.media.Audio.base64(copy _18) -> [bb33];
+    }
+
+    bb33: {
+        _30 = call const fn baml.media.Audio.mime_type(copy _18) -> [bb34];
+    }
+
+    bb34: {
+        _31 = copy _19;
+        _29 = call const fn ai.internal._media_mime_type(copy _30, copy _31, const "audio") -> [bb35];
+    }
+
+    bb35: {
+        _0 = call const fn ai.internal._resolve_media_preview_content(copy _26, copy _27, copy _28, copy _29) -> [bb47];
+    }
+
+    bb36: {
+        _3 = copy _2;
+        _8 = call const fn baml.media.Image.file(copy _3) -> [bb37];
+    }
+
+    bb37: {
+        _7 = copy _8;
+        _9 = copy _7 == const null;
+        branch copy _9 -> [bb38, bb39];
+    }
+
+    bb38: {
+        _7 = call const fn baml.media.Image.url(copy _3) -> [bb39];
+    }
+
+    bb39: {
+        _6 = copy _7;
+        _5 = copy _6;
+        _10 = copy _5 == const null;
+        branch copy _10 -> [bb40, bb41];
+    }
+
+    bb40: {
+        _5 = const "";
+        goto -> bb41;
+    }
+
+    bb41: {
+        _4 = copy _5;
+        _11 = call const fn baml.media.Image.url(copy _3) -> [bb42];
+    }
+
+    bb42: {
+        _12 = call const fn baml.media.Image.file(copy _3) -> [bb43];
+    }
+
+    bb43: {
+        _13 = call const fn baml.media.Image.base64(copy _3) -> [bb44];
+    }
+
+    bb44: {
+        _15 = call const fn baml.media.Image.mime_type(copy _3) -> [bb45];
+    }
+
+    bb45: {
+        _16 = copy _4;
+        _14 = call const fn ai.internal._media_mime_type(copy _15, copy _16, const "image") -> [bb46];
+    }
+
+    bb46: {
+        _0 = call const fn ai.internal._resolve_media_preview_content(copy _11, copy _12, copy _13, copy _14) -> [bb47];
+    }
+
+    bb47: {
+        return;
+    }
+}
+
 fn ai.wire.merge_request_body(base: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>, overrides: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
@@ -9409,6 +10194,72 @@ fn .<lambda(prompt, 0)>(ctx: ai.Context) -> ai.Prompt {
     }
 }
 
+fn ai.FunctionSpec.build_request(self: ai.FunctionSpec, override_client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: ai.FunctionSpec // self // param
+    let _2: null | ai.Client // override_client // param
+    let _3: bool
+    let _4: ai.Client // selected
+    let _5: ai.Client
+    let _6: bool
+    let _7: ai.ModelTurnInput
+    let _8: (string) -> ai.Prompt throws never
+    let _9: ai.Journal
+    let _10: type
+    let _11: ai.tools.Toolbox
+    let _12: type
+    let _13: type
+    let _14: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _2;
+        _6 = copy _5 == const null;
+        branch copy _6 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _5 = copy _1.4;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _4 = copy _5;
+        _8 = copy _1.2;
+        _10 = load_type(#0);
+        _9 = call const fn ai.Journal.new<copy _10>(copy _1) -> [bb5];
+    }
+
+    bb5: {
+        _12 = load_type(#0);
+        _11 = call const fn ai.FunctionSpec.tools<copy _12>(copy _1) -> [bb6];
+    }
+
+    bb6: {
+        _14 = load_type(#0);
+        _13 = call const fn ai.FunctionSpec.output_type<copy _14>(copy _1) -> [bb7];
+    }
+
+    bb7: {
+        _7 = ai.ModelTurnInput { copy _8, copy _9, copy _11, copy _13 };
+        _0 = virtual_call render as ai.Client(copy _4, copy _7) -> [bb8];
+    }
+
+    bb8: {
+        return;
+    }
+}
+
 fn ai.FunctionSpec.name(self: ai.FunctionSpec) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -9681,6 +10532,17 @@ fn ai.Client.id(_1: void) -> void {
     // Locals:
     let _0: void // return
     let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn ai.Client.render(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
 
     bb0: {
         unreachable;

@@ -343,7 +343,7 @@ pub(crate) fn lower_client_initializer(
 ///         // space) so it can never shadow a user identifier
 ///         let ctx = ai.internal.SpecCtx { output_format: output_format };
 ///         let tagged = baml.TaggedString { ...the function's prompt... };
-///         ai.internal.assemble_prompt(tagged.parts, tagged.values)
+///         ai.internal.assemble_llm_prompt(tagged.parts, tagged.values)
 ///     },
 ///     toolbox: ai.Toolbox.new([ai.tool(a), ...]),
 ///     default_client: openai.ResponsesClient.new(model = "gpt-4o-mini"),
@@ -526,7 +526,7 @@ pub(crate) fn synthesize_llm_spec_body(
         Expr::Path(vec![
             Name::new("ai"),
             Name::new("internal"),
-            Name::new("assemble_prompt"),
+            Name::new("assemble_llm_prompt"),
         ]),
         prompt_start,
     );
@@ -724,7 +724,7 @@ pub(crate) fn synthesize_llm_spec_body(
 /// `Fn$spec(p...).prompt(ai.wire.render_output_format(type.of<Out>()))`.
 pub(crate) fn synthesize_spec_render_prompt_body(
     function_name: &str,
-    param_names: &[Name],
+    params: &[Param],
     generic_param_names: &[Name],
     out_type: Option<crate::ast::TypeExpr>,
     span: TextRange,
@@ -737,10 +737,7 @@ pub(crate) fn synthesize_spec_render_prompt_body(
         Expr::Path(vec![Name::new(format!("{function_name}$spec"))]),
         span,
     );
-    let spec_args: Vec<CallArg> = param_names
-        .iter()
-        .map(|n| CallArg::positional(ctx.alloc_expr(Expr::Path(vec![n.clone()]), span)))
-        .collect();
+    let spec_args = companion_param_call_args(&mut ctx, params, span);
     let spec_call = ctx.alloc_expr(
         Expr::Call {
             callee: spec_callee,
@@ -794,6 +791,50 @@ pub(crate) fn synthesize_spec_render_prompt_body(
     (body, source_map)
 }
 
+/// Synthesize the `$build_request` companion body:
+/// `Fn$spec(p...).build_request(override_client = client)`.
+pub(crate) fn synthesize_spec_build_request_body(
+    function_name: &str,
+    params: &[Param],
+    generic_param_names: &[Name],
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+    let spec_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new(format!("{function_name}$spec"))]),
+        span,
+    );
+    let spec_args = companion_param_call_args(&mut ctx, params, span);
+    let spec_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: spec_callee,
+            type_args: static_type_args(generic_param_names, span),
+            args: spec_args,
+        },
+        span,
+    );
+    let build_callee = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: spec_call,
+            member: Name::new("build_request"),
+        },
+        span,
+    );
+    let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
+    let call = ctx.alloc_expr(
+        Expr::Call {
+            callee: build_callee,
+            type_args: vec![],
+            args: vec![CallArg::named("override_client", client_ref)],
+        },
+        span,
+    );
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(call));
+    (body, source_map)
+}
+
 /// Synthesize the `$parse` companion body: a network-free parse of an
 /// existing JSON/SAP string into the function's return type —
 /// `baml.sap.parse<Out>(json)`.
@@ -837,13 +878,11 @@ pub(crate) fn synthesize_spec_parse_body(
 /// `Agent.run` falls back to the spec's default client when it is null.
 pub(crate) fn synthesize_spec_agent_run_body(
     function_name: &str,
-    param_names: &[Name],
+    params: &[Param],
     generic_param_names: &[Name],
     out_type: Option<crate::ast::TypeExpr>,
     span: TextRange,
 ) -> (ExprBody, AstSourceMap) {
-    use crate::ast::CallArg;
-
     let mut ctx = LoweringContext::new();
 
     // Fn$spec(p1, p2, ...)
@@ -851,13 +890,7 @@ pub(crate) fn synthesize_spec_agent_run_body(
         Expr::Path(vec![Name::new(format!("{function_name}$spec"))]),
         span,
     );
-    let spec_args: Vec<CallArg> = param_names
-        .iter()
-        .map(|n| {
-            let id = ctx.alloc_expr(Expr::Path(vec![n.clone()]), span);
-            CallArg::positional(id)
-        })
-        .collect();
+    let spec_args = companion_param_call_args(&mut ctx, params, span);
     let spec_call = ctx.alloc_expr(
         Expr::Call {
             callee: spec_callee,
@@ -930,13 +963,11 @@ pub(crate) fn synthesize_spec_agent_run_body(
 /// is null.
 pub fn synthesize_spec_stream_body(
     function_name: &str,
-    param_names: &[Name],
+    params: &[Param],
     generic_param_names: &[Name],
     type_args: Vec<crate::ast::TypeExpr>,
     span: TextRange,
 ) -> (ExprBody, AstSourceMap) {
-    use crate::ast::CallArg;
-
     let mut ctx = LoweringContext::new();
 
     // Fn$spec(p1, p2, ...)
@@ -944,13 +975,7 @@ pub fn synthesize_spec_stream_body(
         Expr::Path(vec![Name::new(format!("{function_name}$spec"))]),
         span,
     );
-    let spec_args: Vec<CallArg> = param_names
-        .iter()
-        .map(|n| {
-            let id = ctx.alloc_expr(Expr::Path(vec![n.clone()]), span);
-            CallArg::positional(id)
-        })
-        .collect();
+    let spec_args = companion_param_call_args(&mut ctx, params, span);
     let spec_call = ctx.alloc_expr(
         Expr::Call {
             callee: spec_callee,
@@ -1001,6 +1026,27 @@ fn static_type_args(names: &[Name], span: TextRange) -> Vec<TypeArg> {
             }
             .at(span)
             .into()
+        })
+        .collect()
+}
+
+/// Re-apply parameter defaults when a generated companion calls its `$spec`.
+/// Required parameters can stay positional; defaulted parameters are named so
+/// the callee's default metadata remains visible to argument lowering.
+fn companion_param_call_args(
+    ctx: &mut LoweringContext,
+    params: &[Param],
+    span: TextRange,
+) -> Vec<CallArg> {
+    params
+        .iter()
+        .map(|param| {
+            let value = ctx.alloc_expr(Expr::Path(vec![param.name.clone()]), span);
+            if param.default.is_some() {
+                CallArg::named(param.name.clone(), value)
+            } else {
+                CallArg::positional(value)
+            }
         })
         .collect()
 }

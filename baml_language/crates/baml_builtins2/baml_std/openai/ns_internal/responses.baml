@@ -218,7 +218,7 @@ class OaResponse {
 function _openai_prune_nulls(value: baml.json.json) -> baml.json.json {
     match (value) {
         let object: map<string, baml.json.json> => {
-            let out: map<string, baml.json.json> = { };
+            let out: map<string, baml.json.json> = {};
             for (let key in object.keys()) {
                 let entry = object.get(key);
                 match (entry) {
@@ -336,11 +336,20 @@ function _openai_audio_format(mime_type: string) -> string {
 
 function _openai_media_role_error(kind: string, role: string) -> ai.errors.Failure {
     let detail = `OpenAI Responses only supports ${kind} input in user messages, found ${role}`;
-    ai.errors.InvalidRequest { provider: "openai", status_code: null, detail: detail, raw_body: null }
+    ai.errors.InvalidRequest {
+        provider: "openai",
+        status_code: null,
+        detail: detail,
+        raw_body: null,
+    }
 }
 
 // A rendered structural prompt message becomes typed Responses content parts.
-function _openai_prompt_content(message: ai.PromptMessage, role: string) -> OaInputPart[] {
+function _openai_prompt_content(
+    message: ai.PromptMessage,
+    role: string,
+    preview: bool = false,
+) -> OaInputPart[] {
     let content: OaInputPart[] = [];
     for (let part in message.parts) {
         match (part) {
@@ -355,19 +364,28 @@ function _openai_prompt_content(message: ai.PromptMessage, role: string) -> OaIn
                 null
             },
             let image: baml.media.Image => {
-                if (role != "user") {
+                // The legacy OpenAI Responses lowering accepted image parts in
+                // the system message produced for a role-less prompt. Keep
+                // that compatibility while still rejecting assistant/tool
+                // authored media, which has no valid Responses input shape.
+                if (role != "user" && role != "system") {
                     throw _openai_media_role_error("image", role)
                 }
-                let resolved = ai.wire.resolve_media(image, false);
+                let resolved = if (preview) {
+                    ai.wire.resolve_media_preview(image)
+                } else {
+                    ai.wire.resolve_media(image, false)
+                };
                 let image_url = resolved.url ?? `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`;
-                content.push(
-                    OaInputImage {
-                        type: "input_image",
-                        image_url: image_url,
-                        file_id: null,
-                        detail: "auto",
-                    },
-                );
+                content
+                    .push(
+                        OaInputImage {
+                            type: "input_image",
+                            image_url: image_url,
+                            file_id: null,
+                            detail: "auto",
+                        },
+                    );
                 null
             },
             let audio: baml.media.Audio => {
@@ -375,45 +393,62 @@ function _openai_prompt_content(message: ai.PromptMessage, role: string) -> OaIn
                     throw _openai_media_role_error("audio", role)
                 }
                 // audio has no URL form on the wire: always inline base64.
-                let resolved = ai.wire.resolve_media(audio, true);
-                content.push(
-                    OaInputAudio {
-                        type: "input_audio",
-                        input_audio: OaAudioPayload {
-                            data: resolved.base64 ?? "",
-                            format: _openai_audio_format(resolved.mime_type),
+                let resolved = if (preview) {
+                    ai.wire.resolve_media_preview(audio)
+                } else {
+                    ai.wire.resolve_media(audio, true)
+                };
+                if (preview && resolved.url != null) {
+                    throw ai.errors.PreviewUnsupported {
+                        provider: "openai",
+                        detail: "OpenAI Responses audio input requires downloaded bytes during request preview",
+                    }
+                }
+                content
+                    .push(
+                        OaInputAudio {
+                            type: "input_audio",
+                            input_audio: OaAudioPayload {
+                                data: resolved.base64 ?? "",
+                                format: _openai_audio_format(resolved.mime_type),
+                            },
                         },
-                    },
-                );
+                    );
                 null
             },
             let pdf: baml.media.Pdf => {
                 if (role != "user") {
                     throw _openai_media_role_error("PDF", role)
                 }
-                let resolved = ai.wire.resolve_media(pdf, false);
+                let resolved = if (preview) {
+                    ai.wire.resolve_media_preview(pdf)
+                } else {
+                    ai.wire.resolve_media(pdf, false)
+                };
                 let name = _openai_file_name(pdf.file() ?? pdf.url());
                 if let url: string = resolved.url {
-                    content.push(
-                        OaInputFile {
-                            type: "input_file",
-                            filename: name,
-                            file_data: null,
-                            file_url: url,
-                            file_id: null,
-                        },
-                    );
+                    content
+                        .push(
+                            OaInputFile {
+                                type: "input_file",
+                                filename: name,
+                                file_data: null,
+                                file_url: url,
+                                file_id: null,
+                            },
+                        );
                     null
                 } else {
-                    content.push(
-                        OaInputFile {
-                            type: "input_file",
-                            filename: name,
-                            file_data: `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`,
-                            file_url: null,
-                            file_id: null,
-                        },
-                    );
+                    content
+                        .push(
+                            OaInputFile {
+                                type: "input_file",
+                                filename: name,
+                                file_data: `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`,
+                                file_url: null,
+                                file_id: null,
+                            },
+                        );
                     null
                 };
                 null
@@ -434,14 +469,20 @@ function _openai_prompt_content(message: ai.PromptMessage, role: string) -> OaIn
 // Role-less content uses the ordinary user role; `tool` is not a valid
 // free-standing Responses message role, so authored tool context is user
 // content (actual tool outputs come from the journal path below).
-function openai_lower_prompt(prompt: ai.Prompt) -> OaInputItem[] {
+function openai_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> OaInputItem[] {
     let items: OaInputItem[] = [];
     for (let message in prompt.messages()) {
         let role = match (message.role) {
             "" | "tool" => "user",
             _ => message.role,
         };
-        items.push(OaMessageItem { role: role, content: _openai_prompt_content(message, role) });
+        items
+            .push(
+                OaMessageItem {
+                    role: role,
+                    content: _openai_prompt_content(message, role, preview = preview),
+                },
+            );
     }
     items
 }
@@ -524,35 +565,38 @@ function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
     for (let e in j.entries()) {
         match (e) {
             let u: ai.events.UserMessage => {
-                items.push(
-                    OaMessageItem {
-                        role: "user",
-                        content: [OaInputText { type: "input_text", text: u.content }],
-                    },
-                );
+                items
+                    .push(
+                        OaMessageItem {
+                            role: "user",
+                            content: [OaInputText { type: "input_text", text: u.content }],
+                        },
+                    );
                 null
             },
             let a: ai.events.AssistantMessage => {
                 for (let b in a.content) {
                     match (b) {
                         let t: ai.content.Text => {
-                            items.push(
-                                OaMessageItem {
-                                    role: "assistant",
-                                    content: [OaOutputText { type: "output_text", text: t.text }],
-                                },
-                            );
+                            items
+                                .push(
+                                    OaMessageItem {
+                                        role: "assistant",
+                                        content: [OaOutputText { type: "output_text", text: t.text }],
+                                    },
+                                );
                             null
                         },
                         let use: ai.content.ToolUse => {
-                            items.push(
-                                OaFunctionCallItem {
-                                    type: "function_call",
-                                    call_id: use.id,
-                                    name: use.name,
-                                    arguments: baml.json.stringify(baml.json.to_json(use.args)),
-                                },
-                            );
+                            items
+                                .push(
+                                    OaFunctionCallItem {
+                                        type: "function_call",
+                                        call_id: use.id,
+                                        name: use.name,
+                                        arguments: baml.json.stringify(baml.json.to_json(use.args)),
+                                    },
+                                );
                             null
                         },
                         // ai.Reasoning does not round-trip yet (the API wants
@@ -565,25 +609,27 @@ function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
                 null
             },
             let c: ai.events.ToolCompleted => {
-                items.push(
-                    OaFunctionCallOutputItem {
-                        type: "function_call_output",
-                        call_id: c.id,
-                        output: c.output,
-                    },
-                );
+                items
+                    .push(
+                        OaFunctionCallOutputItem {
+                            type: "function_call_output",
+                            call_id: c.id,
+                            output: c.output,
+                        },
+                    );
                 null
             },
             let f: ai.events.ToolFailed => {
-                let err: map<string, unknown> = { };
+                let err: map<string, unknown> = {};
                 let _ = err.set("error", f.message);
-                items.push(
-                    OaFunctionCallOutputItem {
-                        type: "function_call_output",
-                        call_id: f.id,
-                        output: baml.json.stringify(baml.json.to_json(err)),
-                    },
-                );
+                items
+                    .push(
+                        OaFunctionCallOutputItem {
+                            type: "function_call_output",
+                            call_id: f.id,
+                            output: baml.json.stringify(baml.json.to_json(err)),
+                        },
+                    );
                 null
             },
             _ => null,
@@ -607,15 +653,16 @@ function _openai_wants_image(output_type: type) -> bool {
 function _openai_tools(toolbox: ai.tools.Toolbox, wants_image: bool) -> OaTool[]? {
     let tools: OaTool[] = [];
     for (let t in toolbox.list()) {
-        tools.push(
-            OaFunctionTool {
-                type: "function",
-                name: t.name,
-                description: t.description,
-                parameters: baml.json.to_json(t.input_schema),
-                strict: false,
-            },
-        );
+        tools
+            .push(
+                OaFunctionTool {
+                    type: "function",
+                    name: t.name,
+                    description: t.description,
+                    parameters: baml.json.to_json(t.input_schema),
+                    strict: false,
+                },
+            );
     }
     if (wants_image) {
         tools.push(OaBuiltinTool { type: "image_generation" });
@@ -627,7 +674,10 @@ function _openai_tools(toolbox: ai.tools.Toolbox, wants_image: bool) -> OaTool[]
     }
 }
 
-function _openai_tool_choice(tools: OaTool[]?, wants_image: bool) -> (string | OaToolChoiceObject)? {
+function _openai_tool_choice(
+    tools: OaTool[]?,
+    wants_image: bool,
+) -> (string | OaToolChoiceObject)? {
     if (wants_image) {
         return OaToolChoiceObject { type: "image_generation" };
     }
@@ -677,9 +727,10 @@ function _openai_url(c: root.ResponsesClient) -> string {
     if let params: map<string, string> = c.query_params {
         let pairs: string[] = [];
         for (let key in params.keys()) {
-            pairs.push(
-                `${_openai_percent_encode(key)}=${_openai_percent_encode(params.get(key) ?? "")}`,
-            );
+            pairs
+                .push(
+                    `${_openai_percent_encode(key)}=${_openai_percent_encode(params.get(key) ?? "")}`,
+                );
         }
         if (pairs.length() > 0) {
             return `${url}?${pairs.join("&")}`;
@@ -690,7 +741,13 @@ function _openai_url(c: root.ResponsesClient) -> string {
 
 // ai.ModelTurnInput -> one Responses API request.
 function openai_render(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _openai_request(c, input, false)
+    _openai_request(c, input, false, preview = false)
+}
+
+// The request one `render` would send. This path never reads local media or
+// downloads URLs; provider-unsupported URL forms return PreviewUnsupported.
+function openai_preview(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
+    _openai_request(c, input, false, preview = true)
 }
 
 // The shared request builder: identical body for both paths, plus the
@@ -699,9 +756,10 @@ function _openai_request(
     c: root.ResponsesClient,
     input: ai.ModelTurnInput,
     stream: bool,
+    preview: bool = false,
 ) -> baml.http.Request {
     let prompt = input.prompt(ai.wire.render_output_format(input.output_type));
-    let items = openai_lower_prompt(prompt);
+    let items = openai_lower_prompt(prompt, preview = preview);
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.
     let journal = ai.wire.sanitize_for_client(input.journal, c.id());
@@ -731,14 +789,13 @@ function _openai_request(
     // typed request -> json -> drop unset optionals -> put the caller's own
     // open-ended JSON back (tool schemas, then the per-message directives that
     // ride on a content part) -> user passthrough LAST.
-    let pruned = _openai_restore_tool_schemas(
-        _openai_prune_nulls(baml.json.to_json(request)),
-        tools,
-    );
-    let body = ai.wire.merge_request_body(
-        _openai_apply_message_metadata(pruned, openai_prompt_metadata(prompt)),
-        c.request_body,
-    );
+    let pruned = _openai_restore_tool_schemas(_openai_prune_nulls(baml.json.to_json(request)), tools);
+    let body = ai
+        .wire
+        .merge_request_body(
+            _openai_apply_message_metadata(pruned, openai_prompt_metadata(prompt)),
+            c.request_body,
+        );
     baml.http.Request {
         method: "POST",
         url: _openai_url(c),
@@ -806,7 +863,10 @@ function _openai_response_failure(resp: OaResponse) -> ai.errors.Failure {
         let err: OaErrorBody => _openai_error_failure(err),
         null => {
             _openai_error_failure(
-                OaErrorBody { code: null, message: `the response ended with status ${resp.status ?? "failed"}` },
+                OaErrorBody {
+                    code: null,
+                    message: `the response ended with status ${resp.status ?? "failed"}`,
+                },
             )
         },
     }
@@ -827,24 +887,26 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
         match (item.type) {
             "function_call" => {
                 has_call = true;
-                let args: map<string, unknown> = { };
+                let args: map<string, unknown> = {};
                 if let s: string = item.arguments {
                     // Provider-malformed output, not a bug in the caller's code:
                     // the raw baml JsonParseError would escape as an untyped
                     // UnknownError, so it is classified like every other
                     // undecodable provider payload (ai.wire.send_as does the
                     // same for the response body).
-                    args = baml.json.from_string<map<string, unknown>>(s) catch_all (e) {
-                        _ => throw ai.errors.ParseFailed { provider: "openai", raw_output: s },
-                    };
+                    args
+                        = baml.json.from_string<map<string, unknown>>(s) catch_all (e) {
+                            _ => throw ai.errors.ParseFailed { provider: "openai", raw_output: s },
+                        };
                 };
-                content.push(
-                    ai.content.ToolUse {
-                        id: item.call_id ?? "",
-                        name: item.name ?? "",
-                        args: args,
-                    },
-                );
+                content
+                    .push(
+                        ai.content.ToolUse {
+                            id: item.call_id ?? "",
+                            name: item.name ?? "",
+                            args: args,
+                        },
+                    );
                 null
             },
             "message" => {
@@ -883,13 +945,16 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
                 // content, NOT a tool call the runner has to execute.
                 if let encoded: string = item.result {
                     let mime = _openai_image_mime(item.output_format);
-                    content.push(
-                        ai.content.Media.new(
-                            baml.media.Image.from_base64(encoded, mime),
-                            provider_id = item.id,
-                            revised_prompt = item.revised_prompt,
-                        ),
-                    );
+                    content
+                        .push(
+                            ai.content
+                                .Media
+                                .new(
+                                    baml.media.Image.from_base64(encoded, mime),
+                                    provider_id = item.id,
+                                    revised_prompt = item.revised_prompt,
+                                ),
+                        );
                     null
                 } else {
                     null
@@ -972,8 +1037,8 @@ class OaStreamState {
     call_arguments: map<string, string>,
 
     function new() -> OaStreamState {
-        let started: map<string, bool> = { };
-        let buffered: map<string, string> = { };
+        let started: map<string, bool> = {};
+        let buffered: map<string, string> = {};
         OaStreamState { model: null, text_started: started, call_arguments: buffered }
     }
 }
@@ -1060,10 +1125,7 @@ function _openai_stream_events(
             // terminal event's response object.
             if let delta: string = event.delta {
                 let key = _openai_event_key(event);
-                let _ = state.call_arguments.set(
-                    key,
-                    (state.call_arguments.get(key) ?? "") + delta,
-                );
+                let _ = state.call_arguments.set(key, (state.call_arguments.get(key) ?? "") + delta);
             };
             null
         },
@@ -1130,11 +1192,9 @@ function _openai_sse_failure(error: unknown) -> ai.errors.Failure {
                 _ => 0,
             };
             if (code > 0) {
-                return ai.errors.classify_http(
-                    "openai",
-                    code,
-                    rest.slice(separator + 1, rest.length()).trim(),
-                );
+                return ai
+                    .errors
+                    .classify_http("openai", code, rest.slice(separator + 1, rest.length()).trim());
             };
         };
     };
@@ -1148,7 +1208,7 @@ function _openai_sse_failure(error: unknown) -> ai.errors.Failure {
 // The streaming entry point: the same request as `invoke` with `stream: true`,
 // wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-    let req = _openai_request(c, input, true);
+    let req = _openai_request(c, input, true, preview = false);
     let sse = baml.http.fetch_sse(req) catch_all (e) {
         _ => throw _openai_sse_failure(e),
     };
@@ -1159,11 +1219,13 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
     // complete one — opt into ai.stream's strict termination contract so the
     // partial text is reported as ai.errors.NetworkFailure instead of being
     // handed back as a successful answer.
-    ai.stream.TurnStream.from_sse(
-        sse,
-        (batch: string) -> {
-            _openai_decode_batch(batch, state)
-        },
-        require_terminal = "openai",
-    )
+    ai.stream
+        .TurnStream
+        .from_sse(
+            sse,
+            (batch: string) -> {
+                _openai_decode_batch(batch, state)
+            },
+            require_terminal = "openai",
+        )
 }

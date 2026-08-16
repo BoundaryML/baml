@@ -105,6 +105,12 @@ class AiGatewayImageClient {
             root.internal._gw_images_client_id(self)
         }
 
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            vercel.internal.gateway_images_render(self, input, preview = true) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        }
+
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.gateway_images_invoke(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),

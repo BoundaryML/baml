@@ -181,10 +181,10 @@ test "chat_openai_message_text" {
     assert.equal(chat_openai_message_text(), "You are terse.//Say pong.")
 }
 
-// A prompt with no `${role(...)}` marker is USER content, not a system
-// instruction — the shipped native clients' rule (PLAN §5). sys_llm defaulted
-// role-less content to `system`, which silently rewrote every unmarked prompt.
-function chat_roleless_defaults_to_user() -> string {
+// A prompt with no `${role(...)}` marker is legacy system content. The
+// compiler-generated LLM spec applies this compatibility default while the
+// standalone `prompt` tag remains role-less unless explicitly marked.
+function chat_roleless_defaults_to_system() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -205,8 +205,8 @@ function chat_roleless_defaults_to_user() -> string {
     )
 }
 
-test "chat_roleless_defaults_to_user" {
-    assert.equal(chat_roleless_defaults_to_user(), "user|1")
+test "chat_roleless_defaults_to_system" {
+    assert.equal(chat_roleless_defaults_to_system(), "system|1")
 }
 
 // First-class typed parameters lower into their wire keys; the `request_body`

@@ -151,40 +151,50 @@ class AzureClient {
     }
 
     function compat(self) -> root.internal.ChatCompat {
-        let query: map<string, string> = {  };
+        let query: map<string, string> = {};
         if let version: string = self.api_version {
             let _ = query.set("api-version", version);
         }
-        root.internal.ChatCompat.new(
-            provider = "azure",
-            base_url = self.resolved_base_url(),
-            auth = root.internal.ChatAuth.ApiKeyHeader,
-            api_key_env = "AZURE_OPENAI_API_KEY",
-            api_key_required = true,
-            default_max_tokens = 4096,
-            compat_query = query,
-        )
+        root.internal
+            .ChatCompat
+            .new(
+                provider = "azure",
+                base_url = self.resolved_base_url(),
+                auth = root.internal.ChatAuth.ApiKeyHeader,
+                api_key_env = "AZURE_OPENAI_API_KEY",
+                api_key_required = true,
+                default_max_tokens = 4096,
+                compat_query = query,
+            )
     }
 
     function params(self) -> root.internal.ChatParams {
-        root.internal.ChatParams.new(
-            model = self.model,
-            api_key = self.resolved_api_key(),
-            temperature = self.temperature,
-            max_tokens = self.max_tokens,
-            max_completion_tokens = self.max_completion_tokens,
-            top_p = self.top_p,
-            stop = self.stop,
-            seed = self.seed,
-            headers = self.headers,
-            query_params = self.query_params,
-            request_body = self.request_body,
-        )
+        root.internal
+            .ChatParams
+            .new(
+                model = self.model,
+                api_key = self.resolved_api_key(),
+                temperature = self.temperature,
+                max_tokens = self.max_tokens,
+                max_completion_tokens = self.max_completion_tokens,
+                top_p = self.top_p,
+                stop = self.stop,
+                seed = self.seed,
+                headers = self.headers,
+                query_params = self.query_params,
+                request_body = self.request_body,
+            )
     }
 
     implements ai.Client {
         function id(self) -> string {
             `azure/${self.model}`
+        }
+
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            openai.internal.chat_preview(self.compat(), self.params(), input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {

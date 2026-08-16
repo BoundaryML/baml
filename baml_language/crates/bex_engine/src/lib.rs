@@ -2162,6 +2162,7 @@ impl BexEngine {
                             .map(|f| sys_types::ClassFieldDefinition {
                                 name: f.name.clone(),
                                 field_type: f.field_type.clone(),
+                                field_template: Some(f.field_template.clone()),
                                 description: f.description.clone(),
                                 alias: f.alias.clone(),
                                 skip: f.skip,
@@ -2236,6 +2237,7 @@ impl BexEngine {
                 .map(|field| sys_types::ClassFieldDefinition {
                     name: field.name.clone(),
                     field_type: field.field_type.clone(),
+                    field_template: Some(field.field_template.clone()),
                     description: field.description.clone(),
                     alias: field.alias.clone(),
                     skip: field.skip,
@@ -2338,6 +2340,7 @@ impl BexEngine {
                             .map(|field| sys_types::ClassFieldDefinition {
                                 name: field.name.clone(),
                                 field_type: field.field_type.clone(),
+                                field_template: Some(field.field_template.clone()),
                                 description: field.description.clone(),
                                 alias: field.alias.clone(),
                                 skip: field.skip,

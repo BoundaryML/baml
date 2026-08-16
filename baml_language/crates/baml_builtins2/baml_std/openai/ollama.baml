@@ -65,32 +65,42 @@ class OllamaClient {
     }
 
     function compat(self) -> root.internal.ChatCompat {
-        root.internal.ChatCompat.new(
-            provider = "ollama",
-            base_url = self.resolved_base_url(),
-            collapse_text_content = true,
-            inline_image_urls = true,
-        )
+        root.internal
+            .ChatCompat
+            .new(
+                provider = "ollama",
+                base_url = self.resolved_base_url(),
+                collapse_text_content = true,
+                inline_image_urls = true,
+            )
     }
 
     function params(self) -> root.internal.ChatParams {
-        root.internal.ChatParams.new(
-            model = self.model,
-            api_key = self.resolved_api_key(),
-            temperature = self.temperature,
-            max_tokens = self.max_tokens,
-            top_p = self.top_p,
-            stop = self.stop,
-            seed = self.seed,
-            headers = self.headers,
-            query_params = self.query_params,
-            request_body = self.request_body,
-        )
+        root.internal
+            .ChatParams
+            .new(
+                model = self.model,
+                api_key = self.resolved_api_key(),
+                temperature = self.temperature,
+                max_tokens = self.max_tokens,
+                top_p = self.top_p,
+                stop = self.stop,
+                seed = self.seed,
+                headers = self.headers,
+                query_params = self.query_params,
+                request_body = self.request_body,
+            )
     }
 
     implements ai.Client {
         function id(self) -> string {
             `ollama/${self.model}`
+        }
+
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            openai.internal.chat_preview(self.compat(), self.params(), input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {

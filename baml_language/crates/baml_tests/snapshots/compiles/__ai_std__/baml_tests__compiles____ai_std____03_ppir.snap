@@ -141,6 +141,15 @@ function ai.clients.new(inner: root.Client, max_attempts: int = 3, retry_if: (ro
 function ai.clients.new(members: root.Client[]) -> ai.clients.RoundRobin  [expr] {
   { if (members.length() Eq 0) { throw baml.errors.InvalidArgument { message: "RoundRobin needs ..." } } } ai.clients.RoundRobin { members: members, counter: 0 }
 }
+function ai.clients.render(self: ?, input: root.ModelTurnInput) -> baml.http.Request  [expr] {
+  {  } self.inner.render(input) catch_all (e) { _ => throw root.errors.normalize(e) }
+}
+function ai.clients.render(self: ?, input: root.ModelTurnInput) -> baml.http.Request  [expr] {
+  {  } match (self.members.at(0)) { c: root.Client => c.render(input), null => { throw baml.errors.InvalidArgument { message: "RoundRobin needs ..." } } } catch_all (e) { _ => throw root.errors.normalize(e) }
+}
+function ai.clients.render(self: ?, input: root.ModelTurnInput) -> baml.http.Request  [expr] {
+  {  } match (self.members.at(0)) { c: root.Client => c.render(input), null => { throw baml.errors.InvalidArgument { message: "Fallback needs at..." } } } catch_all (e) { _ => throw root.errors.normalize(e) }
+}
 function ai.clients.resolve(selector: ai.clients.ClientSelector) -> root.Client  [expr] {
   {  } match (selector) { shorthand: string => root.internal._from_shorthand(shorthand), named: baml.env.Ref => {  } if let value: string = named.get() {  } root.internal._from_shorthand(value) else { throw root.errors.InvalidRequest { provider: "ai.clients", status_code: null, detail: `...`, raw_body: null } }, existing: root.Client => existing }
 }
@@ -219,6 +228,14 @@ class ai.errors.ParseFailed$stream {
   provider: string | null
   raw_output: string | null
 }
+class ai.errors.PreviewUnsupported {
+  provider: string
+  detail: string
+}
+class ai.errors.PreviewUnsupported$stream {
+  provider: string | null
+  detail: string | null
+}
 class ai.errors.RateLimited {
   provider: string
   retry_after_ms: int?
@@ -271,6 +288,9 @@ function ai.errors.normalize(error: unknown) -> Failure | baml.errors.UnknownErr
   {  } match (error) { failure: Failure => failure, unknown_error: baml.errors.UnknownError => unknown_error, _ => baml.errors.UnknownError { data: error, message: [error.to_string()] } }
 }
 function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [missing]
+function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [expr] {
+  {  } RetrySafety.Safe
+}
 function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [expr] {
   {  } RetrySafety.Safe
 }
@@ -391,6 +411,9 @@ class ai.internal.SpecCtx$stream {
 function ai.internal._schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown>  [expr] {
   { let sig = reflect.signature(handler); let props: map<string, unknown> = map {  }; let required: string[] = []; for a in sig.args { let _ = props.set(a.name, baml.json.schema(a.type)); required.push(a.name) } } map { "type": "object", "properties": props, "required": required, "additionalProperties": false }
 }
+function ai.internal.assemble_llm_prompt(parts: string[], values: unknown[]) -> root.Prompt  [expr] {
+  { let first_role = Neg 1; let i = 0; while i Lt values.length() { if (first_role Lt 0 And values[i] is root.Role) { first_role = i }; i Add= 1 }; let needs_system = if (first_role Lt 0) {  } true else if (first_role Gt 0) {  } true else {  } parts[0].trim() Ne "" } if (needs_system) { let system = root.Role { name: "system", metadata: map {  } }; let llm_parts: string[] = [""]; for part in parts { llm_parts.push(part) }; let llm_values: unknown[] = [system]; for value in values { llm_values.push(value) } } assemble_prompt(llm_parts, llm_values) else {  } assemble_prompt(parts, values)
+}
 function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> root.Prompt  [builtin]
 
 --- <builtin>/ai/ns_internal/http_errors.baml ---
@@ -441,6 +464,9 @@ function ai.internal._media_mime_type(explicit: string?, source_value: string, k
 }
 function ai.internal._resolve_media_content(url: string?, file: string?, inline: string, mime: string, fetch_url: bool) -> root.wire.ResolvedMedia  [expr] {
   { if let path: string = file { let handle = baml.fs.open(path, "r") catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } }; let data = handle.bytes().to_base64() catch_all (e) { _ => { handle.close(); throw baml.errors.InvalidArgument { message: `...` } } }; handle.close(); return root.wire.ResolvedMedia { url: null, base64: data, mime_type: mime } }; if (inline Ne "") { return root.wire.ResolvedMedia { url: null, base64: inline, mime_type: mime } }; if let media_url: string = url { if (media_url.starts_with("data:")) { if let separator: int = media_url.index_of(";base64,") { return root.wire.ResolvedMedia { url: null, base64: media_url.slice(separator Add 8, media_url.length()), mime_type: media_url.slice(5, separator) } }; let preview = if (media_url.length() Gt 48) {  } `...` else {  } media_url; throw baml.errors.InvalidArgument { message: `...` } }; if (Not fetch_url Or media_url.starts_with("gs://")) { return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime } }; let response = baml.http.fetch(media_url, timeout = baml.time.Duration.from_seconds(30)) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } } }; if (Not response.ok()) { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } }; let response_mime = response.headers.get("content-type") NullCoalesce mime; let body = response.bytes() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } } }; return root.wire.ResolvedMedia { url: null, base64: body.to_base64(), mime_type: response_mime.split(";").at(0) NullCoalesce mime.trim() } }; throw baml.errors.InvalidArgument { message: "media has no URL,..." } }
+}
+function ai.internal._resolve_media_preview_content(url: string?, file: string?, inline: string, mime: string) -> root.wire.ResolvedMedia  [expr] {
+  { if let path: string = file { throw ai.errors.PreviewUnsupported { provider: "media-preview", detail: `...` } }; if (inline Ne "") { return root.wire.ResolvedMedia { url: null, base64: inline, mime_type: mime } }; if let media_url: string = url { if (media_url.starts_with("data:")) { if let separator: int = media_url.index_of(";base64,") { return root.wire.ResolvedMedia { url: null, base64: media_url.slice(separator Add 8, media_url.length()), mime_type: media_url.slice(5, separator) } }; throw ai.errors.PreviewUnsupported { provider: "media-preview", detail: "request preview c..." } }; return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime } }; throw ai.errors.PreviewUnsupported { provider: "media-preview", detail: "request preview r..." } }
 }
 
 --- <builtin>/ai/ns_internal/prompt.baml ---
@@ -704,6 +730,9 @@ function ai.wire.resolve_credential(cred: root.Credential?, env_fallback: string
 function ai.wire.resolve_media(media: ai.MediaPart, fetch_url: bool) -> ai.wire.ResolvedMedia  [expr] {
   {  } match (media) { image: baml.media.Image => { let source = image.file() NullCoalesce image.url() NullCoalesce "" } root.internal._resolve_media_content(image.url(), image.file(), image.base64(), root.internal._media_mime_type(image.mime_type(), source, "image"), fetch_url), audio: baml.media.Audio => { let source = audio.file() NullCoalesce audio.url() NullCoalesce "" } root.internal._resolve_media_content(audio.url(), audio.file(), audio.base64(), root.internal._media_mime_type(audio.mime_type(), source, "audio"), fetch_url), video: baml.media.Video => { let source = video.file() NullCoalesce video.url() NullCoalesce "" } root.internal._resolve_media_content(video.url(), video.file(), video.base64(), root.internal._media_mime_type(video.mime_type(), source, "video"), fetch_url), pdf: baml.media.Pdf => { let source = pdf.file() NullCoalesce pdf.url() NullCoalesce "" } root.internal._resolve_media_content(pdf.url(), pdf.file(), pdf.base64(), root.internal._media_mime_type(pdf.mime_type(), source, "pdf"), fetch_url) }
 }
+function ai.wire.resolve_media_preview(media: ai.MediaPart) -> ai.wire.ResolvedMedia  [expr] {
+  {  } match (media) { image: baml.media.Image => { let source = image.file() NullCoalesce image.url() NullCoalesce "" } root.internal._resolve_media_preview_content(image.url(), image.file(), image.base64(), root.internal._media_mime_type(image.mime_type(), source, "image")), audio: baml.media.Audio => { let source = audio.file() NullCoalesce audio.url() NullCoalesce "" } root.internal._resolve_media_preview_content(audio.url(), audio.file(), audio.base64(), root.internal._media_mime_type(audio.mime_type(), source, "audio")), video: baml.media.Video => { let source = video.file() NullCoalesce video.url() NullCoalesce "" } root.internal._resolve_media_preview_content(video.url(), video.file(), video.base64(), root.internal._media_mime_type(video.mime_type(), source, "video")), pdf: baml.media.Pdf => { let source = pdf.file() NullCoalesce pdf.url() NullCoalesce "" } root.internal._resolve_media_preview_content(pdf.url(), pdf.file(), pdf.base64(), root.internal._media_mime_type(pdf.mime_type(), source, "pdf")) }
+}
 function ai.wire.sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal  [expr] {
   { let out: root.events.Event[] = []; let pending: string[] = []; for event in j.entries() { match (event) { assistant: root.events.AssistantMessage => { root.internal._flush_orphaned_calls(out, pending); let blocks = root.internal._wire_blocks(assistant.content, assistant.client_id Eq client_id); if (blocks.length() Gt 0) { out.push(root.events.AssistantMessage { content: blocks, client_id: assistant.client_id }); for block in blocks {  } if let use: root.content.ToolUse = block { pending.push(use.id) } } null else {  } null } null, user: root.events.UserMessage => { root.internal._flush_orphaned_calls(out, pending); out.push(user) } null, completed: root.events.ToolCompleted => { root.internal._resolve_pending_call(pending, completed.id); out.push(completed) } null, failed: root.events.ToolFailed => { root.internal._resolve_pending_call(pending, failed.id); out.push(failed) } null, _ => { out.push(event) } null } }; root.internal._flush_orphaned_calls(out, pending) } root.Journal { log: out }
 }
@@ -808,6 +837,9 @@ type ai.PromptPart$stream = string | ai.MediaPart$stream
 function ai.arguments(self: ?) -> map<string, unknown>  [expr] {
   {  } self.args
 }
+function ai.build_request(self: ?, override_client: Client? = null) -> baml.http.Request  [expr] {
+  { let selected = override_client NullCoalesce self.default_client } selected.render(ModelTurnInput { prompt: self.prompt_template, journal: Journal.new(self), toolbox: self.tools(), output_type: self.output_type() })
+}
 function ai.messages(self: ?) -> ai.PromptMessage[]  [builtin]
 function ai.name(self: ?) -> string  [expr] {
   {  } self.spec_name
@@ -860,6 +892,7 @@ function ai.invoke(self: ?, input: ai.ModelTurnInput) -> ai.ModelTurn  [missing]
 function ai.media(self: ?) -> MediaPart[]  [expr] {
   { let out: MediaPart[] = []; for b in self.content {  } if let m: root.content.Media = b { out.push(m.media) } } out
 }
+function ai.render(self: ?, input: ai.ModelTurnInput) -> baml.http.Request  [missing]
 function ai.terminal_text(self: ?) -> string?  [expr] {
   { let out: string? = null; for b in self.content {  } if let t: root.content.Text = b { out = t.text } } out
 }

@@ -231,9 +231,13 @@ impl OutputFormatContent {
             &self.target
         {
             let tn_display_name = tn.display_name();
-            if hoisted_classes.contains(tn_display_name.as_str()) {
+            let class_key = class_instantiation_key(&self.target);
+            if hoisted_classes.contains(&class_key)
+                || hoisted_classes.contains(tn_display_name.as_str())
+            {
                 let display_name = self
-                    .find_class(tn_display_name.as_str())
+                    .find_class(&class_key)
+                    .or_else(|| self.find_class(tn_display_name.as_str()))
                     .and_then(|cls| cls.alias.as_deref())
                     .unwrap_or(tn_display_name.as_str());
                 Some(display_name.to_string())
@@ -422,9 +426,13 @@ impl OutputFormatContent {
         // Intercept hoisted classes: return just the (aliased) name
         if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) = ty {
             let tn_display_name = tn.display_name();
-            if hoisted_classes.contains(tn_display_name.as_str()) {
+            let class_key = class_instantiation_key(ty);
+            if hoisted_classes.contains(&class_key)
+                || hoisted_classes.contains(tn_display_name.as_str())
+            {
                 let display_name = self
-                    .find_class(tn_display_name.as_str())
+                    .find_class(&class_key)
+                    .or_else(|| self.find_class(tn_display_name.as_str()))
                     .and_then(|cls| cls.alias.as_deref())
                     .unwrap_or(tn_display_name.as_str());
                 return Ok(Some(display_name.to_string()));
@@ -452,7 +460,8 @@ impl OutputFormatContent {
                 // Determine if we need multiline rendering
                 let is_hoisted = match inner.as_ref() {
                     RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
-                        hoisted_classes.contains(tn.display_name().as_str())
+                        hoisted_classes.contains(&class_instantiation_key(inner))
+                            || hoisted_classes.contains(tn.display_name().as_str())
                     }
                     RuntimeTy::TypeAlias(tn, _) => self
                         .recursive_type_aliases
@@ -546,7 +555,11 @@ impl OutputFormatContent {
             }
 
             RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
-                if let Some(cls) = self.find_class(tn.display_name().as_str()) {
+                let class_key = class_instantiation_key(ty);
+                if let Some(cls) = self
+                    .find_class(&class_key)
+                    .or_else(|| self.find_class(tn.display_name().as_str()))
+                {
                     Ok(Some(self.render_class_hoisted(
                         cls,
                         options,
@@ -699,6 +712,52 @@ impl OutputFormatContent {
 /// Return alias if set, otherwise the real name.
 fn rendered_name<'a>(name: &'a str, alias: Option<&'a String>) -> &'a str {
     alias.map(String::as_str).unwrap_or(name)
+}
+
+/// Key a class definition by its realized generic instantiation. A generic
+/// class's display name alone is insufficient: `Box<int>` and `Box<string>`
+/// have different field schemas even though both are named `Box`.
+fn class_instantiation_key(ty: &RuntimeTy) -> String {
+    let (type_name, type_args) = match ty {
+        RuntimeTy::Class(type_name, type_args, _)
+        | RuntimeTy::Interface(type_name, type_args, _, _) => (type_name, type_args),
+        _ => unreachable!("class_instantiation_key called for a non-class type"),
+    };
+    if type_args.is_empty() {
+        type_name.display_name().to_string()
+    } else {
+        format!(
+            "{}<{}>",
+            type_name.display_name(),
+            type_args
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+/// Internal traversal identity for a realized class. Unlike the output label,
+/// this retains the canonical package-qualified type name.
+fn class_visit_key(ty: &RuntimeTy) -> String {
+    let (type_name, type_args) = match ty {
+        RuntimeTy::Class(type_name, type_args, _)
+        | RuntimeTy::Interface(type_name, type_args, _, _) => (type_name, type_args),
+        _ => unreachable!("class_visit_key called for a non-class type"),
+    };
+    if type_args.is_empty() {
+        format!("class:{type_name}")
+    } else {
+        format!(
+            "class:{type_name}<{}>",
+            type_args
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
 }
 
 /// Extract the display name from an enum target type.
@@ -1004,25 +1063,24 @@ fn walk_ty(
     ty: &baml_type::RuntimeTy,
     ctx: &::sys_types::SysOpContext,
     content: &mut self::OutputFormatContent,
-    visited: &mut std::collections::HashSet<baml_type::TypeName>,
-    ancestry: &mut Vec<baml_type::TypeName>,
+    visited: &mut std::collections::HashSet<String>,
+    ancestry: &mut Vec<(String, String)>,
 ) {
     use baml_type::RuntimeTy;
 
     match ty {
-        RuntimeTy::Class(type_name, _, _) => {
+        RuntimeTy::Class(type_name, type_args, _) => {
             // Runtime definitions carry a mint-qualified internal TypeName. Use
             // that identity for traversal: the display name is an output label,
             // not a definition key (BEP-066 R-3).
-            let key = type_name.clone();
+            let key = class_visit_key(ty);
+            let output_key = class_instantiation_key(ty);
 
             // If this class is already on the ancestry stack, it's a recursive cycle.
             // Only mark classes from the cycle start, not unrelated ancestors.
-            if let Some(start) = ancestry.iter().position(|name| name == &key) {
-                for name in &ancestry[start..] {
-                    content
-                        .recursive_classes
-                        .insert(name.display_name().to_string());
+            if let Some(start) = ancestry.iter().position(|(name, _)| name == &key) {
+                for (_, output_name) in &ancestry[start..] {
+                    content.recursive_classes.insert(output_name.clone());
                 }
                 return;
             }
@@ -1032,20 +1090,36 @@ fn walk_ty(
             }
 
             if let Some(class_def) = find_class_definition(ctx, type_name) {
+                // `field_type` is the erased/runtime shape used by older
+                // callers. Emitted classes also carry a symbolic template so
+                // a generic class visited as `Outer<Choice>` can substitute
+                // `T` through nested positions such as `Inner<T>.values`.
+                let field_types: Vec<RuntimeTy> = class_def
+                    .fields
+                    .iter()
+                    .filter(|f| !f.skip)
+                    .map(|f| {
+                        f.field_template
+                            .as_ref()
+                            .map(|template| template.substitute_symbolic(type_args))
+                            .unwrap_or_else(|| f.field_type.clone())
+                    })
+                    .collect();
                 let fields: Vec<self::ClassField> = class_def
                     .fields
                     .iter()
                     .filter(|f| !f.skip)
-                    .map(|f| self::ClassField {
-                        name: f.name.clone(),
-                        alias: f.alias.clone(),
-                        field_type: f.field_type.clone(),
-                        description: f.description.clone(),
+                    .zip(field_types.iter())
+                    .map(|(field, field_type)| self::ClassField {
+                        name: field.name.clone(),
+                        alias: field.alias.clone(),
+                        field_type: field_type.clone(),
+                        description: field.description.clone(),
                     })
                     .collect();
 
                 content.classes.insert(
-                    type_name.display_name().to_string(),
+                    output_key.clone(),
                     self::Class {
                         name: type_name.display_name().to_string(),
                         alias: class_def.alias.clone(),
@@ -1055,17 +1129,15 @@ fn walk_ty(
                 );
 
                 // Push onto ancestry before recursing into fields
-                ancestry.push(key);
-                for field_def in &class_def.fields {
-                    if !field_def.skip {
-                        walk_ty(&field_def.field_type, ctx, content, visited, ancestry);
-                    }
+                ancestry.push((key, output_key));
+                for field_type in &field_types {
+                    walk_ty(field_type, ctx, content, visited, ancestry);
                 }
                 ancestry.pop();
             }
         }
         RuntimeTy::Enum(type_name, _) => {
-            let key = type_name.clone();
+            let key = format!("enum:{type_name}");
             if !visited.insert(key) {
                 return;
             }
@@ -1100,10 +1172,10 @@ fn walk_ty(
             // recurse into the alias body (which would diverge on the self-referential
             // `json[]` / `map<string, json>` arms).
             if type_name.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
-                visited.insert(type_name.clone());
+                visited.insert(format!("alias:{type_name}"));
                 return;
             }
-            let key = type_name.clone();
+            let key = format!("alias:{type_name}");
             if !visited.insert(key) {
                 return;
             }

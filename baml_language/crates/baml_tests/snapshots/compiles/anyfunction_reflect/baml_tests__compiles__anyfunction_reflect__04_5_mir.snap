@@ -392,6 +392,41 @@ fn user.RuntimeClassify(input: string, client: null | ai.Client) -> T {
     }
 }
 
+fn user.RuntimeClassify$build_request(input: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // input // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<T>
+    let _5: type
+    let _6: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = load_type(#0);
+        _4 = call const fn user.RuntimeClassify$spec<copy _5>(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type(#0);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _6>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
 fn user.RuntimeClassify$parse(json: string) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -563,7 +598,7 @@ fn .<lambda(RuntimeClassify$spec, 0)>( __spec_output_format: string) -> ai.Promp
         _30 = copy _31.0;
         _33 = copy _3;
         _32 = copy _33.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _30, copy _32) -> [bb6];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _30, copy _32) -> [bb6];
     }
 
     bb6: {

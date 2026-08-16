@@ -3799,15 +3799,28 @@ impl<'db> LoweringContext<'db> {
             .expect("every item-tree function has a recorded scope")
             .file_scope_id(self.db);
         let func_scope = &index.scopes[func_scope_id.index() as usize];
-        let enclosing_class_name: Option<Name> = func_scope.parent.and_then(|parent_idx| {
-            let parent = &index.scopes[parent_idx.index() as usize];
-            if matches!(parent.kind, baml_compiler2_hir::scope::ScopeKind::Class) {
-                parent.name.clone()
-            } else {
-                None
-            }
-        });
-        let enclosing_impl = match baml_compiler2_ppir::item_data::method_owner(self.db, func_loc) {
+        let method_owner = baml_compiler2_ppir::item_data::method_owner(self.db, func_loc);
+        let enclosing_class_name: Option<Name> = match method_owner {
+            // Methods declared inside an `implements` block are owned by the
+            // class, but their lexical scope is the block rather than the
+            // class scope. Use the item-tree owner so an unannotated `self`
+            // parameter gets the concrete class type (and virtual calls keep
+            // their receiver type) instead of falling back to `Any`.
+            Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => Some(
+                baml_compiler2_ppir::item_data::class_data(self.db, class_loc)
+                    .name
+                    .clone(),
+            ),
+            _ => func_scope.parent.and_then(|parent_idx| {
+                let parent = &index.scopes[parent_idx.index() as usize];
+                if matches!(parent.kind, baml_compiler2_hir::scope::ScopeKind::Class) {
+                    parent.name.clone()
+                } else {
+                    None
+                }
+            }),
+        };
+        let enclosing_impl = match method_owner {
             Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => Some(
                 baml_compiler2_ppir::item_data::impl_block_data(self.db, impl_loc),
             ),

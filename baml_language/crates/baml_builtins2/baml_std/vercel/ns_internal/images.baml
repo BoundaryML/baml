@@ -137,15 +137,14 @@ function _gw_images_media_rejected(kind: string) -> ai.errors.InvalidRequest {
 // protocol takes a `{type:"url"}` reference directly, so a remote image is
 // handed to the gateway as a link and only local/base64/`data:` sources are
 // inlined.
-function _gw_images_file(media: ai.MediaPart) -> GwImagesFile {
-    let resolved = ai.wire.resolve_media(media, false);
+function _gw_images_file(media: ai.MediaPart, preview: bool = false) -> GwImagesFile {
+    let resolved = if (preview) {
+        ai.wire.resolve_media_preview(media)
+    } else {
+        ai.wire.resolve_media(media, false)
+    };
     if let encoded: string = resolved.base64 {
-        return GwImagesFile {
-            type: "file",
-            mediaType: resolved.mime_type,
-            data: encoded,
-            url: null,
-        };
+        return GwImagesFile { type: "file", mediaType: resolved.mime_type, data: encoded, url: null };
     }
     if let location: string = resolved.url {
         return GwImagesFile { type: "url", mediaType: null, data: null, url: location };
@@ -167,7 +166,11 @@ function _gw_images_file(media: ai.MediaPart) -> GwImagesFile {
 // Files: image parts become `files[]` entries, which is how this endpoint does
 // image editing / variations (image-model protocol v4). The other media kinds
 // have no representation and are still rejected.
-function _gw_images_input(prompt: ai.Prompt, journal: ai.Journal) -> GwImagesInput {
+function _gw_images_input(
+    prompt: ai.Prompt,
+    journal: ai.Journal,
+    preview: bool = false,
+) -> GwImagesInput {
     let parts: string[] = [];
     let files: GwImagesFile[] = [];
     for (let message in prompt.messages()) {
@@ -181,7 +184,7 @@ function _gw_images_input(prompt: ai.Prompt, journal: ai.Journal) -> GwImagesInp
                     null
                 },
                 let image: baml.media.Image => {
-                    files.push(_gw_images_file(image));
+                    files.push(_gw_images_file(image, preview = preview));
                     null
                 },
                 let audio: baml.media.Audio => {
@@ -229,9 +232,6 @@ function _gw_images_escape_query(raw: string) -> string {
         .replace_all("%", "%25")
         .replace_all(" ", "%20")
         .replace_all("&", "%26")
-        // `+` decodes to a space in a query string on most servers, so a value
-        // containing one arrives altered unless it is escaped (the Gemini
-        // helper `_gm_encode_query` does the same).
         .replace_all("+", "%2B")
         .replace_all("=", "%3D")
         .replace_all("?", "%3F")
@@ -243,9 +243,10 @@ function _gw_images_with_query(url: string, params: map<string, string>?) -> str
     let pairs: string[] = [];
     if let configured: map<string, string> = params {
         for (let key in configured.keys()) {
-            pairs.push(
-                `${_gw_images_escape_query(key)}=${_gw_images_escape_query(configured.get(key) ?? "")}`,
-            );
+            pairs
+                .push(
+                    `${_gw_images_escape_query(key)}=${_gw_images_escape_query(configured.get(key) ?? "")}`,
+                );
         }
     }
     if (pairs.length() == 0) {
@@ -283,6 +284,7 @@ function _gw_images_headers(c: root.AiGatewayImageClient) -> map<string, string>
 function gateway_images_render(
     c: root.AiGatewayImageClient,
     input: ai.ModelTurnInput,
+    preview: bool = false,
 ) -> baml.http.Request {
     if (!input.toolbox.is_empty()) {
         throw ai.errors.InvalidRequest {
@@ -294,7 +296,7 @@ function gateway_images_render(
     }
     let journal = ai.wire.sanitize_for_client(input.journal, _gw_images_client_id(c));
     // No schema block: the only thing this endpoint can return is an image.
-    let lowered = _gw_images_input(input.prompt(""), journal);
+    let lowered = _gw_images_input(input.prompt(""), journal, preview = preview);
     let files: GwImagesFile[]? = if (lowered.files.length() == 0) {
         null
     } else {
@@ -420,9 +422,7 @@ function gateway_images_parse(
     let content: ai.content.Block[] = [];
     for (let encoded in images) {
         if (encoded.trim() != "") {
-            content.push(
-                ai.content.Media.new(value = _gw_images_value(encoded, fallback_mime)),
-            );
+            content.push(ai.content.Media.new(value = _gw_images_value(encoded, fallback_mime)));
         }
     }
     if (content.length() == 0) {
@@ -441,11 +441,7 @@ function gateway_images_parse(
     } else {
         null
     };
-    ai.ModelTurn {
-        content: content,
-        stop_reason: ai.content.StopReason.Complete,
-        usage: usage,
-    }
+    ai.ModelTurn { content: content, stop_reason: ai.content.StopReason.Complete, usage: usage }
 }
 
 // The one internal entry point: render, send, normalize — one model turn. The
@@ -454,7 +450,7 @@ function gateway_images_invoke(
     c: root.AiGatewayImageClient,
     input: ai.ModelTurnInput,
 ) -> ai.ModelTurn {
-    let req = gateway_images_render(c, input);
+    let req = gateway_images_render(c, input, preview = false);
     let resp = ai.wire.send_as<GwImagesResponse>(req, "ai-gateway-images");
     gateway_images_parse(c, resp)
 }

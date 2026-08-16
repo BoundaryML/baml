@@ -552,6 +552,7 @@ mod schema {
             ClassFieldDefinition {
                 name: name.to_string(),
                 field_type,
+                field_template: None,
                 description: None,
                 alias: None,
                 skip: false,

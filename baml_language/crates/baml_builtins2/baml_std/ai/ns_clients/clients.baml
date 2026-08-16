@@ -120,9 +120,11 @@ class Retry {
                         && self.retry_if(f)
                 ) {
                     let attempt = self.max_attempts - remaining + 1;
-                    let _ = baml.sys.sleep(
-                        baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f)),
-                    ) catch_all (se) {
+                    let _ = baml
+                        .sys
+                        .sleep(
+                            baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f)),
+                        ) catch_all (se) {
                         _ => null,
                     };
                     self._attempt(input, remaining - 1)
@@ -137,6 +139,14 @@ class Retry {
     implements root.Client {
         function id(self) -> string {
             self.inner.id()
+        }
+
+        // Rendering is a pure preview of the inner client. It deliberately
+        // does not apply retry policy or backoff because no request is sent.
+        function render(self, input: root.ModelTurnInput) -> baml.http.Request {
+            self.inner.render(input) catch_all (e) {
+                _ => throw root.errors.normalize(e),
+            }
         }
 
         function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
@@ -168,6 +178,19 @@ class RoundRobin {
                 c.id()
             } else {
                 "round-robin"
+            }
+        }
+
+        // Rendering is deterministic and side-effect free: preview the first
+        // member rather than mutating the invocation rotation counter.
+        function render(self, input: root.ModelTurnInput) -> baml.http.Request {
+            match (self.members.at(0)) {
+                let c: root.Client => c.render(input),
+                null => {
+                    throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
+                },
+            } catch_all (e) {
+                _ => throw root.errors.normalize(e),
             }
         }
 
@@ -222,6 +245,19 @@ class Fallback {
                 c.id()
             } else {
                 "fallback"
+            }
+        }
+
+        // Rendering previews the first fallback member. It never probes later
+        // members because request construction itself must remain pure.
+        function render(self, input: root.ModelTurnInput) -> baml.http.Request {
+            match (self.members.at(0)) {
+                let c: root.Client => c.render(input),
+                null => {
+                    throw baml.errors.InvalidArgument { message: "Fallback needs at least one member" }
+                },
+            } catch_all (e) {
+                _ => throw root.errors.normalize(e),
             }
         }
 

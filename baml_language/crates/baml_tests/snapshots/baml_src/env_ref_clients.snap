@@ -184,6 +184,24 @@ function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client |
     return
 }
 
+function env_ref_clients.EnvRefDynamicEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var question
+    call user.env_ref_clients.EnvRefDynamicEcho$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
 function env_ref_clients.EnvRefDynamicEcho$parse(json: string) -> string {
     load_type string
     load_var json
@@ -285,6 +303,24 @@ function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null) 
     store_var _4
     load_var _4
     load_field .value
+    return
+}
+
+function env_ref_clients.EnvRefEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var question
+    call user.env_ref_clients.EnvRefEcho$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
     return
 }
 
@@ -394,6 +430,24 @@ function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client 
     return
 }
 
+function env_ref_clients.EnvRefResolvedEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var question
+    call user.env_ref_clients.EnvRefResolvedEcho$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
 function env_ref_clients.EnvRefResolvedEcho$parse(json: string) -> string {
     load_type string
     load_var json
@@ -488,6 +542,24 @@ function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | nu
     return
 }
 
+function env_ref_clients.LiveEnvRefEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var question
+    call user.env_ref_clients.LiveEnvRefEcho$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
 function env_ref_clients.LiveEnvRefEcho$parse(json: string) -> string {
     load_type string
     load_var json
@@ -578,6 +650,24 @@ function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Cli
     store_var _4
     load_var _4
     load_field .value
+    return
+}
+
+function env_ref_clients.LiveEnvRefFallbackEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var question
+    call user.env_ref_clients.LiveEnvRefFallbackEcho$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
     return
 }
 

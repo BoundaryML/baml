@@ -46,6 +46,39 @@ fn user.GenerateImage(prompt: string, client: null | ai.Client) -> image {
     }
 }
 
+fn user.GenerateImage$build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // prompt // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<image>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.GenerateImage$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(image);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
 fn user.GenerateImage$parse(json: string) -> image {
     // Locals:
     let _0: image // _0 // return
@@ -189,7 +222,7 @@ fn .<lambda(GenerateImage$spec, 0)>( __spec_output_format: string) -> ai.Prompt 
         _21 = copy _22.0;
         _24 = copy _2;
         _23 = copy _24.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _21, copy _23) -> [bb4];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _21, copy _23) -> [bb4];
     }
 
     bb4: {
@@ -272,6 +305,39 @@ fn user.GenerateImageSet(prompt: string, client: null | ai.Client) -> image[] {
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.GenerateImageSet$build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // prompt // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<image[]>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.GenerateImageSet$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(image[]);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -419,7 +485,7 @@ fn .<lambda(GenerateImageSet$spec, 0)>( __spec_output_format: string) -> ai.Prom
         _21 = copy _22.0;
         _24 = copy _2;
         _23 = copy _24.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _21, copy _23) -> [bb4];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _21, copy _23) -> [bb4];
     }
 
     bb4: {
@@ -502,6 +568,39 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: null | ai.Client) ->
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.GenerateMixedImageNarrative$build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // prompt // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<(string | image)[]>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.GenerateMixedImageNarrative$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type((string | image)[]);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -675,7 +774,7 @@ fn .<lambda(GenerateMixedImageNarrative$spec, 0)>( __spec_output_format: string)
         _30 = copy _31.0;
         _33 = copy _3;
         _32 = copy _33.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _30, copy _32) -> [bb6];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _30, copy _32) -> [bb6];
     }
 
     bb6: {

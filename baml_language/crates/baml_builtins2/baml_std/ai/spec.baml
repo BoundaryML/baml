@@ -100,6 +100,21 @@ class FunctionSpec<Out> {
     toolbox: root.tools.Toolbox,
     default_client: Client,
 
+    // Build the provider HTTP request shape for this spec without invoking the model.
+    // A supplied client overrides the spec's default; null uses the default.
+    function build_request(self, override_client: Client? = null) -> baml.http.Request {
+        let selected = override_client ?? self.default_client;
+        selected
+            .render(
+                ModelTurnInput {
+                    prompt: self.prompt_template,
+                    journal: Journal.new(self),
+                    toolbox: self.tools(),
+                    output_type: self.output_type(),
+                },
+            )
+    }
+
     function name(self) -> string {
         self.spec_name
     }

@@ -123,6 +123,12 @@ class ResponsesClient {
             `openai/${self.model}`
         }
 
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            openai.internal.openai_preview(self, input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        }
+
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.invoke(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),

@@ -56,6 +56,19 @@ class InvalidRequest {
     }
 }
 
+// A request preview cannot represent this input without performing the I/O
+// that the preview API explicitly forbids (for example, reading a local media
+// file or downloading a URL for a provider that has no URL wire form).
+class PreviewUnsupported {
+    provider: string,
+    detail: string,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
 class Refused {
     provider: string,
     reason: string,
