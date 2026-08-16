@@ -247,6 +247,7 @@ export function Whiteboard() {
     const t = toolRef.current;
     const doc: [number, number] = [e.clientX, e.clientY + window.scrollY];
     if (t === 'text' || t === 'label') {
+      e.preventDefault();
       const id = stickySeq++;
       actionsRef.current.push({ id, kind: 'sticky' });
       setStickies((prev) => [
@@ -259,7 +260,10 @@ export function Whiteboard() {
           y: doc[1],
         },
       ]);
-      setTool('browse');
+      // Switch back to browse only after this pointer's click has fully
+      // dispatched, so the click cannot fall through onto the page and yank
+      // focus away from the new note.
+      setTimeout(() => setTool('browse'), 0);
       return;
     }
     if (t === 'eraser') {
@@ -426,18 +430,26 @@ export function Whiteboard() {
               className="xp-sticky-body"
               contentEditable
               onInput={(e) => {
-                const text = (e.currentTarget as HTMLElement).innerText;
+                const text = (e.currentTarget as HTMLElement).innerHTML;
                 setStickies((prev) =>
                   prev.map((n) => (n.id === s.id ? { ...n, text } : n)),
                 );
               }}
-              // Seed the text once and never re-render it: React owns no
-              // children here, so typing and re-renders cannot fight.
+              // Seed the content once and never re-render it: React owns no
+              // children here, so typing and re-renders cannot fight. Stored
+              // as HTML so Cmd+B / Cmd+I formatting persists.
               ref={(el) => {
                 if (el && el.dataset.init !== '1') {
                   el.dataset.init = '1';
-                  el.textContent = s.text;
-                  if (!s.text) el.focus();
+                  el.innerHTML = s.text;
+                  if (!s.text) {
+                    requestAnimationFrame(() => {
+                      el.focus();
+                      const sel = window.getSelection();
+                      sel?.selectAllChildren(el);
+                      sel?.collapseToEnd();
+                    });
+                  }
                 }
               }}
               suppressContentEditableWarning
@@ -521,8 +533,14 @@ export function Whiteboard() {
         .xp-sticky--label .xp-sticky-body { font-size: 20px; }
         .xp-sticky--label .xp-sticky-grip,
         .xp-sticky--label .xp-sticky-x { color: rgba(26, 22, 18, 0.35); }
-        .xp-sticky-body { outline: none; font-size: 14px; line-height: 1.45;
-          font-family: 'Marker Felt', 'Comic Sans MS', cursive; min-height: 20px; }
+        .xp-sticky-body { outline: none; font-size: 14px; line-height: 1.5;
+          font-family: var(--font-geist-sans), ui-sans-serif, system-ui,
+            sans-serif;
+          font-weight: 350; color: rgba(26, 22, 18, 0.82);
+          min-height: 20px; min-width: 80px; cursor: text;
+          white-space: pre-wrap; }
+        .xp-sticky-body b, .xp-sticky-body strong { font-weight: 650; }
+        .xp-sticky-body i, .xp-sticky-body em { font-style: italic; }
         .xp-sticky-grip { position: absolute; top: 2px; left: 6px; border: 0;
           background: none; cursor: grab; color: #B8A44E; font-size: 12px;
           padding: 2px; }
