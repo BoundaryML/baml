@@ -320,10 +320,13 @@ function _oai_images_mime(format: string?) -> string {
 // type comes from the fetch's own `content-type` when it sent one.
 function _oai_images_fetch_inline(location: string, fallback_mime: string) -> image {
     let response = baml.http.fetch(location) catch_all (e) {
-        _ => throw ai.errors.NetworkFailure {
-            provider: "openai-images",
-            detail: `fetching the generated image at ${location} failed: ${e.to_string()}`,
-            raw_body: null,
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw ai.errors.NetworkFailure {
+                provider: "openai-images",
+                detail: `fetching the generated image at ${location} failed: ${e.to_string()}`,
+                raw_body: null,
+            }
         },
     };
     if (!response.ok()) {

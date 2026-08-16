@@ -1357,6 +1357,7 @@ function _chat_send(
     audio_mime: string = "audio/wav",
 ) -> ai.ModelTurn {
     let response = baml.http.send(request) catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw ai.errors.NetworkFailure {
                 provider: provider,

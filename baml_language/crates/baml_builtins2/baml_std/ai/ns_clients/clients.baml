@@ -406,6 +406,10 @@ class StreamRelay {
 
     function recover(self, error: unknown) -> void {
         match (root.errors.normalize_invoke(error)) {
+            let timeout: baml.errors.Timeout => {
+                self.close_current();
+                throw timeout
+            },
             let cancelled: baml.panics.Cancelled => {
                 self.close_current();
                 throw cancelled

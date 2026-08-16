@@ -81,6 +81,7 @@ function credential_sources(cred: root.Credential?, canonical_env: string?) -> s
 // T = json-shaped envelope class; unknown fields are ignored by the decoder.
 function send_as<T>(req: baml.http.Request, provider: string) -> T {
     let resp = baml.http.send(req) catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw root.errors.NetworkFailure {
             provider: provider,

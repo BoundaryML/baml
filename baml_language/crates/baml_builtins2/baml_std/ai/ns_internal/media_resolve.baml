@@ -122,9 +122,11 @@ function _resolve_media_content(
         if (!fetch_url || media_url.starts_with("gs://")) {
             return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime };
         }
-        // A remote fetch gets a bounded deadline (the default is unbounded) and
-        // its raw Io/Timeout failures become a typed, classified NetworkFailure.
+        // A remote fetch gets a bounded deadline (the default is unbounded).
+        // Preserve Timeout for the invocation boundary; other transport errors
+        // become a typed, classified NetworkFailure.
         let response = baml.http.fetch(media_url, timeout = baml.time.Duration.from_seconds(30)) catch_all (e) {
+            let timeout: baml.errors.Timeout => throw timeout,
             _ => {
                 throw root.errors.NetworkFailure {
                     provider: "media",
