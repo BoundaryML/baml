@@ -3873,23 +3873,406 @@ mod tests {
                 origin: origin("echo.baml", 0),
             }),
         );
+        pool.insert(
+            cg_name("user", &["lorem"], "one_type_arg"),
+            Symbol::Function(Function {
+                name: BaseName::new("one_type_arg"),
+                generic_params: vec![BaseName::new("T")],
+                docstring: None,
+                arguments: vec![],
+                return_type: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                throws: None,
+                watchers: vec![],
+                origin: origin("echo.baml", 100),
+            }),
+        );
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             pyi.contains("T = typing.TypeVar(\"T\")"),
             "pyi missing TypeVar:\n{pyi}",
         );
-        // A generic free function requires the caller to bind every TypeVar
-        // via a keyword-only `_types=` dict (the runtime enforces it; the stub
-        // mirrors it). See `sdkgen_python_pydantic2::leaf` and the engine's
-        // Gate A full-binding enforcement.
+        // Required value arguments make `_types=` optional.
         assert!(
-            pyi.contains("def echo(value: T, *, _types: dict[str, type]) -> T: ..."),
+            pyi.contains("def echo(value: T, *, _types: dict[str, type] | None = None) -> T: ..."),
             "pyi missing typed echo signature:\n{pyi}",
         );
         assert!(
-            pyi.contains("async def echo_async(value: T, *, _types: dict[str, type]) -> T: ..."),
+            pyi.contains(
+                "async def echo_async(value: T, *, _types: dict[str, type] | None = None) -> T: ..."
+            ),
             "pyi missing async echo signature:\n{pyi}",
+        );
+        // A body-only TypeVar has no inference source, so `_types=` stays
+        // statically required on both host modes.
+        assert!(
+            pyi.contains("def one_type_arg(*, _types: dict[str, type]) -> str: ..."),
+            "pyi should require body-only TypeVars:\n{pyi}",
+        );
+        assert!(
+            pyi.contains("async def one_type_arg_async(*, _types: dict[str, type]) -> str: ..."),
+            "pyi should require async body-only TypeVars:\n{pyi}",
+        );
+    }
+
+    #[test]
+    fn generic_function_types_kwarg_tracks_engine_inference_sources() {
+        let mut pool: SymbolPool = HashMap::new();
+        let default_label = || FunctionArgument {
+            name: BaseName::new("label"),
+            docstring: None,
+            ty: Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                baml_base::Literal::String("default".to_string()),
+            ))),
+        };
+
+        pool.insert(
+            cg_name("user", &["lorem"], "identity_with_default"),
+            Symbol::Function(Function {
+                name: BaseName::new("identity_with_default"),
+                generic_params: vec![BaseName::new("T")],
+                docstring: None,
+                arguments: vec![
+                    FunctionArgument {
+                        name: BaseName::new("value"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("T")),
+                        default: None,
+                    },
+                    default_label(),
+                ],
+                return_type: type_var(BaseName::new("T")),
+                throws: None,
+                watchers: vec![],
+                origin: origin("generic.baml", 0),
+            }),
+        );
+        pool.insert(
+            cg_name("user", &["lorem"], "optional_only"),
+            Symbol::Function(Function {
+                name: BaseName::new("optional_only"),
+                generic_params: vec![BaseName::new("T")],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: union(vec![
+                        type_var(BaseName::new("T")),
+                        Ty::Null {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    ]),
+                    default: Some(FunctionArgumentDefault::Null),
+                }],
+                return_type: type_var(BaseName::new("T")),
+                throws: None,
+                watchers: vec![],
+                origin: origin("generic.baml", 100),
+            }),
+        );
+        pool.insert(
+            cg_name("user", &["lorem"], "apply"),
+            Symbol::Function(Function {
+                name: BaseName::new("apply"),
+                generic_params: vec![BaseName::new("T"), BaseName::new("R")],
+                docstring: None,
+                arguments: vec![
+                    FunctionArgument {
+                        name: BaseName::new("callback"),
+                        docstring: None,
+                        ty: Ty::Function {
+                            params: vec![baml_codegen_types::CallableParam::required(
+                                None,
+                                type_var(BaseName::new("T")),
+                            )],
+                            ret: Box::new(type_var(BaseName::new("R"))),
+                            throws: Box::new(Ty::Never {
+                                attr: baml_base::TyAttr::EMPTY,
+                            }),
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                        default: None,
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("value"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("T")),
+                        default: None,
+                    },
+                ],
+                return_type: type_var(BaseName::new("R")),
+                throws: None,
+                watchers: vec![],
+                origin: origin("generic.baml", 200),
+            }),
+        );
+        pool.insert(
+            cg_name("user", &["lorem"], "ambiguous"),
+            Symbol::Function(Function {
+                name: BaseName::new("ambiguous"),
+                generic_params: vec![BaseName::new("T"), BaseName::new("U")],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: union(vec![
+                        type_var(BaseName::new("T")),
+                        type_var(BaseName::new("U")),
+                        Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    ]),
+                    default: None,
+                }],
+                return_type: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                throws: None,
+                watchers: vec![],
+                origin: origin("generic.baml", 300),
+            }),
+        );
+        pool.insert(
+            cg_name("user", &["lorem"], "ambiguous_with_values"),
+            Symbol::Function(Function {
+                name: BaseName::new("ambiguous_with_values"),
+                generic_params: vec![BaseName::new("T"), BaseName::new("U")],
+                docstring: None,
+                arguments: vec![
+                    FunctionArgument {
+                        name: BaseName::new("ambiguous"),
+                        docstring: None,
+                        ty: union(vec![
+                            type_var(BaseName::new("T")),
+                            type_var(BaseName::new("U")),
+                            Ty::Int {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                        ]),
+                        default: None,
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("left"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("T")),
+                        default: None,
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("right"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("U")),
+                        default: None,
+                    },
+                ],
+                return_type: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                throws: None,
+                watchers: vec![],
+                origin: origin("generic.baml", 400),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        let inferred = pyi
+            .lines()
+            .find(|line| line.starts_with("def identity_with_default("))
+            .expect("identity_with_default stub");
+        assert!(
+            inferred.contains("_types: dict[str, type] | None = None"),
+            "a required value should infer T after defaulted args: {inferred}"
+        );
+        assert!(
+            inferred.find("label:").unwrap() < inferred.find("_types:").unwrap(),
+            "`_types` must follow existing keyword-only defaults: {inferred}"
+        );
+
+        let optional_only = pyi
+            .lines()
+            .find(|line| line.starts_with("def optional_only("))
+            .expect("optional_only stub");
+        assert!(
+            optional_only.contains("_types: dict[str, type] | None = None"),
+            "a defaulted value position should infer T via Rule 4: {optional_only}"
+        );
+        assert!(
+            optional_only.find("value:").unwrap() < optional_only.find("_types:").unwrap(),
+            "`_types` must follow the defaulted value parameter: {optional_only}"
+        );
+
+        let rich = pyi
+            .lines()
+            .find(|line| line.starts_with("def ambiguous_with_values("))
+            .expect("ambiguous_with_values stub");
+        assert!(
+            rich.contains("_types: dict[str, type] | None = None"),
+            "separate ordinary value positions should bind both union vars: {rich}"
+        );
+
+        for name in ["apply", "ambiguous"] {
+            let prefix = format!("def {name}(");
+            let line = pyi
+                .lines()
+                .find(|line| line.starts_with(&prefix))
+                .unwrap_or_else(|| panic!("missing {name} stub:\n{pyi}"));
+            assert!(
+                line.contains("_types: dict[str, type]"),
+                "{name} should expose `_types`: {line}"
+            );
+            assert!(
+                !line.contains("_types: dict[str, type] | None"),
+                "{name} must require `_types`: {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn generic_method_types_kwarg_is_optional_in_stub() {
+        let mut pool: SymbolPool = HashMap::new();
+        let box_name = cg_name("user", &["lorem"], "Box");
+        let pair_method = Function {
+            name: BaseName::new("pair_with"),
+            generic_params: vec![BaseName::new("U")],
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new("other"),
+                docstring: None,
+                ty: type_var(BaseName::new("U")),
+                default: None,
+            }],
+            return_type: type_var(BaseName::new("U")),
+            throws: None,
+            watchers: vec![],
+            origin: origin("box.baml", 10),
+        };
+        let pair_with_default = Function {
+            name: BaseName::new("pair_with_default"),
+            generic_params: vec![BaseName::new("U")],
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    name: BaseName::new("other"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("U")),
+                    default: None,
+                },
+                FunctionArgument {
+                    name: BaseName::new("label"),
+                    docstring: None,
+                    ty: Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                        baml_base::Literal::String("default".to_string()),
+                    ))),
+                },
+            ],
+            return_type: type_var(BaseName::new("U")),
+            throws: None,
+            watchers: vec![],
+            origin: origin("box.baml", 20),
+        };
+        let static_type_name = Function {
+            name: BaseName::new("static_type_name"),
+            generic_params: vec![BaseName::new("V")],
+            docstring: None,
+            arguments: vec![],
+            return_type: Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            throws: None,
+            watchers: vec![],
+            origin: origin("box.baml", 30),
+        };
+        let static_with_default = Function {
+            name: BaseName::new("static_with_default"),
+            generic_params: vec![BaseName::new("V")],
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("V")),
+                    default: None,
+                },
+                FunctionArgument {
+                    name: BaseName::new("label"),
+                    docstring: None,
+                    ty: Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                        baml_base::Literal::String("default".to_string()),
+                    ))),
+                },
+            ],
+            return_type: type_var(BaseName::new("V")),
+            throws: None,
+            watchers: vec![],
+            origin: origin("box.baml", 40),
+        };
+        pool.insert(
+            box_name.clone(),
+            Symbol::Class(Class {
+                name: box_name,
+                generic_params: vec![BaseName::new("T")],
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("item"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("T")),
+                }],
+                static_methods: vec![static_type_name, static_with_default],
+                instance_methods: vec![pair_method, pair_with_default],
+                origin: origin("box.baml", 0),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains(
+                "def pair_with(self, other: U, *, _types: dict[str, type] | None = None) -> U: ..."
+            ),
+            "pyi should allow inferred method TypeVars:\n{pyi}",
+        );
+        assert!(
+            pyi.contains(
+                "async def pair_with_async(self, other: U, *, _types: dict[str, type] | None = None) -> U: ..."
+            ),
+            "pyi should allow inferred async method TypeVars:\n{pyi}",
+        );
+        assert!(
+            pyi.contains(
+                "def pair_with_default(self, other: U, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, type] | None = None) -> U: ..."
+            ),
+            "pyi should keep inferred `_types` after instance defaults:\n{pyi}",
+        );
+        assert!(
+            pyi.contains(
+                "def static_with_default(value: V, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, type] | None = None) -> V: ..."
+            ),
+            "pyi should keep inferred `_types` after static defaults:\n{pyi}",
+        );
+        assert!(
+            pyi.contains("def static_type_name(*, _types: dict[str, type]) -> str: ..."),
+            "zero-arg static own generics should require `_types`:\n{pyi}",
+        );
+        assert!(
+            pyi.contains(
+                "async def static_type_name_async(*, _types: dict[str, type]) -> str: ..."
+            ),
+            "zero-arg async static own generics should require `_types`:\n{pyi}",
+        );
+        assert!(
+            !pyi.contains("static_type_name(,"),
+            "zero-arg static signatures must not start with a comma:\n{pyi}",
         );
     }
 

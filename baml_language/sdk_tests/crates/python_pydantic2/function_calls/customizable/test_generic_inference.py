@@ -37,6 +37,7 @@ from baml_sdk.generic_tests import (
     wrap,
     parse_as,
     one_type_arg,
+    optional_only,
     maybe_id,
     first_or,
     values_of,
@@ -104,6 +105,11 @@ def test_generic_inference_identity_null_round_trips():
     # `T=null`) ⇒ `T` defaults to host-only `rust_type`, and the value round-trips
     # unchanged.
     assert identity(None) is None
+
+
+def test_generic_inference_default_only_value_position():
+    assert optional_only() is None
+    assert optional_only(x=7) == 7
 
 
 def test_generic_inference_identity_unbound_generic_instance_round_trips():
