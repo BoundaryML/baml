@@ -68,3 +68,8 @@ wasm-eval-roots
 # `line-tables-only` on BOTH arms in one commit, never debug=0.
 musl-test-export
 musl-eval-roots
+
+# Same rule as musl: debuginfo is on, measure the closure before the
+# builder's first tick on this root.
+gnu-test-export
+gnu-eval-roots

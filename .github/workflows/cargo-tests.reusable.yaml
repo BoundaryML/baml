@@ -121,6 +121,7 @@ jobs:
       # nix arm: the flake CI shell provides the pinned toolchain, sccache,
       # direnv and cargo-nextest. Fallback arm (no nix): rustup + mise.
       - name: "Set up toolchains"
+        id: toolchains
         uses: ./.github/actions/setup-ci-shell
         with:
           mise-install-args: "sccache direnv cargo:cargo-nextest"
@@ -128,7 +129,62 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
+      # Same probe as the msrv, wasm and musl lanes, same shape on purpose
+      # (two probes in one file reading differently is how one of them
+      # rots); the full why-a-probe-not-a-switch reasoning lives above the
+      # msrv probe. The root is the gnu nextest EXPORT: manifests whose
+      # interpolated store paths pin every test binary into one closure, so
+      # a hit substitutes the compile work and the job only RUNS the tests,
+      # in this runner environment on both arms.
+      - name: "Probe the L2 unit cache"
+        id: l2
+        if: steps.toolchains.outputs.nix == 'true'
+        env:
+          # The eval runs the render IFD, so it is not free; bound it rather
+          # than let a cold guest sit here. The network probe is the cheap
+          # half and gets a tight budget of its own.
+          L2_EVAL_TIMEOUT_SECONDS: "180"
+          L2_PROBE_TIMEOUT_SECONDS: "10"
+        run: |
+          set -uo pipefail
+
+          echo "hit=false" >> "$GITHUB_OUTPUT"
+
+          # Timeout (rc 124) is a slow cold guest and expected; any other
+          # nonzero exit is a broken flake and must not hide behind a green
+          # cargo arm. Keep stderr: on the error arm it is the only place
+          # the nix diagnostic survives.
+          eval_log="$(mktemp)"
+          out_path="$(timeout "${L2_EVAL_TIMEOUT_SECONDS}" nix eval --raw .#gnu-test-export.outPath 2>"${eval_log}")" \
+            && eval_rc=0 || eval_rc=$?
+          if [ "${eval_rc}" -ne 0 ]; then
+            if [ "${eval_rc}" -eq 124 ]; then
+              echo "::notice title=L2::evaluation did not finish within ${L2_EVAL_TIMEOUT_SECONDS}s; taking the cargo arm"
+            else
+              echo "::warning title=L2::evaluation FAILED with exit ${eval_rc} (not a timeout); taking the cargo arm"
+              sed -n '1,25p' "${eval_log}"
+            fi
+            exit 0
+          fi
+
+          # Local first: runners are persistent, so a VM that already built
+          # this exact root has it on disk.
+          if nix path-info "${out_path}" >/dev/null 2>&1; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=L2::already in the local store: ${out_path}; taking the nix arm"
+          # --narinfo-cache-negative-ttl 0: a probe that runs before the
+          # builder publishes must not poison this runner for an hour.
+          elif timeout "${L2_PROBE_TIMEOUT_SECONDS}" nix path-info --narinfo-cache-negative-ttl 0 --store https://cache.ix.dev "${out_path}" >/dev/null 2>&1; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=L2::cache hit for ${out_path}; taking the nix arm"
+          else
+            echo "::notice title=L2::cache miss for ${out_path}; taking the cargo arm"
+          fi
+
       - uses: Swatinem/rust-cache@v2
+        # Deliberately ungated by the probe: the cargo arm stays the
+        # fallback, so its cache has to keep being warmed on canary or the
+        # first L2 miss lands on a cold cargo build.
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
@@ -145,6 +201,7 @@ jobs:
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
+        if: steps.l2.outputs.hit != 'true'
         run: cargo fetch
         working-directory: baml_language
 
@@ -156,11 +213,36 @@ jobs:
       # too.) The `sdk_test_*` crates need uv and run in the dedicated
       # `sdk-tests` matrix below.
       - name: "Build tests with --timings"
+        if: steps.l2.outputs.hit != 'true'
         run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_lsp2_actions --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
+      # The nix arm: substitute the export (manifests + every test binary in
+      # its closure), then run nextest against the prebuilt binaries in THIS
+      # checkout. --workspace-remap makes nextest derive each test's cwd
+      # from the real tree; INSTA_WORKSPACE_ROOT is insta's hatch for
+      # relocated builds (this lane runs baml_surface's insta tests). The
+      # list phase executes each binary once; these are glibc binaries
+      # linking the graph's openssl with no rpath, and the loader finds it
+      # through the LD_LIBRARY_PATH ci-env already exports (the export's
+      # linked-paths synthesis is empty in v1).
+      - name: "Run tests with nextest (nix unit graph)"
+        if: steps.l2.outputs.hit == 'true'
+        run: |
+          set -euo pipefail
+          echo "::notice title=L2::arm=nix"
+          export_dir="$(nix build --no-link --print-out-paths --print-build-logs .#gnu-test-export)"
+          cd baml_language
+          INSTA_WORKSPACE_ROOT="$PWD" cargo nextest run \
+            --binaries-metadata "$export_dir/binaries-metadata.json" \
+            --cargo-metadata "$export_dir/cargo-metadata.json" \
+            --workspace-remap "$PWD"
+
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_lsp2_actions --exclude "sdk_test_*" --exclude baml_bridge
+        if: steps.l2.outputs.hit != 'true'
+        run: |
+          echo "::notice title=L2::arm=cargo"
+          cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_lsp2_actions --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Upload test results on failure"
@@ -188,12 +270,16 @@ jobs:
           path: sccache-stats-test-linux.json
           if-no-files-found: ignore
 
+      # --timings only exists on the cargo arm; `clean: false` keeps stale
+      # files across runs, so an unconditional mv would fail on the nix arm
+      # or ship the previous run's timings as this run's (same gating as
+      # the msrv job).
       - name: "Rename cargo timings"
-        if: always()
+        if: always() && steps.l2.outputs.hit != 'true'
         run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux.html
         working-directory: baml_language
       - name: "Upload cargo timings"
-        if: always()
+        if: always() && steps.l2.outputs.hit != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-linux

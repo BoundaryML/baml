@@ -731,6 +731,78 @@
           packageBuildEnv = graphPackageBuildEnv;
         };
 
+        # ------------------------------------------------------------------
+        # L2, the gnu lane
+        # ------------------------------------------------------------------
+        #
+        # Same shape as the musl graph, host triple. The lane's selection is
+        # broader-featured and narrower-cratered than musl's: --all-features
+        # (so openssl enters via native-tls; graphNativeBuildInputs already
+        # carries it for the LINK) and three more exclusions - baml_tests,
+        # baml_cli and baml_lsp2_actions run in the snapshot-tests job, and
+        # excluding them here skips the heaviest links in the workspace.
+        #
+        # .minimal for the same closure reason as the wasm graph; host
+        # target needs no `targets` override.
+        gnuToolchain = rustOverlayPkgs.rust-bin.stable.${ciRustChannel}.minimal;
+
+        gnuWorkspace = cargoUnit.buildWorkspace {
+          src = ./baml_language;
+          workspaceRoot = ./baml_language;
+          rustToolchain = gnuToolchain;
+
+          # Same reason as the msrv graph: cache.ix.dev 404s /realisations,
+          # so a floating-CA output is unsubstitutable through the only cache
+          # the pool guests can read.
+          contentAddressed = false;
+          # pureBuild + the stable-toolchain embedMetadata override (see
+          # l2Policy above for the trap).
+          policy = l2Policy;
+
+          # Host triple: no `target` argument, same as the msrv graph.
+
+          # The lane runs bare `cargo test --no-run` (dev + test); stated
+          # explicitly for the same debug_assertions reason as the msrv
+          # graph.
+          profile = "dev";
+
+          # The lane's exact cargo selection, exclusions verbatim from the
+          # job's build step.
+          cargoTargets = [
+            [
+              "--workspace"
+              "--all-features"
+              "--tests"
+              "--exclude"
+              "baml_tests"
+              "--exclude"
+              "baml_cli"
+              "--exclude"
+              "baml_lsp2_actions"
+              "--exclude"
+              "sdk_test_*"
+              "--exclude"
+              "baml_bridge"
+            ]
+          ];
+          cargoTargetNames = [ "gnu" ];
+
+          env = {
+            # Same two reasons as the msrv graph: cargo-unit does not read
+            # cargo config's [env] table, and the workflow pins opt-level 1
+            # on both profiles workflow-wide.
+            RUST_MIN_STACK = "67108864";
+            CARGO_PROFILE_DEV_OPT_LEVEL = "1";
+            CARGO_PROFILE_TEST_OPT_LEVEL = "1";
+            # NO debug=0: this lane RUNS its binaries (see the musl graph's
+            # note; the closure-measure-first rule in nix/l2-roots.txt is
+            # the enforcement).
+          };
+
+          nativeBuildInputs = graphNativeBuildInputs;
+          packageBuildEnv = graphPackageBuildEnv;
+        };
+
         # Common source filtering for crane
         src = pkgs.lib.cleanSourceWith {
           src = ./engine;
@@ -1054,6 +1126,34 @@
                   muslWorkspace.unitsNix
                   muslWorkspace.unitGraphJson
                   muslWorkspace.vendorDir
+                ];
+              }
+              ''
+                set -euo pipefail
+                mkdir -p "$out"
+                printf '%s\n' "''${roots[@]}" > "$out/eval-roots"
+              '';
+
+        # The gnu lane's root: same whole-workspace nextest export shape as
+        # musl's (see that note above).
+        packages.gnu-test-export =
+          if pkgs.stdenv.isDarwin then
+            throw "packages.gnu-test-export builds the Linux CI lane's unit graph; there is no Darwin lane to mirror"
+          else
+            gnuWorkspace.nextestExport;
+
+        packages.gnu-eval-roots =
+          if pkgs.stdenv.isDarwin then
+            throw "packages.gnu-eval-roots belongs to the Linux gnu graph"
+          else
+            idxPkgs.runCommand "baml-gnu-eval-roots"
+              {
+                __structuredAttrs = true;
+                strictDeps = true;
+                roots = [
+                  gnuWorkspace.unitsNix
+                  gnuWorkspace.unitGraphJson
+                  gnuWorkspace.vendorDir
                 ];
               }
               ''
