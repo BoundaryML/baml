@@ -258,10 +258,13 @@ mod tests {
     };
 
     use baml_base::{FileId, SourceFile};
-    use baml_workspace::{Compiler2ExtraFiles, Project};
+    use baml_workspace::{Compiler2ExtraFiles, MountedPackages, Project};
     use salsa::Setter;
 
-    use super::{PackageId, is_allowed_builtin_namespace_shadow, package_items};
+    use super::{
+        PackageId, is_allowed_builtin_namespace_shadow, is_external_package, is_mounted_package,
+        is_precompiled_package, package_items,
+    };
     use crate::Db;
 
     #[salsa::db]
@@ -270,6 +273,7 @@ mod tests {
         next_file_id: AtomicU32,
         project: Option<Project>,
         extra: Option<Compiler2ExtraFiles>,
+        mounted: Option<MountedPackages>,
     }
 
     impl Default for TestDb {
@@ -279,6 +283,7 @@ mod tests {
                 next_file_id: AtomicU32::new(0),
                 project: None,
                 extra: None,
+                mounted: None,
             }
         }
     }
@@ -301,6 +306,15 @@ mod tests {
             db.extra = Some(Compiler2ExtraFiles::new(&db, builtin_files));
             db
         }
+
+        fn with_mounts(
+            by_package: std::collections::BTreeMap<String, Vec<u8>>,
+            immutable_precompiled: std::collections::BTreeSet<String>,
+        ) -> Self {
+            let mut db = Self::default();
+            db.mounted = Some(MountedPackages::new(&db, by_package, immutable_precompiled));
+            db
+        }
     }
 
     #[salsa::db]
@@ -310,6 +324,10 @@ mod tests {
     impl baml_workspace::Db for TestDb {
         fn project(&self) -> Project {
             self.project.expect("test db initialized")
+        }
+
+        fn mounted_packages(&self) -> Option<MountedPackages> {
+            self.mounted
         }
     }
 
@@ -365,6 +383,31 @@ mod tests {
             &[baml_base::Name::new("other")],
             id_def
         ));
+    }
+
+    #[test]
+    fn external_package_fast_path_matches_composed_classification() {
+        let absent = TestDb::default();
+        assert!(!is_external_package(&absent, &baml_base::Name::new("app")));
+
+        let by_package = ["app", "baml", "log", "user"]
+            .into_iter()
+            .map(|name| (name.to_owned(), Vec::new()))
+            .collect();
+        let immutable_precompiled = ["baml", "user", "missing"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        let db = TestDb::with_mounts(by_package, immutable_precompiled);
+
+        for raw_name in ["app", "baml", "log", "user", "missing", "env"] {
+            let name = baml_base::Name::new(raw_name);
+            assert_eq!(
+                is_external_package(&db, &name),
+                is_mounted_package(&db, &name) || is_precompiled_package(&db, &name),
+                "fused classification diverged for {raw_name}"
+            );
+        }
     }
 }
 
@@ -449,7 +492,17 @@ pub fn is_precompiled_package(db: &dyn crate::Db, name: &Name) -> bool {
 /// Whether `name` is any source-less dependency served from a serialized
 /// `PackageInterface`.
 pub fn is_external_package(db: &dyn crate::Db, name: &Name) -> bool {
-    is_mounted_package(db, name) || is_precompiled_package(db, name)
+    let Some(mounted) = db.mounted_packages() else {
+        return false;
+    };
+    if !mounted.by_package(db).contains_key(name.as_str()) {
+        return false;
+    }
+    if !is_reserved_package_name(name.as_str()) {
+        return true;
+    }
+    baml_builtins2::stdlib_package_names().contains(&name.as_str())
+        && mounted.immutable_precompiled(db).contains(name.as_str())
 }
 
 /// The *direct* dependencies of `package_id` (hardcoded for now).

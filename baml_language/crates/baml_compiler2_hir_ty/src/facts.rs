@@ -21,6 +21,11 @@ pub struct Facts<'db> {
     /// The current scope's param env (I2): each rigid variable's declared
     /// bound conjunction, as plain constraints (the trait's vocabulary).
     bounds: rustc_hash::FxHashMap<ParamTy, Vec<Interface>>,
+    /// Canonicalization asks for the same recursive alias and enum facts many
+    /// times inside one body. Cache the owned plain rows at the oracle boundary
+    /// instead of repeatedly materializing them from interned compiler data.
+    alias_defs: std::cell::RefCell<rustc_hash::FxHashMap<QualifiedTypeName, Option<Ty>>>,
+    enum_variants: std::cell::RefCell<rustc_hash::FxHashMap<QualifiedTypeName, Option<Vec<Name>>>>,
 }
 
 impl<'db> Facts<'db> {
@@ -28,6 +33,8 @@ impl<'db> Facts<'db> {
         Facts {
             db,
             bounds: rustc_hash::FxHashMap::default(),
+            alias_defs: std::cell::RefCell::new(rustc_hash::FxHashMap::default()),
+            enum_variants: std::cell::RefCell::new(rustc_hash::FxHashMap::default()),
         }
     }
 
@@ -35,7 +42,12 @@ impl<'db> Facts<'db> {
         db: &'db dyn baml_compiler2_ppir::Db,
         bounds: rustc_hash::FxHashMap<ParamTy, Vec<Interface>>,
     ) -> Facts<'db> {
-        Facts { db, bounds }
+        Facts {
+            db,
+            bounds,
+            alias_defs: std::cell::RefCell::new(rustc_hash::FxHashMap::default()),
+            enum_variants: std::cell::RefCell::new(rustc_hash::FxHashMap::default()),
+        }
     }
 
     /// The scope's param env verbatim - the overlap oracle's `bounds` input
@@ -55,33 +67,49 @@ impl<'db> Facts<'db> {
 
 impl TypeContext for Facts<'_> {
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
-        if let Some(Definition::TypeAlias(alias)) = self.definition_of(name) {
-            return Some(crate::lower::type_alias_value(self.db, alias).to_plain());
+        if let Some(cached) = self.alias_defs.borrow().get(name) {
+            return cached.clone();
         }
-        match crate::package_interface::mounted_type_row(self.db, name) {
-            Some(crate::package_interface::ExportedType::TypeAlias { resolved, .. }) => {
-                Some(resolved.clone())
+        let resolved = if let Some(Definition::TypeAlias(alias)) = self.definition_of(name) {
+            Some(crate::lower::type_alias_value(self.db, alias).to_plain())
+        } else {
+            match crate::package_interface::mounted_type_row(self.db, name) {
+                Some(crate::package_interface::ExportedType::TypeAlias { resolved, .. }) => {
+                    Some(resolved.clone())
+                }
+                _ => None,
             }
-            _ => None,
-        }
+        };
+        self.alias_defs
+            .borrow_mut()
+            .insert(name.clone(), resolved.clone());
+        resolved
     }
 
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
-        if let Some(Definition::Enum(enum_loc)) = self.definition_of(name) {
-            return Some(
+        if let Some(cached) = self.enum_variants.borrow().get(name) {
+            return cached.clone();
+        }
+        let resolved = if let Some(Definition::Enum(enum_loc)) = self.definition_of(name) {
+            Some(
                 baml_compiler2_ppir::item_data::enum_data(self.db, enum_loc)
                     .variants
                     .iter()
                     .map(|variant| variant.name.clone())
                     .collect(),
-            );
-        }
-        match crate::package_interface::mounted_type_row(self.db, name) {
-            Some(crate::package_interface::ExportedType::Enum { variants, .. }) => {
-                Some(variants.clone())
+            )
+        } else {
+            match crate::package_interface::mounted_type_row(self.db, name) {
+                Some(crate::package_interface::ExportedType::Enum { variants, .. }) => {
+                    Some(variants.clone())
+                }
+                _ => None,
             }
-            _ => None,
-        }
+        };
+        self.enum_variants
+            .borrow_mut()
+            .insert(name.clone(), resolved.clone());
+        resolved
     }
 
     // -- Interface facts (I1: the impl registry answers; bounds and
