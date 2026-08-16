@@ -156,6 +156,12 @@ struct StaticVirtualCallKey {
     call_pc: usize,
     receiver: StaticVirtualReceiverKey,
     interface_mint: u64,
+    /// Impl selection compares these under `StructuralEquivCtx`, which is
+    /// deliberately fact-poor. The static mint is canonicalized under the full
+    /// VM context and can therefore equate interface instantiations that the
+    /// resolver distinguishes (for example `I<Animal>` and `I<Animal | Dog>`).
+    /// Empty for the overwhelmingly common non-generic interface case.
+    interface_args: Box<[baml_type::RealizedTy]>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -2617,9 +2623,7 @@ impl BexVm {
         if let Some(ptr) = value.as_object_ptr()
             && let Object::Instance(instance) = self.get_object(ptr)
             && let Object::Class(class) = self.get_object(instance.class)
-            && class.runtime_type.is_none()
-            && crate::package_baml::json::media_kind_from_fqn(class.name.display_name().as_str())
-                .is_none()
+            && self.heap.is_compile_time_ptr(instance.class)
         {
             return Some(StaticVirtualReceiverKey::Class {
                 type_tag: class.type_tag,
@@ -7122,6 +7126,14 @@ impl BexVm {
                         let Object::Type(type_value) = self.get_object(iface_ptr) else {
                             unreachable!("as_object_ptr(Type) guarantees a Type object")
                         };
+                        let interface_args = match &type_value.ty {
+                            baml_type::RealizedTy::Interface(_, args, _, _) => {
+                                args.clone().into_boxed_slice()
+                            }
+                            other => unreachable!(
+                                "VirtualCall interface operand must be an Interface type, found {other:?}"
+                            ),
+                        };
                         match type_value.mint() {
                             MintId::Static(interface_mint) => self
                                 .static_virtual_receiver_key(receiver)
@@ -7130,6 +7142,7 @@ impl BexVm {
                                     call_pc: self.cur_pc,
                                     receiver,
                                     interface_mint,
+                                    interface_args,
                                 }),
                             MintId::Runtime(_) => None,
                         }

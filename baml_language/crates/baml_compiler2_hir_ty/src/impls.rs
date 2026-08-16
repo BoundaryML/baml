@@ -392,9 +392,12 @@ pub struct ResolvedImpl<'db> {
 
 #[derive(Clone, PartialEq)]
 enum CachedResolvedImplOrigin<'db> {
-    Source {
-        block: ImplLoc<'db>,
-    },
+    /// Deliberately fact-free: source facts are Salsa-derived and must be
+    /// re-hydrated by `impls_for_type` so the caller records their live query
+    /// dependency rather than retaining a stale borrowed result here.
+    Source { block: ImplLoc<'db> },
+    /// Mounted facts are owned imported data with no Salsa query from which to
+    /// re-hydrate them, so this arm retains the facts alongside the methods.
     Mounted {
         methods: Vec<crate::package_interface::ExportedFunction>,
         facts: MountedImplFacts,
@@ -407,8 +410,9 @@ struct CachedResolvedImpl<'db> {
     bindings: FxHashMap<ParamTy, Ty>,
 }
 
-// SAFETY: the cached rows contain Salsa-interned locations tied to the query
-// database. This is the same PartialEq-driven overwrite contract as ImplFacts.
+// SAFETY: cached rows contain no `db` borrows: only owned collections and
+// Copy/interned handles. PartialEq therefore completely determines whether the
+// old allocation can be retained, matching Salsa's update contract.
 #[allow(unsafe_code)]
 unsafe impl salsa::Update for CachedResolvedImpl<'_> {
     #[allow(unsafe_code)]
@@ -723,12 +727,22 @@ struct ImplTypeKey<'db> {
     concrete: Ty,
 }
 
+/// A recursive obligation can re-enter candidate assembly through
+/// `bounds_hold`; inductive impl cycles contribute no candidates.
+fn impls_for_type_cycle_result<'db>(
+    _db: &'db dyn baml_compiler2_ppir::Db,
+    _id: salsa::Id,
+    _type_key: ImplTypeKey<'db>,
+) -> Vec<CachedResolvedImpl<'db>> {
+    Vec::new()
+}
+
 /// Memoized ground candidate assembly. Concrete primitive/container types recur
 /// throughout one project (especially through operator and interface lookup),
 /// while their impl set is a pure Salsa-dependent function of the type and
 /// package inputs. Cache that scan once instead of re-walking every impl block
 /// for every expression that mentions the same receiver type.
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked(returns(ref), cycle_result = impls_for_type_cycle_result)]
 fn impls_for_type_cached<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     type_key: ImplTypeKey<'db>,
@@ -737,6 +751,9 @@ fn impls_for_type_cached<'db>(
     let eq = AliasOnlyFacts::new(db);
     let mut out = Vec::new();
     for &package in all_packages(db) {
+        // Do not short-circuit this iterator: `impl_facts` dependencies are
+        // registered lazily as source rows are visited. This memoized query
+        // must exhaust every package so later fact changes invalidate it.
         for (origin, facts) in package_impl_candidates(db, package) {
             let pattern = facts.for_ty_pattern();
             let pattern_has_typevar = pattern.has_typevar();
