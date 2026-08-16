@@ -11,6 +11,11 @@
       inputs.nixpkgs-lib.follows = "nixpkgs";
     };
 
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -23,6 +28,7 @@
       flake-parts,
       nixpkgs,
       rust-overlay,
+      treefmt-nix,
       ...
     }:
     let
@@ -37,10 +43,16 @@
       rustToolchainSpec = builtins.fromTOML (builtins.readFile ./rust-toolchain.toml);
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [ treefmt-nix.flakeModule ];
       systems = supportedSystems;
 
       perSystem =
-        { pkgs, system, ... }:
+        {
+          config,
+          pkgs,
+          system,
+          ...
+        }:
         let
           useMuslCross = pkgs.stdenv.hostPlatform.isLinux;
 
@@ -73,10 +85,32 @@
         {
           packages = bamlPackages;
 
-          checks = import ./packaging/nix/checks.nix {
-            inherit lib;
-            packages = bamlPackages;
+          checks =
+            import ./packaging/nix/checks.nix {
+              inherit lib;
+              packages = bamlPackages;
+              inherit pkgs;
+            }
+            // {
+              formatting = config.treefmt.build.check config.treefmt.projectRoot;
+            };
+
+          treefmt = {
             inherit pkgs;
+            projectRootFile = "flake.nix";
+
+            # Preserve the existing public check name while the flake-parts
+            # module provides the formatter output.
+            flakeCheck = false;
+            settings.on-unmatched = "debug";
+
+            programs.nixfmt = {
+              enable = true;
+              includes = [
+                "flake.nix"
+                "packaging/nix/**/*.nix"
+              ];
+            };
           };
         };
     };

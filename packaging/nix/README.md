@@ -59,6 +59,16 @@ Only `x86_64-linux` is currently built and smoke-tested locally. The other
 systems evaluate successfully and require their native CI runners before being
 claimed as build-verified.
 
+## Formatting
+
+```console
+nix fmt
+```
+
+The treefmt wrapper applies `nixfmt` to the root `flake.nix` and files under
+`packaging/nix/`. Existing Rust workspace and TypeScript Biome formatting remain
+under their established repository commands and CI jobs.
+
 ## Checks
 
 ```console
