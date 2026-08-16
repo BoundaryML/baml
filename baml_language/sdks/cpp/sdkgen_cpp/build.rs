@@ -19,8 +19,16 @@ const PB_FILES: &[&str] = &[
 
 fn main() {
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR");
+    // The headers live in a sibling crate. A per-crate build system (the nix
+    // unit graph) slices source at the crate boundary, so `../bridge_cpp` is
+    // not there and the relative path cannot resolve; the override lets such
+    // a build point at the same files by absolute path. Not a soft-fail:
+    // absent headers still panic, because a sdkgen_cpp that silently emitted
+    // nothing would be worse than one that failed.
+    println!("cargo:rerun-if-env-changed=BAML_BRIDGE_CPP_PB_DIR");
+    let pb_dir = env::var("BAML_BRIDGE_CPP_PB_DIR").unwrap_or_else(|_| PB_DIR.to_string());
     for name in PB_FILES {
-        let src = Path::new(PB_DIR).join(name);
+        let src = Path::new(&pb_dir).join(name);
         println!("cargo:rerun-if-changed={}", src.display());
         let bytes = fs::read(&src)
             .unwrap_or_else(|e| panic!("read {name}: {e} (run the pb_generation bless test)"));

@@ -67,13 +67,30 @@ fn compile_baml_src() -> Program {
     baml_project::testing::compile_multi_file(&refs)
 }
 
+/// Prompt Fiddle owns the demo; this existing test binary checks it compiles
+/// without standing up a second compiler build.
+///
+/// The demo is read at run time rather than `include_str!`d. It lives above
+/// `baml_language/`, and a per-crate build system (the nix unit graph) slices
+/// source at the crate boundary, so a compile-time include of it does not
+/// build at all. `BAML_PROMPTFIDDLE_DEFAULT_BAML` lets such a build hand the
+/// file to the test binary it produced.
 #[test]
 fn promptfiddle_demo_compiles() {
-    // This cross-workspace include is intentionally cursed: Prompt Fiddle owns
-    // the demo, while this existing test binary checks it without a second compiler build.
-    let source =
-        include_str!("../../../../typescript2/app-promptfiddle/src/playground/default.baml");
-    baml_project::testing::compile_multi_file(&[("baml_src/main.baml", source)]);
+    let path = std::env::var_os("BAML_PROMPTFIDDLE_DEFAULT_BAML")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../typescript2/app-promptfiddle/src/playground/default.baml")
+        });
+    let source = std::fs::read_to_string(&path).unwrap_or_else(|error| {
+        panic!(
+            "read the Prompt Fiddle demo at {}: {error} \
+             (set BAML_PROMPTFIDDLE_DEFAULT_BAML to override the path)",
+            path.display()
+        )
+    });
+    baml_project::testing::compile_multi_file(&[("baml_src/main.baml", source.as_str())]);
 }
 
 /// Strip the `ns_` prefix from a directory segment if it names a valid namespace

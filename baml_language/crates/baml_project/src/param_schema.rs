@@ -846,6 +846,12 @@ function Plain(x: int) -> int { x }
     /// pkg-playground) validates against its `worker-protocol.ts` mirror —
     /// the FQN and shape contracts are otherwise enforced only by convention.
     /// On drift, update the fixture and both mirrors together.
+    ///
+    /// The fixture is read at run time rather than `include_str!`d: it lives
+    /// above `baml_language/`, and a per-crate build system (the nix unit
+    /// graph) slices source at the crate boundary, so a compile-time include
+    /// of it does not build at all. `BAML_PARAM_SCHEMA_GOLDEN` lets such a
+    /// build hand the file to the test binary it produced.
     #[test]
     fn wire_shape_matches_the_ts_golden_fixture() {
         let db = db_with(&[(
@@ -869,10 +875,22 @@ function Plain(x: int) -> int { x }
             "params": params_json(&listing, "Golden"),
             "types": types_json(&listing),
         });
-        let golden: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../typescript2/pkg-playground/src/__fixtures__/param-schema-golden.json"
-        ))
-        .expect("golden fixture should contain valid JSON");
+        let golden_path = std::env::var_os("BAML_PARAM_SCHEMA_GOLDEN")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+                    "../../../typescript2/pkg-playground/src/__fixtures__/param-schema-golden.json",
+                )
+            });
+        let golden_source = std::fs::read_to_string(&golden_path).unwrap_or_else(|error| {
+            panic!(
+                "read the golden fixture at {}: {error} \
+                 (set BAML_PARAM_SCHEMA_GOLDEN to override the path)",
+                golden_path.display()
+            )
+        });
+        let golden: serde_json::Value =
+            serde_json::from_str(&golden_source).expect("golden fixture should contain valid JSON");
         assert_eq!(
             actual,
             golden,
