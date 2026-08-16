@@ -17,7 +17,7 @@ from xml.etree import ElementTree
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PLATFORMS = ROOT / "release" / "platforms.json"
+DEFAULT_PLATFORMS = ROOT / "baml_language" / "crates" / "baml_release" / "platforms.json"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 SOURCE_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 VERSION_RE = re.compile(

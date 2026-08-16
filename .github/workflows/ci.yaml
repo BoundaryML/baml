@@ -92,7 +92,6 @@ jobs:
             ':scripts/baml_release_platforms.py' \
             ':scripts/baml-bridge-cffi-hygiene' \
             ':scripts/tests/**' \
-            ':release/platforms.json' \
             ':scripts/install.sh' \
             ':scripts/install.ps1' \
             ':packaging/aur/**' \
@@ -308,7 +307,6 @@ jobs:
             ':.github/actions/setup-rust/**' \
             ':scripts/baml-bridge-cffi-hygiene' \
             ':scripts/tests/**' \
-            ':release/platforms.json' \
             ':baml_language/Cargo.toml' \
             ':baml_language/Cargo.lock' \
             ':baml_language/Cross.toml' \

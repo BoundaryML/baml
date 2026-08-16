@@ -1,6 +1,12 @@
-//! The repository-owned platform contract (`release/platforms.json`): the
-//! single machine-readable source for the release target set, each target's
+//! The repository-owned platform contract
+//! (`baml_language/crates/baml_release/platforms.json`): the single
+//! machine-readable source for the release target set, each target's
 //! per-artifact support, and the `bridge_cffi` cdylib build config.
+//!
+//! It lives beside this crate rather than at the repository root so that the
+//! `include_str!` below stays inside the crate directory. Per-crate build
+//! systems (the nix unit graph) slice source at the crate boundary, and a
+//! path escaping it is not merely uncacheable, it is unbuildable.
 //!
 //! The cffi, toolchain, python, Java, and C# build matrices are generated from
 //! this file (each in its own workflow); the Rust target list is kept in sync
@@ -15,7 +21,7 @@
 use serde::Deserialize;
 
 /// The committed platform contract, embedded at build time.
-const PLATFORMS_JSON: &str = include_str!("../../../../release/platforms.json");
+const PLATFORMS_JSON: &str = include_str!("../platforms.json");
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Platforms {
@@ -150,8 +156,8 @@ pub struct CSharpArtifact {
 /// malformed — that is a build-blocking repository error the tests guard.
 pub fn platforms() -> Platforms {
     let platforms: Platforms =
-        serde_json::from_str(PLATFORMS_JSON).expect("release/platforms.json is valid JSON");
-    validate_platforms(&platforms).expect("release/platforms.json has valid artifact dependencies");
+        serde_json::from_str(PLATFORMS_JSON).expect("platforms.json is valid JSON");
+    validate_platforms(&platforms).expect("platforms.json has valid artifact dependencies");
     platforms
 }
 
@@ -197,7 +203,7 @@ mod tests {
         let from_const: BTreeSet<&str> = SUPPORTED_RELEASE_TARGETS.iter().copied().collect();
         assert_eq!(
             from_json, from_const,
-            "release/platforms.json target set must match SUPPORTED_RELEASE_TARGETS"
+            "platforms.json target set must match SUPPORTED_RELEASE_TARGETS"
         );
     }
 

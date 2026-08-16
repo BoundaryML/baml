@@ -11,7 +11,7 @@ from scripts.baml_release_platforms import expected_wrapper_assets
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_TOOL = ROOT / "scripts" / "baml-release-manifests"
-PLATFORMS = ROOT / "release" / "platforms.json"
+PLATFORMS = ROOT / "baml_language" / "crates" / "baml_release" / "platforms.json"
 
 
 class ReleaseManifestTests(unittest.TestCase):
