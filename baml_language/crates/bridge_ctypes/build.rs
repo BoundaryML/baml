@@ -41,6 +41,23 @@ fn main() -> std::io::Result<()> {
         .collect();
     prost_build::compile_protos(&proto_strs, &["types"])?;
 
+    // The two legs below write into committed trees two crates up. A
+    // per-crate build system (the nix unit graph) slices source at the crate
+    // boundary and mounts it read-only, so those trees are simply not there;
+    // skip them rather than fail. Nothing is lost by skipping: these writes
+    // only refresh committed copies, and the `proto-sync` CI job is what
+    // keeps those copies honest -- it runs on the cargo path, where the
+    // trees do exist.
+    let sdks_dir = manifest_dir.join("../../sdks");
+    if !sdks_dir.is_dir() {
+        println!(
+            "cargo:warning=bridge_ctypes: {} is absent, skipping the vendored \
+             Rust and Python outputs (proto-sync verifies them on the cargo path)",
+            sdks_dir.display()
+        );
+        return Ok(());
+    }
+
     // Vendor the same prost output into baml_bridge (the published Rust
     // SDK runtime): it ships committed generated code so consumers need
     // neither protoc nor this crate's engine-coupled codecs. The

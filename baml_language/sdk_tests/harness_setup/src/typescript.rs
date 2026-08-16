@@ -141,6 +141,21 @@ pub(crate) fn copy_customizable(source: &Path, destination: &Path) {
                     destination_path.display()
                 )
             });
+            // `fs::copy` carries the source's mode across. When the source
+            // tree is read-only - a nix store path, under a per-crate build
+            // system - every copy lands at 0444 and `rewrite_test_bridge_
+            // imports` below dies EACCES on its own scratch file. Make the
+            // copies writable; they belong to this build.
+            let mut permissions = fs::metadata(&destination_path)
+                .unwrap_or_else(|error| panic!("stat {}: {error}", destination_path.display()))
+                .permissions();
+            if permissions.readonly() {
+                #[allow(clippy::permissions_set_readonly_false)]
+                permissions.set_readonly(false);
+                fs::set_permissions(&destination_path, permissions).unwrap_or_else(|error| {
+                    panic!("chmod {}: {error}", destination_path.display())
+                });
+            }
         }
     }
 }
@@ -195,6 +210,10 @@ fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[FixtureTests]) {
     buffer.push_str(&format!(
         "::sdk_test_harness_runner::setup_guard!({SETUP_ENV_VAR:?});\n"
     ));
+    // Runs through the bridge's own `attw` package script rather than
+    // `pnpm exec attw` so a local `pnpm attw` and this test stay the same
+    // check — the script stages the pack without the native addon
+    // (`typescript_src/attw-check.js` explains why).
     buffer.push_str(&format!(
         r#"
 mod bridge_typescript {{
@@ -202,7 +221,7 @@ mod bridge_typescript {{
     fn attw() {{
         ::sdk_test_harness_runner::run_workspace_cmd(
             "sdks/typescript/bridge_typescript",
-            "pnpm exec attw --pack --profile esm-only",
+            "pnpm run attw",
             "{CACHE_SUBDIR}",
             "{CACHE_ENV_VAR}",
         );

@@ -27,6 +27,7 @@
 //! ```
 
 use std::{
+    env,
     fmt::{self, Display},
     fs,
     path::{Path, PathBuf},
@@ -150,13 +151,26 @@ pub struct LoadedFixture {
 /// from a generator crate's `CARGO_MANIFEST_DIR`. Generator crates
 /// live at `<workspace>/sdk_tests/crates/<generator>/`, so the
 /// fixtures root is `manifest.parent().parent().join("fixtures")`.
+///
+/// `BAML_SDK_TEST_FIXTURES` overrides it outright. The corpus is shared
+/// by every generator but lives outside all of them, and a per-crate
+/// build system (the nix unit graph) slices source at the crate
+/// boundary, so the relative walk lands on a path that is not there.
+/// This is the one choke point all nine generators resolve through.
 pub fn fixtures_root_from_manifest(manifest_dir: &Path) -> PathBuf {
+    println!("cargo:rerun-if-env-changed={FIXTURES_ROOT_ENV}");
+    if let Some(root) = env::var_os(FIXTURES_ROOT_ENV) {
+        return PathBuf::from(root);
+    }
     manifest_dir
         .parent()
         .and_then(Path::parent)
         .expect("crate not at <workspace>/sdk_tests/crates/<generator>/")
         .join("fixtures")
 }
+
+/// Override for the shared fixture corpus; see [`fixtures_root_from_manifest`].
+pub const FIXTURES_ROOT_ENV: &str = "BAML_SDK_TEST_FIXTURES";
 
 /// Enumerate every `<fixtures_root>/<name>/` that contains a
 /// `baml_src/` subdirectory. Sorted so codegen output ordering is

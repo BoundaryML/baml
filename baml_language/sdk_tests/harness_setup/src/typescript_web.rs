@@ -29,7 +29,13 @@ const SETUP_ENV_VAR: &str = "SDK_TEST_TYPESCRIPT_WEB_SETUP";
 
 pub fn run_all_from_typescript_sources(relative_sources: &str) {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let sources_root = manifest_dir.join(relative_sources);
+    // Same reason as the fixtures corpus: the canonical TypeScript sources
+    // live in a sibling crate, which a per-crate source slice does not
+    // contain. See `fixtures_root_from_manifest`.
+    println!("cargo:rerun-if-env-changed=BAML_SDK_TEST_TYPESCRIPT_SOURCES");
+    let sources_root = env::var_os("BAML_SDK_TEST_TYPESCRIPT_SOURCES")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| manifest_dir.join(relative_sources));
     let fixtures_root = fixtures_root_from_manifest(&manifest_dir);
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let fixtures = discover_fixtures(&fixtures_root);
