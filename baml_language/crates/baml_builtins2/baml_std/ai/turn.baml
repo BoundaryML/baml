@@ -58,5 +58,5 @@ interface Client {
     // wrappers use this as a stable request-shape preview: they do not sleep,
     // rotate, or try fallback members while rendering.
     function render(self, input: ModelTurnInput) -> baml.http.Request throws root.errors.Failure | baml.errors.UnknownError
-    function invoke(self, input: ModelTurnInput) -> ModelTurn throws root.errors.Failure | baml.errors.UnknownError
+    function invoke(self, input: ModelTurnInput) -> ModelTurn throws root.errors.Failure | baml.errors.UnknownError | baml.panics.Cancelled
 }

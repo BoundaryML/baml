@@ -199,7 +199,7 @@ class AzureClient {
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.chat_invoke(self.compat(), self.params(), input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }
@@ -207,7 +207,7 @@ class AzureClient {
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
             root.internal.chat_invoke_stream(self.compat(), self.params(), input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

@@ -156,7 +156,7 @@ class BedrockClient {
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.invoke(self, input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

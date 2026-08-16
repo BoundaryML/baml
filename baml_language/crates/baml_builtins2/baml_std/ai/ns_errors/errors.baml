@@ -22,6 +22,18 @@ function normalize(error: unknown) -> Failure | baml.errors.UnknownError throws 
     }
 }
 
+// Invocation boundaries preserve a Cancelled value that reaches BAML's error
+// channel as a first-class signal. Classified failures and already-normalized
+// unknown errors retain their identity; only untyped values enter UnknownError.
+function normalize_invoke(
+    error: unknown,
+) -> Failure | baml.errors.UnknownError | baml.panics.Cancelled throws never {
+    match (error) {
+        let cancelled: baml.panics.Cancelled => cancelled,
+        _ => normalize(error),
+    }
+}
+
 class RateLimited {
     provider: string,
     retry_after_ms: int?,

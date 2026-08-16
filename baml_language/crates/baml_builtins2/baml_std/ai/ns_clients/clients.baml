@@ -154,7 +154,7 @@ class Retry {
 
         function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
             self._attempt(input, self.max_attempts) catch_all (e) {
-                _ => throw root.errors.normalize(e),
+                _ => throw root.errors.normalize_invoke(e),
             }
         }
     }
@@ -257,7 +257,7 @@ class RoundRobin {
                     },
                 }
             } catch_all (e) {
-                _ => throw root.errors.normalize(e),
+                _ => throw root.errors.normalize_invoke(e),
             }
         }
     }
@@ -280,8 +280,7 @@ class RoundRobin {
                     },
                 }
             } catch_all (e) {
-                let cancelled: baml.panics.Cancelled => throw cancelled,
-                _ => throw root.errors.normalize(e),
+                _ => throw root.errors.normalize_invoke(e),
             }
         }
     }
@@ -341,7 +340,7 @@ class Fallback {
 
         function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
             self._try(input, 0) catch_all (e) {
-                _ => throw root.errors.normalize(e),
+                _ => throw root.errors.normalize_invoke(e),
             }
         }
     }
@@ -406,7 +405,7 @@ class StreamRelay {
     }
 
     function recover(self, error: unknown) -> void {
-        match (error) {
+        match (root.errors.normalize_invoke(error)) {
             let cancelled: baml.panics.Cancelled => {
                 self.close_current();
                 throw cancelled
@@ -420,9 +419,9 @@ class StreamRelay {
                     throw failure
                 }
             },
-            _ => {
+            let unknown_error: baml.errors.UnknownError => {
                 self.close_current();
-                throw root.errors.normalize(error)
+                throw unknown_error
             },
         }
     }

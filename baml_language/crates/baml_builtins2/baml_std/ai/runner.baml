@@ -289,7 +289,10 @@ class Agent<Out> {
 
     implements Runner<Out> {
         type Output = RunResult<Out>
-        type Error = root.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError
+        type Error = root.errors.Failure
+            | baml.errors.UnknownError
+            | baml.reflect.errors.CompilationError
+            | baml.panics.Cancelled
 
         function run(self, spec: FunctionSpec<Out>) -> RunResult<Out> {
             let selected = self.client ?? spec.default_client;

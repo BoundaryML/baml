@@ -137,6 +137,40 @@ class NonStreamingClient {
     }
 }
 
+class SyntheticInvokeClient {
+    attempts: int,
+    cancel_immediately: bool,
+
+    implements ai.Client {
+        function id(self) -> string {
+            "synthetic-invoke"
+        }
+
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            let _ = input;
+            baml.http.Request {
+                method: "POST",
+                url: "https://example.invalid/synthetic-invoke",
+                headers: {},
+                body: "{}",
+            }
+        }
+
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            let _ = input;
+            self.attempts += 1;
+            if (self.cancel_immediately) {
+                throw baml.panics.Cancelled { message: "scripted non-stream cancellation" }
+            }
+            throw ai.errors.NetworkFailure {
+                provider: "synthetic-invoke",
+                detail: "retryable failure",
+                raw_body: null,
+            }
+        }
+    }
+}
+
 function scripted_client(
     client_id: string,
     chunks: string[],
@@ -415,5 +449,42 @@ test "streaming_composites_do_not_retry_unsafe_failure" {
     assert.equal(
         streaming_composites_do_not_retry_unsafe_failure_case(),
         "StepBudgetExceeded:1|open:unsafe:1",
+    )
+}
+
+function nonstream_composites_preserve_cancellation_case() -> string {
+    let retry_inner = SyntheticInvokeClient { attempts: 0, cancel_immediately: true };
+    let retry = ai.clients.Retry.new(
+        retry_inner,
+        max_attempts = 3,
+        backoff = ai.clients.Backoff.new(initial_ms = 0, max_ms = 0),
+    );
+    let retry_outcome = retry.invoke(composite_input()) catch_all (e) {
+        let cancelled: baml.panics.Cancelled => "cancelled",
+        _ => "other",
+    };
+
+    let round_robin_inner = SyntheticInvokeClient { attempts: 0, cancel_immediately: true };
+    let round_robin = ai.clients.RoundRobin.new([round_robin_inner]);
+    let round_robin_outcome = round_robin.invoke(composite_input()) catch_all (e) {
+        let cancelled: baml.panics.Cancelled => "cancelled",
+        _ => "other",
+    };
+
+    let fallback_inner = SyntheticInvokeClient { attempts: 0, cancel_immediately: true };
+    let fallback_backup = SyntheticInvokeClient { attempts: 0, cancel_immediately: false };
+    let fallback = ai.clients.Fallback { members: [fallback_inner, fallback_backup] };
+    let fallback_outcome = fallback.invoke(composite_input()) catch_all (e) {
+        let cancelled: baml.panics.Cancelled => "cancelled",
+        _ => "other",
+    };
+
+    `retry=${retry_outcome}:${retry_inner.attempts}|round_robin=${round_robin_outcome}:${round_robin_inner.attempts}|fallback=${fallback_outcome}:${fallback_inner.attempts}:${fallback_backup.attempts}`
+}
+
+test "nonstream_composites_preserve_typed_cancellation" {
+    assert.equal(
+        nonstream_composites_preserve_cancellation_case(),
+        "retry=cancelled:1|round_robin=cancelled:1|fallback=cancelled:1:0",
     )
 }
