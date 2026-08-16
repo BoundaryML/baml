@@ -1,0 +1,62 @@
+# L2 push roots: every flake attribute the out-of-repo builder must realise
+# and push to the ix-public attic cache for a canary rev, one per line.
+#
+# The builder reads this file rather than carrying its own list, so adding a
+# lane is a change to the lane's PR and not a coordinated change to a fleet
+# NixOS module. Blank lines and `#` comments are ignored.
+#
+# FORMAT, and it is worth being exact because the wrong guess is fatal rather
+# than degrading: lines here are BARE flake attribute names and the builder
+# prefixes `.#`. A line already carrying a `#` is taken as a complete
+# installable and used verbatim, so `.#msrv-check` also works. What does not
+# work is a consumer that passes a bare name straight to `nix build`: that is
+# not "attribute missing", it is an eval error, which fails the whole tick
+# rather than one root. Keep the two spellings as the only two accepted, and
+# do not invent a third.
+#
+# Two roots per lane, and both are load-bearing:
+#
+#   <lane>-check       the lane's compile work. Its closure is the unit DAG,
+#                      which is what a guest substitutes instead of compiling.
+#   <lane>-eval-roots  the graph's two IFD artifacts (the rendered units.nix
+#                      and its unit-graph JSON) plus the vendor dir. These are
+#                      BUILD-time deps of <lane>-check, so they are absent
+#                      from its closure and would not ride along. A guest that
+#                      cannot substitute them re-runs a full cargo resolve
+#                      over 928 packages and the renderer at EVALUATION time,
+#                      before it considers a single compile unit. index hit
+#                      this exact failure and fixed it the same way
+#                      (crossIfdRoots, index#1687).
+#
+# A lane whose -eval-roots is pushed but whose -check is not is still a win
+# (fast eval, cold compile); the reverse is close to worthless.
+#
+# BEFORE ADDING A LANE, MEASURE ITS CLOSURE. `nix path-info -Sh .#<lane>-check`.
+# A guest substitutes that whole closure on a hit, so the number decides
+# whether the nix arm is faster than the cargo arm at all - and it is the one
+# property of a graph that a green, fast, correct build tells you nothing
+# about. Calibration, all measured 2026-08-16:
+#
+#   wasm-check        394 MiB   release profile, strip = "symbols"
+#   msrv-check (dev)   93 GiB   dev profile with cargo's default debuginfo
+#   msrv-check (rel)  4.6 GiB   same graph, release
+#
+# The middle row is the cautionary one. Switching the msrv graph from release
+# to dev was correct on the semantics -- release silently drops
+# `#[cfg(debug_assertions)]` code, so the two arms of the lane were compiling
+# different programs -- but the same change multiplied the closure 20x, all of
+# it debuginfo in the test binaries, to roughly 72 minutes of substitution
+# against a cargo arm of 20-26. It compiled cold in 593s; nothing about the
+# build said it would make CI slower. Hence `debug = 0` on that graph: on a
+# `--no-run` lane debuginfo cannot change what rustc accepts, while
+# debug-assertions is a separate profile field and stays on, so the semantic
+# half of the equivalence is kept and the bytes are not.
+#
+# The builder refuses a root over 30 GiB and warns over 10, which is a
+# backstop, not a substitute for looking.
+
+msrv-check
+msrv-eval-roots
+
+wasm-check
+wasm-eval-roots

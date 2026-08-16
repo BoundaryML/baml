@@ -148,6 +148,23 @@ in
     # free whenever free space drops under 50 GiB.
     min-free = 50 * 1024 * 1024 * 1024;
     max-free = 100 * 1024 * 1024 * 1024;
+    # nix's upstream default caches a MISSING narinfo for 3600s. On a
+    # persistent runner that is an hour of blindness per root: an L2 probe
+    # that runs before the builder has published answers "miss", and every
+    # later job landing on the same member by family affinity re-reads that
+    # negative entry instead of asking the cache, so rerunning the job once
+    # the artifact exists cannot recover it. Measured on the pool: the
+    # second of two consecutive msrv jobs on baml-r10-1 probed after the
+    # push had landed and still missed, in 13s, with no network round trip.
+    #
+    # 60s matches what the ix fleet already pins for the same reason
+    # (ix nix/modules/base/nix-settings.nix:187, which has a deploy-surface
+    # check behind it); the pool image simply never inherited it. This only
+    # reaches VMs at a pool roll, so the probe passes
+    # --narinfo-cache-negative-ttl 0 explicitly as well - that is what makes
+    # it correct on the members running today, and this makes the default
+    # sane for everything else that substitutes here.
+    narinfo-cache-negative-ttl = 60;
   };
 
   # Prefer IPv4 for every destination: some regions' guests hold global v6

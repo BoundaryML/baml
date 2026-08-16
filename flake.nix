@@ -290,64 +290,78 @@
             CARGO_PROFILE_TEST_DEBUG = "0";
           };
 
-          # Tools the workspace's build scripts shell out to. These fold into
-          # every unit, which is right for toolchain constants and is anyway
-          # the only hatch: the machinery has no per-package build-inputs
-          # table, only per-package env and rustc args.
-          nativeBuildInputs = [
-            idxPkgs.cmake
-            idxPkgs.ninja
-            idxPkgs.pkg-config
-            idxPkgs.perl
-            idxPkgs.go # sdkgen_go's build script shells out to gofmt
-            idxPkgs.protobuf
-            (mkProtocGenGo idxPkgs)
-            # openssl is here for the LINK, not for openssl-sys' build
-            # script (that one reads OPENSSL_LIB_DIR below). Units link
-            # independently, so the `rustc-link-search` openssl-sys emits
-            # does not reach the dependent binaries the way it does under
-            # one cargo invocation, and every test binary that pulls
-            # native-tls dies "mold: fatal: library not found: ssl".
-            # Putting it here lets the stdenv wrapper add -L to every link.
-            # It costs nothing in closure terms: --all-features already
-            # drags openssl into this graph.
-            idxPkgs.openssl
-          ];
-
-          # Values, unlike tools, are scoped per package. `env` folds into
-          # every unit, so exporting the openssl and libclang variables
-          # workspace-wide would make every unit in the graph depend on
-          # openssl -- wrong, and expensive. index learned this the costly
-          # way (ENG-10488).
-          packageBuildEnv = {
-            openssl-sys = {
-              OPENSSL_LIB_DIR = "${idxPkgs.lib.getLib idxPkgs.openssl}/lib";
-              OPENSSL_INCLUDE_DIR = "${idxPkgs.openssl.dev}/include";
-              OPENSSL_NO_VENDOR = "1";
-            };
-            # bindgen consumers: aws-lc-sys is pulled in by --all-features'
-            # aws-crypto, bridge_cffi runs bindgen in its own build script.
-            aws-lc-sys = graphBindgenEnv;
-            bridge_cffi = graphBindgenEnv;
-            # sdkgen_cpp gzips committed protobuf headers that live in the
-            # sibling bridge_cpp crate, which its own slice does not contain.
-            sdkgen_cpp.BAML_BRIDGE_CPP_PB_DIR =
-              "${./baml_language/sdks/cpp/bridge_cpp/pb/baml_bridge/cffi/v1}";
-            # A machinery gap, not a BAML one: cargo defines
-            # CARGO_TARGET_TMPDIR at compile time for integration-test and
-            # bench targets, and cargo-unit does not, so baml_cli's
-            # tests/common/mod.rs fails to compile on `env!`. A literal is
-            # all the compile needs; running those tests under nix would
-            # additionally need this path writable.
-            baml_cli.CARGO_TARGET_TMPDIR = "/tmp/baml-cli-target-tmp";
-          }
-          # The lane is `--workspace` and there are no default-members, so it
-          # builds the whole sdk_tests tree, whose nine generators all read a
-          # fixture corpus that sits above every one of them. The generators
-          # are pure Rust (no foreign toolchain at build time), so handing
-          # them the corpus is all they need.
-          // sdkTestFixtureEnv;
+          nativeBuildInputs = graphNativeBuildInputs;
+          packageBuildEnv = graphPackageBuildEnv;
         };
+
+        # Tools the workspace's build scripts shell out to. These fold into
+        # every unit, which is right for toolchain constants and is anyway
+        # the only hatch: the machinery has no per-package build-inputs
+        # table, only per-package env and rustc args.
+        #
+        # Shared by every graph below. They are the same set per graph on
+        # purpose: which build scripts run is a property of the package
+        # selection, and a tool that no selected build script invokes costs
+        # only its store path, never a compile.
+        graphNativeBuildInputs = [
+          idxPkgs.cmake
+          idxPkgs.ninja
+          idxPkgs.pkg-config
+          idxPkgs.perl
+          idxPkgs.go # sdkgen_go's build script shells out to gofmt
+          idxPkgs.protobuf
+          (mkProtocGenGo idxPkgs)
+          # openssl is here for the LINK, not for openssl-sys' build
+          # script (that one reads OPENSSL_LIB_DIR below). Units link
+          # independently, so the `rustc-link-search` openssl-sys emits
+          # does not reach the dependent binaries the way it does under
+          # one cargo invocation, and every test binary that pulls
+          # native-tls dies "mold: fatal: library not found: ssl".
+          # Putting it here lets the stdenv wrapper add -L to every link.
+          # It costs nothing in closure terms on the msrv graph, whose
+          # --all-features already drags openssl in.
+          idxPkgs.openssl
+        ];
+
+        # Values, unlike tools, are scoped per package. `env` folds into
+        # every unit, so exporting the openssl and libclang variables
+        # workspace-wide would make every unit in the graph depend on
+        # openssl -- wrong, and expensive. index learned this the costly
+        # way (ENG-10488).
+        #
+        # Keys are checked against Cargo.lock, not against the graph's
+        # package selection, so one table serves every graph: an entry for a
+        # package a given graph does not build is inert, and dropping
+        # entries per graph would only invite the silent-no-op class the
+        # machinery's default-deny exists to prevent.
+        graphPackageBuildEnv = {
+          openssl-sys = {
+            OPENSSL_LIB_DIR = "${idxPkgs.lib.getLib idxPkgs.openssl}/lib";
+            OPENSSL_INCLUDE_DIR = "${idxPkgs.openssl.dev}/include";
+            OPENSSL_NO_VENDOR = "1";
+          };
+          # bindgen consumers: aws-lc-sys is pulled in by --all-features'
+          # aws-crypto, bridge_cffi runs bindgen in its own build script.
+          aws-lc-sys = graphBindgenEnv;
+          bridge_cffi = graphBindgenEnv;
+          # sdkgen_cpp gzips committed protobuf headers that live in the
+          # sibling bridge_cpp crate, which its own slice does not contain.
+          sdkgen_cpp.BAML_BRIDGE_CPP_PB_DIR =
+            "${./baml_language/sdks/cpp/bridge_cpp/pb/baml_bridge/cffi/v1}";
+          # A machinery gap, not a BAML one: cargo defines
+          # CARGO_TARGET_TMPDIR at compile time for integration-test and
+          # bench targets, and cargo-unit does not, so baml_cli's
+          # tests/common/mod.rs fails to compile on `env!`. A literal is
+          # all the compile needs; running those tests under nix would
+          # additionally need this path writable.
+          baml_cli.CARGO_TARGET_TMPDIR = "/tmp/baml-cli-target-tmp";
+        }
+        # The msrv lane is `--workspace` and there are no default-members, so
+        # it builds the whole sdk_tests tree, whose nine generators all read a
+        # fixture corpus that sits above every one of them. The generators
+        # are pure Rust (no foreign toolchain at build time), so handing
+        # them the corpus is all they need.
+        // sdkTestFixtureEnv;
 
         # The shared sdk_tests fixture corpus, handed to each generator that
         # reads it. Scoped per package rather than put in workspace-wide
@@ -382,6 +396,218 @@
         graphBindgenEnv = {
           LIBCLANG_PATH = "${idxPkgs.libclang.lib}/lib";
           BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${idxPkgs.llvmPackages.libclang.lib}/lib/clang/${idxPkgs.lib.versions.major idxPkgs.llvmPackages.libclang.version}/include -isystem ${idxPkgs.llvmPackages.libclang.lib}/include -isystem ${idxPkgs.glibc.dev}/include";
+        };
+
+        # ------------------------------------------------------------------
+        # L2, the wasm lane
+        # ------------------------------------------------------------------
+        #
+        # Which other Linux rust lanes are NOT here, and why. Each of these
+        # was attempted against the pinned index rev and hit a specific
+        # missing capability, not a difficulty:
+        #
+        #   cargo-test-linux (gnu) and cargo-test-linux-musl. These lanes
+        #     COMPILE and then RUN. The graph can produce the test binaries,
+        #     but nothing can hand them to nextest: the machinery synthesizes
+        #     a `--binaries-metadata` JSON per test target inside a throwaway
+        #     single-package workspace in $TMPDIR and never installs it, so
+        #     there is no whole-workspace metadata file to reach from the
+        #     flake. Converting only the compile half is not neutral, it is a
+        #     regression: `cargo nextest run` with an empty target/ recompiles
+        #     everything the nix arm just built, so the job pays for both.
+        #     Running the tests inside the derivations instead would work
+        #     mechanically -- the packages these two lanes select carry no
+        #     nextest setup scripts and no serialization groups -- but it
+        #     makes the two arms semantically different, and the arm is
+        #     chosen by cache state. A test that passes in the runner
+        #     environment and fails in the nix sandbox (or the reverse) would
+        #     then make the verdict depend on whether the builder had caught
+        #     up, which is not a property a merge gate may have. Compile-only
+        #     lanes are immune to this, which is why msrv and wasm are the
+        #     two that converted. The unblocker is a whole-workspace
+        #     binaries-metadata export, upstream in the machinery.
+        #
+        #   cargo-doc. The machinery has no rustdoc-HTML path at this pin:
+        #     rustdoc is invoked only as `rustdoc --test` for doctests, there
+        #     is no `--no-deps` or doc-output install, and RUSTDOCFLAGS
+        #     appears nowhere in the tree -- so `RUSTDOCFLAGS=-D warnings`,
+        #     which is the entire point of the lane, has nowhere to go. The
+        #     available workaround, running cargo doc against `vendorDir` in
+        #     one coarse derivation, is a whole-workspace blob that any
+        #     source edit invalidates. That is worse than sccache, not
+        #     better, because the PR delta is the whole mechanism.
+        #
+        #   size-gate linux and wasm. Blocked in the size-gate tool, not in
+        #     nix: `cargo size-gate check` shells out to `cargo build
+        #     --release -p <pkg>` itself at run time and then executes the
+        #     CLI it just built. A release graph would produce those binaries
+        #     cheaply -- `profile` is a plain argument -- but the tool has no
+        #     way to be handed a prebuilt artifact. The unblocker is a
+        #     `--prebuilt` hatch in crates/tools_size_gate/src/measure.rs,
+        #     which is a change to that tool and not to this file.
+
+        # The cargo-test-wasm lane despite its name runs no tests: it is
+        # `cargo build --target wasm32-unknown-unknown --release`. That makes
+        # it the second clean conversion after msrv, and the only lane in the
+        # record with a measured build-step decomposition (107-120 s of a
+        # 120-136 s cold job, n=3) -- so almost all of it is compile, and
+        # almost all of that is substitutable.
+        #
+        # It is a second `buildWorkspace` rather than a second cargoTargets
+        # entry because target triple, profile and toolchain are all folded
+        # into every unit hash. Nothing here shares a single unit with the
+        # msrv graph, by construction.
+
+        # The lane discovers its package set at run time from cargo metadata:
+        # every workspace member whose `[package.metadata.ci] wasm_support`
+        # is absent or true. Reproduced here because the graph needs the
+        # selection at EVALUATION time, and reproduced as a predicate over
+        # the real manifests rather than a copied list so a new crate is
+        # picked up the same way the lane picks it up.
+        #
+        # The one thing this cannot track is a change to the `members` globs
+        # themselves. That is what packages.wasm-package-list and the job's
+        # drift check are for: a mismatch routes the job to the cargo arm
+        # with a warning instead of silently building a different set.
+        wasmPackages =
+          let
+            root = ./baml_language;
+            # Cargo's members list, transcribed. Globs are expanded against
+            # the tree so `crates/*` stays self-maintaining.
+            globbed =
+              rel:
+              let
+                entries = builtins.readDir (root + "/${rel}");
+              in
+              map (name: "${rel}/${name}") (
+                builtins.filter (
+                  name: entries.${name} == "directory" && builtins.pathExists (root + "/${rel}/${name}/Cargo.toml")
+                ) (builtins.attrNames entries)
+              );
+            explicitMembers = [
+              "sdks/cpp/sdkgen_cpp"
+              "sdks/csharp/sdkgen_csharp"
+              "sdks/go/sdkgen_go"
+              "sdks/java/bridge_java"
+              "sdks/java/sdkgen_java"
+              "sdks/typescript/bridge_typescript"
+              "sdks/typescript/bridge_typescript_web"
+              "sdks/typescript/sdkgen_typescript_shared"
+              "sdk_tests/harness_setup"
+              "sdk_tests/harness_runner"
+              "sdk_tests/harness/llm_recordings"
+              "sdk_tests/crates/java"
+              "sdk_tests/crates/cpp"
+              "sdk_tests/crates/csharp"
+              "sdk_tests/crates/python_pydantic2"
+              "sdk_tests/crates/swift"
+              "sdk_tests/crates/go"
+              "sdk_tests/crates/typescript"
+              "sdk_tests/crates/typescript_web"
+              "sdk_tests/crates/rust"
+              "tools_sccache"
+            ];
+            # [workspace].exclude: directories the globs would otherwise
+            # sweep up but that are not members.
+            notMembers = [
+              "forks/aws-config-systest"
+              "forks/google-cloud-auth-systest"
+              "sdks/rust/verify"
+            ];
+            memberDirs = builtins.filter (dir: !(builtins.elem dir notMembers)) (
+              globbed "crates"
+              ++ globbed "forks"
+              ++ globbed "sdks/python/rust"
+              ++ globbed "sdks/swift/rust"
+              ++ globbed "sdks/rust"
+              ++ explicitMembers
+            );
+            manifestOf = dir: builtins.fromTOML (builtins.readFile (root + "/${dir}/Cargo.toml"));
+            # Absent means supported: the lane's jq predicate defaults the
+            # flag to true, so only an explicit `false` opts a crate out.
+            supportsWasm = manifest: manifest.package.metadata.ci.wasm_support or true;
+          in
+          nixpkgs.lib.sort (a: b: a < b) (
+            map (manifest: manifest.package.name) (builtins.filter supportsWasm (map manifestOf memberDirs))
+          );
+
+        # Read from the same rust-toolchain.toml devShells.ci pins, so the
+        # graph and the shell cannot name different compilers.
+        #
+        # `.minimal` rather than `.default`: this is the cut the msrv TODO
+        # above describes, taken here because a new graph costs nothing to
+        # start lean. minimal is rustc + cargo + rust-std, which is
+        # everything a unit graph invokes -- cargo only for the planning IFD,
+        # rustc for every unit -- while `.default` would add rust-docs,
+        # clippy and rustfmt to what every guest substitutes. policy
+        # pureBuild already means no clippy unit exists to want the
+        # component.
+        ciRustChannel = (builtins.fromTOML (builtins.readFile ./rust-toolchain.toml)).toolchain.channel;
+        wasmToolchain = rustOverlayPkgs.rust-bin.stable.${ciRustChannel}.minimal.override {
+          targets = [ "wasm32-unknown-unknown" ];
+        };
+
+        wasmWorkspace = cargoUnit.buildWorkspace {
+          src = ./baml_language;
+          workspaceRoot = ./baml_language;
+          rustToolchain = wasmToolchain;
+
+          # Same reason as the msrv graph: cache.ix.dev 404s /realisations,
+          # so a floating-CA output is unsubstitutable through the only cache
+          # the pool guests can read.
+          contentAddressed = false;
+          policy = cargoUnit.policyPresets.pureBuild;
+
+          # The triple is a first-class argument, not a flag inside
+          # cargoTargets: the machinery threads it into the planner AND into
+          # its nextest wiring, and a per-entry --target would key those two
+          # differently. One graph per triple is the machinery's own rule.
+          target = "wasm32-unknown-unknown";
+
+          # The lane builds --release, and this graph must agree with it
+          # exactly: profile fields (opt-level "s", lto "fat",
+          # codegen-units 1, panic "abort", strip "symbols") are all folded
+          # into the unit hash. Stated explicitly even though "release" is
+          # the machinery's default, because the default is the wrong one to
+          # inherit silently -- see the note on the msrv graph.
+          profile = "release";
+
+          cargoTargets = [
+            (
+              [ "--no-default-features" ]
+              ++ builtins.concatMap (name: [
+                "-p"
+                name
+              ]) wasmPackages
+            )
+          ];
+          cargoTargetNames = [ "wasm" ];
+
+          # baml_language/.cargo/config.toml carries
+          #   [target.wasm32-unknown-unknown]
+          #   rustflags = [ "--cfg", 'getrandom_backend="wasm_js"' ]
+          # and cargo applies it to every wasm32 unit. cargo-unit drives
+          # rustc directly and so honors cargo config only when asked; left
+          # off, this graph compiles getrandom (and anything else reading
+          # that cfg) differently from the lane it stands in for -- two arms
+          # of one job building two different programs. Measured on the
+          # first build of this graph: the emitted rustc argv carried no
+          # --cfg at all.
+          #
+          # The flag is per-triple, so it is inert on host units (build
+          # scripts, proc-macros): there is no [target.x86_64-unknown-linux
+          # -gnu] section, which is also why the msrv graph does not set it.
+          cargoConfigRustflags = true;
+
+          # baml_language/.cargo/config.toml sets this and cargo-unit does
+          # not read the [env] table. It is not the in-process compiler
+          # tests that need it here -- this graph builds no tests -- but
+          # proc-macro expansion runs on the host under the same setting the
+          # lane runs under, and matching the lane is the whole point.
+          env.RUST_MIN_STACK = "67108864";
+
+          nativeBuildInputs = graphNativeBuildInputs;
+          packageBuildEnv = graphPackageBuildEnv;
         };
 
         # Common source filtering for crane
@@ -599,6 +825,88 @@
                 mkdir -p "$out"
                 printf '%s\n' "''${roots[@]}" > "$out/eval-roots"
               '';
+
+        # The cargo-test-wasm lane, as a nix build. Roots every unit that
+        # lane's `cargo build -p ... --target wasm32-unknown-unknown
+        # --no-default-features --release` produces -- libs and bins of the
+        # selected packages -- and copies the .wasm artifacts out so the job
+        # can list them the way it lists target/'s today.
+        packages.wasm-check =
+          if pkgs.stdenv.isDarwin then
+            throw "packages.wasm-check builds the Linux CI lane's unit graph; there is no Darwin lane to mirror"
+          else
+            idxPkgs.runCommand "baml-wasm-check"
+              {
+                __structuredAttrs = true;
+                strictDeps = true;
+                unitRoots = wasmWorkspace.roots;
+              }
+              ''
+                set -euo pipefail
+                mkdir -p "$out/wasm"
+                printf '%s\n' "''${unitRoots[@]}" > "$out/unit-roots"
+                # Collected rather than symlinked to the units so `ls -lh`
+                # in the job reports the artifact sizes, which is the only
+                # thing the lane's "List WASM artifacts" step is for. A unit
+                # with no .wasm output (an rlib dependency root) is normal.
+                #
+                # Two naming differences from cargo, both measured against
+                # the cargo arm's four .wasm files. cargo drops every wasm
+                # artifact into one target directory as <name>.wasm; nix
+                # splits them by kind, and installs cdylib outputs as
+                # lib/<name>.wasm but bin outputs as bin/<name> with no
+                # extension at all. A lib/*.wasm sweep finds three of the
+                # four; adding bin/*.wasm still finds three, because the
+                # [[bin]] crate (tools_sap_visualizer) has no suffix to
+                # match.
+                #
+                # So: sweep both directories and decide by the file's magic
+                # rather than by its path. A host-platform executable can
+                # then never be filed as a wasm artifact, which a
+                # path-shaped rule would do silently.
+                for root in "''${unitRoots[@]}"; do
+                  for artifact in "$root"/lib/*.wasm "$root"/bin/*; do
+                    [ -f "$artifact" ] || continue
+                    magic=$(head -c 4 "$artifact" | od -An -tx1 | tr -d ' \n')
+                    [ "$magic" = "0061736d" ] || continue
+                    cp -n "$artifact" "$out/wasm/$(basename "$artifact" .wasm).wasm"
+                  done
+                done
+                echo "built ''${#unitRoots[@]} wasm unit roots" > "$out/result"
+              '';
+
+        packages.wasm-eval-roots =
+          if pkgs.stdenv.isDarwin then
+            throw "packages.wasm-eval-roots belongs to the Linux wasm graph"
+          else
+            idxPkgs.runCommand "baml-wasm-eval-roots"
+              {
+                __structuredAttrs = true;
+                strictDeps = true;
+                roots = [
+                  wasmWorkspace.unitsNix
+                  wasmWorkspace.unitGraphJson
+                  wasmWorkspace.vendorDir
+                ];
+              }
+              ''
+                set -euo pipefail
+                mkdir -p "$out"
+                printf '%s\n' "''${roots[@]}" > "$out/eval-roots"
+              '';
+
+        # The package selection the wasm graph was built from, as a file the
+        # job can diff against what `cargo metadata` reports on the runner.
+        #
+        # Deliberately independent of wasmWorkspace: it evaluates and builds
+        # in milliseconds with no IFD, so the job can afford to check the
+        # selection BEFORE committing to the nix arm. A mismatch means the
+        # flake's transcription of Cargo's `members` has drifted from cargo's
+        # own resolution, which would otherwise show up as the nix arm
+        # quietly compiling a different set of crates than the lane does.
+        packages.wasm-package-list = idxPkgs.writeText "baml-wasm-packages" (
+          nixpkgs.lib.concatMapStrings (name: name + "\n") wasmPackages
+        );
 
         packages.default = bamlRustPackage {
           pname = "baml-cli";

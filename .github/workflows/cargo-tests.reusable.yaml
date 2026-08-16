@@ -1221,7 +1221,100 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
+      # L2: same probe-then-choose contract as the msrv lane. Take the
+      # per-unit nix graph only when cache.ix.dev (or this VM's own store)
+      # already has this exact root; a unit-DAG miss costs the whole graph
+      # and must route back to cargo.
+      #
+      # This lane carries one extra precondition the msrv lane does not.
+      # The cargo arm discovers its package set at run time from
+      # `cargo metadata`; the nix arm needs that set at EVALUATION time and
+      # so re-derives it from the manifests. Those two derivations agree
+      # today and are checked to agree on every run, because a silent
+      # divergence would have the nix arm compiling a different set of
+      # crates than the lane is supposed to build -- a green job that gated
+      # nothing. Cheap to check: the list is its own IFD-free derivation.
+      - name: "Probe the L2 unit cache"
+        id: l2
+        if: steps.toolchains.outputs.nix == 'true'
+        env:
+          L2_EVAL_TIMEOUT_SECONDS: "180"
+          L2_PROBE_TIMEOUT_SECONDS: "10"
+        run: |
+          set -uo pipefail
+
+          echo "hit=false" >> "$GITHUB_OUTPUT"
+
+          if ! list_path="$(nix build --no-link --print-out-paths .#wasm-package-list 2>/dev/null)"; then
+            echo "::notice title=L2::could not build the package list; taking the cargo arm"
+            exit 0
+          fi
+          # mktemp, never a hardcoded /tmp path: the pool's runner unit is
+          # ProtectSystem=strict with a per-slot TMPDIR, so /tmp is not
+          # writable, and mktemp honors TMPDIR and so lands in the slot dir.
+          from_cargo="$(mktemp)"
+          cargo metadata --no-deps --format-version 1 --manifest-path baml_language/Cargo.toml \
+            | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | .name' \
+            | LC_ALL=C sort > "${from_cargo}"
+          if [[ ! -s "${from_cargo}" ]]; then
+            # Not drift: cargo metadata itself produced nothing. Distinguished
+            # from a real mismatch so the warning does not send someone to
+            # edit flake.nix over a transient.
+            echo "::notice title=L2::cargo metadata returned no packages; taking the cargo arm"
+            exit 0
+          fi
+          if [[ "$(cat "${list_path}")" != "$(cat "${from_cargo}")" ]]; then
+            echo "::warning title=L2::the flake's wasm package selection has drifted from cargo metadata; taking the cargo arm. Fix wasmPackages in flake.nix."
+            # comm, not diff: coreutils is on the job PATH, diffutils is not
+            # guaranteed to be.
+            comm -3 "${list_path}" "${from_cargo}" || true
+            exit 0
+          fi
+
+          # Timeout vs broken flake, same distinction and deliberately the
+          # same shape as the msrv probe below -- two probes in one file
+          # reading differently is how one of them rots. `timeout` returns
+          # 124 only when it actually fired, so that is the one code that
+          # means "slow guest"; anything else is an eval bug that would
+          # otherwise hide behind a green lane. Note the assignment form:
+          # `if ! cmd; then rc=$?` would capture the status of `!`, not of
+          # the command.
+          eval_log="$(mktemp)"
+          out_path="$(timeout "${L2_EVAL_TIMEOUT_SECONDS}" nix eval --raw .#wasm-check.outPath 2>"${eval_log}")" \
+            && eval_rc=0 || eval_rc=$?
+          if [ "${eval_rc}" -ne 0 ]; then
+            if [ "${eval_rc}" -eq 124 ]; then
+              echo "::notice title=L2::evaluation did not finish within ${L2_EVAL_TIMEOUT_SECONDS}s; taking the cargo arm"
+            else
+              echo "::warning title=L2::evaluation FAILED with exit ${eval_rc} (not a timeout); taking the cargo arm"
+              sed -n '1,25p' "${eval_log}"
+            fi
+            exit 0
+          fi
+
+          # Local first: runners are persistent, so a VM that already built
+          # this root has it on disk and should not be sent down the cargo
+          # path over a remote cache eviction that costs it nothing.
+          if nix path-info "${out_path}" >/dev/null 2>&1; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=L2::already in the local store: ${out_path}; taking the nix arm"
+          # --narinfo-cache-negative-ttl 0, for the reason spelled out on the
+          # msrv probe: nix caches a MISSING narinfo for 3600s by default, so
+          # one probe that runs before the builder publishes would poison
+          # this member for an hour and no rerun inside that window could
+          # hit. Only "not found" is affected; the positive cache is
+          # untouched.
+          elif timeout "${L2_PROBE_TIMEOUT_SECONDS}" nix path-info --narinfo-cache-negative-ttl 0 --store https://cache.ix.dev "${out_path}" >/dev/null 2>&1; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=L2::cache hit for ${out_path}; taking the nix arm"
+          else
+            echo "::notice title=L2::cache miss for ${out_path}; taking the cargo arm"
+          fi
+
       - uses: Swatinem/rust-cache@v2
+        # Deliberately ungated by the probe: the cargo arm stays the
+        # fallback, so its cache has to keep being warmed on canary or the
+        # first L2 miss lands on a cold cargo build.
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
@@ -1238,12 +1331,29 @@ jobs:
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
+        if: steps.l2.outputs.hit != 'true'
         run: cargo fetch --target wasm32-unknown-unknown
         working-directory: baml_language
 
-      - name: "Build for WASM"
+      # The nix arm. Same work as the cargo arm below, expressed as one
+      # derivation per rustc invocation, so the guest compiles only the units
+      # this PR's diff perturbed.
+      - name: "Build for WASM (nix unit graph)"
+        if: steps.l2.outputs.hit == 'true'
         run: |
           set -euo pipefail
+          echo "::notice title=L2::arm=nix"
+          # --no-link: the runner keeps ignored files across checkouts
+          # (`clean: false`) and `result` is not ignored, so a symlink left
+          # in the tree would outlive the job.
+          out_path="$(nix build --no-link --print-out-paths --print-build-logs .#wasm-check)"
+          echo "L2_WASM_OUT=${out_path}" >> "$GITHUB_ENV"
+
+      - name: "Build for WASM"
+        if: steps.l2.outputs.hit != 'true'
+        run: |
+          set -euo pipefail
+          echo "::notice title=L2::arm=cargo"
           readarray -t wasm_packages < <(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | .name')
           if [[ ${#wasm_packages[@]} -eq 0 ]]; then
             echo "Error: no WASM packages discovered; cargo metadata or jq may have failed" >&2
@@ -1257,8 +1367,12 @@ jobs:
         working-directory: baml_language
 
       - name: "List WASM artifacts"
-        run: ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
-        working-directory: baml_language
+        run: |
+          if [[ "${{ steps.l2.outputs.hit }}" == "true" ]]; then
+            ls -lh "${L2_WASM_OUT}"/wasm/*.wasm || true
+          else
+            ls -lh baml_language/target/wasm32-unknown-unknown/release/*.wasm || true
+          fi
 
       - name: "Show sccache stats"
         if: always()
@@ -1276,15 +1390,19 @@ jobs:
           path: sccache-stats-test-wasm.json
           if-no-files-found: ignore
 
+      # --timings is a cargo flag, so these only exist on the cargo arm. The
+      # existence guard below is not enough on its own: the runner keeps
+      # ignored files across runs (`clean: false`), so on the nix arm the
+      # file present is the PREVIOUS run's and would ship as this run's.
       - name: "Rename cargo timings"
-        if: always()
+        if: always() && steps.l2.outputs.hit != 'true'
         run: |
           if [[ -f target/cargo-timings/cargo-timing.html ]]; then
             mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-wasm.html
           fi
         working-directory: baml_language
       - name: "Upload cargo timings"
-        if: always()
+        if: always() && steps.l2.outputs.hit != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-wasm
