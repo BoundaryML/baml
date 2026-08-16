@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // anywhere, and in move mode every top-level block of the page is draggable
 // like a thing pinned to a board. Sketch mode adds wobbly hand-drawn framing.
 
-type Tool = 'browse' | 'move' | 'pen' | 'hl' | 'eraser' | 'text';
+type Tool = 'browse' | 'move' | 'pen' | 'hl' | 'eraser' | 'text' | 'label';
 
 type Stroke = {
   color: string;
@@ -23,7 +23,14 @@ type Sticky = {
   x: number;
   y: number;
   text: string;
+  /** note = yellow paper; label = bare text on the board */
+  kind: 'note' | 'label';
 };
+
+// Board contents survive reloads.
+const STORAGE_KEY = 'xp-board-v1';
+
+type Action = { kind: 'stroke' } | { kind: 'sticky'; id: number };
 
 const COLORS = ['#1A1612', '#6D28D9', '#B4342B', '#1F8B4C'];
 
@@ -58,6 +65,7 @@ const ICONS = {
   note: icon('M4 5h16v10H10l-4 4v-4H4z'),
   pen: icon('M4 20l1-4L16 5l3 3L8 19zM14 7l3 3'),
   trash: icon('M5 7h14M9 7V4h6v3m-8 0l1 13h8l1-13'),
+  type: icon('M6 6h12M12 6v13M9 19h6'),
   undo: icon('M8 5L4 9l4 4M4 9h10a5 5 0 0 1 0 10h-3'),
 };
 
@@ -68,6 +76,7 @@ const TOOL_BUTTONS: [Tool, JSX.Element, string][] = [
   ['hl', ICONS.hl, 'Highlighter'],
   ['eraser', ICONS.eraser, 'Eraser'],
   ['text', ICONS.note, 'Note'],
+  ['label', ICONS.type, 'Text'],
 ];
 
 export function Whiteboard() {
@@ -78,6 +87,23 @@ export function Whiteboard() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const strokesRef = useRef<Stroke[]>([]);
   const liveRef = useRef<Stroke | null>(null);
+  const actionsRef = useRef<Action[]>([]);
+  const stickiesRef = useRef<Sticky[]>([]);
+  stickiesRef.current = stickies;
+
+  const save = useCallback(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          stickies: stickiesRef.current,
+          strokes: strokesRef.current,
+        }),
+      );
+    } catch {
+      /* storage full or unavailable */
+    }
+  }, []);
   const toolRef = useRef(tool);
   toolRef.current = tool;
   const colorRef = useRef(color);
@@ -116,6 +142,33 @@ export function Whiteboard() {
     if (liveRef.current) paint(liveRef.current);
     ctx.globalAlpha = 1;
   }, []);
+
+  // Restore the persisted board once on mount.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw) as {
+        strokes?: Stroke[];
+        stickies?: Sticky[];
+      };
+      strokesRef.current = data.strokes ?? [];
+      const notes = (data.stickies ?? []).map((n) => ({
+        ...n,
+        kind: n.kind ?? ('note' as const),
+      }));
+      setStickies(notes);
+      stickySeq = Math.max(0, ...notes.map((n) => n.id)) + 1;
+      redraw();
+    } catch {
+      /* corrupt board state: start fresh */
+    }
+  }, [redraw]);
+
+  // Stickies persist whenever they change (position, text, add, delete).
+  useEffect(() => {
+    save();
+  }, [stickies, save]);
 
   // Canvas sizing + scroll tracking.
   useEffect(() => {
@@ -193,10 +246,18 @@ export function Whiteboard() {
   const onCanvasDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const t = toolRef.current;
     const doc: [number, number] = [e.clientX, e.clientY + window.scrollY];
-    if (t === 'text') {
+    if (t === 'text' || t === 'label') {
+      const id = stickySeq++;
+      actionsRef.current.push({ id, kind: 'sticky' });
       setStickies((prev) => [
         ...prev,
-        { id: stickySeq++, text: '', x: doc[0], y: doc[1] },
+        {
+          id,
+          kind: t === 'text' ? 'note' : 'label',
+          text: '',
+          x: doc[0],
+          y: doc[1],
+        },
       ]);
       setTool('browse');
       return;
@@ -241,19 +302,61 @@ export function Whiteboard() {
     liveRef.current = null;
     if (live && live.pts.length > 1 && toolRef.current !== 'eraser') {
       strokesRef.current.push(live);
+      actionsRef.current.push({ kind: 'stroke' });
+    }
+    redraw();
+    save();
+  };
+
+  // Undo walks one shared history of stroke and sticky additions.
+  const undo = useCallback(() => {
+    const action = actionsRef.current.pop();
+    if (!action) return;
+    if (action.kind === 'stroke') {
+      strokesRef.current.pop();
+      redraw();
+      save();
+    } else {
+      setStickies((prev) => prev.filter((n) => n.id !== action.id));
+    }
+  }, [redraw, save]);
+
+  const clearAll = () => {
+    strokesRef.current = [];
+    actionsRef.current = [];
+    setStickies([]);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* fine */
     }
     redraw();
   };
 
-  const undo = () => {
-    strokesRef.current.pop();
-    redraw();
-  };
-  const clearAll = () => {
-    strokesRef.current = [];
-    setStickies([]);
-    redraw();
-  };
+  // Cmd/Ctrl+Z undoes board edits, except while typing in a note (there the
+  // browser's own text undo should win).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (
+        !(e.metaKey || e.ctrlKey) ||
+        e.key.toLowerCase() !== 'z' ||
+        e.shiftKey
+      )
+        return;
+      const a = document.activeElement as HTMLElement | null;
+      if (
+        a &&
+        (a.isContentEditable ||
+          a.tagName === 'INPUT' ||
+          a.tagName === 'TEXTAREA')
+      )
+        return;
+      e.preventDefault();
+      undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo]);
 
   // Sticky dragging works in every mode, by the note's grip strip.
   const stickyDown = (e: React.PointerEvent, id: number) => {
@@ -286,7 +389,11 @@ export function Whiteboard() {
   };
 
   const inking =
-    tool === 'pen' || tool === 'hl' || tool === 'eraser' || tool === 'text';
+    tool === 'pen' ||
+    tool === 'hl' ||
+    tool === 'eraser' ||
+    tool === 'text' ||
+    tool === 'label';
 
   return (
     <>
@@ -302,7 +409,11 @@ export function Whiteboard() {
       {/* Doc-anchored layer for stickies (height 0, overflow visible). */}
       <div className="xp-notes">
         {stickies.map((s) => (
-          <div className="xp-sticky" key={s.id} style={{ left: s.x, top: s.y }}>
+          <div
+            className={`xp-sticky${s.kind === 'label' ? ' xp-sticky--label' : ''}`}
+            key={s.id}
+            style={{ left: s.x, top: s.y }}
+          >
             <button
               aria-label="Drag note"
               className="xp-sticky-grip"
@@ -314,14 +425,23 @@ export function Whiteboard() {
             <div
               className="xp-sticky-body"
               contentEditable
-              // biome-ignore lint/a11y/noAutofocus: a fresh note wants a caret
+              onInput={(e) => {
+                const text = (e.currentTarget as HTMLElement).innerText;
+                setStickies((prev) =>
+                  prev.map((n) => (n.id === s.id ? { ...n, text } : n)),
+                );
+              }}
+              // Seed the text once and never re-render it: React owns no
+              // children here, so typing and re-renders cannot fight.
               ref={(el) => {
-                if (el && !s.text) el.focus();
+                if (el && el.dataset.init !== '1') {
+                  el.dataset.init = '1';
+                  el.textContent = s.text;
+                  if (!s.text) el.focus();
+                }
               }}
               suppressContentEditableWarning
-            >
-              {s.text}
-            </div>
+            />
             <button
               aria-label="Delete note"
               className="xp-sticky-x"
@@ -396,6 +516,11 @@ export function Whiteboard() {
           background: #FEF6C7; border: 1px solid #E3D48A; border-radius: 3px;
           box-shadow: 3px 5px 0 rgba(26, 22, 18, 0.12);
           transform: rotate(-1deg); padding: 20px 22px 10px 10px; }
+        .xp-sticky--label { background: none; border: none; box-shadow: none;
+          transform: none; padding: 14px 22px 6px 10px; min-width: 60px; }
+        .xp-sticky--label .xp-sticky-body { font-size: 20px; }
+        .xp-sticky--label .xp-sticky-grip,
+        .xp-sticky--label .xp-sticky-x { color: rgba(26, 22, 18, 0.35); }
         .xp-sticky-body { outline: none; font-size: 14px; line-height: 1.45;
           font-family: 'Marker Felt', 'Comic Sans MS', cursive; min-height: 20px; }
         .xp-sticky-grip { position: absolute; top: 2px; left: 6px; border: 0;
