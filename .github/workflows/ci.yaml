@@ -999,7 +999,9 @@ jobs:
     # policy
     # and the "Perf benchmarks (PR notice)" job for the comment PRs get when
     # benchmarks are skipped. Skipped in merge_group (already settled on the PR).
-    if: needs.determine_changes.outputs.run_perf == 'true'
+    # Upstream only: forks have no Blacksmith ARM runner, so this job queues
+    # forever there and holds the whole run open (blocks reruns for 24h).
+    if: github.repository == 'boundaryml/baml' && needs.determine_changes.outputs.run_perf == 'true'
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
