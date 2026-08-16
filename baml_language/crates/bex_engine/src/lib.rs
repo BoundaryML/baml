@@ -4596,11 +4596,13 @@ impl BexEngine {
         // `baml.panics.*` instance and would surface an internal
         // `TypeMismatch` leak instead of the clean panic. This mirrors the
         // panic bypass in [`enforce_host_throw_contract`].
-        let value_is_panic = value_runtime_baml_ty(value, thread.proof())
-            .is_some_and(|rt| matches!(&rt, RuntimeTy::Class(name, _, _) if name.is_panic_type()));
+        let runtime_ty = value_runtime_baml_ty(value, thread.proof());
+        let value_is_panic = runtime_ty
+            .as_ref()
+            .is_some_and(|rt| matches!(rt, RuntimeTy::Class(name, _, _) if name.is_panic_type()));
         let external = match throws_type {
             Some(ty) if !value_is_panic => {
-                self.convert_vm_value_to_external_with_type(value, ty, thread.proof())?
+                self.convert_vm_value_to_external_with_type(value, ty, &thread.vm, thread.proof())?
             }
             _ => self.vm_value_to_owned(thread.proof(), value),
         };
@@ -5285,6 +5287,7 @@ impl BexEngine {
                                 let external = self.convert_vm_value_to_external_with_type(
                                     value,
                                     &return_type,
+                                    &thread.vm,
                                     thread.proof(),
                                 )?;
                                 (external.clone(), external)
@@ -5299,6 +5302,7 @@ impl BexEngine {
                             let external = self.convert_vm_value_to_external_with_type(
                                 value,
                                 &return_type,
+                                &thread.vm,
                                 thread.proof(),
                             )?;
                             let external = crate::conversion::coerce_return_to_declared_type(
@@ -5311,6 +5315,7 @@ impl BexEngine {
                         let external = self.convert_vm_value_to_external_with_type(
                             value,
                             &return_type,
+                            &thread.vm,
                             thread.proof(),
                         )?;
                         let external = crate::conversion::coerce_return_to_declared_type(
@@ -5396,7 +5401,12 @@ impl BexEngine {
                             }
                             vec![
                                 self.vm_arg_to_bex_value(args[0]),
-                                self.convert_host_call_args_pack(args[1], &params, thread.proof())?,
+                                self.convert_host_call_args_pack(
+                                    args[1],
+                                    &params,
+                                    &thread.vm,
+                                    thread.proof(),
+                                )?,
                                 self.vm_arg_to_bex_value(args[2]),
                                 self.vm_arg_to_bex_value(args[3]),
                             ]
