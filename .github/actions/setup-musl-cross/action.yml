@@ -15,8 +15,12 @@ runs:
         # The cc/cargo env var names are the target triple with dashes as
         # underscores (CC lower-cased, the cargo linker var upper-cased).
         # Derived from the target so the platform contract stays shell-free.
-        sudo apt-get update
-        sudo apt-get install -y musl-tools
+        # Self-hosted ix runners ship musl-gcc on the unit PATH (NixOS: no
+        # apt); only install on GitHub-hosted Ubuntu images.
+        if ! command -v musl-gcc >/dev/null 2>&1; then
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+        fi
         target="${{ inputs.target }}"
         up="$(printf '%s' "$target" | tr '[:lower:]' '[:upper:]')"
         echo "CC_${target//-/_}=musl-gcc" >> "$GITHUB_ENV"

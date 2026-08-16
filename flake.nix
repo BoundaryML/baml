@@ -7,6 +7,25 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Pins the exact rust-toolchain.toml channel with extra target triples for
+    # the Linux -> Darwin/Windows cross lane (devShells.cross).
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
+    };
+    # Fresh nixpkgs for the CI runner VMs only (the repo's own nixpkgs pins
+    # are untouched): the GitHub Actions runner package must stay current or
+    # registered runners are refused. Deliberately not `follows
+    # nixpkgs-unstable` despite the same URL - this one has to track fresh
+    # nixos-unstable on its own, while the repo's other pins stay stable.
+    nixpkgs-ci.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # ix-maintained runner mechanism; nix/ci-runner.nix here is only policy.
+    # Main-rev pin; bump deliberately (the reconcile workflow pins the SAME
+    # rev in its `uses:` - move both together).
+    # MAIN REVS ONLY: a branch pin reverts every fix main has that the
+    # branch lacks (2026-08-16: an app-auth branch pin time-traveled past
+    # the region fix and recreated pool members in the wrong region).
+    ix-runners.url = "github:indexable-inc/ix-runners/275f844b869476bde794f3d691ebd946f20a890d";
     crane = {
       url = "github:ipetkov/crane";
     };
@@ -24,6 +43,9 @@
       flake-utils,
       fenix,
       crane,
+      rust-overlay,
+      nixpkgs-ci,
+      ix-runners,
       ...
     }:
 
@@ -111,9 +133,9 @@
           LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
           BINDGEN_EXTRA_CLANG_ARGS =
             if pkgs.stdenv.isDarwin then
-              "-I${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.llvmPackages.libclang.version}/headers "
+              "-I${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.versions.major pkgs.llvmPackages.libclang.version}/headers "
             else
-              "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.llvmPackages.libclang.version}/include -isystem ${pkgs.llvmPackages.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
+              "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.versions.major pkgs.llvmPackages.libclang.version}/include -isystem ${pkgs.llvmPackages.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
           RUSTFLAGS =
             if pkgs.stdenv.isDarwin then
               "--cfg tracing_unstable"
@@ -866,7 +888,12 @@
             if pkgs.stdenv.isDarwin then
               "" # Rely on default includes provided by stdenv.cc + libclang
             else
-              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
+              # llvmPackages_17 was removed from nixpkgs; use the default LLVM
+              # set and derive the clang resource dir from it (same pattern as
+              # the build env above). Since LLVM 16 that directory is named by
+              # MAJOR version only, so the full version would be a path that
+              # does not exist and clang would silently ignore the -isystem.
+              "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.versions.major pkgs.llvmPackages.libclang.version}/include -isystem ${pkgs.llvmPackages.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
 
           # Prevent SDK conflicts on macOS and configure CGO for Go
           shellHook = pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
@@ -882,7 +909,63 @@
             export CGO_LDFLAGS="-isysroot $SDKROOT"
           '';
         };
+
+        # CI shells, Linux-only by construction; the legacy `devShell` above
+        # stays the default shell.
+        #   cross   - Linux -> Darwin/Windows cross builds: zig cc + pinned
+        #             macOS SDK for the Apple triples, cargo-xwin for MSVC.
+        #   ci      - the toolchain surface the Linux CI jobs consume
+        #             (rust-toolchain.toml channel via fenix).
+        #   ci-msrv - same shell pinned to the baml_language MSRV, read from
+        #             the workspace manifest so the shell and the
+        #             cargo-build-msrv gate cannot drift.
+        devShells =
+          let
+            rustOverlayPkgs = import nixpkgs-unstable {
+              inherit system;
+              overlays = [ rust-overlay.overlays.default ];
+            };
+            msrv =
+              (builtins.fromTOML (builtins.readFile ./baml_language/Cargo.toml)).workspace.package.rust-version;
+          in
+          nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+            cross = import ./nix/cross-shell.nix {
+              pkgs = rustOverlayPkgs;
+            };
+            ci = import ./nix/ci-shell.nix {
+              inherit
+                pkgs
+                pkgs-unstable
+                toolchain
+                protocGenGo
+                ;
+            };
+            ci-msrv = import ./nix/ci-shell.nix {
+              inherit pkgs pkgs-unstable protocGenGo;
+              toolchain = rustOverlayPkgs.rust-bin.stable.${msrv}.default;
+            };
+          };
       }
-    );
+    )
+    // {
+      # Self-hosted CI runner pool on ix VMs; this repo carries only the
+      # policy in nix/ci-runner.nix.
+      nixosConfigurations = ix-runners.lib.mkPool {
+        nixpkgs = nixpkgs-ci;
+        configRev = self.rev or null;
+        # The pool's definition, read here AND by the reconcile workflow, so
+        # its size cannot be two different numbers in two files.
+        spec = builtins.fromTOML (builtins.readFile ./nix/ix-pool.toml);
+        # NOTE, measured 2026-08-15: do NOT bake the CI shell closures into
+        # the image (system.extraDependencies) yet. The in-guest template
+        # builder runs with base-image nix settings - it cannot substitute
+        # through this config's own substituters (chicken-and-egg) - so the
+        # bake turned every member create into a 30+ min toolchain compile,
+        # once per (rev, attr) even though all attrs share one profile hash.
+        # Re-land once the platform (a) lets template builds substitute via
+        # cache.ix.dev and (b) keys the template cache by profile hash.
+        modules = [ ./nix/ci-runner.nix ];
+      };
+    };
 
 }

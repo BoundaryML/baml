@@ -1,0 +1,90 @@
+name: "Set up CI toolchains"
+description: |
+  One seam for how a job gets its toolchains, with two arms:
+
+  - nix on PATH (the ix runner pool, which is NixOS): enter the flake's CI
+    dev shell once and persist its environment into GITHUB_ENV, so every
+    later step runs the shell's pinned tools as plain commands. Closures
+    substitute from the pool's binary caches; nothing is downloaded from
+    tool registries.
+  - no nix (the Blacksmith fork-PR fallback; those images have no nix):
+    today's imperative path, `rustup show` + setup-mise.
+
+  Multi-toolchain jobs must not use `cargo +toolchain` on the nix arm - the
+  shell's cargo is not a rustup shim (see .envrc's history note). Each Rust
+  toolchain gets its own shell attribute instead (ci, ci-msrv).
+
+inputs:
+  shell:
+    description: devShells attribute to enter on nix-capable runners.
+    required: false
+    default: "ci"
+  mise-install-args:
+    description: |
+      setup-mise install_args for the fallback arm. Empty skips mise
+      entirely (pass the same narrow set the job used before this action).
+    required: false
+    default: ""
+  rustup:
+    description: |
+      Whether the fallback arm runs `rustup show` to install the toolchain
+      pinned by rust-toolchain.toml. Set "false" for jobs that install a
+      different toolchain themselves (e.g. the MSRV job).
+    required: false
+    default: "true"
+  rustup-working-directory:
+    description: Directory whose rust-toolchain.toml `rustup show` honors.
+    required: false
+    default: "baml_language"
+
+outputs:
+  nix:
+    description: |
+      "true" when the job entered the flake shell; jobs gate their
+      fallback-only steps (rustup target add, musl cross setup) on this.
+    value: ${{ steps.detect.outputs.nix }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Detect nix
+      id: detect
+      shell: bash
+      run: |
+        if command -v nix >/dev/null 2>&1; then
+          echo "nix=true" >>"$GITHUB_OUTPUT"
+        else
+          echo "nix=false" >>"$GITHUB_OUTPUT"
+        fi
+
+    - name: Enter the flake CI shell
+      if: steps.detect.outputs.nix == 'true'
+      shell: bash
+      # Retried: the first entry on a freshly rolled VM downloads the shell
+      # closure, and a transient substituter failure should not fail the job
+      # (same shape as ix-cross.yml's retry). `ci-env` appends the current
+      # PATH so runner-provided tools stay reachable for unconverted steps.
+      run: |
+        for attempt in 1 2 3; do
+          if BAML_CI_BASE_PATH="$PATH" \
+            nix develop "$GITHUB_WORKSPACE#${{ inputs.shell }}" -c ci-env >"$RUNNER_TEMP/ci-shell.env"; then
+            cat "$RUNNER_TEMP/ci-shell.env" >>"$GITHUB_ENV"
+            exit 0
+          fi
+          echo "nix develop failed (attempt $attempt), retrying" >&2
+          sleep $((attempt * 10))
+        done
+        echo "could not enter devShells.${{ inputs.shell }} after 3 attempts" >&2
+        exit 1
+
+    - name: Install Rust toolchain (no-nix fallback)
+      if: steps.detect.outputs.nix == 'false' && inputs.rustup == 'true'
+      shell: bash
+      working-directory: ${{ inputs.rustup-working-directory }}
+      run: rustup show
+
+    - name: Install tools with mise (no-nix fallback)
+      if: steps.detect.outputs.nix == 'false' && inputs.mise-install-args != ''
+      uses: ./.github/actions/setup-mise
+      with:
+        install_args: ${{ inputs.mise-install-args }}
