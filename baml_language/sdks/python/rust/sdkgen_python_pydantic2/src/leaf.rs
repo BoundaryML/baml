@@ -329,8 +329,14 @@ impl LeafBody {
     /// Mirrors `root_imports_py`'s walk shape but returns the
     /// `RelImport` form used by the post-25b2 render path.
     pub(crate) fn all_rel_imports_py(&self) -> Vec<RelImport> {
+        self.all_rel_imports_from(&self.leaf)
+    }
+
+    /// Collect this body's signature imports as rendered from `current`.
+    /// Callable-child protocols are emitted in their parent's stub, so their
+    /// imports must be anchored at the parent rather than the child leaf.
+    fn all_rel_imports_from(&self, current: &LeafPath) -> Vec<RelImport> {
         let mut acc = RootImportSets::default();
-        let current = &self.leaf;
         for (sym, _) in &self.symbols {
             match sym {
                 EmittedSymbol::Class(c) => {
@@ -811,13 +817,26 @@ fn split_hoistable_aliases(
     (hoisted, trailing)
 }
 
-/// Whether `name` lands in a leaf under a different top-level package
-/// than `leaf`. The SDK root package counts as nobody's outside.
-fn routes_outside_package(leaf: &LeafPath, name: &baml_codegen_types::Name) -> bool {
+/// Whether `name` lands in a leaf under a different logical package than
+/// `leaf`. `stream_types` is a synthetic routing prefix, so compare the source
+/// package beneath it (`ai`, `baml`, ...) rather than treating every partial
+/// type as part of one giant package. The SDK root counts as nobody's outside.
+pub(crate) fn routes_outside_package(leaf: &LeafPath, name: &baml_codegen_types::Name) -> bool {
     let routed = route_class_ref(name);
-    match (leaf.segments.first(), routed.segments.first()) {
+    match (
+        logical_package_segment(&leaf.segments),
+        logical_package_segment(&routed.segments),
+    ) {
         (Some(current), Some(other)) => current != other,
         _ => false,
+    }
+}
+
+fn logical_package_segment(segments: &[String]) -> Option<&str> {
+    match segments {
+        [prefix, package, ..] if prefix == "stream_types" => Some(package),
+        [package, ..] => Some(package),
+        [] => None,
     }
 }
 
@@ -1205,6 +1224,8 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
         // Runtime `.py`: callback Protocols are stub-only, so optional-arg
         // callables widen to `typing.Callable[..., R]` here.
         callback_protocols: None,
+        type_stream_accessors: true,
+        include_stream_done: false,
     };
 
     match s {
@@ -1282,7 +1303,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
             out
         }
         EmittedSymbol::TypeAlias(a) => {
-            let mut out = render_type_alias(a, leaf);
+            let mut out = render_type_alias(a, leaf, true, false);
             out.push('\n');
             out
         }
@@ -1312,14 +1333,20 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     }
 }
 
-/// Render a type alias to its source line. Shared between `.py` and
-/// `.pyi`; the body is identical (12d §3.3).
+/// Render a type alias to its source line. Runtime and stub aliases share the
+/// same structure and use the bridge stream type; stubs additionally include
+/// the generated terminal marker in the stream's `next()` result.
 ///
 /// Non-recursive aliases render as `Name: typing.TypeAlias = <RHS>`.
 /// Recursive aliases (18c) render via `typing_extensions.TypeAliasType`
 /// with inner self-references quoted, so Pydantic resolves them
 /// through its JSON-schema definitions machinery instead of recursing.
-fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) -> String {
+fn render_type_alias(
+    a: &crate::emit::type_alias::PyTypeAlias,
+    leaf: &LeafPath,
+    type_stream_accessors: bool,
+    include_stream_done: bool,
+) -> String {
     use askama::Template;
 
     // Special-case the stdlib `baml.json.json` alias.  Its expanded form is
@@ -1365,6 +1392,8 @@ fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) 
         // with optional params widens to `typing.Callable[..., R]` rather than
         // referencing a stub-only Protocol.
         callback_protocols: None,
+        type_stream_accessors,
+        include_stream_done,
     };
     let rhs = translate_ty(&a.resolves_to, &ctx);
     if a.recursive {
@@ -1740,6 +1769,13 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
         out.push_str("]\n");
     }
 
+    // Stream annotations point at the underlying runtime type directly;
+    // this is the same `BamlStream` class that the `ai.stream` leaf re-exports
+    // as `Stream`.
+    if out.contains("_BamlStream[") {
+        out.insert_str(0, "\nfrom baml_bridge import BamlStream as _BamlStream\n");
+    }
+
     out
 }
 
@@ -2003,6 +2039,8 @@ fn render_symbol_pyi(
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        type_stream_accessors: true,
+        include_stream_done: true,
     };
 
     match s {
@@ -2057,8 +2095,7 @@ fn render_symbol_pyi(
             out
         }
         EmittedSymbol::TypeAlias(a) => {
-            // Type alias is identical between `.py` and `.pyi`.
-            let mut out = render_type_alias(a, leaf);
+            let mut out = render_type_alias(a, leaf, true, true);
             out.push('\n');
             out
         }
@@ -2176,12 +2213,19 @@ fn render_callable_child_protocol_pyi(
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        type_stream_accessors: true,
+        include_stream_done: true,
     };
     let child_ctx = TranslateCtx {
-        current_leaf: child_body.leaf.clone(),
+        // Child functions are exposed as methods on a Protocol emitted in the
+        // parent stub. Translate every child-local reference from the parent
+        // location so its spelling matches the parent-anchored imports.
+        current_leaf: parent_leaf.clone(),
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        type_stream_accessors: true,
+        include_stream_done: true,
     };
     let protocol_name = callable_child_protocol_name(name);
     let mut out = format!("class {protocol_name}(typing.Protocol):\n");
@@ -2368,6 +2412,11 @@ pub(crate) fn render_leaf_body_pyi(
     // the stub doesn't run at runtime, so the guard is a no-op for
     // type checkers and keeps the stub minimal.
     let mut rel_imports = body.all_rel_imports_py();
+    for child_body in callable_child_bodies.values() {
+        rel_imports.extend(child_body.all_rel_imports_from(&body.leaf));
+    }
+    rel_imports.sort();
+    rel_imports.dedup();
     if body.has_defaulted_call_params() && body.leaf.segments != ["baml"] {
         // Optional arguments annotate as `typing.Union[..., UNSET]` and
         // default to `UNSET`. The sentinel must be a bare name in the type
@@ -2467,6 +2516,8 @@ pub(crate) fn render_leaf_body_pyi(
             self_ref: None,
             defer_name_refs: false,
             callback_protocols: Some(map.clone()),
+            type_stream_accessors: true,
+            include_stream_done: true,
         };
         for (ty, _base) in &protocol_tys {
             if let Ty::Function { params, ret, .. } = ty {
@@ -2540,14 +2591,25 @@ pub(crate) fn render_leaf_body_pyi(
         out.push_str("]\n");
     }
 
-    // Referencing `ai.stream.Stream` through the generated package tree makes
-    // pyright lose the `Stream` re-export while resolving the circular
-    // `ai`/`ai.stream` stub graph. Point annotations at the underlying runtime
-    // type directly; this is the same `BamlStream` class that the
-    // `ai.stream` leaf re-exports as `Stream`.
-    if out.contains("ai.stream.Stream[") {
-        out = out.replace("ai.stream.Stream[", "_BamlStream[");
-        out.insert_str(0, "\nfrom baml_bridge import BamlStream as _BamlStream\n");
+    // Stream annotations use the bridge runtime type directly. Outside the
+    // `ai.stream` leaf, import the generated terminal marker under a private
+    // alias so nested stream types do not depend on package attribute cascades
+    // or create runtime import cycles.
+    let mut stream_imports = String::new();
+    if out.contains("_BamlStreamDone") {
+        let dots = ".".repeat(body.leaf.segments.len() + 1);
+        writeln!(
+            stream_imports,
+            "from {dots}ai.stream import Done as _BamlStreamDone"
+        )
+        .unwrap();
+    }
+    if out.contains("_BamlStream[") {
+        stream_imports.push_str("from baml_bridge import BamlStream as _BamlStream\n");
+    }
+    if !stream_imports.is_empty() {
+        stream_imports.insert(0, '\n');
+        out.insert_str(0, &stream_imports);
     }
 
     out

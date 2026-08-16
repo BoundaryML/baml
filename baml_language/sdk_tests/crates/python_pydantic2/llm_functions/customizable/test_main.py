@@ -114,6 +114,12 @@ def test_main_stream_types_lorem_leaf_present():
     )
 
 
+def test_main_nested_stream_partial_module_imports_cleanly():
+    from baml_sdk.stream_types import stream_typing
+
+    assert stream_typing.TextResultStreamHolder is not None
+
+
 def test_main_classify_sentiment_factory_bindings():
     from baml_sdk import ipsum
 

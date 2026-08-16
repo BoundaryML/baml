@@ -1072,6 +1072,14 @@ mod tests {
     #[test]
     fn callable_child_collision_uses_function_namespace_surface() {
         let mut pool: SymbolPool = HashMap::new();
+        let stream_name = cg_name("ai", &["stream"], "Stream");
+        let done_name = cg_name("ai", &["stream"], "Done");
+        let partial_name = cg_name("boundary", &["id"], "Partial");
+        let final_name = cg_name("boundary", &["id"], "Final");
+        pool.insert(stream_name.clone(), class(stream_name.clone()));
+        pool.insert(done_name.clone(), class(done_name));
+        pool.insert(partial_name.clone(), class(partial_name.clone()));
+        pool.insert(final_name.clone(), class(final_name.clone()));
         pool.insert(
             cg_name("boundary", &[], "id"),
             zero_arg_func(
@@ -1087,9 +1095,10 @@ mod tests {
             cg_name("boundary", &["id"], "current"),
             zero_arg_func(
                 "current",
-                Ty::String {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                class_ty(
+                    stream_name,
+                    vec![class_ty(partial_name, vec![]), class_ty(final_name, vec![])],
+                ),
                 "id.baml",
                 0,
             ),
@@ -1107,7 +1116,13 @@ mod tests {
         assert!(!pyi.contains("from . import id\n"));
         assert!(pyi.contains("class _BamlCallableNamespace_id(typing.Protocol):\n"));
         assert!(pyi.contains("    def __call__(self) -> str: ...\n"));
-        assert!(pyi.contains("    def current(self) -> str: ...\n"));
+        assert!(pyi.contains(
+            "from ...ai.stream import Done as _BamlStreamDone\nfrom baml_bridge import BamlStream as _BamlStream\n"
+        ));
+        assert!(pyi.contains(
+            "    def current(self) -> _BamlStream[typing.Union[vendor.boundary.id.Partial, _BamlStreamDone], vendor.boundary.id.Final]: ...\n"
+        ));
+        assert!(pyi.contains("    from ... import vendor\n"));
         assert!(pyi.contains("\nid: _BamlCallableNamespace_id\n"));
         assert!(!pyi.contains("def id() -> str: ..."));
     }
@@ -1566,7 +1581,9 @@ mod tests {
     fn stream_return_stub_imports_runtime_type_directly() {
         let mut pool: SymbolPool = HashMap::new();
         let stream_name = cg_name("ai", &["stream"], "Stream");
+        let done_name = cg_name("ai", &["stream"], "Done");
         pool.insert(stream_name.clone(), class(stream_name.clone()));
+        pool.insert(done_name.clone(), class(done_name));
 
         let mut f = bare_func("extract_resume_stream", "x.baml", 0);
         f.return_type = class_ty(
@@ -1587,9 +1604,68 @@ mod tests {
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let stub = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(stub.contains("from ..ai.stream import Done as _BamlStreamDone\n"));
         assert!(stub.contains("from baml_bridge import BamlStream as _BamlStream\n"));
-        assert!(stub.contains("def extract_resume_stream(x: int) -> _BamlStream[int, str]:"));
+        assert!(stub.contains(
+            "def extract_resume_stream(x: int) -> _BamlStream[typing.Union[int, _BamlStreamDone], str]:"
+        ));
         assert!(!stub.contains("ai.stream.Stream"));
+    }
+
+    #[test]
+    fn stream_state_class_is_not_rewritten_as_host_handle() {
+        let mut pool: SymbolPool = HashMap::new();
+        let stream_state_name = cg_name("ai", &["stream"], "Stream$stream");
+        let holder_name = cg_name("user", &["lorem"], "PartialHolder");
+        pool.insert(stream_state_name.clone(), class(stream_state_name.clone()));
+        pool.insert(
+            holder_name.clone(),
+            class_with_props(
+                holder_name,
+                vec![(
+                    "stream_state",
+                    class_ty(
+                        stream_state_name,
+                        vec![
+                            Ty::Int {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                            Ty::String {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                        ],
+                    ),
+                )],
+                "x.baml",
+                0,
+            ),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        for path in ["lorem/__init__.py", "lorem/__init__.pyi"] {
+            let leaf = &out[&PathBuf::from(path)];
+            assert!(
+                leaf.contains("stream_state: stream_types.ai.stream.Stream[int, str]"),
+                "{path} lowered a partial-state class incorrectly:\n{leaf}"
+            );
+            assert!(!leaf.contains("_BamlStream["));
+        }
+    }
+
+    #[test]
+    fn partial_alias_hoisting_ignores_the_synthetic_stream_types_prefix() {
+        let partial_ai = LeafPath {
+            segments: vec!["stream_types".into(), "ai".into()],
+        };
+
+        assert!(crate::leaf::routes_outside_package(
+            &partial_ai,
+            &cg_name("baml", &["media"], "Image"),
+        ));
+        assert!(!crate::leaf::routes_outside_package(
+            &partial_ai,
+            &cg_name("ai", &["content"], "Media"),
+        ));
     }
 
     #[test]
