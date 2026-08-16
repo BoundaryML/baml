@@ -37,6 +37,16 @@
     # index's inputs have `internal` visibility; none is on this path, which
     # is why the rev is PINNED rather than tracking main - a future input
     # change must not be able to silently break fork PRs.
+    #
+    # TODO(pin-bump): the musl and gnu graphs' `nextestExport` requires the
+    # index rev carrying the whole-workspace nextest metadata export (forge
+    # main kynplkpmlkqu / ea527d85eabe, 2026-08-16; mirror publish pending).
+    # This PR ships as a draft against the old pin; the pin + flake.lock
+    # bump lands as a follow-up commit once the mirror publishes, together
+    # with the anonymous-eval re-verification at the new rev and
+    # `compiler.embedMetadata = true` per the HAZARD note on the msrv graph.
+    # Until then `.#musl-test-export` does not evaluate - by design, the
+    # probe fails open to the cargo arm.
     index.url = "github:indexable-inc/index/efe77d641f76398ebf979735760df8e31e7153c2";
     crane = {
       url = "github:ipetkov/crane";
@@ -610,6 +620,105 @@
           packageBuildEnv = graphPackageBuildEnv;
         };
 
+        # ------------------------------------------------------------------
+        # L2, the musl lane
+        # ------------------------------------------------------------------
+        #
+        # The first lane that RUNS what it builds. The graph produces the
+        # test binaries; the job hands them to cargo-nextest via the
+        # machinery's whole-workspace `nextestExport` (binaries-metadata +
+        # cargo-metadata whose interpolated store paths pin every test
+        # binary into one substitutable closure), and nextest executes them
+        # in the real checkout with --workspace-remap. The tests run in the
+        # same runner environment on both arms, so arm equivalence holds the
+        # same way it does for the compile-only lanes: the only thing a
+        # cache hit changes is who compiled.
+        #
+        # Same toolchain file as devShells.ci and the wasm graph, with the
+        # musl target added: baml_language/rust-toolchain.toml lists only
+        # wasm32, so the target is added here exactly the way the job's
+        # no-nix fallback does with `rustup target add`.
+        muslToolchain = rustOverlayPkgs.rust-bin.stable.${ciRustChannel}.minimal.override {
+          targets = [ "x86_64-unknown-linux-musl" ];
+        };
+
+        # The full musl cross gcc, NOT nixpkgs' thin `musl-gcc` libc wrapper:
+        # the wrapper links broken static-PIE binaries. Same fix, same
+        # reasoning as nix/ci-shell.nix's musl-gcc and the pool image's --
+        # this one just resolves against the graph's own nixpkgs.
+        muslCc = idxPkgs.pkgsCross.musl64.stdenv.cc;
+
+        muslWorkspace = cargoUnit.buildWorkspace {
+          src = ./baml_language;
+          workspaceRoot = ./baml_language;
+          rustToolchain = muslToolchain;
+
+          # Same reason as the msrv graph: cache.ix.dev 404s /realisations,
+          # so a floating-CA output is unsubstitutable through the only cache
+          # the pool guests can read.
+          contentAddressed = false;
+          policy = cargoUnit.policyPresets.pureBuild;
+
+          # One graph per triple is the machinery's own rule -- the triple
+          # is a first-class argument, same as the wasm graph.
+          target = "x86_64-unknown-linux-musl";
+
+          # The lane runs bare `cargo test --no-run` (dev + test); stated
+          # explicitly for the same debug_assertions reason as the msrv
+          # graph.
+          profile = "dev";
+
+          # The lane's exact selection: NO --all-features, deliberately --
+          # every feature turns on the optional native-tls backend, which
+          # needs a target-specific OpenSSL build; default features match
+          # the rustls-based musl artifacts shipped (the workflow says the
+          # same above its build step). Exclusions mirror the job's cargo
+          # line verbatim.
+          cargoTargets = [
+            [
+              "--workspace"
+              "--tests"
+              "--exclude"
+              "baml_tests"
+              "--exclude"
+              "sdk_test_*"
+              "--exclude"
+              "baml_bridge"
+            ]
+          ];
+          cargoTargetNames = [ "musl" ];
+
+          env = {
+            # Same two reasons as the msrv graph: cargo-unit does not read
+            # cargo config's [env] table, and the workflow pins opt-level 1
+            # on both profiles workflow-wide.
+            RUST_MIN_STACK = "67108864";
+            CARGO_PROFILE_DEV_OPT_LEVEL = "1";
+            CARGO_PROFILE_TEST_OPT_LEVEL = "1";
+
+            # NO debug=0 here, per the msrv graph's own warning: this lane
+            # RUNS its binaries, so dropping debuginfo costs backtrace
+            # quality on real failures. The closure consequence is real
+            # (msrv measured 93.29 GiB at full dev debuginfo vs 10.23 GiB at
+            # debug=0) and is why nix/l2-roots.txt demands measuring this
+            # graph's closure BEFORE the builder picks it up. If it blows
+            # the builder's 30 GiB refusal, the mitigation is
+            # `line-tables-only` set on BOTH arms in the same commit (the
+            # workflow env and here), never on one.
+
+            # The linker seam the job wires via setup-musl-cross: without
+            # it, the musl target links with the default glibc gcc and dies
+            # on `-ldl` (musl folds libdl into libc).
+            CC_x86_64_unknown_linux_musl = "${muslCc}/bin/x86_64-unknown-linux-musl-gcc";
+            CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER = "${muslCc}/bin/x86_64-unknown-linux-musl-gcc";
+          };
+
+          # Scoped envs for packages this graph excludes are inert, and one
+          # table serving every graph is the point (see the msrv note).
+          nativeBuildInputs = graphNativeBuildInputs;
+          packageBuildEnv = graphPackageBuildEnv;
+        };
+
         # Common source filtering for crane
         src = pkgs.lib.cleanSourceWith {
           src = ./engine;
@@ -907,6 +1016,39 @@
         packages.wasm-package-list = idxPkgs.writeText "baml-wasm-packages" (
           nixpkgs.lib.concatMapStrings (name: name + "\n") wasmPackages
         );
+
+        # The musl lane's root: the machinery's whole-workspace nextest
+        # export. Not a `-check` blob of binaries -- the export's two JSON
+        # manifests interpolate every test binary's store path, so
+        # substituting THIS one derivation substitutes the manifests and all
+        # test binaries in one move, and the job hands them straight to
+        # `cargo nextest run --binaries-metadata`. The name follows the
+        # l2-roots contract (<lane>-<what it is>).
+        packages.musl-test-export =
+          if pkgs.stdenv.isDarwin then
+            throw "packages.musl-test-export builds the Linux CI lane's unit graph; there is no Darwin lane to mirror"
+          else
+            muslWorkspace.nextestExport;
+
+        packages.musl-eval-roots =
+          if pkgs.stdenv.isDarwin then
+            throw "packages.musl-eval-roots belongs to the Linux musl graph"
+          else
+            idxPkgs.runCommand "baml-musl-eval-roots"
+              {
+                __structuredAttrs = true;
+                strictDeps = true;
+                roots = [
+                  muslWorkspace.unitsNix
+                  muslWorkspace.unitGraphJson
+                  muslWorkspace.vendorDir
+                ];
+              }
+              ''
+                set -euo pipefail
+                mkdir -p "$out"
+                printf '%s\n' "''${roots[@]}" > "$out/eval-roots"
+              '';
 
         packages.default = bamlRustPackage {
           pname = "baml-cli";

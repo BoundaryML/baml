@@ -60,3 +60,11 @@ msrv-eval-roots
 
 wasm-check
 wasm-eval-roots
+
+# The musl graph keeps debuginfo ON (its binaries RUN, backtraces matter),
+# so the measure-first rule above applies with force: measure
+# `nix path-info -Sh .#musl-test-export` before the builder's first tick on
+# this root. If it trips the 30 GiB refusal, the mitigation is
+# `line-tables-only` on BOTH arms in one commit, never debug=0.
+musl-test-export
+musl-eval-roots
