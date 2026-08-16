@@ -45,6 +45,9 @@ pub enum ExternalLinkability {
 pub struct ExternalCallable {
     pub target: ExternalCallTarget,
     pub linkability: ExternalLinkability,
+    /// Preserved so source-less consumers can lower compiler intrinsics and
+    /// await/sys-op call shapes through the same road as source functions.
+    pub builtin_kind: Option<baml_compiler2_ast::BuiltinKind>,
     pub takes_self: bool,
     pub owner_generic_params: Vec<baml_type::ParamTy>,
     pub owner_generic_param_bounds: Vec<Vec<baml_type::Interface>>,

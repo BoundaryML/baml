@@ -164,7 +164,7 @@ function mismatched_function_contract() -> null throws unknown {
   null
 }
 
-function alias_order_and_reserved_names() -> string throws unknown {
+function alias_order_and_reserved_names() -> bool throws unknown {
   let root_package = reflect.Package.current()
   let generated = reflect.Package.compile(
     { "main.baml": #"
@@ -172,11 +172,21 @@ function Read(state: app.AgentState) -> string {
   app.Plan(state) + ":" + baml.Array.length(["o", "k"]).to_string()
 }
 "# },
-    packages = { "z_last": root_package, "baml": root_package, "app": root_package },
+    packages = { "z_last": root_package, "app": root_package },
   )
   let read = generated.get_function<(AgentState) -> string>("root.Read")
     ?? throw "missing root.Read"
-  read(AgentState { goal: "ordered", history: [] })
+  let ordered = read(AgentState { goal: "ordered", history: [] }) == "planned ordered:2"
+
+  let rejected = false
+  let _ = reflect.Package.compile(
+    { "main.baml": "function main() -> int { 1 }" },
+    packages = { "baml": root_package },
+  ) catch (e) {
+    baml.reflect.errors.CompilationError => { rejected = true },
+    _ => throw e,
+  }
+  ordered && rejected
 }
 
 test "enumerated package test" {
@@ -231,6 +241,42 @@ async fn scenario_5_compiles_parses_and_encodes_runtime_schema() {
             r#"{"account":"AC-1","amount":42}"#.into()
         ))
     );
+}
+
+/// The compiler-built stdlib remains the host image's immutable dispatch
+/// world: a runtime-compiled generic bound must resolve the same stdlib impl
+/// rule and inherited default method as statically compiled code.
+#[tokio::test]
+async fn runtime_compiled_code_dispatches_through_static_stdlib_impls() {
+    let output = baml_test!(
+        r####"
+function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws never {
+  let count = 0
+  for (let i = 0; i < n; i += 1) {
+    if value <= value { count += 1 } else { count -= 1 }
+  }
+  count
+}
+
+function main() -> bool throws unknown {
+  let package = reflect.Package.compile({ "dispatch.baml": #"
+function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws never {
+  let count = 0
+  for (let i = 0; i < n; i += 1) {
+    if value <= value { count += 1 } else { count -= 1 }
+  }
+  count
+}
+function run(n: int) -> int throws never { compare_hot<int>(7, n) }
+"# })
+  let run = package.get_function<(int) -> int>("root.run") ?? throw "missing run"
+  let before_gc = run(100)
+  baml.sys.collect_garbage()
+  compare_hot<int>(7, 100) == before_gc && before_gc == run(100)
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
 #[tokio::test]
@@ -374,10 +420,7 @@ async fn get_function_mismatch_throws_compiler_subtyping_diagnostic() {
 #[tokio::test]
 async fn alias_maps_are_order_independent_and_cannot_shadow_stdlib() {
     let output = baml_test!(baml: SCENARIO_6_SOURCE, entry: "alias_order_and_reserved_names");
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("planned ordered:2".into()))
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
 #[tokio::test]

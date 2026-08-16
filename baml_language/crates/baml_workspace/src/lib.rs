@@ -159,6 +159,15 @@ pub struct SeededStdlibInterface {
 pub struct MountedPackages {
     #[returns(ref)]
     pub by_package: std::collections::BTreeMap<String, Vec<u8>>,
+
+    /// Names whose blobs are compiler-built, image-immutable dependencies.
+    ///
+    /// This is deliberately metadata on the mounted-package transport rather
+    /// than a second interface store: both ordinary runtime mounts and the
+    /// precompiled stdlib use the same `PackageInterface` bytes, while the
+    /// compiler can still keep immutable rows on its fact-free fast path.
+    #[returns(ref)]
+    pub immutable_precompiled: std::collections::BTreeSet<String>,
 }
 
 /// Input: the project root configuration

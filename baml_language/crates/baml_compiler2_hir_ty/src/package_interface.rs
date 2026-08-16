@@ -19,7 +19,7 @@ use baml_compiler2_hir::{
     contributions::Definition,
     file_package,
     loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
-    package::{PackageId, PackageItems, is_mounted_package, package_dependencies},
+    package::{PackageId, PackageItems, is_external_package, package_dependencies},
 };
 use baml_type::{FunctionParamMode, FunctionParamTy, ParamTy, QualifiedTypeName, Ty, TyAttr};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -243,6 +243,7 @@ pub(crate) fn resolved_exported_function(
         external: Some(Arc::new(crate::callable::ExternalCallable {
             target: function.target.clone(),
             linkability: function.linkability,
+            builtin_kind: function.builtin_kind,
             takes_self,
             owner_generic_params,
             owner_generic_param_bounds,
@@ -343,7 +344,7 @@ pub fn mounted_interface<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     package: &Name,
 ) -> Option<&'db PackageInterface> {
-    is_mounted_package(db, package)
+    is_external_package(db, package)
         .then(|| package_interface(db, PackageId::new(db, package.clone())))
 }
 
@@ -951,11 +952,14 @@ pub fn package_interface<'db>(
     // A mounted package has no source rows. Its serialized interface is the
     // authoritative compiler surface; stale/corrupt blobs fail closed by
     // falling through to the empty honest derivation.
-    if is_mounted_package(db, &pkg_name)
+    if is_external_package(db, &pkg_name)
         && let Some(mounted) = db.mounted_packages()
         && let Some(bytes) = mounted.by_package(db).get(pkg_name.as_str())
-        && let Ok(interface) = borsh::from_slice::<PackageInterface>(bytes)
+        && let Ok(mut interface) = borsh::from_slice::<PackageInterface>(bytes)
     {
+        if baml_compiler2_hir::package::is_precompiled_package(db, &pkg_name) {
+            mark_precompiled_callables_linkable(&mut interface);
+        }
         return interface;
     }
 
@@ -969,6 +973,56 @@ pub fn package_interface<'db>(
     }
 
     fold_package_interface(db, pkg_id)
+}
+
+/// Builtin functions are unsafe to expose from an arbitrary mounted blob, but
+/// a compiler-built stdlib row links to the exact function already present in
+/// the immutable prefix. Upgrade only that trusted transport to the ordinary
+/// symbolic-link contract.
+fn mark_precompiled_callables_linkable(interface: &mut PackageInterface) {
+    let mark = |function: &mut ExportedFunction| {
+        if matches!(
+            function.builtin_kind,
+            Some(BuiltinKind::Vm | BuiltinKind::Io)
+        ) {
+            function.linkability = ExternalLinkability::Linkable;
+        }
+    };
+    for function in interface
+        .functions
+        .values_mut()
+        .flat_map(|namespace| namespace.values_mut())
+    {
+        mark(function);
+    }
+    for exported in interface
+        .types
+        .values_mut()
+        .flat_map(|namespace| namespace.values_mut())
+    {
+        match exported {
+            ExportedType::Class { methods, .. } => {
+                for function in methods {
+                    mark(function);
+                }
+            }
+            ExportedType::Interface {
+                required_methods,
+                default_methods,
+                ..
+            } => {
+                for function in required_methods.iter_mut().chain(default_methods) {
+                    mark(function);
+                }
+            }
+            ExportedType::Enum { .. } | ExportedType::TypeAlias { .. } => {}
+        }
+    }
+    for implementation in &mut interface.impls {
+        for function in &mut implementation.methods {
+            mark(function);
+        }
+    }
 }
 
 /// Lower the package's implementation registry into a canonical, loc-free
@@ -1376,7 +1430,7 @@ impl<'db> PackageResolutionContext<'db> {
             }
             for (dep_name, dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
-                    if is_mounted_package(db, dep_name) {
+                    if is_external_package(db, dep_name) {
                         let function = dep_iface.lookup_function(&path[1..path.len() - 1], item)?;
                         return Some(ResolvedValue::Exported(Box::new(
                             resolved_exported_function(function, Vec::new(), Vec::new()),

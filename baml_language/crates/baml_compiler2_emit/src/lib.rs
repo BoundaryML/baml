@@ -558,7 +558,7 @@ fn build_packages(
     // mounted artifact before walking the consumer's source blocks: otherwise
     // `class Local { implements dep.I {} }` would prove membership at check
     // time but emit neither inherited defaults nor virtual-field links.
-    for package in baml_compiler2_hir::package::mounted_package_names(db) {
+    for package in baml_compiler2_hir::package::external_package_names(db) {
         let Some(interface) =
             baml_compiler2_hir_ty::package_interface::mounted_interface(db, &package)
         else {
@@ -1724,6 +1724,23 @@ pub fn emit_units(
     decompose_units(db, options, &program)
 }
 
+/// Emit relocatable source units on top of a compiler-built stdlib prefix.
+///
+/// The prefix is used for semantic/runtime symbol indices during lowering but
+/// is not decomposed back into units: every reference from a returned source
+/// unit to the prefix becomes a normal symbolic import. Linking that unit into
+/// the host image therefore resolves stdlib symbols to the host's immutable
+/// objects and impl rules instead of copying them into a runtime package.
+pub fn emit_units_with_stdlib(
+    db: &dyn crate::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    stdlib: &Program,
+) -> Result<Vec<CompilationUnit>, LoweringError> {
+    let program = generate_project_bytecode_with_stdlib(db, options, opt, stdlib)?;
+    decompose_units_after_prefix(db, options, &program, stdlib.objects.len())
+}
+
 /// Per-object attribution kind, computed during the pool walk.
 enum PoolObjKind {
     Class,
@@ -1753,6 +1770,16 @@ pub fn decompose_units(
     db: &dyn baml_compiler2_mir::Db,
     options: &CompileOptions,
     program: &Program,
+) -> Result<Vec<CompilationUnit>, LoweringError> {
+    decompose_units_after_prefix(db, options, program, 0)
+}
+
+#[allow(clippy::too_many_lines)]
+fn decompose_units_after_prefix(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    program: &Program,
+    prefix_objects: usize,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
     let all_files = compiler2_all_files(db);
     let n_files = all_files.len();
@@ -1847,18 +1874,18 @@ pub fn decompose_units(
             // No regular functions at all (e.g. a dirty-only emit whose sole
             // tail-producing file declares only a top-level `let`): the tail
             // begins right after the class/enum/interface definition prefix.
-            tail_start = class_owner.len() + enum_owner.len() + iface_owner.len();
+            tail_start = prefix_objects + class_owner.len() + enum_owner.len() + iface_owner.len();
         }
     }
 
     // ---- Attribute every regular pool object to a file ----------------------
     let mut obj_owner: Vec<usize> = vec![usize::MAX; n_obj];
-    let mut obj_kind: Vec<PoolObjKind> = Vec::with_capacity(tail_start);
+    let mut obj_kind: Vec<PoolObjKind> = Vec::with_capacity(tail_start - prefix_objects);
     let (mut ci, mut ei, mut ii) = (0usize, 0usize, 0usize);
     // The index drives three sequences (pool read, `obj_owner` write, `obj_kind`
     // push), so a range loop is clearer than juggling parallel iterators.
     #[allow(clippy::needless_range_loop)]
-    for idx in 0..tail_start {
+    for idx in prefix_objects..tail_start {
         let obj = &program.objects[ObjectIndex::from_raw(idx)];
         let (owner, kind) = match obj {
             Object::Class(_) => {
@@ -1933,7 +1960,7 @@ pub fn decompose_units(
     // in the pool (a function's constants are interned before its own object is
     // pushed). Scan backwards, carrying the most recent function's owner.
     let mut next_func_owner = usize::MAX;
-    for idx in (0..tail_start).rev() {
+    for idx in (prefix_objects..tail_start).rev() {
         match &program.objects[ObjectIndex::from_raw(idx)] {
             Object::Function(_) => next_func_owner = obj_owner[idx],
             Object::String(_)
@@ -1961,8 +1988,9 @@ pub fn decompose_units(
         })
         .collect();
     // Per pool object: its LocalRef within its owning unit (bucket + offset).
-    let mut obj_localref: Vec<LocalRef> = Vec::with_capacity(tail_start);
-    for (idx, kind) in obj_kind.iter().enumerate() {
+    let mut obj_localref: Vec<LocalRef> = Vec::with_capacity(tail_start - prefix_objects);
+    for (offset, kind) in obj_kind.iter().enumerate() {
+        let idx = prefix_objects + offset;
         let u = obj_owner[idx];
         let obj = program.objects[ObjectIndex::from_raw(idx)].clone();
         let local_ref = match kind {
@@ -2004,8 +2032,8 @@ pub fn decompose_units(
     // order, `let` ordinals follow file order.
     let mut name_to_local_global: HashMap<String, (usize, u32)> = HashMap::new();
     let mut func_next: Vec<u32> = vec![0; n_files];
-    for idx in 0..tail_start {
-        if let PoolObjKind::NamedFn(name) = &obj_kind[idx] {
+    for idx in prefix_objects..tail_start {
+        if let PoolObjKind::NamedFn(name) = &obj_kind[idx - prefix_objects] {
             // Only functions that own a global slot participate.
             if program.function_global_indices.contains_key(name) {
                 let u = obj_owner[idx];
@@ -2047,7 +2075,7 @@ pub fn decompose_units(
         // Precompute this unit's flat-local index for each pool object it owns.
         // (Captured references keep the closure `Fn`.)
         let flat_local = |abs: usize| -> usize {
-            match obj_localref[abs] {
+            match obj_localref[abs - prefix_objects] {
                 LocalRef::Class(k) => k as usize,
                 LocalRef::Enum(k) => c + k as usize,
                 LocalRef::Interface(k) => c + e + k as usize,
@@ -2059,10 +2087,10 @@ pub fn decompose_units(
             rewrite_pool_operands(
                 object,
                 |target| {
-                    if obj_owner[target] == u {
+                    if target >= prefix_objects && obj_owner[target] == u {
                         Ok(flat_local(target))
                     } else {
-                        let sym = object_symbol(program, target, &obj_kind, &slot_to_name)?;
+                        let sym = object_symbol(program, target, &fn_obj_name, &slot_to_name)?;
                         let import_idx = intern_import(
                             &mut object_imports,
                             &mut obj_import_idx,
@@ -2118,18 +2146,21 @@ pub fn decompose_units(
     }
 
     // ---- Export tables ------------------------------------------------------
-    for idx in 0..tail_start {
+    for idx in prefix_objects..tail_start {
         let u = obj_owner[idx];
-        match &obj_kind[idx] {
+        match &obj_kind[idx - prefix_objects] {
             PoolObjKind::Class | PoolObjKind::Enum | PoolObjKind::Interface => {
                 let fq = def_object_fq(&program.objects[ObjectIndex::from_raw(idx)]);
-                units[u].exports.objects.push((fq, obj_localref[idx]));
+                units[u]
+                    .exports
+                    .objects
+                    .push((fq, obj_localref[idx - prefix_objects]));
             }
             PoolObjKind::NamedFn(name) => {
                 units[u]
                     .exports
                     .objects
-                    .push((name.clone(), obj_localref[idx]));
+                    .push((name.clone(), obj_localref[idx - prefix_objects]));
             }
             PoolObjKind::CodeAnon => {}
         }
@@ -2151,7 +2182,7 @@ pub fn decompose_units(
         let tail = build_init_tail(
             program,
             tail_start,
-            &obj_kind,
+            &fn_obj_name,
             &slot_to_name,
             &let_name_to_file,
         )?;
@@ -2172,8 +2203,13 @@ pub fn decompose_units(
         package_first_unit.entry(pkg.clone()).or_insert(u);
     }
     for (pkg_name, pkg) in &program.packages {
+        let Some(&carrier) = package_first_unit.get(pkg_name) else {
+            // Source-less dependency packages are supplied by the linked
+            // prefix. Their package fragments must stay in that immutable
+            // image rather than being copied onto a consumer unit.
+            continue;
+        };
         let frag = build_package_fragment(program, pkg, &fn_obj_name)?;
-        let carrier = package_first_unit.get(pkg_name).copied().unwrap_or(0);
         units[carrier].package_fragment = frag;
     }
 
@@ -2371,7 +2407,7 @@ fn tail_generic_dupes_clean(
 fn object_symbol(
     program: &Program,
     target: usize,
-    obj_kind: &[PoolObjKind],
+    fn_obj_name: &HashMap<usize, String>,
     slot_to_name: &[Option<String>],
 ) -> Result<Symbol, LoweringError> {
     let obj = &program.objects[ObjectIndex::from_raw(target)];
@@ -2404,15 +2440,14 @@ fn object_symbol(
                 Object::Class(c) => (SymbolKind::Class, c.name.to_string()),
                 Object::Enum(e) => (SymbolKind::Enum, e.name.to_string()),
                 Object::Interface(i) => (SymbolKind::Interface, i.name.to_string()),
-                Object::Function(_) => match &obj_kind[target] {
-                    PoolObjKind::NamedFn(name) => (SymbolKind::Function, name.clone()),
-                    PoolObjKind::CodeAnon => {
+                Object::Function(_) => match fn_obj_name.get(&target) {
+                    Some(name) => (SymbolKind::Function, name.clone()),
+                    None => {
                         return Err(LoweringError::Internal(format!(
                             "cross-unit reference to lambda object {target} (lambdas \
                              are never cross-unit)"
                         )));
                     }
-                    _ => unreachable!("function object with non-function kind"),
                 },
                 _ => {
                     return Err(LoweringError::Internal(format!(
@@ -2516,7 +2551,7 @@ fn build_package_fragment(
 fn build_init_tail(
     program: &Program,
     tail_start: usize,
-    obj_kind: &[PoolObjKind],
+    fn_obj_name: &HashMap<usize, String>,
     slot_to_name: &[Option<String>],
     let_name_to_file: &HashMap<String, usize>,
 ) -> Result<bex_vm_types::InitTail, LoweringError> {
@@ -2583,7 +2618,7 @@ fn build_init_tail(
                 if t >= tail_start {
                     Ok(t - tail_start)
                 } else {
-                    let sym = object_symbol(program, t, obj_kind, slot_to_name)?;
+                    let sym = object_symbol(program, t, fn_obj_name, slot_to_name)?;
                     let import_idx = intern_import(
                         &mut object_imports,
                         &mut obj_import_idx,
@@ -2747,10 +2782,19 @@ fn generate_impl(
     skip_clean: Option<&HashSet<String>>,
 ) -> Result<Program, LoweringError> {
     let mut all_files = compiler2_all_files(db);
-    let builtin_count = all_files
-        .iter()
-        .take_while(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"))
-        .count();
+    let builtin_count = if base.is_some()
+        && !baml_compiler2_hir::package::precompiled_package_names(db).is_empty()
+    {
+        // A source-less stdlib database has no builtin sources to skip. Any
+        // `<builtin>/…` files it does hold are link stubs for ordinary runtime
+        // mounts and must be emitted into temporary dependency units.
+        0
+    } else {
+        all_files
+            .iter()
+            .take_while(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"))
+            .count()
+    };
     if stdlib_only {
         // The builtin prefix is user-independent, so compiling "just the
         // stdlib" is the full pipeline over the builtin files alone.
@@ -2846,7 +2890,7 @@ fn generate_impl(
     // their compiled package records from the linked prefix after the ordinary
     // source-backed package pass rebuilds the consumer metadata.
     if let Some(base) = base {
-        for pkg_name in baml_compiler2_hir::package::mounted_package_names(db) {
+        for pkg_name in baml_compiler2_hir::package::external_package_names(db) {
             let Some(base_pkg) = base.packages.get(&pkg_name) else {
                 continue;
             };

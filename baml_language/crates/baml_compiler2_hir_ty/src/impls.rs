@@ -334,10 +334,32 @@ pub struct MountedImplFacts {
     pub associated_types: Vec<(Name, Ty)>,
 }
 
+// SAFETY: mounted/precompiled facts are fully owned interned values and
+// collections. PartialEq therefore completely determines whether Salsa may
+// retain the old allocation.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for MountedImplFacts {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub enum ResolvedImplFacts<'db> {
     Source(&'db ImplFacts<'db>),
     Mounted(MountedImplFacts),
+    /// Compiler-built source-less facts are re-hydrated from a tracked row and
+    /// borrowed, keeping the memoized candidate entry fact-free like Source.
+    Precompiled(&'db MountedImplFacts),
 }
 
 impl ResolvedImplFacts<'_> {
@@ -345,6 +367,7 @@ impl ResolvedImplFacts<'_> {
         match self {
             Self::Source(facts) => &facts.interface,
             Self::Mounted(facts) => &facts.interface,
+            Self::Precompiled(facts) => &facts.interface,
         }
     }
 
@@ -352,6 +375,7 @@ impl ResolvedImplFacts<'_> {
         match self {
             Self::Source(facts) => &facts.for_ty_pattern,
             Self::Mounted(facts) => &facts.for_ty_pattern,
+            Self::Precompiled(facts) => &facts.for_ty_pattern,
         }
     }
 
@@ -359,6 +383,7 @@ impl ResolvedImplFacts<'_> {
         match self {
             Self::Source(facts) => &facts.generic_params,
             Self::Mounted(facts) => &facts.generic_params,
+            Self::Precompiled(facts) => &facts.generic_params,
         }
     }
 
@@ -366,6 +391,7 @@ impl ResolvedImplFacts<'_> {
         match self {
             Self::Source(facts) => &facts.associated_types,
             Self::Mounted(facts) => &facts.associated_types,
+            Self::Precompiled(facts) => &facts.associated_types,
         }
     }
 }
@@ -379,6 +405,14 @@ pub enum ResolvedImplOrigin<'db> {
     },
     Mounted {
         methods: Vec<crate::package_interface::ExportedFunction>,
+    },
+    /// A compiler-built immutable interface row. Methods and facts borrow from
+    /// tracked artifact queries; unlike a live mount, no owned fact payload is
+    /// retained in each impl-cache entry.
+    Precompiled {
+        package: PackageId<'db>,
+        row: u32,
+        methods: &'db [crate::package_interface::ExportedFunction],
     },
 }
 
@@ -402,6 +436,8 @@ enum CachedResolvedImplOrigin<'db> {
         methods: Vec<crate::package_interface::ExportedFunction>,
         facts: MountedImplFacts,
     },
+    /// Fact-free identity for an immutable compiler-built interface row.
+    Precompiled { package: PackageId<'db>, row: u32 },
 }
 
 #[derive(Clone, PartialEq)]
@@ -499,8 +535,10 @@ impl<'db> ResolvedImpl<'db> {
         &self,
         name: &Name,
     ) -> Option<&crate::package_interface::ExportedFunction> {
-        let ResolvedImplOrigin::Mounted { methods } = &self.origin else {
-            return None;
+        let methods = match &self.origin {
+            ResolvedImplOrigin::Mounted { methods } => methods.as_slice(),
+            ResolvedImplOrigin::Precompiled { methods, .. } => *methods,
+            ResolvedImplOrigin::Source { .. } => return None,
         };
         methods.iter().find(|method| method.name == *name)
     }
@@ -508,7 +546,7 @@ impl<'db> ResolvedImpl<'db> {
     pub fn source_block(&self) -> Option<ImplLoc<'db>> {
         match self.origin {
             ResolvedImplOrigin::Source { block, .. } => Some(block),
-            ResolvedImplOrigin::Mounted { .. } => None,
+            ResolvedImplOrigin::Mounted { .. } | ResolvedImplOrigin::Precompiled { .. } => None,
         }
     }
 }
@@ -717,6 +755,27 @@ pub fn impls_for_type<'db>(
                 facts: ResolvedImplFacts::Mounted(facts.clone()),
                 bindings: cached.bindings.clone(),
             },
+            CachedResolvedImplOrigin::Precompiled { package, row } => {
+                let row_index = usize::try_from(*row).expect("precompiled impl row fits usize");
+                let interface = crate::package_interface::mounted_interface(db, &package.name(db))
+                    .expect("cached precompiled package remains installed");
+                let exported = interface
+                    .impls
+                    .get(row_index)
+                    .expect("cached precompiled impl row remains present");
+                let facts = precompiled_impl_facts(db, *package, *row)
+                    .as_ref()
+                    .expect("cached precompiled impl facts remain present");
+                ResolvedImpl {
+                    origin: ResolvedImplOrigin::Precompiled {
+                        package: *package,
+                        row: *row,
+                        methods: &exported.methods,
+                    },
+                    facts: ResolvedImplFacts::Precompiled(facts),
+                    bindings: cached.bindings.clone(),
+                }
+            }
         })
         .collect()
 }
@@ -810,6 +869,10 @@ fn impls_for_type_cached<'db>(
                 (ResolvedImplOrigin::Mounted { methods }, ResolvedImplFacts::Mounted(facts)) => {
                     CachedResolvedImplOrigin::Mounted { methods, facts }
                 }
+                (
+                    ResolvedImplOrigin::Precompiled { package, row, .. },
+                    ResolvedImplFacts::Precompiled(_),
+                ) => CachedResolvedImplOrigin::Precompiled { package, row },
                 _ => unreachable!("impl candidate origin and facts have the same provenance"),
             };
             out.push(CachedResolvedImpl { origin, bindings });
@@ -825,7 +888,7 @@ fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<PackageId<'_>> {
         .into_iter()
         .map(|file| baml_compiler2_hir::file_package::file_package(db, file).package)
         .collect();
-    names.extend(baml_compiler2_hir::package::mounted_package_names(db));
+    names.extend(baml_compiler2_hir::package::external_package_names(db));
     names.sort();
     names.dedup();
     names
@@ -850,43 +913,89 @@ fn package_impl_candidates<'db>(
                 ResolvedImplFacts::Source(facts),
             ))
         });
-    let mounted = crate::package_interface::mounted_interface(db, &package.name(db))
+    let precompiled = baml_compiler2_hir::package::is_precompiled_package(db, &package.name(db));
+    let immutable = precompiled
+        .then(|| crate::package_interface::mounted_interface(db, &package.name(db)))
         .into_iter()
+        .flatten()
+        .flat_map(move |interface| {
+            interface
+                .impls
+                .iter()
+                .enumerate()
+                .filter_map(move |(index, row)| {
+                    let row_index = u32::try_from(index).ok()?;
+                    let facts = precompiled_impl_facts(db, package, row_index).as_ref()?;
+                    Some((
+                        ResolvedImplOrigin::Precompiled {
+                            package,
+                            row: row_index,
+                            methods: &row.methods,
+                        },
+                        ResolvedImplFacts::Precompiled(facts),
+                    ))
+                })
+        });
+    let mounted = (!precompiled)
+        .then(|| crate::package_interface::mounted_interface(db, &package.name(db)))
+        .into_iter()
+        .flatten()
         .flat_map(move |interface| {
             interface.impls.iter().map(|row| {
-                let generic_params = row
-                    .generic_params
-                    .iter()
-                    .enumerate()
-                    .map(|(index, param)| {
-                        let bounds = row
-                            .param_bounds
-                            .get(index)
-                            .into_iter()
-                            .flatten()
-                            .map(InterfaceRef::from_constraint)
-                            .collect();
-                        (param.clone(), bounds)
-                    })
-                    .collect();
                 (
                     ResolvedImplOrigin::Mounted {
                         methods: row.methods.clone(),
                     },
-                    ResolvedImplFacts::Mounted(MountedImplFacts {
-                        interface: InterfaceRef::from_constraint(&row.interface),
-                        for_ty_pattern: Ty::from_plain(&row.for_ty_pattern),
-                        generic_params,
-                        associated_types: row
-                            .associated_types
-                            .iter()
-                            .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
-                            .collect(),
-                    }),
+                    ResolvedImplFacts::Mounted(exported_impl_facts(row)),
                 )
             })
         });
-    source.chain(mounted)
+    source.chain(immutable).chain(mounted)
+}
+
+fn exported_impl_facts(row: &crate::package_interface::ExportedImpl) -> MountedImplFacts {
+    let generic_params = row
+        .generic_params
+        .iter()
+        .enumerate()
+        .map(|(index, param)| {
+            let bounds = row
+                .param_bounds
+                .get(index)
+                .into_iter()
+                .flatten()
+                .map(InterfaceRef::from_constraint)
+                .collect();
+            (param.clone(), bounds)
+        })
+        .collect();
+    MountedImplFacts {
+        interface: InterfaceRef::from_constraint(&row.interface),
+        for_ty_pattern: Ty::from_plain(&row.for_ty_pattern),
+        generic_params,
+        associated_types: row
+            .associated_types
+            .iter()
+            .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+            .collect(),
+    }
+}
+
+/// Rehydrate an immutable compiler-built impl row through a tracked query.
+/// Cache entries retain only `(package, row)`; all callers borrow this shared
+/// fact value and record the live package-interface dependency.
+#[salsa::tracked(returns(ref))]
+fn precompiled_impl_facts<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    package: PackageId<'db>,
+    row: u32,
+) -> Option<MountedImplFacts> {
+    if !baml_compiler2_hir::package::is_precompiled_package(db, &package.name(db)) {
+        return None;
+    }
+    let interface = crate::package_interface::mounted_interface(db, &package.name(db))?;
+    let row = interface.impls.get(usize::try_from(row).ok()?)?;
+    Some(exported_impl_facts(row))
 }
 
 /// Every impl block implementing `interface_name`, drawn from the

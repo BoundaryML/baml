@@ -396,6 +396,37 @@ pub fn mounted_package_names(db: &dyn crate::Db) -> Vec<Name> {
         .collect()
 }
 
+/// Compiler-built, source-less stdlib packages carried by the mounted-package
+/// interface transport.
+///
+/// Reserved names are accepted only when both the immutable marker and the
+/// blob are present, and only for names in the embedded stdlib manifest. A
+/// caller therefore cannot use ordinary mounting to shadow a builtin package.
+pub fn precompiled_package_names(db: &dyn crate::Db) -> Vec<Name> {
+    let Some(mounted) = db.mounted_packages() else {
+        return Vec::new();
+    };
+    mounted
+        .immutable_precompiled(db)
+        .iter()
+        .filter(|name| {
+            baml_builtins2::stdlib_package_names().contains(&name.as_str())
+                && mounted.by_package(db).contains_key(name.as_str())
+        })
+        .map(|name| Name::new(name.as_str()))
+        .collect()
+}
+
+/// Every source-less dependency visible to compiler2, regardless of whether
+/// it is an ordinary mutable mount or a compiler-built immutable stdlib row.
+pub fn external_package_names(db: &dyn crate::Db) -> Vec<Name> {
+    let mut names = mounted_package_names(db);
+    names.extend(precompiled_package_names(db));
+    names.sort();
+    names.dedup();
+    names
+}
+
 /// Whether `name` is a mounted source-less dependency package (a
 /// non-reserved key of the `MountedPackages` input).
 pub fn is_mounted_package(db: &dyn crate::Db, name: &Name) -> bool {
@@ -404,6 +435,21 @@ pub fn is_mounted_package(db: &dyn crate::Db, name: &Name) -> bool {
     }
     db.mounted_packages()
         .is_some_and(|mounted| mounted.by_package(db).contains_key(name.as_str()))
+}
+
+/// Whether `name` is a compiler-built immutable stdlib dependency.
+pub fn is_precompiled_package(db: &dyn crate::Db, name: &Name) -> bool {
+    baml_builtins2::stdlib_package_names().contains(&name.as_str())
+        && db.mounted_packages().is_some_and(|mounted| {
+            mounted.immutable_precompiled(db).contains(name.as_str())
+                && mounted.by_package(db).contains_key(name.as_str())
+        })
+}
+
+/// Whether `name` is any source-less dependency served from a serialized
+/// `PackageInterface`.
+pub fn is_external_package(db: &dyn crate::Db, name: &Name) -> bool {
+    is_mounted_package(db, name) || is_precompiled_package(db, name)
 }
 
 /// The *direct* dependencies of `package_id` (hardcoded for now).
@@ -477,7 +523,7 @@ pub fn package_dependencies<'db>(
                         .filter(|package| {
                             package.as_str() != name
                                 && !is_reserved_package_name(package.as_str())
-                                && !is_mounted_package(db, package)
+                                && !is_external_package(db, package)
                         })
                         .collect();
                 deps.extend(

@@ -12,7 +12,7 @@ use baml_base::Name;
 use baml_compiler_diagnostics::{DiagnosticId, Severity};
 use baml_compiler_lexer::{TokenKind, lex_lossless};
 use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
-use baml_compiler2_emit::{CompileOptions, OptLevel, emit_units};
+use baml_compiler2_emit::{CompileOptions, emit_units_with_stdlib};
 use baml_compiler2_hir::{
     body::{BodyOwnerId, LetBody, let_body},
     contributions::Definition,
@@ -1500,10 +1500,18 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 )
             }
         };
+        let stdlib = crate::precompiled_stdlib::load().map_err(|message| {
+            vec![RuntimeCompileDiagnostic {
+                code: "E_RUNTIME_STDLIB".to_string(),
+                message,
+                severity: RuntimeDiagnosticSeverity::Error,
+                span: None,
+            }]
+        })?;
         // This local is the transience guarantee: no handle to `db` occurs in
         // either return type, and all retained values below are deep-owned.
         let mut db = ProjectDatabase::new();
-        db.set_project_root(Path::new(RUNTIME_VIRTUAL_ROOT));
+        db.set_project_root_with_precompiled_stdlib(Path::new(RUNTIME_VIRTUAL_ROOT));
         let enriched = packages
             .into_iter()
             .map(|(name, package)| {
@@ -1516,6 +1524,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             .map(|(name, blob, _)| (name.clone(), blob.clone()))
             .collect::<BTreeMap<_, _>>();
         db.set_mounted_packages(mounted);
+        db.set_precompiled_stdlib_packages(stdlib.interfaces);
         // Emit needs concrete pool/global slots while producing the consumer's
         // relocatable units. Materialize link-only native stubs in the mounted
         // package; the mounted interface remains the semantic authority, and
@@ -1592,9 +1601,15 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             }]
         })?;
         let options = CompileOptions {
-            emit_test_cases: false,
+            emit_test_cases: crate::precompiled_stdlib_config::EMIT_TEST_CASES,
         };
-        let emitted = emit_units(&db, &options, OptLevel::One).map_err(|error| {
+        let emitted = emit_units_with_stdlib(
+            &db,
+            &options,
+            crate::precompiled_stdlib_config::OPT_LEVEL,
+            &stdlib.program,
+        )
+        .map_err(|error| {
             vec![RuntimeCompileDiagnostic {
                 code: "E_RUNTIME_EMIT".to_string(),
                 message: error.to_string(),

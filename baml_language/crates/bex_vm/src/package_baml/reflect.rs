@@ -639,6 +639,18 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         };
         let mut dependencies = IndexMap::<String, HeapPtr>::new();
         for (alias, value) in packages {
+            // Keep runtime rejection single-sourced with compiler mount filtering.
+            if baml_builtins2::reserved_package_names().contains(&alias.as_str()) {
+                let diagnostic = super::type_kinds::compiler_diagnostic(
+                    DiagnosticId::InvalidSyntax,
+                    format!("package alias `{alias}` is reserved"),
+                );
+                return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+                    vm,
+                    &[diagnostic],
+                ))
+                .into();
+            }
             match package_ptr(vm, *value) {
                 Ok(ptr) => {
                     dependencies.insert(alias.to_string(), ptr);
@@ -1594,6 +1606,13 @@ fn graft_session_submission(
         .iter()
         .map(|(name, index)| (name.clone(), objects[index.raw()]))
         .collect::<IndexMap<_, _>>();
+    let new_type_values = allocate_runtime_declaration_types(
+        vm,
+        package_ptr,
+        &new_classes,
+        &new_enums,
+        &new_interfaces,
+    );
     let new_functions = program_package
         .functions
         .iter()
@@ -1631,15 +1650,6 @@ fn graft_session_submission(
         }
         new_impl_rules.insert(interface, pointers);
     }
-
-    let type_values = allocate_runtime_declaration_types(
-        vm,
-        package_ptr,
-        &new_classes,
-        &new_enums,
-        &new_interfaces,
-    );
-    extra_owned.extend(type_values.values().copied());
 
     let mut object_name_updates = IndexMap::new();
     for (name, index) in &plan.program.function_indices {
@@ -1766,7 +1776,11 @@ fn graft_session_submission(
     runtime.object_names.extend(object_name_updates);
     runtime.global_names.extend(cached_import_names);
     runtime.global_names.extend(global_name_updates);
-    runtime.type_values.extend(type_values);
+    // Every declaration submission is generative: its created-once Type value
+    // carries a fresh mint and points back to the Session package that owns its
+    // definitions. Overwriting a visible name updates only the newest lookup;
+    // values and functions from older submissions retain their original mint.
+    runtime.type_values.extend(new_type_values);
     runtime.diagnostics.clone_from(&artifact.diagnostics);
     Ok(actions)
 }

@@ -10,6 +10,7 @@ documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 description = "Reusable compile-and-run runtime for BAML programs"
+build = "build.rs"
 
 [lib]
 doctest = false
@@ -60,6 +61,16 @@ text-size = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 vfs = { workspace = true }
+
+[build-dependencies]
+baml_base = { workspace = true }
+baml_builtins2 = { workspace = true }
+baml_compiler2_emit = { workspace = true }
+baml_compiler2_hir = { workspace = true }
+baml_compiler2_hir_ty = { workspace = true }
+baml_project = { workspace = true }
+baml_version = { workspace = true }
+borsh = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bex_cache = { workspace = true, default-features = false }

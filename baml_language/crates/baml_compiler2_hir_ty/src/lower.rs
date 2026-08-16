@@ -1220,7 +1220,7 @@ impl<'db> LowerCtx<'db> {
                     return Some(ResolvedTypeDefinition::Source(def));
                 }
             } else {
-                if baml_compiler2_hir::package::is_mounted_package(self.db, &segments[0]) {
+                if baml_compiler2_hir::package::is_external_package(self.db, &segments[0]) {
                     if !self.can_access_package(&segments[0]) {
                         return None;
                     }
@@ -1348,14 +1348,27 @@ impl<'db> LowerCtx<'db> {
         &self,
         segments: &[Name],
     ) -> Option<crate::package_interface::ResolvedFunction> {
-        if segments.len() < 2
-            || !baml_compiler2_hir::package::is_mounted_package(self.db, &segments[0])
-            || !self.can_access_package(&segments[0])
+        if segments.len() < 2 {
+            return None;
+        }
+        let (package, visible_segments) = if segments
+            .first()
+            .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
+        {
+            // Mirror `resolve_value`'s builtin shorthand after ordinary local
+            // lookup: `type.of` is `baml.type.of`, and likewise for the other
+            // compiler-owned namespaces.
+            (Name::new("baml"), segments)
+        } else {
+            (segments[0].clone(), &segments[1..])
+        };
+        if !baml_compiler2_hir::package::is_external_package(self.db, &package)
+            || !self.can_access_package(&package)
         {
             return None;
         }
-        let (item, namespace) = segments[1..].split_last()?;
-        let interface = crate::package_interface::mounted_interface(self.db, &segments[0])?;
+        let (item, namespace) = visible_segments.split_last()?;
+        let interface = crate::package_interface::mounted_interface(self.db, &package)?;
         let function = interface.lookup_function(namespace, item)?;
         Some(crate::package_interface::resolved_exported_function(
             function,

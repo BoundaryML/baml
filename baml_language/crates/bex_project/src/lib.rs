@@ -35,6 +35,8 @@ use thiserror::Error;
 mod bex;
 mod bex_lsp;
 mod fs;
+mod precompiled_stdlib;
+mod precompiled_stdlib_config;
 mod project;
 mod runtime_compile;
 mod seed;
