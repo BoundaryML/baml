@@ -38,16 +38,15 @@
     # is why the rev is PINNED rather than tracking main - a future input
     # change must not be able to silently break fork PRs.
     #
-    # TODO(pin-bump): the musl and gnu graphs' `nextestExport` requires the
-    # index rev carrying the whole-workspace nextest metadata export (forge
-    # main kynplkpmlkqu / ea527d85eabe, 2026-08-16; mirror publish pending).
-    # This PR ships as a draft against the old pin; the pin + flake.lock
-    # bump lands as a follow-up commit once the mirror publishes, together
-    # with the anonymous-eval re-verification at the new rev and
-    # `compiler.embedMetadata = true` per the HAZARD note on the msrv graph.
-    # Until then `.#musl-test-export` does not evaluate - by design, the
-    # probe fails open to the cargo arm.
-    index.url = "github:indexable-inc/index/efe77d641f76398ebf979735760df8e31e7153c2";
+    # This rev (mirror publish of 2026-08-16, carrying forge ea527d85eabe)
+    # is the first with the whole-workspace nextest metadata export the
+    # musl and gnu lanes run their prebuilt test binaries through.
+    # Anonymous evaluability re-verified at THIS rev, same protocol as the
+    # original pin (access-tokens cleared, internal inputs 404ing as
+    # positive controls). Bumping past it requires the same two rituals:
+    # re-verify anonymous eval, and re-read the policy schema (see the
+    # l2Policy note below for the trap this pin already stepped around).
+    index.url = "github:indexable-inc/index/b8652df400e424c02a24f233d52bd8bdcbffdf80";
     crane = {
       url = "github:ipetkov/crane";
     };
@@ -200,6 +199,30 @@
         idxPkgs = import index.inputs.nixpkgs { inherit system; };
         cargoUnit = index.lib.cargoUnitFor idxPkgs;
 
+        # The one policy every graph here uses: pureBuild (no clippy/audit/
+        # machete units - BAML's lint gates are their own jobs) plus the one
+        # override that keeps stable toolchains compiling.
+        #
+        # compiler.embedMetadata defaults FALSE at this pin and renders
+        # `-Zembed-metadata=no` into every unit. That flag is nightly-only,
+        # and all four graphs pin stable rust-overlay toolchains, so the
+        # default kills all 5000+ units with "the option `Z` is only
+        # accepted on the nightly compiler". The machinery's own guard reads
+        # `rustToolchain.ixRustChannel`, which rust-overlay toolchains do
+        # not carry, and a null channel is an accept arm - the guard
+        # structurally cannot fire for an external consumer, so the failure
+        # would land as thousands of broken compiles instead of one eval
+        # error. index hit the same wall on its own stable graphs
+        # (ENG-12992).
+        #
+        # recursiveUpdate, not `//`: the preset is a partial policy resolved
+        # through evalModules. Today it carries no `compiler` key, so `//`
+        # would work - until the preset grows one, at which point `//`
+        # silently clobbers every sibling under it. Merge deep, always.
+        l2Policy = nixpkgs.lib.recursiveUpdate cargoUnit.policyPresets.pureBuild {
+          compiler.embedMetadata = true;
+        };
+
         msrvWorkspace = cargoUnit.buildWorkspace {
           src = ./baml_language;
           workspaceRoot = ./baml_language;
@@ -212,26 +235,11 @@
           # the pool guests can read. Costs early cutoff, buys substitution.
           contentAddressed = false;
 
-          # A pure build artifact: this graph reproduces `cargo test --no-run`,
-          # and BAML's lint gates (prek, clippy) are their own jobs, so none of
-          # the machinery's gates belong here.
-          #
-          # HAZARD WHEN BUMPING THE index PIN. A later index than the one
-          # pinned above grows `policy.compiler.embedMetadata`, defaulted
-          # false, which renders `-Zembed-metadata=no` on every unit. That
-          # flag is nightly-only and this graph pins stable ${msrv} by
-          # definition, so every unit dies "the option `Z` is only accepted
-          # on the nightly compiler" - measured, on a newer index. index hit
-          # the same wall on its own stable graphs (ENG-12992). The machinery
-          # guards for it by reading `rustToolchain.ixRustChannel`, which a
-          # rust-overlay toolchain does not carry, and a null channel is an
-          # accept arm - so the guard cannot fire for an external consumer
-          # and the failure lands as 900+ broken compiles instead of one eval
-          # error. When the pin moves past that commit, add
-          # `compiler.embedMetadata = true;` here. It cannot be set today:
-          # the option does not exist at this rev and setting it is an eval
-          # error.
-          policy = cargoUnit.policyPresets.pureBuild;
+          # pureBuild + the stable-toolchain embedMetadata override; the full
+          # trap writeup lives on l2Policy above. The old HAZARD note here
+          # predicted exactly this: the pin moved past the commit that grew
+          # the option, and the override is now mandatory, not optional.
+          policy = l2Policy;
 
           # Plan the same cargo execution the lane runs. Feature unification
           # is then reproduced by construction instead of modeled, which
@@ -566,7 +574,9 @@
           # so a floating-CA output is unsubstitutable through the only cache
           # the pool guests can read.
           contentAddressed = false;
-          policy = cargoUnit.policyPresets.pureBuild;
+          # pureBuild + the stable-toolchain embedMetadata override (see
+          # l2Policy above for the trap).
+          policy = l2Policy;
 
           # The triple is a first-class argument, not a flag inside
           # cargoTargets: the machinery threads it into the planner AND into
@@ -657,7 +667,9 @@
           # so a floating-CA output is unsubstitutable through the only cache
           # the pool guests can read.
           contentAddressed = false;
-          policy = cargoUnit.policyPresets.pureBuild;
+          # pureBuild + the stable-toolchain embedMetadata override (see
+          # l2Policy above for the trap).
+          policy = l2Policy;
 
           # One graph per triple is the machinery's own rule -- the triple
           # is a first-class argument, same as the wasm graph.
