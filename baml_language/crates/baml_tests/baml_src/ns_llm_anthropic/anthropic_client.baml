@@ -83,6 +83,9 @@ function anth_failure_label(e: unknown) -> string {
         let n: ai.errors.NetworkFailure => `NetworkFailure:${n.detail}`,
         let i: ai.errors.InvalidRequest => `InvalidRequest:${i.detail}`,
         let p: ai.errors.ParseFailed => `ParseFailed:${p.raw_output}`,
+        let f: ai.errors.FinishReasonError => {
+            `FinishReasonError:${f.finish_reason.to_string()}:${f.raw_output}`
+        },
         let f: ai.errors.Refused => "Refused",
         _ => `other:${e.to_string()}`,
     }
@@ -523,15 +526,18 @@ test "anthropic_stop_reason_stop_sequence" {
 }
 
 test "anthropic_stop_reason_max_tokens" {
-    assert.equal(anthropic_stop_reason_outcome("max_tokens"), "ParseFailed:pong")
+    assert.equal(anthropic_stop_reason_outcome("max_tokens"), "FinishReasonError:MaxTokens:pong")
 }
 
 test "anthropic_stop_reason_pause_turn" {
-    assert.equal(anthropic_stop_reason_outcome("pause_turn"), "ParseFailed:pong")
+    assert.equal(anthropic_stop_reason_outcome("pause_turn"), "FinishReasonError:MaxTokens:pong")
 }
 
 test "anthropic_stop_reason_unknown" {
-    assert.equal(anthropic_stop_reason_outcome("model_context_window_exceeded"), "ParseFailed:pong")
+    assert.equal(
+        anthropic_stop_reason_outcome("model_context_window_exceeded"),
+        "FinishReasonError:MaxTokens:pong",
+    )
 }
 
 test "anthropic_stop_reason_refusal" {

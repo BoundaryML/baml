@@ -90,6 +90,22 @@ class ParseFailed {
     }
 }
 
+// The provider completed a turn with a terminal reason that is not a valid
+// successful completion. This stays distinct from ParseFailed: the response
+// may be syntactically valid but incomplete because the model exhausted its
+// output budget. Host SDKs can map MaxTokens to their legacy `length` finish
+// reason without treating it as a schema-validation failure.
+class FinishReasonError {
+    provider: string,
+    finish_reason: root.content.StopReason,
+    raw_output: string,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
 // The runner hit its step budget. Unlike the client-layer failures above,
 // this is thrown AFTER turns were committed to the journal — and any tools
 // those turns called have already run. Local state advanced, so a blind

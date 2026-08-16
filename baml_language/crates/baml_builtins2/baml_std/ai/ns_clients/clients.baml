@@ -52,6 +52,7 @@ function default_retry_judgment(f: root.errors.Failure) -> bool {
         let r: root.errors.Refused => false,
         let i: root.errors.InvalidRequest => false,
         let p: root.errors.ParseFailed => false,
+        let f: root.errors.FinishReasonError => false,
         _ => true,
     }
 }
@@ -90,6 +91,8 @@ class Backoff {
     }
 }
 
+// Streaming retries use the same safety judgment and backoff as invoke, but a
+// new stream may be opened only before the first text delta is returned.
 class Retry {
     inner: root.Client,
     max_attempts: int,
@@ -155,12 +158,61 @@ class Retry {
             }
         }
     }
+
+    implements root.stream.StreamingClient {
+        function invoke_stream(self, input: root.ModelTurnInput) -> root.stream.TurnStream {
+            let remaining = self.max_attempts;
+            let open = () -> root.stream.TurnStream {
+                match (self.inner) {
+                    let streaming: root.stream.StreamingClient => streaming.invoke_stream(input),
+                    let member: root.Client => {
+                        throw root.errors.StreamingUnsupported { client_id: member.id() }
+                    },
+                }
+            };
+            let retry = (failure: root.errors.Failure) -> bool {
+                if (failure is root.errors.StreamingUnsupported) {
+                    false
+                } else if (
+                    remaining > 1
+                        && failure.retry_safety() == root.errors.RetrySafety.Safe
+                        && self.retry_if(failure)
+                ) {
+                    let attempt = self.max_attempts - remaining + 1;
+                    let _ = baml.sys.sleep(
+                        baml.time.Duration.from_milliseconds(
+                            self.backoff.delay_ms(attempt, failure),
+                        ),
+                    ) catch_all (e) {
+                        let cancelled: baml.panics.Cancelled => throw cancelled,
+                        _ => null,
+                    };
+                    remaining -= 1;
+                    true
+                } else {
+                    false
+                }
+            };
+            let relay = StreamRelay {
+                open: open,
+                retry: retry,
+                current: null,
+                emitted: false,
+                terminal: [],
+                terminal_cursor: 0,
+                finished: false,
+            };
+            root.stream.TurnStream.from_event_source(relay.next_event)
+        }
+    }
 }
 
 // Rotates invocations across members. Replaces the legacy round-robin
 // provider: distribution is a client-boundary concern, exactly like Retry
 // and Fallback. The counter mutates on the shared value, so every call
-// site holding this client participates in one rotation.
+// site holding this client participates in one rotation. A streaming call
+// selects and advances the counter exactly once; a failure from that selected
+// stream never rotates again within the same call.
 class RoundRobin {
     members: root.Client[],
     counter: int,
@@ -209,8 +261,34 @@ class RoundRobin {
             }
         }
     }
+
+    implements root.stream.StreamingClient {
+        function invoke_stream(self, input: root.ModelTurnInput) -> root.stream.TurnStream {
+            {
+                if (self.members.length() == 0) {
+                    throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
+                }
+                let index = self.counter % self.members.length();
+                self.counter += 1;
+                match (self.members.at(index)) {
+                    let streaming: root.stream.StreamingClient => streaming.invoke_stream(input),
+                    let member: root.Client => {
+                        throw root.errors.StreamingUnsupported { client_id: member.id() }
+                    },
+                    null => {
+                        throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
+                    },
+                }
+            } catch_all (e) {
+                let cancelled: baml.panics.Cancelled => throw cancelled,
+                _ => throw root.errors.normalize(e),
+            }
+        }
+    }
 }
 
+// Streaming fallback advances in member order only for a typed, safely
+// retryable failure that occurs before the first text delta is returned.
 class Fallback {
     members: root.Client[],
 
@@ -267,4 +345,151 @@ class Fallback {
             }
         }
     }
+
+    implements root.stream.StreamingClient {
+        function invoke_stream(self, input: root.ModelTurnInput) -> root.stream.TurnStream {
+            let index = 0;
+            let open = () -> root.stream.TurnStream {
+                match (self.members.at(index)) {
+                    let streaming: root.stream.StreamingClient => streaming.invoke_stream(input),
+                    let member: root.Client => {
+                        throw root.errors.StreamingUnsupported { client_id: member.id() }
+                    },
+                    null => {
+                        throw baml.errors.InvalidArgument { message: "Fallback needs at least one member" }
+                    },
+                }
+            };
+            let advance = (failure: root.errors.Failure) -> bool {
+                if (
+                    index + 1 < self.members.length()
+                        && failure.retry_safety() == root.errors.RetrySafety.Safe
+                ) {
+                    index += 1;
+                    true
+                } else {
+                    false
+                }
+            };
+            let relay = StreamRelay {
+                open: open,
+                retry: advance,
+                current: null,
+                emitted: false,
+                terminal: [],
+                terminal_cursor: 0,
+                finished: false,
+            };
+            root.stream.TurnStream.from_event_source(relay.next_event)
+        }
+    }
+}
+
+// Pulls one selected stream through a reliability policy. A typed, safely
+// retryable failure may replace the selected stream only before the first text
+// delta has been returned. Once any delta is visible, every later failure is
+// terminal: replaying would duplicate a prefix and there is no resumable-stream
+// contract at the client boundary.
+class StreamRelay {
+    open: () -> root.stream.TurnStream throws unknown,
+    retry: (root.errors.Failure) -> bool throws unknown,
+    current: root.stream.TurnStream?,
+    emitted: bool,
+    terminal: root.stream.StreamEvent[],
+    terminal_cursor: int,
+    finished: bool,
+
+    function close_current(self) -> void {
+        if let stream: root.stream.TurnStream = self.current {
+            stream._finish();
+        }
+    }
+
+    function recover(self, error: unknown) -> void {
+        match (error) {
+            let cancelled: baml.panics.Cancelled => {
+                self.close_current();
+                throw cancelled
+            },
+            let failure: root.errors.Failure => {
+                if (!self.emitted && self.retry(failure)) {
+                    self.close_current();
+                    self.current = null;
+                } else {
+                    self.close_current();
+                    throw failure
+                }
+            },
+            _ => {
+                self.close_current();
+                throw root.errors.normalize(error)
+            },
+        }
+    }
+
+    function next_event(self) -> root.stream.StreamEvent | root.stream.Done {
+        if (self.terminal_cursor < self.terminal.length()) {
+            let event = self.terminal.at(self.terminal_cursor)
+                ?? baml.sys.panic("StreamRelay lost a terminal event");
+            self.terminal_cursor += 1;
+            return event;
+        }
+        if (self.finished) {
+            return root.stream.Done {  };
+        }
+        if (self.current == null) {
+            let opened: root.stream.TurnStream | StreamRelayError = self.open() catch_all (e) {
+                _ => StreamRelayError { error: e },
+            };
+            if let failed: StreamRelayError = opened {
+                self.recover(failed.error);
+                return self.next_event();
+            } else if let stream: root.stream.TurnStream = opened {
+                self.current = stream;
+            }
+        }
+        if let stream: root.stream.TurnStream = self.current {
+            let next: string | root.stream.Done | StreamRelayError = stream.next() catch_all (e) {
+                _ => StreamRelayError { error: e },
+            };
+            match (next) {
+                let text: string => {
+                    self.emitted = true;
+                    root.stream.TextDelta { text: text }
+                },
+                let done: root.stream.Done => {
+                    let final: root.ModelTurn | StreamRelayError = stream.final_turn() catch_all (e) {
+                        _ => StreamRelayError { error: e },
+                    };
+                    if let failed: StreamRelayError = final {
+                        self.recover(failed.error);
+                        return self.next_event();
+                    } else if let turn: root.ModelTurn = final {
+                        self.finished = true;
+                        self.terminal
+                            = [
+                                root.stream.TurnMeta {
+                                    stop_reason: turn.stop_reason,
+                                    input_tokens: turn.usage?.input_tokens,
+                                    output_tokens: turn.usage?.output_tokens,
+                                },
+                                root.stream.TurnDone {  },
+                            ];
+                        return self.next_event();
+                    }
+                    done
+                },
+                let failed: StreamRelayError => {
+                    self.recover(failed.error);
+                    self.next_event()
+                },
+            }
+        } else {
+            baml.sys.panic("StreamRelay has no current stream")
+        }
+    }
+}
+
+class StreamRelayError {
+    error: unknown,
 }

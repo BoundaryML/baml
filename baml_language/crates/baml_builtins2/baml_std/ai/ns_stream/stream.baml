@@ -100,6 +100,8 @@ type StreamEvent = TextDelta | TurnMeta | TurnDone;
 class Done {
 }
 
+type EventSource = () -> StreamEvent | Done throws unknown;
+
 // The raw text-delta stream of ONE model turn. Pull-based: nothing is read
 // from the wire until `next()` or `final_turn()` is called.
 //
@@ -109,6 +111,9 @@ class Done {
 // turn: the accumulated text as one Text block, the folded stop_reason, and
 // usage where the wire provided token counts.
 class TurnStream {
+    // callback-backed streams: composite clients use this to relay normalized
+    // events from a selected member without exposing provider wire details.
+    _event_source: EventSource?,
     // wire-backed streams: the SSE connection plus a per-provider decoder
     // that turns one `SseStream.next()` batch into StreamEvents.
     _sse: baml.http.SseStream?,
@@ -149,6 +154,7 @@ class TurnStream {
         require_terminal: string? = null,
     ) -> TurnStream {
         TurnStream {
+            _event_source: null,
             _sse: sse,
             _decode: decode,
             _chunks: [],
@@ -171,9 +177,34 @@ class TurnStream {
     // the last chunk.
     function from_chunks(chunks: string[]) -> TurnStream {
         TurnStream {
+            _event_source: null,
             _sse: null,
             _decode: null,
             _chunks: chunks,
+            _cursor: 0,
+            _pending: [],
+            _pcursor: 0,
+            _text: "",
+            _stop_reason: null,
+            _input_tokens: null,
+            _output_tokens: null,
+            _done: false,
+            _require_terminal: null,
+            _saw_terminal: false,
+        }
+    }
+
+    // A stream backed by one normalized-event callback. Reliability clients
+    // use this to relay a chosen member's deltas and final metadata while
+    // retaining TurnStream's ordinary accumulation and termination behavior.
+    // The source itself owns any retry/fallback policy; once it returns a
+    // TextDelta, that delta is immediately visible to the caller.
+    function from_event_source(next_event: EventSource) -> TurnStream {
+        TurnStream {
+            _event_source: next_event,
+            _sse: null,
+            _decode: null,
+            _chunks: [],
             _cursor: 0,
             _pending: [],
             _pcursor: 0,
@@ -249,6 +280,19 @@ class TurnStream {
                         return Done {  };
                     },
                     null => null,
+                };
+                continue;
+            }
+            if let source: EventSource = self._event_source {
+                match (source()) {
+                    let event: StreamEvent => {
+                        self._pending.push(event);
+                        null
+                    },
+                    let done: Done => {
+                        self._finish();
+                        return done;
+                    },
                 };
                 continue;
             }

@@ -248,7 +248,11 @@ class Agent<Out> {
             // terminal wire outcomes are thrown here, with the turn on the record
             match (turn.stop_reason) {
                 root.content.StopReason.MaxTokens => {
-                    throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate }
+                    throw root.errors.FinishReasonError {
+                        provider: c.id(),
+                        finish_reason: turn.stop_reason,
+                        raw_output: candidate,
+                    }
                 },
                 root.content.StopReason.Refused => {
                     throw root.errors.Refused { provider: c.id(), reason: "the model declined to answer", raw_body: null }
