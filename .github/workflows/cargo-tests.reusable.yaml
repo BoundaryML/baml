@@ -1349,7 +1349,78 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
+      # L2: take the per-unit nix graph only when cache.ix.dev already has
+      # this exact root, and fall back to cargo otherwise.
+      #
+      # The asymmetry is why this is a probe and not a switch. An sccache
+      # miss costs one compile. A unit-DAG miss costs the whole graph with
+      # no incremental compilation, one process and one sandbox per rustc
+      # invocation, and no shared target/ - measurably WORSE than the cargo
+      # path, not merely equal to it. So a miss must route back to cargo,
+      # and every failure mode here (eval too slow, cache unreachable, nix
+      # absent on the Blacksmith fork-PR arm) must fail open the same way.
+      #
+      # Probing at all is only possible because the graph is
+      # input-addressed: a floating-CA output has no eval-time path to ask
+      # the cache about.
+      - name: "Probe the L2 unit cache"
+        id: l2
+        if: steps.toolchains.outputs.nix == 'true'
+        env:
+          # The eval runs the render IFD, so it is not free; bound it rather
+          # than let a cold guest sit here. The network probe is the cheap
+          # half and gets a tight budget of its own.
+          L2_EVAL_TIMEOUT_SECONDS: "180"
+          L2_PROBE_TIMEOUT_SECONDS: "10"
+        run: |
+          set -uo pipefail
+
+          echo "hit=false" >> "$GITHUB_OUTPUT"
+
+          # Both arms fail open to cargo, but they are not the same event and
+          # must not read the same in the log. A timeout is a slow cold guest
+          # and is expected; any other nonzero exit is a broken flake, and
+          # reporting that as "did not finish within Ns" is how an eval bug
+          # hides for weeks behind a green lane. `timeout` returns 124 only
+          # when it actually fired, so that is the one code that means what
+          # the old message claimed. Keep stderr: on the error arm it is the
+          # only place the nix diagnostic survives.
+          eval_log="$(mktemp)"
+          out_path="$(timeout "${L2_EVAL_TIMEOUT_SECONDS}" nix eval --raw .#msrv-check.outPath 2>"${eval_log}")" \
+            && eval_rc=0 || eval_rc=$?
+          if [ "${eval_rc}" -ne 0 ]; then
+            if [ "${eval_rc}" -eq 124 ]; then
+              echo "::notice title=L2::evaluation did not finish within ${L2_EVAL_TIMEOUT_SECONDS}s; taking the cargo arm"
+            else
+              echo "::warning title=L2::evaluation FAILED with exit ${eval_rc} (not a timeout); taking the cargo arm"
+              sed -n '1,25p' "${eval_log}"
+            fi
+            exit 0
+          fi
+
+          # Local first. Runners are persistent, so a VM that already built
+          # this exact root has it on disk; asking only the remote would send
+          # such a job down the cargo path over a cache eviction that costs
+          # it nothing.
+          if nix path-info "${out_path}" >/dev/null 2>&1; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=L2::already in the local store: ${out_path}; taking the nix arm"
+          # --narinfo-cache-negative-ttl 0: nix caches negative narinfo
+          # lookups for 3600s by default, so one probe that runs before the
+          # builder publishes would poison this runner for an hour and no
+          # rerun inside the window could ever hit (measured live). The
+          # positive cache is untouched; only "not found" is never cached.
+          elif timeout "${L2_PROBE_TIMEOUT_SECONDS}" nix path-info --narinfo-cache-negative-ttl 0 --store https://cache.ix.dev "${out_path}" >/dev/null 2>&1; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=L2::cache hit for ${out_path}; taking the nix arm"
+          else
+            echo "::notice title=L2::cache miss for ${out_path}; taking the cargo arm"
+          fi
+
       - uses: Swatinem/rust-cache@v2
+        # Deliberately ungated by the probe: the cargo arm stays the
+        # fallback, so its cache has to keep being warmed on canary or the
+        # first L2 miss lands on a cold cargo build.
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
@@ -1366,11 +1437,27 @@ jobs:
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
+        if: steps.l2.outputs.hit != 'true'
         run: cargo fetch
         working-directory: baml_language
 
+      # The nix arm. Same work as the cargo arm below (`cargo test --no-run
+      # --all-features`), expressed as one derivation per rustc invocation,
+      # so the guest compiles only the units this PR's diff perturbed.
+      - name: "Build with MSRV (nix unit graph)"
+        if: steps.l2.outputs.hit == 'true'
+        run: |
+          echo "::notice title=L2::arm=nix"
+          # --no-link: this checkout is `clean: false`, so a bare build's
+          # ./result symlink survives into the next run as an untracked file.
+          # --print-out-paths keeps the built root in the log for triage.
+          nix build --no-link --print-out-paths --print-build-logs .#msrv-check
+
       - name: "Build with MSRV"
-        run: cargo test --no-run --all-features --timings
+        if: steps.l2.outputs.hit != 'true'
+        run: |
+          echo "::notice title=L2::arm=cargo"
+          cargo test --no-run --all-features --timings
         working-directory: baml_language
 
       - name: "Show sccache stats"
@@ -1389,12 +1476,16 @@ jobs:
           path: sccache-stats-msrv.json
           if-no-files-found: ignore
 
+      # --timings is a cargo flag, so these only exist on the cargo arm. The
+      # runner keeps ignored files across runs (`clean: false`), so an
+      # unconditional `mv` here would fail the job on the nix arm, or worse,
+      # ship the previous run's timings as this run's.
       - name: "Rename cargo timings"
-        if: always()
+        if: always() && steps.l2.outputs.hit != 'true'
         run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-msrv.html
         working-directory: baml_language
       - name: "Upload cargo timings"
-        if: always()
+        if: always() && steps.l2.outputs.hit != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-msrv

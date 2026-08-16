@@ -26,6 +26,18 @@
     # branch lacks (2026-08-16: an app-auth branch pin time-traveled past
     # the region fix and recreated pool members in the wrong region).
     ix-runners.url = "github:indexable-inc/ix-runners/275f844b869476bde794f3d691ebd946f20a890d";
+    # `lib.cargoUnitFor`, the per-rustc-unit cargo derivation graph behind
+    # packages.msrv-check.
+    #
+    # The repo is public and this path is reachable anonymously - measured,
+    # with `access-tokens` cleared and internal inputs 404ing as positive
+    # controls. That matters more than it sounds: pool guests hold no GitHub
+    # credential for nix fetches at all, so every guest fetch of this input
+    # is anonymous, on canary exactly as much as on a fork PR. Thirteen of
+    # index's inputs have `internal` visibility; none is on this path, which
+    # is why the rev is PINNED rather than tracking main - a future input
+    # change must not be able to silently break fork PRs.
+    index.url = "github:indexable-inc/index/efe77d641f76398ebf979735760df8e31e7153c2";
     crane = {
       url = "github:ipetkov/crane";
     };
@@ -46,6 +58,7 @@
       rust-overlay,
       nixpkgs-ci,
       ix-runners,
+      index,
       ...
     }:
 
@@ -79,28 +92,296 @@
 
         craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
 
-        protocGenGo = pkgs.buildGoModule rec {
-          pname = "protoc-gen-go";
-          version = "1.34.1";
+        # Parameterized over nixpkgs because the msrv unit graph builds
+        # against index's nixpkgs, not this repo's pin (see idxPkgs), and a
+        # unit graph must not mix two nixpkgs' native inputs.
+        mkProtocGenGo =
+          p:
+          p.buildGoModule rec {
+            pname = "protoc-gen-go";
+            version = "1.34.1";
 
-          src = pkgs.fetchFromGitHub {
-            owner = "protocolbuffers";
-            repo = "protobuf-go";
-            rev = "v${version}";
-            hash = "sha256-xbfqN/t6q5dFpg1CkxwxAQkUs8obfckMDqytYzuDwF4=";
+            src = p.fetchFromGitHub {
+              owner = "protocolbuffers";
+              repo = "protobuf-go";
+              rev = "v${version}";
+              hash = "sha256-xbfqN/t6q5dFpg1CkxwxAQkUs8obfckMDqytYzuDwF4=";
+            };
+
+            vendorHash = "sha256-nGI/Bd6eMEoY0sBwWEtyhFowHVvwLKjbT4yfzFz6Z3E=";
+
+            subPackages = [ "cmd/protoc-gen-go" ];
+
+            meta = with p.lib; {
+              description = "Go support for Google's protocol buffers";
+              mainProgram = "protoc-gen-go";
+              homepage = "https://google.golang.org/protobuf";
+              license = licenses.bsd3;
+              maintainers = with maintainers; [ jojosch ];
+            };
+          };
+        protocGenGo = mkProtocGenGo pkgs;
+
+        # The rust-overlay view of nixpkgs, and the one place the MSRV is
+        # read. devShells.ci-msrv and packages.msrv-check both take the
+        # toolchain from here, so the shell, the unit graph, and the
+        # cargo-build-msrv gate cannot drift from the workspace manifest.
+        rustOverlayPkgs = import nixpkgs-unstable {
+          inherit system;
+          overlays = [ rust-overlay.overlays.default ];
+        };
+        msrv =
+          (builtins.fromTOML (builtins.readFile ./baml_language/Cargo.toml)).workspace.package.rust-version;
+        # Closure curve for msrv-check, all measured 2026-08-16 on one box by
+        # one method, because every number here is profile qualified and the
+        # bare figure has already misled once:
+        #
+        #     4.58 GiB  --release            (what this graph used to build,
+        #                                     and semantically the WRONG arm -
+        #                                     see `profile` below)
+        #    93.29 GiB  dev, debuginfo on    (correct arm, unshippable: a
+        #                                     cache HIT is a substitution)
+        #    10.23 GiB  dev, debug=0         (what it builds today)
+        #
+        # The residual 2.2x over release is not waste to chase here: release
+        # was opt-level="s" + fat LTO + strip="symbols", and this graph is
+        # deliberately none of those, because the cargo arm it has to match is
+        # none of those. The lever that does cut further is the TODO below.
+        #
+        # TODO(l2): give the unit graph `rust-bin.stable.${msrv}.minimal` and
+        # leave devShells.ci-msrv on `.default`. Of the 10.23 GiB,
+        # rust-default-1.91.1 accounts for 1,750 MiB - rust-docs 576 MiB,
+        # clippy-preview 443 MiB, rustfmt-preview 432 MiB. Those component
+        # figures are profile independent and did not move across any row of
+        # the curve above. No guest needs any of those three; they ride in
+        # through baml_type_macros, because a proc-macro is a dylib rustc
+        # loads and so keeps the whole toolchain in its runtime closure.
+        # Cutting them is roughly 14% off what every guest substitutes - it
+        # was worth 31% against the smaller release closure, so the case got
+        # weaker even as the closure got bigger. Deferred rather than done
+        # because it changes the toolchain id, so it is a full graph rebuild
+        # to validate, and it splits the graph's toolchain from the shell's -
+        # the MSRV version stays single-source either way, only the component
+        # set differs.
+        msrvToolchain = rustOverlayPkgs.rust-bin.stable.${msrv}.default;
+
+        # L2: the cargo-build-msrv lane's work as a per-rustc-unit derivation
+        # graph. `nix-cargo-unit` transcribes `cargo --unit-graph` into one
+        # derivation per rustc invocation, keyed by a recursive hash over
+        # package identity, features, profile, mode, sorted dependency
+        # hashes, and the toolchain id. Source is sliced per crate, so a PR
+        # editing one of the workspace's 90 members perturbs that crate's
+        # units and its reverse-deps only; everything else substitutes.
+        #
+        # The msrv lane is the v1 cut because it is build-only
+        # (`cargo test --no-run`), so ~100% of it is compile, and because its
+        # 1.91.1 toolchain is unique to it: nothing else in CI warms its
+        # compile cache, which is why it is the worst lane on the board.
+        # The graph is instantiated against INDEX's nixpkgs, not this repo's
+        # pin, and that is a cost decision rather than a correctness one -
+        # both were measured working anonymously. `cargoUnitFor` builds the
+        # renderer against whichever pkgs it is handed: index's nixpkgs makes
+        # it a cache.ix.dev hit (eval ~6 s), this repo's pin makes it a
+        # derivation no cache has ever seen (~49 s of source build, paid by
+        # every cold guest at EVALUATION time, before one compile unit is
+        # considered). The price is index's nixpkgs in baml's lock, and it
+        # buys a single nixpkgs for the whole unit graph, so native inputs
+        # below come from here too rather than straddling two.
+        idxPkgs = import index.inputs.nixpkgs { inherit system; };
+        cargoUnit = index.lib.cargoUnitFor idxPkgs;
+
+        msrvWorkspace = cargoUnit.buildWorkspace {
+          src = ./baml_language;
+          workspaceRoot = ./baml_language;
+          rustToolchain = msrvToolchain;
+
+          # Not a preference. cache.ix.dev is atticd behind ncps, which
+          # serves narinfos and 404s /realisations; a floating-CA output has
+          # no eval-time path, so substituting one needs exactly that build
+          # trace. CA units would be unsubstitutable through the only cache
+          # the pool guests can read. Costs early cutoff, buys substitution.
+          contentAddressed = false;
+
+          # A pure build artifact: this graph reproduces `cargo test --no-run`,
+          # and BAML's lint gates (prek, clippy) are their own jobs, so none of
+          # the machinery's gates belong here.
+          #
+          # HAZARD WHEN BUMPING THE index PIN. A later index than the one
+          # pinned above grows `policy.compiler.embedMetadata`, defaulted
+          # false, which renders `-Zembed-metadata=no` on every unit. That
+          # flag is nightly-only and this graph pins stable ${msrv} by
+          # definition, so every unit dies "the option `Z` is only accepted
+          # on the nightly compiler" - measured, on a newer index. index hit
+          # the same wall on its own stable graphs (ENG-12992). The machinery
+          # guards for it by reading `rustToolchain.ixRustChannel`, which a
+          # rust-overlay toolchain does not carry, and a null channel is an
+          # accept arm - so the guard cannot fire for an external consumer
+          # and the failure lands as 900+ broken compiles instead of one eval
+          # error. When the pin moves past that commit, add
+          # `compiler.embedMetadata = true;` here. It cannot be set today:
+          # the option does not exist at this rev and setting it is an eval
+          # error.
+          policy = cargoUnit.policyPresets.pureBuild;
+
+          # Plan the same cargo execution the lane runs. Feature unification
+          # is then reproduced by construction instead of modeled, which
+          # matters here: --all-features turns on both aws-crypto and
+          # ring-crypto, and native-tls is the sole reason openssl enters
+          # the graph at all (no crate depends on it directly).
+          cargoTargets = [
+            [
+              "--workspace"
+              "--all-features"
+              "--tests"
+            ]
+          ];
+          cargoTargetNames = [ "msrv" ];
+
+          # The two arms must compile the SAME program, and the machinery
+          # defaults to release (`profile = rawArgs.profile or "release"`,
+          # index lib/rust/cargo-unit.nix:397) while the cargo arm this
+          # replaces runs a bare `cargo test --no-run`, i.e. dev + test.
+          # Left at the default the arms differ on `debug_assertions`, so
+          # every `#[cfg(debug_assertions)]` block is uncompiled on the nix
+          # arm: an error inside one passes the lane on a cache hit and
+          # fails it on a miss, which is the worst shape a gate can have.
+          # `"dev"` renders no profile flag at all, which is cargo's own
+          # default and therefore exactly what the cargo arm does.
+          profile = "dev";
+
+          env = {
+            # baml_language/.cargo/config.toml sets this, and cargo-unit parses
+            # only rustflags out of cargo config -- its doc comment says the
+            # [env] table is explicitly not honored. Without it the in-process
+            # compiler tests stack-overflow.
+            RUST_MIN_STACK = "67108864";
+
+            # The other half of arm equivalence. cargo-tests.reusable.yaml
+            # sets both of these workflow-wide (lines 68-69), so the cargo
+            # arm's dev and test profiles are opt-level 1, not cargo's
+            # default 0. `env` folds into the planner IFD's environment
+            # (cargo-unit.nix:448), so cargo resolves the override while
+            # emitting `--unit-graph` and the renderer reads the opt level
+            # off the graph's profile fields -- the units carry it without
+            # this flake having to model a profile table.
+            CARGO_PROFILE_DEV_OPT_LEVEL = "1";
+            CARGO_PROFILE_TEST_OPT_LEVEL = "1";
+
+            # Debuginfo is the one dev-profile default this graph does NOT
+            # want, and dropping it is not a reprise of the bug above.
+            # `debug_assertions` and `debug` are independent knobs: the first
+            # decides which code exists and so has to match the cargo arm, the
+            # second only decorates the artifact. Debuginfo cannot hide a
+            # compile error and cannot create one, and this lane is
+            # `--no-run`, so nothing here is ever executed, unwound or
+            # debugged -- the binaries exist to prove they link and are then
+            # thrown away.
+            #
+            # Measured, and the reason this is not a micro-optimisation: with
+            # dev's default debuginfo the closure is 93.29 GiB; at debug=0 it
+            # is 10.23 GiB. A cache HIT makes every guest substitute that, so
+            # the 83 GiB is the difference between L2 being worth taking on
+            # this lane and being slower than just running cargo.
+            #
+            # Do NOT copy this to the gnu/musl lanes when they convert. Those
+            # RUN their test binaries, so debug=0 there costs backtrace
+            # quality on real failures - a genuine trade-off, not free.
+            CARGO_PROFILE_DEV_DEBUG = "0";
+            CARGO_PROFILE_TEST_DEBUG = "0";
           };
 
-          vendorHash = "sha256-nGI/Bd6eMEoY0sBwWEtyhFowHVvwLKjbT4yfzFz6Z3E=";
+          # Tools the workspace's build scripts shell out to. These fold into
+          # every unit, which is right for toolchain constants and is anyway
+          # the only hatch: the machinery has no per-package build-inputs
+          # table, only per-package env and rustc args.
+          nativeBuildInputs = [
+            idxPkgs.cmake
+            idxPkgs.ninja
+            idxPkgs.pkg-config
+            idxPkgs.perl
+            idxPkgs.go # sdkgen_go's build script shells out to gofmt
+            idxPkgs.protobuf
+            (mkProtocGenGo idxPkgs)
+            # openssl is here for the LINK, not for openssl-sys' build
+            # script (that one reads OPENSSL_LIB_DIR below). Units link
+            # independently, so the `rustc-link-search` openssl-sys emits
+            # does not reach the dependent binaries the way it does under
+            # one cargo invocation, and every test binary that pulls
+            # native-tls dies "mold: fatal: library not found: ssl".
+            # Putting it here lets the stdenv wrapper add -L to every link.
+            # It costs nothing in closure terms: --all-features already
+            # drags openssl into this graph.
+            idxPkgs.openssl
+          ];
 
-          subPackages = [ "cmd/protoc-gen-go" ];
+          # Values, unlike tools, are scoped per package. `env` folds into
+          # every unit, so exporting the openssl and libclang variables
+          # workspace-wide would make every unit in the graph depend on
+          # openssl -- wrong, and expensive. index learned this the costly
+          # way (ENG-10488).
+          packageBuildEnv = {
+            openssl-sys = {
+              OPENSSL_LIB_DIR = "${idxPkgs.lib.getLib idxPkgs.openssl}/lib";
+              OPENSSL_INCLUDE_DIR = "${idxPkgs.openssl.dev}/include";
+              OPENSSL_NO_VENDOR = "1";
+            };
+            # bindgen consumers: aws-lc-sys is pulled in by --all-features'
+            # aws-crypto, bridge_cffi runs bindgen in its own build script.
+            aws-lc-sys = graphBindgenEnv;
+            bridge_cffi = graphBindgenEnv;
+            # sdkgen_cpp gzips committed protobuf headers that live in the
+            # sibling bridge_cpp crate, which its own slice does not contain.
+            sdkgen_cpp.BAML_BRIDGE_CPP_PB_DIR =
+              "${./baml_language/sdks/cpp/bridge_cpp/pb/baml_bridge/cffi/v1}";
+            # A machinery gap, not a BAML one: cargo defines
+            # CARGO_TARGET_TMPDIR at compile time for integration-test and
+            # bench targets, and cargo-unit does not, so baml_cli's
+            # tests/common/mod.rs fails to compile on `env!`. A literal is
+            # all the compile needs; running those tests under nix would
+            # additionally need this path writable.
+            baml_cli.CARGO_TARGET_TMPDIR = "/tmp/baml-cli-target-tmp";
+          }
+          # The lane is `--workspace` and there are no default-members, so it
+          # builds the whole sdk_tests tree, whose nine generators all read a
+          # fixture corpus that sits above every one of them. The generators
+          # are pure Rust (no foreign toolchain at build time), so handing
+          # them the corpus is all they need.
+          // sdkTestFixtureEnv;
+        };
 
-          meta = with pkgs.lib; {
-            description = "Go support for Google's protocol buffers";
-            mainProgram = "protoc-gen-go";
-            homepage = "https://google.golang.org/protobuf";
-            license = licenses.bsd3;
-            maintainers = with maintainers; [ jojosch ];
+        # The shared sdk_tests fixture corpus, handed to each generator that
+        # reads it. Scoped per package rather than put in workspace-wide
+        # `env` so the corpus is an input of nine units, not of all 5,247.
+        sdkTestFixtureEnv =
+          let
+            fixtures = "${./baml_language/sdk_tests/fixtures}";
+          in
+          nixpkgs.lib.genAttrs [
+            "sdk_test_cpp"
+            "sdk_test_csharp"
+            "sdk_test_go"
+            "sdk_test_java"
+            "sdk_test_python_pydantic2"
+            "sdk_test_rust"
+            "sdk_test_swift"
+            "sdk_test_typescript"
+            "sdk_test_typescript_web"
+          ] (_: { BAML_SDK_TEST_FIXTURES = fixtures; })
+          // {
+            # This one also reads the canonical TypeScript sources out of its
+            # sibling sdk_test_typescript crate.
+            sdk_test_typescript_web = {
+              BAML_SDK_TEST_FIXTURES = fixtures;
+              BAML_SDK_TEST_TYPESCRIPT_SOURCES = "${./baml_language/sdk_tests/crates/typescript}";
+            };
           };
+
+        # Same shape as nix/ci-shell.nix's, but resolved against the unit
+        # graph's own nixpkgs: clang's resource dir is named by MAJOR version
+        # only since LLVM 16.
+        graphBindgenEnv = {
+          LIBCLANG_PATH = "${idxPkgs.libclang.lib}/lib";
+          BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${idxPkgs.llvmPackages.libclang.lib}/lib/clang/${idxPkgs.lib.versions.major idxPkgs.llvmPackages.libclang.version}/include -isystem ${idxPkgs.llvmPackages.libclang.lib}/include -isystem ${idxPkgs.glibc.dev}/include";
         };
 
         # Common source filtering for crane
@@ -262,6 +543,62 @@
       in
 
       rec {
+
+        # The cargo-build-msrv lane, as a nix build. Roots every test binary
+        # `cargo test --no-run --all-features` produces; the derivation
+        # itself is a marker, the work is in the units it depends on.
+        #
+        # The CI job probes cache.ix.dev for this path and only takes the nix
+        # arm on a hit, because a unit-DAG miss is a regression rather than a
+        # neutral outcome: sccache misses cost one compile, this costs the
+        # whole graph with no incremental compilation and one sandbox per
+        # rustc invocation.
+        packages.msrv-check =
+          if pkgs.stdenv.isDarwin then
+            throw "packages.msrv-check builds the Linux CI lane's unit graph; there is no Darwin lane to mirror"
+          else
+            idxPkgs.runCommand "baml-msrv-check"
+              {
+                __structuredAttrs = true;
+                strictDeps = true;
+                testBinaries = map (target: target.binary) (
+                  builtins.attrValues msrvWorkspace.tests
+                );
+              }
+              ''
+                set -euo pipefail
+                mkdir -p "$out"
+                printf '%s\n' "''${testBinaries[@]}" > "$out/test-binaries"
+                echo "built ''${#testBinaries[@]} msrv test binaries" > "$out/result"
+              '';
+
+        # The graph's two IFD artifacts plus the vendor dir, as their own
+        # root. An IFD is a build: a guest that cannot substitute these runs
+        # a full cargo resolve over 928 packages and the renderer at
+        # EVALUATION time, before a single compile unit is considered. They
+        # are build-time deps of msrv-check, so they are absent from its
+        # runtime closure and the builder has to push them deliberately.
+        # index hit exactly this and fixed it the same way (crossIfdRoots,
+        # index#1687).
+        packages.msrv-eval-roots =
+          if pkgs.stdenv.isDarwin then
+            throw "packages.msrv-eval-roots belongs to the Linux msrv graph"
+          else
+            idxPkgs.runCommand "baml-msrv-eval-roots"
+              {
+                __structuredAttrs = true;
+                strictDeps = true;
+                roots = [
+                  msrvWorkspace.unitsNix
+                  msrvWorkspace.unitGraphJson
+                  msrvWorkspace.vendorDir
+                ];
+              }
+              ''
+                set -euo pipefail
+                mkdir -p "$out"
+                printf '%s\n' "''${roots[@]}" > "$out/eval-roots"
+              '';
 
         packages.default = bamlRustPackage {
           pname = "baml-cli";
@@ -923,14 +1260,6 @@
         #             (node/pnpm, temurin+gradle); one attr for the whole
         #             ix-sdk runner family.
         devShells =
-          let
-            rustOverlayPkgs = import nixpkgs-unstable {
-              inherit system;
-              overlays = [ rust-overlay.overlays.default ];
-            };
-            msrv =
-              (builtins.fromTOML (builtins.readFile ./baml_language/Cargo.toml)).workspace.package.rust-version;
-          in
           nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
             cross = import ./nix/cross-shell.nix {
               pkgs = rustOverlayPkgs;
@@ -945,7 +1274,7 @@
             };
             ci-msrv = import ./nix/ci-shell.nix {
               inherit pkgs pkgs-unstable protocGenGo;
-              toolchain = rustOverlayPkgs.rust-bin.stable.${msrv}.default;
+              toolchain = msrvToolchain;
             };
             # The sdk-tests matrix's shell: the ci surface plus the language
             # toolchains its lanes spawn from PATH. One shared attr (not one
