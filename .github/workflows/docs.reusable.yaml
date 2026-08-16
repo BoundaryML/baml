@@ -17,14 +17,21 @@ concurrency:
 jobs:
   publish-docs:
     name: "publish docs"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: ${{ inputs.docs_changed == 'true' || inputs.is_canary }}
+    # PR previews run on ix; the canary publish stays on the ephemeral
+    # Blacksmith runner it already used. Policy: jobs holding production
+    # publish credentials (prod environment, FERN_TOKEN) never run on
+    # persistent shared runners. Fork PRs also stay off the pool: its VMs are
+    # reused by later trusted jobs.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && !inputs.is_canary && fromJSON('["self-hosted", "ix"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    # Skip outside the upstream repo: forks have no FERN_TOKEN, so `fern` fails
+    # authentication and the whole job reports red on every PR.
+    if: ${{ (inputs.docs_changed == 'true' || inputs.is_canary) && github.repository == 'BoundaryML/baml' }}
     permissions: write-all
     environment:
       name: ${{ inputs.is_canary && 'boundary-tools-prod' || 'boundary-tools-dev' }}
     steps:
       - name: Checkout repository
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 

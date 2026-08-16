@@ -26,11 +26,14 @@ permissions:
 jobs:
   biome:
     name: Biome
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Fork PRs must never run on the persistent ix pool: the VMs are reused by
+    # later trusted, secret-bearing jobs. Untrusted events fall back to the
+    # GitHub-hosted runner this job used before the pool migration.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false

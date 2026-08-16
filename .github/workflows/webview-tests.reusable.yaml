@@ -17,21 +17,36 @@ defaults:
 jobs:
   typecheck:
     name: "Typecheck"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Fork PRs must never run on the persistent ix pool: the VMs are reused by
+    # later trusted, secret-bearing jobs. Untrusted events fall back to the
+    # GitHub-hosted runner this job used before the pool migration.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-web"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 15
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup target add wasm32-unknown-unknown
+      # Toolchain BEFORE rust-cache so the cache key uses the correct Rust
+      # version. nix arm: the CI shell carries the wasm32 target and
+      # wasm-pack. node + pnpm stay on setup-node2 above on both arms.
+      - name: "Set up toolchains"
+        id: toolchains
+        uses: ./.github/actions/setup-ci-shell
+        with:
+          mise-install-args: "github:rustwasm/wasm-pack"
+
+      - name: "Add the wasm32 target (no-nix fallback)"
+        if: steps.toolchains.outputs.nix == 'false'
+        run: rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
       - uses: Swatinem/rust-cache@v2
@@ -47,13 +62,6 @@ jobs:
       - name: "Fetch cargo dependencies"
         run: cargo fetch --target wasm32-unknown-unknown
         working-directory: baml_language
-
-      # node + pnpm come from setup-node2 above; we only need mise for
-      # wasm-pack here.
-      - name: "Install mise"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "github:rustwasm/wasm-pack"
 
       # Path-mapped imports from app-vscode-webview resolve into pkg-playground/wasm
       # and pkg-proto/src/generated, so both must be present before tsc runs.
@@ -75,21 +83,33 @@ jobs:
 
   unit-tests:
     name: "Unit Tests (jsdom)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-web"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 15
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup target add wasm32-unknown-unknown
+      # Toolchain BEFORE rust-cache so the cache key uses the correct Rust
+      # version. nix arm: the CI shell carries the wasm32 target and
+      # wasm-pack. node + pnpm stay on setup-node2 above on both arms.
+      - name: "Set up toolchains"
+        id: toolchains
+        uses: ./.github/actions/setup-ci-shell
+        with:
+          mise-install-args: "github:rustwasm/wasm-pack"
+
+      - name: "Add the wasm32 target (no-nix fallback)"
+        if: steps.toolchains.outputs.nix == 'false'
+        run: rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
       - uses: Swatinem/rust-cache@v2
@@ -105,13 +125,6 @@ jobs:
       - name: "Fetch cargo dependencies"
         run: cargo fetch --target wasm32-unknown-unknown
         working-directory: baml_language
-
-      # node + pnpm come from setup-node2 above; we only need mise for
-      # wasm-pack here.
-      - name: "Install mise"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "github:rustwasm/wasm-pack"
 
       - name: "Build WASM"
         run: pnpm --filter pkg-playground build:wasm
@@ -123,21 +136,33 @@ jobs:
 
   browser-tests:
     name: "Browser Tests (Playwright)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-web"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 20
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup target add wasm32-unknown-unknown
+      # Toolchain BEFORE rust-cache so the cache key uses the correct Rust
+      # version. nix arm: the CI shell carries the wasm32 target and
+      # wasm-pack. node + pnpm stay on setup-node2 above on both arms.
+      - name: "Set up toolchains"
+        id: toolchains
+        uses: ./.github/actions/setup-ci-shell
+        with:
+          mise-install-args: "github:rustwasm/wasm-pack"
+
+      - name: "Add the wasm32 target (no-nix fallback)"
+        if: steps.toolchains.outputs.nix == 'false'
+        run: rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
       - uses: Swatinem/rust-cache@v2
@@ -153,13 +178,6 @@ jobs:
       - name: "Fetch cargo dependencies"
         run: cargo fetch --target wasm32-unknown-unknown
         working-directory: baml_language
-
-      # node + pnpm come from setup-node2 above; we only need mise for
-      # wasm-pack here.
-      - name: "Install mise"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "github:rustwasm/wasm-pack"
 
       - name: "Build WASM"
         run: pnpm --filter pkg-playground build:wasm

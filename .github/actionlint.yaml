@@ -9,3 +9,5 @@ self-hosted-runner:
     - blacksmith-4vcpu-ubuntu-2204-arm
     - blacksmith-8vcpu-windows-2025
     - blacksmith-4vcpu-windows-2025
+    # self-hosted ix runner pool
+    - ix

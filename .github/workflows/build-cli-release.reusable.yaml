@@ -99,7 +99,7 @@ jobs:
           # Download protoc directly to avoid rate limiting
           PROTOC_VERSION="27.1"
           curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-win64.zip"
-          unzip -q protoc-${PROTOC_VERSION}-win64.zip -d $HOME/.local
+          unzip -oq protoc-${PROTOC_VERSION}-win64.zip -d $HOME/.local
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           rm protoc-${PROTOC_VERSION}-win64.zip
 

@@ -23,18 +23,33 @@ env:
 jobs:
   wasm-pack-test:
     name: "wasm-pack test"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Fork PRs must never run on the persistent ix pool: the VMs are reused by
+    # later trusted, secret-bearing jobs. Untrusted events fall back to the
+    # GitHub-hosted runner this job used before the pool migration.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 20
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
-      - name: "Install Rust toolchain"
+      # Toolchain BEFORE rust-cache so the cache key uses the correct Rust
+      # version. nix arm: the CI shell carries the wasm32 target; the
+      # stall-prone `rustup target add` download only exists on the
+      # fallback arm.
+      - name: "Set up toolchains"
+        id: toolchains
+        uses: ./.github/actions/setup-ci-shell
+
+      - name: "Add the wasm32 target (no-nix fallback)"
+        if: steps.toolchains.outputs.nix == 'false'
         run: |
           set -euo pipefail
-          rustup show
           # `rustup target add wasm32` fetches a small (~20MB) std component that
           # normally installs in seconds. A multi-minute duration means a stalled
           # download (rustup has no idle timeout), which otherwise burns the whole

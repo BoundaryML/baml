@@ -1,0 +1,98 @@
+# Proof-of-concept: build BAML's macOS and Windows artifacts on Linux ix
+# runners via cross-compilation. Additive - existing mac/windows jobs are
+# untouched; this exists to measure which of them are BUILD jobs that never
+# needed native hardware.
+#
+# All per-target mechanics (zig cc + macOS SDK for darwin, cargo-xwin for
+# MSVC, and their flag quirks) live in the flake's `cross-build` script; see
+# nix/cross-shell.nix.
+name: ix cross builds
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - "engine/**"
+      - "flake.nix"
+      - "flake.lock"
+      - "nix/cross-shell.nix"
+      - ".github/workflows/ix-cross.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cli-cross:
+    name: baml-cli ${{ matrix.target }}
+    # Fork PRs must never run on the persistent ix pool: the VMs are reused by
+    # later trusted, secret-bearing jobs. This lane skips rather than falling
+    # back to a GitHub-hosted runner, because it builds through the flake's
+    # cross shell and there is no nix on the Blacksmith images.
+    if: ${{ (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, ix-cross]
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            expect: "Mach-O 64-bit.*arm64"
+          - target: x86_64-apple-darwin
+            expect: "Mach-O 64-bit.*x86_64"
+          - target: x86_64-pc-windows-msvc
+            expect: "PE32\\+.*x86-64"
+          - target: aarch64-pc-windows-msvc
+            expect: "PE32\\+.*[Aa]arch64"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build baml-cli (${{ matrix.target }})
+        working-directory: engine
+        run: |
+          # Per-slot cache inside the slot's OWN persistent scratch dir. The
+          # parent (/var/lib/ix-runner-tmp) became read-only to slot users
+          # when per-slot /tmp isolation landed (ix-runners #29), so the old
+          # sibling-dir path fails EROFS; $TMPDIR *is* the slot dir, which is
+          # both writable and persistent across jobs. A cache shared between
+          # slots would be a writable path one PR's build can hand to the
+          # next, so each slot keeps its own and pays its own first fetch.
+          export XWIN_CACHE_DIR="${TMPDIR:-/tmp}/xwin-cache"
+          # Bounded retry for CRT/SDK fetch flakes: the download has died on
+          # transient no-route-to-host from this region, and a connect failure
+          # gives up faster than xwin's own HTTP retries cover.
+          for attempt in 1 2 3; do
+            if nix develop "$GITHUB_WORKSPACE#cross" -c cross-build ${{ matrix.target }}; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "cross-build attempt $attempt failed; retrying in $((attempt * 30))s"
+              sleep $((attempt * 30))
+            fi
+          done
+          exit 1
+
+      - name: Assert artifact architecture
+        run: |
+          # the exe for windows targets, the bare binary for darwin - never
+          # the .d dep file a glob would match first
+          bin=engine/target/${{ matrix.target }}/release/baml-cli.exe
+          [ -f "$bin" ] || bin=${bin%.exe}
+          desc=$(nix develop "$GITHUB_WORKSPACE#cross" -c file -b "$bin")
+          echo "$bin: $desc"
+          echo "$desc" | grep -E "${{ matrix.expect }}"
+          # Hand the exact path to the upload so it cannot widen into a glob.
+          echo "CROSS_BIN=$bin" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ix-cross-baml-cli-${{ matrix.target }}
+          path: ${{ env.CROSS_BIN }}
+          if-no-files-found: error

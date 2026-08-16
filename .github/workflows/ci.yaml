@@ -28,7 +28,10 @@ env:
 jobs:
   determine_changes:
     name: "Determine changes"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Fork PRs must never run on the persistent ix pool: the VMs are reused by
+    # later trusted, secret-bearing jobs. Untrusted events fall back to the
+    # GitHub-hosted runner this job used before the pool migration.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     outputs:
       # Flag that is raised when any code in baml_language is changed
       code: ${{ steps.check_code.outputs.changed }}
@@ -63,7 +66,7 @@ jobs:
       # when the PR title/body or a commit message opts in.
       run_perf: ${{ steps.check_perf.outputs.run }}
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -427,13 +430,13 @@ jobs:
   # Lint checks
   prek:
     name: "Pre-commit Checks"
-    runs-on: blacksmith-16vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-light"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 20
     steps:
       - name: "Checkout Branch"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -453,15 +456,20 @@ jobs:
 
       # prek hooks invoke cargo (from rustup), mise tasks that shell out
       # to cargo, and python scripts that begin with `#!/usr/bin/env -S
-      # uv run --script` (e.g. validate-markdown). We don't
-      # need go/ruby/etc here, just the prek binary, a python/uv pair
-      # for hook scripts, node for the grammar check, and clang-format.
+      # uv run --script` (e.g. validate-markdown). So: the prek binary, a
+      # python/uv pair for hook scripts, node for the grammar check,
+      # clang-format, and go. Go is not optional despite nothing here
+      # being a Go job - the clippy hook builds the whole workspace, and
+      # sdk_tests/crates/go's build script pipes its generated code
+      # through `gofmt` (sdks/go/sdkgen_go/src/formatting.rs). The hosted
+      # images preinstall Go so it came for free there; the NixOS runner
+      # image does not. Still no ruby/java/etc.
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
           # Temporarily omit Hawk while its CI check is disabled.
           # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
-          install_args: "cargo:prek python uv node clang-format"
+          install_args: "cargo:prek python uv node clang-format go"
 
       - name: "Cache prek"
         uses: actions/cache@v5
@@ -487,13 +495,13 @@ jobs:
 
   release-metadata:
     name: "Release Metadata"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 5
     steps:
       - name: "Checkout"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -625,12 +633,12 @@ jobs:
 
   grammar-tests:
     name: "Grammar Tests"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     needs: determine_changes
     if: needs.determine_changes.outputs.grammar == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     steps:
       - name: "Checkout Branch"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -669,7 +677,7 @@ jobs:
     if: needs.determine_changes.outputs.grammar == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     steps:
       - name: "Checkout Branch"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -723,7 +731,7 @@ jobs:
 
   miri-tests:
     name: "Miri (unsafe code verification)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     needs: determine_changes
     # TEMPORARILY DISABLED: miri tests timing out at 25 minutes, blocking CI/CD
     # TODO: Re-enable once miri test performance is addressed
@@ -731,7 +739,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: "Checkout"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -756,13 +764,13 @@ jobs:
   # above, whose bex_heap runs were timing out.
   prof-concurrency:
     name: "Profiling ring (loom + miri)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     needs: determine_changes
     if: needs.determine_changes.outputs.prof == 'true'
     timeout-minutes: 45
     steps:
       - name: "Checkout"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -809,13 +817,13 @@ jobs:
 
   proto-sync:
     name: "proto generated files sync"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     needs: determine_changes
     if: needs.determine_changes.outputs.proto == 'true'
     timeout-minutes: 20
     steps:
       - name: "Checkout"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -924,13 +932,13 @@ jobs:
 
   sdk_parity_check:
     name: "SDK parity lint"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     needs: determine_changes
     if: needs.determine_changes.outputs.sdk_tests == 'true'
     timeout-minutes: 15
     steps:
       - name: "Checkout Branch"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1166,9 +1174,9 @@ jobs:
   # between the two states as the author edits the PR / pushes commits.
   perf-pr-notice:
     name: "Perf benchmarks (PR notice)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     needs: determine_changes
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       pull-requests: write
     steps:
@@ -1227,7 +1235,7 @@ jobs:
   # Configure "CI - BAML Language / CI Failure Alert" as a required status check.
   ci-failure-alert:
     name: "CI-v2 Failure Alert"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     needs:
       - prek
       - release-metadata
@@ -1355,7 +1363,7 @@ jobs:
           echo "ref=$release_ref" >> "$GITHUB_OUTPUT"
           echo "Release workflow ref: $release_ref ($ref_sha)"
 
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           # HEAD^ is all the canary-cut check below needs. canary is
           # squash-merge-only with linear history required, so every push is a

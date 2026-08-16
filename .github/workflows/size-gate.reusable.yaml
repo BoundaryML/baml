@@ -46,22 +46,26 @@ env:
 jobs:
   size-gate-linux:
     name: "measure-baml-size (linux)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Fork PRs must never run on the persistent ix pool: the VMs are reused by
+    # later trusted, secret-bearing jobs. Untrusted events fall back to the
+    # GitHub-hosted runner this job used before the pool migration.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-gnu"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 20
     continue-on-error: true
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      - name: "Set up toolchains"
+        uses: ./.github/actions/setup-ci-shell
         with:
-          install_args: "sccache direnv"
+          mise-install-args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -132,6 +136,8 @@ jobs:
 
   size-gate-macos:
     name: "measure-baml-size (macos)"
+    # Forks have no Blacksmith mac/win runners; the job would queue forever.
+    if: ${{ github.repository == 'BoundaryML/baml' }}
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 20
     continue-on-error: true
@@ -139,6 +145,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -218,6 +229,8 @@ jobs:
 
   size-gate-windows:
     name: "measure-baml-size (windows)"
+    # Forks have no Blacksmith mac/win runners; the job would queue forever.
+    if: ${{ github.repository == 'BoundaryML/baml' }}
     runs-on: blacksmith-8vcpu-windows-2025
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
@@ -229,6 +242,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -326,24 +344,30 @@ jobs:
 
   size-gate-wasm:
     name: "measure-baml-size (wasm)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 25
     continue-on-error: true
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup target add wasm32-unknown-unknown
-        working-directory: baml_language
-
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      # nix arm: the CI shell's toolchain already carries the wasm32 target.
+      - name: "Set up toolchains"
+        id: toolchains
+        uses: ./.github/actions/setup-ci-shell
         with:
-          install_args: "sccache direnv"
+          mise-install-args: "sccache direnv"
+
+      - name: "Add the wasm32 target (no-nix fallback)"
+        if: steps.toolchains.outputs.nix == 'false'
+        run: rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
 
       - name: "Verify sccache"
         run: sccache --version
@@ -414,16 +438,21 @@ jobs:
 
   size-gate-report:
     name: "enforce-baml-size"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     if: ${{ always() && !cancelled() }}
     needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
     permissions:
       contents: read
       pull-requests: write
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
       - name: "Download size-gate reports"
         uses: actions/download-artifact@v8
@@ -436,14 +465,10 @@ jobs:
       # job's rust-cache (same shared-key, same runner OS), so this is a
       # near-instant cache hit in the common case — no upload/download of
       # the binary required.
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      - name: "Set up toolchains"
+        uses: ./.github/actions/setup-ci-shell
         with:
-          install_args: "sccache direnv"
+          mise-install-args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -486,6 +511,7 @@ jobs:
           RESULT_MACOS: ${{ needs.size-gate-macos.result }}
           RESULT_WINDOWS: ${{ needs.size-gate-windows.result }}
           RESULT_WASM: ${{ needs.size-gate-wasm.result }}
+          FORK_GATED: ${{ github.repository != 'BoundaryML/baml' }}
         run: |
           # Track which expected platforms produced a JSON report.
           missing=()
@@ -502,6 +528,15 @@ jobs:
             f="reports/size-gate-${platform}.json"
             if [ -s "$f" ]; then
               json_files+=("$f")
+            elif [ "${platform_results[$platform]:-unknown}" = "skipped" ] \
+              && [ "$FORK_GATED" = "true" ] \
+              && { [ "$platform" = "macos" ] || [ "$platform" = "windows" ]; }; then
+              # The only sanctioned skip: the mac/win legs are gated to the
+              # upstream repo, which owns the Blacksmith runners. A gated-off
+              # platform is not a missing report. Any OTHER skip - either leg
+              # skipped upstream, or linux/wasm skipped anywhere - is
+              # unexpected and falls through to the missing callout.
+              echo "note: size-gate ${platform} skipped by the fork gate"
             else
               missing+=("$platform (job result: ${platform_results[$platform]:-unknown})")
             fi

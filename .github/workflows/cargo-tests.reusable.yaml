@@ -67,29 +67,57 @@ env:
   # windows job.
   CARGO_PROFILE_DEV_OPT_LEVEL: "1"
   CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+  # Workflow-level mirror of the runner image's CARGO_BUILD_JOBS pin: cargo
+  # defaults -j to the guest's full 64 cores, and every concurrent pool member
+  # doing that oversubscribes the host it shares (measured: the same cold
+  # build was 317s at full-wave contention vs 120s alone). The image pin only
+  # reaches VMs at the next pool roll; this makes it effective now and is a
+  # no-op once the roll lands. Hosted fallback runners have <=16 vCPUs, so
+  # this changes nothing there.
+  CARGO_BUILD_JOBS: "16"
+  # Workflow-level so it is deterministic on EVERY run regardless of which
+  # image generation the pool member carries (workflow env overrides the
+  # runner unit env; the image pin only reaches VMs at a pool roll, and a
+  # roll cannot converge while CI keeps the members busy). vitest sizes its
+  # pool off availableParallelism()-1 = 63 on the 64-vCPU guests and
+  # vitest-pool-workers spawns one workerd per worker; the elastic guest can
+  # hold ~6 GiB when the spawn burst lands, so the kernel OOM-kills workerd
+  # ("Worker exited unexpectedly"). Measured on the pool: 63 and 16 workers
+  # fail 2/2 (cgroup oom_kill increments), 4 passes 2/2. Pairs with the
+  # one-pool-at-a-time nextest group in baml_language/.config/nextest.toml.
+  VITEST_MAX_WORKERS: "4"
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
 
   cargo-test-linux:
     name: "cargo test (x86_64-unknown-linux-gnu)"
-    runs-on: blacksmith-16vcpu-ubuntu-2404
-    timeout-minutes: 25
+    # Fork PRs must never run on the persistent ix pool: the VMs are reused by
+    # later trusted, secret-bearing jobs. Untrusted events fall back to the
+    # GitHub-hosted runner this job used before the pool migration.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-gnu"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    # 40, not 25: on the persistent pool a run that misses its warm member
+    # recompiles from local sccache and has been measured at 1519s+ under
+    # family contention (cancelled at the old 25m cap); warm runs are 92s.
+    # The cap is a hang backstop, not a perf gate - the L2 conversion of this
+    # lane (nextest binaries-metadata export) is what removes the recompiles.
+    timeout-minutes: 40
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      # mise installs sccache/direnv AND cargo-nextest (cargo: backend ->
-      # cargo-binstall prebuilt), replacing taiki-e/install-action.
-      - name: "Install tools (mise)"
-        uses: ./.github/actions/setup-mise
+      # nix arm: the flake CI shell provides the pinned toolchain, sccache,
+      # direnv and cargo-nextest. Fallback arm (no nix): rustup + mise.
+      - name: "Set up toolchains"
+        uses: ./.github/actions/setup-ci-shell
         with:
-          install_args: "sccache direnv cargo:cargo-nextest"
+          mise-install-args: "sccache direnv cargo:cargo-nextest"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -168,31 +196,43 @@ jobs:
 
   cargo-test-linux-musl:
     name: "cargo test (x86_64-unknown-linux-musl)"
-    runs-on: blacksmith-16vcpu-ubuntu-2404
-    timeout-minutes: 35
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-musl"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    # 45, not 35: same reasoning as the gnu lane above; measured 1400s under
+    # contention against the old 35m cap (23 of 35 minutes used).
+    timeout-minutes: 45
     env:
       CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
-      - name: "Install Rust toolchain"
-        run: |
-          set -euo pipefail
-          rustup show
-          rustup target add x86_64-unknown-linux-musl
+      # nix arm: the CI shell's toolchain already carries the musl target
+      # (rust-toolchain.toml) and ships a static-PIE-capable musl-gcc.
+      - name: "Set up toolchains"
+        id: toolchains
+        uses: ./.github/actions/setup-ci-shell
+        with:
+          mise-install-args: "sccache direnv cargo:cargo-nextest"
+
+      - name: "Add the musl target (no-nix fallback)"
+        if: steps.toolchains.outputs.nix == 'false'
+        run: rustup target add x86_64-unknown-linux-musl
         working-directory: baml_language
 
+      # Both arms: this wires CC_<target> + CARGO_TARGET_*_LINKER=musl-gcc,
+      # without which cargo links the musl target with the default (glibc)
+      # gcc and dies on `-ldl` (musl folds libdl into libc). The CI shell
+      # provides musl-gcc, so the action's apt branch never runs on ix.
       - name: "Setup musl cross toolchain"
         uses: ./.github/actions/setup-musl-cross
         with:
           target: x86_64-unknown-linux-musl
-
-      - name: "Install tools (mise)"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv cargo:cargo-nextest"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -359,7 +399,8 @@ jobs:
     name: "cargo test (x86_64-pc-windows-msvc)"
     # Skip in the merge queue: windows already ran on the PR. The merge_group
     # event is inherited from ci.yaml through the workflow_call boundary.
-    if: ${{ github.event_name != 'merge_group' }}
+    # Also skip outside the upstream repo (no Blacksmith Windows runners).
+    if: ${{ github.event_name != 'merge_group' && github.repository == 'BoundaryML/baml' }}
     # 8-vCPU + CARGO_BUILD_JOBS=16 (2x cores) was the value sweet spot for the
     # native Windows Rust builds (build-caching/04 Exp 7/9).
     runs-on: blacksmith-8vcpu-windows-2025
@@ -382,6 +423,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -502,6 +548,26 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
+            // Fork PRs must never run on the persistent ix pool: the VMs are
+            // reused by later trusted, secret-bearing jobs. Untrusted events
+            // fall back to the GitHub-hosted runner these jobs used before the
+            // pool migration. Read off `context` rather than interpolated by
+            // the workflow templater, so no event data is spliced into this
+            // script.
+            // Same-repo test, not head.repo.fork: `fork` answers "is the head
+            // repo a fork of anything", which is true for every PR on a fork
+            // of upstream and would route same-repo PRs to runner labels that
+            // do not exist there.
+            const poolOk =
+              (context.eventName !== 'pull_request' && context.eventName !== 'pull_request_target') ||
+              context.payload.pull_request?.head?.repo?.full_name ===
+                `${context.repo.owner}/${context.repo.repo}`;
+            // One constant covers all eight linux SDK entries, so the whole
+            // generated matrix lands in the sdk family: these jobs share the
+            // gnu Rust build underneath and differ only in which language
+            // toolchain each one leaves warm on the member.
+            const LINUX_RUNNER = poolOk ? ["self-hosted", "ix-sdk"] : "blacksmith-16vcpu-ubuntu-2404";
+
             const baseMatrix = [
               {
                 "sdk-label": "go",
@@ -510,7 +576,7 @@ jobs:
                 "sdk-path": "go",
                 "install-args": "sccache direnv go cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "runs-on": LINUX_RUNNER,
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -521,7 +587,7 @@ jobs:
                 "sdk-path": "python_pydantic2",
                 "install-args": "sccache direnv python uv cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "runs-on": LINUX_RUNNER,
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -532,7 +598,7 @@ jobs:
                 "sdk-path": "typescript",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "runs-on": LINUX_RUNNER,
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -543,7 +609,7 @@ jobs:
                 "sdk-path": "typescript_web",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
                 "os-label": "linux",
-                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "runs-on": LINUX_RUNNER,
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -559,7 +625,7 @@ jobs:
                 "sdk-path": "cpp",
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "runs-on": LINUX_RUNNER,
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -570,7 +636,7 @@ jobs:
                 "sdk-path": "csharp",
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "runs-on": LINUX_RUNNER,
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -581,7 +647,7 @@ jobs:
                 "sdk-path": "rust",
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "runs-on": LINUX_RUNNER,
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -596,7 +662,7 @@ jobs:
                 "sdk-path": "java",
                 "install-args": "sccache direnv java gradle cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "runs-on": LINUX_RUNNER,
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -783,7 +849,15 @@ jobs:
 
             // TODO(B-1545): Re-enable macOS SDK tests after the SIGABRT flakiness is fixed: https://linear.app/boundaryml2/issue/B-1545/investigate-flakiness-in-cargo-test-aarch64-apple-darwin-ci-job
             const enabledMatrix = baseMatrix.filter((entry) => entry["os-label"] !== "macos");
-            const matrix = context.eventName === "merge_group"
+            // Linux-only in the merge queue (mac/win already ran on the PR)
+            // and on forks (no Blacksmith mac/win runners - jobs would queue
+            // forever). GITHUB_REPOSITORY is always set by Actions and the
+            // compare is case-insensitive, so an absent or differently-cased
+            // payload cannot silently drop the mac/win legs upstream.
+            const linuxOnly =
+              context.eventName === "merge_group" ||
+              process.env.GITHUB_REPOSITORY.toLowerCase() !== "boundaryml/baml";
+            const matrix = linuxOnly
               ? enabledMatrix.filter((entry) => entry["os-label"] === "linux")
               : enabledMatrix;
             const enabledSdkDirs = new Set(enabledMatrix.map((entry) => entry["sdk-dir"]));
@@ -805,6 +879,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
       - name: "Assert every SDK directory has a matrix entry"
         uses: actions/github-script@v8
@@ -873,6 +952,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -1066,17 +1150,31 @@ jobs:
 
   cargo-test-wasm:
     name: "cargo test (wasm32-unknown-unknown)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 45
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
-      - name: "Install Rust toolchain"
+      # nix arm: the CI shell's toolchain already carries the wasm32 target
+      # (rust-toolchain.toml), so the stall-prone `rustup target add` download
+      # only exists on the fallback arm.
+      - name: "Set up toolchains"
+        id: toolchains
+        uses: ./.github/actions/setup-ci-shell
+        with:
+          mise-install-args: "sccache direnv"
+
+      - name: "Add the wasm32 target (no-nix fallback)"
+        if: steps.toolchains.outputs.nix == 'false'
         run: |
           set -euo pipefail
-          rustup show
           # `rustup target add wasm32` fetches a small (~20MB) std component that
           # normally installs in seconds. A multi-minute duration means a stalled
           # download (rustup has no idle timeout), which otherwise burns the whole
@@ -1092,11 +1190,6 @@ jobs:
             sleep 5
           done
         working-directory: baml_language
-
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -1176,12 +1269,22 @@ jobs:
 
   cargo-build-msrv:
     name: "cargo build (msrv)"
-    runs-on: blacksmith-16vcpu-ubuntu-2404
-    timeout-minutes: 25
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-msrv"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    # 40 (was 25): the MSRV toolchain is unique to this job, so its first run
+    # on any given pool VM rebuilds with a cold compile cache and measured
+    # 21-25+ min under wave contention (three straight 25-min timeouts on
+    # cold members, 2026-08-15). Warm/steady-state runs are far inside the
+    # old budget; the headroom only exists for cold landings.
+    timeout-minutes: 40
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
       - uses: SebRollen/toml-action@v1.2.0
         id: msrv
@@ -1189,7 +1292,21 @@ jobs:
           file: "baml_language/Cargo.toml"
           field: "workspace.package.rust-version"
 
-      - name: "Install Rust toolchain (MSRV)"
+      # nix arm: devShells.ci-msrv reads the same manifest field at eval time,
+      # so the shell's toolchain and this gate cannot drift. The `+MSRV`
+      # spelling is gone on purpose - the shell's cargo is not a rustup shim;
+      # both arms make the MSRV toolchain the plain `cargo` and the assert
+      # below keeps that honest.
+      - name: "Set up toolchains"
+        id: toolchains
+        uses: ./.github/actions/setup-ci-shell
+        with:
+          shell: ci-msrv
+          rustup: "false"
+          mise-install-args: "sccache direnv"
+
+      - name: "Install Rust toolchain (MSRV, no-nix fallback)"
+        if: steps.toolchains.outputs.nix == 'false'
         env:
           MSRV: ${{ steps.msrv.outputs.value }}
         run: |
@@ -1197,10 +1314,10 @@ jobs:
           rustup default "${MSRV}"
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv"
+      - name: "Assert the MSRV toolchain is active"
+        env:
+          MSRV: ${{ steps.msrv.outputs.value }}
+        run: rustc --version | grep -F "${MSRV}"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -1222,15 +1339,11 @@ jobs:
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: cargo "+${MSRV}" fetch
+        run: cargo fetch
         working-directory: baml_language
 
       - name: "Build with MSRV"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: cargo "+${MSRV}" test --no-run --all-features --timings
+        run: cargo test --no-run --all-features --timings
         working-directory: baml_language
 
       - name: "Show sccache stats"
@@ -1263,21 +1376,22 @@ jobs:
 
   cargo-doc:
     name: "cargo doc"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-gnu"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 25
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      - name: "Set up toolchains"
+        uses: ./.github/actions/setup-ci-shell
         with:
-          install_args: "sccache direnv"
+          mise-install-args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -1338,21 +1452,26 @@ jobs:
 
   snapshot-tests:
     name: "snapshot tests"
-    runs-on: blacksmith-16vcpu-ubuntu-2404
-    timeout-minutes: 30
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-gnu"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    # 45, not 30: on the persistent pool this lane runs 7-16 min quiet but has
+    # been measured at 30m+ when two full waves stack on the gnu family
+    # (three timeout-cancels on 2026-08-16, all contention, all green on
+    # rerun). 30m leaves zero headroom for the contended regime.
+    timeout-minutes: 45
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Persistent-runner warmth: keep IGNORED files (target/, node_modules)
+          # across runs; tracked files still hard-reset to the new SHA. A no-op
+          # on ephemeral runners; on the ix pool it is what lets a warm rebuild
+          # skip relinking the world.
+          clean: false
 
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install tools (mise)"
-        uses: ./.github/actions/setup-mise
+      - name: "Set up toolchains"
+        uses: ./.github/actions/setup-ci-shell
         with:
-          install_args: "sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest"
+          mise-install-args: "sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest"
 
       - name: "Verify sccache"
         run: sccache --version

@@ -18,6 +18,8 @@ on:
 jobs:
   test-windows:
     name: Test Windows Go Client
+    # Forks have no Blacksmith Windows runners; the job would queue forever.
+    if: ${{ github.repository == 'BoundaryML/baml' }}
     runs-on: blacksmith-4vcpu-windows-2025
 
     steps:
@@ -46,7 +48,7 @@ jobs:
           # Download protoc directly to avoid rate limiting
           PROTOC_VERSION="27.1"
           curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-win64.zip"
-          unzip -q protoc-${PROTOC_VERSION}-win64.zip -d $HOME/.local
+          unzip -oq protoc-${PROTOC_VERSION}-win64.zip -d $HOME/.local
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           rm protoc-${PROTOC_VERSION}-win64.zip
 
@@ -90,7 +92,14 @@ jobs:
     strategy:
       fail-fast: false  # Don't cancel other jobs if one fails
       matrix:
-        os: [blacksmith-4vcpu-ubuntu-2404, macos-latest]
+        # `include` so the ix entry stays one job carrying both labels; a bare
+        # `os:` list would read them as two separate variations.
+        include:
+          # Fork PRs must never run on the persistent ix pool: the VMs are reused by
+          # later trusted, secret-bearing jobs. Untrusted events fall back to the
+          # GitHub-hosted runner this job used before the pool migration.
+          - os: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-sdk"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+          - os: macos-latest
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -123,7 +132,7 @@ jobs:
             PROTOC_ZIP="protoc-${PROTOC_VERSION}-osx-universal_binary.zip"
           fi
           curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PROTOC_ZIP}"
-          unzip -q ${PROTOC_ZIP} -d $HOME/.local
+          unzip -oq ${PROTOC_ZIP} -d $HOME/.local
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           rm ${PROTOC_ZIP}
 
@@ -166,7 +175,7 @@ jobs:
 
   cross-compile-test:
     name: Test Cross-Compilation
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix-cross"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
 
     steps:
       - name: Checkout code
