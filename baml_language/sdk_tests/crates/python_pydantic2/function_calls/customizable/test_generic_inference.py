@@ -107,6 +107,7 @@ def test_generic_inference_identity_null_round_trips():
     assert identity(None) is None
 
 
+# SDK_PARITY_LINT(skip): validates Python default-argument stubs and runtime TypeVar inference
 def test_generic_inference_default_only_value_position():
     assert optional_only() is None
     assert optional_only(x=7) == 7

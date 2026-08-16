@@ -114,6 +114,7 @@ def test_main_stream_types_lorem_leaf_present():
     )
 
 
+# SDK_PARITY_LINT(skip): validates Python generated stream_types package imports
 def test_main_nested_stream_partial_module_imports_cleanly():
     from baml_sdk.stream_types import stream_typing
 

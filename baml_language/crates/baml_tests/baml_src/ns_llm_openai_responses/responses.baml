@@ -35,6 +35,7 @@ function OaiPicture(subject: string) -> image {
 function OaiLook(pic: image, clip: audio, doc: pdf) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
+        ${role("user")}
         Look: ${pic} ${clip} ${doc}
     `
 }
@@ -178,7 +179,7 @@ test "oai_request_shape" {
     // typed request fields, in the request class's declaration order
     assert.contains(got, `"model":"gpt-4o-mini"`);
     assert.contains(got, `"store":false`);
-    assert.contains(got, `"input":[{"role":"user","content":[{"type":"input_text","text":`);
+    assert.contains(got, `"input":[{"role":"system","content":[{"type":"input_text","text":`);
     assert.contains(got, "Say pong.");
     assert.contains(got, `"temperature":0.25`);
     assert.contains(got, `"top_p":0.5`);
@@ -340,7 +341,10 @@ function oai_system_image_input() -> string {
 
 test "oai_system_image_input" {
     let got = oai_system_image_input();
-    assert.contains(got, `{"role":"system","content":[{"type":"input_image","image_url":"data:image/png;base64,aW1n","detail":"auto"}]}`)
+    assert.contains(
+        got,
+        `{"role":"system","content":[{"type":"input_text","text":"\\nLook: "},{"type":"input_image","image_url":"data:image/png;base64,aW1n","detail":"auto"}]}`,
+    )
 }
 
 // An `-> image` return type enables the provider-side image_generation tool and

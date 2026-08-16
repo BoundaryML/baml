@@ -1924,7 +1924,7 @@ fn generic_inference_positions<'a>(
 /// inferable (Rule 4 supplies `RustType` when a defaulted value is omitted),
 /// while any closure occurrence poisons the var globally. A direct
 /// multi-TypeVar union is ambiguous only at that occurrence; another value
-/// argument can still bind the same var. Class TypeVars are excluded by the
+/// argument can still bind the same var. Class `TypeVars` are excluded by the
 /// caller, which passes only the function or method's own `generic_params`.
 fn own_generic_params_inferable<'a>(
     generic_params: &[String],

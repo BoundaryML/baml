@@ -262,7 +262,11 @@ impl BexEngine {
         };
 
         if let Some(selected) = selected_interface {
-            return wrap_selected_union_member(external, declared_type, selected);
+            return Ok(wrap_selected_union_member(
+                external,
+                declared_type,
+                selected,
+            ));
         }
         // Wrap in Union if declared type is a union
         maybe_wrap_union(external, declared_type)
@@ -1672,24 +1676,24 @@ fn wrap_selected_union_member(
     value: BexExternalValue,
     declared_type: &RuntimeTy,
     selected: &RuntimeTy,
-) -> Result<BexExternalValue, EngineError> {
+) -> BexExternalValue {
     let RuntimeTy::Union(members, _) = declared_type else {
-        return Ok(value);
+        return value;
     };
     if members.iter().any(RuntimeTy::is_null) {
         if matches!(value, BexExternalValue::Null) {
-            return Ok(value);
+            return value;
         }
         let non_null: Vec<&RuntimeTy> = members.iter().filter(|member| !member.is_null()).collect();
         if non_null.len() <= 1 {
-            return Ok(value);
+            return value;
         }
     }
 
-    Ok(BexExternalValue::Union {
+    BexExternalValue::Union {
         value: Box::new(value),
         metadata: UnionMetadata::new(declared_type.clone(), selected.clone()),
-    })
+    }
 }
 
 /// Recover `TypeVar(name) -> concrete` bindings by walking a declared type and

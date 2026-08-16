@@ -43,6 +43,7 @@ def test_main_deep_namespace_thing_reachable():
     from baml_sdk.a.b import Thing  # noqa: F401
 
 
+# SDK_PARITY_LINT(skip): validates Python Pydantic extra-field compatibility
 def test_main_generated_models_ignore_extra_fields():
     from baml_sdk.generics import Wrapper
     from baml_sdk.lorem import Resume

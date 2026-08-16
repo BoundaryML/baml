@@ -718,10 +718,10 @@ fn rendered_name<'a>(name: &'a str, alias: Option<&'a String>) -> &'a str {
 /// class's display name alone is insufficient: `Box<int>` and `Box<string>`
 /// have different field schemas even though both are named `Box`.
 fn class_instantiation_key(ty: &RuntimeTy) -> String {
-    let (type_name, type_args) = match ty {
-        RuntimeTy::Class(type_name, type_args, _)
-        | RuntimeTy::Interface(type_name, type_args, _, _) => (type_name, type_args),
-        _ => unreachable!("class_instantiation_key called for a non-class type"),
+    let (RuntimeTy::Class(type_name, type_args, _)
+    | RuntimeTy::Interface(type_name, type_args, _, _)) = ty
+    else {
+        unreachable!("class_instantiation_key called for a non-class type")
     };
     if type_args.is_empty() {
         type_name.display_name().to_string()
@@ -741,10 +741,10 @@ fn class_instantiation_key(ty: &RuntimeTy) -> String {
 /// Internal traversal identity for a realized class. Unlike the output label,
 /// this retains the canonical package-qualified type name.
 fn class_visit_key(ty: &RuntimeTy) -> String {
-    let (type_name, type_args) = match ty {
-        RuntimeTy::Class(type_name, type_args, _)
-        | RuntimeTy::Interface(type_name, type_args, _, _) => (type_name, type_args),
-        _ => unreachable!("class_visit_key called for a non-class type"),
+    let (RuntimeTy::Class(type_name, type_args, _)
+    | RuntimeTy::Interface(type_name, type_args, _, _)) = ty
+    else {
+        unreachable!("class_visit_key called for a non-class type")
     };
     if type_args.is_empty() {
         format!("class:{type_name}")
