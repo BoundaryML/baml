@@ -61,6 +61,15 @@ function user.NamedTools$spec(q: string) -> ai.FunctionSpec<Answer> {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call anthropic.AnthropicClient.new
     store_var _6
     load_const "NamedTools"
@@ -139,7 +148,16 @@ function user.PlainChat$spec(q: string) -> ai.FunctionSpec<string> {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call openai.OpenAiClient.new
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
     store_var _6
     load_const "PlainChat"
     load_deref ?1
@@ -241,7 +259,16 @@ function user.SpecAgent$spec(q: string) -> ai.FunctionSpec<Answer> {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call openai.OpenAiClient.new
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
     store_var _7
     load_const "SpecAgent"
     load_deref ?1

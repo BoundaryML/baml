@@ -2,17 +2,17 @@
 // (The legacy `allowed_roles` option went away with `client<llm>` config
 // blocks; roles are the client's wire concern now.)
 
-client O1Client = openai.OpenAiClient.new(
+client O1Client = openai.ResponsesClient.new(
     model = "o1",
     api_key = "sk-test",
 );
 
-client O1MiniClient = openai.OpenAiClient.new(
+client O1MiniClient = openai.ResponsesClient.new(
     model = "o1-mini",
     api_key = "sk-test",
 );
 
-client Gpt4oClient = openai.OpenAiClient.new(
+client Gpt4oClient = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = "sk-test",
 );

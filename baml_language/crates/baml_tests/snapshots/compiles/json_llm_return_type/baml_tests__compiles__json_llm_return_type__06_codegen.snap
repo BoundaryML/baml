@@ -60,13 +60,15 @@ function user.ExtractAny$spec() -> ai.FunctionSpec<baml.json.json> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_global user.TestClient
+    call ai.clients.resolve
+    store_var _5
     load_const "ExtractAny"
     load_type string
     load_type unknown
     alloc_map 0
     make_closure .<lambda(ExtractAny$spec, 0)>, 0
-    load_var _3
-    load_global user.TestClient
+    load_var2 1 2
     load_type baml.json.json
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

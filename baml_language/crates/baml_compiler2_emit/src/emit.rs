@@ -3474,6 +3474,15 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // carries a binding for every declared member, pinned or
             // defaulted), or a union that may carry any of these: the VM
             // value matcher.
+            //
+            // Media (`image` / `audio` / `video` / `pdf`) belongs here rather
+            // than with the tagless leaves below: there is no type tag for
+            // media, but `value_concrete_ty` reports the *primitive*
+            // `ConcreteRealizedTy::Media(kind)`, so the value matcher
+            // discriminates `image` from `audio` exactly. Routing it to the
+            // tagless-leaf fallback instead compiles to constant-FALSE — `v is
+            // image` false for every value, and a `match`'s media arm never
+            // firing (the last arm swallows the value).
             TyTemplate::List(..)
             | TyTemplate::Map { .. }
             | TyTemplate::Future(..)

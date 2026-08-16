@@ -56,7 +56,7 @@ test OuterPyramid() {
   args { }
 }
 
-client GPT4o = openai.OpenAiClient.new(
+client GPT4o = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = env.OPENAI_API_KEY,
 );

@@ -100,13 +100,15 @@ function type_reflection.GetBar$spec() -> ai.FunctionSpec<type_reflection.Bar> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_global user.type_reflection.TestClient
+    call ai.clients.resolve
+    store_var _5
     load_const "GetBar"
     load_type string
     load_type unknown
     alloc_map 0
     make_closure .<lambda(GetBar$spec, 0)>, 0
-    load_var _3
-    load_global user.type_reflection.TestClient
+    load_var2 1 2
     load_type type_reflection.Bar
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
@@ -182,13 +184,15 @@ function type_reflection.GetFoo$spec() -> ai.FunctionSpec<type_reflection.Foo> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_global user.type_reflection.TestClient
+    call ai.clients.resolve
+    store_var _5
     load_const "GetFoo"
     load_type string
     load_type unknown
     alloc_map 0
     make_closure .<lambda(GetFoo$spec, 0)>, 0
-    load_var _3
-    load_global user.type_reflection.TestClient
+    load_var2 1 2
     load_type type_reflection.Foo
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
@@ -214,10 +218,10 @@ function type_reflection.GetFoo$stream(client: ai.stream.StreamingClient | null)
 
 function type_reflection.eq_type_values_different_fn() -> bool {
     load_const "GetFoo"
-    sys_op baml.prompt.get_return_type
+    sys_op ai.internal.get_return_type
     store_var a
     load_const "GetBar"
-    sys_op baml.prompt.get_return_type
+    sys_op ai.internal.get_return_type
     store_var b
     load_var2 1 2
     call baml.ops.equals_equals
@@ -226,10 +230,10 @@ function type_reflection.eq_type_values_different_fn() -> bool {
 
 function type_reflection.eq_type_values_same_fn() -> bool {
     load_const "GetFoo"
-    sys_op baml.prompt.get_return_type
+    sys_op ai.internal.get_return_type
     store_var a
     load_const "GetFoo"
-    sys_op baml.prompt.get_return_type
+    sys_op ai.internal.get_return_type
     store_var b
     load_var2 1 2
     call baml.ops.equals_equals
@@ -238,10 +242,10 @@ function type_reflection.eq_type_values_same_fn() -> bool {
 
 function type_reflection.neq_type_values_different_fn() -> bool {
     load_const "GetFoo"
-    sys_op baml.prompt.get_return_type
+    sys_op ai.internal.get_return_type
     store_var a
     load_const "GetBar"
-    sys_op baml.prompt.get_return_type
+    sys_op ai.internal.get_return_type
     store_var b
     load_var2 1 2
     call baml.ops.equals_equals
@@ -251,10 +255,10 @@ function type_reflection.neq_type_values_different_fn() -> bool {
 
 function type_reflection.neq_type_values_same_fn() -> bool {
     load_const "GetFoo"
-    sys_op baml.prompt.get_return_type
+    sys_op ai.internal.get_return_type
     store_var a
     load_const "GetFoo"
-    sys_op baml.prompt.get_return_type
+    sys_op ai.internal.get_return_type
     store_var b
     load_var2 1 2
     call baml.ops.equals_equals

@@ -27,7 +27,7 @@ pub mod io {
     pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
     pub use bex_vm_types::SysOp;
     // Owned structs are generated once in sys_types and re-exported here
-    // so that `io::owned::prompt::*` paths continue to work.
+    // so that `io::owned::ai::*` paths continue to work.
     pub use sys_types::generated::owned;
     pub use sys_types::{
         AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, SysOpContext, SysOpFn,
@@ -44,7 +44,7 @@ pub mod io {
 // `baml_builtins2_codegen` to generate the `RuntimeIo` trait (in
 // `sys_types::runtime_io`). RuntimeIo is a flat, typed async interface to all
 // sys-ops -- no VM plumbing (BexHeap, SysOpContext, CallId) in its signatures.
-// Crates like `sys_llm` take `&dyn RuntimeIo` to call into the runtime IO
+// Crates like `sys_auth` take `&dyn RuntimeIo` to call into the runtime IO
 // layer (HTTP, env, filesystem, shell) without coupling to the VM.
 //
 // The generated `RuntimeIoAdapter` below bridges the trait to the underlying
@@ -86,7 +86,18 @@ mod io_adapter {
 pub use io_adapter::build_runtime_io;
 
 // ============================================================================
-// Blanket IO LLM implementation (delegates to sys_llm)
+// Prompt schema rendering + SAP parsing
+// ============================================================================
+// Relocated verbatim from the (now deleted) `sys_llm` crate, whose provider
+// stack was replaced by native BAML client implementations. `sys_ops` was the
+// only remaining caller of these two pieces.
+// ============================================================================
+
+pub mod output_format;
+pub mod sap;
+
+// ============================================================================
+// Blanket IO LLM implementation
 // ============================================================================
 
 /// Look up an LLM function by name via the canonical
@@ -157,7 +168,7 @@ impl<T> io::IoClassSapParseCache for T {
                     });
                 }
             };
-        let sap = ::sys_llm::SapParseCache::new(compiled);
+        let sap = crate::sap::SapParseCache::new(compiled);
         let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
         SysOpOutput::ok(io::owned::sap::ParseCache { _data: data })
     }
@@ -166,13 +177,13 @@ impl<T> io::IoClassSapParseCache for T {
 /// Blanket impl — `Context.output_format_with(...)` re-renders the return
 /// type's schema with caller options (BEP-049 §10 / M5b.2). `Context._output_format`
 /// carries the prebuilt schema as an opaque handle, so this only re-renders it.
-impl<T> io::IoClassPromptContext for T {
+impl<T> io::IoClassAiContext for T {
     #[allow(clippy::too_many_arguments)]
     fn output_format_with(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        context: io::owned::prompt::Context,
+        context: io::owned::ai::Context,
         prefix: Option<String>,
         or_splitter: Option<String>,
         enum_value_prefix: Option<String>,
@@ -185,10 +196,10 @@ impl<T> io::IoClassPromptContext for T {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         // Render the prebuilt schema handle with the caller's options. The
-        // `Option → RenderOptions` mapping lives inside sys_llm (those option
-        // types are crate-internal there).
+        // `Option → RenderOptions` mapping lives inside `output_format` (those
+        // option types are module-internal there).
         let content = unwrap_output_format(&context._output_format);
-        SysOpOutput::ok(sys_llm::render_output_format_content(
+        SysOpOutput::ok(crate::output_format::render_output_format_content(
             &content,
             prefix,
             or_splitter,
@@ -703,44 +714,43 @@ mod schema {
     }
 }
 
-impl<T> io::IoNamespacePrompt for T {
-    fn render_output_format(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        return_type: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        // BEP-049 §10 (M5b): the `ctx.output_format` schema string.
-        SysOpOutput::ok(sys_llm::render_output_format(&return_type, ctx))
-    }
+/// The `ai` package root has no free IO functions — its IO surface is the
+/// `ai.Context` class methods (`IoClassAiContext`) — but the generated package
+/// trait still requires the (method-only) namespace trait.
+impl<T> io::IoNamespaceAi for T {}
 
-    fn build_output_format(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        return_type: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::prompt::OutputFormat> {
-        // BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
-        // carries; `output_format_with(...)` renders it with caller options.
-        let content = sys_llm::build_output_format_content(&return_type, ctx);
-        SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
-    }
+// The `ai.internal` prompt-rendering sys-ops are pure (no platform IO), so
+// both `DefaultIoOps` and `NativeSysOps` delegate their `IoNamespaceAiInternal`
+// prompt methods to these shared implementations.
 
-    fn get_return_type(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::RuntimeTy> {
-        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
-        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
-            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
-        };
-        SysOpOutput::ok(info.return_type.clone())
-    }
+/// BEP-049 §10 (M5b): the `ctx.output_format` schema string.
+pub fn render_output_format_op(
+    return_type: &baml_type::RuntimeTy,
+    ctx: &SysOpContext,
+) -> SysOpOutput<String> {
+    SysOpOutput::ok(crate::output_format::render_output_format(return_type, ctx))
+}
+
+/// BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
+/// carries; `output_format_with(...)` renders it with caller options.
+pub fn build_output_format_op(
+    return_type: &baml_type::RuntimeTy,
+    ctx: &SysOpContext,
+) -> SysOpOutput<io::owned::ai::OutputFormat> {
+    let content = crate::output_format::build_output_format_content(return_type, ctx);
+    SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
+}
+
+/// Look up an LLM function's declared return type by name.
+pub fn get_return_type_op(
+    function_name: &str,
+    ctx: &SysOpContext,
+) -> SysOpOutput<baml_type::RuntimeTy> {
+    let outcome = lookup_llm_function(function_name, &ctx.llm_functions);
+    let sys_types::ResolveOutcome::Found(_, info) = outcome else {
+        return SysOpOutput::err(llm_function_lookup_error(function_name, &outcome));
+    };
+    SysOpOutput::ok(info.return_type.clone())
 }
 
 /// Schema-aligned parsing operations back both public `baml.sap.parse` and
@@ -756,13 +766,13 @@ impl<T> io::IoNamespaceSap for T {
         _type_arg_1: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        let Ok(sap) = cache._data.downcast::<::sys_llm::SapParseCache>() else {
+        let Ok(sap) = cache._data.downcast::<crate::sap::SapParseCache>() else {
             return SysOpOutput::err(VmBamlError::DevOther {
                 message: "Invalid ParseCache: expected SapParseCache".into(),
             });
         };
         SysOpOutput::Ready(
-            sys_llm::execute_sap_parse_final(&json, &sap, ctx).map_err(VmRustFnError::from),
+            crate::sap::execute_sap_parse_final(&json, &sap, ctx).map_err(VmRustFnError::from),
         )
     }
 
@@ -776,12 +786,12 @@ impl<T> io::IoNamespaceSap for T {
         _type_arg_1: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        let Ok(sap) = cache._data.downcast::<::sys_llm::SapParseCache>() else {
+        let Ok(sap) = cache._data.downcast::<crate::sap::SapParseCache>() else {
             return SysOpOutput::err(VmBamlError::DevOther {
                 message: "Invalid ParseCache: expected SapParseCache".into(),
             });
         };
-        let result = match sys_llm::execute_sap_parse_partial(&json, &sap, ctx) {
+        let result = match crate::sap::execute_sap_parse_partial(&json, &sap, ctx) {
             Ok(Some(value)) => Ok(value),
             Ok(None) => Ok(BexExternalValue::instance(
                 "baml.sap.NoYield",
@@ -793,24 +803,24 @@ impl<T> io::IoNamespaceSap for T {
     }
 }
 
-/// Wrap an `OutputFormatContent` into the generated `owned::prompt::OutputFormat` handle.
+/// Wrap an `OutputFormatContent` into the generated `owned::ai::OutputFormat` handle.
 fn wrap_output_format(
-    content: std::sync::Arc<sys_llm::OutputFormatContent>,
-) -> io::owned::prompt::OutputFormat {
-    io::owned::prompt::OutputFormat {
+    content: std::sync::Arc<crate::output_format::OutputFormatContent>,
+) -> io::owned::ai::OutputFormat {
+    io::owned::ai::OutputFormat {
         _data: content as std::sync::Arc<dyn std::any::Any + Send + Sync>,
     }
 }
 
-/// Unwrap a generated `owned::prompt::OutputFormat` handle back to its `OutputFormatContent`.
+/// Unwrap a generated `owned::ai::OutputFormat` handle back to its `OutputFormatContent`.
 #[allow(clippy::used_underscore_binding)]
 fn unwrap_output_format(
-    owned: &io::owned::prompt::OutputFormat,
-) -> std::sync::Arc<sys_llm::OutputFormatContent> {
+    owned: &io::owned::ai::OutputFormat,
+) -> std::sync::Arc<crate::output_format::OutputFormatContent> {
     owned
         ._data
         .clone()
-        .downcast::<sys_llm::OutputFormatContent>()
+        .downcast::<crate::output_format::OutputFormatContent>()
         .expect("OutputFormat._data downcast failed: expected Arc<OutputFormatContent>. This indicates a bug in wrap_output_format or a type mismatch.")
 }
 
@@ -1875,6 +1885,99 @@ impl io::IoClassRandomSystemRandom for DefaultIoOps {
 }
 
 impl io::IoNamespaceRandom for DefaultIoOps {}
+
+impl io::IoNamespaceAiInternal for DefaultIoOps {
+    fn render_output_format(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        render_output_format_op(&return_type, ctx)
+    }
+    fn build_output_format(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::ai::OutputFormat> {
+        build_output_format_op(&return_type, ctx)
+    }
+    fn get_return_type(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<baml_type::RuntimeTy> {
+        get_return_type_op(&function_name, ctx)
+    }
+    fn _gcp_access_token(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _credentials_json: Option<String>,
+        _scope: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _gcp_project_id(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _credentials_json: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _gcp_quota_project_id(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _credentials_json: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _aws_sign_request(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _request: BexExternalValue,
+        _service: String,
+        _region: Option<String>,
+        _profile: Option<String>,
+        _access_key_id: Option<String>,
+        _secret_access_key: Option<String>,
+        _session_token: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _aws_resolve_region(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _region: Option<String>,
+        _profile: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
 
 impl io::IoPackageBaml for DefaultIoOps {}
 

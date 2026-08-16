@@ -92,9 +92,11 @@ namespace baml.csv:
   function write<T>
   function writer
 namespace baml.env:
+  class Ref { methods: [get, get_or_panic, or] }
   function get
   function get_or_panic
   function get_or_panic_lenient
+  function ref
 namespace baml.errors:
   class AccessError { methods: [] }
   class CompilationError { methods: [] }
@@ -261,23 +263,6 @@ namespace baml.panics:
   class StackOverflow { methods: [] }
   class Unreachable { methods: [] }
   class UserPanic { methods: [] }
-namespace baml.prompt:
-  class AnthropicOptions { methods: [] }
-  class AzureOpenAiOptions { methods: [] }
-  class BedrockOptions { methods: [] }
-  class Context { methods: [output_format_with] }
-  class ContextClient { methods: [] }
-  class GoogleAiOptions { methods: [] }
-  class MediaUrlHandler { methods: [] }
-  class OutputFormat { methods: [] }
-  class PrimitiveClientOptions { methods: [] }
-  class Role { methods: [] }
-  class VertexAiOptions { methods: [] }
-  function build_output_format
-  function get_return_type
-  function make_role
-  function render_output_format
-  function validate_output_type
 namespace baml.random:
   class ChaCha20 { methods: [new, _new, random, random_int] }
   type Rng

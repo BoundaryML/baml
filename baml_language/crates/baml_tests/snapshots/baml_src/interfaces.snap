@@ -1917,14 +1917,12 @@ function interfaces.GbspPair.GbspEquatable.eq(self: interfaces.GbspPair, other: 
     return
 }
 
-function interfaces.GictIntStack.GictContainer<int>.add(self: interfaces.GictIntStack, item: int) -> null {
+function interfaces.GictIntStack.GictContainer<int>.add(self: interfaces.GictIntStack, item: int) -> void {
     load_type int
     load_var self
     load_field .items
     load_var item
     call baml.Array.push
-    pop 1
-    load_const null
     return
 }
 

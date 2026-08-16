@@ -1612,7 +1612,7 @@ fn baml.csv.CsvReader.rows(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error
     let _0: baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = T> // _0 // return
     let _1: baml.csv.CsvReader // self // param
     let _2: null | string[]
-    let _3: null
+    let _3: void
     let _4: type
 
     bb0: {
@@ -3066,6 +3066,89 @@ fn baml.env.get_or_panic(key: string) -> string {
     }
 
     bb4: {
+        return;
+    }
+}
+
+fn baml.env.Ref.get(self: baml.env.Ref) -> string | null {
+    // Locals:
+    let _0: string | null // _0 // return
+    let _1: baml.env.Ref // self // param
+    let _2: string
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = sys_op const fn baml.env.get(copy _2) -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.env.Ref.get_or_panic(self: baml.env.Ref) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.env.Ref // self // param
+    let _2: string
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = call const fn baml.env.get_or_panic(copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.env.Ref.or(self: baml.env.Ref, fallback: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.env.Ref // self // param
+    let _2: string // fallback // param
+    let _3: string
+    let _4: string | null
+    let _5: string
+    let _6: bool
+
+    bb0: {
+        _5 = copy _1.0;
+        _4 = sys_op const fn baml.env.get(copy _5) -> bb1;
+    }
+
+    bb1: {
+        _3 = copy _4;
+        _6 = copy _3 == const null;
+        branch copy _6 -> [bb2, bb3];
+    }
+
+    bb2: {
+        _3 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _0 = copy _3;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn baml.env.ref(name: string) -> baml.env.Ref {
+    // Locals:
+    let _0: baml.env.Ref // _0 // return
+    let _1: string // name // param
+
+    bb0: {
+        _0 = baml.env.Ref { copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -7226,109 +7309,6 @@ fn baml.ops.__union_div = builtin(vm)
 fn baml.ops.__union_rem = builtin(vm)
 
 fn baml.ops.__union_neg = builtin(vm)
-
-fn baml.prompt.Context.output_format_with = builtin(io)
-
-fn baml.prompt.validate_output_type(return_type: type) -> void {
-    // Locals:
-    let _0: void // _0 // return
-    let _1: type // return_type // param
-    let _2: void
-    let _3: null | baml.reflect.enum.Type
-    let _4: null | baml.reflect.enum.Type
-    let _5: baml.reflect.enum.Type // enum_type
-    let _6: bool
-    let _7: int
-    let _8: baml.reflect.enum.Value[]
-    let _9: string // message
-    let _10: string
-    let _11: string
-    let _12: baml.reflect.errors.CompilationError
-    let _13: string
-    let _14: baml.reflect.Diagnostic[]
-    let _15: baml.reflect.Diagnostic
-    let _16: string
-
-    bb0: {
-        _2 = call const fn baml.TypeValue._validate_renderable(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _3 = call const fn baml.TypeValue.as_enum(copy _1) -> [bb2];
-    }
-
-    bb2: {
-        _4 = copy _3;
-        _4 = narrow_bind copy _4 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["reflect", "enum"], name: "Type" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb3];
-    }
-
-    bb3: {
-        _0 = const null;
-        goto -> bb8;
-    }
-
-    bb4: {
-        _5 = copy _4;
-        _8 = call const fn baml.reflect.enum.Type.values(copy _5) -> [bb5];
-    }
-
-    bb5: {
-        _7 = len(_8);
-        goto -> bb6;
-    }
-
-    bb6: {
-        _6 = copy _7 == const 0_i64;
-        branch copy _6 -> [bb9, bb7];
-    }
-
-    bb7: {
-        _0 = const null;
-        goto -> bb8;
-    }
-
-    bb8: {
-        return;
-    }
-
-    bb9: {
-        _11 = call const fn baml.TypeValue.baml.ToString.to_string(copy _1) -> [bb10];
-    }
-
-    bb10: {
-        _10 = const "empty enum `" + copy _11;
-        _9 = copy _10 + const "` cannot be rendered as an LLM output schema";
-        _13 = copy _9;
-        _16 = copy _9;
-        _15 = baml.reflect.Diagnostic { const "E0159", const null, copy _16 };
-        _14 = [copy _15]: baml.reflect.Diagnostic[];
-        _12 = baml.reflect.errors.CompilationError { copy _13, copy _14 };
-        throw copy _12;
-    }
-}
-
-fn baml.prompt.render_output_format = builtin(io)
-
-fn baml.prompt.build_output_format = builtin(io)
-
-fn baml.prompt.make_role(name: string) -> baml.prompt.Role {
-    // Locals:
-    let _0: baml.prompt.Role // _0 // return
-    let _1: string // name // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = {  }: map<string, unknown>;
-        _0 = baml.prompt.Role { copy _1, copy _2 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.prompt.get_return_type = builtin(io)
 
 fn baml.random.Rng.random(_1: void, _2: void) -> void {
     // Locals:

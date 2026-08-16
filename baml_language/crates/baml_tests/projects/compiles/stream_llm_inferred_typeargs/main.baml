@@ -1,7 +1,7 @@
 // Call-shape pin for the generic ai.stream constructor. The expected return
 // type must infer both TStream and TFinal without explicit type arguments.
 
-client TestClient = openai.OpenAiClient.new(
+client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",

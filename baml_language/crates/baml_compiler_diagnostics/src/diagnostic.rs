@@ -366,6 +366,8 @@ pub enum DiagnosticId {
     /// Two non-equivalent definitions with the same displayed qualified name
     /// reached one LLM render/parse context.
     ConflictingTypeDefinitionAtRender,
+    /// A top-level declaration ($init) can reach a yielding io sysop.
+    InitIoNotAllowed,
 }
 
 impl DiagnosticId {
@@ -543,6 +545,7 @@ impl DiagnosticId {
             DiagnosticId::RuntimeEmptyUnion => "E0160",
             DiagnosticId::OpenInterfaceAtRender => "E0161",
             DiagnosticId::ConflictingTypeDefinitionAtRender => "E0162",
+            DiagnosticId::InitIoNotAllowed => "E0163",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 

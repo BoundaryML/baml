@@ -7,6 +7,9 @@ file_bytes = "20.6 MiB"
 stripped_bytes = "20.6 MiB"
 gzip_bytes = "9.8 MiB"
 
+# Re-recorded from CI run 31906918242: BEP-066 (evaluation/type-construction/
+# reflection) VM+bytecode surface plus the native provider stdlib additions
+# since the 2026-08-12 record (EnvRef, ai.internal prompt plumbing).
 [artifacts.packed-program]
-file_bytes = "14.9 MiB"
-gzip_bytes = "6.8 MiB"
+file_bytes = "16.6 MiB"
+gzip_bytes = "7.2 MiB"

@@ -31,7 +31,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × mismatched types
    ╭─[strict_normalization.baml:8:18]
- 8 │     let x: int = baml.prompt.get_return_type(function_name);
+ 8 │     let x: int = ai.internal.get_return_type(function_name);
    ·                  ─────────────────────┬────────────────────
    ·                                       ╰── expected `int`, found `type`
    ╰────

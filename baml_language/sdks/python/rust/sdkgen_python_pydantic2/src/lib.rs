@@ -298,7 +298,7 @@ fn to_source_code_internal(
     }
 
     // `baml/` always exists — even if no stdlib symbols route there,
-    // leaves that reference `baml.media.*` / `baml.prompt.*` need the
+    // leaves that reference `baml.media.*` / `ai.*` need the
     // subpackage to import from. The root leaf itself is always emitted
     // as well. (25b2 Phase 2 relocated `_inlinedbaml.py` to the SDK
     // root; `baml/` is no longer load-bearing for the root init.)

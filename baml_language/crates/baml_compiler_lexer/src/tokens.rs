@@ -1102,8 +1102,8 @@ mod tests {
 
     #[test]
     fn test_path_with_keyword_segment() {
-        // `baml.prompt.get_client` should be 5 tokens: WORD DOT WORD DOT WORD
-        let tokens = lex_no_whitespace("baml.prompt.get_client");
+        // `ai.internal.get_client` should be 5 tokens: WORD DOT WORD DOT WORD
+        let tokens = lex_no_whitespace("ai.internal.get_client");
         assert_eq!(
             tokens,
             vec![

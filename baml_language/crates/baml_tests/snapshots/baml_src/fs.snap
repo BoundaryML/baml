@@ -608,7 +608,7 @@ function fs.fs_file_close_invalidates_handle_fn() -> bool {
     return
 }
 
-function fs.fs_file_close_is_idempotent_fn() -> null {
+function fs.fs_file_close_is_idempotent_fn() -> void {
     load_const "close_idempotent.txt"
     call user.fs.fs_tmp
     store_var path

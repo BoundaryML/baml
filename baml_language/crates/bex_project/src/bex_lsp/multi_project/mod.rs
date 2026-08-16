@@ -2519,8 +2519,12 @@ mod tests {
         let publisher = std::thread::spawn(move || {
             publishing_lsp.send_update_project("/p", &publishing_project);
         });
+        // Building the playground update walks the full builtin package listing.
+        // The native provider stdlib makes that legitimately exceed 10 seconds
+        // on slower targets (notably the musl CI runner), before the gated
+        // sender is reached.
         let diagnostics = publication_rx
-            .recv_timeout(std::time::Duration::from_secs(10))
+            .recv_timeout(std::time::Duration::from_secs(30))
             .expect("the failure-bearing update must reach the publication boundary");
         assert!(
             diagnostics

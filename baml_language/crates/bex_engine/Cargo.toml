@@ -42,7 +42,6 @@ wasm-bindgen-futures = { workspace = true }
 baml_project = { workspace = true, features = [ "testing" ] }
 bex_resource_types = { workspace = true }
 bridge_ctypes = { workspace = true }
-sys_llm = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
 anyhow = { workspace = true }
 indexmap = { workspace = true }

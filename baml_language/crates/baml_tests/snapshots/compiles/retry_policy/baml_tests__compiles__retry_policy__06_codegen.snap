@@ -67,6 +67,9 @@ function user.UseRetryClient$spec(input: string) -> ai.FunctionSpec<string> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.MyClient
+    call ai.clients.resolve
+    store_var _6
     load_const "UseRetryClient"
     load_deref ?1
     load_const "input"
@@ -75,8 +78,7 @@ function user.UseRetryClient$spec(input: string) -> ai.FunctionSpec<string> {
     alloc_map 1
     load_var input
     make_closure .<lambda(UseRetryClient$spec, 0)>, 1
-    load_var _4
-    load_global user.MyClient
+    load_var2 2 3
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

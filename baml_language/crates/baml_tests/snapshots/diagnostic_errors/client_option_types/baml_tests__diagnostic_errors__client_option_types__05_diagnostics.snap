@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client LegacyOpenAI = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LegacyOpenAI = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
     ╭─[client_option_types.baml:9:1]
   9 │ ╭─▶ client<llm> LegacyOpenAI {
@@ -32,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] E0010
 
   × LLM function `UnknownProviderPrefix` has an unusable `client`: no builtin provider for prefix "aws-bedrock"; construct a client value instead (OpenAI-compatible endpoints:
-  │ openai.OpenAiClient.new(base_url = ..., model = "anthropic.claude-3-haiku"))
+  │ openai.GenericClient.new(base_url = ..., model = "anthropic.claude-3-haiku"))
     ╭─[client_option_types.baml:38:57]
  38 │ ╭─▶ function UnknownProviderPrefix(input: string) -> string {
  39 │ │       client: "aws-bedrock/anthropic.claude-3-haiku"

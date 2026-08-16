@@ -121,9 +121,23 @@ class StreamingUnsupported {
 
 // HTTP status -> classified failure. The classifier attaches the body it
 // received as raw_body, so a failure always carries what the provider said.
-function classify_http(provider: string, status_code: int, body: string) -> Failure {
+//
+// `headers` is the response's header map when the caller has it (ai.wire.send_as
+// passes `resp.headers`); it is what fills RateLimited.retry_after_ms. It
+// defaults to null so a caller that only has a status and a body still compiles
+// — such a call just cannot report a retry delay.
+function classify_http(
+    provider: string,
+    status_code: int,
+    body: string,
+    headers: map<string, string>? = null,
+) -> Failure {
     if (status_code == 429) {
-        RateLimited { provider: provider, retry_after_ms: null, raw_body: body }
+        RateLimited {
+            provider: provider,
+            retry_after_ms: root.internal._retry_after_ms(headers),
+            raw_body: body,
+        }
     } else if (status_code == 408 || status_code >= 500) {
         NetworkFailure { provider: provider, detail: `http ${status_code}`, raw_body: body }
     } else {

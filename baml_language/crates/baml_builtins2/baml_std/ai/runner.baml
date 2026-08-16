@@ -52,7 +52,7 @@ class Agent<Out> {
         tb: root.tools.Toolbox,
         call: root.content.ToolUse,
         j: Journal,
-    ) -> null {
+    ) -> void {
         match (tb.get(call.name)) {
             let t: root.tools.Tool => {
                 let outcome: string? = t.call(call.args) catch_all (e) {
@@ -96,7 +96,100 @@ class Agent<Out> {
         }
     }
 
-    function _parses(self, candidate: string) -> bool {
+    // Does this turn carry content a media-shaped `Out` can be built from?
+    // Mirrors the `Ok(None)` condition of sys_llm's
+    // `parse_llm_output_for_target`: nothing to build from means fall back to
+    // the ordinary text parse. Always false when `Out` holds no media.
+    function _has_media_output(self, turn: ModelTurn) -> bool {
+        let shape = root.internal._media_shape(type.of<Out>());
+        let form = shape.split(":").at(0) ?? "";
+        if (form == "") {
+            return false;
+        }
+        if (form == "mixed" || form == "mixedlist") {
+            return root.internal._media_mixed_parts(turn).length() > 0;
+        }
+        root.internal._media_of_kind(turn, shape.split(":").at(1) ?? "").length() > 0
+    }
+
+    // Build a media-shaped `Out` from the turn's content blocks. Only called
+    // when `_has_media_output` holds; the shape-specific errors below are the
+    // ported sys_llm messages, thrown after the turn is already on the record.
+    function _media_value(self, turn: ModelTurn, provider: string) -> Out {
+        let t = type.of<Out>();
+        let shape = root.internal._media_shape(t);
+        let form = shape.split(":").at(0) ?? "";
+        let kind = shape.split(":").at(1) ?? "";
+        let payload = match (form) {
+            "mixedlist" => {
+                let items: baml.json.json = root.internal._media_mixed_parts(turn);
+                items
+            },
+            "mixed" => {
+                let items = root.internal._media_mixed_parts(turn);
+                if (items.length() == 1) {
+                    let only: baml.json.json = null;
+                    for (let i in items) {
+                        only = i;
+                    }
+                    only
+                } else if (root.internal._media_all_text(items)) {
+                    // several plain text parts collapse into one string
+                    root.internal._media_join_text(items)
+                } else {
+                    throw root.errors.ParseFailed {
+                        provider: provider,
+                        raw_output: `Expected one text or image output for ${t.to_string()}, got ${items.length()} parts. Use (image | string)[] to preserve mixed outputs.`,
+                    }
+                }
+            },
+            "list" => {
+                root.internal._media_reject_mixed(turn, kind, provider);
+                let items: baml.json.json = root.internal._media_of_kind(turn, kind);
+                items
+            },
+            _ => {
+                let parts = root.internal._media_of_kind(turn, kind);
+                root.internal._media_reject_mixed(turn, kind, provider);
+                if (parts.length() != 1) {
+                    throw root.errors.ParseFailed {
+                        provider: provider,
+                        raw_output: if (form == "one") {
+                            `Expected exactly one ${kind} output, got ${parts.length()}. Use ${kind}[] for multiple outputs.`
+                        } else {
+                            `Expected zero or one ${kind} output for ${t.to_string()}, got ${parts.length()}. Use ${kind}[] for multiple outputs.`
+                        },
+                    }
+                }
+                let only: baml.json.json = null;
+                for (let p in parts) {
+                    only = p;
+                }
+                only
+            },
+        };
+        baml.json.from_json<Out>(payload) catch_all (e) {
+            _ => {
+                throw root.errors.ParseFailed {
+                    provider: provider,
+                    raw_output: `the ${kind} output did not fit ${t.to_string()}: ${e.to_string()}`,
+                }
+            },
+        }
+    }
+
+    function _parses(self, turn: ModelTurn, candidate: string) -> bool {
+        // A media-shaped `Out` is satisfied by the turn's blocks. When the turn
+        // carries NONE, this falls through to the ordinary text parse rather
+        // than declaring failure — that is sys_llm's `Ok(None)` -> SAP path
+        // (`lib.rs:594-645`), and SAP is what turns a media-less answer into
+        // `null` for `image?` and `[]` for `image[]`. Short-circuiting to
+        // `false` here made those shapes unrepresentable: the runner re-asked
+        // and then raised ParseFailed on a perfectly valid absence. Only a
+        // required `image` genuinely fails the text parse.
+        if (self._has_media_output(turn)) {
+            return true;
+        }
         let _ = baml.sap.parse<Out>(candidate) catch_all (e) {
             _ => {
                 return false;
@@ -149,7 +242,7 @@ class Agent<Out> {
         let accepted = turn.tool_uses().length() > 0
             || turn.stop_reason == root.content.StopReason.MaxTokens
             || turn.stop_reason == root.content.StopReason.Refused
-            || self._parses(candidate);
+            || self._parses(turn, candidate);
         if (accepted) {
             j.append_all(batch);
             // terminal wire outcomes are thrown here, with the turn on the record
@@ -249,10 +342,21 @@ class Agent<Out> {
                     }
                 } else {
                     let candidate = turn.terminal_text() ?? "";
-                    let value = baml.sap.parse<Out>(candidate) catch_all (e) {
-                        _ => {
-                            throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
-                        },
+                    // A media-shaped Out comes from the turn's media blocks;
+                    // everything else, including a media Out the turn produced
+                    // no media for, goes through the ordinary text parse. That
+                    // second branch is REACHABLE for a media Out and is how
+                    // absence is expressed: SAP answers `null` for `image?` /
+                    // `image[]?` and `[]` for `image[]`, and only a required
+                    // `image` fails there (`_parses` agrees, by construction).
+                    let value = if (self._has_media_output(turn)) {
+                        self._media_value(turn, selected.id())
+                    } else {
+                        baml.sap.parse<Out>(candidate) catch_all (e) {
+                            _ => {
+                                throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
+                            },
+                        }
                     };
                     let value_json = baml.json.to_json(value) catch_all (e) {
                         _ => {

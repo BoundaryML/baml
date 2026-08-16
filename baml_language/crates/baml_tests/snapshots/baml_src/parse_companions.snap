@@ -72,13 +72,15 @@ function parse_companions.ParseCompanionsParseAliasPayload$spec() -> ai.Function
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_global user.parse_companions.ParseCompanionsTestClient
+    call ai.clients.resolve
+    store_var _5
     load_const "ParseCompanionsParseAliasPayload"
     load_type string
     load_type unknown
     alloc_map 0
     make_closure .<lambda(ParseCompanionsParseAliasPayload$spec, 0)>, 0
-    load_var _3
-    load_global user.parse_companions.ParseCompanionsTestClient
+    load_var2 1 2
     load_type parse_companions.ParseCompanionsAliasPayload
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
@@ -154,13 +156,15 @@ function parse_companions.ParseCompanionsParseOptPayload$spec() -> ai.FunctionSp
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_global user.parse_companions.ParseCompanionsTestClient
+    call ai.clients.resolve
+    store_var _5
     load_const "ParseCompanionsParseOptPayload"
     load_type string
     load_type unknown
     alloc_map 0
     make_closure .<lambda(ParseCompanionsParseOptPayload$spec, 0)>, 0
-    load_var _3
-    load_global user.parse_companions.ParseCompanionsTestClient
+    load_var2 1 2
     load_type parse_companions.ParseCompanionsOptPayload
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

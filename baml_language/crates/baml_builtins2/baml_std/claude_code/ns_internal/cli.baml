@@ -159,45 +159,49 @@ function _preview(text: string) -> string {
 }
 
 // One log line per Claude Code JSONL event: the harness's own transcript.
-function _log_cc_event(raw: json) -> null {
+function _log_cc_event(raw: json) -> void {
     let kind = baml.json.path_or<string>(raw, ".type", "?");
-    if (kind == "system") {
-        let subtype = baml.json.path_or<string>(raw, ".subtype", "?");
-        if (subtype == "thinking_tokens") {
-            // a progress counter, never content — the thinking text arrives
-            // later inside the assistant message's thinking block
-            log.debug(
-                `cc event: thinking ~${baml.json.path_or<int>(raw, ".estimated_tokens", 0)} tokens`,
-            );
-        } else {
-            log.info(
-                `cc event: system/${subtype} model=${baml.json.path_or<string>(raw, ".model", "?")}`,
-            );
-        };
-    } else if (kind == "assistant" || kind == "user") {
-        let parts: string[] = [];
-        let blocks = baml.json.path_or<json[]>(raw, ".message.content", []);
-        for (let b in blocks) {
-            let bt = baml.json.path_or<string>(b, ".type", "?");
-            match (bt) {
-                "text" => parts.push(`text: ${_preview(baml.json.path_or<string>(b, ".text", ""))}`),
-                "thinking" => {
-                    parts.push(
-                        `thinking: ${_preview(baml.json.path_or<string>(b, ".thinking", ""))}`,
-                    )
-                },
-                "tool_use" => parts.push(`tool_use: ${baml.json.path_or<string>(b, ".name", "?")}`),
-                "tool_result" => parts.push("tool_result"),
-                _ => parts.push(bt),
+    match (kind) {
+        "system" => {
+            let subtype = baml.json.path_or<string>(raw, ".subtype", "?");
+            if (subtype == "thinking_tokens") {
+                // a progress counter, never content — the thinking text arrives
+                // later inside the assistant message's thinking block
+                let estimated = baml.json.path_or<int>(raw, ".estimated_tokens", 0);
+                log.debug(`cc event: thinking ~${estimated} tokens`);
+            } else {
+                let model = baml.json.path_or<string>(raw, ".model", "?");
+                log.info(`cc event: system/${subtype} model=${model}`);
             };
-        }
-        log.info(`cc event: ${kind} [${parts.join(" | ")}]`);
-    } else if (kind == "result") {
-        null // logged separately with cost and session
-    } else {
-        log.info(`cc event: ${kind}`);
+        },
+        "assistant" | "user" => {
+            let parts: string[] = [];
+            let blocks = baml.json.path_or<json[]>(raw, ".message.content", []);
+            for (let b in blocks) {
+                let bt = baml.json.path_or<string>(b, ".type", "?");
+                match (bt) {
+                    "text" => {
+                        parts.push(`text: ${_preview(baml.json.path_or<string>(b, ".text", ""))}`)
+                    },
+                    "thinking" => {
+                        parts.push(
+                            `thinking: ${_preview(baml.json.path_or<string>(b, ".thinking", ""))}`,
+                        )
+                    },
+                    "tool_use" => {
+                        parts.push(`tool_use: ${baml.json.path_or<string>(b, ".name", "?")}`)
+                    },
+                    "tool_result" => parts.push("tool_result"),
+                    _ => parts.push(bt),
+                };
+            }
+            log.info(`cc event: ${kind} [${parts.join(" | ")}]`);
+        },
+        "result" => {
+            // logged separately with cost and session
+        },
+        _ => log.info(`cc event: ${kind}`),
     };
-    null
 }
 
 // The client's mcp_servers as one --mcp-config JSON string, or null when no

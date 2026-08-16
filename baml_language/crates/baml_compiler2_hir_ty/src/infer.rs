@@ -1310,6 +1310,7 @@ fn infer_body_impl<'db>(
         }
         BodyOwnerId::Let(_) => None,
     };
+    ctx.body_owner_id = Some(owner);
     ctx.owner_file = Some(owner.file(db));
     ctx.defaults_owner = matches!(owner, BodyOwnerId::ParameterDefaults(_));
     if let BodyOwnerId::ParameterDefaults(function) = owner {
@@ -10148,9 +10149,8 @@ impl<'db> InferenceContext<'db> {
         else {
             return names;
         };
-        let index = self.index;
-        for ancestor in index.ancestor_scopes(scope) {
-            let bindings = &index.scope_bindings[ancestor.index() as usize];
+        for ancestor in self.index.ancestor_scopes(scope) {
+            let bindings = &self.index.scope_bindings[ancestor.index() as usize];
             names.extend(bindings.bindings.iter().map(|b| b.name.clone()));
             names.extend(
                 bindings

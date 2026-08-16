@@ -39,7 +39,7 @@ client<llm> InvalidCompositeFields {
 //- diagnostics
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client BaseClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client BaseClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
 //   │ ai.RoundRobin)
 //    ╭─[client_http_config_composite_wrong_field.baml:1:1]
 //  1 │ ╭─▶ client<llm> BaseClient {
@@ -52,8 +52,8 @@ client<llm> InvalidCompositeFields {
 //    ╰────
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client InvalidCompositeFields = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
-//   │ ai.Fallback / ai.RoundRobin)
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client InvalidCompositeFields = ai.Fallback.new(members = [FirstClient, SecondClient]);` (compose reliability with
+//   │ ai.Retry / ai.Fallback / ai.RoundRobin)
 //     ╭─[client_http_config_composite_wrong_field.baml:8:1]
 //   8 │ ╭─▶ client<llm> InvalidCompositeFields {
 //   9 │ │     provider fallback

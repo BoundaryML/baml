@@ -8,7 +8,7 @@ use bex_engine::BexExternalValue;
 async fn non_equivalent_same_name_runtime_classes_fail_before_render() {
     let output = baml_test!(
         r##"
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",
@@ -54,7 +54,7 @@ async fn non_equivalent_same_name_runtime_classes_fail_before_render() {
 async fn recursive_and_equivalent_same_name_runtime_classes_still_render() {
     let output = baml_test!(
         r##"
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",

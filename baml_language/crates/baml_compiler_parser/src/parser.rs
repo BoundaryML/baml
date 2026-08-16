@@ -4264,7 +4264,7 @@ impl<'a> Parser<'a> {
             // - A quoted "provider/model" string: client: "openai/gpt-4o"
             // - An expression evaluating to an ai.Client: a declared client
             //   name (`client: Fast`), a constructor call
-            //   (`client: openai.OpenAiClient.new(...)`), a wrapper
+            //   (`client: openai.ResponsesClient.new(...)`), a wrapper
             //   (`client: ai.Retry.new(Fast)`), etc.
             //
             // The unquoted `client: openai/gpt-4o` shorthand of the legacy
@@ -10057,6 +10057,70 @@ function Foo() -> {
         ];
         for input in inputs {
             let _ = parse_source(input);
+        }
+    }
+
+    /// The LLM-vs-expression classifier walks raw tokens, where string
+    /// CONTENTS lex as ordinary tokens (`client` even lexes as `KW_CLIENT`).
+    /// Prose that happens to mention `client`/`prompt`/`tools` must never
+    /// flip a plain function into an LLM body — that produced a cascade of
+    /// "Only 'client', 'tools' and 'prompt' allowed in LLM function" errors.
+    #[test]
+    fn string_contents_never_classify_a_body_as_llm() {
+        let bodies = [
+            // quoted
+            r#""the client sent nothing""#,
+            r#""the prompt was empty""#,
+            r#""tools/list""#,
+            r#""client""#,
+            r#""prompt""#,
+            // the shapes that were already safe, kept safe
+            r#""clients here""#,
+            r#""a client.""#,
+            r#""client = x""#,
+            // backtick, including an interpolation and a nested literal
+            "`the client sent nothing`",
+            "`prompt: ${\"client\"}`",
+            "``a `client` quote``",
+            // raw string
+            r##"#"the client sent nothing"#"##,
+            // escaped quote inside the literal must not end it early
+            r#""say \"client\" now""#,
+            // an unbalanced brace inside a literal must not confuse depth
+            r#""a { client""#,
+        ];
+        for body in bodies {
+            let source = format!("function f() -> string {{ {body} }}\n");
+            let (root, errors) = parse_source(&source);
+            assert!(
+                !root
+                    .descendants()
+                    .any(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY),
+                "body {body} must parse as an expression body, not an LLM body"
+            );
+            assert_no_errors(&errors);
+        }
+    }
+
+    /// The string-awareness fix must not stop real LLM bodies from
+    /// classifying — including ones whose prompt is a backtick block with
+    /// interpolation, braces, and the word `client` inside it.
+    #[test]
+    fn real_llm_bodies_still_classify_with_string_aware_scan() {
+        let sources = [
+            "function F(raw: string) -> string {\n  client: Fast\n  prompt: `hi ${raw}`\n}\n",
+            "function F(raw: string) -> string {\n  client: Fast\n  prompt: #\"hi\"#\n}\n",
+            // prompt first, and a prompt mentioning `client` / braces
+            "function F(raw: string) -> string {\n  prompt: `client {x} ${raw} ${ctx.output_format}`\n  client: Fast\n}\n",
+        ];
+        for source in sources {
+            let (root, errors) = parse_source(source);
+            assert!(
+                root.descendants()
+                    .any(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY),
+                "expected an LLM_FUNCTION_BODY for:\n{source}"
+            );
+            assert_no_errors(&errors);
         }
     }
 

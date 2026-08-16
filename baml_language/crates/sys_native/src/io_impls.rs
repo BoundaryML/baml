@@ -3235,6 +3235,170 @@ impl io::IoNamespaceWs for NativeSysOps {
     }
 }
 
+// ============================================================================
+// Provider auth (GCP OAuth2 tokens, AWS SigV4)
+// ============================================================================
+
+/// Surface a `sys_auth` failure as the matching `baml.errors.*` class: a bad or
+/// missing credential is an `AccessError` (retrying will not help), a transport
+/// failure while resolving one is `Io`.
+fn auth_error(err: sys_auth::AuthError) -> VmBamlError {
+    match err {
+        sys_auth::AuthError::Access(message) => VmBamlError::AccessError { message },
+        sys_auth::AuthError::Io(message) => VmBamlError::Io { message },
+    }
+}
+
+impl io::IoNamespaceAiInternal for NativeSysOps {
+    fn render_output_format(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        sys_ops::render_output_format_op(&return_type, ctx)
+    }
+
+    fn build_output_format(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::ai::OutputFormat> {
+        sys_ops::build_output_format_op(&return_type, ctx)
+    }
+
+    fn get_return_type(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<baml_type::RuntimeTy> {
+        sys_ops::get_return_type_op(&function_name, ctx)
+    }
+
+    fn _gcp_access_token(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        credentials_json: Option<String>,
+        scope: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            sys_auth::access_token(runtime_io, credentials_json, &scope)
+                .await
+                .map_err(|e| auth_error(e).into())
+        })
+    }
+
+    fn _gcp_project_id(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        credentials_json: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            Ok(sys_auth::project_id(runtime_io, credentials_json).await)
+        })
+    }
+
+    fn _gcp_quota_project_id(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        credentials_json: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            Ok(sys_auth::quota_project_id(runtime_io, credentials_json).await)
+        })
+    }
+
+    fn _aws_sign_request(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        request: BexExternalValue,
+        service: String,
+        region: Option<String>,
+        profile: Option<String>,
+        access_key_id: Option<String>,
+        secret_access_key: Option<String>,
+        session_token: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        // `baml.http.Request` crosses the sys-op boundary untyped (the
+        // generated marshaller only maps classes from the sysop's own
+        // namespace), so decode it here. The type checker guarantees the shape,
+        // so a failure here is a marshalling bug; it is reported as an
+        // `AccessError` because that is what the op's declared contract allows.
+        let mut request = match owned::http::Request::from_external(request) {
+            Ok(request) => request,
+            Err(e) => {
+                return SysOpOutput::err(VmBamlError::AccessError {
+                    message: format!(
+                        "ai.internal._aws_sign_request: argument is not a baml.http.Request: {e:?}"
+                    ),
+                });
+            }
+        };
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            let opts = sys_auth::AwsSignOptions {
+                region,
+                profile,
+                access_key_id,
+                secret_access_key,
+                session_token,
+                service,
+            };
+            let headers: Vec<(String, String)> = request
+                .headers
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            let signed = sys_auth::sign_request(
+                runtime_io,
+                &request.method,
+                &request.url,
+                &headers,
+                request.body.as_bytes(),
+                &opts,
+            )
+            .await
+            .map_err(auth_error)?;
+            for (name, value) in signed {
+                request.headers.insert(name, value);
+            }
+            Ok(sys_ops::io::AsBexExternalValue::into_bex_external_value(
+                request,
+            ))
+        })
+    }
+
+    fn _aws_resolve_region(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        region: Option<String>,
+        profile: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            Ok(sys_auth::resolve_region(runtime_io, region, profile).await)
+        })
+    }
+}
+
 // BEP-034 Future methods live on the heap `Object::Future` itself (atomic
 // state + SetOnce + cancel token) and are dispatched via the native-call
 // path (`$rust_function` in `ns_future/future.baml`), not through sys-ops.

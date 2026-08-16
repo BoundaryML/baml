@@ -1824,7 +1824,7 @@ function baml.csv._to_markdown_records(records: string[][], headers: string[] | 
 function baml.csv._try_decode(rec: baml.csv.CsvRecord, r: baml.csv.CsvReader) -> #0 | baml.csv.CsvSkip {
 }
 
-function baml.csv._validate_columns(r: baml.csv.CsvReader) -> null {
+function baml.csv._validate_columns(r: baml.csv.CsvReader) -> void {
 }
 
 function baml.csv._writer(file: baml.fs.File, options: baml.csv.WriterOptions | null, owns_file: bool) -> baml.csv.CsvWriter {
@@ -2357,6 +2357,36 @@ function baml.csv.writer(file: baml.fs.File, options: baml.csv.WriterOptions | n
 function baml.deep_copy(value: #0) -> #0 {
 }
 
+function baml.env.Ref.get(self: baml.env.Ref) -> string | null {
+    load_var self
+    load_field .name
+    sys_op baml.env.get
+    return
+}
+
+function baml.env.Ref.get_or_panic(self: baml.env.Ref) -> string {
+    load_var self
+    load_field .name
+    call baml.env.get_or_panic
+    return
+}
+
+function baml.env.Ref.or(self: baml.env.Ref, fallback: string) -> string {
+    load_var self
+    load_field .name
+    sys_op baml.env.get
+    store_var_load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_var fallback
+    store_var _3
+
+  L0:
+    load_var _3
+    return
+}
+
 function baml.env.get(key: string) -> string | null {
 }
 
@@ -2402,6 +2432,12 @@ function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string {
     load_var _3
 
   L3:
+    return
+}
+
+function baml.env.ref(name: string) -> baml.env.Ref {
+    load_var name
+    init_instance baml.env.Ref .name
     return
 }
 
@@ -4995,80 +5031,6 @@ function baml.ops.__union_sub(a: unknown, b: unknown) -> unknown {
 }
 
 function baml.ops.equals_equals(a: unknown, b: unknown) -> bool {
-}
-
-function baml.prompt.Context.output_format_with(self: baml.prompt.Context, prefix: string | null, or_splitter: string | null, enum_value_prefix: string | null, hoisted_class_prefix: string | null, always_hoist_enums: bool | null, quote_class_fields: bool | null, hoist_classes: string[] | null, map_style: string | null, render_null_as: string | null) -> string {
-}
-
-function baml.prompt.build_output_format(return_type: type) -> baml.prompt.OutputFormat {
-}
-
-function baml.prompt.get_return_type(function_name: string) -> type {
-}
-
-function baml.prompt.make_role(name: string) -> baml.prompt.Role {
-    load_var name
-    load_type string
-    load_type unknown
-    alloc_map 0
-    init_instance baml.prompt.Role .name, .metadata
-    return
-}
-
-function baml.prompt.render_output_format(return_type: type) -> string {
-}
-
-function baml.prompt.validate_output_type(return_type: type) -> void {
-    load_var return_type
-    call baml.TypeValue._validate_renderable
-    pop 1
-    load_var return_type
-    call baml.TypeValue.as_enum
-    store_var _4
-    load_var _4
-    narrow_bind baml.reflect.enum.Type, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const null
-    jump L3
-
-  L1:
-    load_var _4
-    call baml.reflect.enum.Type.values
-    container_len
-    store_var _7
-    load_var _7
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L2
-    jump L4
-
-  L2:
-    load_const null
-
-  L3:
-    return
-
-  L4:
-    load_var return_type
-    call baml.TypeValue.baml.ToString.to_string
-    store_var _11
-    load_const "empty enum `"
-    load_var _11
-    bin_op +
-    load_const "` cannot be rendered as an LLM output schema"
-    bin_op +
-    store_var_load_var message
-    load_const "E0159"
-    load_const null
-    load_var message
-    init_instance baml.reflect.Diagnostic .code, .span, .message
-    load_type baml.reflect.Diagnostic
-    alloc_array 1
-    init_instance baml.reflect.errors.CompilationError .message, .diagnostics
-    throw
 }
 
 function baml.random.ChaCha20.Rng.random(self: baml.random.ChaCha20, bytes: int) -> uint8array {

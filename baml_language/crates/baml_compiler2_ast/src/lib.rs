@@ -563,7 +563,7 @@ client<llm> C {
     fn client_value_decl_lowers_to_client_let() {
         use crate::ast::LetOrigin;
         let source = r#"
-client Fast = openai.OpenAiClient.new(model = "gpt-4o-mini");
+client Fast = openai.ResponsesClient.new(model = "gpt-4o-mini");
 "#;
         let items = parse_and_lower(source);
         assert_eq!(items.len(), 1, "expected exactly one item");

@@ -2,11 +2,14 @@ version = 1
 recorded_at = "2026-08-12T05:04:16Z"
 git_sha = "a51ffdf12b5caf288cc7028fa5fbd86449c0d518"
 
+# Re-recorded from CI run 31906918242: BEP-066 (evaluation/type-construction/
+# reflection) VM+bytecode surface plus the native provider stdlib additions
+# since the 2026-08-12 record (EnvRef, ai.internal prompt plumbing).
 [artifacts.baml-cli]
-file_bytes = "22.2 MiB"
-stripped_bytes = "22.2 MiB"
-gzip_bytes = "10.0 MiB"
+file_bytes = "22.8 MiB"
+stripped_bytes = "22.8 MiB"
+gzip_bytes = "10.2 MiB"
 
 [artifacts.packed-program]
-file_bytes = "15.9 MiB"
-gzip_bytes = "6.9 MiB"
+file_bytes = "17.6 MiB"
+gzip_bytes = "7.3 MiB"

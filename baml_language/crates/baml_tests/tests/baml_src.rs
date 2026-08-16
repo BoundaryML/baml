@@ -151,6 +151,14 @@ fn bytecode() {
     }
 
     for (key, mut funcs) in by_namespace {
+        // The `llm_*` provider-suite namespaces are large wire-shape/behavior
+        // suites whose guarantees live in their own `test` blocks; their
+        // bytecode dumps flooded these snapshots (thousands of lines each)
+        // without adding signal. Codegen stability is still covered by the
+        // remaining namespaces and the `compiles/` phase snapshots.
+        if key.starts_with("llm_") {
+            continue;
+        }
         funcs.sort_by(|(a, _), (b, _)| a.cmp(b));
         let output = display_program(&funcs, BytecodeFormat::Textual);
         insta::with_settings!({

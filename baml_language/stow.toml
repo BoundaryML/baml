@@ -132,7 +132,7 @@ name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size
 # package names that cannot collide with the real crates.
 [[namespaces]]
 name = "forked_aws"
-name_exceptions = { "aws-bedrock" = "forked_aws_bedrock", "aws-config" = "forked_aws_config", "aws-sigv4" = "forked_aws_sigv4" }
+name_exceptions = { "aws-config" = "forked_aws_config", "aws-sigv4" = "forked_aws_sigv4" }
 
 # forked Google crates follow the same package-name convention.
 [[namespaces]]

@@ -47,13 +47,32 @@ impl std::fmt::Display for ExtractNativeBuiltinsError {
 
 impl std::error::Error for ExtractNativeBuiltinsError {}
 
+/// Stdlib packages outside `baml` that also declare `$rust_io_function`
+/// sys-ops, and so contribute to the generated IO dispatch surface (`SysOp`,
+/// the `IoNamespace*` traits, `RuntimeIo`).
+///
+/// Scanning is deliberately narrow: only the files that actually contain a
+/// `$rust_io_function` are parsed, and only their IO builtins and class defs
+/// are kept — a package's `$rust_function` (VM) builtins keep coming from its
+/// own per-package extraction (`extract_native_builtins_for`, used by
+/// `bex_vm`'s build script), so nothing else about these packages is dragged
+/// into the IO codegen.
+const EXTRA_IO_PACKAGES: &[&str] = &["ai"];
+
+/// Marker whose presence in a file's source selects it for the extra-package
+/// IO scan (see `EXTRA_IO_PACKAGES`).
+const IO_BUILTIN_MARKER: &str = "$rust_io_function";
+
 /// Parse, lower, and extract all `$rust_function` and `$rust_io_function` builtins
 /// from the `.baml` stdlib.
 ///
 /// Returns `(vm_builtins, io_builtins, class_defs)`:
-/// - `vm_builtins`: `$rust_function` builtins (synchronous, run inline in VM)
+/// - `vm_builtins`: `$rust_function` builtins of the `baml` package
+///   (synchronous, run inline in VM)
 /// - `io_builtins`: `$rust_io_function` builtins (async, dispatched via engine)
-/// - `class_defs`: class definitions with fields (for view/owned struct generation)
+///   of the `baml` package plus `EXTRA_IO_PACKAGES`
+/// - `class_defs`: `baml`-package class definitions with fields (for view/owned
+///   struct generation)
 ///
 /// Fails with [`ExtractNativeBuiltinsError`] if any file has parse errors or non-empty HIR
 /// diagnostics (so codegen never runs on a silently broken stdlib).
@@ -61,7 +80,22 @@ impl std::error::Error for ExtractNativeBuiltinsError {}
 pub fn extract_native_builtins()
 -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
 {
-    extract_native_builtins_for(baml_builtins2::PACKAGE_BAML)
+    let (vm_builtins, mut io_builtins, mut class_defs) =
+        extract_native_builtins_for(baml_builtins2::PACKAGE_BAML)?;
+    for package in EXTRA_IO_PACKAGES {
+        let (_vm, extra_io, extra_classes) =
+            extract_scoped(package, |f| f.contents.contains(IO_BUILTIN_MARKER))?;
+        io_builtins.extend(extra_io);
+        // Classes declared alongside extra-package IO builtins (e.g. the
+        // `ai.Context` render-context surface) participate in owned/view
+        // struct generation so receiver methods and typed returns marshal
+        // through generated structs, exactly like `baml`-package classes.
+        // `filter_io_class_defs` still drops anything in a namespace without
+        // IO builtins, and `sys_op_variant_name` keys are package-qualified,
+        // so this cannot collide with `baml` names.
+        class_defs.extend(extra_classes);
+    }
+    Ok((vm_builtins, io_builtins, class_defs))
 }
 
 /// [`extract_native_builtins`] scoped to one stdlib package, so each package
@@ -71,12 +105,26 @@ pub fn extract_native_builtins_for(
     package: &str,
 ) -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
 {
+    extract_scoped(package, |_| true)
+}
+
+/// [`extract_native_builtins_for`] restricted to the package's files matching
+/// `keep_file`.
+#[allow(clippy::type_complexity)]
+fn extract_scoped(
+    package: &str,
+    keep_file: impl Fn(&baml_builtins2::BuiltinFile) -> bool,
+) -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
+{
     let mut vm_builtins = Vec::new();
     let mut io_builtins = Vec::new();
     let mut class_defs = Vec::new();
     let mut diagnostic_lines: Vec<String> = Vec::new();
 
-    for builtin_file in baml_builtins2::ALL.iter().filter(|f| f.package == package) {
+    for builtin_file in baml_builtins2::ALL
+        .iter()
+        .filter(|f| f.package == package && keep_file(f))
+    {
         let path = builtin_file.virtual_path();
         // Real filesystem path for diagnostic messages (clickable in editors).
         let diag_path = format!(
@@ -1197,8 +1245,8 @@ mod tests {
         assert_eq!(make("baml.sys.panic").sys_op_variant_name(), "BamlSysPanic");
         assert_eq!(make("ai.Prompt.text").sys_op_variant_name(), "AiPromptText");
         assert_eq!(
-            make("baml.prompt.render_output_format").sys_op_variant_name(),
-            "BamlPromptRenderOutputFormat"
+            make("ai.internal.render_output_format").sys_op_variant_name(),
+            "AiInternalRenderOutputFormat"
         );
     }
 

@@ -358,7 +358,7 @@ fn keyword_shorthands_follow_the_exported_baml_surface() {
     ));
     db.add_compiler2_virtual_file(
         "<builtin>/baml/ns_reflect/raw_only.baml",
-        "interface RawOnly {}\nclient raw_only = openai.OpenAiClient.new(model = \"gpt-4\");\n",
+        "interface RawOnly {}\nclient raw_only = openai.ResponsesClient.new(model = \"gpt-4\");\n",
     );
     db.add_file(
         "main.baml",

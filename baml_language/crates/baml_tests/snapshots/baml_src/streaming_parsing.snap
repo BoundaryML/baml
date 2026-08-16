@@ -58,6 +58,9 @@ function streaming_parsing.ExtractDoc$spec(input: string) -> ai.FunctionSpec<str
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.streaming_parsing.StreamParseClient
+    call ai.clients.resolve
+    store_var _6
     load_const "ExtractDoc"
     load_deref ?1
     load_const "input"
@@ -66,8 +69,7 @@ function streaming_parsing.ExtractDoc$spec(input: string) -> ai.FunctionSpec<str
     alloc_map 1
     load_var input
     make_closure .<lambda(ExtractDoc$spec, 0)>, 1
-    load_var _4
-    load_global user.streaming_parsing.StreamParseClient
+    load_var2 2 3
     load_type streaming_parsing.Doc
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
@@ -149,6 +151,9 @@ function streaming_parsing.SayHello$spec(input: string) -> ai.FunctionSpec<strin
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.streaming_parsing.StreamParseClient
+    call ai.clients.resolve
+    store_var _6
     load_const "SayHello"
     load_deref ?1
     load_const "input"
@@ -157,8 +162,7 @@ function streaming_parsing.SayHello$spec(input: string) -> ai.FunctionSpec<strin
     alloc_map 1
     load_var input
     make_closure .<lambda(SayHello$spec, 0)>, 1
-    load_var _4
-    load_global user.streaming_parsing.StreamParseClient
+    load_var2 2 3
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

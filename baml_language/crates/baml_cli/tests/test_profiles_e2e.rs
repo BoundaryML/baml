@@ -36,7 +36,7 @@ testset "integration" {
   test "creates_order" { assert.is_true(true) }
 }
 
-client TestClient = openai.OpenAiClient.new(model = "gpt-4o-mini");
+client TestClient = openai.ResponsesClient.new(model = "gpt-4o-mini");
 
 function Summarize(input: string) -> string {
   client: TestClient

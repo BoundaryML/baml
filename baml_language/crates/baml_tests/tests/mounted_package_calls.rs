@@ -413,7 +413,7 @@ fn mounted_stream_companion_supports_consumer_llm_expansion() {
     db.add_file(
         "main.baml",
         r##"
-client Dummy = openai.OpenAiClient.new(
+client Dummy = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = "test",
 );

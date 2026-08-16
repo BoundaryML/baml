@@ -99,6 +99,7 @@ fn user.ExtractAny$spec() -> ai.FunctionSpec<baml.json.json> {
     let _2: (string) -> ai.Prompt throws never
     let _3: ai.tools.Toolbox
     let _4: ai.tools.Tool[]
+    let _5: ai.Client
 
     bb0: {
         _1 = {  }: map<string, unknown>;
@@ -108,11 +109,15 @@ fn user.ExtractAny$spec() -> ai.FunctionSpec<baml.json.json> {
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<baml.json.json> { const "ExtractAny", copy _1, copy _2, copy _3, const item user.TestClient };
-        goto -> bb2;
+        _5 = call const fn ai.clients.resolve(const item user.TestClient) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<baml.json.json> { const "ExtractAny", copy _1, copy _2, copy _3, copy _5 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

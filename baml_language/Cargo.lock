@@ -1382,7 +1382,6 @@ dependencies = [
  "prost",
  "rustc-hash 2.1.2",
  "serde_json",
- "sys_llm",
  "sys_native",
  "sys_ops",
  "sys_types",
@@ -2087,17 +2086,6 @@ name = "cesu8"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c"
-
-[[package]]
-name = "cfb"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d38f2da7a0a2c4ccf0065be06397cc26a81f4e528be095826eee9d4adbb8c60f"
-dependencies = [
- "byteorder",
- "fnv",
- "uuid",
-]
 
 [[package]]
 name = "cfg-if"
@@ -3179,16 +3167,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
-name = "forked_aws_bedrock"
-version = "0.1.0"
-dependencies = [
- "base64",
- "percent-encoding",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "forked_aws_config"
 version = "0.1.0"
 dependencies = [
@@ -4078,15 +4056,6 @@ dependencies = [
  "unicode-width 0.2.0",
  "unit-prefix",
  "web-time",
-]
-
-[[package]]
-name = "infer"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc150e5ce2330295b8616ce0e3f53250e53af31759a9dbedad1621ba29151847"
-dependencies = [
- "cfb",
 ]
 
 [[package]]
@@ -7505,45 +7474,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sys_auth"
+version = "0.0.0-beta"
+dependencies = [
+ "async-trait",
+ "forked_aws_config",
+ "forked_aws_sigv4",
+ "forked_google_cloud_auth",
+ "indexmap",
+ "num-bigint",
+ "serde_json",
+ "sys_types",
+ "tokio",
+ "web-time",
+]
+
+[[package]]
 name = "sys_glob"
 version = "0.0.0-beta"
 dependencies = [
  "regex",
-]
-
-[[package]]
-name = "sys_llm"
-version = "0.0.0-beta"
-dependencies = [
- "async-trait",
- "baml_base",
- "baml_builtins2",
- "baml_type",
- "base64",
- "bex_external_types",
- "bex_heap",
- "bex_resource_types",
- "bex_sap",
- "bex_vm_types",
- "forked_aws_bedrock",
- "forked_aws_config",
- "forked_aws_sigv4",
- "forked_google_cloud_auth",
- "getrandom 0.2.17",
- "getrandom 0.3.4",
- "indexmap",
- "infer",
- "num-bigint",
- "rsa",
- "rustls",
- "serde",
- "serde_json",
- "strum",
- "sys_types",
- "thiserror 2.0.18",
- "tokio",
- "url",
- "web-time",
 ]
 
 [[package]]
@@ -7570,6 +7520,7 @@ dependencies = [
  "rustls",
  "rustls-pemfile",
  "serde_json",
+ "sys_auth",
  "sys_glob",
  "sys_ops",
  "sys_types",
@@ -7596,8 +7547,8 @@ dependencies = [
  "indexmap",
  "num-bigint",
  "serde_json",
- "sys_llm",
  "sys_types",
+ "thiserror 2.0.18",
  "tokio",
 ]
 

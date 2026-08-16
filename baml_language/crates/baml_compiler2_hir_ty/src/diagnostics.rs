@@ -810,6 +810,24 @@ pub enum TirTypeError {
     /// parameters have no generic binder to open an effect parameter on, so they must declare it
     /// explicitly.
     FunctionTypeMissingThrows,
+    /// A top-level declaration's initializer reaches an io sysop. Top-level
+    /// declarations (`client Foo = …`, `let x = …`) are evaluated by the
+    /// synthesized `$init` chainer when the engine is created, on a path that
+    /// cannot suspend — so the io does not fail with a catchable BAML error,
+    /// it kills engine construction with an opaque `InitFailed`. Detected by
+    /// [`crate::init_io`] (E0158).
+    InitIoNotAllowed {
+        /// The declaration's name.
+        declaration: Name,
+        /// `client Foo = …` (true) versus a plain top-level `let` (false).
+        /// Only affects wording.
+        is_client: bool,
+        /// Fully-qualified name of the io sysop reached (`baml.env.get`).
+        sysop: Name,
+        /// The first call hop from the initializer toward `sysop`. `None` when
+        /// the initializer calls the sysop directly.
+        via: Option<Name>,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1911,6 +1929,25 @@ impl fmt::Display for TirTypeError {
                     f,
                     "function type must declare an explicit `throws` clause; add `throws never` \
                      if calling it cannot throw"
+                )
+            }
+            TirTypeError::InitIoNotAllowed {
+                declaration,
+                is_client,
+                sysop,
+                via,
+            } => {
+                let kind = if *is_client { "client" } else { "declaration" };
+                let reach = match via {
+                    Some(via) => format!("reaches `{sysop}`, which performs io, through `{via}`"),
+                    None => format!("calls `{sysop}`, which performs io"),
+                };
+                write!(
+                    f,
+                    "{kind} `{declaration}` {reach} — top-level declarations are evaluated at \
+                     startup (`$init`), where io is unavailable; resolve at request time \
+                     instead — e.g. `env.X`, a late-bound reference read only when the \
+                     request is made"
                 )
             }
         }

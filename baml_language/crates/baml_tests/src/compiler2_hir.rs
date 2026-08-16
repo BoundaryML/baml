@@ -665,7 +665,7 @@ mod tests {
         let _type_file = db.add_file("types.baml", "type Backend = string");
         let _client_file = db.add_file(
             "clients.baml",
-            r#"client Backend = openai.OpenAiClient.new(model = "gpt-4o-mini");"#,
+            r#"client Backend = openai.ResponsesClient.new(model = "gpt-4o-mini");"#,
         );
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
@@ -2098,7 +2098,7 @@ implements MyIface for MyClass {
 
 function MyTemplate(x: string) -> string { `${x}` }
 
-client MyClient = openai.OpenAiClient.new(model = "gpt-4o-mini");
+client MyClient = openai.ResponsesClient.new(model = "gpt-4o-mini");
 
 function target() -> int { 1 }
 

@@ -346,7 +346,7 @@ pub(crate) fn lower_client_initializer(
 ///         ai.internal.assemble_prompt(tagged.parts, tagged.values)
 ///     },
 ///     toolbox: ai.Toolbox.new([ai.tool(a), ...]),
-///     default_client: openai.OpenAiClient.new(model = "gpt-4o-mini"),
+///     default_client: openai.ResponsesClient.new(model = "gpt-4o-mini"),
 /// }
 /// ```
 ///
@@ -354,8 +354,12 @@ pub(crate) fn lower_client_initializer(
 /// the built-in `prompt` tag. `${role(...)}` values become prompt messages
 /// and media remains structural. `ctx` is bound to an `ai.internal.SpecCtx`,
 /// so `${ctx.output_format}` resolves to the closure's parameter and every
-/// other interpolation captures the enclosing function's parameters. Provider
-/// construction is pure, so the eager default client never touches credentials.
+/// other interpolation captures the enclosing function's parameters.
+///
+/// The `default_client` expression is evaluated when this `$spec` body runs —
+/// that is, on every call of the LLM function — never during `$init`. Provider
+/// construction itself is pure, so building the spec still never touches
+/// credentials; only a request reads them.
 ///
 /// In the `tools` list, a bare function reference is wrapped in `ai.tool(...)`;
 /// any other element expression must already produce an `ai.Tool`.
@@ -474,8 +478,8 @@ pub(crate) fn synthesize_llm_spec_body(
         .collect();
     for callee in role_callees {
         ctx.exprs[callee] = Expr::Path(vec![
-            Name::new("baml"),
-            Name::new("prompt"),
+            Name::new("ai"),
+            Name::new("internal"),
             Name::new("make_role"),
         ]);
     }
@@ -633,11 +637,25 @@ pub(crate) fn synthesize_llm_spec_body(
         span,
     );
 
-    // default_client — an eager value; provider construction is pure
-    // (credentials resolve from the environment at request time), so
-    // building the spec never touches env. Either the compile-time-mapped
-    // provider constructor for a "provider/model" string, or the user's own
-    // client expression lowered in place.
+    // default_client — evaluated when the `$spec` function RUNS, i.e. when the
+    // LLM function is called, *not* during `$init`. (This whole body is the
+    // `<Fn>$spec` companion function; the caller is `<Fn>`'s own body,
+    // `ai.Agent<Out>.new(client = client).run(Fn$spec(p...))`.) So a dynamic
+    // selector is re-read on every call and a host may load secrets after the
+    // runtime initializes.
+    //
+    // Two shapes:
+    //
+    //   * `client "provider/model"` — a STRING LITERAL, mapped at compile time
+    //     to a builtin provider constructor (`spec_client_provider` in
+    //     lower_cst.rs). Static, so an unknown prefix is a compile error.
+    //     Provider construction is pure — it never touches env.
+    //   * anything else — an arbitrary expression, wrapped in
+    //     `ai.clients.resolve(...)` so every dynamic selector shape works:
+    //     an `ai.Client` value (identity), a runtime `"provider/model"`
+    //     string, or a `baml.env.Ref` (read at call time, then the string
+    //     path). Unknown prefixes / unset vars become typed runtime `ai`
+    //     errors rather than an opaque `InitFailed`.
     let default_client = match client_spec {
         crate::lower_cst::LlmClientSpec::Provider { pkg, class, model } => {
             let model_lit = ctx.alloc_expr(Expr::Literal(Literal::String(model.clone())), span);
@@ -654,12 +672,31 @@ pub(crate) fn synthesize_llm_spec_body(
                 span,
             )
         }
-        crate::lower_cst::LlmClientSpec::Expr(rowan::NodeOrToken::Node(node)) => {
-            ctx.lower_expr(node)
+        crate::lower_cst::LlmClientSpec::Expr(value) => {
+            let inner = match value {
+                rowan::NodeOrToken::Node(node) => ctx.lower_expr(node),
+                // A bare dot-free identifier is a token, not a node.
+                rowan::NodeOrToken::Token(token) => ctx
+                    .try_lower_bare_token(token)
+                    .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
+            };
+            let resolve_callee = ctx.alloc_expr(
+                Expr::Path(vec![
+                    Name::new("ai"),
+                    Name::new("clients"),
+                    Name::new("resolve"),
+                ]),
+                span,
+            );
+            ctx.alloc_expr(
+                Expr::Call {
+                    callee: resolve_callee,
+                    type_args: vec![],
+                    args: vec![CallArg::positional(inner)],
+                },
+                span,
+            )
         }
-        crate::lower_cst::LlmClientSpec::Expr(rowan::NodeOrToken::Token(token)) => ctx
-            .try_lower_bare_token(token)
-            .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
     };
 
     let type_args = out_type.map(|t| vec![t]).unwrap_or_default();
@@ -3503,7 +3540,20 @@ impl LoweringContext {
     }
 
     fn lower_env_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
-        // Desugar `env.VAR_NAME` → `baml.env.get_or_panic("VAR_NAME")`
+        // Desugar `env.VAR_NAME` → `baml.env.ref("VAR_NAME")`
+        //
+        // `env.X` is a LATE-BOUND typed reference (`baml.env.Ref`), not an
+        // eager read. Two reasons:
+        //
+        //   1. `client Foo = ...` declarations are evaluated during `$init`,
+        //      which cannot perform io — an eager `baml.env.get_or_panic`
+        //      there died at runtime with an opaque `InitFailed`.
+        //   2. Hosts routinely load secrets *after* the runtime initializes,
+        //      so an eager snapshot taken at declaration time is wrong.
+        //
+        // The `Ref` carries the variable NAME only — a secret is never
+        // captured into a constructed value. Reads happen at use time through
+        // `Ref.get()` / `.get_or_panic()` / `.or(fallback)`.
         let range = node.span_range();
 
         let mut field_text = None;
@@ -3525,11 +3575,7 @@ impl LoweringContext {
             range,
         });
         let callee = self.alloc_expr(
-            Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("env"),
-                Name::new("get_or_panic"),
-            ]),
+            Expr::Path(vec![Name::new("baml"), Name::new("env"), Name::new("ref")]),
             range,
         );
         let arg = self.alloc_expr(Expr::Literal(Literal::String(var_name)), range);

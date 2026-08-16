@@ -1,2 +1,30 @@
 [package]
 name = "baml_tests"
+
+# Test profiles (schema: crates/baml_cli/src/manifest.rs:42-76; resolution:
+# crates/baml_cli/src/test_command.rs:771-846). A profile is preset `baml test`
+# argv, parsed by the real clap grammar.
+#
+# `default` is what a bare `baml-cli test` uses — including the corpus runner in
+# crates/baml_tests/tests/baml_src.rs:155-183 and therefore CI, which has no
+# provider keys. It must keep selecting the whole offline corpus, so it only
+# drops the opt-in `::live::` testsets. `--exclude` beats `--include`, and an
+# excluded testset subtree is pruned *before* its body runs
+# (baml_std/testing/registry.baml:644-659), so an offline run never constructs a
+# provider client or reads an API key.
+#
+#   offline (default):
+#     target/debug/baml-cli test --from crates/baml_tests/baml_src
+#   live (real provider calls, needs keys):
+#     infisical run -- baml_language/target/debug/baml-cli test \
+#       --from baml_language/crates/baml_tests/baml_src --profile live
+#
+# See ns_llm_mock/README.md for the authoring rules these profiles assume.
+[test]
+default = "offline"
+
+[test.profiles.offline]
+args = ["-x", "::live::"]
+
+[test.profiles.live]
+args = ["-i", "::live::"]

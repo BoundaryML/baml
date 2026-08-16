@@ -509,7 +509,7 @@ async fn unreflect_reifies_the_runtime_type_argument() {
 async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
     let output = baml_test!(
         r##"
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",
@@ -560,7 +560,7 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
 async fn runtime_enum_identity_and_metadata_are_preserved() {
     let output = baml_test!(
         r##"
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",
@@ -640,7 +640,7 @@ async fn duplicate_runtime_enum_value_uses_compiler_diagnostic() {
 async fn empty_runtime_enum_fails_at_the_render_boundary() {
     let output = baml_test!(
         r##"
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",
@@ -684,7 +684,7 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
 fn runtime_type_arguments_are_rejected_on_streaming_companions() {
     let db = setup_test_db(
         r##"
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
 );

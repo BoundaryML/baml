@@ -1,7 +1,7 @@
 // Retry composes at the client boundary now: the legacy `retry_policy` block
 // is removed, and reliability wraps a base client via `ai.Retry.new`.
 
-client BaseClient = openai.OpenAiClient.new(
+client BaseClient = openai.ResponsesClient.new(
     model = "gpt-4",
     api_key = "test-key",
     base_url = "http://localhost:1234",

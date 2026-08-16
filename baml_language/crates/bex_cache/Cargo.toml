@@ -10,7 +10,7 @@ documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 
-# TLS provider selection mirrors sys_native/sys_llm: `rustls` on
+# TLS provider selection mirrors sys_native: `rustls` on
 # reqwest pins the aws-lc-rs provider, whose C objects don't link on
 # iOS — Apple bridge builds select `ring-crypto` instead.
 [features]

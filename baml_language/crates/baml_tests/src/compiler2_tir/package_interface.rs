@@ -1426,7 +1426,7 @@ implement app.Taggable for Mine {
             &[(
                 "main.baml",
                 r##"
-client Dummy = openai.OpenAiClient.new(
+client Dummy = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = "test",
 );

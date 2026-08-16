@@ -60,13 +60,15 @@ function user.CommentAfterArrow$spec() -> ai.FunctionSpec<string> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_global user.TestClient
+    call ai.clients.resolve
+    store_var _5
     load_const "CommentAfterArrow"
     load_type string
     load_type unknown
     alloc_map 0
     make_closure .<lambda(CommentAfterArrow$spec, 0)>, 0
-    load_var _3
-    load_global user.TestClient
+    load_var2 1 2
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
@@ -144,6 +146,9 @@ function user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<st
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _5
+    load_global user.TestClient
+    call ai.clients.resolve
+    store_var _7
     load_const "FunctionWithComments"
     load_var2 1 2
     load_const "a"
@@ -152,8 +157,7 @@ function user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<st
     load_type unknown
     alloc_map 2
     make_closure .<lambda(FunctionWithComments$spec, 0)>, 0
-    load_var _5
-    load_global user.TestClient
+    load_var2 3 4
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

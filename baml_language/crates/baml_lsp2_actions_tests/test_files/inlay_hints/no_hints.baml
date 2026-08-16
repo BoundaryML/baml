@@ -24,7 +24,7 @@ function foo() -> string {
 }
 
 // client declarations are desugared; no hints should appear
-client GPT4 = openai.OpenAiClient.new(model = "gpt-4");
+client GPT4 = openai.ResponsesClient.new(model = "gpt-4");
 
 //----
 //- diagnostics

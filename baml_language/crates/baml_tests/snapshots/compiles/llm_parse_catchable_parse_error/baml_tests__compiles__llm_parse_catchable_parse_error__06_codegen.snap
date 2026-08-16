@@ -65,6 +65,9 @@ function user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<Invoice> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.GPT4o
+    call ai.clients.resolve
+    store_var _6
     load_const "ExtractInvoice"
     load_deref ?1
     load_const "text"
@@ -73,8 +76,7 @@ function user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<Invoice> {
     alloc_map 1
     load_var text
     make_closure .<lambda(ExtractInvoice$spec, 0)>, 1
-    load_var _4
-    load_global user.GPT4o
+    load_var2 2 3
     load_type Invoice
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

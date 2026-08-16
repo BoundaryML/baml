@@ -102,6 +102,7 @@ fn user.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
     let _3: (string) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
+    let _6: openai.ImageClient
 
     bb0: {
         _2 = { const "prompt": copy _1 }: map<string, unknown>;
@@ -111,11 +112,15 @@ fn user.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<image> { const "GenerateImage", copy _2, copy _3, copy _4, const item user.OpenAIImageResponses };
-        goto -> bb2;
+        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<image> { const "GenerateImage", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -125,95 +130,69 @@ fn .<lambda(GenerateImage$spec, 0)>( __spec_output_format: string) -> ai.Prompt 
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string //  __spec_output_format // param
-    let _2: ai.internal.SpecCtx // ctx
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: type
-    let _12: int
-    let _13: unknown[]
-    let _14: string
-    let _15: type
-    let _16: int
-    let _17: string[]
-    let _18: "\n\n"
-    let _19: type
-    let _20: int
-    let _21: unknown[]
-    let _22: string
-    let _23: type
-    let _24: int
-    let _25: string[]
-    let _26: ""
-    let _27: type
-    let _28: string[]
-    let _29: unknown[]
-    let _30: string[]
-    let _31: baml.TaggedString
-    let _32: unknown[]
-    let _33: baml.TaggedString
+    let _2: baml.TaggedString //  __spec_tagged_prompt
+    let _3: string[] //  __tt_parts
+    let _4: unknown[] //  __tt_values
+    let _5: string //  __tt_cur
+    let _6: string
+    let _7: int
+    let _8: string[]
+    let _9: string
+    let _10: type
+    let _11: int
+    let _12: unknown[]
+    let _13: string
+    let _14: type
+    let _15: int
+    let _16: string[]
+    let _17: ""
+    let _18: type
+    let _19: string[]
+    let _20: unknown[]
+    let _21: string[]
+    let _22: baml.TaggedString
+    let _23: unknown[]
+    let _24: baml.TaggedString
 
     bb0: {
-        _2 = ai.internal.SpecCtx { copy _1 };
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "Generate an image for this prompt:\n";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1];
+        _3 = []: string[];
+        _4 = []: unknown[];
+        _5 = const "";
+        _6 = copy _5;
+        _5 = copy _6 + const "Generate an image for this prompt:\n";
+        _8 = copy _3;
+        _9 = copy _5;
+        _10 = load_type(string);
+        _7 = call const fn baml.Array.push<copy _10>(copy _8, copy _9) -> [bb1];
     }
 
     bb1: {
-        _6 = const "";
-        _13 = copy _5;
-        _14 = copy capture[0];
-        _15 = load_type(unknown);
-        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2];
+        _5 = const "";
+        _12 = copy _4;
+        _13 = copy capture[0];
+        _14 = load_type(unknown);
+        _11 = call const fn baml.Array.push<copy _14>(copy _12, copy _13) -> [bb2];
     }
 
     bb2: {
-        _6 = const "\n\n";
-        _17 = copy _4;
-        _18 = copy _6;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3];
+        _16 = copy _3;
+        _17 = copy _5;
+        _18 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
     }
 
     bb3: {
-        _6 = const "";
-        _21 = copy _5;
-        _22 = copy _2.0;
-        _23 = load_type(unknown);
-        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb4];
+        _19 = copy _3;
+        _20 = copy _4;
+        _2 = baml.TaggedString { copy _19, copy _20 };
+        _22 = copy _2;
+        _21 = copy _22.0;
+        _24 = copy _2;
+        _23 = copy _24.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _21, copy _23) -> [bb4];
     }
 
     bb4: {
-        _25 = copy _4;
-        _26 = copy _6;
-        _27 = load_type(string);
-        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb5];
-    }
-
-    bb5: {
-        _28 = copy _4;
-        _29 = copy _5;
-        _3 = baml.TaggedString { copy _28, copy _29 };
-        _31 = copy _3;
-        _30 = copy _31.0;
-        _33 = copy _3;
-        _32 = copy _33.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _30, copy _32) -> [bb6];
-    }
-
-    bb6: {
         return;
     }
 }
@@ -353,6 +332,7 @@ fn user.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> {
     let _3: (string) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
+    let _6: openai.ImageClient
 
     bb0: {
         _2 = { const "prompt": copy _1 }: map<string, unknown>;
@@ -362,11 +342,15 @@ fn user.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> {
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<image[]> { const "GenerateImageSet", copy _2, copy _3, copy _4, const item user.OpenAIImageResponses };
-        goto -> bb2;
+        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<image[]> { const "GenerateImageSet", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -376,95 +360,69 @@ fn .<lambda(GenerateImageSet$spec, 0)>( __spec_output_format: string) -> ai.Prom
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string //  __spec_output_format // param
-    let _2: ai.internal.SpecCtx // ctx
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: type
-    let _12: int
-    let _13: unknown[]
-    let _14: string
-    let _15: type
-    let _16: int
-    let _17: string[]
-    let _18: "\n\n"
-    let _19: type
-    let _20: int
-    let _21: unknown[]
-    let _22: string
-    let _23: type
-    let _24: int
-    let _25: string[]
-    let _26: ""
-    let _27: type
-    let _28: string[]
-    let _29: unknown[]
-    let _30: string[]
-    let _31: baml.TaggedString
-    let _32: unknown[]
-    let _33: baml.TaggedString
+    let _2: baml.TaggedString //  __spec_tagged_prompt
+    let _3: string[] //  __tt_parts
+    let _4: unknown[] //  __tt_values
+    let _5: string //  __tt_cur
+    let _6: string
+    let _7: int
+    let _8: string[]
+    let _9: string
+    let _10: type
+    let _11: int
+    let _12: unknown[]
+    let _13: string
+    let _14: type
+    let _15: int
+    let _16: string[]
+    let _17: ""
+    let _18: type
+    let _19: string[]
+    let _20: unknown[]
+    let _21: string[]
+    let _22: baml.TaggedString
+    let _23: unknown[]
+    let _24: baml.TaggedString
 
     bb0: {
-        _2 = ai.internal.SpecCtx { copy _1 };
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "Generate multiple distinct image outputs for this prompt:\n";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1];
+        _3 = []: string[];
+        _4 = []: unknown[];
+        _5 = const "";
+        _6 = copy _5;
+        _5 = copy _6 + const "Generate multiple distinct image outputs for this prompt:\n";
+        _8 = copy _3;
+        _9 = copy _5;
+        _10 = load_type(string);
+        _7 = call const fn baml.Array.push<copy _10>(copy _8, copy _9) -> [bb1];
     }
 
     bb1: {
-        _6 = const "";
-        _13 = copy _5;
-        _14 = copy capture[0];
-        _15 = load_type(unknown);
-        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2];
+        _5 = const "";
+        _12 = copy _4;
+        _13 = copy capture[0];
+        _14 = load_type(unknown);
+        _11 = call const fn baml.Array.push<copy _14>(copy _12, copy _13) -> [bb2];
     }
 
     bb2: {
-        _6 = const "\n\n";
-        _17 = copy _4;
-        _18 = copy _6;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3];
+        _16 = copy _3;
+        _17 = copy _5;
+        _18 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
     }
 
     bb3: {
-        _6 = const "";
-        _21 = copy _5;
-        _22 = copy _2.0;
-        _23 = load_type(unknown);
-        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb4];
+        _19 = copy _3;
+        _20 = copy _4;
+        _2 = baml.TaggedString { copy _19, copy _20 };
+        _22 = copy _2;
+        _21 = copy _22.0;
+        _24 = copy _2;
+        _23 = copy _24.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _21, copy _23) -> [bb4];
     }
 
     bb4: {
-        _25 = copy _4;
-        _26 = copy _6;
-        _27 = load_type(string);
-        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb5];
-    }
-
-    bb5: {
-        _28 = copy _4;
-        _29 = copy _5;
-        _3 = baml.TaggedString { copy _28, copy _29 };
-        _31 = copy _3;
-        _30 = copy _31.0;
-        _33 = copy _3;
-        _32 = copy _33.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _30, copy _32) -> [bb6];
-    }
-
-    bb6: {
         return;
     }
 }
@@ -604,6 +562,7 @@ fn user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpec<(str
     let _3: (string) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
+    let _6: openai.ResponsesClient
 
     bb0: {
         _2 = { const "prompt": copy _1 }: map<string, unknown>;
@@ -613,11 +572,15 @@ fn user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpec<(str
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<(image | string)[]> { const "GenerateMixedImageNarrative", copy _2, copy _3, copy _4, const item user.OpenAIImageResponses };
-        goto -> bb2;
+        _6 = call const fn openai.ResponsesClient.new(const "gpt-4.1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<(image | string)[]> { const "GenerateMixedImageNarrative", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

@@ -128,8 +128,8 @@ async fn role_construction_isolation() {
     // Isolation: does constructing a `Role { name, metadata }` even type-check?
     let output = baml_test!(
         r#"
-function main() -> baml.prompt.Role {
-  return baml.prompt.Role { name: "system", metadata: {} };
+function main() -> ai.Role {
+  return ai.Role { name: "system", metadata: {} };
 }
 "#
     );
@@ -145,18 +145,18 @@ async fn prompt_role_metadata_is_preserved() {
     let output = baml_test!(
         r#"
 function main() -> ai.Prompt {
-  let system = baml.prompt.Role {
+  let system = ai.Role {
     name: "system",
     metadata: {
       "cache_control": { "type": "ephemeral" },
     },
   }
-  let user = baml.prompt.Role {
+  let user = ai.Role {
     name: "user",
     metadata: { "priority": 3 },
   }
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["system", "user"] }
-  let ctx = baml.prompt.Context { client: cc, tags: {} }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["system", "user"] }
+  let ctx = ai.Context { client: cc, tags: {} }
   let render = prompt`${system}Rules${user}Hello`
   render(ctx)
 }
@@ -184,8 +184,8 @@ async fn prompt_tag_builds_promptast_with_role_messages() {
         r#"
 function main() -> ai.Prompt {
   let name = "World"
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-  let ctx = baml.prompt.Context { client: cc, tags: {} }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let ctx = ai.Context { client: cc, tags: {} }
   let render = ai.prompt`${role("system")}You are helpful.${role("user")}Hi ${name}!`
   render(ctx)
 }
@@ -200,13 +200,13 @@ function main() -> ai.Prompt {
 #[tokio::test]
 async fn unqualified_prompt_tag_resolves_to_baml_llm_prompt() {
     // Ergonomic fallback: bare `prompt`...`` resolves to `ai.prompt`
-    // (no `baml.prompt.` qualifier needed). Same assembly as the qualified form.
+    // (no `ai.` qualifier needed). Same assembly as the qualified form.
     let output = baml_test!(
         r#"
 function main() -> ai.Prompt {
   let name = "World"
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-  let ctx = baml.prompt.Context { client: cc, tags: {} }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let ctx = ai.Context { client: cc, tags: {} }
   let render = prompt`${role("system")}You are helpful.${role("user")}Hi ${name}!`
   render(ctx)
 }
@@ -234,8 +234,8 @@ class Point {
 function main() -> string {
   let p = Point { x: 1, y: 2 }
   let xs = [10, 20, 30]
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
-  let ctx = baml.prompt.Context { client: cc, tags: {} }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
+  let ctx = ai.Context { client: cc, tags: {} }
   let render = prompt`Point ${p} list ${xs}`
   let from_prompt = render(ctx).text()
   let from_string = `Point ${p} list ${xs}`
@@ -277,8 +277,8 @@ class Labeled {
 
 function main() -> string {
   let v = Labeled { tag: "hi" }
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }
-  let ctx = baml.prompt.Context { client: cc, tags: {} }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }
+  let ctx = ai.Context { client: cc, tags: {} }
   let render = prompt`${role("system")}head ${v}${role("user")}tail ${v}`
   render(ctx).text()
 }
@@ -321,8 +321,8 @@ function main() -> ai.Prompt {
     gallery: [leaf],
     lookup: { "copy": leaf },
   }
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-  let ctx = baml.prompt.Context { client: cc, tags: {} }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let ctx = ai.Context { client: cc, tags: {} }
   let render = prompt`${role("user")}Inspect ${envelope}`
   render(ctx)
 }
@@ -373,9 +373,9 @@ class Person {
 }
 
 function main() -> ai.Prompt {
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-  let of = baml.prompt.render_output_format(type.of<Person>())
-  let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: of }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let of = ai.internal.render_output_format(type.of<Person>())
+  let ctx = ai.Context { client: cc, tags: {}, output_format: of }
   let render = ai.prompt`Answer using this schema:
 ${ctx.output_format}`
   render(ctx)
@@ -409,9 +409,9 @@ class Person {
 }
 
 function main() -> ai.Prompt {
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
   let rt = type.of<Person>()
-  let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
+  let ctx = ai.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
   let render = ai.prompt`${ctx.output_format_with(prefix = "Use this exact schema:")}`
   render(ctx)
 }
@@ -445,9 +445,9 @@ class Person {
 }
 
 function main() -> ai.Prompt {
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
   let rt = type.of<Person>()
-  let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
+  let ctx = ai.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
   let render = ai.prompt`${ctx.output_format_with(quote_class_fields = true)}`
   render(ctx)
 }
@@ -470,9 +470,9 @@ class Person {
 }
 
 function main() -> ai.Prompt {
-  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
   let rt = type.of<Person>()
-  let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
+  let ctx = ai.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
   let render = ai.prompt`${ctx.output_format_with(render_null_as = "omit")}`
   render(ctx)
 }
