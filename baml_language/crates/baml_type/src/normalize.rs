@@ -30,11 +30,7 @@
 //! absorb, or equate, so a missing fact can only yield "not *necessarily*
 //! equivalent / subtype", never a false claim of equivalence or membership.
 
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{cell::RefCell, collections::HashSet, sync::Arc};
 
 use rustc_hash::FxHashMap;
 
@@ -2768,7 +2764,7 @@ use crate::interned;
 ///   non-empty co-inductive assumption stack, which are hypothesis-relative.
 #[derive(Default)]
 pub struct InternedCanonicalCache {
-    canonical: RefCell<HashMap<interned::Ty, Arc<NormalTy>>>,
+    canonical: RefCell<FxHashMap<interned::Ty, Arc<NormalTy>>>,
     subtype_verdicts: RefCell<FxHashMap<(interned::Ty, interned::Ty), bool>>,
     equivalent_verdicts: RefCell<FxHashMap<(interned::Ty, interned::Ty), bool>>,
 }
