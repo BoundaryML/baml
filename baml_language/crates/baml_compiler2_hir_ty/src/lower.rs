@@ -1430,10 +1430,7 @@ pub fn substitute_params(ty: &baml_type::interned::Ty, args: &[baml_type::intern
     {
         return replacement.clone();
     }
-    Ty::intern(
-        ty.kind()
-            .map_children(|child| substitute_params(child, args)),
-    )
+    ty.map_children_preserving(|child| substitute_params(child, args))
 }
 
 /// Generic-arity recovery without diagnostics (S17): extras truncated,
@@ -1725,7 +1722,7 @@ pub fn reject_holes(ty: &Ty) -> Ty {
     if matches!(ty.kind(), TyKind::Infer { var: None, .. }) {
         return Ty::error();
     }
-    Ty::intern(ty.kind().map_children(reject_holes))
+    ty.map_children_preserving(reject_holes)
 }
 
 /// The declared interface bounds for a CLASS's own generic frame - the

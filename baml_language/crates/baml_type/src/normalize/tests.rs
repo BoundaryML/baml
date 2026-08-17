@@ -1662,7 +1662,7 @@ mod interned_entry {
                 );
                 assert_eq!(
                     cache.is_subtype(a, b, &ctx),
-                    canonical_a.is_subtype_of(&canonical_b, &ctx, &mut HashSet::new()),
+                    canonical_a.is_subtype_of(&canonical_b, &ctx, &mut super::Assumptions::new()),
                     "cached subtyping diverged for {a:?} <: {b:?}"
                 );
             }

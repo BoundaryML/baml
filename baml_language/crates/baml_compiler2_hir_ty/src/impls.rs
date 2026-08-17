@@ -1298,10 +1298,7 @@ pub(crate) fn reduce_ground_projections(
     if fuel == 0 || !ty.has_projection() || ty.has_infer() {
         return ty.clone();
     }
-    let rebuilt = Ty::intern(
-        ty.kind()
-            .map_children(|child| reduce_ground_projections(db, child, fuel)),
-    );
+    let rebuilt = ty.map_children_preserving(|child| reduce_ground_projections(db, child, fuel));
     if let TyKind::AssociatedTypeProjection {
         base,
         interface,
@@ -1550,10 +1547,7 @@ pub fn substitute_bindings(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
     {
         return bound.clone();
     }
-    Ty::intern(
-        ty.kind()
-            .map_children(|child| substitute_bindings(child, bindings)),
-    )
+    ty.map_children_preserving(|child| substitute_bindings(child, bindings))
 }
 
 /// Verifies a matched impl's declared bounds at the realized bindings.
