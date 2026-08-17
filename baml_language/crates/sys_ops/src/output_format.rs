@@ -1000,7 +1000,8 @@ pub fn render_output_format(
         .unwrap_or_default()
 }
 
-/// Render a prebuilt [`OutputFormatContent`] with caller-supplied options.
+/// Render a prebuilt [`OutputFormatContent`] with caller-supplied options,
+/// preserving any deferred build or render error for the sys-op boundary.
 /// This backs the parameterized `ctx.output_format_with(...)` accessor. The content is
 /// carried as an opaque handle on `Context` (built once by
 /// [`build_output_format_content`]); this only re-renders. The option mapping
@@ -1021,7 +1022,7 @@ pub fn render_output_format_content(
     hoist_classes: Option<Vec<String>>,
     map_style: Option<String>,
     render_null_as: Option<String>,
-) -> String {
+) -> Result<String, RenderError> {
     use self::{HoistClasses, MapStyle, RenderOptions, RenderSetting};
     fn setting<V>(o: Option<V>) -> RenderSetting<V> {
         o.map_or(RenderSetting::Auto, RenderSetting::Always)
@@ -1042,7 +1043,7 @@ pub fn render_output_format_content(
         },
         render_null_as: setting(render_null_as),
     };
-    content.render(&options).ok().flatten().unwrap_or_default()
+    content.render(&options).map(Option::unwrap_or_default)
 }
 
 /// Build an `OutputFormatContent` by walking a `RuntimeTy` and collecting all
@@ -3746,7 +3747,7 @@ Answer in JSON using this type: A"#
     }
 
     #[test]
-    fn test_build_output_format_rejects_non_regular_recursive_generic() {
+    fn test_render_output_format_content_rejects_non_regular_recursive_generic() {
         let chain = baml_type::TypeName::local("Chain".into());
         let target = RuntimeTy::Class(chain.clone(), vec![ty_int()], TyAttr::default());
         let next_template = baml_type::TyTemplate::class(
@@ -3779,7 +3780,10 @@ Answer in JSON using this type: A"#
         ctx.class_definitions = Arc::new(classes);
 
         let content = build_output_format_content(&target, &ctx);
-        let error = content.render(&RenderOptions::default()).unwrap_err();
+        let error = render_output_format_content(
+            &content, None, None, None, None, None, None, None, None, None,
+        )
+        .unwrap_err();
         assert!(matches!(
             error,
             RenderError::NonRegularRecursiveGeneric {

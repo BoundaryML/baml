@@ -368,6 +368,8 @@ function env_ref_clients.EnvRefEcho$spec(question: string) -> ai.FunctionSpec<st
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var _6
     load_const "EnvRefEcho"
@@ -849,6 +851,7 @@ function env_ref_clients.dynamic_client_selector_runs_against_the_mock() -> stri
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(dynamic_client_selector_runs_against_the_mock, 0)>, 0
+    load_const <omitted>
     call user.llm_mock.mock_json_serve
     return
 }
@@ -863,6 +866,7 @@ function env_ref_clients.env_ref_api_key_reaches_the_wire() -> string {
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(env_ref_api_key_reaches_the_wire, 0)>, 0
+    load_const <omitted>
     call user.llm_mock.mock_json_serve
     return
 }
@@ -877,6 +881,7 @@ function env_ref_clients.env_ref_base_url_resolves_at_request_time() -> string {
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(env_ref_base_url_resolves_at_request_time, 0)>, 0
+    load_const <omitted>
     call user.llm_mock.mock_json_serve
     return
 }
@@ -931,6 +936,8 @@ function env_ref_clients.env_ref_keeps_the_secret_out_of_the_client() -> string 
     store_var _2
     load_const "gpt-4o-mini"
     load_var _2
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1047,6 +1054,8 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     call openai.ResponsesClient.resolved_api_key
     store_var _2
@@ -1055,6 +1064,8 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     store_var _8
     load_const "m"
     load_var _8
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1180,6 +1191,8 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call openai.GenericClient.new
     call openai.GenericClient.resolved_api_key
     store_var_load_var _28
@@ -1194,6 +1207,8 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     store_var _27
     load_const "m"
     load_const "sk-explicit"
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1230,6 +1245,8 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const "sk-explicit"
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1290,6 +1307,7 @@ function env_ref_clients.explicit_resolve_selector_runs_against_the_mock() -> st
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(explicit_resolve_selector_runs_against_the_mock, 0)>, 0
+    load_const <omitted>
     call user.llm_mock.mock_json_serve
     return
 }
@@ -1326,6 +1344,7 @@ function env_ref_clients.plain_string_api_key_still_works() -> string {
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(plain_string_api_key_still_works, 0)>, 0
+    load_const <omitted>
     call user.llm_mock.mock_json_serve
     return
 }
@@ -1523,6 +1542,8 @@ function env_ref_clients.resolve_of_a_client_value_is_identity() -> string {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var inner
     load_var inner
@@ -1701,6 +1722,8 @@ function env_ref_clients.unset_base_url_is_the_same_configuration_error() -> str
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call openai.GenericClient.new
     call openai.GenericClient.resolved_base_url
     jump L2
@@ -1727,6 +1750,8 @@ function env_ref_clients.unset_ref_base_url_is_a_configuration_error() -> string
     store_var _2
     load_const "m"
     load_var _2
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>

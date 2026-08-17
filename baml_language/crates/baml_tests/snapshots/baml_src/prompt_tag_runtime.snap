@@ -219,6 +219,8 @@ function prompt_tag_runtime.PtRenderPerson$spec() -> ai.FunctionSpec<prompt_tag_
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var _5
     load_const "PtRenderPerson"
@@ -327,6 +329,8 @@ function prompt_tag_runtime.PtStructuredGreeting$spec(name: string) -> ai.Functi
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -452,6 +456,8 @@ function prompt_tag_runtime.PtStructuredImage$spec(photo: image) -> ai.FunctionS
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>

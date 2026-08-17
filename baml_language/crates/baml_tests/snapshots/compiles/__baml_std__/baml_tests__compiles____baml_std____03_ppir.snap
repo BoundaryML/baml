@@ -955,6 +955,7 @@ class baml.http.SseStream$stream {
   _handle: $rust_type
 }
 function baml.http._fetch(url: string, timeout_nanos: bigint) -> baml.http.Response  [builtin]
+function baml.http._fetch_sse(request: baml.http.Request, timeout_nanos: bigint, first_event_timeout_nanos: bigint) -> baml.http.SseStream  [builtin]
 function baml.http._send(request: baml.http.Request, timeout_nanos: bigint) -> baml.http.Response  [builtin]
 function baml.http._timeout_nanos(timeout: root.time.Duration?) -> bigint  [expr] {
   {  } match (timeout) { null => 0n, t: root.time.Duration => t.to_nanoseconds() }
@@ -965,7 +966,9 @@ function baml.http.end(self: ?) -> null  [builtin]
 function baml.http.fetch(url: string, timeout: root.time.Duration? = null) -> baml.http.Response  [expr] {
   {  } _fetch(url, _timeout_nanos(timeout))
 }
-function baml.http.fetch_sse(request: baml.http.Request) -> baml.http.SseStream  [builtin]
+function baml.http.fetch_sse(request: baml.http.Request, timeout: root.time.Duration? = null, first_event_timeout: root.time.Duration? = null) -> baml.http.SseStream  [expr] {
+  {  } _fetch_sse(request, _timeout_nanos(timeout), _timeout_nanos(first_event_timeout))
+}
 function baml.http.new(status_code: int, headers: map<string, string>, body: uint8array) -> baml.http.Response  [builtin]
 function baml.http.new_streaming(status_code: int, headers: map<string, string>) -> baml.http.Response  [builtin]
 function baml.http.next(self: ?) -> string?  [builtin]

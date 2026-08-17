@@ -261,6 +261,11 @@ impl GenerateArgs {
         let _ = session.warm_prep_seeds_only();
         session.prime();
         let (db, from) = (session.db, session.resolved.root);
+        // `SourceFile` paths are canonicalized by `ProjectDatabase`. Canonicalize
+        // the root too so Windows short paths and `\\?\` paths can be relativized.
+        let from = from
+            .canonicalize()
+            .with_context(|| format!("failed to resolve project root {}", from.display()))?;
         // Compile-time diagnostics — same shape as run/pack: render the
         // diagnostic block after abandoning the spinner so the colored
         // source-snippet output doesn't fight with the lamb. No "Checking"

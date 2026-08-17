@@ -231,7 +231,16 @@ class MockSseServer {
             baml.sys.sleep(first_event_delay);
             for (let event in events) {
                 if (event.length() > 0) {
-                    resp.write((event + "\n\n").to_utf8());
+                    resp.write((event + "\n\n").to_utf8()) catch (e) {
+                        // A request-timeout test intentionally drops the client
+                        // while this producer is still replaying later events.
+                        baml.errors.Io => {
+                            if (e.message == "streaming response could not be written: the client has hung up") {
+                                break;
+                            }
+                            throw e
+                        },
+                    };
                     baml.sys.sleep(delay);
                 }
             }

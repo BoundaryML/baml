@@ -345,6 +345,8 @@ function user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpe
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var _6
     load_const "GenerateMixedImageNarrative"

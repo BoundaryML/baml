@@ -144,8 +144,8 @@ impl HttpBody {
         Ok(())
     }
 
-    /// Consume the body and decode it as text. For a client response this honors
-    /// the `Content-Type` charset (via `reqwest`); buffered bytes are UTF-8.
+    /// Consume the body and decode it as text. Client responses use lossy UTF-8
+    /// decoding (via `reqwest`); buffered bytes require valid UTF-8.
     pub(crate) async fn read_text(&self) -> Result<String, VmBamlError> {
         match self {
             // Decode failures remain `Io`; a client request deadline can also

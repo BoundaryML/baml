@@ -274,7 +274,7 @@ pub fn to_source_code_with_options(
     user_baml_files: &[UserBamlFile],
     options: &PythonGenOptions,
 ) -> HashMap<PathBuf, String> {
-    to_source_code_internal(pool, RuntimePayload::SourceFiles(user_baml_files), options)
+    to_source_code_internal(pool, RuntimePayload::SourceFiles(user_baml_files), *options)
 }
 
 /// Build the Python SDK output tree using precompiled BAML bytecode as the
@@ -299,7 +299,7 @@ pub fn to_source_code_with_bytecode_and_options(
     to_source_code_internal(
         pool,
         RuntimePayload::Bytecode(baml_bytecode, None, &[]),
-        options,
+        *options,
     )
 }
 
@@ -342,14 +342,14 @@ pub fn to_source_code_with_bytecode_and_metadata_and_source_files_and_options(
     to_source_code_internal(
         pool,
         RuntimePayload::Bytecode(baml_bytecode, Some(embedded_baml_toml), user_baml_files),
-        options,
+        *options,
     )
 }
 
 fn to_source_code_internal(
     pool: &SymbolPool,
     runtime_payload: RuntimePayload<'_>,
-    options: &PythonGenOptions,
+    options: PythonGenOptions,
 ) -> HashMap<PathBuf, String> {
     // Only `PreserveCase` is wired up so far; `Language`-mode rewriting
     // is the next piece of work and panics loudly until then.

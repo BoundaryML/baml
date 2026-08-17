@@ -22,9 +22,11 @@ class Response {
     url: string,
     _body: $rust_type,
 
-    /// Returns the response body as a UTF-8 string.
+    /// Returns the response body as a string. Live client responses are decoded
+    /// lossily as UTF-8, replacing malformed bytes with U+FFFD. Buffered `Bytes`
+    /// responses use strict UTF-8 decoding.
     /// Throws `Timeout` if the request deadline elapses while reading the body,
-    /// or `Io` if the body was unavailable or was not valid UTF-8.
+    /// or `Io` if the body was unavailable or buffered bytes were not valid UTF-8.
     function text(self) -> string throws root.errors.Io | root.errors.Timeout {
         $rust_io_function
     }

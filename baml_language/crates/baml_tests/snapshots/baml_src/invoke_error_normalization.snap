@@ -169,6 +169,8 @@ function invoke_error_normalization.TimeoutSpec$spec() -> ai.FunctionSpec<string
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var _5
     load_const "TimeoutSpec"

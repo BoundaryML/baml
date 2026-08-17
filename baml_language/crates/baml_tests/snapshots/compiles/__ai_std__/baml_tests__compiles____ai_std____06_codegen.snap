@@ -3454,6 +3454,8 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call google.VertexClient.new
     jump L26
 
@@ -3476,6 +3478,8 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
 
   L19:
     load_var model
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -3573,11 +3577,15 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call openai.ChatClient.new
     jump L26
 
   L25:
     load_var model
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -4869,7 +4877,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     load_var media_url
     call baml.String.from
     store_var _108
-    load_type baml.errors.Io
+    load_type baml.errors.Io | baml.errors.Timeout
     load_var e
     call baml.String.from
     store_var _112
@@ -8065,48 +8073,81 @@ function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Jou
     return
 }
 
-function ai.wire.send_as(req: baml.http.Request, provider: string) -> #0 {
-    load_var req
+function ai.wire.send_as(req: baml.http.Request, provider: string, request_timeout_ms: int | null) -> #0 {
+    load_var request_timeout_ms
     load_const <omitted>
-    call baml.http.send
-    store_var resp
-    jump L2
-    load_var e
-    store_var _5
-    load_var _5
-    narrow_bind baml.errors.Timeout, slot=5
+    cmp_op ==
     pop_jump_if_false L0
-    jump L1
+    load_const null
+    store_var request_timeout_ms
 
   L0:
+    load_var request_timeout_ms
+    store_var _6
+    load_var _6
+    narrow_bind int, slot=5
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    store_var timeout
+    jump L3
+
+  L2:
+    load_var _6
+    call baml.time.Duration.from_milliseconds
+    store_var timeout
+
+  L3:
+    load_var2 1 4
+    call baml.http.send
+    store_var resp
+    jump L6
+    load_var e
+    store_var _12
+    load_var _12
+    narrow_bind baml.errors.Timeout, slot=8
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
     load_var e
     throw_if_panic
     load_type baml.errors.Io
     load_var e
     call baml.String.from
     call ai.wire.redact_url_secrets
-    store_var _10
+    store_var _17
     load_type string
-    load_var _10
+    load_var _17
     call baml.String.from
-    store_var _9
+    store_var _16
     load_var provider
     load_const "transport failed before a response arrived: "
-    load_var _9
+    load_var _16
     bin_op +
     load_const null
     init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
     throw
 
-  L1:
-    load_var _5
+  L5:
+    load_var _12
     throw
 
-  L2:
+  L6:
     load_var resp
     sys_op baml.http.Response.text
     store_var text
-    jump L3
+    jump L9
+    load_var e
+    store_var _23
+    load_var _23
+    narrow_bind baml.errors.Timeout, slot=13
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
     load_var e
     throw_if_panic
     load_var provider
@@ -8115,31 +8156,35 @@ function ai.wire.send_as(req: baml.http.Request, provider: string) -> #0 {
     init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
     throw
 
-  L3:
+  L8:
+    load_var _23
+    throw
+
+  L9:
     load_var resp
     call baml.http.Response.ok
     unary_op !
-    pop_jump_if_false L4
-    jump L6
+    pop_jump_if_false L10
+    jump L12
 
-  L4:
+  L10:
     load_type #0
     load_var text
     call baml.json.from_string
-    jump L5
+    jump L11
     load_var e
     throw_if_panic
-    load_var2 2 8
+    load_var2 2 11
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
 
-  L5:
+  L11:
     return
 
-  L6:
-    load_var2 2 3
+  L12:
+    load_var2 2 6
     load_field .status_code
-    load_var2 8 3
+    load_var2 11 6
     load_field .headers
     call ai.errors.classify_http
     throw

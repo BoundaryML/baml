@@ -199,7 +199,7 @@ impl<T> io::IoClassAiContext for T {
         // `Option → RenderOptions` mapping lives inside `output_format` (those
         // option types are module-internal there).
         let content = unwrap_output_format(&context._output_format);
-        SysOpOutput::ok(crate::output_format::render_output_format_content(
+        let rendered = crate::output_format::render_output_format_content(
             &content,
             prefix,
             or_splitter,
@@ -210,7 +210,16 @@ impl<T> io::IoClassAiContext for T {
             hoist_classes,
             map_style,
             render_null_as,
-        ))
+        );
+        match rendered {
+            Ok(rendered) => SysOpOutput::ok(rendered),
+            // Keep the structured render failure at the VM boundary instead of
+            // turning it into a successful empty schema. The public BAML method
+            // retains its existing effect signature for prompt-tag compatibility.
+            Err(error) => SysOpOutput::err(VmBamlError::RenderPrompt {
+                message: error.to_string(),
+            }),
+        }
     }
 }
 

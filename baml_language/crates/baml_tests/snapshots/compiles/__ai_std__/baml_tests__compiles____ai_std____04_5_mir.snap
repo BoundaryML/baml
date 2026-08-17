@@ -2717,7 +2717,7 @@ fn ai.internal._from_shorthand(shorthand: string) -> ai.Client {
 
     bb25: {
         _29 = copy _7;
-        _11 = call const fn google.VertexClient.new(copy _29, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn google.VertexClient.new(copy _29, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb26: {
@@ -2727,7 +2727,7 @@ fn ai.internal._from_shorthand(shorthand: string) -> ai.Client {
 
     bb27: {
         _25 = copy _7;
-        _11 = call const fn anthropic.AnthropicClient.new(copy _25, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn anthropic.AnthropicClient.new(copy _25, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb28: {
@@ -2752,12 +2752,12 @@ fn ai.internal._from_shorthand(shorthand: string) -> ai.Client {
 
     bb32: {
         _15 = copy _7;
-        _11 = call const fn openai.ChatClient.new(copy _15, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn openai.ChatClient.new(copy _15, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb33: {
         _13 = copy _7;
-        _11 = call const fn openai.ResponsesClient.new(copy _13, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn openai.ResponsesClient.new(copy _13, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb34: {
@@ -4884,7 +4884,7 @@ fn ai.internal._resolve_media_content(url: string | null, file: string | null, i
     bb69: {
         _107 = const "media URL " + copy _108;
         _106 = copy _107 + const " body could not be read: ";
-        _113 = load_type(baml.errors.Io);
+        _113 = load_type(baml.errors.Io | baml.errors.Timeout);
         _112 = call const fn baml.String.from<copy _113>(copy _103) -> [bb70];
     }
 
@@ -8226,126 +8226,172 @@ fn ai.wire.credential_sources(cred: string | null | baml.env.Ref, canonical_env:
     }
 }
 
-fn ai.wire.send_as(req: baml.http.Request, provider: string) -> T {
+fn ai.wire.send_as(req: baml.http.Request, provider: string, request_timeout_ms: int | null) -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: baml.http.Request // req // param
     let _2: string // provider // param
-    let _3: baml.http.Response // resp
-    let _4: unknown // e
-    let _5: unknown
-    let _6: baml.errors.Timeout // timeout
-    let _7: ai.errors.NetworkFailure
-    let _8: string
-    let _9: string
-    let _10: string
-    let _11: string
-    let _12: type
-    let _13: type
-    let _14: string // text
-    let _15: unknown // e
-    let _16: ai.errors.NetworkFailure
-    let _17: bool
-    let _18: bool
-    let _19: ai.errors.Failure
-    let _20: int
-    let _21: string
-    let _22: map<string, string>
-    let _23: unknown // e
-    let _24: string
-    let _25: type
-    let _26: ai.errors.ParseFailed
-    let _27: string
+    let _3: int | null // request_timeout_ms // param
+    let _4: bool
+    let _5: null | baml.time.Duration // timeout
+    let _6: int | null
+    let _7: int // milliseconds
+    let _8: int
+    let _9: baml.http.Response // resp
+    let _10: unknown // e
+    let _11: null | baml.time.Duration
+    let _12: unknown
+    let _13: baml.errors.Timeout // timeout
+    let _14: ai.errors.NetworkFailure
+    let _15: string
+    let _16: string
+    let _17: string
+    let _18: string
+    let _19: type
+    let _20: type
+    let _21: string // text
+    let _22: unknown // e
+    let _23: unknown
+    let _24: baml.errors.Timeout // timeout
+    let _25: ai.errors.NetworkFailure
+    let _26: bool
+    let _27: bool
+    let _28: ai.errors.Failure
+    let _29: int
+    let _30: string
+    let _31: map<string, string>
+    let _32: unknown // e
+    let _33: string
+    let _34: type
+    let _35: ai.errors.ParseFailed
+    let _36: string
 
     bb0: {
-        _3 = call const fn baml.http.send(copy _1, const <omitted>) -> [bb1, unwind: bb8];
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
-        _14 = sys_op const fn baml.http.Response.text(copy _3) -> bb2 unwind bb15;
+        _3 = const null;
+        goto -> bb2;
     }
 
     bb2: {
-        _18 = call const fn baml.http.Response.ok(copy _3) -> [bb3];
+        _6 = copy _3;
+        _6 = narrow_bind copy _6 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb4, bb3];
     }
 
     bb3: {
-        _17 = !copy _18;
-        branch copy _17 -> [bb6, bb4];
+        _5 = const null;
+        goto -> bb5;
     }
 
     bb4: {
-        _24 = copy _14;
-        _25 = load_type(#0);
-        _0 = call const fn baml.json.from_string<copy _25>(copy _24) -> [bb5, unwind: bb17];
+        _7 = copy _6;
+        _8 = copy _7;
+        _5 = call const fn baml.time.Duration.from_milliseconds(copy _8) -> [bb5];
     }
 
     bb5: {
-        return;
+        _11 = copy _5;
+        _9 = call const fn baml.http.send(copy _1, copy _11) -> [bb6, unwind: bb13];
     }
 
     bb6: {
-        _20 = copy _3.0;
-        _21 = copy _14;
-        _22 = copy _3.1;
-        _19 = call const fn ai.errors.classify_http(copy _2, copy _20, copy _21, copy _22) -> [bb7];
+        _21 = sys_op const fn baml.http.Response.text(copy _9) -> bb7 unwind bb20;
     }
 
     bb7: {
-        throw copy _19;
+        _27 = call const fn baml.http.Response.ok(copy _9) -> [bb8];
     }
 
     bb8: {
-        _5 = copy _4;
-        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["errors"], name: "Timeout" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb14, bb9];
+        _26 = !copy _27;
+        branch copy _26 -> [bb11, bb9];
     }
 
     bb9: {
-        throw_if_panic copy _4 -> bb10;
+        _33 = copy _21;
+        _34 = load_type(#0);
+        _0 = call const fn baml.json.from_string<copy _34>(copy _33) -> [bb10, unwind: bb24];
     }
 
     bb10: {
-        _12 = load_type(baml.errors.Io);
-        _11 = call const fn baml.String.from<copy _12>(copy _4) -> [bb11];
+        return;
     }
 
     bb11: {
-        _10 = call const fn ai.wire.redact_url_secrets(copy _11) -> [bb12];
+        _29 = copy _9.0;
+        _30 = copy _21;
+        _31 = copy _9.1;
+        _28 = call const fn ai.errors.classify_http(copy _2, copy _29, copy _30, copy _31) -> [bb12];
     }
 
     bb12: {
-        _13 = load_type(string);
-        _9 = call const fn baml.String.from<copy _13>(copy _10) -> [bb13];
+        throw copy _28;
     }
 
     bb13: {
-        _8 = const "transport failed before a response arrived: " + copy _9;
-        _7 = ai.errors.NetworkFailure { copy _2, copy _8, const null };
-        throw copy _7;
+        _12 = copy _10;
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["errors"], name: "Timeout" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb19, bb14];
     }
 
     bb14: {
-        _6 = copy _5;
-        throw copy _6;
+        throw_if_panic copy _10 -> bb15;
     }
 
     bb15: {
-        throw_if_panic copy _15 -> bb16;
+        _19 = load_type(baml.errors.Io);
+        _18 = call const fn baml.String.from<copy _19>(copy _10) -> [bb16];
     }
 
     bb16: {
-        _16 = ai.errors.NetworkFailure { copy _2, const "the response body could not be read completely", const null };
-        throw copy _16;
+        _17 = call const fn ai.wire.redact_url_secrets(copy _18) -> [bb17];
     }
 
     bb17: {
-        throw_if_panic copy _23 -> bb18;
+        _20 = load_type(string);
+        _16 = call const fn baml.String.from<copy _20>(copy _17) -> [bb18];
     }
 
     bb18: {
-        _27 = copy _14;
-        _26 = ai.errors.ParseFailed { copy _2, copy _27 };
-        throw copy _26;
+        _15 = const "transport failed before a response arrived: " + copy _16;
+        _14 = ai.errors.NetworkFailure { copy _2, copy _15, const null };
+        throw copy _14;
+    }
+
+    bb19: {
+        _13 = copy _12;
+        throw copy _13;
+    }
+
+    bb20: {
+        _23 = copy _22;
+        _23 = narrow_bind copy _23 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["errors"], name: "Timeout" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb23, bb21];
+    }
+
+    bb21: {
+        throw_if_panic copy _22 -> bb22;
+    }
+
+    bb22: {
+        _25 = ai.errors.NetworkFailure { copy _2, const "the response body could not be read completely", const null };
+        throw copy _25;
+    }
+
+    bb23: {
+        _24 = copy _23;
+        throw copy _24;
+    }
+
+    bb24: {
+        throw_if_panic copy _32 -> bb25;
+    }
+
+    bb25: {
+        _36 = copy _21;
+        _35 = ai.errors.ParseFailed { copy _2, copy _36 };
+        throw copy _35;
     }
 }
 

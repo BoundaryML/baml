@@ -3033,6 +3033,9 @@ function baml.http.TlsConfig.new(cert_pem: uint8array, key_pem: uint8array, allo
 function baml.http._fetch(url: string, timeout_nanos: bigint) -> baml.http.Response {
 }
 
+function baml.http._fetch_sse(request: baml.http.Request, timeout_nanos: bigint, first_event_timeout_nanos: bigint) -> baml.http.SseStream {
+}
+
 function baml.http._send(request: baml.http.Request, timeout_nanos: bigint) -> baml.http.Response {
 }
 
@@ -3072,7 +3075,33 @@ function baml.http.fetch(url: string, timeout: baml.time.Duration | null) -> bam
     return
 }
 
-function baml.http.fetch_sse(request: baml.http.Request) -> baml.http.SseStream {
+function baml.http.fetch_sse(request: baml.http.Request, timeout: baml.time.Duration | null, first_event_timeout: baml.time.Duration | null) -> baml.http.SseStream {
+    load_var timeout
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var timeout
+
+  L0:
+    load_var first_event_timeout
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var first_event_timeout
+
+  L1:
+    load_var timeout
+    call baml.http._timeout_nanos
+    store_var _6
+    load_var first_event_timeout
+    call baml.http._timeout_nanos
+    store_var _7
+    load_var2 1 4
+    load_var _7
+    sys_op baml.http._fetch_sse
+    return
 }
 
 function baml.http.send(request: baml.http.Request, timeout: baml.time.Duration | null) -> baml.http.Response {

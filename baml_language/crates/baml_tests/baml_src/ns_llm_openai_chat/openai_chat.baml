@@ -916,10 +916,12 @@ function chat_stream_total_timeout_after_delta() -> string {
             root.llm_mock.sse_data(`[DONE]`),
         ],
         (mock: root.llm_mock.MockSseServer) -> {
+            // The corpus runs every leaf concurrently, so leave connection
+            // headroom while keeping the next event past the total deadline.
             let cl = openai.ChatClient.new(
                 api_key = "k",
                 base_url = mock.base_url(),
-                request_timeout_ms = 80,
+                request_timeout_ms = 30000,
             );
             let stream = cl.invoke_stream(_chat_input("hi"));
             let first = match (stream.next()) {
@@ -932,12 +934,12 @@ function chat_stream_total_timeout_after_delta() -> string {
             };
             `${cl.request_timeout_ms ?? -1}|${first}|${outcome}`
         },
-        chunk_delay_ms = 200,
+        chunk_delay_ms = 60000,
     )
 }
 
 test "chat_stream_total_timeout_after_delta" {
-    assert.equal(chat_stream_total_timeout_after_delta(), "80|po|Timeout")
+    assert.equal(chat_stream_total_timeout_after_delta(), "30000|po|Timeout")
 }
 
 // SSE comment/heartbeat bytes are transport keepalives, not tokens: they must
