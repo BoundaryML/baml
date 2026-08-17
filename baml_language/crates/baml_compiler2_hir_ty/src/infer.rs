@@ -5486,7 +5486,6 @@ impl<'db> InferenceContext<'db> {
                 && self.member_probe_depth == 0
                 && !resolved.has_error()
                 && !resolved.has_infer()
-                && !matches!(resolved.kind(), TyKind::Unknown { .. })
             {
                 if matches!(resolved.kind(), TyKind::Union(..)) {
                     self.pending_diags
