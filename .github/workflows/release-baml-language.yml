@@ -1423,8 +1423,9 @@ jobs:
             --arg module "github.com/boundaryml/baml-go" \
             '
               .version == $version
-              and .baml_bridge_go == {
-                "module": $module,
+              and .sdks.go == {
+                "registry": "go",
+                "package": $module,
                 "version": $go_version
               }
               and (.cffi | type == "object" and length > 0)

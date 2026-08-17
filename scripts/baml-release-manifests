@@ -117,8 +117,8 @@ def main() -> None:
     parser.add_argument("--version", required=True)
     parser.add_argument("--released-at", required=True)
     parser.add_argument("--pypi-version", required=True)
-    # Registry coordinates are optional to keep this utility useful for partial
-    # fixture generation; the release workflow supplies every enabled SDK only
+    # Native SDK registry coordinates are optional to keep this utility useful
+    # for partial fixture generation; the release workflow supplies each one
     # after its publisher succeeds.
     parser.add_argument("--crates-io-version", default=None)
     parser.add_argument("--nuget-version", default=None)
@@ -185,19 +185,24 @@ def main() -> None:
             "url": artifact_url(f"baml-language-{args.version}", vsix),
             "sha256": sha256(vsix),
         },
-        "baml_bridge_pypi": {
-            "version": args.pypi_version,
-        },
-        "baml_bridge_go": {
-            "module": "github.com/boundaryml/baml-go",
-            "version": f"v{args.version}",
-        },
         "cffi": collect_cffi_artifacts(args.cffi_dir, args.version),
     }
-    # Generated-SDK registry coordinates are supplied only after the matching
-    # publisher succeeds. Native packages also bind the manifest to the digest
-    # of the exact pre-publication package exercised by their consumer gates.
-    sdks = {}
+    # Python and Go replace their legacy top-level manifest fields. Additional
+    # SDK coordinates are supplied after the matching publisher succeeds.
+    # Native packages also bind the manifest to the digest of the exact
+    # pre-publication package exercised by their consumer gates.
+    sdks = {
+        "go": {
+            "registry": "go",
+            "package": "github.com/boundaryml/baml-go",
+            "version": f"v{args.version}",
+        },
+        "python": {
+            "registry": "pypi",
+            "package": "baml-bridge",
+            "version": args.pypi_version,
+        },
+    }
     if args.crates_io_version:
         sdks["rust"] = {
             "registry": "crates_io",
