@@ -755,7 +755,8 @@ mod tests {
                 // Non-empty sentinel bytes: the manifest's verbatim fragment
                 // carry must survive the disk round-trip untouched.
                 callable_throws_fragment: vec![0xca, 0xfe, 0xf0, 0x0d],
-                unit_key: [0u8; 32], // no unit → callable_throws seed empty
+                unit_key: [0u8; 32],  // no unit → callable_throws seed empty
+                throws_fp: [0u8; 32], // poison fixture: no honest fingerprint
             }],
         };
         cache

@@ -712,6 +712,17 @@ pub(crate) struct ReusePlan {
     /// path clears the inference seeds, so emit's re-check runs against
     /// honestly-derived inference and can demote further.
     pub(crate) throws_gate_verified: bool,
+    /// Files whose stored throws fingerprint no longer matches a
+    /// recomputation from current inputs (see `throws_fingerprints`).
+    /// Restricted to files the partition called clean — dirty files are
+    /// re-derived regardless. In shadow mode (default) this is
+    /// observability only; under `BAML_THROWS_FINGERPRINTS=enforce` it
+    /// replaces the inference-priced serve-time gate as the demotion
+    /// authority.
+    pub(crate) fingerprint_invalid: std::collections::BTreeSet<String>,
+    /// How many clean files the fingerprint validator checked (0 when the
+    /// validator was skipped: env-off, or a manifest predating the field).
+    pub(crate) fingerprint_checked: usize,
 }
 
 /// The result of the warm-database preamble ([`CacheContext::prepare_warm_db`]).
@@ -749,6 +760,49 @@ pub(crate) fn prepare_reuse_plan(
         plan.throws_gate_verified = true;
         return Some(plan);
     }
+    // Fingerprints in ENFORCE mode replace the inference-priced gate: the
+    // validator already proved (by input-identity, not trust) that every
+    // remaining clean file's stored throws re-derive from unchanged inputs.
+    // Invalid files take the same fail-safe demotion the gate used.
+    if matches!(
+        crate::throws_fingerprints::mode(),
+        crate::throws_fingerprints::FpMode::Enforce
+    ) && plan.fingerprint_checked > 0
+    {
+        if plan.fingerprint_invalid.is_empty() {
+            db.set_seeded_callable_throws(callable_seeds);
+            plan.throws_gate_verified = true;
+            cache_debug(format_args!(
+                "throws fingerprints clean — inference gate skipped (enforce)"
+            ));
+            return Some(plan);
+        }
+        db.set_seeded_throw_facts(std::collections::BTreeMap::new());
+        db.set_seeded_callable_throws(std::collections::BTreeMap::new());
+        let root = db.get_project().map(|project| project.root(db).clone());
+        let invalid = std::mem::take(&mut plan.fingerprint_invalid);
+        for rel in invalid {
+            cache_debug(format_args!("reuse demoted `{rel}`: throws fingerprint"));
+            if !plan.clean_files.remove(&rel) {
+                continue;
+            }
+            plan.unit_keys.remove(&rel);
+            plan.clean_diagnostics.remove(&rel);
+            let full = root
+                .as_ref()
+                .map_or_else(|| PathBuf::from(&rel), |root| root.join(&rel));
+            if let Some(file) = db.get_file(&full)
+                && !plan.dirty_files.contains(&file)
+            {
+                plan.dirty_files.push(file);
+            }
+        }
+        if plan.clean_files.is_empty() {
+            return None;
+        }
+        return Some(plan);
+    }
+
     // The gate's runtime-type conversion derives the package alias tables,
     // which fold every file's semantic index. Prime the per-file indexes
     // across workers first so that derivation is a cheap fold instead of a
@@ -760,6 +814,38 @@ pub(crate) fn prepare_reuse_plan(
         "throws gate: {} body inferences",
         baml_db::baml_compiler2_hir_ty::infer::body_inferences() - pre_gate_inferences
     ));
+
+    // Shadow comparison: the gate is the deciding oracle; log where the
+    // fingerprint validator disagrees. A file the gate demotes but the
+    // validator called valid is UNDER-INVALIDATION — the failure class that
+    // blocks enforce mode — and is logged loudly per file. The reverse
+    // (validator invalidates, gate passes) is mere conservatism.
+    if plan.fingerprint_checked > 0 {
+        let gate_demoted: std::collections::BTreeSet<&str> =
+            mismatches.iter().map(|(rel, _)| rel.as_str()).collect();
+        let under: Vec<&&str> = gate_demoted
+            .iter()
+            .filter(|rel| !plan.fingerprint_invalid.contains(**rel))
+            .collect();
+        let over = plan
+            .fingerprint_invalid
+            .iter()
+            .filter(|rel| !gate_demoted.contains(rel.as_str()))
+            .count();
+        for rel in &under {
+            cache_debug(format_args!(
+                "THROWS-FP UNDER-INVALIDATION: gate demoted `{rel}` but fingerprint validated it"
+            ));
+        }
+        cache_debug(format_args!(
+            "throws fingerprints vs gate: fp_invalid={} gate_demoted={} under={} over={}",
+            plan.fingerprint_invalid.len(),
+            gate_demoted.len(),
+            under.len(),
+            over
+        ));
+    }
+
     if mismatches.is_empty() {
         db.set_seeded_callable_throws(callable_seeds);
         plan.throws_gate_verified = true;
@@ -791,6 +877,98 @@ pub(crate) fn prepare_reuse_plan(
         return None;
     }
     Some(plan)
+}
+
+/// Recompute every current file's throws fingerprint and compare the clean
+/// files' against their stored values (see `throws_fingerprints`).
+///
+/// Inputs mirror the store side exactly: clean files read from the manifest
+/// (their content is unchanged, so stored facts/hashes ARE current), dirty
+/// and added files from the database (`file_throw_facts` is salsa-memoized
+/// and was already demanded by the dirty partition). Removed files simply
+/// drop out of the input set, which shifts every dependent's fingerprint —
+/// no special case needed.
+///
+/// Returns `None` when disabled (`BAML_THROWS_FINGERPRINTS=off`), else
+/// `(invalid clean rels, checked count)`.
+fn validate_throws_fingerprints(
+    db: &ProjectDatabase,
+    manifest: &ProjectManifest,
+    current_files: &HashMap<String, SourceFile>,
+    clean_files: &HashSet<String>,
+) -> Option<(std::collections::BTreeSet<String>, usize)> {
+    if matches!(
+        crate::throws_fingerprints::mode(),
+        crate::throws_fingerprints::FpMode::Off
+    ) {
+        return None;
+    }
+    let entries: HashMap<&str, &ManifestFile> = manifest
+        .files
+        .iter()
+        .map(|f| (f.rel_path.as_str(), f))
+        .collect();
+    type OwnedInput = (
+        String,
+        Vec<baml_type::throw_facts::FunctionThrowFacts>,
+        [u8; 32],
+        bool,
+        [u8; 32],
+    );
+    let owned: Vec<OwnedInput> = current_files
+        .iter()
+        .map(|(rel, sf)| {
+            if clean_files.contains(rel)
+                && let Some(entry) = entries.get(rel.as_str())
+            {
+                (
+                    rel.clone(),
+                    entry.throw_facts.clone(),
+                    entry.layout_hash,
+                    entry.referenced_names.iter().any(|n| n == IMPL_SENTINEL),
+                    entry.content_hash,
+                )
+            } else {
+                (
+                    rel.clone(),
+                    baml_db::baml_compiler2_hir_ty::throw_facts::file_throw_facts(db, *sf)
+                        .0
+                        .clone(),
+                    crate::file_signature::file_layout_hash(db, *sf),
+                    file_has_impl_construct(db, *sf),
+                    content_hash(sf.text(db)),
+                )
+            }
+        })
+        .collect();
+    let inputs: Vec<crate::throws_fingerprints::FileFpInput<'_>> = owned
+        .iter()
+        .map(
+            |(rel, facts, layout, has_impl, content)| crate::throws_fingerprints::FileFpInput {
+                rel,
+                facts,
+                layout_hash: *layout,
+                has_impl_construct: *has_impl,
+                content_hash: *content,
+            },
+        )
+        .collect();
+    let fps = crate::throws_fingerprints::compute_file_fingerprints(&inputs);
+    let mut invalid = std::collections::BTreeSet::new();
+    let mut checked = 0usize;
+    for entry in &manifest.files {
+        if !clean_files.contains(&entry.rel_path) {
+            continue;
+        }
+        let Some(current_fp) = fps.get(&entry.rel_path) else {
+            continue; // clean but no longer on disk: partition handles it
+        };
+        checked += 1;
+        if *current_fp != entry.throws_fp {
+            invalid.insert(entry.rel_path.clone());
+        }
+    }
+    Some((invalid, checked))
 }
 
 /// Cache diagnostics to stderr, gated on `BAML_CACHE_DEBUG=1`. For support
@@ -1573,6 +1751,36 @@ impl CacheContext {
             if no_delta { " (no delta)" } else { "" }
         ));
 
+        // Throws-fingerprint validation (shadow by default; see
+        // `throws_fingerprints`). Runs before seeding so its inputs are the
+        // same honest sources the store side used.
+        let (fingerprint_invalid, fingerprint_checked) = match validate_throws_fingerprints(
+            db,
+            &manifest,
+            &current_files,
+            &clean_files,
+        ) {
+            Some((invalid, checked)) => {
+                cache_debug(format_args!(
+                    "throws fingerprints: {} checked, {} invalid",
+                    checked,
+                    invalid.len()
+                ));
+                if no_delta && !invalid.is_empty() {
+                    // Identical inputs must reproduce identical
+                    // fingerprints; anything else is a determinism bug in
+                    // the fingerprint computation itself.
+                    cache_debug(format_args!(
+                        "THROWS-FP SELF-CHECK FAILURE: {} files invalid on a no-delta plan: {:?}",
+                        invalid.len(),
+                        invalid
+                    ));
+                }
+                (invalid, checked)
+            }
+            None => (Default::default(), 0),
+        };
+
         // Seed throw facts for every file. Clean files' facts come from the
         // manifest (their content is unchanged, and nothing they reference
         // changed signature). Dirty/added files' facts are the ones the partition
@@ -1642,6 +1850,8 @@ impl CacheContext {
             clean_fragments,
             no_delta,
             throws_gate_verified: false,
+            fingerprint_invalid,
+            fingerprint_checked,
         })
     }
 
@@ -1736,6 +1946,47 @@ impl CacheContext {
             user_files.len().saturating_sub(unit_entries_written)
         ));
 
+        // Throws fingerprints for every file, from the same db state the
+        // entries below read (facts are memoized/seeded, hashes recomputed).
+        // Always computed at store time regardless of mode: the field must be
+        // populated for a later validate-side run to compare against.
+        let throws_fps: std::collections::BTreeMap<String, [u8; 32]> = {
+            type OwnedInput = (
+                String,
+                Vec<baml_type::throw_facts::FunctionThrowFacts>,
+                [u8; 32],
+                bool,
+                [u8; 32],
+            );
+            let owned: Vec<OwnedInput> = user_files
+                .iter()
+                .map(|(sf, rel)| {
+                    (
+                        rel.clone(),
+                        baml_db::baml_compiler2_hir_ty::throw_facts::file_throw_facts(db, *sf)
+                            .0
+                            .clone(),
+                        file_layout_hash(db, *sf),
+                        file_has_impl_construct(db, *sf),
+                        content_hash(sf.text(db)),
+                    )
+                })
+                .collect();
+            let inputs: Vec<crate::throws_fingerprints::FileFpInput<'_>> = owned
+                .iter()
+                .map(|(rel, facts, layout, has_impl, content)| {
+                    crate::throws_fingerprints::FileFpInput {
+                        rel,
+                        facts,
+                        layout_hash: *layout,
+                        has_impl_construct: *has_impl,
+                        content_hash: *content,
+                    }
+                })
+                .collect();
+            crate::throws_fingerprints::compute_file_fingerprints(&inputs)
+        };
+
         let mut referenced = referenced_names_by_file(program);
         let mut files: Vec<ManifestFile> = user_files
             .into_iter()
@@ -1797,6 +2048,7 @@ impl CacheContext {
                         .or_else(|| plan.and_then(|p| p.clean_fragments.get(&rel).cloned()))
                         .unwrap_or_default(),
                     unit_key: unit_keys[&rel],
+                    throws_fp: throws_fps.get(&rel).copied().unwrap_or([0u8; 32]),
                     rel_path: rel,
                 }
             })

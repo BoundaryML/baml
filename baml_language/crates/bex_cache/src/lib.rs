@@ -239,6 +239,17 @@ pub struct ManifestFile {
     /// the manifest is the sole mutable pointer table for the immutable per-file
     /// unit entries.
     pub unit_key: [u8; 32],
+    /// Dependency fingerprint of this file's throw analysis: a fold of every
+    /// input its functions' solved throws depend on (own throw facts, the
+    /// transitive same-package callee cone via SCC condensation, and — for
+    /// dispatch/externally-dependent nodes — the project's impl/layout
+    /// environment). Computed by the CLI's `throws_fingerprints` module at
+    /// store time; a warm compile recomputes it from current inputs and may
+    /// treat the stored throws as valid iff the fingerprints match, replacing
+    /// the inference-priced serve-time gate. Adding this field intentionally
+    /// fails borsh decode of pre-fingerprint manifests — those degrade to a
+    /// full compile, the standard schema-migration path.
+    pub throws_fp: [u8; 32],
 }
 
 /// Fixed per-project key for the [`ProjectManifest`].
