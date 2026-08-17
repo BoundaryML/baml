@@ -426,8 +426,7 @@ function lambdas.lambdas_explicit_throwing_lambda_catches_error() -> int {
     call_indirect
     jump L2
     load_var e
-    load_const "negative"
-    cmp_op ==
+    is_type "negative"
     pop_jump_if_false L0
     jump L1
 
