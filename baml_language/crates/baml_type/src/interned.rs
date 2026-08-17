@@ -64,6 +64,8 @@ bitflags::bitflags! {
         const HAS_PROJECTION = 1 << 3;
         /// Contains a fresh (unwidened) literal.
         const HAS_FRESH_LITERAL = 1 << 4;
+        /// Contains a `Union` node (anywhere, own node included).
+        const HAS_UNION = 1 << 5;
     }
 }
 
@@ -146,6 +148,13 @@ impl Ty {
     /// Whether this type contains an associated-type projection.
     pub fn has_projection(&self) -> bool {
         self.0.flags.contains(TypeFlags::HAS_PROJECTION)
+    }
+
+    /// Whether this type contains a union node anywhere (own node included).
+    /// Union-shape folds (e.g. inference's union canonicalization) are the
+    /// identity on types without one, so they short-circuit on this.
+    pub fn has_union(&self) -> bool {
+        self.0.flags.contains(TypeFlags::HAS_UNION)
     }
 }
 
@@ -657,6 +666,41 @@ impl TyKind {
     }
 }
 
+impl Ty {
+    /// Rebuilds this type with each direct child replaced by `f(child)`
+    /// (satellite-nested children included), interning only when a child
+    /// actually changed: if every child maps to itself the ORIGINAL handle
+    /// is returned — no candidate kind materialization, no pool lock. This
+    /// is the form every fold/substitution pass should use: on the common
+    /// mostly-unchanged tree it turns per-node intern traffic into pointer
+    /// compares.
+    ///
+    /// `f` is called exactly once per child (it may be stateful), in
+    /// [`for_each_child`] order, which [`TyKind::map_children`] mirrors.
+    pub fn map_children_preserving(&self, mut f: impl FnMut(&Ty) -> Ty) -> Ty {
+        let mut mapped: Vec<Ty> = Vec::new();
+        let mut changed = false;
+        for_each_child(self.kind(), |child| {
+            let new = f(child);
+            changed |= new != *child;
+            mapped.push(new);
+        });
+        if !changed {
+            return self.clone();
+        }
+        let mut next = mapped.into_iter();
+        let rebuilt = Ty::intern(self.kind().map_children(|_| {
+            next.next()
+                .expect("map_children visits the same children as for_each_child")
+        }));
+        debug_assert!(
+            next.next().is_none(),
+            "map_children visited more children than for_each_child"
+        );
+        rebuilt
+    }
+}
+
 fn compute_flags(kind: &TyKind) -> TypeFlags {
     let own = match kind {
         TyKind::Literal(_, Freshness::Fresh, _) => TypeFlags::HAS_FRESH_LITERAL,
@@ -664,6 +708,7 @@ fn compute_flags(kind: &TyKind) -> TypeFlags {
         TyKind::AssociatedTypeProjection { .. } => TypeFlags::HAS_PROJECTION,
         TyKind::Error { .. } => TypeFlags::HAS_ERROR,
         TyKind::Infer { .. } => TypeFlags::HAS_INFER,
+        TyKind::Union(..) => TypeFlags::HAS_UNION,
         _ => TypeFlags::empty(),
     };
     let mut flags = own;
@@ -1101,6 +1146,14 @@ mod tests {
     }
 
     #[test]
+    fn union_flag_propagates() {
+        assert!(Ty::union([Ty::int(), Ty::string()]).has_union());
+        assert!(Ty::list(Ty::optional(Ty::int())).has_union());
+        assert!(!Ty::list(Ty::int()).has_union());
+        assert!(!Ty::int().has_union());
+    }
+
+    #[test]
     fn map_children_rebuilds_nested_structure() {
         let var = Ty::infer_var(InferVar::new(7));
         let nested = Ty::list(Ty::union([Ty::int(), var.clone()]));
@@ -1121,6 +1174,58 @@ mod tests {
         // Untouched subtrees keep their identity.
         let unchanged = substitute(&nested, &Ty::infer_var(InferVar::new(8)), &Ty::string());
         assert!(unchanged == nested);
+    }
+
+    #[test]
+    fn map_children_preserving_matches_map_children_and_preserves_identity() {
+        let var = Ty::infer_var(InferVar::new(11));
+        // Children in every satellite position: function params/ret/throws,
+        // projection base + interface generics + associated types.
+        let samples: Vec<Ty> = plain_samples().iter().map(Ty::from_plain).collect();
+        let deep = Ty::intern(TyKind::Function {
+            params: [FunctionParam::required(None, var.clone())].into(),
+            ret: Ty::intern(TyKind::AssociatedTypeProjection {
+                base: var.clone(),
+                interface: InterfaceRef::new(
+                    TypeName::local(Name::new("I")),
+                    [var.clone()].into(),
+                    vec![(Name::new("Item"), var.clone())],
+                ),
+                member: Name::new("Item"),
+                attr: TyAttr::default(),
+            }),
+            throws: Ty::never(),
+            attr: TyAttr::default(),
+        });
+
+        for ty in samples.iter().chain([&deep]) {
+            // Identity mapping returns the ORIGINAL handle, calling f once
+            // per child.
+            let mut calls_a = 0;
+            let same = ty.map_children_preserving(|child| {
+                calls_a += 1;
+                child.clone()
+            });
+            assert!(same == *ty);
+
+            // A real substitution agrees with the plain map_children +
+            // intern road, and visits the same children in the same order.
+            let mut calls_b = 0;
+            let subst = |child: &Ty| {
+                if child == &var {
+                    Ty::string()
+                } else {
+                    child.clone()
+                }
+            };
+            let preserving = ty.map_children_preserving(|child| {
+                calls_b += 1;
+                subst(child)
+            });
+            let baseline = Ty::intern(ty.kind().map_children(subst));
+            assert!(preserving == baseline);
+            assert_eq!(calls_a, calls_b);
+        }
     }
 
     #[test]
