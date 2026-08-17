@@ -116,6 +116,27 @@ struct Args {
     #[arg(long)]
     check_only: bool,
 
+    /// Path substring identifying which discovered source file to mutate
+    /// before warm run #1, instead of every warm run being a content-free
+    /// no-op rerun. A no-op rerun short-circuits at the top-level tracked
+    /// query without recursing into any child query, so it fires zero
+    /// events (not even cache-hit events) and cannot show real incremental
+    /// reuse. Combine with `--edit-find`/`--edit-replace` to apply exactly
+    /// one deterministic textual substitution and observe which queries
+    /// actually get invalidated (`executed`) vs stay cached (`cache_hits`)
+    /// after a real edit — the LSP edit-loop case.
+    #[arg(long)]
+    edit_file: Option<String>,
+
+    /// Substring to find in the `--edit-file` target (required with
+    /// `--edit-file`). Only the first occurrence is replaced.
+    #[arg(long)]
+    edit_find: Option<String>,
+
+    /// Replacement text for `--edit-find` (required with `--edit-file`).
+    #[arg(long)]
+    edit_replace: Option<String>,
+
     /// Show this many entries in each top-N table.
     #[arg(long, default_value_t = 30)]
     top_n: usize,
@@ -160,6 +181,40 @@ fn main() -> Result<()> {
         eprintln!("[tools_compile_profile] running {} times", args.repeat);
     }
 
+    // Resolve the (index, mutated-text) pair for `--edit-file`/`--edit-find`/
+    // `--edit-replace`, if given. Applied once, before warm run #1, to
+    // measure real incremental-edit reuse instead of a vacuous no-op rerun.
+    let edit: Option<(usize, String)> = if let Some(needle) = args.edit_file.as_deref() {
+        let idx = sources
+            .iter()
+            .position(|(p, _)| p.to_string_lossy().contains(needle))
+            .unwrap_or_else(|| {
+                panic!("--edit-file {needle:?}: no discovered source path contains this substring")
+            });
+        let find = args
+            .edit_find
+            .as_deref()
+            .expect("--edit-file requires --edit-find");
+        let replace = args
+            .edit_replace
+            .as_deref()
+            .expect("--edit-file requires --edit-replace");
+        let (path, original) = &sources[idx];
+        if !original.contains(find) {
+            panic!(
+                "--edit-find {find:?} not found in {}",
+                path.to_string_lossy()
+            );
+        }
+        eprintln!(
+            "[tools_compile_profile] edit probe: {} — {find:?} -> {replace:?} (applied before warm run #1)",
+            path.to_string_lossy()
+        );
+        Some((idx, original.replacen(find, replace, 1)))
+    } else {
+        None
+    };
+
     let cold_runs = args.repeat.max(1);
     let mut runs: Vec<RunReport> = Vec::with_capacity(cold_runs * (1 + args.warm_runs));
     for i in 0..cold_runs {
@@ -171,8 +226,15 @@ fn main() -> Result<()> {
         // `run_cold_plus_warm` builds a fresh db (cold), invokes the
         // pipeline once, then invokes it `warm_runs` more times against
         // the *same* db — each of those additional invocations reuses
-        // Salsa's cache, so its query counts show cache effectiveness.
-        let reports = run_cold_plus_warm(&root, &sources, args.check_only, args.warm_runs)?;
+        // Salsa's cache, so its query counts show cache effectiveness
+        // (or, with `edit` set, real incremental-edit reuse after warm #1).
+        let reports = run_cold_plus_warm(
+            &root,
+            &sources,
+            args.check_only,
+            args.warm_runs,
+            edit.as_ref(),
+        )?;
         for r in &reports {
             eprintln!(
                 "[tools_compile_profile]   [{}] total: {:.3}s  (check {:.3}s, emit {:.3}s, exec {} queries, hit {})",
@@ -352,8 +414,16 @@ struct RawCounters {
 
 /// Build a fresh instrumented database, then invoke the compile pipeline
 /// `1 + warm_runs` times: once cold (empty cache) and then `warm_runs`
-/// more times against the *same* database (no input mutation between
-/// invocations, so every resolve should be a Salsa cache hit).
+/// more times against the *same* database. With `edit` unset, no input
+/// mutation happens between invocations, so every resolve should be a
+/// Salsa cache hit (in practice: a no-op rerun short-circuits at the
+/// top-level tracked query and fires ZERO events, not even cache hits —
+/// it never even recurses into child queries to check them). With `edit`
+/// set to `(source_index, mutated_text)`, that one file is mutated via
+/// `add_or_update_file` immediately before warm run #1, so that run's
+/// counts show REAL incremental-edit reuse: which queries actually got
+/// invalidated (`executed`) vs stayed cached (`cache_hits`) in response to
+/// one real content change, matching the LSP edit-loop case.
 ///
 /// The Salsa event callback is installed once on the database and
 /// remains active for all invocations. Between invocations we snapshot
@@ -364,6 +434,7 @@ fn run_cold_plus_warm(
     sources: &[(PathBuf, String)],
     check_only: bool,
     warm_runs: usize,
+    edit: Option<&(usize, String)>,
 ) -> Result<Vec<RunReport>> {
     let stats: Arc<Mutex<RawStats>> = Arc::new(Mutex::new(RawStats::default()));
     // Cycle events don't need per-query breakdown — a single counter is
@@ -437,6 +508,12 @@ fn run_cold_plus_warm(
     // (the caller may want to see whether reruns are also fast even in
     // that case — they should be).
     for i in 1..=warm_runs {
+        if i == 1
+            && let Some((source_idx, mutated_text)) = edit
+        {
+            let (path, _original) = &sources[*source_idx];
+            db.add_or_update_file(path, mutated_text);
+        }
         let cycles_before = cycle_iters.load(Ordering::Relaxed);
         let warm = invoke_pipeline(
             &mut db,

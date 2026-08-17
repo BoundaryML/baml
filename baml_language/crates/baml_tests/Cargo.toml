@@ -54,6 +54,7 @@ darwin-kperf = { workspace = true }
 darwin-kperf-events = { workspace = true }
 divan = { workspace = true }
 libc = { workspace = true }
+mimalloc = { workspace = true }
 num-bigint = { workspace = true }
 rayon = { workspace = true }
 serde_json = { workspace = true }

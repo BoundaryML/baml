@@ -1256,6 +1256,7 @@ dependencies = [
  "indexmap",
  "insta",
  "libc",
+ "mimalloc",
  "num-bigint",
  "prettyplease",
  "proc-macro2",

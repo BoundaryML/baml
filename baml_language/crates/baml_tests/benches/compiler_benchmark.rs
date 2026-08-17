@@ -23,6 +23,18 @@ use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
 use divan::{Bencher, black_box};
 
+/// The compiler is allocation-heavy (small short-lived `Ty` trees, `Vec`s,
+/// `SmolStr`s): a single-threaded `samply` profile of `compile_empty_project`
+/// showed system malloc at ~52% of CPU time with ZERO thread contention
+/// (kernel time was <1%), so this isn't a locking cost — it's raw allocation
+/// volume. `baml_cli` and `tools_compile_profile` already both set mimalloc
+/// as the global allocator for exactly this reason (see
+/// `tools_compile_profile/src/main.rs`); this bench binary hadn't been,
+/// which means every prior measurement against it reflects default system
+/// malloc, not what a real `baml build`/`baml check` actually pays.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn main() {
     if cfg!(debug_assertions) {
         eprintln!("Skipping compiler_benchmark in debug/test profile.");
