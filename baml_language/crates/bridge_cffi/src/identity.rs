@@ -74,6 +74,7 @@ impl BridgeLanguage {
             Self::Cpp => "the C++ bridge",
             Self::Java => "the Maven package",
             Self::Swift => "the Swift package",
+            Self::Ruby => "the Ruby gem",
         }
     }
 
@@ -241,6 +242,7 @@ mod tests {
     fn ruby_identity_is_stable_and_uses_dynamic_union_selection() {
         assert_eq!(BridgeLanguage::try_from(10), Ok(BridgeLanguage::Ruby));
         assert_eq!(BridgeLanguage::Ruby.telemetry_name(), "ruby");
+        assert_eq!(BridgeLanguage::Ruby.package_kind(), "the Ruby gem");
         assert_eq!(BridgeLanguage::Ruby.legacy_runtime_name(), "Baml::Bridge");
         assert_eq!(
             BridgeLanguage::Ruby.inbound_union_ambiguity_policy(),
