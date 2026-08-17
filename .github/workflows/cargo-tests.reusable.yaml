@@ -241,26 +241,43 @@ jobs:
           echo "::notice title=L2::arm=nix"
           export_dir="$(nix build --no-link --print-out-paths --print-build-logs .#gnu-test-export)"
           cd baml_language
+          # -E arm equivalence with the cargo arm's --exclude list, built
+          # AGAINST THE EXPORT'S OWN METADATA: naming a package the export
+          # does not carry is a hard filterset parse error, and the gnu and
+          # musl exports have been measured to DISAGREE about which excluded
+          # packages they contain (musl carries baml_cli+baml_lsp2_actions,
+          # gnu carries neither - proven live, jobs 95521894883/95521894678).
+          # These packages run in the snapshot-tests job, and cannot run
+          # here anyway: their file-based insta snapshots resolve against
+          # the unit build's baked /build/<crate>/ manifest dir, which
+          # INSTA_WORKSPACE_ROOT cannot remap.
+          filter_expr=""
+          for pkg in baml_cli baml_lsp2_actions; do
+            if jq -e --arg p "$pkg" 'any(.packages[]; .name == $p)' \
+              "$export_dir/cargo-metadata.json" >/dev/null 2>&1; then
+              filter_expr="${filter_expr:+$filter_expr or }package(=$pkg)"
+            fi
+          done
+          filter_args=()
+          if [ -n "$filter_expr" ]; then
+            filter_args=(-E "not ($filter_expr)")
+          fi
           # --config-file: the main nextest.toml's package(=sdk_test_*)
           # filters hard-error against the export's trimmed cargo metadata
           # (those packages are not in the unit graph); nextest-l2.toml is
           # the unit-graph-scoped config. See the comment in that file.
-          # -E: arm equivalence with the cargo arm's --exclude list. The
-          # export CONTAINS baml_cli and baml_lsp2_actions (so the
-          # predicates resolve), but this job's cargo arm never runs them -
-          # they run in the snapshot-tests job. Running them here also
-          # fails structurally: their file-based insta snapshots resolve
-          # against the unit build's baked /build/<crate>/ manifest dir,
-          # which INSTA_WORKSPACE_ROOT cannot remap, so every assertion
-          # reads as "+new results". baml_tests / sdk_test_* / baml_bridge
-          # need no exclusion: they are not in the export, and naming an
-          # absent package in a filterset is itself a hard parse error.
-          INSTA_WORKSPACE_ROOT="$PWD" cargo nextest run \
+          # BAML_PARAM_SCHEMA_GOLDEN: baml_project's golden-fixture test
+          # reads ../../../typescript2/... relative to its baked unit source
+          # dir, which does not exist in the relocated build; the test ships
+          # this override for exactly that case. Point it at the real tree.
+          INSTA_WORKSPACE_ROOT="$PWD" \
+          BAML_PARAM_SCHEMA_GOLDEN="$PWD/../typescript2/pkg-playground/src/__fixtures__/param-schema-golden.json" \
+          cargo nextest run \
             --config-file "$PWD/.config/nextest-l2.toml" \
             --binaries-metadata "$export_dir/binaries-metadata.json" \
             --cargo-metadata "$export_dir/cargo-metadata.json" \
             --workspace-remap "$PWD" \
-            -E 'not (package(=baml_cli) or package(=baml_lsp2_actions))'
+            "${filter_args[@]}"
 
       - name: "Run tests with nextest"
         if: steps.l2.outputs.hit != 'true'
@@ -470,16 +487,30 @@ jobs:
           # binary is not in the export at all, and a CLI filterset naming a
           # binary absent from the metadata is the same hard parse error the
           # config hit ("operator didn't match any binary names").
-          # -E: arm equivalence with the cargo arm's --exclude list; same
-          # reasoning as the gnu lane (baml_cli / baml_lsp2_actions run in
-          # the snapshot-tests job, and their file-based insta snapshots
-          # cannot resolve from the unit build's relocated manifest dir).
-          INSTA_WORKSPACE_ROOT="$PWD" cargo nextest run \
+          # -E built against the export's own metadata; same reasoning and
+          # same shape as the gnu lane (the two exports have been measured
+          # to disagree about which excluded packages they carry).
+          filter_expr=""
+          for pkg in baml_cli baml_lsp2_actions; do
+            if jq -e --arg p "$pkg" 'any(.packages[]; .name == $p)' \
+              "$export_dir/cargo-metadata.json" >/dev/null 2>&1; then
+              filter_expr="${filter_expr:+$filter_expr or }package(=$pkg)"
+            fi
+          done
+          filter_args=()
+          if [ -n "$filter_expr" ]; then
+            filter_args=(-E "not ($filter_expr)")
+          fi
+          # BAML_PARAM_SCHEMA_GOLDEN: see the gnu lane - the golden-fixture
+          # test's relative path does not survive the relocated unit build.
+          INSTA_WORKSPACE_ROOT="$PWD" \
+          BAML_PARAM_SCHEMA_GOLDEN="$PWD/../typescript2/pkg-playground/src/__fixtures__/param-schema-golden.json" \
+          cargo nextest run \
             --config-file "$PWD/.config/nextest-l2.toml" \
             --binaries-metadata "$export_dir/binaries-metadata.json" \
             --cargo-metadata "$export_dir/cargo-metadata.json" \
             --workspace-remap "$PWD" \
-            -E 'not (package(=baml_cli) or package(=baml_lsp2_actions))'
+            "${filter_args[@]}"
 
       - name: "Run tests with nextest"
         if: steps.l2.outputs.hit != 'true'
