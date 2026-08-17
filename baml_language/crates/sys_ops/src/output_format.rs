@@ -590,9 +590,10 @@ impl OutputFormatContent {
             | RuntimeTy::TypeVar(..)
             | RuntimeTy::AssociatedTypeProjection { .. }
             | RuntimeTy::Never { .. }
-            // Public LLM render paths reject these at `validate_output_type`.
-            // Keep the formatter fallible too so an internal caller cannot
-            // turn a missing boundary check into a process abort.
+            // Checked LLM execution and render-companion paths reject these at
+            // `validate_output_type`. Throws-never low-level output-format
+            // helpers may still degrade this error to an empty string, so keep
+            // the formatter fallible rather than aborting the process.
             | RuntimeTy::RustType { .. } => Err(RenderError::UnsupportedType(ty.to_string())),
         }
     }

@@ -4,10 +4,6 @@ All notable changes to this project will be documented in this file. See [conven
 
 ## [0.226.0](https://github.com/boundaryml/baml/compare/0.225.0..0.226.0) - 2026-08-17
 
-### Bug Fixes
-
-- return a catchable diagnostic when non-data LLM output types reach schema rendering
-
 ### Features
 
 - **(runtime)** make connection pooling configurable ([#3975](https://github.com/BoundaryML/baml/pull/3975)) - ([521919c](https://github.com/BoundaryML/baml/commit/521919c7f58b0b930ae1709df1882651db8ca865)) - Dex Hunter

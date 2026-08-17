@@ -167,6 +167,16 @@ pub fn non_data_type_at_render(ty: &str) -> Diagnostic {
     )
 }
 
+/// E0164 — a class field contains a non-data type at the LLM schema boundary.
+pub fn non_data_field_at_render(field: &str, ty: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::NonDataTypeAtRender,
+        format!(
+            "field `{field}` has non-data type `{ty}`, which cannot be rendered as an LLM output schema"
+        ),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,6 +244,11 @@ mod tests {
                 non_data_type_at_render("never"),
                 "E0164",
                 "non-data type `never` cannot be rendered as an LLM output schema",
+            ),
+            (
+                non_data_field_at_render("Envelope.payload", "unknown"),
+                "E0164",
+                "field `Envelope.payload` has non-data type `unknown`, which cannot be rendered as an LLM output schema",
             ),
         ];
 

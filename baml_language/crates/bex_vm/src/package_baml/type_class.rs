@@ -214,11 +214,17 @@ impl BamlClassTypeValue for PackageBamlImpl {
         }
 
         let mut visited = std::collections::HashSet::new();
-        if let Some(non_data_ty) =
-            first_non_data_type(vm, &type_value.ty, type_value.defs(), &mut visited)
+        if let Some((path, non_data_ty)) =
+            first_non_data_type(vm, &type_value.ty, type_value.defs(), &root, &mut visited)
         {
-            let diagnostic =
-                baml_compiler_diagnostics::runtime_type::non_data_type_at_render(&non_data_ty);
+            let diagnostic = if path == root {
+                baml_compiler_diagnostics::runtime_type::non_data_type_at_render(&non_data_ty)
+            } else {
+                baml_compiler_diagnostics::runtime_type::non_data_field_at_render(
+                    &path,
+                    &non_data_ty,
+                )
+            };
             return Err(VmRustFnError::Thrown(
                 super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
             ));
@@ -742,7 +748,7 @@ fn first_open_interface(
             let Object::Class(class) = vm.get_object(class_ptr) else {
                 return None;
             };
-            for field in &class.fields {
+            for field in class.fields.iter().filter(|field| !field.skip) {
                 let child_path = format!("{path}.{}", field.name);
                 if let Some(runtime) = &field.runtime_type {
                     if let Some(found) =
@@ -841,10 +847,11 @@ fn first_non_data_type(
     vm: &BexVm,
     ty: &baml_type::RealizedTy,
     defs: &DynTypeDefs,
+    path: &str,
     visited: &mut std::collections::HashSet<baml_type::RealizedTy>,
-) -> Option<String> {
+) -> Option<(String, String)> {
     if is_non_data_render_type(ty) {
-        return Some(ty.to_string());
+        return Some((path.to_string(), ty.to_string()));
     }
 
     match ty {
@@ -860,10 +867,18 @@ fn first_non_data_type(
             let Object::Class(class) = vm.get_object(class_ptr) else {
                 return None;
             };
-            for field in &class.fields {
+            // The output formatter currently walks `ClassField::field_type`,
+            // whose class-generic leaves are intentionally unsubstituted.
+            // Reject this path before rendering can silently erase the schema;
+            // substituting class arguments in `sys_ops` is a separate fix.
+            if class.generic_param_count > 0 {
+                return Some((path.to_string(), ty.to_string()));
+            }
+            for field in class.fields.iter().filter(|field| !field.skip) {
+                let child_path = format!("{path}.{}", field.name);
                 if let Some(runtime) = &field.runtime_type {
                     if let Some(found) =
-                        first_non_data_type(vm, &runtime.ty, runtime.defs(), visited)
+                        first_non_data_type(vm, &runtime.ty, runtime.defs(), &child_path, visited)
                     {
                         return Some(found);
                     }
@@ -875,28 +890,31 @@ fn first_non_data_type(
                     .ok()
                     .or_else(|| baml_type::RealizedTy::try_from(field.field_type.clone()).ok());
                 if let Some(field_ty) = field_ty
-                    && let Some(found) = first_non_data_type(vm, &field_ty, defs, visited)
+                    && let Some(found) =
+                        first_non_data_type(vm, &field_ty, defs, &child_path, visited)
                 {
                     return Some(found);
                 }
             }
             None
         }
-        baml_type::RealizedTy::List(element, _) => first_non_data_type(vm, element, defs, visited),
+        baml_type::RealizedTy::List(element, _) => {
+            first_non_data_type(vm, element, defs, path, visited)
+        }
         baml_type::RealizedTy::Map { key, value, .. } => {
-            first_non_data_type(vm, key, defs, visited)
-                .or_else(|| first_non_data_type(vm, value, defs, visited))
+            first_non_data_type(vm, key, defs, path, visited)
+                .or_else(|| first_non_data_type(vm, value, defs, path, visited))
         }
         baml_type::RealizedTy::Union(members, _) => members
             .iter()
-            .find_map(|member| first_non_data_type(vm, member, defs, visited)),
+            .find_map(|member| first_non_data_type(vm, member, defs, path, visited)),
         baml_type::RealizedTy::TypeAlias(name, _) => {
             if !visited.insert(ty.clone()) {
                 return None;
             }
             vm.recursive_type_alias(name)
                 .and_then(|alias| baml_type::RealizedTy::try_from(alias.clone()).ok())
-                .and_then(|alias| first_non_data_type(vm, &alias, defs, visited))
+                .and_then(|alias| first_non_data_type(vm, &alias, defs, path, visited))
         }
         baml_type::RealizedTy::Int { .. }
         | baml_type::RealizedTy::Bigint { .. }
