@@ -2074,7 +2074,11 @@ mod tests {
         assert!(!inlined.contains("function a()"));
 
         let sources = &out[&PathBuf::from("_baml_sources.py")];
-        let nested = sources.find("nested/a.baml").unwrap();
+        #[cfg(windows)]
+        let nested_key = "nested\\\\a.baml";
+        #[cfg(not(windows))]
+        let nested_key = "nested/a.baml";
+        let nested = sources.find(nested_key).unwrap();
         let root = sources.find("z.baml").unwrap();
         assert!(nested < root);
         assert!(sources.contains("function a() -> int { 2 }\\n"));
