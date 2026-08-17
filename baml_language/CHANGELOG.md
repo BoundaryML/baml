@@ -26,6 +26,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Fixes
 
+- Restored E0007 diagnostics for method calls on `unknown` receivers, preventing unresolved calls from reaching an internal VM error. ([#4466](https://github.com/BoundaryML/baml/pull/4466)) - Antonio Sarosi
 - Rejected runtime-checked arguments on indirect calls with E0010; release builds had previously compiled them while silently omitting the check. ([#4460](https://github.com/BoundaryML/baml/pull/4460)) - Antonio Sarosi
 - Enabled runtime package compilation from `baml run` scripts and expressions. ([#4451](https://github.com/BoundaryML/baml/pull/4451)) - Antonio Sarosi
 - Supported double-quoted LLM prompts as literal, non-interpolating prompts and fixed the segfault they could cause. ([#4432](https://github.com/BoundaryML/baml/pull/4432)) - 2kai2kai2
