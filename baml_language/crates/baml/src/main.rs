@@ -571,7 +571,11 @@ fn next_cli_command(args: &[String]) -> Option<(&str, &[String])> {
 
 fn toolchain_is_usable(version: &str) -> bool {
     let root = toolchains_dir().join(version);
-    toolchain_cli_path(version).is_file()
+    installed_toolchain_is_usable(&root, version)
+}
+
+fn installed_toolchain_is_usable(root: &Path, version: &str) -> bool {
+    verify_path_toolchain(&root.join("bin").join(cli_exe_name()), "").is_ok()
         && fs::read_to_string(root.join("VERSION"))
             .is_ok_and(|installed| installed.trim() == version)
 }
@@ -1829,6 +1833,26 @@ mod tests {
             },
         );
         assert!(!channel_needs_initial_setup("canary", &state));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn managed_toolchain_without_executable_permission_is_unusable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("0.16.0");
+        let bin = root.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(root.join("VERSION"), "0.16.0\n").unwrap();
+        let cli = bin.join(cli_exe_name());
+        fs::write(&cli, "#!/bin/sh\n").unwrap();
+        fs::set_permissions(&cli, fs::Permissions::from_mode(0o644)).unwrap();
+
+        assert!(!installed_toolchain_is_usable(&root, "0.16.0"));
+
+        fs::set_permissions(&cli, fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(installed_toolchain_is_usable(&root, "0.16.0"));
     }
 
     fn resolved(selector: &str, source: SelectorSource) -> ResolvedSelector {
