@@ -1,0 +1,19 @@
+# Config for the L2 nix-unit-graph nextest runs ONLY (the "nextest (nix unit
+# graph)" steps in cargo-tests.reusable.yaml pass this via --config-file).
+#
+# Why a second config exists: the main .config/nextest.toml carries overrides
+# and setup scripts keyed on `package(=sdk_test_*)` / `package(=baml_bridge)`
+# filters. Those packages are deliberately absent from the gnu/musl test
+# exports (they run in their own dedicated lanes), and nextest resolves
+# package predicates against the --cargo-metadata it is given - a predicate
+# naming a package that does not exist in that metadata is a HARD parse error
+# ("operator didn't match any packages"), not a no-op. Against the trimmed
+# unit-graph metadata every one of those entries errors, which is what turned
+# the gnu and musl lanes red whenever the L2 probe hit.
+#
+# Everything in the main config is sdk/bridge-scoped, so for the unit graph
+# the correct config is the empty one. If the exports ever grow
+# whole-workspace cargo metadata (the planned L2 unlock for the heavy lanes),
+# this file and the --config-file flags can be deleted and the main config
+# used on both arms.
+nextest-version = "0.9.98"

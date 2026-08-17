@@ -241,7 +241,12 @@ jobs:
           echo "::notice title=L2::arm=nix"
           export_dir="$(nix build --no-link --print-out-paths --print-build-logs .#gnu-test-export)"
           cd baml_language
+          # --config-file: the main nextest.toml's package(=sdk_test_*)
+          # filters hard-error against the export's trimmed cargo metadata
+          # (those packages are not in the unit graph); nextest-l2.toml is
+          # the unit-graph-scoped config. See the comment in that file.
           INSTA_WORKSPACE_ROOT="$PWD" cargo nextest run \
+            --config-file "$PWD/.config/nextest-l2.toml" \
             --binaries-metadata "$export_dir/binaries-metadata.json" \
             --cargo-metadata "$export_dir/cargo-metadata.json" \
             --workspace-remap "$PWD"
@@ -449,7 +454,10 @@ jobs:
           mkdir -p /tmp/baml-cli-target-tmp
           export_dir="$(nix build --no-link --print-out-paths --print-build-logs .#musl-test-export)"
           cd baml_language
+          # --config-file: same trimmed-metadata hard-error as the gnu lane;
+          # see .config/nextest-l2.toml.
           INSTA_WORKSPACE_ROOT="$PWD" cargo nextest run \
+            --config-file "$PWD/.config/nextest-l2.toml" \
             --binaries-metadata "$export_dir/binaries-metadata.json" \
             --cargo-metadata "$export_dir/cargo-metadata.json" \
             --workspace-remap "$PWD" \
