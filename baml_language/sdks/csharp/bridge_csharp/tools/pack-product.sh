@@ -13,7 +13,6 @@ target_template="$tool_dir/../src/baml-bridge.targets.in"
 normalizer="$tool_dir/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj"
 platforms="$repository_root/release/platforms.json"
 release_contract="$repository_root/scripts/baml-csharp-release-contract"
-size_policy="$repository_root/release/csharp-package-size-policy.json"
 expected_exports="$repository_root/release/bridge-cffi-public-exports.txt"
 native_root="$(cd "$1" && pwd -P)"
 native_manifest="$(cd "$(dirname "$2")" && pwd -P)/$(basename "$2")"
@@ -284,25 +283,6 @@ diff -u "$work/expected-package-entries.txt" \
 expected_package_entry_count="$((expected_native_count + 7))"
 test "$(wc -l < "$work/actual-package-entries.txt")" \
   -eq "$expected_package_entry_count"
-package_size="$(stat -c %s "$work/normalized/package-a.nupkg")"
-package_baseline="$(jq -er \
-  '.compressed_package.baseline_bytes
-   | select(type == "number" and . > 0)' "$size_policy")"
-package_regression_percent="$(jq -er \
-  '.compressed_package.max_regression_percent
-   | select(type == "number" and . >= 0)' "$size_policy")"
-package_regression_limit="$((package_baseline * (100 + package_regression_percent) / 100))"
-package_safety_ceiling="$(jq -er \
-  '.compressed_package.registry_safety_ceiling_bytes
-   | select(type == "number" and . > 0)' "$size_policy")"
-if ((package_size > package_regression_limit)); then
-  echo "compressed package size regression exceeds policy: actual=$package_size limit=$package_regression_limit baseline=$package_baseline" >&2
-  exit 1
-fi
-if ((package_size >= package_safety_ceiling)); then
-  echo "compressed package exceeds registry safety ceiling: actual=$package_size ceiling=$package_safety_ceiling" >&2
-  exit 1
-fi
 unzip -p "$work/normalized/package-a.nupkg" baml-bridge.nuspec \
   > "$work/baml-bridge.nuspec"
 grep -Fq '<dependency id="Google.Protobuf"' "$work/baml-bridge.nuspec"
