@@ -130,15 +130,165 @@ jobs:
             baml_language/.ci/size-gate/*.toml
             baml_language/.cargo/size-gate.toml
 
-      - name: "Enable auto-merge"
-        # Only when a PR actually exists (no diff → no PR → nothing to do).
-        # With canary's required checks, auto-merge waits for this PR's own
-        # size-gate CI to pass before merging, so a refresh that would
-        # regress never lands. Uses the PAT (the GITHUB_TOKEN can't enable
-        # auto-merge on a PR it didn't author).
+      - name: "Validate and enqueue baseline-refresh PR"
+        # Only when create-pull-request returned the exact PR it created or
+        # updated (no diff/no PR -> nothing to do). Repository auto-merge is
+        # disabled, so enroll directly in canary's merge queue. The queue
+        # preserves branch protection and waits for all required checks.
+        #
+        # Reuse the PAT required above so creating the PR still triggers CI;
+        # the workflow's GITHUB_TOKEN remains read-only. Validate the full PR
+        # identity and changed-file scope before making any merge mutation.
         if: steps.cpr.outputs.pull-request-number
         env:
           GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+          EXPECTED_REPOSITORY: BoundaryML/baml
+          EXPECTED_HEAD: chore/size-gate-baseline-refresh
+          EXPECTED_BASE: canary
+          EXPECTED_TITLE: "chore: refresh size-gate baselines"
         run: |
-          gh pr merge "${{ steps.cpr.outputs.pull-request-number }}" \
-            --squash --auto
+          set -euo pipefail
+
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::create-pull-request returned an invalid PR number: $PR_NUMBER"
+            exit 1
+          fi
+
+          read_pr() {
+            gh api graphql \
+              -f owner='BoundaryML' \
+              -f name='baml' \
+              -F number="$PR_NUMBER" \
+              -f query='query($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) {
+                  nameWithOwner
+                  pullRequest(number: $number) {
+                    id
+                    number
+                    state
+                    merged
+                    title
+                    headRefName
+                    headRefOid
+                    baseRefName
+                    headRepository { nameWithOwner }
+                    baseRepository { nameWithOwner }
+                    mergeQueueEntry { id position }
+                  }
+                }
+              }'
+          }
+
+          echo "Inspecting $EXPECTED_REPOSITORY PR #$PR_NUMBER returned by create-pull-request"
+          pr_json=$(read_pr)
+          if ! jq -e '.data.repository.pullRequest != null' <<< "$pr_json" >/dev/null; then
+            echo "::error::PR #$PR_NUMBER was not found in $EXPECTED_REPOSITORY"
+            exit 1
+          fi
+
+          actual_repository=$(jq -r '.data.repository.nameWithOwner' <<< "$pr_json")
+          actual_number=$(jq -r '.data.repository.pullRequest.number' <<< "$pr_json")
+          state=$(jq -r '.data.repository.pullRequest.state' <<< "$pr_json")
+          merged=$(jq -r '.data.repository.pullRequest.merged' <<< "$pr_json")
+
+          if [[ "$actual_repository" != "$EXPECTED_REPOSITORY" || "$actual_number" != "$PR_NUMBER" ]]; then
+            echo "::error::Resolved PR identity does not match $EXPECTED_REPOSITORY#$PR_NUMBER"
+            exit 1
+          fi
+          if [[ "$merged" == 'true' || "$state" == 'MERGED' ]]; then
+            echo "PR #$PR_NUMBER is already merged; nothing to enqueue"
+            exit 0
+          fi
+          if [[ "$state" != 'OPEN' ]]; then
+            echo "::error::Expected PR #$PR_NUMBER to be open, found state $state"
+            exit 1
+          fi
+
+          head_repository=$(jq -r '.data.repository.pullRequest.headRepository.nameWithOwner // ""' <<< "$pr_json")
+          base_repository=$(jq -r '.data.repository.pullRequest.baseRepository.nameWithOwner // ""' <<< "$pr_json")
+          head_ref=$(jq -r '.data.repository.pullRequest.headRefName' <<< "$pr_json")
+          base_ref=$(jq -r '.data.repository.pullRequest.baseRefName' <<< "$pr_json")
+          title=$(jq -r '.data.repository.pullRequest.title' <<< "$pr_json")
+          pr_id=$(jq -r '.data.repository.pullRequest.id' <<< "$pr_json")
+          head_oid=$(jq -r '.data.repository.pullRequest.headRefOid' <<< "$pr_json")
+          queue_position=$(jq -r '.data.repository.pullRequest.mergeQueueEntry.position // ""' <<< "$pr_json")
+
+          if [[ "$head_repository" != "$EXPECTED_REPOSITORY" || "$base_repository" != "$EXPECTED_REPOSITORY" ]]; then
+            echo "::error::Expected head and base repositories to be $EXPECTED_REPOSITORY; found head=$head_repository base=$base_repository"
+            exit 1
+          fi
+          if [[ "$head_ref" != "$EXPECTED_HEAD" ]]; then
+            echo "::error::Expected head branch $EXPECTED_HEAD; found $head_ref"
+            exit 1
+          fi
+          if [[ "$base_ref" != "$EXPECTED_BASE" ]]; then
+            echo "::error::Expected base branch $EXPECTED_BASE; found $base_ref"
+            exit 1
+          fi
+          if [[ "$title" != "$EXPECTED_TITLE" ]]; then
+            echo "::error::Expected title '$EXPECTED_TITLE'; found '$title'"
+            exit 1
+          fi
+
+          # These are exactly the two add-paths scopes configured on the
+          # create-pull-request step above. Fetch every page before deciding.
+          files_json=$(gh api --paginate --slurp \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/BoundaryML/baml/pulls/$PR_NUMBER/files?per_page=100")
+          file_count=$(jq '[.[][]] | length' <<< "$files_json")
+          if [[ "$file_count" -eq 0 ]]; then
+            echo "PR #$PR_NUMBER has no changed files; nothing to enqueue"
+            exit 0
+          fi
+
+          echo "Validating $file_count changed file(s):"
+          jq -r '.[][] | "  - \(.filename)"' <<< "$files_json"
+          invalid_files=$(jq -r '.[][] | .filename | select((
+            test("^baml_language/\\.ci/size-gate/[^/]+\\.toml$") or
+            . == "baml_language/.cargo/size-gate.toml"
+          ) | not)' <<< "$files_json")
+          if [[ -n "$invalid_files" ]]; then
+            echo "::error::PR #$PR_NUMBER changes files outside the configured size-gate baseline paths"
+            while IFS= read -r file; do
+              echo "::error file=$file::Unexpected changed file"
+            done <<< "$invalid_files"
+            exit 1
+          fi
+
+          if [[ -n "$queue_position" ]]; then
+            echo "PR #$PR_NUMBER is already in the merge queue at position $queue_position"
+            exit 0
+          fi
+
+          echo "All safety checks passed; enqueueing PR #$PR_NUMBER at head $head_oid"
+          if enqueue_json=$(gh api graphql \
+            -f query='mutation($prId: ID!, $headOid: GitObjectID!) {
+              enqueuePullRequest(input: {pullRequestId: $prId, expectedHeadOid: $headOid}) {
+                mergeQueueEntry { position }
+              }
+            }' \
+            -F prId="$pr_id" \
+            -F headOid="$head_oid" 2>&1); then
+            queue_position=$(jq -r '.data.enqueuePullRequest.mergeQueueEntry.position // "unknown"' <<< "$enqueue_json")
+            echo "Enqueued PR #$PR_NUMBER in the canary merge queue at position $queue_position"
+            exit 0
+          fi
+
+          # A concurrent run may have queued or merged the PR after the first
+          # read. Treat only those confirmed outcomes as idempotent success.
+          latest_pr_json=$(read_pr)
+          latest_state=$(jq -r '.data.repository.pullRequest.state // ""' <<< "$latest_pr_json")
+          latest_merged=$(jq -r '.data.repository.pullRequest.merged // false' <<< "$latest_pr_json")
+          latest_queue_position=$(jq -r '.data.repository.pullRequest.mergeQueueEntry.position // ""' <<< "$latest_pr_json")
+          if [[ "$latest_merged" == 'true' || "$latest_state" == 'MERGED' ]]; then
+            echo "PR #$PR_NUMBER was merged concurrently; nothing left to enqueue"
+            exit 0
+          fi
+          if [[ -n "$latest_queue_position" ]]; then
+            echo "PR #$PR_NUMBER was queued concurrently at position $latest_queue_position"
+            exit 0
+          fi
+
+          echo "::error::Failed to enqueue PR #$PR_NUMBER: $enqueue_json"
+          exit 1
