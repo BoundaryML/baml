@@ -69,12 +69,12 @@ pub fn definition_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<
     let name = Name::new(name_text);
 
     // ── Step 2: resolve the name in scope ─────────────────────────────────────
-    let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &name);
+    let resolved = baml_compiler2_ppir::resolve::resolve_name_at(db, file, offset, &name);
 
     // ── Step 3: map ResolvedName to a Location ────────────────────────────────
     match resolved {
-        baml_compiler2_tir::resolve::ResolvedName::Item(def)
-        | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => {
+        baml_compiler2_ppir::resolve::ResolvedName::Item(def)
+        | baml_compiler2_ppir::resolve::ResolvedName::Builtin(def) => {
             // Top-level item — look up the contribution's name_span.
             let (def_file, range) = utils::definition_span(db, def)?;
             Some(Location {
@@ -83,16 +83,16 @@ pub fn definition_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<
             })
         }
 
-        baml_compiler2_tir::resolve::ResolvedName::Local {
+        baml_compiler2_ppir::resolve::ResolvedName::Local {
             definition_site: Some(site),
             ..
         } => local_definition_location(db, file, offset, site),
 
-        baml_compiler2_tir::resolve::ResolvedName::Local {
+        baml_compiler2_ppir::resolve::ResolvedName::Local {
             definition_site: None,
             ..
         }
-        | baml_compiler2_tir::resolve::ResolvedName::Unknown => {
+        | baml_compiler2_ppir::resolve::ResolvedName::Unknown => {
             // Fallback: try member resolution (field access, enum variant, constructor field, method)
             resolve_member_at(db, file, offset, name_text)
         }
@@ -204,7 +204,7 @@ fn resolve_member_at(
 
             // Get inference, body, source map
             let func_scope_id = index.scope_ids[enclosing_func_scope.index() as usize];
-            let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
+            let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_scope_id)?;
             let body = baml_compiler2_hir::body::function_body(db, func_loc);
             let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
                 return None;
@@ -297,10 +297,10 @@ fn resolve_field_access_at(
     token_text: &str,
     expr_body: &baml_compiler2_ast::ExprBody,
     source_map: &baml_compiler2_ast::AstSourceMap,
-    inference: &baml_compiler2_tir::inference::ScopeInference<'_>,
+    inference: &baml_compiler2_hir_ty::infer::InferenceResult<'_>,
 ) -> Option<Location> {
     use baml_compiler2_ast::Expr;
-    use baml_compiler2_tir::inference::MemberResolution;
+    use baml_compiler2_hir_ty::infer::MemberResolution;
 
     // Find the best matching expr — either a MemberAccess or a multi-segment Path
     // whose span contains the cursor and whose member name matches the token.
@@ -352,21 +352,22 @@ fn resolve_field_access_at(
     // For multi-segment Path nodes, look up the per-segment resolution
     // from path_member_resolutions. For MemberAccess, use the top-level resolution.
     let resolution = if let Some(seg_idx) = path_seg_idx {
-        // seg_idx is the index into the full segments array (0-based, with 0 being the root).
-        // path_member_resolutions[i] corresponds to segments[i+1], so the member resolution
-        // for segment seg_idx is at index seg_idx - 1 in path_member_resolutions.
+        // seg_idx indexes the full segments array (0 = the root); the
+        // resolved-path ladder is parallel, entry 0 carrying no resolution.
         inference
-            .path_member_resolution(expr_id)
-            .and_then(|resolutions| resolutions.get(seg_idx - 1))
-            .or_else(|| inference.resolution(expr_id))
+            .path_resolutions
+            .get(&expr_id)
+            .and_then(|path| path.segments.get(seg_idx))
+            .and_then(|step| step.resolution.as_ref())
+            .or_else(|| inference.member_resolutions.get(&expr_id))
     } else {
-        inference.resolution(expr_id)
+        inference.member_resolutions.get(&expr_id)
     };
 
     match resolution? {
         MemberResolution::Field {
-            class_loc,
-            field_name,
+            class: class_loc,
+            field: field_name,
         } => {
             let target_file = class_loc.file(db);
             // Read the canonical (PPIR) tree, not the HIR pre-expansion tree: this
@@ -385,7 +386,7 @@ fn resolve_field_access_at(
         }
         MemberResolution::Variant {
             enum_loc,
-            variant_name,
+            variant: variant_name,
         } => {
             let target_file = enum_loc.file(db);
             let enum_def = item_data::enum_data(db, *enum_loc);
@@ -399,7 +400,7 @@ fn resolve_field_access_at(
                 range: source_map.variant_name_spans[variant_idx],
             })
         }
-        MemberResolution::Free { func_loc } => {
+        MemberResolution::Free { func: func_loc } => {
             let def = baml_compiler2_hir::contributions::Definition::Function(*func_loc);
             let (def_file, range) = utils::definition_span(db, def)?;
             Some(Location {
@@ -407,9 +408,9 @@ fn resolve_field_access_at(
                 range,
             })
         }
-        MemberResolution::BoundMethod { func_loc, .. }
-        | MemberResolution::UnboundMethod { func_loc, .. }
-        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
+        MemberResolution::BoundMethod { func: func_loc, .. }
+        | MemberResolution::UnboundMethod { func: func_loc, .. }
+        | MemberResolution::InterfaceConcreteMethod { func: func_loc, .. } => {
             // Methods are not in FileSymbolContributions — use the function source map.
             let target_file = func_loc.file(db);
             let name_span = item_data::function_source_map(db, *func_loc).name_span;
@@ -418,7 +419,10 @@ fn resolve_field_access_at(
                 range: name_span,
             })
         }
-        MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
+        MemberResolution::InterfaceVirtualMethod {
+            interface: iface_loc,
+            method,
+        } => {
             // A virtual interface-method call: only the slot (interface + name) is
             // known statically, so navigate to the declaration in the interface —
             // the required signature, or the default method's definition.
@@ -446,7 +450,7 @@ fn resolve_field_access_at(
             })
         }
         MemberResolution::InterfaceVirtualField {
-            iface_loc,
+            interface: iface_loc,
             field_index,
             ..
         } => {
@@ -460,6 +464,11 @@ fn resolve_field_access_at(
                 range: *source_map.field_name_spans.get(*field_index as usize)?,
             })
         }
+        // Mounted rows deliberately carry no dependency SourceFile/span.
+        MemberResolution::External(_)
+        | MemberResolution::ExternalField { .. }
+        | MemberResolution::ExternalVariant { .. }
+        | MemberResolution::ExternalInterfaceVirtualField { .. } => None,
     }
 }
 
@@ -471,10 +480,10 @@ fn resolve_constructor_field_at(
     token_text: &str,
     expr_body: &baml_compiler2_ast::ExprBody,
     source_map: &baml_compiler2_ast::AstSourceMap,
-    inference: &baml_compiler2_tir::inference::ScopeInference<'_>,
+    inference: &baml_compiler2_hir_ty::infer::InferenceResult<'_>,
 ) -> Option<Location> {
     use baml_compiler2_ast::Expr;
-    use baml_compiler2_tir::ty::Ty;
+    use baml_type::Ty;
 
     for (expr_id, expr) in expr_body.exprs.iter() {
         if let Expr::Object { fields, .. } = expr {
@@ -486,11 +495,11 @@ fn resolve_constructor_field_at(
             // Check if cursor token matches any field key name
             let _matching_field = fields
                 .iter()
-                .find(|(name, _)| name.as_str() == token_text)?;
+                .find(|field| field.name.as_str() == token_text)?;
 
             // Get the Object's type
-            let obj_ty = inference.expression_type(expr_id)?;
-            let Ty::Class(qtn, _, _) = obj_ty else {
+            let obj_ty = inference.type_of_expr.get(&expr_id)?.to_plain();
+            let Ty::Class(ref qtn, _, _) = obj_ty else {
                 return None;
             };
 

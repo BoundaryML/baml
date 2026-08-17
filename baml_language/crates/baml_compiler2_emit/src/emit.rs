@@ -798,9 +798,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => elements
                 .iter()
                 .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
-            Rvalue::Uint8Array(_) | Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
-                false
-            }
+            Rvalue::Uint8Array(_)
+            | Rvalue::LoadType(_)
+            | Rvalue::CurrentPackage(_)
+            | Rvalue::MakeGenericFunction { .. } => false,
             Rvalue::MakeGenericFunctionFromValue { value, .. } => {
                 self.operand_reads_spawn_captured_local(value, seen)
             }
@@ -810,6 +811,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }),
             Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
                 self.place_reads_spawn_captured_local(place, seen)
+            }
+            Rvalue::RuntimeIsType {
+                operand,
+                type_value,
+            } => {
+                self.operand_reads_spawn_captured_local(operand, seen)
+                    || self.operand_reads_spawn_captured_local(type_value, seen)
             }
             Rvalue::IsType { operand, .. }
             | Rvalue::IsTypeTag { operand, .. }
@@ -1065,6 +1073,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
             throws_type: baml_type::TyTemplate::Never {
@@ -1074,6 +1083,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0, // assigned at engine init (interim provider)
+            runtime_package: bex_vm_types::HeapPtr::null(),
         }
     }
 
@@ -1475,6 +1485,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             StatementKind::Intrinsic { op, args } => {
                 match op {
+                    IntrinsicOp::BindType(slot) => {
+                        let [value] = args.as_slice() else {
+                            panic!("BindType expects exactly one operand")
+                        };
+                        self.emit_operand_pull(value);
+                        self.emit(Instruction::BindType(*slot));
+                    }
                     IntrinsicOp::Log(level) => {
                         // Emit the reserved "$baml_log" event with payload
                         // { level: "<level>", data: <user_arg> }, where
@@ -1946,6 +1963,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             None => self.mint_object(Object::GenericFunction(bex_vm_types::GenericFunction {
                 function: gidx,
                 type_args: type_args.to_vec().into_boxed_slice(),
+                runtime_package: bex_vm_types::HeapPtr::null(),
             })),
         };
         let const_idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(pool_idx)));
@@ -2240,11 +2258,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 callee,
                 args,
                 ntypeargs,
+                runtime_type_check,
                 runtime_id,
                 destination,
                 target,
                 unwind: _,
             } => {
+                let call_span = self.current_debug_span;
                 let func_name = pull_semantics::resolve_constant_function_name(
                     callee,
                     &self.analysis.classifications,
@@ -2263,14 +2283,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     let instruction = if runtime_id.is_some() {
                         Instruction::CallWithRuntimeId {
                             callee: global_callee,
-                            ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                            ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                                *ntypeargs,
+                                *runtime_type_check,
+                            ),
                         }
                     } else {
                         Instruction::Call {
                             callee: global_callee,
-                            ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                            ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                                *ntypeargs,
+                                *runtime_type_check,
+                            ),
                         }
                     };
+                    // Pulling nested argument producers may install their own
+                    // debug spans. Restore the terminator's enclosing call span
+                    // on the actual call opcode so native diagnostics identify
+                    // the offending call rather than its final nested operand.
+                    self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
                     if let Some(name) = &func_name {
                         self.set_operand(inst, OperandMeta::Callable(name.clone()));
@@ -2283,8 +2314,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     ));
                     if let Some(runtime_id) = runtime_id {
                         unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                        self.set_debug_span(call_span, false);
                         self.emit(Instruction::CallIndirectWithRuntimeId);
                     } else {
+                        self.set_debug_span(call_span, false);
                         self.emit(Instruction::CallIndirect);
                     }
                     self.emit_store_place(destination);
@@ -2297,6 +2330,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 method,
                 args,
                 ntypeargs,
+                runtime_type_check,
                 runtime_id,
                 destination,
                 target,
@@ -2319,12 +2353,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let instruction = if runtime_id.is_some() {
                     Instruction::VirtualCallWithRuntimeId {
                         nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                        ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                            *ntypeargs,
+                            *runtime_type_check,
+                        ),
                     }
                 } else {
                     Instruction::VirtualCall {
                         nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                        ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                            *ntypeargs,
+                            *runtime_type_check,
+                        ),
                     }
                 };
                 let inst = self.emit(instruction);
@@ -3389,6 +3429,15 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // so the VM compares each arg invariantly; empty args →
             // class-pointer identity.
             TyTemplate::Class(tn, type_args_templates, _) => {
+                // A reflected `type` value is physically `Object::Type` but its
+                // reconstructed concrete type is one of the nine sealed kind
+                // classes. Kind tests must therefore use the structural value
+                // matcher; class-object pointer identity only applies to normal
+                // user instances.
+                if baml_type::type_kind::is_type_kind_class(tn) {
+                    emit_structural(self, ty_template);
+                    return Ok(());
+                }
                 let class_name_str = tn.display_name();
                 let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) else {
                     emit_false(self);
@@ -3421,9 +3470,19 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // carries a binding for every declared member, pinned or
             // defaulted), or a union that may carry any of these: the VM
             // value matcher.
+            //
+            // Media (`image` / `audio` / `video` / `pdf`) belongs here rather
+            // than with the tagless leaves below: there is no type tag for
+            // media, but `value_concrete_ty` reports the *primitive*
+            // `ConcreteRealizedTy::Media(kind)`, so the value matcher
+            // discriminates `image` from `audio` exactly. Routing it to the
+            // tagless-leaf fallback instead compiles to constant-FALSE — `v is
+            // image` false for every value, and a `match`'s media arm never
+            // firing (the last arm swallows the value).
             TyTemplate::List(..)
             | TyTemplate::Map { .. }
             | TyTemplate::Future(..)
+            | TyTemplate::Media(..)
             | TyTemplate::TypeArgRef(_)
             | TyTemplate::Interface(..)
             | TyTemplate::AssociatedTypeProjection { .. }
@@ -3448,54 +3507,62 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // exhaustive final `let v: unknown` arm has its test elided.)
             TyTemplate::BuiltinUnknown { .. } => emit_true(self),
 
-            // Everything else keeps its existing coarse check.
-            other => {
-                // A fully-realized leaf (primitive, enum, alias, literal, …):
+            // Fully realized leaves keep their exact identity/tag fast path,
+            // then use structural matching when no exact fast path exists.
+            // This list is exhaustive on purpose: a new template variant must
+            // choose its type-test strategy here.
+            other @ (TyTemplate::Int { .. }
+            | TyTemplate::Bigint { .. }
+            | TyTemplate::Float { .. }
+            | TyTemplate::String { .. }
+            | TyTemplate::Bool { .. }
+            | TyTemplate::Null { .. }
+            | TyTemplate::Uint8Array { .. }
+            | TyTemplate::Literal(..)
+            | TyTemplate::Enum(..)
+            | TyTemplate::EnumVariant(..)
+            | TyTemplate::RustType { .. }
+            | TyTemplate::Type { .. }
+            | TyTemplate::Resource { .. }
+            | TyTemplate::PromptAst { .. }
+            | TyTemplate::Void { .. }
+            | TyTemplate::TypeAlias(..)
+            | TyTemplate::Never { .. }) => {
+                // A fully-realized leaf (primitive, enum, alias, literal, ...):
                 // class-pointer identity for a `TypeAlias`, otherwise its type
-                // tag. Every non-realized template kind has its own arm above,
-                // so the narrowing below succeeds for everything that reaches
-                // here; the `emit_false` fallbacks guard absent objects and
-                // tagless leaves, not template residue.
-                if let Ok(realized) = <&RealizedTy>::try_from(other) {
-                    if let RealizedTy::TypeAlias(tn, _) = realized {
-                        if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
-                            let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(
-                                class_obj_idx,
-                            )));
-                            let inst = self.emit(Instruction::IsType(c));
-                            self.set_operand(
-                                inst,
-                                OperandMeta::Const(tn.display_name().to_string()),
-                            );
-                        } else {
-                            emit_false(self);
-                        }
-                    } else if let RealizedTy::Enum(tn, _) = realized {
-                        // Enum-pointer identity: `is Color` tests the value's enum
-                        // object, so it discriminates `Color` from `Status` — the
-                        // shared `ENUM` type tag cannot. Falls back to constant-false
-                        // if the enum object is absent (e.g. an unreferenced enum).
-                        if let Some(enum_obj_idx) = self.enum_object_index_for_type_name(tn) {
-                            let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(
-                                enum_obj_idx,
-                            )));
-                            let inst = self.emit(Instruction::IsType(c));
-                            self.set_operand(
-                                inst,
-                                OperandMeta::Const(tn.display_name().to_string()),
-                            );
-                        } else {
-                            emit_false(self);
-                        }
-                    } else if let Some(tag) = realized_type_tag(realized) {
-                        let c = self.add_constant(ConstValue::Int(tag));
+                // tag when one exactly represents the test. Tagless leaves use
+                // the canonical structural matcher instead of silently
+                // compiling to false.
+                let realized = <&RealizedTy>::try_from(other)
+                    .expect("exhaustive realized-leaf template classification");
+                if let RealizedTy::TypeAlias(tn, _) = realized {
+                    if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
+                        let c = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
                         let inst = self.emit(Instruction::IsType(c));
-                        self.set_operand(inst, OperandMeta::Const(realized.to_string()));
+                        self.set_operand(inst, OperandMeta::Const(tn.display_name().to_string()));
                     } else {
                         emit_false(self);
                     }
+                } else if let RealizedTy::Enum(tn, _) = realized {
+                    // Enum-pointer identity: `is Color` tests the value's enum
+                    // object, so it discriminates `Color` from `Status` - the
+                    // shared `ENUM` type tag cannot. Falls back to constant-false
+                    // if the enum object is absent (e.g. an unreferenced enum).
+                    if let Some(enum_obj_idx) = self.enum_object_index_for_type_name(tn) {
+                        let c = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(enum_obj_idx)));
+                        let inst = self.emit(Instruction::IsType(c));
+                        self.set_operand(inst, OperandMeta::Const(tn.display_name().to_string()));
+                    } else {
+                        emit_false(self);
+                    }
+                } else if let Some(tag) = realized_type_tag(realized) {
+                    let c = self.add_constant(ConstValue::Int(tag));
+                    let inst = self.emit(Instruction::IsType(c));
+                    self.set_operand(inst, OperandMeta::Const(realized.to_string()));
                 } else {
-                    emit_false(self);
+                    emit_structural(self, other);
                 }
             }
         }
@@ -3519,10 +3586,23 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
+    fn runtime_is_type(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::RuntimeIsType);
+        Ok(())
+    }
+
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error> {
         let const_idx = self.add_constant(ConstValue::Type(template.clone()));
         let inst = self.emit(Instruction::LoadType(const_idx));
         self.set_operand(inst, OperandMeta::Const(template.to_string()));
+        Ok(())
+    }
+
+    fn load_current_package(&mut self, package: &str) -> Result<(), Self::Error> {
+        let object = self.mint_object(Object::String(package.into()));
+        let constant = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(object)));
+        let inst = self.emit(Instruction::LoadCurrentPackage(constant));
+        self.set_operand(inst, OperandMeta::Const(package.to_string()));
         Ok(())
     }
 
@@ -3635,6 +3715,7 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         RealizedTy::List(..) => Some(baml_type::typetag::LIST),
         RealizedTy::Map { .. } => Some(baml_type::typetag::MAP),
         RealizedTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
+        RealizedTy::Type { .. } => Some(baml_type::typetag::TYPE),
         RealizedTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
         RealizedTy::Literal(lit, _, _) => Some(match lit {
             baml_base::Literal::Int(_) => baml_type::typetag::INT,
@@ -3643,7 +3724,19 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
             baml_base::Literal::String(_) => baml_type::typetag::STRING,
             baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,
         }),
-        _ => None,
+        RealizedTy::Media(..)
+        | RealizedTy::Class(..)
+        | RealizedTy::Interface(..)
+        | RealizedTy::Union(..)
+        | RealizedTy::Future(..)
+        | RealizedTy::RustType { .. }
+        | RealizedTy::Resource { .. }
+        | RealizedTy::PromptAst { .. }
+        | RealizedTy::Void { .. }
+        | RealizedTy::TypeAlias(..)
+        | RealizedTy::BuiltinUnknown { .. }
+        | RealizedTy::Never { .. }
+        | RealizedTy::EnumVariant(..) => None,
     }
 }
 

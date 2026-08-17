@@ -19,8 +19,8 @@ class Verdict {
 
 // The function under test.
 function classify(text: string) -> Verdict {
-    client Mini
-    prompt `
+    client: Mini
+    prompt: `
         Classify the sentiment of the text below as positive, negative, or
         neutral. Sarcasm counts as the sentiment actually expressed, not the
         literal words. Plain statements of fact are neutral.
@@ -76,9 +76,9 @@ function classify(text: string) -> Verdict {
 // ns_sentiment.baml:21:25 (type) [defaultLibrary] len=6 "string"
 // ns_sentiment.baml:21:36 (class) len=7 "Verdict"
 // ns_sentiment.baml:22:5 (property) len=6 "client"
-// ns_sentiment.baml:22:12 (variable) len=4 "Mini"
+// ns_sentiment.baml:22:13 (variable) len=4 "Mini"
 // ns_sentiment.baml:23:5 (property) [declaration] len=6 "prompt"
-// ns_sentiment.baml:23:12 (string) len=1 "`"
+// ns_sentiment.baml:23:13 (string) len=1 "`"
 // ns_sentiment.baml:24:9 (string) len=8 "Classify"
 // ns_sentiment.baml:24:18 (string) len=3 "the"
 // ns_sentiment.baml:24:22 (string) len=9 "sentiment"

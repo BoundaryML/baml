@@ -14,8 +14,8 @@
 // A `prompt` body with `${role(...)}` markers, assembled against a hand-built
 // `Context` — the shared fixture every accessor test evaluates against.
 function paa_render_ast() -> ai.Prompt {
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }
-    let ctx = baml.prompt.Context { client: cc, tags: {} }
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }
+    let ctx = ai.Context { client: cc, tags: {} }
     let render = prompt`${role("system")}You are helpful.${role("user")}Hi World!`
     render(ctx)
 }
@@ -67,8 +67,8 @@ test "messages_expose_role_and_content" {
 // The element type is the new `ai.PromptMessage` class — pinned by this
 // helper's declared return type type-checking.
 function paa_single_message_fn() -> ai.PromptMessage[] {
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
-    let ctx = baml.prompt.Context { client: cc, tags: {} }
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
+    let ctx = ai.Context { client: cc, tags: {} }
     let render = prompt`Just a system prompt.`
     render(ctx).messages()
 }

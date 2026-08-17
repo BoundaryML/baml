@@ -21,7 +21,7 @@ client<llm> InvalidFieldName {
 //- diagnostics
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client InvalidFieldName = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client InvalidFieldName = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
 //   │ ai.RoundRobin)
 //    ╭─[client_http_config_invalid_fields.baml:1:1]
 //  1 │ ╭─▶ client<llm> InvalidFieldName {

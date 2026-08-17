@@ -1,18 +1,18 @@
 // Learn more about clients at https://docs.boundaryml.com/docs/snippets/clients/overview
 
-client CustomGPT5 = openai.OpenAiClient.new(
+client CustomGPT5 = openai.ResponsesClient.new(
   model = "gpt-5",
   api_key = env.OPENAI_API_KEY,
 );
 
 // Retries compose by wrapping the inner client value.
 client CustomGPT5Mini = ai.clients.Retry.new(
-  inner = openai.OpenAiClient.new(model = "gpt-5-mini", api_key = env.OPENAI_API_KEY),
+  inner = openai.ResponsesClient.new(model = "gpt-5-mini", api_key = env.OPENAI_API_KEY),
   max_attempts = 2,
 );
 
 // Openai with chat completion
-client CustomGPT5Chat = openai.OpenAiClient.new(
+client CustomGPT5Chat = openai.ResponsesClient.new(
   model = "gpt-5",
   api_key = env.OPENAI_API_KEY,
 );
@@ -62,8 +62,8 @@ class Resume {
 function ExtractResume(resume: string) -> Resume {
   // Specify a client as provider/model-name
   // You can also use custom LLM params with a custom client name from clients.baml like "client CustomGPT5" or "client CustomSonnet4"
-  client "openai/gpt-5-mini" // Set OPENAI_API_KEY to use this client.
-  prompt `
+  client: "openai/gpt-5-mini" // Set OPENAI_API_KEY to use this client.
+  prompt: `
     Extract from this content:
     ${resume}
 

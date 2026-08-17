@@ -130,7 +130,7 @@ test "comparable_user_class_custom_cmperror_propagates" {
     } catch (e) {
         ComparableCompareError => e.message
     };
-    assert.is_true(msg.matches("cannot compare null"))
+    assert.is_true(msg.includes("cannot compare null"))
 }
 
 // ─── Sortable: `sort` (Phase 3 — new path alongside the old `sort`) ─────────
@@ -280,7 +280,7 @@ test "sort_fallible_comparator_throw_rolls_back" {
     } catch (e) {
         ComparableCompareError => e.message
     };
-    assert.is_true(msg.matches("cannot compare null"));
+    assert.is_true(msg.includes("cannot compare null"));
     // rollback: original order intact
     let vals = xs.map((x: ComparableFlaky) -> int {
         if let v: int = x.value { v } else { -1 }

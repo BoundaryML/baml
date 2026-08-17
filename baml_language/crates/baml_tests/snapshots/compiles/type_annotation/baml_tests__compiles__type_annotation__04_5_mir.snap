@@ -9,7 +9,7 @@ fn user.test_type_annotation(function_name: string) -> string {
     let _2: type // t
 
     bb0: {
-        _2 = sys_op const fn baml.prompt.get_return_type(copy _1) -> bb1;
+        _2 = sys_op const fn ai.internal.get_return_type(copy _1) -> bb1;
     }
 
     bb1: {
@@ -29,7 +29,7 @@ fn user.test_let_binding(function_name: string) -> string {
     let _2: type // t
 
     bb0: {
-        _2 = sys_op const fn baml.prompt.get_return_type(copy _1) -> bb1;
+        _2 = sys_op const fn ai.internal.get_return_type(copy _1) -> bb1;
     }
 
     bb1: {
@@ -63,7 +63,7 @@ fn user.test_return_type(function_name: string) -> type {
     let _1: string // function_name // param
 
     bb0: {
-        _0 = sys_op const fn baml.prompt.get_return_type(copy _1) -> bb1;
+        _0 = sys_op const fn ai.internal.get_return_type(copy _1) -> bb1;
     }
 
     bb1: {

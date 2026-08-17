@@ -24,6 +24,14 @@ function Ok() -> int {
 
 //----
 //- diagnostics
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//    ╭─[expr_let_annotations.baml:1:1]
+//  1 │ let G: int | float = 10.0;
+//    · ─────────────┬────────────
+//    ·              ╰── move this binding into a function body
+//    ╰────
 // E0001
 //
 //   × mismatched types

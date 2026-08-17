@@ -1,6 +1,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
+use indexmap::IndexMap;
 
-use crate::HeapPtr;
+use crate::{HeapPtr, types::RuntimeTypeProvenance};
 
 /// A variant within a runtime enum, carrying schema metadata.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
@@ -8,6 +9,8 @@ pub struct EnumVariant {
     pub name: String,
     pub description: Option<String>,
     pub alias: Option<String>,
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
     pub skip: bool,
 }
 
@@ -27,8 +30,17 @@ pub struct Enum {
     /// Enum-level serialization alias.
     pub alias: Option<String>,
 
+    /// Enum-level source documentation and custom annotations.
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
+
     /// Enum-level type attribute.
     pub ty_attr: baml_type::TyAttr,
+
+    /// Present only on runtime-constructed enums; omitted from program wire
+    /// data for the same reason as `Class::runtime_type`.
+    #[borsh(skip)]
+    pub runtime_type: Option<RuntimeTypeProvenance>,
 }
 
 impl std::fmt::Display for Enum {

@@ -1,13 +1,13 @@
-client Bar = openai.OpenAiClient.new(model = "gpt-4o");
+client Bar = openai.ResponsesClient.new(model = "gpt-4o");
 
 function InputNone() -> int {
-  client Bar
-  prompt `fa`
+  client: Bar
+  prompt: `fa`
 }
 
 function InputSimple(a: string, b: int | bool) -> int {
-  client Bar
-  prompt `fa`
+  client: Bar
+  prompt: `fa`
 }
 
 class Email {
@@ -16,8 +16,8 @@ class Email {
 }
 
 function InputObject(email: Email) -> string {
-  client Bar
-  prompt ` subject line ${email.subject} `
+  client: Bar
+  prompt: ` subject line ${email.subject} `
 }
 
 enum Color {
@@ -27,8 +27,8 @@ enum Color {
 }
 
 function InputEnum(color: Color) -> string {
-  client Bar
-  prompt ` color ${color} `
+  client: Bar
+  prompt: ` color ${color} `
 }
 
 // Try it with wierd spacing and comments
@@ -50,14 +50,14 @@ string
 
 // Or else
 {
-  client Bar
-  prompt ` color ${color} `
+  client: Bar
+  prompt: ` color ${color} `
 }
 
 
 function InputImage(image: image) -> string {
-  client Bar
-  prompt ` image ${image} `
+  client: Bar
+  prompt: ` image ${image} `
 }
 
 test Foo {

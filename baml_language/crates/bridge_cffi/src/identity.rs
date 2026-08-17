@@ -64,6 +64,19 @@ impl BridgeLanguage {
         }
     }
 
+    pub(crate) const fn package_kind(self) -> &'static str {
+        match self {
+            Self::NodeJs | Self::Web => "the npm package",
+            Self::Python => "the Python package",
+            Self::Go => "the Go module",
+            Self::Rust => "the Rust crate",
+            Self::CSharp => "the NuGet package",
+            Self::Cpp => "the C++ bridge",
+            Self::Java => "the Maven package",
+            Self::Swift => "the Swift package",
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) const fn legacy_runtime_name(self) -> &'static str {
         match self {

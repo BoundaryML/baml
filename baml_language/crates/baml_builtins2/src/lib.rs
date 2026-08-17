@@ -118,8 +118,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
     builtin!("baml", "ns_csv/csv.baml"),
-    builtin!("baml", "ns_prompt/prompt.baml"),
-    builtin!("baml", "ns_prompt/sys_llm_types.baml"),
     builtin!("baml", "ns_sap/sap.baml"),
     builtin!("baml", "ns_ws/ws.baml"),
     builtin!("baml", "ns_iter/iter.baml"),
@@ -133,14 +131,33 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_time/plaindate.baml"),
     builtin!("baml", "ns_time/plaindatetime.baml"),
     builtin!("baml", "ns_time/zoneddatetime.baml"),
+    builtin!("baml", "ns_ops/bitwise.baml"),
     builtin!("baml", "ns_ops/comparison.baml"),
+    builtin!("baml", "ns_ops/index.baml"),
     builtin!("baml", "ns_ops/math.baml"),
     builtin!("baml", "ns_random/random.baml"),
+    // `baml.reflect` (BEP-066 I-9: `reflect` is a keyword shorthand for it).
+    builtin!("baml", "ns_reflect/reflect.baml"),
+    builtin!("baml", "ns_reflect/ns_class/class.baml"),
+    builtin!("baml", "ns_reflect/ns_enum/enum.baml"),
+    builtin!("baml", "ns_reflect/ns_union/union.baml"),
+    builtin!("baml", "ns_reflect/ns_literal/literal.baml"),
+    builtin!("baml", "ns_reflect/ns_array/array.baml"),
+    builtin!("baml", "ns_reflect/ns_map/map.baml"),
+    builtin!("baml", "ns_reflect/ns_interface/interface.baml"),
+    builtin!("baml", "ns_reflect/ns_primitive/primitive.baml"),
+    builtin!("baml", "ns_reflect/ns_function/function.baml"),
+    builtin!("baml", "ns_reflect/ns_errors/errors.baml"),
+    // `baml.type` (BEP-066 K-13: `type.of` / `type.of_value` resolve here).
+    builtin!("baml", "ns_type/type.baml"),
+    builtin!("baml", "ns_crypto/errors.baml"),
+    builtin!("baml", "ns_crypto/interfaces.baml"),
+    builtin!("baml", "ns_crypto/aes_gcm_siv.baml"),
+    builtin!("baml", "ns_crypto/chacha20poly1305.baml"),
+    builtin!("baml", "ns_crypto/sha2.baml"),
     // --- boundary package ---
     builtin!("boundary", "core.baml"),
     builtin!("boundary", "ns_id/id.baml"),
-    // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
-    builtin!("reflect", "reflect.baml"),
     // --- testing package ---
     builtin!("testing", "types.baml"),
     builtin!("testing", "registry.baml"),
@@ -153,6 +170,9 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("ai", "ns_content/content.baml"),
     builtin!("ai", "ns_events/events.baml"),
     builtin!("ai", "journal.baml"),
+    // Render-context surface (`ai.Context`, `ai.Role`, `ai.OutputFormat`,
+    // `ai.ContextClient`) — the `ctx` object LLM prompt bodies touch.
+    builtin!("ai", "context.baml"),
     builtin!("ai", "spec.baml"),
     builtin!("ai", "ns_tools/tools.baml"),
     builtin!("ai", "turn.baml"),
@@ -162,17 +182,48 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("ai", "ns_stream/stream.baml"),
     builtin!("ai", "ns_errors/errors.baml"),
     builtin!("ai", "ns_internal/helpers.baml"),
+    // Provider auth sys-ops (`ai.internal._gcp_*` / `ai.internal._aws_*`),
+    // implemented in `crates/sys_auth`.
+    builtin!("ai", "ns_internal/auth.baml"),
+    // `ai.internal` is where the package's PRIVATE free functions live, so that
+    // `baml describe ai` / `ai.wire` / `ai.errors` / `ai.clients` list only the
+    // public surface. Each file backs the like-named public namespace.
+    builtin!("ai", "ns_internal/media_output.baml"),
+    builtin!("ai", "ns_internal/media_resolve.baml"),
+    builtin!("ai", "ns_internal/wire.baml"),
+    builtin!("ai", "ns_internal/clients.baml"),
+    builtin!("ai", "ns_internal/http_errors.baml"),
+    // Prompt-rendering plumbing shared by `ai.*` and the `prompt` tag desugar;
+    // lives here; the render-context classes sit in ai/context.baml.
+    builtin!("ai", "ns_internal/prompt.baml"),
     // --- provider client packages ---
     builtin!("openai", "responses.baml"),
     builtin!("openai", "ns_internal/responses.baml"),
+    builtin!("openai", "chat.baml"),
+    builtin!("openai", "generic.baml"),
+    builtin!("openai", "azure.baml"),
+    builtin!("openai", "ollama.baml"),
+    builtin!("openai", "openrouter.baml"),
+    builtin!("openai", "images.baml"),
+    builtin!("openai", "ns_internal/chat.baml"),
+    builtin!("openai", "ns_internal/images.baml"),
     builtin!("anthropic", "messages.baml"),
     builtin!("anthropic", "ns_internal/messages.baml"),
     builtin!("google", "gemini.baml"),
+    builtin!("google", "vertex.baml"),
     builtin!("google", "ns_internal/gemini.baml"),
+    builtin!("google", "ns_internal/vertex.baml"),
+    builtin!("google", "ns_internal/auth.baml"),
+    builtin!("aws", "bedrock.baml"),
+    builtin!("aws", "ns_internal/bedrock.baml"),
+    builtin!("aws", "ns_internal/auth.baml"),
+    builtin!("vercel", "images.baml"),
+    builtin!("vercel", "ns_internal/images.baml"),
     builtin!("claude_code", "cli.baml"),
     builtin!("claude_code", "ns_internal/cli.baml"),
     // ai.mcp: MCP servers as ordinary ai tools (part of the ai package).
     builtin!("ai", "ns_mcp/mcp.baml"),
+    builtin!("ai", "ns_internal/mcp.baml"),
 ];
 
 /// The distinct standard-library / builtin package names, derived from the
@@ -199,6 +250,21 @@ pub fn stdlib_package_names() -> &'static [&'static str] {
                 names.push(file.package);
             }
         }
+        names
+    })
+}
+
+/// Every package name that user-provided mounts may not claim, in stable
+/// first-appearance order: all builtin packages, followed by the implicit user
+/// package and the two compiler-reserved package names.
+///
+/// This is the single source of truth shared by mount filtering and runtime
+/// reflection, so both paths reject exactly the same aliases.
+pub fn reserved_package_names() -> &'static [&'static str] {
+    static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        let mut names = stdlib_package_names().to_vec();
+        names.extend([baml_type::RESERVED_USER_PACKAGE, "root", "env"]);
         names
     })
 }

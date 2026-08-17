@@ -268,3 +268,34 @@ function _format_zoned(
 ) -> string throws root.errors.InvalidArgument {
     $rust_function
 }
+
+implement root.ops.Add<Duration> for ZonedDateTime {
+    type Output = ZonedDateTime
+    function add(self, other: Duration) -> ZonedDateTime {
+        ZonedDateTime {
+            _nanoseconds: self._nanoseconds + other._nanoseconds,
+            _offset_ns: self._offset_ns,
+            _iana: self._iana,
+        }
+    }
+}
+
+implement root.ops.Subtract<Duration> for ZonedDateTime {
+    type Output = ZonedDateTime
+    function sub(self, other: Duration) -> ZonedDateTime {
+        ZonedDateTime {
+            _nanoseconds: self._nanoseconds - other._nanoseconds,
+            _offset_ns: self._offset_ns,
+            _iana: self._iana,
+        }
+    }
+}
+
+implement root.ops.Subtract<ZonedDateTime> for ZonedDateTime {
+    type Output = Duration
+    function sub(self, other: ZonedDateTime) -> Duration {
+        Duration {
+            _nanoseconds: self._nanoseconds - other._nanoseconds,
+        }
+    }
+}

@@ -33,7 +33,8 @@ jobs:
           # actual keys look like `v0-rust-linux-cargo-<toolchain>-<hash>`.
           # Without the `v0-rust-` lead, the prefix match never hits and
           # the loop silently deletes nothing.
-          for sk in linux-cargo linux-wasm linux-msrv macos-cargo windows-cargo; do
+          # TODO(B-1545): Resume purging macos-cargo when cargo-test-macos is re-enabled as its cache writer.
+          for sk in linux-cargo linux-wasm linux-msrv windows-cargo; do
             gh cache list -R "$REPO" --ref refs/heads/canary --key "v0-rust-$sk" \
               --limit 200 --json id --jq '.[].id' | while read -r id; do
               [ -n "$id" ] || continue

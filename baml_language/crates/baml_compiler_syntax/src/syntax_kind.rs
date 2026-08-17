@@ -23,7 +23,6 @@ pub enum SyntaxKind {
     KW_TESTSET,
     KW_RETRY_POLICY,
     KW_TEMPLATE_STRING,
-    KW_TYPE_BUILDER,
 
     // Control flow keywords
     KW_IF,
@@ -49,7 +48,6 @@ pub enum SyntaxKind {
     // Other keywords
     KW_INSTANCEOF,
     KW_IS,
-    KW_DYNAMIC,
     KW_WITH,
     // Contextual keywords re-lexed from a `Word` at parse time (no lexer token).
     KW_AS,    // `.as<T>` cast / `(T as I)` / `field as field`
@@ -168,8 +166,6 @@ pub enum SyntaxKind {
     RETRY_POLICY_DEF,
     TEMPLATE_STRING_DEF,
     TYPE_ALIAS_DEF,
-    TYPE_BUILDER_BLOCK, // type_builder { ... } inside test definitions
-    DYNAMIC_TYPE_DEF,   // dynamic class/enum inside type_builder blocks
 
     // Function components
     PARAMETER_LIST,
@@ -226,8 +222,8 @@ pub enum SyntaxKind {
     FUNCTION_TYPE_PARAM, // x: int (or just int)
 
     // Attributes
-    ATTRIBUTE,       // @alias("name")
-    BLOCK_ATTRIBUTE, // @@dynamic
+    ATTRIBUTE, // @alias("name")
+    BLOCK_ATTRIBUTE,
     ATTRIBUTE_ARGS,
 
     // Expressions (for attributes and function bodies)
@@ -348,6 +344,8 @@ pub enum SyntaxKind {
     /// Bare type expression as a pattern (literals, paths, generics, arrays, …).
     /// Does NOT consume `|` — that belongs to `UNION_PATTERN` at the pattern level.
     TYPE_PATTERN,
+    /// Contextual runtime identity pattern: `unreflect(expr)`.
+    UNREFLECT_PATTERN,
     /// `'(' PATTERN ')'` — explicit grouping.
     PAREN_PATTERN,
     /// `'_'` (bare) or `'let' '_'` — wildcard / discard. Distinct from
@@ -395,6 +393,8 @@ pub enum SyntaxKind {
     WHILE_LET_STMT,
     FOR_EXPR,
     LET_STMT,
+    /// Runtime type binding: `type T = unreflect(expr)`.
+    TYPE_BINDING_STMT,
     BREAK_STMT,
     CONTINUE_STMT,
     RETURN_STMT,
@@ -407,6 +407,9 @@ pub enum SyntaxKind {
     CALL_ARGS,
     CALL_ARG,
     GENERIC_ARGS,
+    /// Contextual runtime type argument: `unreflect(expr)`. This is deliberately
+    /// a whole generic-argument node rather than a type-expression atom.
+    UNREFLECT_ARG,
     /// Declaration-site generic type parameter list: `<T>` or `<K, V>` on class/function defs.
     GENERIC_PARAM_LIST,
     /// A single type parameter name inside a `GENERIC_PARAM_LIST`.
@@ -533,7 +536,6 @@ impl SyntaxKind {
                 | Self::KW_TESTSET
                 | Self::KW_RETRY_POLICY
                 | Self::KW_TEMPLATE_STRING
-                | Self::KW_TYPE_BUILDER
                 | Self::KW_IF
                 | Self::KW_ELSE
                 | Self::KW_FOR
@@ -555,7 +557,6 @@ impl SyntaxKind {
                 | Self::KW_AWAIT
                 | Self::KW_DEFER
                 | Self::KW_INSTANCEOF
-                | Self::KW_DYNAMIC
                 | Self::KW_WITH
                 | Self::KW_AS
                 | Self::KW_TYPE

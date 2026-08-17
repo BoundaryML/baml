@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+340..344 'both': throws never
+371..380 '{\n    a\n}': T[]
+377..378 'a': T[]
+391..392 'f': throws never
+404..499 '{\n   ...  x\n}': int[]
+410..415 'let x': int[]
+418..422 'both': (a: int[], b: int[]) -> int[] throws never
+418..431 'both([], [1])': int[]
+423..425 '[]': int[]
+427..430 '[1]': int[]
+428..429 '1': 1
+453..458 'let y': int[]
+461..465 'both': (a: int[], b: int[]) -> int[] throws never
+461..474 'both([1], [])': int[]
+466..469 '[1]': int[]
+467..468 '1': 1
+471..473 '[]': int[]
+496..497 'x': int[]

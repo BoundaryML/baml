@@ -94,7 +94,7 @@ baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
 baml_compiler2_ppir = { path = "crates/baml_compiler2_ppir" }
-baml_compiler2_tir = { path = "crates/baml_compiler2_tir" }
+baml_compiler2_hir_ty = { path = "crates/baml_compiler2_hir_ty" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
@@ -105,11 +105,12 @@ baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
+sys_auth = { path = "crates/sys_auth" }
 sys_glob = { path = "crates/sys_glob" }
-sys_llm = { path = "crates/sys_llm", default-features = false }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
+baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
@@ -148,7 +149,6 @@ askama = { version = "0.14.0" }
 # call sites import them unchanged; the `package` is the `forked_*` crate.
 aws-config = { path = "forks/aws-config", package = "forked_aws_config" }
 aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
-aws-bedrock = { path = "forks/aws-bedrock", package = "forked_aws_bedrock" }
 google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
 bitflags = "2"
@@ -177,6 +177,9 @@ ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
+# Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
+# crate rustc and rust-analyzer build their inference tables on.
+ena = "0.14"
 flate2 = { version = "1" }
 fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
@@ -188,8 +191,8 @@ hyper = { version = "1", features = [ "server", "http1", "http2" ] }
 hyper-util = { version = "0.1", features = [ "server", "server-auto", "tokio" ] }
 indexmap = { version = "2.13", features = [ "serde" ] }
 indicatif = "0.18"
-infer = "0.16.0"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
+similar = "2"
 jiff = { version = "0.2" }
 la-arena = { version = "0.3" }
 libc = "0.2.169"
@@ -270,7 +273,6 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 ] }
 unicode-normalization = "0.1.25"
 ureq = { version = "3", default-features = false, features = [ "rustls", "gzip" ] }
-url = "2.5.2"
 uuid = { version = "1", features = [ "serde", "v4" ] }
 walkdir = { version = "2.4" }
 tsify = { version = "0.5", features = [ "js" ] }
@@ -309,6 +311,25 @@ rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
 # does not build under MSVC (sha2-asm ships GAS `.S` sources), so it must not
 # be turned on here unconditionally.
 sha2 = { version = "0.10", features = [ "oid" ] }
+# `baml.crypto`'s AEAD ciphers. `getrandom` is off (it is on by default): keys
+# and nonces come from a caller-supplied `baml.random.Rng`, never from the
+# crate's own entropy source, so the VM keeps building for
+# `wasm32-unknown-unknown` without a JS shim. `zeroize` is on (it is off by
+# default) so the per-message subkeys AES-GCM-SIV derives are wiped after use.
+aes-gcm-siv = { version = "0.12", default-features = false, features = [
+  "aes",
+  "alloc",
+  "zeroize",
+] }
+# The other `baml.crypto` AEAD family. Same `aead` 0.6 generation as
+# `aes-gcm-siv` above, which is what lets both share one set of seal/open
+# helpers. `getrandom` off and `zeroize` on for the same reasons; the
+# `reduced-round` ChaCha8/ChaCha12 variants stay off, since they trade security
+# margin for speed and no RFC covers them.
+chacha20poly1305 = { version = "0.11", default-features = false, features = [
+  "alloc",
+  "zeroize",
+] }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

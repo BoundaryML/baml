@@ -1175,7 +1175,7 @@ function csv_writer_bom() -> string {
     let out = w.text();
     // BOM + "x" + "\n" = 3 chars; the BOM strips on a default read-back.
     baml.json.stringify(out.length())
-        + ":" + out.char_at(1)
+        + ":" + out.slice(1, 2)
         + ":" + grid(baml.csv.parse(out, options = baml.csv.ReaderOptions { has_header: false }))
 }
 
@@ -1353,7 +1353,7 @@ function csv_excel_profile() -> string {
         sanitize_formulas: true,
     });
     // BOM + "x" + "\r" + "\n" = 4 chars.
-    grid(rows) + "#" + baml.json.stringify(out.length()) + ":" + out.char_at(1) + ":" + out.char_at(2)
+    grid(rows) + "#" + baml.json.stringify(out.length()) + ":" + out.slice(1, 2) + ":" + out.slice(2, 3)
 }
 
 test "csv_excel_profile" {
@@ -1487,7 +1487,7 @@ function csv_writer_bom_survives_encode_error() -> string {
     w.write_record(good);
     let out = w.text();
     // BOM + "x" + "\n" = 3 chars.
-    caught + "#" + baml.json.stringify(out.length()) + ":" + out.char_at(1)
+    caught + "#" + baml.json.stringify(out.length()) + ":" + out.slice(1, 2)
 }
 
 test "csv_writer_bom_survives_encode_error" {

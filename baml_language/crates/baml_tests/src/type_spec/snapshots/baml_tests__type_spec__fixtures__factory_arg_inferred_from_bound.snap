@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+910..915 'drive': throws E
+1026..1060 '{\n   ...n    }': O
+1036..1048 'driver.drive': (self: D, input: user.Task<T>) -> O throws E
+1036..1054 'driver...(self)': O
+1049..1053 'self': user.Task<T>
+1206..1211 'drive': throws never
+1252..1279 '{\n   ...n    }': T
+1262..1273 'input.value': T
+1292..1300 'generate': throws never
+1321..1353 '{\n   ..." }\n}': user.Generate<T>
+1327..1351 'Genera... "g" }': user.Generate<T>
+1346..1349 '"g"': "g"
+1364..1369 'repro': throws never
+1407..1505 '{\n   ...  r\n}': int
+1413..1418 'let r': int
+1421..1431 'task.drive': (self: user.Task<int>, driver: user.Generate<int>) -> int throws never
+1421..1443 'task.d...ate())': int
+1432..1440 'generate': () -> user.Generate<int> throws never
+1432..1442 'generate()': user.Generate<int>
+1502..1503 'r': int

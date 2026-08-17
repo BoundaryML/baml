@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+423..426 'tag': throws never
+456..477 '{\n   ...n    }': "int"
+466..471 '"int"': "int"
+490..496 'vd_log': throws never
+533..557 '{\n   ...y")\n}': int
+539..547 'log.push': (self: string[], item: string) -> int throws never
+539..555 'log.pu...body")': int
+548..554 '"body"': "body"
+568..576 'li_child': throws never
+602..684 '{\n   ...g()\n}': string
+608..630 'let ch...l<int>': user.LiGoal<int>
+619..630 'LiGoal<int>': user.LiGoal<int>
+633..634 '1': 1
+671..680 'child.tag': (self: user.LiGoal<int>) -> string throws never
+671..682 'child.tag()': string

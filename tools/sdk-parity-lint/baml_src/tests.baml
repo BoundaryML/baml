@@ -1,7 +1,7 @@
 function fixture_config(repo_root: string, source_directory: string) -> SourceConfig {
     let base = source_config_for(source_configs(repo_root), source_directory);
     let absolute_fixture_root = `${repo_root}/tools/sdk-parity-lint/test-fixtures/${base.language}`;
-    let fixture_root = absolute_fixture_root.substring(repo_root.length() + 1, absolute_fixture_root.length());
+    let fixture_root = absolute_fixture_root.slice(repo_root.length() + 1, absolute_fixture_root.length());
     make_source_config(
         base.language,
         base.source_directory,
@@ -177,23 +177,25 @@ test "TypeScript direct and enclosing suite gates set runtime membership" {
     let scan = scan_source(repo_root, fixture_config(repo_root, "typescript"));
     let valid_matches: AstMatch[] = [];
     for (let ast_match in scan.matches) {
-        if (!ast_match.text.matches("dynamic_case")) {
+        if (!ast_match.text.includes("dynamic_case")) {
             valid_matches.push(ast_match);
         }
     }
     let valid_scan = SourceScan { config: scan.config, matches: valid_matches };
     let tests = discover_tests([valid_scan]);
     apply_typescript_runtime_gates(tests, [valid_scan]);
-    let direct: DiscoveredTest? = null;
-    let suite: DiscoveredTest? = null;
-    for (let test_case in tests) {
-        if (test_case.sdk_test_id == "fixture/runtime_case") {
-            direct = test_case;
-        }
-        if (test_case.sdk_test_id == "fixture/suite_runtime_case") {
-            suite = test_case;
-        }
-    }
+    let direct = match (tests.find((test_case: DiscoveredTest) -> bool {
+        test_case.sdk_test_id == "fixture/runtime_case"
+    })) {
+        let found: DiscoveredTest => found,
+        null => baml.sys.panic("expected direct runtime-gated fixture"),
+    };
+    let suite = match (tests.find((test_case: DiscoveredTest) -> bool {
+        test_case.sdk_test_id == "fixture/suite_runtime_case"
+    })) {
+        let found: DiscoveredTest => found,
+        null => baml.sys.panic("expected suite runtime-gated fixture"),
+    };
     assert.equal(direct.runtimes, ["web"]);
     assert.equal(suite.runtimes, ["web", "workers"])
 }

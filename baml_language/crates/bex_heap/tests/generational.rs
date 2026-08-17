@@ -7,9 +7,16 @@
 
 use std::sync::Arc;
 
+use baml_type::{Name, QualifiedTypeName, RealizedTy, TyAttr};
 use bex_external_types::WeakHeapRef;
 use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
-use bex_vm_types::Object;
+use bex_vm_types::{
+    Class, GenericFunction, GlobalIndex, Object,
+    types::{
+        DynTypeDefs, LocalName, MintId, Package, RuntimePackage, RuntimeTypeProvenance, TypeValue,
+    },
+};
+use indexmap::IndexMap;
 
 // ============================================================================
 // Generation Classification & Promotion Tests
@@ -90,6 +97,126 @@ fn test_major_gc_flattens_all_to_gen2() {
     for &r in &roots2 {
         assert_eq!(heap.generation_of(r), Generation::Gen2);
     }
+}
+
+/// A runtime package owns its created-once type mints, while every minted type
+/// carries a back-edge to the package. The moving collector must preserve and
+/// fix up that cycle when rooted, and reclaim the whole cycle when dropped.
+#[test]
+fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
+    fn alloc_cycle(heap: &Arc<BexHeap>) -> (Tlab, bex_vm_types::HeapPtr, bex_vm_types::HeapPtr) {
+        let mut tlab = Tlab::new(Arc::clone(heap));
+        let package = Package {
+            exported_names: Vec::new(),
+            classes: IndexMap::new(),
+            enums: IndexMap::new(),
+            interfaces: IndexMap::new(),
+            impl_rules: IndexMap::new(),
+            functions: IndexMap::new(),
+            recursive_type_aliases: IndexMap::new(),
+            interface_blob: Vec::new(),
+            test_init: None,
+            mounted_types: IndexMap::new(),
+            runtime: Some(Box::new(RuntimePackage {
+                objects: Box::new([]),
+                object_names: IndexMap::new(),
+                globals: Box::new([]),
+                global_names: IndexMap::new(),
+                type_values: IndexMap::new(),
+                diagnostics: Vec::new(),
+                dependencies: Box::new([]),
+                dependency_names: IndexMap::new(),
+                init: None,
+                initialized: true,
+            })),
+            session: None,
+        };
+        let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
+        let ty = RealizedTy::Class(
+            QualifiedTypeName::local(Name::new("RuntimeClass")),
+            Vec::new(),
+            TyAttr::default(),
+        );
+        let type_ptr = tlab.alloc_type(TypeValue::runtime(ty, MintId::Runtime(1), package_ptr));
+        let class_name = QualifiedTypeName::local(Name::new("RuntimeClass"));
+        let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
+            name: class_name.clone(),
+            fields: Vec::new(),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::new(),
+            type_tag: baml_type::typetag::class_type_tag("RuntimeClass"),
+            ty_attr: TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
+            runtime_type: Some(RuntimeTypeProvenance {
+                mint: MintId::Runtime(1),
+                defs: DynTypeDefs::default(),
+                owner: package_ptr,
+            }),
+        })));
+        let function_ptr = tlab.alloc(Object::GenericFunction(GenericFunction {
+            function: GlobalIndex::from_raw(0),
+            type_args: Box::new([]),
+            runtime_package: package_ptr,
+        }));
+        // SAFETY: this TLAB exclusively owns both fresh Gen0 objects and no GC
+        // can run concurrently in this single-threaded test.
+        let Object::Package(package) = (unsafe { package_ptr.get_mut() }) else {
+            unreachable!()
+        };
+        package.classes.insert(
+            LocalName {
+                namespace: Vec::new(),
+                name: Name::new("RuntimeClass"),
+            },
+            class_ptr,
+        );
+        let runtime = package.runtime.as_mut().expect("runtime image");
+        runtime.objects = vec![type_ptr, function_ptr, class_ptr].into_boxed_slice();
+        runtime
+            .type_values
+            .insert("RuntimeClass".to_string(), type_ptr);
+        (tlab, package_ptr, function_ptr)
+    }
+
+    let rooted_heap = BexHeap::new(vec![]);
+    let (mut rooted_tlab, package_ptr, function_ptr) = alloc_cycle(&rooted_heap);
+    let (stats, roots, forwarding) = unsafe {
+        rooted_heap.collect_garbage_generational(&[function_ptr], CollectionLevel::Major)
+    };
+    rooted_tlab.invalidate();
+    assert_eq!(stats.live_count, 4);
+    let moved_function = roots[0];
+    let Object::GenericFunction(function) = (unsafe { moved_function.get() }) else {
+        panic!("root ceased to be a generic function")
+    };
+    let moved_package = function.runtime_package;
+    let Object::Package(package) = (unsafe { moved_package.get() }) else {
+        panic!("root ceased to be a package")
+    };
+    let moved_type = package.runtime.as_ref().unwrap().type_values["RuntimeClass"];
+    let Object::Type(type_value) = (unsafe { moved_type.get() }) else {
+        panic!("package mint ceased to be a type")
+    };
+    assert_eq!(type_value.owner, moved_package);
+    let moved_class = package.classes.values().next().copied().unwrap();
+    let Object::Class(class) = (unsafe { moved_class.get() }) else {
+        panic!("package class ceased to be a class")
+    };
+    assert_eq!(class.runtime_type.as_ref().unwrap().owner, moved_package);
+    assert_eq!(forwarding.get(&package_ptr), Some(&moved_package));
+
+    let dropped_heap = BexHeap::new(vec![]);
+    let (mut dropped_tlab, dropped_package, _) = alloc_cycle(&dropped_heap);
+    let (stats, roots, forwarding) =
+        unsafe { dropped_heap.collect_garbage_generational(&[], CollectionLevel::Major) };
+    dropped_tlab.invalidate();
+    assert!(roots.is_empty());
+    assert_eq!(stats.live_count, 0);
+    assert!(stats.collected_count >= 4);
+    assert!(!forwarding.contains_key(&dropped_package));
 }
 
 #[test]

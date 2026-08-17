@@ -3,6 +3,33 @@
 // No journal, no conversation, no wire state.
 // Mirrors _planv2/pages/02_guides/02_specs_and_runners/01_specs.md.
 
+/// A client credential (or endpoint) option: either the literal value, or a
+/// LATE-BOUND `baml.env.Ref` naming the environment variable that holds it.
+///
+/// Every provider client's `api_key` / `base_url` is `Credential?`, so all
+/// three shapes are accepted positionally:
+///
+///     api_key = "sk-..."                  // literal
+///     api_key = env.OPENAI_API_KEY        // late-bound ref, read per request
+///     api_key = null                      // fall back to the canonical env var
+///
+/// A `Ref` carries the variable's NAME only, never its value: a constructed
+/// client never holds the secret, and the read happens at request time — after
+/// `$init` (which cannot do io) and after a host has loaded its secrets.
+/// `ai.wire.resolve_credential` collapses the union to `string?`.
+type Credential = string | baml.env.Ref;
+
+/// What a `client:` position accepts. Defined in `ai/ns_clients/clients.baml`
+/// next to `ai.clients.resolve`, which consumes it; re-exported here so the
+/// package-root name `ai.ClientSelector` reads alongside `ai.Client`.
+type ClientSelector = root.clients.ClientSelector;
+
+/// Provider-neutral media retained inside a rendered prompt.
+type MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf;
+
+/// One structural part of a rendered prompt message.
+type PromptPart = string | MediaPart;
+
 /// A single chat message in a rendered prompt.
 class PromptMessage {
     /// The chat role, e.g. "system", "user", or "assistant". Empty for
@@ -10,6 +37,14 @@ class PromptMessage {
     role: string,
     /// The message's rendered text. Media parts use a readable placeholder.
     content: string,
+    /// Ordered structural content. Provider clients use this instead of the
+    /// readable `content` projection so media survives prompt rendering.
+    parts: PromptPart[],
+    /// Per-message provider directives, carried verbatim from the
+    /// `root.Role.metadata` of the `${role(...)}` marker that opened
+    /// this message — Anthropic `cache_control`, for example. Empty when the
+    /// message carried none.
+    metadata: map<string, baml.json.json>,
 }
 
 /// The rendered, provider-neutral prompt passed to clients. Roles split the
@@ -42,12 +77,12 @@ class Prompt {
 //baml:tagged_string
 function prompt(
     body: (
-        role: (string) -> baml.prompt.Role throws never,
-        ctx: baml.prompt.Context,
+        role: (string) -> root.Role throws never,
+        ctx: root.Context,
     ) -> baml.TaggedString throws never,
-) -> (baml.prompt.Context) -> Prompt throws never {
-    let render = (ctx: baml.prompt.Context) -> {
-        let tagged = body(baml.prompt.make_role, ctx);
+) -> (root.Context) -> Prompt throws never {
+    let render = (ctx: root.Context) -> {
+        let tagged = body(root.internal.make_role, ctx);
         root.internal.assemble_prompt(tagged.parts, tagged.values)
     };
     render
@@ -73,8 +108,10 @@ class FunctionSpec<Out> {
         self.args
     }
 
-    function output_type(self) -> type {
-        reflect.type_of<Out>()
+    function output_type(self) -> type throws baml.reflect.errors.CompilationError {
+        let output_type = type.of<Out>();
+        root.internal.validate_output_type(output_type);
+        output_type
     }
 
     function prompt(self, output_format: string = "") -> Prompt {

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 28188
 ---
 === PPIR ===
 class user.Person {
@@ -10,7 +9,7 @@ class user.Person$stream {
   name: string | null
 }
 function user.reflect_array() -> type  [expr] {
-  {  } reflect.type_of()
+  {  } type.of()
 }
 function user.reflect_int_array() -> type  [expr] {
   {  } reflect_array()
@@ -19,5 +18,5 @@ function user.reflect_person() -> type  [expr] {
   {  } reflect_type()
 }
 function user.reflect_type() -> type  [expr] {
-  {  } reflect.type_of()
+  {  } type.of()
 }

@@ -258,10 +258,13 @@ mod tests {
     };
 
     use baml_base::{FileId, SourceFile};
-    use baml_workspace::{Compiler2ExtraFiles, Project};
+    use baml_workspace::{Compiler2ExtraFiles, MountedPackages, Project};
     use salsa::Setter;
 
-    use super::{PackageId, is_allowed_builtin_namespace_shadow, package_items};
+    use super::{
+        PackageId, is_allowed_builtin_namespace_shadow, is_external_package, is_mounted_package,
+        is_precompiled_package, package_items,
+    };
     use crate::Db;
 
     #[salsa::db]
@@ -270,6 +273,7 @@ mod tests {
         next_file_id: AtomicU32,
         project: Option<Project>,
         extra: Option<Compiler2ExtraFiles>,
+        mounted: Option<MountedPackages>,
     }
 
     impl Default for TestDb {
@@ -279,6 +283,7 @@ mod tests {
                 next_file_id: AtomicU32::new(0),
                 project: None,
                 extra: None,
+                mounted: None,
             }
         }
     }
@@ -286,7 +291,7 @@ mod tests {
     impl TestDb {
         fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
             let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
-            SourceFile::new(self, content.to_string(), path.into(), file_id)
+            SourceFile::new(self, content.to_string(), path.into(), file_id, false)
         }
 
         fn with_builtins() -> Self {
@@ -301,6 +306,15 @@ mod tests {
             db.extra = Some(Compiler2ExtraFiles::new(&db, builtin_files));
             db
         }
+
+        fn with_mounts(
+            by_package: std::collections::BTreeMap<String, Vec<u8>>,
+            immutable_precompiled: std::collections::BTreeSet<String>,
+        ) -> Self {
+            let mut db = Self::default();
+            db.mounted = Some(MountedPackages::new(&db, by_package, immutable_precompiled));
+            db
+        }
     }
 
     #[salsa::db]
@@ -310,6 +324,10 @@ mod tests {
     impl baml_workspace::Db for TestDb {
         fn project(&self) -> Project {
             self.project.expect("test db initialized")
+        }
+
+        fn mounted_packages(&self) -> Option<MountedPackages> {
+            self.mounted
         }
     }
 
@@ -366,12 +384,131 @@ mod tests {
             id_def
         ));
     }
+
+    #[test]
+    fn external_package_fast_path_matches_composed_classification() {
+        let absent = TestDb::default();
+        assert!(!is_external_package(&absent, &baml_base::Name::new("app")));
+
+        let by_package = ["app", "baml", "log", "user"]
+            .into_iter()
+            .map(|name| (name.to_owned(), Vec::new()))
+            .collect();
+        let immutable_precompiled = ["baml", "user", "missing"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        let db = TestDb::with_mounts(by_package, immutable_precompiled);
+
+        for raw_name in ["app", "baml", "log", "user", "missing", "env"] {
+            let name = baml_base::Name::new(raw_name);
+            assert_eq!(
+                is_external_package(&db, &name),
+                is_mounted_package(&db, &name) || is_precompiled_package(&db, &name),
+                "fused classification diverged for {raw_name}"
+            );
+        }
+    }
+}
+
+/// Whether `name` is reserved against mounting (BEP-066 mounted-package linking): builtin
+/// packages, `user`, `root`, and `env`. The complete list is single-sourced in
+/// [`baml_builtins2::reserved_package_names`], shared with runtime reflection.
+pub fn is_reserved_package_name(name: &str) -> bool {
+    baml_builtins2::reserved_package_names().contains(&name)
+}
+
+/// The names of every mounted source-less dependency package (BEP-066
+/// mounted-package linking): the keys of the [`baml_workspace::MountedPackages`]
+/// input, minus any
+/// reserved name ([`is_reserved_package_name`] — a blob may not shadow the
+/// stdlib, `user`, `root`, or `env`). Deterministically ordered (`BTreeMap`
+/// keys). Empty for databases that mount nothing.
+///
+/// Reading the input inside a tracked query records a dependency on the mount
+/// map, so mounting/unmounting invalidates dependents for free.
+pub fn mounted_package_names(db: &dyn crate::Db) -> Vec<Name> {
+    let Some(mounted) = db.mounted_packages() else {
+        return Vec::new();
+    };
+    mounted
+        .by_package(db)
+        .keys()
+        .filter(|name| !is_reserved_package_name(name))
+        .map(|name| Name::new(name.as_str()))
+        .collect()
+}
+
+/// Compiler-built, source-less stdlib packages carried by the mounted-package
+/// interface transport.
+///
+/// Reserved names are accepted only when both the immutable marker and the
+/// blob are present, and only for names in the embedded stdlib manifest. A
+/// caller therefore cannot use ordinary mounting to shadow a builtin package.
+pub fn precompiled_package_names(db: &dyn crate::Db) -> Vec<Name> {
+    let Some(mounted) = db.mounted_packages() else {
+        return Vec::new();
+    };
+    mounted
+        .immutable_precompiled(db)
+        .iter()
+        .filter(|name| {
+            baml_builtins2::stdlib_package_names().contains(&name.as_str())
+                && mounted.by_package(db).contains_key(name.as_str())
+        })
+        .map(|name| Name::new(name.as_str()))
+        .collect()
+}
+
+/// Every source-less dependency visible to compiler2, regardless of whether
+/// it is an ordinary mutable mount or a compiler-built immutable stdlib row.
+pub fn external_package_names(db: &dyn crate::Db) -> Vec<Name> {
+    let mut names = mounted_package_names(db);
+    names.extend(precompiled_package_names(db));
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Whether `name` is a mounted source-less dependency package (a
+/// non-reserved key of the `MountedPackages` input).
+pub fn is_mounted_package(db: &dyn crate::Db, name: &Name) -> bool {
+    if is_reserved_package_name(name.as_str()) {
+        return false;
+    }
+    db.mounted_packages()
+        .is_some_and(|mounted| mounted.by_package(db).contains_key(name.as_str()))
+}
+
+/// Whether `name` is a compiler-built immutable stdlib dependency.
+pub fn is_precompiled_package(db: &dyn crate::Db, name: &Name) -> bool {
+    baml_builtins2::stdlib_package_names().contains(&name.as_str())
+        && db.mounted_packages().is_some_and(|mounted| {
+            mounted.immutable_precompiled(db).contains(name.as_str())
+                && mounted.by_package(db).contains_key(name.as_str())
+        })
+}
+
+/// Whether `name` is any source-less dependency served from a serialized
+/// `PackageInterface`.
+pub fn is_external_package(db: &dyn crate::Db, name: &Name) -> bool {
+    let Some(mounted) = db.mounted_packages() else {
+        return false;
+    };
+    if !mounted.by_package(db).contains_key(name.as_str()) {
+        return false;
+    }
+    if !is_reserved_package_name(name.as_str()) {
+        return true;
+    }
+    baml_builtins2::stdlib_package_names().contains(&name.as_str())
+        && mounted.immutable_precompiled(db).contains(name.as_str())
 }
 
 /// The *direct* dependencies of `package_id` (hardcoded for now).
 ///
 /// Note these lists are not uniformly flattened: `testing`/`assert` list `baml`
-/// but not `baml`'s own `log`/`reflect`. Callers that need every package whose
+/// but not `baml`'s own `log`. Callers that need every package whose
 /// items could be visible from `package_id` (interface coherence,
 /// `type_implements_with_deps`) must use [`package_dependency_closure`], not this
 /// direct list.
@@ -384,46 +521,72 @@ pub fn package_dependencies<'db>(
         // "log" has no deps — it only uses primitives, and "baml" depends on
         // it so the stdlib can emit log events.
         "log" => vec![],
-        // "reflect" has no deps — it only uses the `type` primitive.
-        "reflect" => vec![],
         // "boundary" has no deps — it only returns the current boundary id as
         // a primitive string.
         "boundary" => vec![],
-        // "baml" depends on "log" and "reflect" so stdlib code can call
-        // log.info/debug/etc. and reflect.type_of<T>() inside builtin BAML namespaces.
-        "baml" => vec![
-            PackageId::new(db, Name::new("log")),
-            PackageId::new(db, Name::new("reflect")),
-        ],
+        // "baml" depends on "log" so stdlib code can call log.info/debug/etc.
+        // Reflection lives inside "baml" itself (`baml.reflect` / `baml.type`,
+        // BEP-066), so it is no dependency.
+        "baml" => vec![PackageId::new(db, Name::new("log"))],
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
-        // The "ai" package uses baml primitives and reflection.
-        "ai" => vec![
-            PackageId::new(db, Name::new("baml")),
-            PackageId::new(db, Name::new("reflect")),
-        ],
-        // Provider client packages implement the `ai.Client` interface; the
-        // claude_code harness client also logs its own event stream.
+        // The "ai" package uses BAML primitives, runtime type reflection, and
+        // prompt schema rendering, all of which now live in the "baml" package.
+        "ai" => vec![PackageId::new(db, Name::new("baml"))],
+        // Provider packages implement `ai.Client`; claude_code also logs its
+        // own event stream.
         "openai" | "anthropic" | "google" | "claude_code" => vec![
             PackageId::new(db, Name::new("baml")),
-            PackageId::new(db, Name::new("reflect")),
             PackageId::new(db, Name::new("log")),
             PackageId::new(db, Name::new("ai")),
         ],
-        // User packages depend on public builtin packages.
-        _ => vec![
-            PackageId::new(db, Name::new("baml")),
-            PackageId::new(db, Name::new("boundary")),
-            PackageId::new(db, Name::new("testing")),
-            PackageId::new(db, Name::new("assert")),
-            PackageId::new(db, Name::new("log")),
-            PackageId::new(db, Name::new("reflect")),
-            PackageId::new(db, Name::new("ai")),
-            PackageId::new(db, Name::new("openai")),
-            PackageId::new(db, Name::new("anthropic")),
-            PackageId::new(db, Name::new("google")),
-            PackageId::new(db, Name::new("claude_code")),
-        ],
+        // User packages depend on public builtin packages — plus every mounted
+        // source-less package (BEP-066 mounted-package linking) and every auxiliary source
+        // package installed through `compiler2_extra_files`. The latter makes
+        // the source side of the source-vs-blob contract real: a package such
+        // as `<builtin>/app/…` is the same direct dependency whether its source
+        // or its mounted interface is present. A mounted/auxiliary package
+        // itself keeps the stdlib list only, avoiding dependency cycles.
+        name => {
+            let mut deps = vec![
+                PackageId::new(db, Name::new("baml")),
+                PackageId::new(db, Name::new("boundary")),
+                PackageId::new(db, Name::new("testing")),
+                PackageId::new(db, Name::new("assert")),
+                PackageId::new(db, Name::new("log")),
+                PackageId::new(db, Name::new("ai")),
+                PackageId::new(db, Name::new("openai")),
+                PackageId::new(db, Name::new("anthropic")),
+                PackageId::new(db, Name::new("google")),
+                PackageId::new(db, Name::new("claude_code")),
+            ];
+            let mounted = mounted_package_names(db);
+            if !mounted.iter().any(|m| m.as_str() == name) {
+                deps.extend(
+                    mounted
+                        .into_iter()
+                        .map(|mounted_name| PackageId::new(db, mounted_name)),
+                );
+            }
+            if name == "user" {
+                let source_packages: std::collections::BTreeSet<Name> =
+                    crate::compiler2_all_files(db)
+                        .into_iter()
+                        .map(|file| crate::file_package::file_package(db, file).package)
+                        .filter(|package| {
+                            package.as_str() != name
+                                && !is_reserved_package_name(package.as_str())
+                                && !is_external_package(db, package)
+                        })
+                        .collect();
+                deps.extend(
+                    source_packages
+                        .into_iter()
+                        .map(|package| PackageId::new(db, package)),
+                );
+            }
+            deps
+        }
     }
 }
 

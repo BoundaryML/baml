@@ -46,6 +46,7 @@ from .errors import (
 from ._stream import BamlStream
 from .ctx_manager import CtxManager as BamlCtxManager
 from .proto import (
+    BamlType,
     decode_call_result,
     encode_call_args,
     pydantic_instance_type_args,
@@ -78,7 +79,7 @@ def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
 
 register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)
 
-__version__ = "0.16.0"
+__version__ = "0.17.0"
 
 
 # ---------------------------------------------------------------------------
@@ -349,7 +350,7 @@ def _build_type_args(
     if class_args:
         for i, name in enumerate(class_type_params):
             arg = class_args[i] if i < len(class_args) else None
-            wire.append((name, python_type_to_wire_ty(arg)))
+            wire.append((name, arg if isinstance(arg, BamlType) else python_type_to_wire_ty(arg)))
 
     resolved = _resolve_types_kwarg(types_kwarg, type_params)
     # Send only the *explicitly* bound params (non-`None`); the rest are inferred
@@ -367,7 +368,10 @@ def _build_type_args(
                 "_types= on a generic method requires a Pydantic generic "
                 "receiver so the class type args can be recovered"
             )
-        wire.extend((name, python_type_to_wire_ty(r)) for name, r in bound)
+        wire.extend(
+            (name, r if isinstance(r, BamlType) else python_type_to_wire_ty(r))
+            for name, r in bound
+        )
     return wire
 
 
@@ -536,6 +540,7 @@ __all__ = [
     "BamlCallContext",
     "BamlPyHandle",
     "BamlRuntime",
+    "BamlType",
     "BamlStream",
     "Collector",
     "FunctionLog",

@@ -23,6 +23,42 @@ fn shared_stdin() -> &'static tokio::sync::Mutex<tokio::io::BufReader<tokio::io:
 
 use crate::NativeSysOps;
 
+// Runtime compilation is intercepted by BexEngine and delegated to the
+// compiler trait injected by bex_project. This provider implementation is the
+// closed fallback required by the generated IO trait hierarchy.
+impl io::IoClassReflectPackage for NativeSysOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _files: indexmap::IndexMap<String, String>,
+        _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::Package> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
+impl io::IoClassReflectSession for NativeSysOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _session: io::owned::reflect::Session,
+        _source: String,
+        _type_arg_0: baml_type::RuntimeTy,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::Package> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
+impl io::IoNamespaceReflect for NativeSysOps {}
+
 // ============================================================================
 // Environment
 // ============================================================================
@@ -889,6 +925,129 @@ impl io::IoNamespaceFs for NativeSysOps {
             .map_err(VmRustFnError::from)
         })
     }
+
+    fn chmod(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        mode: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let mode = match permission_bits(mode) {
+            Ok(mode) => mode,
+            Err(err) => return SysOpOutput::err(err),
+        };
+        SysOpOutput::async_op(async move { chmod_path(&path, mode).await })
+    }
+
+    fn symlink(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        target: String,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            symlink_path(&target, &path)
+                .await
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to create symlink '{path}' -> '{target}': {e}"),
+                })
+                .map_err(VmRustFnError::from)
+        })
+    }
+}
+
+/// Narrow a BAML `int` mode to the POSIX permission bits.
+///
+/// The accepted range is the permission triple plus the setuid/setgid/sticky
+/// digit. Everything else — negative values, file-type bits from a `stat`
+/// result, anything past `u32` — is rejected rather than masked, because a mode
+/// outside that range is a caller mistake and the kernel would silently drop the
+/// extra bits (`chmod_common` masks with `S_IALLUGO`).
+fn permission_bits(mode: i64) -> Result<u32, VmBamlError> {
+    u32::try_from(mode)
+        .ok()
+        .filter(|mode| *mode <= 0o7777)
+        .ok_or_else(|| VmBamlError::InvalidArgument {
+            // `{:#o}` renders a negative `i64` as its 64-bit two's complement,
+            // which reads as a nonsensically large mode; show those in decimal.
+            message: match mode {
+                0.. => {
+                    format!("Invalid file mode {mode:#o}: expected a permission mask in 0..=0o7777")
+                }
+                _ => format!("Invalid file mode {mode}: expected a permission mask in 0..=0o7777"),
+            },
+        })
+}
+
+#[cfg(unix)]
+async fn chmod_path(path: &str, mode: u32) -> Result<(), VmRustFnError> {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+        .await
+        .map_err(|e| VmBamlError::Io {
+            message: format!("Failed to set permissions on '{path}': {e}"),
+        })
+        .map_err(VmRustFnError::from)
+}
+
+/// Windows has no mode bits — `Permissions` carries a single read-only flag —
+/// so the owner-write bit decides it and the rest of `mode` is ignored. This
+/// matches libuv (and therefore Node's `fs.chmod`), which tests exactly
+/// `_S_IWRITE`.
+///
+/// Reading the current permissions first is what makes a missing `path` fail
+/// here as it does on unix, rather than silently succeeding.
+#[cfg(windows)]
+async fn chmod_path(path: &str, mode: u32) -> Result<(), VmRustFnError> {
+    let mut permissions = tokio::fs::metadata(path)
+        .await
+        .map_err(|e| VmBamlError::Io {
+            message: format!("Failed to read permissions of '{path}': {e}"),
+        })?
+        .permissions();
+    permissions.set_readonly((mode & 0o200) == 0);
+    tokio::fs::set_permissions(path, permissions)
+        .await
+        .map_err(|e| VmBamlError::Io {
+            message: format!("Failed to set permissions on '{path}': {e}"),
+        })
+        .map_err(VmRustFnError::from)
+}
+
+#[cfg(unix)]
+async fn symlink_path(target: &str, path: &str) -> std::io::Result<()> {
+    tokio::fs::symlink(target, path).await
+}
+
+/// Windows picks the link flavor at creation time and cannot change it later,
+/// so `target` is resolved the way the OS will resolve it — a relative target
+/// hangs off the link's own directory — and a directory link is created only
+/// when that resolves to a directory today. A dangling link becomes a file
+/// link, matching Node's autodetect.
+#[cfg(windows)]
+async fn symlink_path(target: &str, path: &str) -> std::io::Result<()> {
+    let target_path = std::path::Path::new(target);
+    let resolved = if target_path.is_absolute() {
+        target_path.to_path_buf()
+    } else {
+        std::path::Path::new(path)
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new(""))
+            .join(target_path)
+    };
+    if tokio::fs::metadata(&resolved)
+        .await
+        .is_ok_and(|metadata| metadata.is_dir())
+    {
+        tokio::fs::symlink_dir(target, path).await
+    } else {
+        tokio::fs::symlink_file(target, path).await
+    }
 }
 
 // Auto-creates missing parent dirs, matching Bun's `Bun.write` behavior.
@@ -1663,6 +1822,12 @@ impl io::IoNamespaceSys for NativeSysOps {
             tokio::time::sleep(std::time::Duration::from_nanos(nanos)).await;
             Ok(())
         })
+    }
+
+    fn pid(&self, _heap: &Arc<BexHeap>, _call_id: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
+        // `std::process::id` is a `u32` on every platform this crate builds
+        // for, so the widening into BAML's i63 `int` is always exact.
+        SysOpOutput::ok(i64::from(std::process::id()))
     }
 }
 
@@ -3066,6 +3231,170 @@ impl io::IoNamespaceWs for NativeSysOps {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "ws".to_string(),
             message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+// ============================================================================
+// Provider auth (GCP OAuth2 tokens, AWS SigV4)
+// ============================================================================
+
+/// Surface a `sys_auth` failure as the matching `baml.errors.*` class: a bad or
+/// missing credential is an `AccessError` (retrying will not help), a transport
+/// failure while resolving one is `Io`.
+fn auth_error(err: sys_auth::AuthError) -> VmBamlError {
+    match err {
+        sys_auth::AuthError::Access(message) => VmBamlError::AccessError { message },
+        sys_auth::AuthError::Io(message) => VmBamlError::Io { message },
+    }
+}
+
+impl io::IoNamespaceAiInternal for NativeSysOps {
+    fn render_output_format(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        sys_ops::render_output_format_op(&return_type, ctx)
+    }
+
+    fn build_output_format(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::ai::OutputFormat> {
+        sys_ops::build_output_format_op(&return_type, ctx)
+    }
+
+    fn get_return_type(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<baml_type::RuntimeTy> {
+        sys_ops::get_return_type_op(&function_name, ctx)
+    }
+
+    fn _gcp_access_token(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        credentials_json: Option<String>,
+        scope: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            sys_auth::access_token(runtime_io, credentials_json, &scope)
+                .await
+                .map_err(|e| auth_error(e).into())
+        })
+    }
+
+    fn _gcp_project_id(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        credentials_json: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            Ok(sys_auth::project_id(runtime_io, credentials_json).await)
+        })
+    }
+
+    fn _gcp_quota_project_id(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        credentials_json: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            Ok(sys_auth::quota_project_id(runtime_io, credentials_json).await)
+        })
+    }
+
+    fn _aws_sign_request(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        request: BexExternalValue,
+        service: String,
+        region: Option<String>,
+        profile: Option<String>,
+        access_key_id: Option<String>,
+        secret_access_key: Option<String>,
+        session_token: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        // `baml.http.Request` crosses the sys-op boundary untyped (the
+        // generated marshaller only maps classes from the sysop's own
+        // namespace), so decode it here. The type checker guarantees the shape,
+        // so a failure here is a marshalling bug; it is reported as an
+        // `AccessError` because that is what the op's declared contract allows.
+        let mut request = match owned::http::Request::from_external(request) {
+            Ok(request) => request,
+            Err(e) => {
+                return SysOpOutput::err(VmBamlError::AccessError {
+                    message: format!(
+                        "ai.internal._aws_sign_request: argument is not a baml.http.Request: {e:?}"
+                    ),
+                });
+            }
+        };
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            let opts = sys_auth::AwsSignOptions {
+                region,
+                profile,
+                access_key_id,
+                secret_access_key,
+                session_token,
+                service,
+            };
+            let headers: Vec<(String, String)> = request
+                .headers
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            let signed = sys_auth::sign_request(
+                runtime_io,
+                &request.method,
+                &request.url,
+                &headers,
+                request.body.as_bytes(),
+                &opts,
+            )
+            .await
+            .map_err(auth_error)?;
+            for (name, value) in signed {
+                request.headers.insert(name, value);
+            }
+            Ok(sys_ops::io::AsBexExternalValue::into_bex_external_value(
+                request,
+            ))
+        })
+    }
+
+    fn _aws_resolve_region(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        region: Option<String>,
+        profile: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            Ok(sys_auth::resolve_region(runtime_io, region, profile).await)
         })
     }
 }

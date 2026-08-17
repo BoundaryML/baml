@@ -13,6 +13,7 @@
 //! - Cross-file aggregation: `namespace_items`, `package_items`
 
 pub mod body;
+pub mod body_type_refs;
 mod builder;
 pub mod contributions;
 pub mod diagnostic;
@@ -158,12 +159,12 @@ pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
                 .join(".")
         )
     };
-    let (items, diagnostics, env_var_refs) =
-        baml_compiler2_ast::lower_file_with_path_and_test_owner(
-            &tree,
-            Some(path.as_path()),
-            Some(&test_owner),
-        );
+    let lower = if file.is_session_submission(db) {
+        baml_compiler2_ast::lower_session_file_with_path_and_test_owner
+    } else {
+        baml_compiler2_ast::lower_file_with_path_and_test_owner
+    };
+    let (items, diagnostics, env_var_refs) = lower(&tree, Some(path.as_path()), Some(&test_owner));
     FileAst {
         items,
         diagnostics,

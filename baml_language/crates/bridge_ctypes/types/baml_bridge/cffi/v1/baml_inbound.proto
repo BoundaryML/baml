@@ -38,9 +38,13 @@ message InboundValue {
     bytes uint8array_value = 11;
     string bigint_value = 12;
     // A reflected BAML type passed as a value (mirrors a `type`-typed BAML
-    // value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
+    // value, e.g. the result of `type.of<T>()`). Accepted as an
     // argument value so the host can pass types as data.
     BamlTy ty_value = 13;
+    // Definition-carrying reflected type. New hosts use this for values that
+    // must retain runtime-created class/enum schemas; tag 13 remains for
+    // rollout compatibility with structural/static type senders.
+    BamlTyDef ty_def_value = 14;
   }
   // Absent oneof = null value.
 }
@@ -82,6 +86,10 @@ message InboundEnumValue {
 message BamlTyArg {
   string type_var = 1; // TypeVar name, e.g. "T", "A"
   BamlTy type_value = 2; // the concrete binding
+  // Preferred for a runtime reflected type. Mutually exclusive with
+  // `type_value` by convention; retained as separate fields for backwards
+  // compatibility with already generated SDKs.
+  BamlTyDef type_definition = 3;
 }
 
 message CallFunctionArgs {

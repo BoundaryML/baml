@@ -14,15 +14,121 @@
 //! reserve a placeholder slot per impl rule and per package, build the heap
 //! unsealed, fill each slot with its resolved pointers, then seal.
 
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use baml_type::Name;
 use bex_heap::BexHeap;
 use bex_vm_types::{
-    HeapPtr, Object, ObjectIndex,
+    GlobalIndex, HeapPtr, Object, ObjectIndex,
     types::{LocalName, MethodImpl, Package, ProgramImplRule, ProgramPackage, RuntimeImplRule},
 };
 use indexmap::IndexMap;
+
+/// One value-scoped implementation in the dynamic dispatch table. `class`
+/// is weak: the table never keeps a minted definition alive.
+#[derive(Clone, Debug)]
+pub struct DynRuleEntry {
+    pub class: HeapPtr,
+    pub rule: RuntimeImplRule,
+}
+
+/// Engine-local side tables for runtime-created nominal definitions.
+#[derive(Default, Debug)]
+pub struct DynDispatchTables {
+    impl_rules: RwLock<IndexMap<HeapPtr, Vec<DynRuleEntry>>>,
+    classes: RwLock<IndexMap<baml_type::TypeName, HeapPtr>>,
+}
+
+impl DynDispatchTables {
+    pub fn register_class(&self, name: baml_type::TypeName, class: HeapPtr) {
+        self.classes
+            .write()
+            .expect("dynamic-class table lock poisoned")
+            .insert(name, class);
+    }
+
+    pub fn register_rule(&self, interface: HeapPtr, entry: DynRuleEntry) {
+        self.impl_rules
+            .write()
+            .expect("dynamic-impl table lock poisoned")
+            .entry(interface)
+            .or_default()
+            .push(entry);
+    }
+
+    pub fn rules_of(&self, interface: HeapPtr) -> Vec<RuntimeImplRule> {
+        self.impl_rules
+            .read()
+            .expect("dynamic-impl table lock poisoned")
+            .get(&interface)
+            .into_iter()
+            .flatten()
+            .map(|entry| entry.rule.clone())
+            .collect()
+    }
+
+    pub fn class_ptr(&self, name: &baml_type::TypeName) -> Option<HeapPtr> {
+        self.classes
+            .read()
+            .expect("dynamic-class table lock poisoned")
+            .get(name)
+            .copied()
+    }
+
+    /// Update weak pointers after a moving collection and sweep entries whose
+    /// owning runtime class was not forwarded.
+    pub fn sweep_and_forward(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        self.classes
+            .write()
+            .expect("dynamic-class table lock poisoned")
+            .retain(|_, class| {
+                let Some(&forwarded) = forwarding.get(class) else {
+                    return false;
+                };
+                *class = forwarded;
+                true
+            });
+        self.impl_rules
+            .write()
+            .expect("dynamic-impl table lock poisoned")
+            .retain(|_, entries| {
+                entries.retain_mut(|entry| {
+                    let Some(&forwarded) = forwarding.get(&entry.class) else {
+                        return false;
+                    };
+                    entry.class = forwarded;
+                    true
+                });
+                !entries.is_empty()
+            });
+    }
+
+    #[cfg(test)]
+    pub fn rule_count(&self) -> usize {
+        self.impl_rules
+            .read()
+            .expect("dynamic-impl table lock poisoned")
+            .values()
+            .map(Vec::len)
+            .sum()
+    }
+}
+
+/// Permit-holder view. Dynamic entries are weak (no roots), but this holder
+/// observes every forwarding map to sweep dead rules and move live pointers.
+#[derive(Clone, Default, Debug)]
+pub struct DynDispatchRoot(pub Arc<DynDispatchTables>);
+
+impl bex_vm_types::RootHaver for DynDispatchRoot {
+    fn collect_roots(&self, _roots: &mut Vec<HeapPtr>) {}
+
+    fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        self.0.sweep_and_forward(forwarding);
+    }
+}
 
 /// The compile-time object slots a package and its impl rules were reserved at,
 /// so the fill pass can resolve them to `HeapPtr`s.
@@ -110,12 +216,47 @@ pub struct PackageIndex {
     /// Canonical `Object::Interface` pointer → every `Object::ImplRule` of that
     /// interface in the program, in package-load order.
     impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
+    /// Static image object symbols used by the runtime linker.
+    objects_by_name: HashMap<String, HeapPtr>,
+    /// Static image global symbols used by the runtime linker.
+    globals_by_name: HashMap<String, GlobalIndex>,
 }
 
 impl PackageIndex {
+    pub fn install_image_symbols(
+        &mut self,
+        objects_by_name: HashMap<String, HeapPtr>,
+        globals_by_name: HashMap<String, GlobalIndex>,
+    ) {
+        self.objects_by_name = objects_by_name;
+        self.globals_by_name = globals_by_name;
+    }
+
+    pub fn object_by_name(&self, name: &str) -> Option<HeapPtr> {
+        self.objects_by_name
+            .get(name)
+            .copied()
+            .or_else(|| lookup_type_by_fqn(self, name))
+    }
+
+    pub fn global_by_name(&self, name: &str) -> Option<GlobalIndex> {
+        self.globals_by_name.get(name).copied()
+    }
     /// The `Object::Package` pointer for `name`, if the package is loaded.
     pub fn package_ptr(&self, name: &Name) -> Option<HeapPtr> {
         self.by_name.get(name).copied()
+    }
+
+    /// Every loaded package's `Object::Package` pointer.
+    pub fn package_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        self.by_name.values().copied()
+    }
+
+    /// The canonical static package name for a package pointer.
+    pub fn package_name(&self, package: HeapPtr) -> Option<&Name> {
+        self.by_name
+            .iter()
+            .find_map(|(name, &ptr)| (ptr == package).then_some(name))
     }
 
     /// Every loaded package, by name.
@@ -212,11 +353,20 @@ fn fill_package_slots(
             impl_rules.insert(iface_ptr, rule_ptrs);
         }
         let package = Package {
+            exported_names: pkg.exported_names.clone(),
             classes: resolve_members(heap, &pkg.classes),
             enums: resolve_members(heap, &pkg.enums),
             interfaces: resolve_members(heap, &pkg.interfaces),
             impl_rules,
+            functions: resolve_members(heap, &pkg.functions),
             recursive_type_aliases: pkg.recursive_type_aliases.clone(),
+            interface_blob: pkg.interface_blob.clone(),
+            test_init: pkg
+                .test_init
+                .map(|index| heap.compile_time_ptr(index.into_raw())),
+            mounted_types: IndexMap::new(),
+            runtime: None,
+            session: None,
         };
         heap.set_compile_time_object(slots.package_slot, Object::Package(Box::new(package)));
         index
@@ -226,10 +376,11 @@ fn fill_package_slots(
     index
 }
 
-/// Look up a class or enum object pointer by its fully-qualified dotted name —
-/// package as the leading segment — through the package index. The free-function
-/// form of [`crate::vm::BexVm::lookup_type_by_fqn`], usable before a `BexVm`
-/// exists (e.g. to pre-resolve builtin error/panic classes in `BexVm::new`).
+/// Look up a class, enum, or interface object pointer by its fully-qualified
+/// dotted name — package as the leading segment — through the package index.
+/// The free-function form of [`crate::vm::BexVm::lookup_type_by_fqn`], usable
+/// before a `BexVm` exists (e.g. to pre-resolve builtin error/panic classes in
+/// `BexVm::new`).
 pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr> {
     let mut parts: Vec<Name> = fqn.split('.').map(Name::new).collect();
     let name = parts.pop()?;
@@ -249,6 +400,7 @@ pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr>
         .classes
         .get(&local)
         .or_else(|| package.enums.get(&local))
+        .or_else(|| package.interfaces.get(&local))
         .copied()
 }
 
@@ -290,4 +442,88 @@ pub fn build_heap_with_packages(
     let mut heap = BexHeap::build_unsealed_default(compile_time_objects);
     let index = fill_package_slots(&mut heap, packages, &layout);
     (heap.seal(), index)
+}
+
+#[cfg(test)]
+mod tests {
+    use bex_heap::Tlab;
+    use bex_vm_types::{RootHaver, types::Object};
+
+    use super::*;
+
+    fn empty_rule(interface: HeapPtr, class_name: baml_type::TypeName) -> RuntimeImplRule {
+        RuntimeImplRule {
+            interface_head: interface,
+            for_ty_pattern: baml_type::TyTemplate::Class(
+                class_name,
+                Vec::new(),
+                baml_type::TyAttr::default(),
+            ),
+            generic_param_bounds: Vec::new(),
+            interface_args: Vec::new(),
+            interface_assoc: Vec::new(),
+            methods: IndexMap::new(),
+            field_links: Box::default(),
+        }
+    }
+
+    #[test]
+    fn dynamic_dispatch_entries_are_forwarded_then_swept_with_owners() {
+        let heap = BexHeap::new(vec![Object::String(bex_str::BexStr::from(
+            "static interface",
+        ))]);
+        let interface = heap.compile_time_ptr(0);
+        let tables = Arc::new(DynDispatchTables::default());
+        let mut hook = DynDispatchRoot(Arc::clone(&tables));
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let mut owners = Vec::new();
+        for index in 0..128 {
+            // The side table is pointer-kind agnostic; these moving heap
+            // allocations stand in for runtime Object::Class owners and let
+            // the test isolate the weak-lifetime/forwarding contract.
+            let owner = tlab.alloc_string(format!("runtime class {index}"));
+            let name = baml_type::TypeName::runtime_local(
+                baml_type::Name::new(format!("RuntimeClass{index}")),
+                index,
+            );
+            tables.register_class(name.clone(), owner);
+            tables.register_rule(
+                interface,
+                DynRuleEntry {
+                    class: owner,
+                    rule: empty_rule(interface, name),
+                },
+            );
+            owners.push(owner);
+        }
+
+        let live: Vec<_> = owners.iter().step_by(2).copied().collect();
+        #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
+        let (_stats, _remapped, forwarding) = unsafe { heap.collect_garbage(&live) };
+        hook.forward_roots(&forwarding);
+        assert_eq!(
+            tables.rule_count(),
+            64,
+            "dead owners must sweep their rules"
+        );
+        let first_name =
+            baml_type::TypeName::runtime_local(baml_type::Name::new("RuntimeClass0"), 0);
+        assert_eq!(
+            tables.class_ptr(&first_name),
+            forwarding.get(&owners[0]).copied(),
+            "live owner pointers must follow relocation"
+        );
+
+        tlab.invalidate();
+        #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
+        let (_stats, _remapped, forwarding) = unsafe { heap.collect_garbage(&[]) };
+        hook.forward_roots(&forwarding);
+        assert_eq!(
+            tables.rule_count(),
+            0,
+            "dropping the last runtime class/witness reachability must sweep every rule"
+        );
+        assert!(tables.class_ptr(&first_name).is_none());
+    }
 }

@@ -2,11 +2,11 @@ class Email {
   subject string
 }
 
-client TestClient = openai.OpenAiClient.new(model = "gpt-4o-mini");
+client TestClient = openai.ResponsesClient.new(model = "gpt-4o-mini");
 
 function ClassifyEmail(em<[CURSOR]ail: Email) -> string {
-  client TestClient
-  prompt `
+  client: TestClient
+  prompt: `
     Subject: ${em<[CURSOR]ail.subject}
   `
 }

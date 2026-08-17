@@ -65,7 +65,7 @@ func DynamicUnionDecoder(candidates ...DynamicDecodeCandidate) func(Value) (any,
 			return nil, err
 		}
 		for index, candidate := range candidates {
-			if err := validateBAMLType(candidate.Type.value, 0); err != nil {
+			if err := validateBAMLTypeValue(candidate.Type); err != nil {
 				return nil, fmt.Errorf("dynamic union candidate %d: %w", index, err)
 			}
 			if candidate.Decode == nil {
@@ -171,6 +171,17 @@ func GeneratedClassInput(value any) Input {
 func TypeOf[T any]() BAMLType {
 	typeOf, _ := reflectedBAMLType(reflect.TypeFor[T]())
 	return typeOf
+}
+
+// DefinitionOf promotes a known sparse token to the portable definition form
+// used by reflected handles. Unsupported Go-only shapes remain invalid.
+func DefinitionOf[T any]() BAMLType {
+	value := TypeOf[T]()
+	definition, err := value.definitionCopy()
+	if err != nil {
+		return BAMLType{err: fmt.Errorf("unsupported Go type token %s", reflect.TypeFor[T]())}
+	}
+	return BAMLType{definition: definition}
 }
 
 // DecodeAs decodes a BAML value into the concrete Go instantiation T.
@@ -641,6 +652,8 @@ func decodeDynamicValue(value Value, path string, depth int) (any, error) {
 		return item.BoolValue, nil
 	case *cffi.BamlOutboundValue_Uint8ArrayValue:
 		return append([]byte(nil), item.Uint8ArrayValue...), nil
+	case *cffi.BamlOutboundValue_TyDefValue:
+		return value.Type()
 	case *cffi.BamlOutboundValue_LiteralValue:
 		if item.LiteralValue == nil {
 			return nil, fmt.Errorf("%s: BAML literal payload is empty", path)

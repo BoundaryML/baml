@@ -6,7 +6,7 @@ use indexmap::indexmap;
 async fn parse_companion_allows_missing_optional_class_field() {
     let output = baml_test!(
         r##"
-            client TestClient = openai.OpenAiClient.new(
+            client TestClient = openai.ResponsesClient.new(
                 model = "gpt-4o-mini",
                 api_key = "test-key",
                 base_url = "http://localhost:1234",
@@ -17,8 +17,8 @@ async fn parse_companion_allows_missing_optional_class_field() {
             }
 
             function ParsePayload() -> Payload {
-                client TestClient
-                prompt `${ctx.output_format}`
+                client: TestClient
+                prompt: `${ctx.output_format}`
             }
 
             function main() -> Payload {
@@ -43,7 +43,7 @@ async fn parse_companion_allows_missing_optional_class_field() {
 async fn parse_companion_allows_missing_nullable_alias_field() {
     let output = baml_test!(
         r##"
-            client TestClient = openai.OpenAiClient.new(
+            client TestClient = openai.ResponsesClient.new(
                 model = "gpt-4o-mini",
                 api_key = "test-key",
                 base_url = "http://localhost:1234",
@@ -56,8 +56,8 @@ async fn parse_companion_allows_missing_nullable_alias_field() {
             }
 
             function ParsePayload() -> Payload {
-                client TestClient
-                prompt `${ctx.output_format}`
+                client: TestClient
+                prompt: `${ctx.output_format}`
             }
 
             function main() -> Payload {
@@ -85,15 +85,15 @@ async fn parse_companion_allows_missing_nullable_alias_field() {
 async fn sap_parse_decodes_a_complete_top_level_json_string() {
     let output = baml_test!(
         r##"
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
             model = "gpt-4o-mini",
             api_key = "test-key",
             base_url = "http://localhost:1234",
         );
 
         function ParseString() -> string {
-            client TestClient
-            prompt `${ctx.output_format}`
+            client: TestClient
+            prompt: `${ctx.output_format}`
         }
 
         function main() -> string {
@@ -109,15 +109,15 @@ async fn sap_parse_decodes_a_complete_top_level_json_string() {
 async fn sap_parse_preserves_plain_llm_text() {
     let output = baml_test!(
         r##"
-        client TestClient = openai.OpenAiClient.new(
+        client TestClient = openai.ResponsesClient.new(
             model = "gpt-4o-mini",
             api_key = "test-key",
             base_url = "http://localhost:1234",
         );
 
         function ParseString() -> string {
-            client TestClient
-            prompt `${ctx.output_format}`
+            client: TestClient
+            prompt: `${ctx.output_format}`
         }
 
         function main() -> string {

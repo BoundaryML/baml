@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12673
 ---
 function user.deserialize_user(s: string) -> User {
     load_type User

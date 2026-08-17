@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function assert.approx_equal(actual: float, expected: float, eps: float) -> null {
+function assert.approx_equal(actual: float, expected: float, eps: float) -> void {
     load_var eps
     load_const 0.0
     cmp_float_op <
@@ -15,7 +15,9 @@ function assert.approx_equal(actual: float, expected: float, eps: float) -> null
 
   L1:
     pop_jump_if_false L2
-    jump L7
+    load_const "assertion failed: epsilon must be a non-negative number"
+    call baml.sys.panic
+    pop 1
 
   L2:
     load_var2 1 2
@@ -38,48 +40,49 @@ function assert.approx_equal(actual: float, expected: float, eps: float) -> null
 
   L5:
     load_const null
-    jump L8
+    jump L7
 
   L6:
+    load_type float
     load_var delta
-    call assert.format_operand
-    store_var _18
-    load_var eps
-    call assert.format_operand
+    call baml.String.from
     store_var _20
+    load_type float
+    load_var eps
+    call baml.String.from
+    store_var _23
+    load_type float
     load_var actual
-    call assert.format_operand
-    store_var _21
+    call baml.String.from
+    store_var _25
+    load_type float
     load_var expected
-    call assert.format_operand
-    store_var _22
-    load_const "assertion failed: |left - right| = "
-    load_var _18
-    bin_op +
-    load_const ", eps = "
-    bin_op +
+    call baml.String.from
+    store_var _27
+    load_const "assertion failed: |left - right| = \""
     load_var _20
     bin_op +
-    load_const ", left = "
+    load_const "\", eps = \""
     bin_op +
-    load_var _21
+    load_var _23
     bin_op +
-    load_const ", right = "
+    load_const "\", left = \""
     bin_op +
-    load_var _22
+    load_var _25
+    bin_op +
+    load_const "\", right = \""
+    bin_op +
+    load_var _27
+    bin_op +
+    load_const "\""
     bin_op +
     call baml.sys.panic
-    jump L8
 
   L7:
-    load_const "assertion failed: epsilon must be a non-negative number"
-    call baml.sys.panic
-
-  L8:
     return
 }
 
-function assert.contains(haystack: string, needle: string) -> null {
+function assert.contains(haystack: string, needle: string) -> void {
     load_var2 1 2
     call baml.String.includes
     unary_op !
@@ -98,7 +101,7 @@ function assert.contains(haystack: string, needle: string) -> null {
     return
 }
 
-function assert.equal(actual: unknown, expected: unknown) -> null {
+function assert.equal(actual: unknown, expected: unknown) -> void {
     load_var2 1 2
     call baml.ops.equals_equals
     unary_op !
@@ -112,16 +115,24 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
   L1:
     load_var actual
     call assert.format_operand
+    store_var _9
+    load_type string
+    load_var _9
+    call baml.String.from
     store_var _8
     load_var expected
     call assert.format_operand
-    store_var _9
+    store_var _12
+    load_type string
+    load_var _12
+    call baml.String.from
+    store_var _11
     load_const "assertion failed: left = "
     load_var _8
     bin_op +
     load_const ", right = "
     bin_op +
-    load_var _9
+    load_var _11
     bin_op +
     call baml.sys.panic
 
@@ -130,13 +141,35 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
 }
 
 function assert.format_operand(value: unknown) -> string {
+    load_var value
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
     load_type unknown
     load_var value
     call baml.String.from
+    jump L2
+
+  L1:
+    load_type string
+    load_var _2
+    call baml.String.from
+    store_var _5
+    load_const "\""
+    load_var _5
+    bin_op +
+    load_const "\""
+    bin_op +
+
+  L2:
     return
 }
 
-function assert.is_true(condition: bool) -> null {
+function assert.is_true(condition: bool) -> void {
     load_var condition
     unary_op !
     pop_jump_if_false L0
@@ -154,7 +187,41 @@ function assert.is_true(condition: bool) -> null {
     return
 }
 
-function assert.not_null(value: unknown | null) -> null {
+function assert.is_type(actual: unknown) -> #0 {
+    load_var actual
+    is_type #0
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type type
+    load_type #0
+    call baml.String.from
+    store_var _8
+    load_type unknown
+    load_var actual
+    call baml.String.from
+    store_var _11
+    load_const "assertion failed: expected type \""
+    load_var _8
+    bin_op +
+    load_const "\", got \""
+    bin_op +
+    load_var _11
+    bin_op +
+    load_const "\""
+    bin_op +
+    call baml.sys.panic
+    jump L2
+
+  L1:
+    load_var actual
+
+  L2:
+    return
+}
+
+function assert.not_null(value: unknown | null) -> void {
     load_var value
     load_const null
     call baml.ops.equals_equals

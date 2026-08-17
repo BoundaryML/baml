@@ -228,3 +228,30 @@ class PlainDateTime {
         }
     }
 }
+
+implement root.ops.Add<Duration> for PlainDateTime {
+    type Output = PlainDateTime
+    function add(self, other: Duration) -> PlainDateTime {
+        PlainDateTime {
+            _nanoseconds: self._nanoseconds + other._nanoseconds
+        }
+    }
+}
+
+implement root.ops.Subtract<Duration> for PlainDateTime {
+    type Output = PlainDateTime
+    function sub(self, other: Duration) -> PlainDateTime {
+        PlainDateTime {
+            _nanoseconds: self._nanoseconds - other._nanoseconds
+        }
+    }
+}
+
+implement root.ops.Subtract<PlainDateTime> for PlainDateTime {
+    type Output = Duration
+    function sub(self, other: PlainDateTime) -> Duration {
+        Duration {
+            _nanoseconds: self._nanoseconds - other._nanoseconds
+        }
+    }
+}

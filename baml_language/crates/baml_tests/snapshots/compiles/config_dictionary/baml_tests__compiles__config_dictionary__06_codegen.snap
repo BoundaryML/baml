@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 8503
 ---
 function $init() -> null {
     call $init_let_0

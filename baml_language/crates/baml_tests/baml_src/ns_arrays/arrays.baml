@@ -154,6 +154,75 @@ test "array_sort_by_callback_throws" {
     assert.equal(xs, expected)
 }
 
+test "array_sort_by_later_merge_throw_does_not_write_back" {
+    let xs = [4, 3, 2, 1];
+    let comparisons = 0;
+    assert.is_true({
+        xs.sort_by((a: int, b: int) -> int throws string {
+            comparisons += 1;
+            // The first two calls sort the width-1 runs. The third call is the
+            // first comparison in the next merge pass.
+            if (comparisons == 3) { throw "later merge failed" }
+            a - b
+        });
+        false
+    } catch (e) {
+        string => true
+    });
+    let expected_comparisons = 3;
+    assert.equal(comparisons, expected_comparisons);
+    let expected = [4, 3, 2, 1];
+    assert.equal(xs, expected)
+}
+
+test "array_sort_by_is_stable" {
+    let xs = [
+        ArraySortItem { key: 2, label: "a", nullable: 2 },
+        ArraySortItem { key: 1, label: "b", nullable: 1 },
+        ArraySortItem { key: 2, label: "c", nullable: 2 },
+        ArraySortItem { key: 1, label: "d", nullable: 1 }
+    ];
+    xs.sort_by((a: ArraySortItem, b: ArraySortItem) -> int { a.key - b.key });
+    let labels = xs.map((x: ArraySortItem) -> string { x.label });
+    let expected = ["b", "d", "a", "c"];
+    assert.equal(labels, expected)
+}
+
+// A fixed-size operation-count assertion is deterministic and distinguishes
+// O(n log n) sorting from the old insertion sort without relying on CI timing.
+// Reverse input plus an ascending comparator is the old implementation's
+// quadratic case: it made n(n-1)/2 = 32,640 calls for n=256.
+test "array_sort_by_comparison_count_is_n_log_n" {
+    let xs: int[] = [];
+    let i = 256;
+    while (i > 0) {
+        xs.push(i);
+        i -= 1;
+    }
+    let comparisons = 0;
+    xs.sort_by((a: int, b: int) -> int {
+        comparisons += 1;
+        a - b
+    });
+    assert.is_true(comparisons <= 4096);
+    assert.equal(xs.at(0), 1);
+    assert.equal(xs.at(255), 256)
+}
+
+// Bottom-up merge passes visit pairs deterministically and callbacks never run
+// concurrently. The public contract does not promise this exact sequence, but
+// pinning it here makes an accidental scheduler/order change explicit.
+test "array_sort_by_comparator_order_is_deterministic" {
+    let seen: string[] = [];
+    let xs = [4, 3, 2, 1];
+    xs.sort_by((a: int, b: int) -> int {
+        seen.push(`${a}:${b}`);
+        a - b
+    });
+    let expected = ["4:3", "2:1", "3:1", "3:2"];
+    assert.equal(seen, expected)
+}
+
 // ─── sort_by_key ─────────────────────────────────────────────────────────────
 
 test "array_sort_by_key_class_field" {
@@ -190,6 +259,19 @@ test "array_sort_by_key_called_once_per_element" {
     });
     let expected_count = 3;
     assert.equal(count, expected_count);
+    let expected = [1, 2, 3];
+    assert.equal(xs, expected)
+}
+
+test "array_sort_by_key_calls_left_to_right_once" {
+    let seen: int[] = [];
+    let xs = [3, 1, 2];
+    xs.sort_by_key((x: int) -> int {
+        seen.push(x);
+        x
+    });
+    let expected_seen = [3, 1, 2];
+    assert.equal(seen, expected_seen);
     let expected = [1, 2, 3];
     assert.equal(xs, expected)
 }

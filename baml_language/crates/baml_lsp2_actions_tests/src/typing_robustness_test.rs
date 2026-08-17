@@ -46,7 +46,7 @@ mod tests {
         // Backtick template string with interpolation.
         "function b() -> string { `hello ${1 + 2}` }",
         // String escapes + a client value declaration.
-        "client Cl = openai.OpenAiClient.new(model = \"gpt-4o\");\nfunction e() -> string { \"\\n\\t\\u{1f600}\" }",
+        "client Cl = openai.ResponsesClient.new(model = \"gpt-4o\");\nfunction e() -> string { \"\\n\\t\\u{1f600}\" }",
     ];
 
     /// `(prefix, content, suffix)` — `content` is typed one char at a time

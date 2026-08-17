@@ -473,7 +473,7 @@ function comparable_sort.dispatch_f(xs: #0[]) -> #0[] {
 
 function comparable_sort.do_sort(xs: int[]) -> int[] {
     load_var xs
-    load_type baml.Sortable<SortError = (int as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -552,7 +552,7 @@ function comparable_sort.float_nan_sort_main() -> bool {
     alloc_array 4
     store_var xs
     load_var xs
-    load_type baml.Sortable<SortError = (float as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     pop 1
@@ -681,7 +681,7 @@ function comparable_sort.oob_score_sort_main() -> int {
     init_instance user.comparable_sort.OobScore .points
     load_type comparable_sort.OobScore
     alloc_array 3
-    load_type baml.Sortable<SortError = (comparable_sort.OobScore as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var s
@@ -1002,7 +1002,7 @@ function comparable_sort.phase3_sort_ints_main() -> int {
     load_const 2
     load_type int
     alloc_array 3
-    load_type baml.Sortable<SortError = (int as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var s
@@ -1033,7 +1033,7 @@ function comparable_sort.phase3_sort_user_class_main() -> int {
     init_instance user.comparable_sort.ScorePts .points
     load_type comparable_sort.ScorePts
     alloc_array 3
-    load_type baml.Sortable<SortError = (comparable_sort.ScorePts as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var sorted
@@ -1053,7 +1053,7 @@ function comparable_sort.phase5_resume_sort_main() -> int {
     init_instance user.comparable_sort.Resume .rank
     load_type comparable_sort.Resume
     alloc_array 3
-    load_type baml.Sortable<SortError = (comparable_sort.Resume as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var sorted
@@ -1109,7 +1109,7 @@ function comparable_sort.ranked_sort_main() -> string {
     alloc_array 4
     store_var xs
     load_var xs
-    load_type baml.Sortable<SortError = (comparable_sort.Ranked as baml.Comparable).CompareError>
+    load_type baml.Sortable<SortError = never>
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var result
@@ -1149,7 +1149,7 @@ function comparable_sort.spike_1a_catch_main() -> string {
     alloc_instance user.comparable_sort.Risky
     load_type comparable_sort.Risky
     alloc_array 1
-    load_type comparable_sort.Wrap<WE = (comparable_sort.Risky as comparable_sort.HasErr).E>
+    load_type comparable_sort.Wrap<WE = comparable_sort.Kaboom>
     load_const "g"
     virtual_call nargs=1 ntypeargs=0
     store_var v
@@ -1182,7 +1182,7 @@ function comparable_sort.spike_1a_never_main() -> int {
     init_instance user.comparable_sort.Safe .value
     load_type comparable_sort.Safe
     alloc_array 1
-    load_type comparable_sort.Wrap<WE = (comparable_sort.Safe as comparable_sort.HasErr).E>
+    load_type comparable_sort.Wrap<WE = never>
     load_const "g"
     virtual_call nargs=1 ntypeargs=0
     store_var _0

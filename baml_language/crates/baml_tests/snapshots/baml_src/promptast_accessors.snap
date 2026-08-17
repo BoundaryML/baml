@@ -87,13 +87,13 @@ function promptast_accessors.paa_render_ast() -> ai.Prompt {
     load_const "user"
     load_type string
     alloc_array 2
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_const null
     load_const null
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     return
@@ -109,13 +109,13 @@ function promptast_accessors.paa_single_message_fn() -> ai.PromptMessage[] {
     load_const "system"
     load_type string
     alloc_array 1
-    init_instance baml.prompt.ContextClient .name, .provider, .default_role, .allowed_roles
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
     load_type string
     load_type unknown
     alloc_map 0
     load_const null
     load_const null
-    init_instance baml.prompt.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.messages

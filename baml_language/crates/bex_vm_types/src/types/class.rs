@@ -1,7 +1,11 @@
 use baml_type::RuntimeTy;
 use borsh::{BorshDeserialize, BorshSerialize};
+use indexmap::IndexMap;
 
-use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, Value};
+use crate::{
+    AtomicValueSlot, CleanupLatch, HeapPtr, Value,
+    types::{RuntimeTypeProvenance, TypeValue},
+};
 
 /// A field within a runtime class, carrying type and schema metadata.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
@@ -20,7 +24,14 @@ pub struct ClassField {
     pub field_template: baml_type::TyTemplate,
     pub description: Option<String>,
     pub alias: Option<String>,
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
     pub skip: bool,
+
+    /// Exact minted operand used for a runtime-constructed field. This makes
+    /// reflection read-back preserve identity as well as shape.
+    #[borsh(skip)]
+    pub runtime_type: Option<TypeValue>,
 }
 
 /// Runtime class representation.
@@ -38,6 +49,10 @@ pub struct Class {
 
     /// Class-level serialization alias.
     pub alias: Option<String>,
+
+    /// Class-level source documentation and custom annotations.
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
 
     /// Type tag for this class, used by `TypeTag` instruction for jump table dispatch.
     /// Assigned during codegen as `CLASS_BASE + class_index`.
@@ -59,6 +74,12 @@ pub struct Class {
     /// generic params (which Gate A must demand) from the inherited class params
     /// (bound by the receiver, never by name). Set at emit time.
     pub generic_param_count: usize,
+
+    /// Present only on runtime-constructed classes. Runtime definitions are
+    /// never serialized into a compiled program, so Borsh deliberately omits
+    /// this heap-local identity/provenance payload.
+    #[borsh(skip)]
+    pub runtime_type: Option<RuntimeTypeProvenance>,
 }
 
 impl std::fmt::Display for Class {

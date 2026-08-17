@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 32169
 ---
 === PPIR ===
 function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {

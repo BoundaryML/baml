@@ -17,4 +17,11 @@ let x = Foo { bar: Bar { name: 10 }};
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//    ╭─[expr_constructors_nested.baml:9:1]
+//  9 │ let x = Foo { bar: Bar { name: 10 }};
+//    · ──────────────────┬──────────────────
+//    ·                   ╰── move this binding into a function body
+//    ╰────

@@ -10,15 +10,15 @@
 //!   `initialize`. Compiler APIs stay byte-based.
 
 use lsp_types::{
-    CodeLens, CodeLensOptions, CompletionOptions, HoverProviderCapability, InlayHintOptions,
-    InlayHintServerCapabilities, SaveOptions, SemanticTokensFullOptions, SemanticTokensLegend,
-    SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TextDocumentSyncSaveOptions, WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities,
-    WorkspaceServerCapabilities,
+    CodeActionProviderCapability, CodeLens, CodeLensOptions, CompletionOptions,
+    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, SaveOptions,
+    SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
+    SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
+    WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
 
-use super::{BexMulitProject, LspError, commands, read_for_request, wasm_helpers};
+use super::{BexMultiProject, LspError, commands, read_for_request, wasm_helpers};
 use crate::bex_lsp::{
     multi_project::commands::BexLspCommand,
     position_codec::{PositionCodec, PositionEncoding},
@@ -47,7 +47,7 @@ pub(super) fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilit
         code_lens_provider: Some(CodeLensOptions {
             resolve_provider: Some(true),
         }),
-        code_action_provider: None,
+        code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
         execute_command_provider: Some(lsp_types::ExecuteCommandOptions {
             commands: vec![commands::OpenBamlPanel::COMMAND_ID.to_string()],
             work_done_progress_options: lsp_types::WorkDoneProgressOptions::default(),
@@ -77,7 +77,7 @@ pub(super) fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilit
             TextDocumentSyncOptions {
                 open_close: Some(true),
                 change: Some(TextDocumentSyncKind::FULL),
-                will_save: Some(true),
+                will_save: Some(false),
                 save: Some(TextDocumentSyncSaveOptions::SaveOptions(SaveOptions {
                     include_text: Some(false),
                 })),
@@ -123,7 +123,7 @@ fn initialize_result(encoding: PositionEncoding) -> lsp_types::InitializeResult 
     }
 }
 
-impl BexLspRequest for BexMulitProject {
+impl BexLspRequest for BexMultiProject {
     fn request_sender(
         &self,
     ) -> Box<
@@ -501,7 +501,7 @@ impl BexLspRequest for BexMulitProject {
                 })?;
 
                 let project_path = if let Some(pp) = project_path {
-                    self.fs.get_path_from_str(
+                    self.fs.get_path_from_vfs_path(
                         &crate::fs::FsPath::from_str(pp),
                         "workspace/executeCommand",
                     )?
@@ -515,7 +515,7 @@ impl BexLspRequest for BexMulitProject {
                             .ok_or(LspError::NoProjectsFound)?
                     };
                     self.fs
-                        .get_path_from_str(&first_key, "workspace/executeCommand")?
+                        .get_path_from_vfs_path(&first_key, "workspace/executeCommand")?
                 };
 
                 let _ = self.get_or_create_project(project_path.clone())?;
@@ -1123,7 +1123,7 @@ fn definition_kind_to_lsp_symbol_kind(
     }
 }
 
-impl BexMulitProject {
+impl BexMultiProject {
     /// Store `tokens` as the latest semantic tokens for `path` under a fresh
     /// `result_id`, returning that id so the next `full/delta` can diff against it.
     ///
@@ -1225,6 +1225,25 @@ mod tests {
             server_capabilities(PositionEncoding::UTF16).position_encoding,
             Some(lsp_types::PositionEncodingKind::UTF16)
         );
+    }
+
+    #[test]
+    fn capabilities_do_not_request_will_save_notifications() {
+        let Some(TextDocumentSyncCapability::Options(options)) =
+            server_capabilities(PositionEncoding::UTF16).text_document_sync
+        else {
+            panic!("expected text document sync options");
+        };
+
+        assert_eq!(options.will_save, Some(false));
+    }
+
+    #[test]
+    fn capabilities_advertise_code_actions() {
+        assert!(matches!(
+            server_capabilities(PositionEncoding::UTF16).code_action_provider,
+            Some(CodeActionProviderCapability::Simple(true))
+        ));
     }
 
     #[test]

@@ -15,6 +15,7 @@ mod future;
 mod interface;
 mod object;
 mod package;
+mod type_value;
 mod value;
 
 use std::collections::HashMap;
@@ -32,6 +33,7 @@ pub use interface::*;
 pub use object::*;
 pub use package::*;
 pub use tokio_util::sync::CancellationToken;
+pub use type_value::*;
 pub use value::*;
 
 use crate::{heap_ptr::HeapPtr, indexable::ObjectPool};
@@ -206,6 +208,10 @@ pub enum SysOpErrorCategory {
     AccessError,
     RenderPrompt,
     LlmClient,
+    /// Runtime source compilation was rejected with compiler diagnostics.
+    CompilationError,
+    /// A live Session already has an evaluation in flight.
+    SessionBusy,
     /// Wildcard for development convenience. Must be explicitly declared in
     /// `#[throws(DevOther)]` and should be migrated to named categories.
     DevOther,
@@ -225,6 +231,8 @@ impl std::fmt::Display for SysOpErrorCategory {
             Self::AccessError => write!(f, "AccessError"),
             Self::RenderPrompt => write!(f, "RenderPrompt"),
             Self::LlmClient => write!(f, "LlmClient"),
+            Self::CompilationError => write!(f, "CompilationError"),
+            Self::SessionBusy => write!(f, "SessionBusy"),
             Self::DevOther => write!(f, "DevOther"),
             Self::HostCallable => write!(f, "HostCallable"),
         }

@@ -273,6 +273,10 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
     case pb::BamlOutboundValue::kBigintValue:
       out.set_bigint_value(v.bigint_value());
       return;
+    case pb::BamlOutboundValue::kTyDefValue:
+      throw error(
+          "BAML decode error: a runtime type definition requires BEP-066 "
+          "reflection support, which the C++ SDK does not provide");
     default:
       throw error("cannot transcode this value back inbound");
   }

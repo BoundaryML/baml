@@ -4,8 +4,8 @@ client ImagePromptClient = google.GoogleClient.new(
 );
 
 function generate_image_prompt(thing: string) -> string {
-    client ImagePromptClient
-    prompt `
+    client: ImagePromptClient
+    prompt: `
         Write a detailed image-generation prompt for this subject:
 
         ${thing}
@@ -36,9 +36,9 @@ function generate_image_prompt(thing: string) -> string {
 // ns_images_pipeline.baml:6:39 (type) [defaultLibrary] len=6 "string"
 // ns_images_pipeline.baml:6:50 (type) [defaultLibrary] len=6 "string"
 // ns_images_pipeline.baml:7:5 (property) len=6 "client"
-// ns_images_pipeline.baml:7:12 (variable) len=17 "ImagePromptClient"
+// ns_images_pipeline.baml:7:13 (variable) len=17 "ImagePromptClient"
 // ns_images_pipeline.baml:8:5 (property) [declaration] len=6 "prompt"
-// ns_images_pipeline.baml:8:12 (string) len=1 "`"
+// ns_images_pipeline.baml:8:13 (string) len=1 "`"
 // ns_images_pipeline.baml:9:9 (string) len=5 "Write"
 // ns_images_pipeline.baml:9:15 (string) len=1 "a"
 // ns_images_pipeline.baml:9:17 (string) len=8 "detailed"

@@ -9,6 +9,7 @@ use crate::{
     diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic},
     errors::{ErrorContext, NameError, ParseError, TypeError},
     message::{DiagnosticIdentifierKind, DiagnosticText},
+    runtime_type,
 };
 
 // ============================================================================
@@ -45,6 +46,11 @@ impl ToDiagnostic for ParseError {
                 Diagnostic::error(DiagnosticId::InvalidSyntax, "invalid syntax")
                     .with_primary(*span, message.clone())
             }
+
+            ParseError::RemovedFeature { message, span } => {
+                Diagnostic::error(DiagnosticId::RemovedFeature, "removed language feature")
+                    .with_primary(*span, message.clone())
+            }
         };
         diag.with_phase(DiagnosticPhase::Parse)
     }
@@ -76,7 +82,7 @@ impl<C: ErrorContext> TypeError<C> {
                     .type_expr(ty_fn(expected))
                     .text(", found ")
                     .type_expr(ty_fn(found));
-                let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
+                let diag = runtime_type::mismatched_types()
                     .with_primary(loc_fn(location), message);
                 if let Some(info_location) = info_location {
                     diag.with_secondary(loc_fn(info_location), "expected due to this")
@@ -291,7 +297,7 @@ impl<C: ErrorContext> TypeError<C> {
             .with_primary_span(loc_fn(location)),
 
             TypeError::InstanceofRemoved { location } => Diagnostic::error(
-                DiagnosticId::InstanceofRemoved,
+                DiagnosticId::RemovedFeature,
                 "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
             )
             .with_primary_span(loc_fn(location)),

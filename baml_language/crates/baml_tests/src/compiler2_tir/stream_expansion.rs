@@ -292,22 +292,6 @@ class Resume {
     insta::assert_snapshot!(render_tir(&db, file));
 }
 
-// ── @@dynamic passthrough ───────────────────────────────────────────────────
-
-#[test]
-fn dynamic_attr_passes_through() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        "\
-class DynamicClass {
-    name string
-    @@dynamic
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
 // ── Bug 1: pending_default alias resolution ─────────────────────────────────
 
 #[test]
@@ -438,11 +422,11 @@ class Box<T> {
     value T
 }
 
-client Dummy = openai.OpenAiClient.new(model = "gpt-4");
+client Dummy = openai.ResponsesClient.new(model = "gpt-4");
 
 function GetBoxedInt() -> Box<int> {
-    client Dummy
-    prompt `Give me a box`
+    client: Dummy
+    prompt: `Give me a box`
 }
 "#,
     );

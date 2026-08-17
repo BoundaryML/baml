@@ -189,6 +189,23 @@ impl std::ops::Deref for TypeExpr {
     }
 }
 
+/// One explicit generic argument at an expression call site.
+///
+/// Static arguments retain the existing type grammar. `Unreflect` is a
+/// contextual whole-argument marker whose operand is an ordinary expression
+/// in the enclosing body arena; it is never a type-expression atom.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeArg {
+    Static(TypeExpr),
+    Unreflect(ExprId),
+}
+
+impl From<TypeExpr> for TypeArg {
+    fn from(value: TypeExpr) -> Self {
+        Self::Static(value)
+    }
+}
+
 impl std::ops::DerefMut for TypeExpr {
     fn deref_mut(&mut self) -> &mut TypeExprKind {
         &mut self.kind
@@ -545,7 +562,15 @@ impl ExprBody {
                 let ty_args_str = if type_args.is_empty() {
                     String::new()
                 } else {
-                    let tys: Vec<_> = type_args.iter().map(ToString::to_string).collect();
+                    let tys: Vec<_> = type_args
+                        .iter()
+                        .map(|arg| match arg {
+                            TypeArg::Static(ty) => ty.to_string(),
+                            TypeArg::Unreflect(expr) => {
+                                format!("unreflect({})", self.display_expr_inner(*expr, depth + 1))
+                            }
+                        })
+                        .collect();
                     format!("<{}>", tys.join(", "))
                 };
                 let args_str: Vec<_> = args
@@ -629,12 +654,6 @@ pub struct AstSourceMap {
     /// For object-constructor fields, the span of the field name keyed by
     /// `(object_expr_id, value_expr_id)`.
     pub object_field_name_spans: HashMap<(ExprId, ExprId), TextRange>,
-    /// Value expressions synthesized from property shorthand. For example,
-    /// `{ options }` lowers to the same key/value shape as
-    /// `{ options: options }`, while this set preserves that the user wrote the
-    /// shorthand so diagnostics can explain its exact-name requirement.
-    pub property_shorthand_exprs: HashSet<ExprId>,
-
     /// Ids of compiler-synthesized nodes — desugarings that have no
     /// user-written source of their own (e.g. the `string.from(${…})` wrapper
     /// and the concat accumulator that backtick interpolation lowers to). Their
@@ -662,7 +681,6 @@ impl AstSourceMap {
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
             object_field_name_spans: HashMap::new(),
-            property_shorthand_exprs: HashSet::new(),
             synthetic_exprs: HashSet::new(),
             synthetic_stmts: HashSet::new(),
             synthetic_patterns: HashSet::new(),
@@ -677,12 +695,6 @@ impl AstSourceMap {
     /// Whether `id` names a compiler-synthesized statement (see `synthetic_stmts`).
     pub fn is_synthetic_stmt(&self, id: StmtId) -> bool {
         self.synthetic_stmts.contains(&id)
-    }
-
-    /// Whether `id` is the value expression synthesized for a shorthand
-    /// property such as the `options` value in `{ options }`.
-    pub fn is_property_shorthand_expr(&self, id: ExprId) -> bool {
-        self.property_shorthand_exprs.contains(&id)
     }
 
     /// Look up a span in an arena that is index-parallel to the arena `id`
@@ -768,6 +780,66 @@ impl AstSourceMap {
 impl Default for AstSourceMap {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// How a property value was written in source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PropertySyntax {
+    /// An explicit key/value pair such as `{ "name": value }` or
+    /// `Config { name: value }`.
+    Explicit,
+    /// A shorthand property such as `{ name }` or `Config { name }`.
+    Shorthand,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectExprField {
+    pub name: Name,
+    pub value: ExprId,
+    pub syntax: PropertySyntax,
+}
+
+impl ObjectExprField {
+    pub fn explicit(name: Name, value: ExprId) -> Self {
+        Self {
+            name,
+            value,
+            syntax: PropertySyntax::Explicit,
+        }
+    }
+
+    pub fn shorthand(name: Name, value: ExprId) -> Self {
+        Self {
+            name,
+            value,
+            syntax: PropertySyntax::Shorthand,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapExprEntry {
+    pub key: ExprId,
+    pub value: ExprId,
+    pub syntax: PropertySyntax,
+}
+
+impl MapExprEntry {
+    pub fn explicit(key: ExprId, value: ExprId) -> Self {
+        Self {
+            key,
+            value,
+            syntax: PropertySyntax::Explicit,
+        }
+    }
+
+    pub fn shorthand(key: ExprId, value: ExprId) -> Self {
+        Self {
+            key,
+            value,
+            syntax: PropertySyntax::Shorthand,
+        }
     }
 }
 
@@ -872,7 +944,7 @@ pub enum Expr {
         callee: ExprId,
         /// Explicit type arguments at the call site, e.g. `foo<int, string>(x)`.
         /// Empty vec when no `<...>` was written.
-        type_args: Vec<TypeExpr>,
+        type_args: Vec<TypeArg>,
         args: Vec<CallArg>,
     },
     Object {
@@ -884,14 +956,14 @@ pub enum Expr {
         /// Explicit generic type args from syntax like `Foo<int> { ... }`.
         /// Empty when no `<...>` was written (e.g. bare `Foo { ... }`).
         type_args: Vec<TypeExpr>,
-        fields: Vec<(Name, ExprId)>,
+        fields: Vec<ObjectExprField>,
         spreads: Vec<SpreadField>,
     },
     Array {
         elements: Vec<ExprId>,
     },
     Map {
-        entries: Vec<(ExprId, ExprId)>,
+        entries: Vec<MapExprEntry>,
     },
     Block {
         stmts: Vec<StmtId>,
@@ -1062,6 +1134,12 @@ impl CallArg {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     Expr(ExprId),
+    /// Evaluate a runtime `type` value once and bind its exact identity to a
+    /// lexical type parameter for the remainder of the enclosing block.
+    TypeBinding {
+        name: Name,
+        value: ExprId,
+    },
     Let {
         /// The binding pattern. A `: T` annotation lives inside the pattern
         /// as the bind's sub-pattern slot, not as a separate field on
@@ -1201,6 +1279,9 @@ pub enum Pattern {
     /// is irrefutable against scrutinee `int` but refutable against `int|str`.
     /// Cannot carry a `: T` ascription.
     Type(TypeExpr),
+    /// `unreflect(expr)` — identity-filter against a runtime minted type.
+    /// This pattern narrows no static shape; its operand is checked as `type`.
+    Unreflect(ExprId),
 
     // ── Combinators (combine other patterns) ─────────────────────────────
     /// `p1 | p2 | ...` — alternation. Length always `>= 2`. Every alternative
@@ -1264,7 +1345,7 @@ impl Pattern {
         out: &mut Vec<&'a Name>,
     ) {
         match self {
-            Pattern::Wildcard | Pattern::Type(_) => {}
+            Pattern::Wildcard | Pattern::Type(_) | Pattern::Unreflect(_) => {}
             Pattern::Bind { name, subpat } => {
                 out.push(name);
                 if let Some(sp) = subpat {
@@ -1632,7 +1713,7 @@ pub struct LlmBodyDef {
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
     /// True when the function's `tools` field can hold tools at runtime:
     /// any value other than an absent field or a literal empty list (`tools
-    /// []`). A non-literal expression (`tools shared()`) counts as `true`
+    /// []`). A non-literal expression (`tools: shared()`) counts as `true`
     /// even if it evaluates empty — the compile-time signal is conservative.
     /// PPIR skips `$stream` synthesis when set (streaming does not run the
     /// tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers the
@@ -1902,7 +1983,8 @@ pub struct RetryPolicyDef {
     pub name_span: TextRange,
 }
 
-/// A top-level let binding — compiler-generated, not user syntax.
+/// A top-level let binding. Source `let` declarations and compiler-generated
+/// client/retry-policy bindings share the same `$init` pipeline.
 /// Carries an optional `ExprBody` initializer that flows through TIR type-checking.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LetDef {

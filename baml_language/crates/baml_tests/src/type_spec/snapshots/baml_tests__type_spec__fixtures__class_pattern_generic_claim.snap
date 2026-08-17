@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+368..376 'pg_field': throws never
+430..595 '{\n   ...  n\n}': int
+436..441 'let n': int
+444..586 'match ...n    }': int
+451..454 'box': user.PgBox<int> | user.PgBox<string>
+480..512 'PgBox<... int }': user.PgBox<int>
+500..510 'let v: int': int
+507..510 'int': int
+516..517 'v': int
+527..565 'PgBox<...ring }': user.PgBox<string>
+550..563 'let s: string': string
+557..563 'string': string
+569..577 's.length': (self: baml.String) -> int throws never
+569..579 's.length()': int
+592..593 'n': int
+606..613 'pg_unit': throws never
+667..740 '{\n   ...  }\n}': 7
+673..738 'match ...n    }': 7
+680..683 'box': user.PgBox<int> | user.PgBox<string>
+695..708 'PgBox<int> {}': user.PgBox<int>
+695..727 'PgBox<...ng> {}': user.PgBox<int> | user.PgBox<string>
+711..727 'PgBox<...ng> {}': user.PgBox<string>
+731..732 '7': 7

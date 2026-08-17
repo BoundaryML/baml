@@ -34,9 +34,10 @@
 //                                   in the mode union); the Rust test uses
 //                                   #[should_panic] to catch a compile-time panic.
 //                                   No BAML equivalent.
-//     fs_read_dir_reports_symlink_flag — creates a Unix symlink via
-//                                   std::os::unix::fs::symlink; baml.fs has no
-//                                   symlink primitive.
+//     fs_read_dir_reports_symlink_flag — `baml.fs.symlink` could create the
+//                                   link now, but creating one on Windows needs
+//                                   privileges CI does not grant, so the test
+//                                   stays Unix-only in Rust.
 
 // ============================================================================
 // open + read (text)
@@ -420,17 +421,16 @@ test "fs_open_append_plus_can_read" {
 }
 
 // ============================================================================
-// close is idempotent (calling close twice returns null both times)
+// close is idempotent (calling close twice succeeds both times)
 // ============================================================================
 
-function fs_file_close_is_idempotent_fn() -> null {
+function fs_file_close_is_idempotent_fn() -> void {
     let path = fs_tmp("close_idempotent.txt");
     baml.fs.write(path, "x");
     let f = baml.fs.open(path, "r");
     f.close();
     f.close();
     baml.fs.remove(path);
-    null
 }
 
 test "fs_file_close_is_idempotent" {
@@ -687,4 +687,112 @@ function fs_remove_dir_all_idempotent_fn() -> bool {
 
 test "fs_remove_dir_all_idempotent" {
     assert.is_true(fs_remove_dir_all_idempotent_fn())
+}
+
+// ============================================================================
+// chmod
+// ============================================================================
+//
+// Only the platform-independent behavior lives here. What `mode` does to a file
+// is meaningful on unix and reduces to one read-only bit on Windows, and BAML
+// has no way to read a mode back, so the effect is asserted from Rust
+// (tests/fs.rs::fs_chmod_sets_the_exact_mode).
+
+function fs_chmod_on_existing_file_fn() -> bool {
+    let path = fs_tmp("chmod_ok.txt");
+    baml.fs.write(path, "content");
+    baml.fs.chmod(path, 0o644);
+    let existed = baml.fs.exists(path);
+    baml.fs.remove(path);
+    existed
+}
+
+test "fs_chmod_on_existing_file" {
+    assert.is_true(fs_chmod_on_existing_file_fn())
+}
+
+// A mode outside `0..=0o7777` is a caller mistake, rejected before the syscall
+// the kernel would have silently masked it in.
+//
+// Each `catch` is the tail expression of its own helper so its result is
+// returned rather than bound to a local — the caller keeps the setup and
+// cleanup around the call.
+function fs_chmod_rejects_mode(path: string, mode: int) -> bool {
+    {
+        baml.fs.chmod(path, mode);
+        false
+    } catch (e) {
+        baml.errors.InvalidArgument => true
+    }
+}
+
+function fs_chmod_rejects_high_mode_fn() -> bool {
+    let path = fs_tmp("chmod_high_mode.txt");
+    baml.fs.write(path, "content");
+    let threw = fs_chmod_rejects_mode(path, 0o10000);
+    baml.fs.remove(path);
+    threw
+}
+
+test "fs_chmod_rejects_high_mode" {
+    assert.is_true(fs_chmod_rejects_high_mode_fn())
+}
+
+function fs_chmod_rejects_negative_mode_fn() -> bool {
+    let path = fs_tmp("chmod_negative_mode.txt");
+    baml.fs.write(path, "content");
+    let threw = fs_chmod_rejects_mode(path, 0 - 1);
+    baml.fs.remove(path);
+    threw
+}
+
+test "fs_chmod_rejects_negative_mode" {
+    assert.is_true(fs_chmod_rejects_negative_mode_fn())
+}
+
+// A missing path is an I/O failure on every platform — including Windows, where
+// the current attributes are read before they are rewritten.
+function fs_chmod_missing_path_errors_fn() -> bool {
+    let path = fs_tmp("chmod_missing.txt");
+    {
+        baml.fs.chmod(path, 0o644);
+        false
+    } catch (e) {
+        baml.errors.Io => true
+    }
+}
+
+test "fs_chmod_missing_path_errors" {
+    assert.is_true(fs_chmod_missing_path_errors_fn())
+}
+
+// ============================================================================
+// symlink
+// ============================================================================
+//
+// Creating a link needs privileges Windows CI does not grant, so the success
+// path is Unix-only and lives in Rust (tests/fs.rs::fs_symlink_*). What is
+// asserted here holds even where symlink creation is refused outright: the call
+// fails with `Io` and leaves the occupied path alone.
+
+function fs_symlink_is_refused_at(path: string) -> bool {
+    {
+        baml.fs.symlink(path, path);
+        false
+    } catch (e) {
+        baml.errors.Io => true
+    }
+}
+
+function fs_symlink_onto_existing_path_errors_fn() -> bool {
+    let path = fs_tmp("symlink_taken.txt");
+    baml.fs.write(path, "keep me");
+    let threw = fs_symlink_is_refused_at(path);
+    let intact = baml.fs.read(path) == "keep me";
+    baml.fs.remove(path);
+    threw && intact
+}
+
+test "fs_symlink_onto_existing_path_errors" {
+    assert.is_true(fs_symlink_onto_existing_path_errors_fn())
 }

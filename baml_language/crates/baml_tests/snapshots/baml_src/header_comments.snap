@@ -4,7 +4,7 @@ source: crates/baml_tests/tests/baml_src.rs
 function header_comments.$init_test_ns_header_comments_header_comments(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.header_comments"
-    load_const "header comments parse in class, implements, and match positions"
+    load_const "header comments parse in expression positions"
     make_closure .<lambda($init_test_ns_header_comments_header_comments, 0)>, 0
     load_const null
     call testing.TestCollector.register_test_at

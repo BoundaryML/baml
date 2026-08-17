@@ -264,7 +264,7 @@ function load_doc_sections(path: string) -> DocSections {
             if (current.length() > 0) {
                 let _ = out.bodies.set(current, buffer.join("\n"));
             }
-            current = line.substring(3, line.length()).trim();
+            current = line.slice(3, line.length()).trim();
             out.headings.push(current);
             buffer = [];
         } else if (current.length() > 0) {

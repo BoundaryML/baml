@@ -312,12 +312,12 @@ impl RuntimeCli {
         if let Commands::Test(test) = &mut cli.command {
             test.cli_output =
                 crate::test_command::TestOutputOverrides::from_cli_matches(&matches, cli.output);
-            test.cli_logs = matches
+            test.cli_log = matches
                 .subcommand_matches("test")
                 .filter(|matches| {
-                    matches.value_source("logs") == Some(clap::parser::ValueSource::CommandLine)
+                    matches.value_source("log") == Some(clap::parser::ValueSource::CommandLine)
                 })
-                .map(|_| test.logs);
+                .map(|_| test.log);
         }
 
         cli
@@ -703,7 +703,7 @@ mod tests {
             (
                 &["test"],
                 &[
-                    "--logs <LEVEL>\n          Set the BAML log level [default: off] [possible values: off, error, warn, info, debug]",
+                    "--log <LEVEL>\n          Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error,\n          warn, info, debug, trace]",
                 ],
             ),
             (

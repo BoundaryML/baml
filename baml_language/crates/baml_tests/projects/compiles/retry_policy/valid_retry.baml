@@ -1,7 +1,7 @@
 // Retry composes at the client boundary now: the legacy `retry_policy` block
 // is removed, and reliability wraps a base client via `ai.Retry.new`.
 
-client BaseClient = openai.OpenAiClient.new(
+client BaseClient = openai.ResponsesClient.new(
     model = "gpt-4",
     api_key = "test-key",
     base_url = "http://localhost:1234",
@@ -10,6 +10,6 @@ client BaseClient = openai.OpenAiClient.new(
 client MyClient = ai.clients.Retry.new(BaseClient, max_attempts = 3);
 
 function UseRetryClient(input: string) -> string {
-    client MyClient
-    prompt `echo ${input}`
+    client: MyClient
+    prompt: `echo ${input}`
 }

@@ -34,7 +34,7 @@ client<llm> OpenAIResponsesFunctionCall {
 //- diagnostics
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client OpenAIResponsesFunctionCall = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client OpenAIResponsesFunctionCall = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
 //   │ ai.Fallback / ai.RoundRobin)
 //     ╭─[client_enum_key_in_options.baml:3:1]
 //   3 │ ╭─▶ client<llm> OpenAIResponsesFunctionCall {

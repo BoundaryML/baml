@@ -187,6 +187,9 @@ class Array<T> {
     /// Stable: elements the comparator reports as equal keep their relative
     /// order. If the comparator throws, `self` is left in its pre-sort state —
     /// the sorted result is written back only once the whole sort completes.
+    /// Comparator calls run sequentially in a deterministic merge order. Their
+    /// exact order is an implementation detail; comparators should not depend on
+    /// a particular comparison sequence.
     //baml:mut_vm
     //baml:may_yield
     //baml:mut_self
@@ -271,9 +274,17 @@ class Array<T> {
     }
 
     /// Joins all elements into a string, separated by `separator`. Each element is converted to a string via its `to_string` representation.
-    //baml:vm
     function join(self, separator: string) -> string throws never {
-        $rust_function
+        match (self) {
+            [] => "",
+            [let first, ..let rest] => {
+                let joined = string.from(first);
+                for (let item in rest) {
+                    joined = joined + separator + string.from(item);
+                }
+                joined
+            },
+        }
     }
 
     /// Applies `f` to each element and returns an array of the results.

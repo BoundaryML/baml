@@ -4,9 +4,9 @@ source: crates/baml_tests/src/generated_tests.rs
 === MIR2 ===
 
 === MIR2 (package assert) ===
-fn assert.is_true(condition: bool) -> null {
+fn assert.is_true(condition: bool) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: bool // condition // param
     let _2: bool
 
@@ -29,9 +29,9 @@ fn assert.is_true(condition: bool) -> null {
     }
 }
 
-fn assert.not_null(value: unknown) -> null {
+fn assert.not_null(value: unknown) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: unknown // value // param
     let _2: bool
 
@@ -61,21 +61,45 @@ fn assert.format_operand(value: unknown) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: unknown // value // param
-    let _2: type
+    let _2: unknown
+    let _3: string // text
+    let _4: string
+    let _5: string
+    let _6: string
+    let _7: type
+    let _8: type
 
     bb0: {
-        _2 = load_type(unknown);
-        _0 = call const fn baml.String.from<copy _2>(copy _1) -> [bb1];
+        _2 = copy _1;
+        _2 = narrow_bind copy _2 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
     }
 
     bb1: {
+        _8 = load_type(unknown);
+        _0 = call const fn baml.String.from<copy _8>(copy _1) -> [bb4];
+    }
+
+    bb2: {
+        _3 = copy _2;
+        _6 = copy _3;
+        _7 = load_type(string);
+        _5 = call const fn baml.String.from<copy _7>(copy _6) -> [bb3];
+    }
+
+    bb3: {
+        _4 = const "\"" + copy _5;
+        _0 = copy _4 + const "\"";
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
 
-fn assert.equal(actual: unknown, expected: unknown) -> null {
+fn assert.equal(actual: unknown, expected: unknown) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: unknown // actual // param
     let _2: unknown // expected // param
     let _3: bool
@@ -85,6 +109,10 @@ fn assert.equal(actual: unknown, expected: unknown) -> null {
     let _7: string
     let _8: string
     let _9: string
+    let _10: type
+    let _11: string
+    let _12: string
+    let _13: type
 
     bb0: {
         _4 = call const fn baml.ops.equals_equals(copy _1, copy _2) -> [bb1];
@@ -97,43 +125,53 @@ fn assert.equal(actual: unknown, expected: unknown) -> null {
 
     bb2: {
         _0 = const null;
-        goto -> bb6;
+        goto -> bb8;
     }
 
     bb3: {
-        _8 = call const fn assert.format_operand(copy _1) -> [bb4];
+        _9 = call const fn assert.format_operand(copy _1) -> [bb4];
     }
 
     bb4: {
-        _7 = const "assertion failed: left = " + copy _8;
-        _6 = copy _7 + const ", right = ";
-        _9 = call const fn assert.format_operand(copy _2) -> [bb5];
+        _10 = load_type(string);
+        _8 = call const fn baml.String.from<copy _10>(copy _9) -> [bb5];
     }
 
     bb5: {
-        _5 = copy _6 + copy _9;
-        _0 = call const fn baml.sys.panic(copy _5) -> [bb6];
+        _7 = const "assertion failed: left = " + copy _8;
+        _6 = copy _7 + const ", right = ";
+        _12 = call const fn assert.format_operand(copy _2) -> [bb6];
     }
 
     bb6: {
+        _13 = load_type(string);
+        _11 = call const fn baml.String.from<copy _13>(copy _12) -> [bb7];
+    }
+
+    bb7: {
+        _5 = copy _6 + copy _11;
+        _0 = call const fn baml.sys.panic(copy _5) -> [bb8];
+    }
+
+    bb8: {
         return;
     }
 }
 
-fn assert.approx_equal(actual: float, expected: float, eps: float) -> null {
+fn assert.approx_equal(actual: float, expected: float, eps: float) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: float // actual // param
     let _2: float // expected // param
     let _3: float // eps // param
-    let _4: bool
+    let _4: void
     let _5: bool
-    let _6: float // delta
-    let _7: float
-    let _8: bool
+    let _6: bool
+    let _7: float // delta
+    let _8: float
     let _9: bool
-    let _10: float
-    let _11: string
+    let _10: bool
+    let _11: float
     let _12: string
     let _13: string
     let _14: string
@@ -141,92 +179,108 @@ fn assert.approx_equal(actual: float, expected: float, eps: float) -> null {
     let _16: string
     let _17: string
     let _18: string
-    let _19: float
+    let _19: string
     let _20: string
-    let _21: string
-    let _22: string
+    let _21: float
+    let _22: type
+    let _23: string
+    let _24: type
+    let _25: string
+    let _26: type
+    let _27: string
+    let _28: type
 
     bb0: {
-        _5 = copy _3 < const 0_f64;
-        _4 = short_circuit(||) copy _5 -> [eval: bb1, join: bb2];
+        _6 = copy _3 < const 0_f64;
+        _5 = short_circuit(||) copy _6 -> [eval: bb1, join: bb2];
     }
 
     bb1: {
-        _4 = call const fn baml.Float.is_nan(copy _3) -> [bb2];
+        _5 = call const fn baml.Float.is_nan(copy _3) -> [bb2];
     }
 
     bb2: {
-        branch copy _4 -> [bb14, bb3];
+        branch copy _5 -> [bb4, bb3];
     }
 
     bb3: {
-        _7 = copy _1 - copy _2;
-        _6 = call const fn baml.Float.abs(copy _7) -> [bb4];
+        _4 = const null;
+        goto -> bb5;
     }
 
     bb4: {
-        _9 = call const fn baml.Float.is_nan(copy _6) -> [bb5];
+        _4 = call const fn baml.sys.panic(const "assertion failed: epsilon must be a non-negative number") -> [bb5];
     }
 
     bb5: {
-        _8 = short_circuit(||) copy _9 -> [eval: bb6, join: bb7];
+        _8 = copy _1 - copy _2;
+        _7 = call const fn baml.Float.abs(copy _8) -> [bb6];
     }
 
     bb6: {
-        _10 = copy _6;
-        _8 = copy _10 > copy _3;
-        goto -> bb7;
+        _10 = call const fn baml.Float.is_nan(copy _7) -> [bb7];
     }
 
     bb7: {
-        branch copy _8 -> [bb9, bb8];
+        _9 = short_circuit(||) copy _10 -> [eval: bb8, join: bb9];
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb15;
+        _11 = copy _7;
+        _9 = copy _11 > copy _3;
+        goto -> bb9;
     }
 
     bb9: {
-        _19 = copy _6;
-        _18 = call const fn assert.format_operand(copy _19) -> [bb10];
+        branch copy _9 -> [bb11, bb10];
     }
 
     bb10: {
-        _17 = const "assertion failed: |left - right| = " + copy _18;
-        _16 = copy _17 + const ", eps = ";
-        _20 = call const fn assert.format_operand(copy _3) -> [bb11];
+        _0 = const null;
+        goto -> bb16;
     }
 
     bb11: {
-        _15 = copy _16 + copy _20;
-        _14 = copy _15 + const ", left = ";
-        _21 = call const fn assert.format_operand(copy _1) -> [bb12];
+        _21 = copy _7;
+        _22 = load_type(float);
+        _20 = call const fn baml.String.from<copy _22>(copy _21) -> [bb12];
     }
 
     bb12: {
-        _13 = copy _14 + copy _21;
-        _12 = copy _13 + const ", right = ";
-        _22 = call const fn assert.format_operand(copy _2) -> [bb13];
+        _19 = const "assertion failed: |left - right| = \"" + copy _20;
+        _18 = copy _19 + const "\", eps = \"";
+        _24 = load_type(float);
+        _23 = call const fn baml.String.from<copy _24>(copy _3) -> [bb13];
     }
 
     bb13: {
-        _11 = copy _12 + copy _22;
-        _0 = call const fn baml.sys.panic(copy _11) -> [bb15];
+        _17 = copy _18 + copy _23;
+        _16 = copy _17 + const "\", left = \"";
+        _26 = load_type(float);
+        _25 = call const fn baml.String.from<copy _26>(copy _1) -> [bb14];
     }
 
     bb14: {
-        _0 = call const fn baml.sys.panic(const "assertion failed: epsilon must be a non-negative number") -> [bb15];
+        _15 = copy _16 + copy _25;
+        _14 = copy _15 + const "\", right = \"";
+        _28 = load_type(float);
+        _27 = call const fn baml.String.from<copy _28>(copy _2) -> [bb15];
     }
 
     bb15: {
+        _13 = copy _14 + copy _27;
+        _12 = copy _13 + const "\"";
+        _0 = call const fn baml.sys.panic(copy _12) -> [bb16];
+    }
+
+    bb16: {
         return;
     }
 }
 
-fn assert.contains(haystack: string, needle: string) -> null {
+fn assert.contains(haystack: string, needle: string) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: string // haystack // param
     let _2: string // needle // param
     let _3: bool
@@ -251,6 +305,61 @@ fn assert.contains(haystack: string, needle: string) -> null {
     }
 
     bb4: {
+        return;
+    }
+}
+
+fn assert.is_type(actual: unknown) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: unknown // actual // param
+    let _2: bool
+    let _3: type // t
+    let _4: string
+    let _5: string
+    let _6: string
+    let _7: string
+    let _8: string
+    let _9: type
+    let _10: type
+    let _11: string
+    let _12: type
+
+    bb0: {
+        _2 = is_type(copy _1, #0);
+        branch copy _2 -> [bb5, bb1];
+    }
+
+    bb1: {
+        _3 = load_type(#0);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _9 = copy _3;
+        _10 = load_type(type);
+        _8 = call const fn baml.String.from<copy _10>(copy _9) -> [bb3];
+    }
+
+    bb3: {
+        _7 = const "assertion failed: expected type \"" + copy _8;
+        _6 = copy _7 + const "\", got \"";
+        _12 = load_type(unknown);
+        _11 = call const fn baml.String.from<copy _12>(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _5 = copy _6 + copy _11;
+        _4 = copy _5 + const "\"";
+        _0 = call const fn baml.sys.panic(copy _4) -> [bb6];
+    }
+
+    bb5: {
+        _0 = copy _1;
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }

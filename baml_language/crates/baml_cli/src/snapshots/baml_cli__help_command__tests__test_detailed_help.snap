@@ -47,8 +47,9 @@ Selection options:
           Exclude tests matching a selector. Exclusions take precedence
 
 Test output options:
-      --logs <LEVEL>
-          Set the BAML log level [default: off] [possible values: off, error, warn, info, debug]
+      --log <LEVEL>
+          Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error,
+          warn, info, debug, trace]
 
 Global options:
   -q, --quiet...

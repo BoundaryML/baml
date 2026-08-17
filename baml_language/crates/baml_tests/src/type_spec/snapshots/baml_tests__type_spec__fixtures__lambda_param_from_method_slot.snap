@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+414..415 'g': throws never
+427..513 '{\n   ...int\n}': int[]
+433..452 'baml.A...nerate': (length: int, f: (int) -> int throws never) -> int[] throws never
+433..469 'baml.A...{ i })': int[]
+453..454 '3': 3
+456..468 '(i) -> { i }': (i: int) -> int throws never
+463..468 '{ i }': int
+465..466 'i': int

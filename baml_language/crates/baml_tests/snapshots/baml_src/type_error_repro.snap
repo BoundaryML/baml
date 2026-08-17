@@ -1006,34 +1006,31 @@ function type_error_repro.int_through_function_call_as_index_works_body() -> str
 }
 
 function type_error_repro.map_with_repeated_string_alias_union_key_body() -> int {
-    load_type string | string
+    load_type string
     load_type int
     alloc_map 0
     store_var counts
-    load_type string | string
+    load_type string
     load_type int
     load_var counts
     load_const "x"
     load_const 1
     call baml.Map.set
     pop 1
-    load_type string | string
+    load_type string
     load_type int
     load_var counts
     load_const "x"
     call baml.Map.get
-    store_var _5
-    load_var _5
-    store_var _0
-    load_var _5
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 0
-    store_var _0
+    store_var _5
 
   L0:
-    load_var _0
+    load_var _5
     return
 }
 
@@ -1054,18 +1051,15 @@ function type_error_repro.map_with_string_alias_key_body() -> int {
     load_var counts
     load_const "x"
     call baml.Map.get
-    store_var _5
-    load_var _5
-    store_var _0
-    load_var _5
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     load_const 0
-    store_var _0
+    store_var _5
 
   L0:
-    load_var _0
+    load_var _5
     return
 }
 

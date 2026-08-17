@@ -1,6 +1,16 @@
 // Row types mirroring the agent-tries-baml Convex deployment
 // (see tools/agent-tries-baml/docs/data-model.md in the baml monorepo).
 
+// trophies embed turnLog/filesCreated inline (unlike the other queue tables,
+// which only carry blob pointers), so a trophies:list limit of 500 exceeds
+// Convex's per-query bytes-read ceiling once recent runs get long enough.
+// Capped here as a stopgap; the real fix is externalizing those fields to
+// blob storage like transcriptStorageId already does. Trade-off: an issue
+// whose only evidence trophy has aged out of this window loses its
+// bamlVersion/brokeIn enrichment in the feed (falls back to null, not a
+// crash) rather than the whole endpoint erroring out.
+export const ATB_TROPHIES_QUERY_LIMIT = 100;
+
 export type QueueFields = {
   _id: string;
   _creationTime: number;
@@ -63,7 +73,7 @@ export type Metrics = {
 };
 
 export type Finding = {
-  kind: "skill" | "language";
+  kind: 'skill' | 'language';
   title: string;
   description: string;
   anchor?: { call_index?: number | null; turn_index?: number | null };
@@ -98,7 +108,7 @@ export type Trophy = QueueFields & {
 };
 
 export type Issue = QueueFields & {
-  kind: "skill" | "language";
+  kind: 'skill' | 'language';
   category?: string | null; // bug | suggestion
   title: string;
   description: string;
@@ -202,7 +212,7 @@ export type SlimTrophy = {
 
 export type SlimIssue = {
   _id: string;
-  kind: "skill" | "language";
+  kind: 'skill' | 'language';
   category?: string | null;
   title: string;
   status: string;

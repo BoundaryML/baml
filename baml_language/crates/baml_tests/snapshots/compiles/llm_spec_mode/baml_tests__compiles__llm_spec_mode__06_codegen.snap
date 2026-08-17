@@ -21,7 +21,7 @@ function user.NamedTools(q: string, client: ai.Client | null) -> Answer {
     call user.NamedTools$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<Answer, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<Answer>>
+    load_type ai.Runner<Answer, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Answer>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -61,6 +61,15 @@ function user.NamedTools$spec(q: string) -> ai.FunctionSpec<Answer> {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call anthropic.AnthropicClient.new
     store_var _6
     load_const "NamedTools"
@@ -97,7 +106,7 @@ function user.PlainChat(q: string, client: ai.Client | null) -> string {
     call user.PlainChat$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -139,7 +148,16 @@ function user.PlainChat$spec(q: string) -> ai.FunctionSpec<string> {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call openai.OpenAiClient.new
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
     store_var _6
     load_const "PlainChat"
     load_deref ?1
@@ -194,7 +212,7 @@ function user.SpecAgent(q: string, client: ai.Client | null) -> Answer {
     call user.SpecAgent$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<Answer, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<Answer>>
+    load_type ai.Runner<Answer, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Answer>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -241,7 +259,16 @@ function user.SpecAgent$spec(q: string) -> ai.FunctionSpec<Answer> {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call openai.OpenAiClient.new
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
     store_var _7
     load_const "SpecAgent"
     load_deref ?1

@@ -1,0 +1,47 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+80..88 'gal_pair': throws never
+122..131 '{\n    a\n}': T
+128..129 'a': T
+141..154 'gal_ret_three': throws never
+175..184 '{\n    3\n}': 3
+181..182 '3': 3
+194..208 'gal_rigid_join': throws never
+231..293 '{\n   ...  x\n}': 3
+237..242 'let x': 3
+245..253 'gal_pair': (a: 3, b: 3) -> 3 throws never
+245..273 'gal_pa...(), 3)': 3
+254..267 'gal_ret_three': () -> 3 throws never
+254..269 'gal_ret_three()': 3
+271..272 '3': 3
+290..291 'x': 3
+303..317 'gal_union_join': throws never
+361..477 '{\n   ...  w\n}': "x" | int[]
+367..385 'let v:... | "x"': "x" | int[]
+374..379 'int[]': int[]
+374..385 'int[] | "x"': "x" | int[]
+382..385 '"x"': "x"
+388..418 'if (fl... "x" }': "x" | int[]
+392..396 'flag': bool
+398..405 '{ [1] }': int[]
+400..403 '[1]': int[]
+401..402 '1': 1
+411..418 '{ "x" }': "x"
+413..416 '"x"': "x"
+423..428 'let w': "x" | int[]
+431..439 'gal_pair': (a: "x" | int[], b: "x" | int[]) -> "x" | int[] throws never
+431..447 'gal_pa..., "x")': "x" | int[]
+440..441 'v': "x" | int[]
+443..446 '"x"': "x"
+474..475 'w': "x" | int[]
+483..495 '"gal_equals"': "gal_equals"
+496..540 '{\n   ... 3)\n}': () -> void throws never
+496..540 '{\n   ... 3)\n}': void
+502..516 'assert.is_true': (condition: bool) -> void throws never
+502..538 'assert... == 3)': void
+517..530 'gal_ret_three': () -> 3 throws never
+517..532 'gal_ret_three()': 3
+517..537 'gal_re...) == 3': true
+536..537 '3': 3

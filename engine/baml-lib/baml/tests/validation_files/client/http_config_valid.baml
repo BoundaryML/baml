@@ -4,6 +4,7 @@ client<llm> ValidHttpClient {
   options {
     model "gpt-4"
     http {
+      enable_connection_pooling true
       connect_timeout_ms 5000
       request_timeout_ms 30000
     }
@@ -16,6 +17,7 @@ client<llm> ValidStreamingClient {
   options {
     model "claude-3"
     http {
+      enable_connection_pooling false
       time_to_first_token_timeout_ms 15000
       idle_timeout_ms 10000
     }

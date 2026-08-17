@@ -1,6 +1,7 @@
 package com.boundaryml.jetbrains_ext
 
 import com.intellij.openapi.fileTypes.LanguageFileType
+import org.jetbrains.plugins.textmate.TextMateBackedFileType
 import javax.swing.Icon
 
 /**
@@ -8,7 +9,7 @@ import javax.swing.Icon
  *
  * @see [Language and File Type](https://plugins.jetbrains.com/docs/intellij/language-and-filetype.html)
  */
-class BamlFileType private constructor() : LanguageFileType(BamlLanguage) {
+class BamlFileType private constructor() : LanguageFileType(BamlLanguage), TextMateBackedFileType {
 
     companion object {
         val INSTANCE: BamlFileType = BamlFileType()

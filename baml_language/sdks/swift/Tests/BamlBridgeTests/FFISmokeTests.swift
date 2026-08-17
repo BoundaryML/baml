@@ -127,4 +127,22 @@ final class FFISmokeTests: XCTestCase {
         }
         XCTAssertEqual(ints, [])
     }
+
+    func testTyDefReportsUnsupportedReflection() {
+        var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
+        raw.tyDefValue = BamlBridge_Cffi_V1_BamlTyDef()
+
+        XCTAssertThrowsError(
+            try Int._bamlDecode(BamlOutboundValue(raw))
+        ) { error in
+            guard case BamlDecodeError.typeMismatch(let expected, let got) = error else {
+                return XCTFail(
+                    "expected BamlDecodeError.typeMismatch, got \(error)"
+                )
+            }
+            XCTAssertEqual(expected, "Int")
+            XCTAssertTrue(got.contains("requires BEP-066 reflection support"))
+            XCTAssertTrue(got.contains("Swift SDK does not provide"))
+        }
+    }
 }

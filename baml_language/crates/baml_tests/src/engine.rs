@@ -229,8 +229,13 @@ pub async fn run_compiled(
     let positional_args = resolve_args(&program, entry, args);
 
     // Create engine and execute.
-    let engine = BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
-        .expect("Failed to create BexEngine");
+    let engine = BexEngine::new_with_runtime_compiler(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        Vec::new(),
+        bex_project::runtime_compiler(),
+    )
+    .expect("Failed to create BexEngine");
     let engine = Arc::new(engine);
 
     let result = engine

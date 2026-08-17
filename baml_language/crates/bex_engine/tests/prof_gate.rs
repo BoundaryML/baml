@@ -103,11 +103,11 @@ fn outbound_string_list(value: &BamlOutboundValue) -> Vec<String> {
 #[test]
 fn llm_function_capture_defaults_auto_inputs_outputs_errors() {
     let source = r##"
-        client C = openai.OpenAiClient.new(model = "gpt-4o", api_key = "sk-test");
+        client C = openai.ResponsesClient.new(model = "gpt-4o", api_key = "sk-test");
 
         function capture_phase6_llm(name: string) -> string {
-            client C
-            prompt `Hello, ${name}`
+            client: C
+            prompt: `Hello, ${name}`
         }
 
         function capture_phase6_plain(name: string) -> string {

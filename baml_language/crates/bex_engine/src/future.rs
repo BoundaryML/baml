@@ -45,7 +45,7 @@ use ::bex_heap::{
     HeapPermit, HeapPermitManager, InactiveHeapPermit, PermitProof, Tlab, TlabHolder,
 };
 use ::bex_vm_types::{
-    FutureRead, HeapPtr, Object, ObjectType, RootHaver, Value,
+    FutureRead, HeapPtr, Object, ObjectType, RootHaver, SessionEvalLease, Value,
     errors::StackFrame,
     types::{FutureId, FutureInternalError, FutureType},
 };
@@ -200,6 +200,25 @@ impl FutureManagerGuard<'_> {
             // settle_ready/settle_error. No value payload → no write barrier.
             let _ = fut.settle_cancelled();
         }
+        Ok(())
+    }
+
+    /// Register a Session lease held by the producer of `id`. If user-side
+    /// cancellation already won the future race, registration releases the
+    /// lease immediately; otherwise `Future::settle_cancelled` releases it
+    /// before waking the awaiter.
+    pub fn register_session_lease(
+        &mut self,
+        id: FutureId,
+        lease: &SessionEvalLease,
+    ) -> Result<(), EngineError> {
+        let Some(entry) = self.holder().active_futures.get(&id) else {
+            lease.release();
+            return Ok(());
+        };
+        // SAFETY: caller holds the heap permit via `self.proof`.
+        let future = unsafe { entry.future_ref() }?;
+        future.register_session_lease(lease);
         Ok(())
     }
 
@@ -381,7 +400,7 @@ impl FutureManagerGuard<'_> {
             Some(entry) => {
                 // SAFETY: caller holds the heap permit via `self.proof`.
                 let fut = unsafe { entry.future_ref() }?;
-                Some(Arc::clone(&fut.ready))
+                Some(fut.ready_waiter())
             }
             None => {
                 // Relaxed is fine: ordering with respect to the
@@ -438,7 +457,7 @@ impl FutureManagerGuard<'_> {
             .filter_map(|state| {
                 // SAFETY: caller holds the heap permit via `self.proof`.
                 let fut = unsafe { state.future_ref() }.ok()?;
-                matches!(fut.read(), FutureRead::Pending(_)).then(|| Arc::clone(&fut.ready))
+                matches!(fut.read(), FutureRead::Pending(_)).then(|| fut.ready_waiter())
             })
             .collect()
     }

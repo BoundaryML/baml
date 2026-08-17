@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+604..608 'same': throws never
+623..632 '{\n    a\n}': T
+629..630 'a': T
+643..644 'f': throws never
+657..732 '{\n   ...ok"\n}': "ok"
+663..668 'let a': (a: !error) -> !error throws never
+671..675 'same': (a: !error) -> !error throws never
+726..730 '"ok"': "ok"

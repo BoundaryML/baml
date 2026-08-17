@@ -67,6 +67,15 @@ fn compile_baml_src() -> Program {
     baml_project::testing::compile_multi_file(&refs)
 }
 
+#[test]
+fn promptfiddle_demo_compiles() {
+    // This cross-workspace include is intentionally cursed: Prompt Fiddle owns
+    // the demo, while this existing test binary checks it without a second compiler build.
+    let source =
+        include_str!("../../../../typescript2/app-promptfiddle/src/playground/default.baml");
+    baml_project::testing::compile_multi_file(&[("baml_src/main.baml", source)]);
+}
+
 /// Strip the `ns_` prefix from a directory segment if it names a valid namespace
 /// (BAML identifier: starts with a letter or `_`, rest alphanumeric or `_`),
 /// matching the compiler's `file_package` rule. Returns `None` otherwise.
@@ -142,6 +151,14 @@ fn bytecode() {
     }
 
     for (key, mut funcs) in by_namespace {
+        // The `llm_*` provider-suite namespaces are large wire-shape/behavior
+        // suites whose guarantees live in their own `test` blocks; their
+        // bytecode dumps flooded these snapshots (thousands of lines each)
+        // without adding signal. Codegen stability is still covered by the
+        // remaining namespaces and the `compiles/` phase snapshots.
+        if key.starts_with("llm_") {
+            continue;
+        }
         funcs.sort_by(|(a, _), (b, _)| a.cmp(b));
         let output = display_program(&funcs, BytecodeFormat::Textual);
         insta::with_settings!({

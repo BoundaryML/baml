@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+450..451 'f': throws never
+463..519 '{\n   ...t[]\n}': int[]
+469..475 'let xs': int[]
+478..480 '[]': int[]
+486..493 'xs.push': (self: int[], item: int) -> int throws never
+486..496 'xs.push(1)': int
+494..495 '1': 1
+502..504 'xs': int[]

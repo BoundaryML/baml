@@ -88,10 +88,12 @@ jobs:
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
-      - uses: peter-evans/create-pull-request@v6
+      - uses: peter-evans/create-pull-request@v8
         if: steps.check_changes.outputs.has_changes == 'true'
         with:
+          # Use a PAT so the generated pull_request event triggers CI.
           token: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
+          base: canary
           branch: oncall/fill-schedule
           title: "oncall: fill schedule horizon"
           commit-message: "fill schedule to 4mo horizon"

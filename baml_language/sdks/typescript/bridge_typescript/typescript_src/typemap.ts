@@ -20,7 +20,7 @@ export class BamlTypeMap {
     private classCache = new Map<string, unknown>();
     private enumCache = new Map<string, unknown>();
     private aliasCache = new Map<string, unknown>();
-    // Reverse map (constructor identity → FQN) for the encode path. Lazily
+    // Reverse map (constructor or enum-object identity → FQN) for the encode path. Lazily
     // built from the class/enum thunks on first `jsTypeToBamlType` call. The
     // five stdlib media/stream wrappers encode via `instanceof` in proto.ts,
     // so they don't need to be seeded here.
@@ -81,6 +81,13 @@ export class BamlTypeMap {
         if (this.reverse === null) {
             this.reverse = new Map();
             for (const [fqn, thunk] of this.classLazy) {
+                try {
+                    this.reverse.set(thunk(), fqn);
+                } catch {
+                    /* unresolvable entry — skip */
+                }
+            }
+            for (const [fqn, thunk] of this.enumLazy) {
                 try {
                     this.reverse.set(thunk(), fqn);
                 } catch {

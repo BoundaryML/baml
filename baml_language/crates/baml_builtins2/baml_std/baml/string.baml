@@ -190,13 +190,13 @@ class String {
     ///
     /// # Examples
     /// ```
-    /// "hello world".substring(0, 5)   // "hello"
-    /// "hello".substring(2, 100)       // "llo" (end clamped)
-    /// "hello".substring(-3, -1)       // "ll" (counts from the end)
-    /// "😀hello".substring(0, 1)       // "😀"
-    /// "😀hello".substring(1, 4)       // "hel"
+    /// "hello world".slice(0, 5)   // "hello"
+    /// "hello".slice(2, 100)       // "llo" (end clamped)
+    /// "hello".slice(-3, -1)       // "ll" (counts from the end)
+    /// "😀hello".slice(0, 1)       // "😀"
+    /// "😀hello".slice(1, 4)       // "hel"
     /// ```
-    function substring(self, start: int, end: int) -> string throws never {
+    function slice(self, start: int, end: int) -> string throws never {
         $rust_function
     }
 
@@ -219,33 +219,44 @@ class String {
         $rust_function
     }
 
-    /// Returns the character at the given **codepoint index** as a
-    /// one-character string.
-    ///
-    /// Negative indices count from the end: `-1` is the last character. Raises
-    /// `IndexOutOfBounds` when the index is out of range after counting from the
-    /// end, so a successful call always returns exactly one character.
+    /// Returns the **character index** of the start of the last occurrence of `search`, or
+    /// `null` if not found.
     ///
     /// # Examples
     /// ```
-    /// "hello".char_at(0)   // "h"
-    /// "héllo".char_at(1)   // "é"
-    /// "😀hello".char_at(0) // "😀"
-    /// "hello".char_at(-1)  // "o"
-    /// "hi".char_at(99)     // raises IndexOutOfBounds
+    /// "hello world".last_index_of("world")  // 6
+    /// "héllo".last_index_of("l")            // 2
+    /// "😀hello".last_index_of("h")          // 1
+    /// "abc".last_index_of("z")              // null
     /// ```
-    //baml:fallible
-    function char_at(self, index: int) -> string throws never {
+    function last_index_of(self, search: string) -> int? throws never {
+        $rust_function
+    }
+
+    /// Returns the character at the given **codepoint index** as a
+    /// one-character string.
+    ///
+    /// Negative indices count from the end: `-1` is the last character.
+    /// Returns `null` if the index is out of range.
+    ///
+    /// # Examples
+    /// ```
+    /// "hello".at(0)   // "h"
+    /// "héllo".at(1)   // "é"
+    /// "😀hello".at(0) // "😀"
+    /// "hello".at(-1)  // "o"
+    /// "hi".at(99)     // null
+    /// ```
+    function at(self, index: int) -> string? throws never {
         $rust_function
     }
 
     /// Returns the **Unicode code point** of the character at the given codepoint
     /// index, as an `int`.
     ///
-    /// This is the numeric counterpart of `char_at`, which returns the character
-    /// as a one-character string. Negative indices count from the end: `-1` is the last
-    /// character. Raises `IndexOutOfBounds` when the index is out of range after
-    /// counting from the end, mirroring `char_at` and array subscripting.
+    /// This is the numeric counterpart of `at`, which returns the character as a
+    /// one-character string. Negative indices count from the end: `-1` is the last
+    /// character. Returns `null` if the index is out of range.
     ///
     /// The returned value is always in `[0, 0x10FFFF]`, so it round-trips through
     /// `string.from_code_points([cp])`.
@@ -257,10 +268,9 @@ class String {
     /// "🐑".code_point_at(0)       // 128017
     /// "hello".code_point_at(-1)   // 111 ("o")
     /// "😀hello".code_point_at(1)  // 104 ("h", not a UTF-16 unit)
-    /// "hi".code_point_at(99)      // raises IndexOutOfBounds
+    /// "hi".code_point_at(99)      // null
     /// ```
-    //baml:fallible
-    function code_point_at(self, index: int) -> int throws never {
+    function code_point_at(self, index: int) -> int? throws never {
         $rust_function
     }
 
@@ -274,11 +284,6 @@ class String {
     /// "hi".repeat(-1)  // ""
     /// ```
     function repeat(self, count: int) -> string throws never {
-        $rust_function
-    }
-
-    /// Returns true if the string contains the given `substring`.
-    function matches(self, substring: string) -> bool throws never {
         $rust_function
     }
 
@@ -564,5 +569,21 @@ class String {
     /// ```
     function from_code_points(unicode: int[]) -> string throws root.errors.InvalidArgument {
         $rust_function
+    }
+}
+
+// `Rhs` is `string`, not a generic parameter: an `implement<T> Add<T> for string`
+// would put `T` only in the interface args, and neither dispatch path can bind it
+// there. The runtime resolver infers an impl's generics by matching its *for*
+// pattern against the receiver (`resolve_implements_rule`), so `T` stays unbound
+// and a `T extends Add<T>` call site dies with an unresolved virtual call; the
+// direct path has no `string + int` opcode and aborts with `cannot apply binary
+// operation`. Widening `+` to render any right operand needs both of those
+// fixed first.
+implement root.ops.Add<string> for string {
+    type Output = string
+
+    function add(self, rhs: string) -> string throws never {
+        `${self}${rhs}`
     }
 }

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 10715
 ---
 function user.both_ints(a: int | string, b: int | string) -> bool {
     load_var a
