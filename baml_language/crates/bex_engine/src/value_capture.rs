@@ -105,6 +105,63 @@ pub struct TraceCaptureConfig {
     pub max_pending_root_result_drafts: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TraceLogLevel {
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl TraceLogLevel {
+    /// Parse the process-wide `BAML_LOG` setting used by native SDK bridges.
+    /// An unset or empty setting preserves the capture-disabled default.
+    #[must_use]
+    pub fn from_baml_log(raw: Option<&str>) -> Self {
+        match raw.unwrap_or_default().trim().to_ascii_lowercase().as_str() {
+            "off" => Self::Off,
+            "error" => Self::Error,
+            "warn" | "warning" => Self::Warn,
+            "debug" => Self::Debug,
+            "trace" => Self::Trace,
+            "" => Self::Off,
+            "info" => Self::Info,
+            _ => Self::Info,
+        }
+    }
+
+    #[must_use]
+    pub fn allows(self, raw_event_level: Option<&str>) -> bool {
+        if self == Self::Off {
+            return false;
+        }
+        Self::parse_event(raw_event_level).severity() >= self.severity()
+    }
+
+    fn parse_event(raw: Option<&str>) -> Self {
+        match raw.unwrap_or("info").to_ascii_lowercase().as_str() {
+            "error" => Self::Error,
+            "warn" | "warning" => Self::Warn,
+            "debug" => Self::Debug,
+            "trace" => Self::Trace,
+            _ => Self::Info,
+        }
+    }
+
+    const fn severity(self) -> u8 {
+        match self {
+            Self::Off => u8::MAX,
+            Self::Error => 4,
+            Self::Warn => 3,
+            Self::Info => 2,
+            Self::Debug => 1,
+            Self::Trace => 0,
+        }
+    }
+}
+
 impl TraceCaptureConfig {
     const ROOT_RESULT_RESERVED_DRAFTS: usize = 2;
 
@@ -158,6 +215,7 @@ pub struct TraceCaptureProducer {
 #[derive(Debug)]
 struct TraceCaptureInner {
     config: TraceCaptureConfig,
+    log_level: Option<TraceLogLevel>,
     reserved_value_slots: usize,
     reserved_log_slots: usize,
     reserved_root_result_slots: usize,
@@ -189,6 +247,7 @@ impl TraceCaptureProducer {
             trace_heap: TraceHeap::new(),
             inner: Arc::new(Mutex::new(TraceCaptureInner {
                 config,
+                log_level: None,
                 reserved_value_slots: 0,
                 reserved_log_slots: 0,
                 reserved_root_result_slots: 0,
@@ -201,6 +260,41 @@ impl TraceCaptureProducer {
     #[must_use]
     pub fn disabled() -> Self {
         Self::new(TraceCaptureConfig::disabled())
+    }
+
+    /// Create a producer that rejects suppressed log levels before snapshot
+    /// copying or bounded-queue reservation.
+    #[must_use]
+    pub fn new_with_log_level(config: TraceCaptureConfig, log_level: TraceLogLevel) -> Self {
+        let producer = Self::new(config);
+        producer
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .log_level = Some(log_level);
+        producer
+    }
+
+    /// Returns whether another producer handle can still publish captures.
+    ///
+    /// Once this returns `false`, no new producer can be cloned from another
+    /// handle, so a consumer can perform one final drain and stop polling.
+    #[must_use]
+    pub fn has_other_handles(&self) -> bool {
+        Arc::strong_count(&self.inner) > 1
+    }
+
+    /// Returns whether a log at `level` should be copied into this producer.
+    #[must_use]
+    pub fn captures_log_level(&self, level: Option<&str>) -> bool {
+        let inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner.config.enabled
+            && inner
+                .log_level
+                .is_none_or(|configured| configured.allows(level))
     }
 
     #[must_use]
@@ -630,7 +724,7 @@ mod tests {
         trace_heap::{TraceHeap, TraceSnapshot, TraceSnapshotHandle, TraceValue, TraceValueRef},
         value_capture::{
             CaptureKind, CaptureSkipReason, TraceCaptureConfig, TraceCaptureProducer,
-            TraceDrainFailureReason, TraceLogMetadata,
+            TraceDrainFailureReason, TraceLogLevel, TraceLogMetadata,
         },
     };
 
@@ -871,6 +965,27 @@ mod tests {
         assert_eq!(report.logs[1].body, r#"{"user": "ada", "count": 42}"#);
         assert_eq!(producer.trace_heap().retained_snapshot_count(), 0);
         assert!(producer.drain().is_empty());
+    }
+
+    #[test]
+    fn log_level_filter_rejects_suppressed_events_before_queueing() {
+        let producer = TraceCaptureProducer::new_with_log_level(
+            TraceCaptureConfig::logs_only(1),
+            TraceLogLevel::Error,
+        );
+
+        for _ in 0..10 {
+            assert!(!producer.captures_log_level(Some("debug")));
+        }
+        assert!(producer.captures_log_level(Some("error")));
+        producer
+            .capture_log_with(boundary_id(), trace_key(), |trace_heap| {
+                (fake_log_metadata(), test_snapshot(trace_heap, 42))
+            })
+            .unwrap();
+
+        assert_eq!(producer.drain_rendered_logs().logs.len(), 1);
+        assert_eq!(producer.stats().skipped_log_queue_full, 0);
     }
 
     #[test]

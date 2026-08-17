@@ -13,6 +13,38 @@ function single_required_arg(value: string) -> string {
   value
 }
 
+// Exercises structured BAML logs across the host SDK call boundary. The
+// bridge renders these events to stderr according to the BAML_LOG threshold.
+function sdk_bridge_logs() -> int {
+  log.debug("sdk bridge debug")
+  log.info("sdk bridge info")
+  log.warn({ "kind": "sdk bridge warning" })
+  log.error("sdk bridge error")
+  42
+}
+
+// Detached work can outlive the root SDK call, so its logs exercise the
+// bridge's post-result drain lifecycle.
+function sdk_bridge_detached_log() -> int {
+  spawn with baml.spawn.options(detach = true) {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(100n))
+    log.info("sdk bridge detached info")
+  }
+  42
+}
+
+// Cancellation drops the host future before the root returns. The bridge
+// must flush the root log and keep draining the detached child afterward.
+function sdk_bridge_cancelled_log() -> int {
+  spawn with baml.spawn.options(detach = true) {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(100n))
+    log.info("sdk bridge detached after cancel")
+  }
+  log.info("sdk bridge before cancel")
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(2000n))
+  42
+}
+
 function unhandled_spawn_error() -> int throws string {
   throw "boom"
 }

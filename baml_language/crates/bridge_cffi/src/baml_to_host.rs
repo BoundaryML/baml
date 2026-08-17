@@ -327,10 +327,13 @@ pub async fn call_and_encode(
 ) -> Vec<u8> {
     let options = CffiHandleTableOptions::for_in_process();
     let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
+    let log_capture = crate::sdk_logs::SdkLogCapture::from_call_context(&call_ctx);
 
-    let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
-        .catch_unwind()
-        .await;
+    let caught = crate::sdk_logs::run_with_log_capture(
+        log_capture,
+        AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx)).catch_unwind(),
+    )
+    .await;
 
     let result = match caught {
         Ok(call_result) => result_to_outbound(call_result, &options),
@@ -415,9 +418,12 @@ pub async fn call_handle_and_encode(
 
     let options = CffiHandleTableOptions::for_in_process();
     let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
-    let caught = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx))
-        .catch_unwind()
-        .await;
+    let log_capture = crate::sdk_logs::SdkLogCapture::from_call_context(&call_ctx);
+    let caught = crate::sdk_logs::run_with_log_capture(
+        log_capture,
+        AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx)).catch_unwind(),
+    )
+    .await;
     let result = match caught {
         Ok(call_result) => result_to_outbound(call_result, &options),
         Err(panic_info) => BamlOutboundResult {
