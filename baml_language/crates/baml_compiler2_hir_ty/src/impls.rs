@@ -255,23 +255,21 @@ pub fn package_impl_locs<'db>(
 /// termination argument (a fact-rich context would let the matcher
 /// re-enter the resolver that called it).
 pub(crate) struct AliasOnlyFacts<'db> {
-    facts: crate::facts::Facts<'db>,
+    db: &'db dyn baml_compiler2_ppir::Db,
 }
 
 impl<'db> AliasOnlyFacts<'db> {
     pub(crate) fn new(db: &'db dyn baml_compiler2_ppir::Db) -> AliasOnlyFacts<'db> {
-        AliasOnlyFacts {
-            facts: crate::facts::Facts::new(db),
-        }
+        AliasOnlyFacts { db }
     }
 }
 
 impl TypeContext for AliasOnlyFacts<'_> {
     fn alias_def(&self, name: &TypeName) -> Option<baml_type::Ty> {
-        self.facts.alias_def(name)
+        crate::facts::uncached_alias_def(self.db, name)
     }
     fn enum_variants(&self, name: &TypeName) -> Option<Vec<Name>> {
-        self.facts.enum_variants(name)
+        crate::facts::uncached_enum_variants(self.db, name)
     }
     fn implements_interface(&self, _: &baml_type::Ty, _: &baml_type::Interface) -> bool {
         false

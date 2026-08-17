@@ -25,7 +25,7 @@ use baml_compiler2_ast::{ExprBody, ExprId, MatchArmId, PatId, Pattern};
 use baml_type::{
     Freshness, TyAttr,
     interned::{InterfaceRef, Ty, TyKind},
-    normalize::{TypeContext as _, is_subtype_interned, normalize_interned},
+    normalize::{TypeContext as _, normalize_interned},
 };
 
 use super::{Expectation, InferenceContext};
@@ -696,7 +696,7 @@ impl<'db> InferenceContext<'db> {
                 })
             })
             .collect();
-        let head_covers = provable_subtype(scrut, &head, &self.facts);
+        let head_covers = provable_subtype(scrut, &head, &self.facts, &self.canonical_cache);
 
         // The matrix's single-ctor STRUCT VIEW of an existential
         // (`Ctor::Interface`, rustc's non-enum struct treatment): field
@@ -891,7 +891,7 @@ impl<'db> InferenceContext<'db> {
                 consumes_matched: false,
             };
         }
-        let covers = provable_subtype(scrut, pat_ty, &self.facts);
+        let covers = provable_subtype(scrut, pat_ty, &self.facts, &self.canonical_cache);
         if let TyKind::Union(members, _) = scrut.kind()
             && !covers
         {
@@ -899,8 +899,8 @@ impl<'db> InferenceContext<'db> {
             let claimed: Vec<&Ty> = members
                 .iter()
                 .filter(|member| {
-                    provable_subtype(member, pat_ty, &self.facts)
-                        || provable_subtype(pat_ty, member, &self.facts)
+                    provable_subtype(member, pat_ty, &self.facts, &self.canonical_cache)
+                        || provable_subtype(pat_ty, member, &self.facts, &self.canonical_cache)
                 })
                 .collect();
             if !claimed.is_empty() {
@@ -908,11 +908,13 @@ impl<'db> InferenceContext<'db> {
                 let alts: Vec<DPat> = claimed
                     .iter()
                     .map(|member| {
-                        let inner = if provable_subtype(member, pat_ty, &self.facts) {
-                            DPat::wildcard(member.to_plain())
-                        } else {
-                            self.dpat_for_type(pat_ty, member)
-                        };
+                        let inner =
+                            if provable_subtype(member, pat_ty, &self.facts, &self.canonical_cache)
+                            {
+                                DPat::wildcard(member.to_plain())
+                            } else {
+                                self.dpat_for_type(pat_ty, member)
+                            };
                         DPat::union_member(member.to_plain(), inner, scrut_plain.clone())
                     })
                     .collect();
@@ -959,7 +961,7 @@ impl<'db> InferenceContext<'db> {
     /// pattern type stands (rigid pairs keep the written type - TIR's
     /// `intersect_pattern_flow_types` policy).
     fn narrow_to(&self, scrut: &Ty, pat_ty: &Ty) -> Ty {
-        if provable_subtype(scrut, pat_ty, &self.facts) {
+        if provable_subtype(scrut, pat_ty, &self.facts, &self.canonical_cache) {
             scrut.clone()
         } else {
             pat_ty.clone()
@@ -976,7 +978,7 @@ impl<'db> InferenceContext<'db> {
         // provably fits is a wildcard at this column, whatever its shape
         // (a same-union pattern must not decompose into per-member
         // singles that no longer align with UnionMember ctors).
-        if provable_subtype(col, pat_ty, &self.facts) {
+        if provable_subtype(col, pat_ty, &self.facts, &self.canonical_cache) {
             return DPat::wildcard(col_plain);
         }
         match pat_ty.kind() {
@@ -1044,7 +1046,7 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             _ => {
-                if provable_subtype(col, pat_ty, &self.facts) {
+                if provable_subtype(col, pat_ty, &self.facts, &self.canonical_cache) {
                     DPat::wildcard(col_plain)
                 } else {
                     DPat::single(pat_plain, col_plain)
@@ -1194,7 +1196,7 @@ impl<'db> InferenceContext<'db> {
                 })
             })
             .collect();
-        let head_covers = provable_subtype(scrut, &head, &self.facts);
+        let head_covers = provable_subtype(scrut, &head, &self.facts, &self.canonical_cache);
 
         // Union scrutinee: claim the same-class member.
         let dpat = {
@@ -1415,8 +1417,17 @@ impl<'db> InferenceContext<'db> {
                     return true;
                 };
                 if let Some(ascribed) = self.pattern_ascription_ty(body, sub) {
-                    return provable_subtype(&ascribed, &expanded, &self.facts)
-                        || provable_subtype(&expanded, &ascribed, &self.facts);
+                    return provable_subtype(
+                        &ascribed,
+                        &expanded,
+                        &self.facts,
+                        &self.canonical_cache,
+                    ) || provable_subtype(
+                        &expanded,
+                        &ascribed,
+                        &self.facts,
+                        &self.canonical_cache,
+                    );
                 }
                 self.pattern_fits(body, sub, &expanded)
             }
@@ -1473,7 +1484,12 @@ impl<'db> InferenceContext<'db> {
 /// A PROVABLE subtype verdict: ground on both sides and confirmed by the
 /// oracle. Rigid or unresolved pairs are not provable - the conservative
 /// direction for both coverage and claiming.
-pub(super) fn provable_subtype(sub: &Ty, sup: &Ty, facts: &crate::facts::Facts<'_>) -> bool {
+pub(super) fn provable_subtype(
+    sub: &Ty,
+    sup: &Ty,
+    facts: &crate::facts::Facts<'_>,
+    canonical_cache: &baml_type::normalize::InternedCanonicalCache,
+) -> bool {
     if sub == sup {
         return true;
     }
@@ -1485,7 +1501,7 @@ pub(super) fn provable_subtype(sub: &Ty, sup: &Ty, facts: &crate::facts::Facts<'
     // against an unrelated concrete does not - which is exactly the B-633
     // rule). The corpus pinned the case this matters for: a synthetic
     // effect var IS covered by `throws unknown`.
-    is_subtype_interned(sub, sup, facts)
+    canonical_cache.is_subtype(sub, sup, facts)
 }
 
 /// The legal shapes of a rest sub-pattern: the wildcard, a bare
