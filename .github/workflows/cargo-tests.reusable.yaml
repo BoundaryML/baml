@@ -954,6 +954,23 @@ jobs:
         include: ${{ fromJSON(needs.sdk-test-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: ${{ matrix.timeout }}
+    env:
+      # Raised from the runner unit's 16-pin (workflow env overrides unit env,
+      # so this is deterministic per commit). 16 was tuned when the elastic
+      # guests could be memory-deflated under a burst; with the fleet-side
+      # working-set floor live, the honest ceiling is contention, not memory.
+      # If the rust sdk init-race or loom soak flakes return, revert to 16 -
+      # those were the reason for the original pin.
+      NEXTEST_TEST_THREADS: "32"
+      RUST_TEST_THREADS: "32"
+      # Same honesty pin family as CARGO_BUILD_JOBS: the go fixture gates run
+      # `go test ./...` on a 64-vCPU elastic guest shared with pool siblings.
+      GOMAXPROCS: "16"
+      # Skip DWARF generation on fixture test-binary links; the gates only
+      # ever run the binaries, nothing debugs them. (-s too would be nicer,
+      # but GOFLAGS cannot carry a flag value containing a space; -w alone is
+      # most of the link-time win.)
+      GOFLAGS: "-ldflags=-w"
     steps:
       - uses: actions/checkout@v6
         with:
