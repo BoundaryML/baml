@@ -1525,7 +1525,7 @@ function csv_caller_owned_handles_stay_open() -> string {
     w.write_record(record);
     w.close();
     // The caller's handle is still usable after w.close().
-    let appended = wf.write("tail\n");
+    let appended = wf.write("tail\n".to_utf8());
     wf.close();
     let content = baml.fs.read(path);
     baml.fs.remove(path);

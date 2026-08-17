@@ -26,21 +26,25 @@ async fn net_connect_and_read() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> uint8array {{
+            function main() -> uint8array? {{
                 let sock = baml.net.TcpStream.connect("{addr}");
-                sock.read()
+                sock.read(1024)
             }}
         "#
     ));
     server.await.unwrap();
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
-    function main() -> uint8array {
+    function main() -> uint8array | null {
         load_const "{ADDR}"
         load_const <omitted>
         call baml.net.TcpStream.connect
-        load_const <omitted>
-        call baml.net.TcpStream.read
+        load_const 1024
+        load_type baml.io.Read
+        load_const "read"
+        virtual_call nargs=2 ntypeargs=0
+        store_var _0
+        load_var _0
         return
     }
     "#);
@@ -54,20 +58,24 @@ async fn net_connect_and_read() {
 async fn net_connect_failure() {
     let output = baml_test!(
         r#"
-            function main() -> uint8array {
+            function main() -> uint8array? {
                 let sock = baml.net.TcpStream.connect("127.0.0.1:1");
-                sock.read()
+                sock.read(1024)
             }
         "#
     );
 
     insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> uint8array {
+    function main() -> uint8array | null {
         load_const "127.0.0.1:1"
         load_const <omitted>
         call baml.net.TcpStream.connect
-        load_const <omitted>
-        call baml.net.TcpStream.read
+        load_const 1024
+        load_type baml.io.Read
+        load_const "read"
+        virtual_call nargs=2 ntypeargs=0
+        store_var _0
+        load_var _0
         return
     }
     "#);
@@ -91,10 +99,10 @@ async fn net_multiple_reads() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> uint8array {{
+            function main() -> uint8array? {{
                 let sock = baml.net.TcpStream.connect("{addr}");
-                let first = sock.read();
-                let second = sock.read();
+                let first = sock.read(1024);
+                let second = sock.read(1024);
                 first
             }}
         "#
@@ -102,18 +110,22 @@ async fn net_multiple_reads() {
     server.await.unwrap();
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
-    function main() -> uint8array {
+    function main() -> uint8array | null {
         load_const "{ADDR}"
         load_const <omitted>
         call baml.net.TcpStream.connect
         store_var sock
         load_var sock
-        load_const <omitted>
-        call baml.net.TcpStream.read
+        load_const 1024
+        load_type baml.io.Read
+        load_const "read"
+        virtual_call nargs=2 ntypeargs=0
         store_var first
         load_var sock
-        load_const <omitted>
-        call baml.net.TcpStream.read
+        load_const 1024
+        load_type baml.io.Read
+        load_const "read"
+        virtual_call nargs=2 ntypeargs=0
         store_var second
         load_var first
         return
@@ -125,16 +137,19 @@ async fn net_multiple_reads() {
     );
 }
 
-// Kept in Rust (not the baml_src corpus): the silent peer must be a
-// controlled Rust listener that accepts and holds the connection open. A
-// corpus version using `baml.http.Server.bind` as the silent peer is flaky —
-// the BAML listener object can be GC-collected between `connect` and the
-// throwing `read`, resetting the connection into an `Io` error instead of the
-// expected `Timeout`, intermittently under load.
+// `read` carries no deadline of its own: a blocked read is bounded by the
+// native cancellation system, so a timeout is a `CancelToken` fired by a
+// sleeping task. These two cases stay in Rust (not the baml_src corpus)
+// because the silent peer must be a controlled listener that accepts and holds
+// the connection open. A corpus version using `baml.http.Server.bind` as the
+// silent peer is flaky — the BAML listener object can be GC-collected between
+// `connect` and the read, resetting the connection into an `Io` error instead
+// of the expected cancellation, intermittently under load.
 #[tokio::test]
-async fn net_read_timeout_fires() {
-    // The server accepts the connection but never writes, so a bare read() would
-    // block forever. A short read timeout must surface as baml.errors.Timeout.
+async fn net_read_cancelled_by_deadline() {
+    // The server accepts the connection but never writes, so the read parks
+    // forever; firing the spawn's cancel token must unpark it as
+    // baml.panics.Cancelled.
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap().to_string();
 
@@ -146,27 +161,39 @@ async fn net_read_timeout_fires() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> uint8array {{
+            function main() -> string {{
                 let sock = baml.net.TcpStream.connect("{addr}");
-                sock.read(timeout = baml.time.Duration.from_milliseconds(50n))
+                let tok = baml.spawn.CancelToken.new();
+                let read = spawn with baml.spawn.options(cancel = tok) {{
+                    sock.read(1024)
+                }};
+                let deadline = spawn {{
+                    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+                    tok.cancel()
+                }};
+                let outcome = (await read) catch (e) {{
+                    baml.panics.Cancelled => "cancelled"
+                }};
+                match (outcome) {{
+                    let reason: string => reason,
+                    null => "eof",
+                    let chunk: uint8array => "read",
+                }}
             }}
         "#
     ));
     server.await.unwrap();
 
-    let err = output
-        .result
-        .expect_err("read with a 50ms timeout against a silent peer should time out")
-        .to_string();
-    assert!(
-        err.contains("baml.errors.Timeout"),
-        "expected a baml.errors.Timeout throw, got: {err}"
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("cancelled".into())),
+        "a read against a silent peer should be cancelled by the 50ms deadline"
     );
 }
 
 #[tokio::test]
-async fn net_read_succeeds_within_timeout() {
-    // A generous read timeout must not interfere with a prompt response.
+async fn net_read_completes_before_deadline() {
+    // A generous deadline must not interfere with a prompt response.
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap().to_string();
 
@@ -178,9 +205,20 @@ async fn net_read_succeeds_within_timeout() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> uint8array {{
+            function main() -> uint8array? {{
                 let sock = baml.net.TcpStream.connect("{addr}");
-                sock.read(timeout = baml.time.Duration.from_seconds(5n))
+                let tok = baml.spawn.CancelToken.new();
+                let read = spawn with baml.spawn.options(cancel = tok) {{
+                    sock.read(1024)
+                }};
+                let deadline = spawn {{
+                    baml.sys.sleep(baml.time.Duration.from_seconds(5n));
+                    tok.cancel()
+                }};
+                let chunk = await read;
+                // Stop the pending deadline so the test does not wait it out.
+                deadline.cancel();
+                chunk
             }}
         "#
     ));
@@ -207,12 +245,12 @@ async fn net_connect_timeout_param_accepted() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> uint8array {{
+            function main() -> uint8array? {{
                 let sock = baml.net.TcpStream.connect(
                     "{addr}",
                     timeout = baml.time.Duration.from_seconds(5n),
                 );
-                sock.read()
+                sock.read(1024)
             }}
         "#
     ));

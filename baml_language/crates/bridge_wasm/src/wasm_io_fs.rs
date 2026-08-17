@@ -186,30 +186,6 @@ fn remove_dir_all_recursive(vfs: &WasmVfs, path: &str) -> Result<(), VmBamlError
 // ============================================================================
 
 impl io::IoClassFsFile for WasmIoFs {
-    fn text(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
     fn read(
         &self,
         _h: &Arc<BexHeap>,
@@ -217,20 +193,7 @@ impl io::IoClassFsFile for WasmIoFs {
         _f: owned::fs::File,
         _n: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn read_bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: owned::fs::File,
-        _n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
@@ -267,7 +230,7 @@ impl io::IoClassFsFile for WasmIoFs {
         _h: &Arc<BexHeap>,
         _c: CallId,
         _f: owned::fs::File,
-        _d: String,
+        _d: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -275,14 +238,13 @@ impl io::IoClassFsFile for WasmIoFs {
         })
     }
 
-    fn write_bytes(
+    fn flush(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _f: owned::fs::File,
-        _d: Vec<u8>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
+    ) -> SysOpOutput<()> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })

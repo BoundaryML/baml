@@ -476,7 +476,7 @@ function baml.csv._cell_by_index(rec: baml.csv.CsvRecord, index: int) -> T?  [bu
 function baml.csv._cell_by_name(rec: baml.csv.CsvRecord, column: string) -> T?  [builtin]
 function baml.csv._decode_record(rec: baml.csv.CsvRecord) -> T  [builtin]
 function baml.csv._emit(self: ?, out: string) -> null  [expr] {
-  {  } match (self._file) { null => null, f: root.fs.File => { if (out.length() Gt 0) { f.write(out) catch (_) { root.errors.InvalidArgument { message: message } => { throw root.errors.Io { message: "underlying file h..." Add message } } } } } null }
+  {  } match (self._file) { null => null, f: root.fs.File => { if (out.length() Gt 0) { f.write(out.to_utf8()) } } null }
 }
 function baml.csv._encode_header(self: ?, names: string[]) -> string  [builtin]
 function baml.csv._encode_record(self: ?, record: baml.csv.CsvValue[]) -> string  [builtin]
@@ -492,8 +492,8 @@ function baml.csv._mark_closed(self: ?) -> null  [builtin]
 function baml.csv._mark_exhausted(self: ?) -> null  [builtin]
 function baml.csv._poll(self: ?) -> baml.csv.CsvRecord | baml.csv.CsvSkip | baml.csv.CsvNeedData | root.iter.Done  [builtin]
 function baml.csv._poll_headers(self: ?) -> baml.csv.CsvHeaders | baml.csv.CsvNeedData  [builtin]
-function baml.csv._read_chunk(self: ?) -> null  [expr] {
-  {  } match (self._file) { null => { self._feed_eof() } null, f: root.fs.File => { let chunk = f.read_bytes(65536) catch (e) { root.errors.InvalidArgument { message: message } => { throw _error(CsvErrorKind.Closed, "underlying file h..." Add message) }, root.errors.Io => { self._mark_exhausted(); throw e } }; if (chunk.length() Eq 0) { self._feed_eof() } else { self._feed(chunk) } } null }
+function baml.csv._read_chunk(self: ?) -> void  [expr] {
+  { let chunk = self._file?.read(65536) catch (e) { root.errors.Io => { self._mark_exhausted(); throw e } } } match (chunk) { null => { self._feed_eof() }, bytes: uint8array => { self._feed(bytes) } }
 }
 function baml.csv._reader(source: string | uint8array | root.fs.File, options: baml.csv.ReaderOptions?, owns_file: bool) -> baml.csv.CsvReader  [builtin]
 function baml.csv._to_markdown(rows: T[], max_rows: int) -> string  [builtin]
@@ -805,15 +805,17 @@ class baml.fs.MkdirOptions {
 class baml.fs.MkdirOptions$stream {
   recursive: bool | null
 }
-function baml.fs.bytes(self: ?) -> uint8array  [builtin]
+function baml.fs.bytes(self: ?) -> uint8array  [expr] {
+  {  } self.as<root.io.Read>.read_to_end()
+}
 function baml.fs.chmod(path: string, mode: int) -> void  [builtin]
 function baml.fs.close(self: ?) -> null  [builtin]
 function baml.fs.exists(path: string) -> bool  [builtin]
+function baml.fs.flush(self: ?) -> void  [builtin]
 function baml.fs.mkdir(path: string, options: baml.fs.MkdirOptions) -> null  [builtin]
 function baml.fs.open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> baml.fs.File  [builtin]
-function baml.fs.read(self: ?, n: int) -> string  [builtin]
+function baml.fs.read(self: ?, n: int) -> uint8array?  [builtin]
 function baml.fs.read(path: string) -> string  [builtin]
-function baml.fs.read_bytes(self: ?, n: int) -> uint8array  [builtin]
 function baml.fs.read_dir(path: string) -> baml.fs.DirEntry[]  [builtin]
 function baml.fs.remove(path: string) -> null  [builtin]
 function baml.fs.remove_dir(path: string) -> null  [builtin]
@@ -821,10 +823,14 @@ function baml.fs.remove_dir_all(path: string) -> null  [builtin]
 function baml.fs.seek_from(self: ?, whence: "start" | "current" | "end", offset: int) -> int  [builtin]
 function baml.fs.size(path: string) -> int  [builtin]
 function baml.fs.symlink(target: string, path: string) -> void  [builtin]
-function baml.fs.text(self: ?) -> string  [builtin]
-function baml.fs.write(self: ?, data: string) -> int  [builtin]
+function baml.fs.text(self: ?) -> string  [expr] {
+  {  } self.as<root.io.Read>.read_to_string()
+}
+function baml.fs.write(self: ?, data: uint8array) -> int  [builtin]
+function baml.fs.write(self: ?, data: string | uint8array) -> int  [expr] {
+  { let bytes = match (data) { string => data.to_utf8(), uint8array => data } } self.as<root.io.Write>.write(bytes)
+}
 function baml.fs.write(path: string, content: string) -> int  [builtin]
-function baml.fs.write_bytes(self: ?, data: uint8array) -> int  [builtin]
 function baml.fs.write_bytes(path: string, content: uint8array) -> int  [builtin]
 
 --- <builtin>/baml/ns_future/future.baml ---
@@ -999,6 +1005,22 @@ function baml.io.eprintln(s: string) -> null  [builtin]
 function baml.io.input(prompt: string?) -> string  [builtin]
 function baml.io.print(s: string) -> null  [builtin]
 function baml.io.println(s: string) -> null  [builtin]
+
+--- <builtin>/baml/ns_io/read.baml ---
+function baml.io.read(self: ?, limit: int) -> uint8array?  [missing]
+function baml.io.read_to_end(self: ?) -> uint8array  [expr] {
+  { let buf = b"<0 bytes>"; while let chunk: uint8array = self.read(int.max_value()) { buf = buf.concat(chunk) } } buf
+}
+function baml.io.read_to_string(self: ?) -> string  [expr] {
+  { let buf = self.read_to_end() } string.from_utf8(buf) catch (_) { _ => throw root.errors.ParseError { message: "invalid utf-8" } }
+}
+
+--- <builtin>/baml/ns_io/write.baml ---
+function baml.io.flush(self: ?) -> void  [missing]
+function baml.io.write(self: ?, data: uint8array) -> int  [missing]
+function baml.io.write_all(self: ?, data: uint8array) -> void  [expr] {
+  { while data.length() Gt 0 { let written = self.write(data); if (written Eq 0) { throw root.errors.Io { message: "stream closed wit..." } }; data = data.slice(written, data.length()) } }
+}
 
 --- <builtin>/baml/ns_iter/iter.baml ---
 class baml.iter.ArrayIterator {
@@ -1387,13 +1409,11 @@ class baml.net.UdpSocket$stream {
   _handle: $rust_type
 }
 function baml.net._connect(addr: string, timeout_nanos: bigint) -> baml.net.TcpStream  [builtin]
-function baml.net._read(self: ?, timeout_nanos: bigint) -> uint8array  [builtin]
 function baml.net._recv_from(self: ?, timeout_nanos: bigint) -> baml.net.Datagram  [builtin]
 function baml.net._send_to(self: ?, data: uint8array, addr: string, timeout_nanos: bigint) -> int  [builtin]
 function baml.net._timeout_nanos(timeout: root.time.Duration?) -> bigint  [expr] {
   {  } match (timeout) { null => 0n, t: root.time.Duration => t.to_nanoseconds() }
 }
-function baml.net._write(self: ?, data: uint8array, timeout_nanos: bigint) -> null  [builtin]
 function baml.net.accept(self: ?) -> baml.net.TcpStream  [builtin]
 function baml.net.bind(addr: string) -> baml.net.TcpListener  [builtin]
 function baml.net.bind(addr: string) -> baml.net.UdpSocket  [builtin]
@@ -1403,18 +1423,17 @@ function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.connect(addr: string, timeout: root.time.Duration? = null) -> baml.net.TcpStream  [expr] {
   {  } TcpStream._connect(addr, _timeout_nanos(timeout))
 }
-function baml.net.read(self: ?, timeout: root.time.Duration? = null) -> uint8array  [expr] {
-  {  } self._read(_timeout_nanos(timeout))
+function baml.net.flush(self: ?) -> void  [expr] {
+  {  }
 }
+function baml.net.read(self: ?, n: int) -> uint8array?  [builtin]
 function baml.net.recv_from(self: ?, timeout: root.time.Duration? = null) -> baml.net.Datagram  [expr] {
   {  } self._recv_from(_timeout_nanos(timeout))
 }
 function baml.net.send_to(self: ?, data: uint8array, addr: string, timeout: root.time.Duration? = null) -> int  [expr] {
   {  } self._send_to(data, addr, _timeout_nanos(timeout))
 }
-function baml.net.write(self: ?, data: uint8array, timeout: root.time.Duration? = null) -> null  [expr] {
-  {  } self._write(data, _timeout_nanos(timeout))
-}
+function baml.net.write(self: ?, data: uint8array) -> int  [builtin]
 
 --- <builtin>/baml/ns_ops/bitwise.baml ---
 function baml.ops.bit_and(self: ?, rhs: Rhs) -> Self.Output  [missing]
@@ -2080,12 +2099,16 @@ lambda (params) in options: captures [group, cancel, detach]
 
 --- <builtin>/baml/ns_sys/sys.baml ---
 class baml.sys.Process {
-  stdout: baml.sys.ProcessLineStream
   _handle: $rust_type
+  stdin: baml.sys.WritePipe
+  stdout: baml.sys.ReadPipe
+  stderr: baml.sys.ReadPipe
 }
 class baml.sys.Process$stream {
-  stdout: baml.sys.ProcessLineStream$stream | null
   _handle: $rust_type
+  stdin: baml.sys.WritePipe$stream | null
+  stdout: baml.sys.ReadPipe$stream | null
+  stderr: baml.sys.ReadPipe$stream | null
 }
 class baml.sys.ProcessExit {
   exit_code: int
@@ -2094,12 +2117,6 @@ class baml.sys.ProcessExit {
 class baml.sys.ProcessExit$stream {
   exit_code: int | null
   signal: string | null
-}
-class baml.sys.ProcessLineStream {
-  _handle: $rust_type
-}
-class baml.sys.ProcessLineStream$stream {
-  _handle: $rust_type
 }
 class baml.sys.ProcessOptions {
   cwd: string?
@@ -2115,6 +2132,20 @@ class baml.sys.ProcessOptions$stream {
   stdin: string | null
   keep_stdin_open: bool | null
 }
+class baml.sys.ReadPipe {
+  _pipe: $rust_type
+}
+class baml.sys.ReadPipe$stream {
+  _pipe: $rust_type
+}
+class baml.sys.ReadPipeLines {
+  pipe: baml.sys.ReadPipe
+  _pending: uint8array
+}
+class baml.sys.ReadPipeLines$stream {
+  pipe: baml.sys.ReadPipe$stream | null
+  _pending: uint8array
+}
 class baml.sys.ShellOutput {
   stdout: uint8array
   stderr: uint8array
@@ -2125,20 +2156,32 @@ class baml.sys.ShellOutput$stream {
   stderr: uint8array
   exit_code: int | null
 }
-function baml.sys._next(self: ?) -> string?  [builtin]
+class baml.sys.WritePipe {
+  _pipe: $rust_type
+}
+class baml.sys.WritePipe$stream {
+  _pipe: $rust_type
+}
+function baml.sys._strip_carriage_return(line: uint8array) -> uint8array  [expr] {
+  {  } match (line.at(line.length() Sub 1)) { 13 => line.slice(0, line.length() Sub 1), _ => line }
+}
 function baml.sys.argv() -> string[]  [builtin]
 function baml.sys.close(self: ?) -> null  [builtin]
-function baml.sys.close(self: ?) -> null  [builtin]
-function baml.sys.close_stdin(self: ?) -> null  [builtin]
+function baml.sys.close(self: ?) -> void  [builtin]
+function baml.sys.close(self: ?) -> void  [builtin]
 function baml.sys.collect_garbage() -> null  [builtin]
 function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.exit(code: int) -> never  [builtin]
-function baml.sys.iter(self: ?) -> root.iter.Iterator<Item = string, Error = root.errors.Io | root.errors.Timeout>  [expr] {
+function baml.sys.flush(self: ?) -> void  [builtin]
+function baml.sys.iter(self: ?) -> root.iter.Iterator<Item = string, Error = root.errors.Io>  [expr] {
   {  } self
 }
-function baml.sys.kill(self: ?) -> null  [builtin]
+function baml.sys.kill(self: ?) -> void  [builtin]
+function baml.sys.lines(self: ?) -> baml.sys.ReadPipeLines  [expr] {
+  {  } baml.sys.ReadPipeLines { pipe: self, _pending: b"<0 bytes>" }
+}
 function baml.sys.next(self: ?) -> string | root.iter.Done  [expr] {
-  {  } match (self._next()) { line: string => line, null => root.iter.Done {  } }
+  { let line: string | root.iter.Done = root.iter.Done {  }; let framing = true; while framing {  } match (self._pending.index_of(10)) { index: int => { let bytes = self._pending.slice(0, index); self._pending = self._pending.slice(index Add 1, self._pending.length()); line = _strip_carriage_return(bytes).to_string(); framing = false }, null => {  } match (self.pipe.read(65536)) { chunk: uint8array => { self._pending = self._pending.concat(chunk) }, null => { if (self._pending.length() Gt 0) { line = _strip_carriage_return(self._pending).to_string(); self._pending = b"<0 bytes>" }; framing = false } } } } line
 }
 function baml.sys.ok(self: ?) -> bool  [expr] {
   {  } self.exit_code Eq 0
@@ -2148,11 +2191,12 @@ function baml.sys.ok(self: ?) -> bool  [expr] {
 }
 function baml.sys.panic(message: string) -> never  [builtin]
 function baml.sys.pid() -> int  [builtin]
+function baml.sys.read(self: ?, limit: int) -> uint8array?  [builtin]
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.sleep(delay: root.time.Duration) -> null  [builtin]
 function baml.sys.start_process(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.Process  [builtin]
 function baml.sys.wait(self: ?) -> baml.sys.ProcessExit  [builtin]
-function baml.sys.write_stdin(self: ?, data: string) -> null  [builtin]
+function baml.sys.write(self: ?, data: uint8array) -> int  [builtin]
 
 --- <builtin>/baml/ns_time/duration.baml ---
 class baml.time.Duration {
@@ -2720,6 +2764,7 @@ function baml.from_array(array: int[]) -> uint8array  [builtin]
 function baml.from_base64(base64: string) -> uint8array  [builtin]
 function baml.from_hex(hex: string) -> uint8array  [builtin]
 function baml.includes(self: ?, item: int) -> bool  [builtin]
+function baml.index_of(self: ?, item: int) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.pop(self: ?) -> int?  [builtin]
 function baml.push(self: ?, item: int) -> int  [builtin]

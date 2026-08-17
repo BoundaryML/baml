@@ -261,3 +261,23 @@ test "literal_as_call_argument" {
 test "index_read_direct" {
     assert.equal(byte_strings_index_read_direct(), 65)
 }
+
+// ─── B10. index_of: first match, absence, and out-of-range bytes ──────────────
+
+// 0x6c = 108 ('l'), first at index 2 of "hello"
+test "index_of_finds_first_match" {
+    assert.equal(b"hello".index_of(108), 2)
+}
+
+test "index_of_absent_byte_is_null" {
+    assert.is_true(b"hello".index_of(122) == null)
+}
+
+// Outside the u8 range, so it can never be present — matching `includes`.
+test "index_of_non_byte_is_null" {
+    assert.is_true(b"hello".index_of(300) == null)
+}
+
+test "index_of_empty_is_null" {
+    assert.is_true(b"".index_of(108) == null)
+}

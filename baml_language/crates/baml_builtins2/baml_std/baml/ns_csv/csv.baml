@@ -7,7 +7,7 @@
 //
 // The streaming reader is the only parser; every one-shot is a wrapper over
 // it. File IO goes through `baml.fs` handles: the reader pumps chunks via
-// `File.read_bytes` from thin BAML method bodies, while all tokenization,
+// `baml.io.Read` from thin BAML method bodies, while all tokenization,
 // decoding, and encoding is native.
 
 /// Classifies a `CsvError` for portable handling.
@@ -405,29 +405,21 @@ class CsvReader {
     /// (internal) Pull the next chunk from the backing file, or mark EOF for
     /// in-memory sources. IO errors are stream-scoped and fatal: the reader is
     /// marked exhausted before the throw, so subsequent `next()` calls return
-    /// `baml.iter.Done`.
-    function _read_chunk(self) -> null throws CsvError | root.errors.Io {
-        match (self._file) {
+    /// `baml.iter.Done`. A closed handle arrives as one of those IO errors —
+    /// `baml.io.Read` has no separate channel for it.
+    function _read_chunk(self) -> void throws root.errors.Io {
+        let chunk = self._file?.read(65536) catch (e) {
+            root.errors.Io => {
+                self._mark_exhausted();
+                throw e
+            },
+        };
+        match (chunk) {
             null => {
                 self._feed_eof();
-                null
             },
-            let f: root.fs.File => {
-                let chunk = f.read_bytes(65536) catch (e) {
-                    root.errors.InvalidArgument { message } => {
-                        throw _error(CsvErrorKind.Closed, "underlying file handle is closed: " + message)
-                    },
-                    root.errors.Io => {
-                        self._mark_exhausted();
-                        throw e
-                    },
-                };
-                if (chunk.length() == 0) {
-                    self._feed_eof();
-                } else {
-                    self._feed(chunk);
-                }
-                null
+            let bytes: uint8array => {
+                self._feed(bytes);
             },
         }
     }
@@ -583,11 +575,7 @@ class CsvWriter {
             null => null,
             let f: root.fs.File => {
                 if (out.length() > 0) {
-                    f.write(out) catch (_) {
-                        root.errors.InvalidArgument { message } => {
-                            throw root.errors.Io { message: "underlying file handle is closed: " + message }
-                        },
-                    };
+                    f.write(out.to_utf8());
                 }
                 null
             },

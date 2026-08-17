@@ -18,7 +18,7 @@
 //     fs_open_nonexistent_file
 //     fs_file_write_on_readonly_errors
 //     fs_remove_nonexistent_errors
-//     fs_file_read_negative_n_errors
+//     fs_file_read_non_positive_n_is_empty
 //     fs_file_close_invalidates_handle
 //     fs_write_wrapper_closes_on_error
 //     fs_read_nonexistent_errors
@@ -194,7 +194,7 @@ function fs_file_rw_write_and_read_back_fn() -> string {
     baml.fs.write(path, "Hello from BAML!");
     let file = baml.fs.open(path, "r+");
     file.seek_from("start", 6);
-    file.write("to Rust!!");
+    file.write("to Rust!!".to_utf8());
     file.seek_from("start", 0);
     let result = file.text();
     baml.fs.remove(path);
@@ -206,7 +206,7 @@ test "fs_file_rw_write_and_read_back" {
 }
 
 // ============================================================================
-// write_bytes to open file handle
+// write raw bytes to an open file handle
 // ============================================================================
 
 function fs_file_rw_write_bytes_fn() -> bool {
@@ -219,7 +219,7 @@ function fs_file_rw_write_bytes_fn() -> bool {
     let bytes = baml.fs.open(src, "r").bytes();
     let file = baml.fs.open(dst, "r+");
     file.seek_from("start", 0);
-    let n = file.write_bytes(bytes);
+    let n = file.write(bytes);
     baml.fs.remove(src);
     baml.fs.remove(dst);
     // "AB" is 2 bytes
@@ -292,48 +292,67 @@ test "fs_size_returns_length" {
 }
 
 // ============================================================================
-// file.read(n) reads up to n bytes as a string
+// file.read(n) reads up to n bytes. `?? b""` only stands in for end-of-file,
+// which none of these fixtures reach — the assertion still pins the content.
 // ============================================================================
 
-function fs_file_read_n_bytes_fn() -> string {
+function fs_file_read_n_bytes_fn() -> uint8array {
     let path = fs_tmp("read_n.txt");
     baml.fs.write(path, "Hello, world!");
     let f = baml.fs.open(path, "r");
-    let result = f.read(5);
+    let result = f.read(5) ?? b"";
     baml.fs.remove(path);
     result
 }
 
 test "fs_file_read_n_bytes" {
-    assert.equal(fs_file_read_n_bytes_fn(), "Hello")
+    assert.equal(fs_file_read_n_bytes_fn(), "Hello".to_utf8())
 }
 
 // ============================================================================
 // file.read(n) truncates at EOF (doesn't error when n > file size)
 // ============================================================================
 
-function fs_file_read_truncates_at_eof_fn() -> string {
+function fs_file_read_truncates_at_eof_fn() -> uint8array {
     let path = fs_tmp("read_eof.txt");
     baml.fs.write(path, "abc");
     let f = baml.fs.open(path, "r");
-    let result = f.read(100);
+    let result = f.read(100) ?? b"";
     baml.fs.remove(path);
     result
 }
 
 test "fs_file_read_truncates_at_eof" {
-    assert.equal(fs_file_read_truncates_at_eof_fn(), "abc")
+    assert.equal(fs_file_read_truncates_at_eof_fn(), "abc".to_utf8())
 }
 
 // ============================================================================
-// file.read_bytes(n) reads n raw bytes — verified by length
+// file.read(n) at the very end of the file signals EOF with `null`
+// ============================================================================
+
+function fs_file_read_at_eof_is_null_fn() -> bool {
+    let path = fs_tmp("read_at_eof.txt");
+    baml.fs.write(path, "abc");
+    let f = baml.fs.open(path, "r");
+    f.read(100);
+    let past_end = f.read(100);
+    baml.fs.remove(path);
+    past_end == null
+}
+
+test "fs_file_read_at_eof_is_null" {
+    assert.is_true(fs_file_read_at_eof_is_null_fn())
+}
+
+// ============================================================================
+// file.read(n) reads n raw bytes — verified by length
 // ============================================================================
 
 function fs_file_read_bytes_n_fn() -> bool {
     let path = fs_tmp("read_bytes_n.bin");
     baml.fs.write(path, "ABCDE");
     let f = baml.fs.open(path, "r");
-    let data = f.read_bytes(3);
+    let data = f.read(3) ?? b"";
     baml.fs.remove(path);
     // should have read exactly 3 bytes
     data.length() == 3
@@ -347,18 +366,18 @@ test "fs_file_read_bytes_n" {
 // file.read advances the cursor (sequential reads)
 // ============================================================================
 
-function fs_file_read_advances_cursor_fn() -> string {
+function fs_file_read_advances_cursor_fn() -> uint8array {
     let path = fs_tmp("read_advances.txt");
     baml.fs.write(path, "ABCDEFGH");
     let f = baml.fs.open(path, "r");
     f.read(3);
-    let result = f.read(3);
+    let result = f.read(3) ?? b"";
     baml.fs.remove(path);
     result
 }
 
 test "fs_file_read_advances_cursor" {
-    assert.equal(fs_file_read_advances_cursor_fn(), "DEF")
+    assert.equal(fs_file_read_advances_cursor_fn(), "DEF".to_utf8())
 }
 
 // ============================================================================
@@ -369,7 +388,7 @@ function fs_open_append_creates_and_appends_fn() -> bool {
     let path = fs_tmp("append.txt");
     baml.fs.write(path, "start!");
     let f = baml.fs.open(path, "a");
-    let n = f.write("more!");
+    let n = f.write("more!".to_utf8());
     let readback = baml.fs.read(path);
     baml.fs.remove(path);
     n == 5 && readback == "start!more!"
@@ -389,9 +408,9 @@ function fs_open_append_creates_missing_file_fn() -> bool {
     // (if it does exist, this test's logic is still correct since we only
     //  check what we wrote — but let's be safe and overwrite)
     let f = baml.fs.open(path, "w");
-    f.write("");
+    f.write("".to_utf8());
     let f2 = baml.fs.open(path, "a");
-    let n = f2.write("hi");
+    let n = f2.write("hi".to_utf8());
     let readback = baml.fs.read(path);
     baml.fs.remove(path);
     n == 2 && readback == "hi"
@@ -409,7 +428,7 @@ function fs_open_append_plus_can_read_fn() -> string {
     let path = fs_tmp("append_plus.txt");
     baml.fs.write(path, "existing");
     let f = baml.fs.open(path, "a+");
-    f.write(" more");
+    f.write(" more".to_utf8());
     f.seek_from("start", 0);
     let result = f.text();
     baml.fs.remove(path);
@@ -461,7 +480,7 @@ function fs_open_w_truncates_existing_fn() -> bool {
     let path = fs_tmp("open_w_truncate.txt");
     baml.fs.write(path, "original content");
     let f = baml.fs.open(path, "w");
-    let n = f.write("new");
+    let n = f.write("new".to_utf8());
     let readback = baml.fs.read(path);
     baml.fs.remove(path);
     n == 3 && readback == "new"
@@ -478,7 +497,7 @@ test "fs_open_w_truncates_existing" {
 function fs_open_w_creates_missing_file_fn() -> bool {
     let path = fs_tmp("open_w_new.txt");
     let f = baml.fs.open(path, "w");
-    let n = f.write("hi");
+    let n = f.write("hi".to_utf8());
     let readback = baml.fs.read(path);
     baml.fs.remove(path);
     n == 2 && readback == "hi"
@@ -496,7 +515,7 @@ function fs_open_w_plus_reads_after_write_fn() -> string {
     let path = fs_tmp("open_w_plus.txt");
     baml.fs.write(path, "original");
     let f = baml.fs.open(path, "w+");
-    f.write("fresh");
+    f.write("fresh".to_utf8());
     f.seek_from("start", 0);
     let result = f.text();
     baml.fs.remove(path);
@@ -514,7 +533,7 @@ test "fs_open_w_plus_reads_after_write" {
 function fs_open_w_creates_parent_dirs_fn() -> bool {
     let path = fs_tmp("open_w_parent") + "/nested/dir/new.txt";
     let f = baml.fs.open(path, "w");
-    let n = f.write("nested");
+    let n = f.write("nested".to_utf8());
     let readback = baml.fs.read(path);
     // Can only remove the file; intermediate dirs cannot be removed via baml.fs.remove.
     // The path is unique per test so re-runs are idempotent (write overwrites).

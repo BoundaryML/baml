@@ -125,7 +125,7 @@ Application tool catalog (request via outcome.calls only):
 // terminal result event.
 function _read_result(p: baml.sys.Process) -> json {
     let result: json = null;
-    for (let line in p.stdout) {
+    for (let line in p.stdout.lines()) {
         let trimmed = line.trim();
         if (trimmed.length() > 0) {
             let raw = baml.json.parse(trimmed) catch_all (e) {
@@ -295,7 +295,10 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
         p.close()
     }
     // the CLI reads stdin when the pipe is open; deliver EOF immediately
-    let _ = p.close_stdin() catch_all (e) {
+    let _ = {
+        p.stdin.close();
+        null
+    } catch_all (e) {
         _ => null,
     };
     // events stream LIVE: each JSONL line logs as it arrives, and the last

@@ -1,8 +1,8 @@
 // Test hover on network builtins
 
-function TestNetConnect() -> uint8array {
+function TestNetConnect() -> uint8array? {
     let s = baml.net<[CURSOR].TcpStream.connect("127.0.0.1:8080");
-    s.read()
+    s.read(4096)
 }
 
 //----

@@ -24,6 +24,10 @@ function rpc_line(id: int?, method: string, params: map<string, unknown>?) -> st
 class McpConnection {
     server_name: string,
     p: baml.sys.Process,
+    // Framed once at connect: the stream buffers whatever it read past the
+    // last newline, so re-framing per `_request` would drop the start of the
+    // next message.
+    out: baml.sys.ReadPipeLines,
     next_id: int,
 
     // Spawn the server and perform the initialize handshake. The connection
@@ -42,7 +46,6 @@ class McpConnection {
                 env: null,
                 timeout_ms: timeout_ms,
                 stdin: null,
-                keep_stdin_open: true,
             },
         ) catch_all (e) {
             _ => {
@@ -53,7 +56,10 @@ class McpConnection {
                 }
             },
         };
-        let conn = McpConnection { server_name: name, p: p, next_id: 1 };
+        // `lines()` only wraps the pipe — reading it is what can fail, and that
+        // surfaces at `_request`.
+        let out = p.stdout.lines();
+        let conn = McpConnection { server_name: name, p: p, out: out, next_id: 1 };
         let init: map<string, unknown> = {
             "protocolVersion": "2025-06-18",
             "capabilities": {},
@@ -69,7 +75,7 @@ class McpConnection {
         // lose the newline the protocol frames on; the newline is a quoted
         // string, appended before the single write.
         let framed = [line, "\n"].join("");
-        let _ = self.p.write_stdin(framed) catch_all (e) {
+        self.p.stdin.write_all(framed.to_utf8()) catch_all (e) {
             _ => {
                 throw root.errors.NetworkFailure {
                     provider: `mcp/${self.server_name}`,
@@ -87,7 +93,7 @@ class McpConnection {
         self.next_id += 1;
         self._send(rpc_line(id, method, params));
         while (true) {
-            let next = self.p.stdout.next() catch_all (e) {
+            let next = self.out.next() catch_all (e) {
                 _ => {
                     throw root.errors.NetworkFailure {
                         provider: `mcp/${self.server_name}`,

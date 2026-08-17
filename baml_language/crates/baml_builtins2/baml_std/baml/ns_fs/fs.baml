@@ -9,29 +9,19 @@ class File {
     /// Reads the entire remaining file contents as a UTF-8 string.
     function text(
         self,
-    ) -> string throws root.errors.Io | root.errors.InvalidArgument | root.errors.ParseError {
-        $rust_io_function
+    ) -> string throws root.errors.Io | root.errors.ParseError {
+        self.as<root.io.Read>.read_to_string()
     }
 
     /// Reads the entire remaining file contents as raw bytes.
-    function bytes(self) -> uint8array throws root.errors.Io | root.errors.InvalidArgument {
-        $rust_io_function
+    function bytes(self) -> uint8array throws root.errors.Io {
+        self.as<root.io.Read>.read_to_end()
     }
 
-    /// Reads up to `n` bytes from the file and returns them as a UTF-8 string.
-    function read(
-        self,
-        n: int,
-    ) -> string throws root.errors.Io | root.errors.InvalidArgument | root.errors.ParseError {
-        $rust_io_function
-    }
-
-    /// Reads up to `n` bytes from the file and returns them as raw bytes.
-    function read_bytes(
-        self,
-        n: int,
-    ) -> uint8array throws root.errors.Io | root.errors.InvalidArgument {
-        $rust_io_function
+    implements root.io.Read {
+        function read(self, n: int) -> uint8array? throws root.errors.Io {
+            $rust_io_function
+        }
     }
 
     /// Closes the file handle, flushing any pending writes.
@@ -51,17 +41,23 @@ class File {
         $rust_io_function
     }
 
-    /// Writes `data` to the file at the current cursor position. Returns the number of bytes written.
-    function write(self, data: string) -> int throws root.errors.Io | root.errors.InvalidArgument {
-        $rust_io_function
+    implements root.io.Write {
+        function write(self, data: uint8array) -> int throws root.errors.Io {
+            $rust_io_function
+        }
+
+        function flush(self) -> void throws root.errors.Io {
+            $rust_io_function
+        }
     }
 
-    /// Writes raw bytes `data` to the file at the current cursor position. Returns the number of bytes written.
-    function write_bytes(
-        self,
-        data: uint8array,
-    ) -> int throws root.errors.Io | root.errors.InvalidArgument {
-        $rust_io_function
+    /// Writes `data` to the file at the current cursor position. Returns the number of bytes written.
+    function write(self, data: string | uint8array) -> int throws root.errors.Io {
+        let bytes = match (data) {
+            string => data.to_utf8(),
+            uint8array => data,
+        };
+        self.as<root.io.Write>.write(bytes)
     }
 }
 
