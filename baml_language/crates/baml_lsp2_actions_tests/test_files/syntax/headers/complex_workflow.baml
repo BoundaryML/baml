@@ -19,20 +19,34 @@ function ProcessVideo(transcript: string, title: string?) -> string {
 
 // LLM helper functions
 function GenerateTitle(transcript: string) -> string {
-    client GPT4
-    prompt `Generate a title from: ${transcript}`
+    client: GPT4
+    prompt: `Generate a title from: ${transcript}`
 }
 
 function SummarizeVideo(transcript: string) -> string {
-    client GPT4
-    prompt `Summarize: ${transcript}`
+    client: GPT4
+    prompt: `Summarize: ${transcript}`
 }
 
-client GPT4 = openai.OpenAiClient.new(
+client GPT4 = openai.ResponsesClient.new(
     model = "gpt-4",
     api_key = env.OPENAI_API_KEY,
 );
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0001
+//
+//   × mismatched types
+//    ╭─[headers_complex_workflow.baml:6:31]
+//  6 │     let computed_title = if (!title) {
+//    ·                               ──┬──
+//    ·                                 ╰── expected `bool`, found `string | null`
+//    ╰────
+// E0004
+//
+//   × operator `+` cannot be applied to `string | null` and `": "`
+//     ╭─[headers_complex_workflow.baml:17:5]
+//  17 │     computed_title + ": " + summary
+//     ·     ─────────────────────
+//     ╰────

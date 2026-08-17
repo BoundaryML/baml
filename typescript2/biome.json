@@ -25,6 +25,7 @@
       "!app-beps/**",
       "!**/.turbo/**",
       "!**/*.min.*",
+      "!pkg-editor/src/themes/**",
       "!bun.lock",
       "!**/.vscode-test/**",
       "!**/build/**",
@@ -97,6 +98,18 @@
       }
     }
   },
+  "overrides": [
+    {
+      "assist": {
+        "actions": {
+          "source": {
+            "useSortedKeys": "off"
+          }
+        }
+      },
+      "includes": ["pkg-editor/package.json"]
+    }
+  ],
   "vcs": {
     "clientKind": "git",
     "defaultBranch": "canary",

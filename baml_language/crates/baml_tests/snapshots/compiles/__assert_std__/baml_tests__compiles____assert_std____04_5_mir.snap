@@ -4,9 +4,9 @@ source: crates/baml_tests/src/generated_tests.rs
 === MIR2 ===
 
 === MIR2 (package assert) ===
-fn assert.is_true(condition: bool) -> null {
+fn assert.is_true(condition: bool) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: bool // condition // param
     let _2: bool
 
@@ -29,9 +29,9 @@ fn assert.is_true(condition: bool) -> null {
     }
 }
 
-fn assert.not_null(value: unknown) -> null {
+fn assert.not_null(value: unknown) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: unknown // value // param
     let _2: bool
 
@@ -97,9 +97,9 @@ fn assert.format_operand(value: unknown) -> string {
     }
 }
 
-fn assert.equal(actual: unknown, expected: unknown) -> null {
+fn assert.equal(actual: unknown, expected: unknown) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: unknown // actual // param
     let _2: unknown // expected // param
     let _3: bool
@@ -158,20 +158,20 @@ fn assert.equal(actual: unknown, expected: unknown) -> null {
     }
 }
 
-fn assert.approx_equal(actual: float, expected: float, eps: float) -> null {
+fn assert.approx_equal(actual: float, expected: float, eps: float) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: float // actual // param
     let _2: float // expected // param
     let _3: float // eps // param
-    let _4: bool
+    let _4: void
     let _5: bool
-    let _6: float // delta
-    let _7: float
-    let _8: bool
+    let _6: bool
+    let _7: float // delta
+    let _8: float
     let _9: bool
-    let _10: float
-    let _11: string
+    let _10: bool
+    let _11: float
     let _12: string
     let _13: string
     let _14: string
@@ -180,101 +180,107 @@ fn assert.approx_equal(actual: float, expected: float, eps: float) -> null {
     let _17: string
     let _18: string
     let _19: string
-    let _20: float
-    let _21: type
-    let _22: string
-    let _23: type
-    let _24: string
-    let _25: type
-    let _26: string
-    let _27: type
+    let _20: string
+    let _21: float
+    let _22: type
+    let _23: string
+    let _24: type
+    let _25: string
+    let _26: type
+    let _27: string
+    let _28: type
 
     bb0: {
-        _5 = copy _3 < const 0_f64;
-        _4 = short_circuit(||) copy _5 -> [eval: bb1, join: bb2];
+        _6 = copy _3 < const 0_f64;
+        _5 = short_circuit(||) copy _6 -> [eval: bb1, join: bb2];
     }
 
     bb1: {
-        _4 = call const fn baml.Float.is_nan(copy _3) -> [bb2];
+        _5 = call const fn baml.Float.is_nan(copy _3) -> [bb2];
     }
 
     bb2: {
-        branch copy _4 -> [bb14, bb3];
+        branch copy _5 -> [bb4, bb3];
     }
 
     bb3: {
-        _7 = copy _1 - copy _2;
-        _6 = call const fn baml.Float.abs(copy _7) -> [bb4];
+        _4 = const null;
+        goto -> bb5;
     }
 
     bb4: {
-        _9 = call const fn baml.Float.is_nan(copy _6) -> [bb5];
+        _4 = call const fn baml.sys.panic(const "assertion failed: epsilon must be a non-negative number") -> [bb5];
     }
 
     bb5: {
-        _8 = short_circuit(||) copy _9 -> [eval: bb6, join: bb7];
+        _8 = copy _1 - copy _2;
+        _7 = call const fn baml.Float.abs(copy _8) -> [bb6];
     }
 
     bb6: {
-        _10 = copy _6;
-        _8 = copy _10 > copy _3;
-        goto -> bb7;
+        _10 = call const fn baml.Float.is_nan(copy _7) -> [bb7];
     }
 
     bb7: {
-        branch copy _8 -> [bb9, bb8];
+        _9 = short_circuit(||) copy _10 -> [eval: bb8, join: bb9];
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb15;
+        _11 = copy _7;
+        _9 = copy _11 > copy _3;
+        goto -> bb9;
     }
 
     bb9: {
-        _20 = copy _6;
-        _21 = load_type(float);
-        _19 = call const fn baml.String.from<copy _21>(copy _20) -> [bb10];
+        branch copy _9 -> [bb11, bb10];
     }
 
     bb10: {
-        _18 = const "assertion failed: |left - right| = \"" + copy _19;
-        _17 = copy _18 + const "\", eps = \"";
-        _23 = load_type(float);
-        _22 = call const fn baml.String.from<copy _23>(copy _3) -> [bb11];
+        _0 = const null;
+        goto -> bb16;
     }
 
     bb11: {
-        _16 = copy _17 + copy _22;
-        _15 = copy _16 + const "\", left = \"";
-        _25 = load_type(float);
-        _24 = call const fn baml.String.from<copy _25>(copy _1) -> [bb12];
+        _21 = copy _7;
+        _22 = load_type(float);
+        _20 = call const fn baml.String.from<copy _22>(copy _21) -> [bb12];
     }
 
     bb12: {
-        _14 = copy _15 + copy _24;
-        _13 = copy _14 + const "\", right = \"";
-        _27 = load_type(float);
-        _26 = call const fn baml.String.from<copy _27>(copy _2) -> [bb13];
+        _19 = const "assertion failed: |left - right| = \"" + copy _20;
+        _18 = copy _19 + const "\", eps = \"";
+        _24 = load_type(float);
+        _23 = call const fn baml.String.from<copy _24>(copy _3) -> [bb13];
     }
 
     bb13: {
-        _12 = copy _13 + copy _26;
-        _11 = copy _12 + const "\"";
-        _0 = call const fn baml.sys.panic(copy _11) -> [bb15];
+        _17 = copy _18 + copy _23;
+        _16 = copy _17 + const "\", left = \"";
+        _26 = load_type(float);
+        _25 = call const fn baml.String.from<copy _26>(copy _1) -> [bb14];
     }
 
     bb14: {
-        _0 = call const fn baml.sys.panic(const "assertion failed: epsilon must be a non-negative number") -> [bb15];
+        _15 = copy _16 + copy _25;
+        _14 = copy _15 + const "\", right = \"";
+        _28 = load_type(float);
+        _27 = call const fn baml.String.from<copy _28>(copy _2) -> [bb15];
     }
 
     bb15: {
+        _13 = copy _14 + copy _27;
+        _12 = copy _13 + const "\"";
+        _0 = call const fn baml.sys.panic(copy _12) -> [bb16];
+    }
+
+    bb16: {
         return;
     }
 }
 
-fn assert.contains(haystack: string, needle: string) -> null {
+fn assert.contains(haystack: string, needle: string) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: string // haystack // param
     let _2: string // needle // param
     let _3: bool

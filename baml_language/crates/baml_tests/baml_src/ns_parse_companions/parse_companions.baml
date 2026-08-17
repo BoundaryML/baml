@@ -8,7 +8,7 @@
 // against literal instances. Locals go through top-level helper functions
 // (test-block local-boxing VM bug).
 
-client ParseCompanionsTestClient = openai.OpenAiClient.new(
+client ParseCompanionsTestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",
@@ -21,8 +21,8 @@ class ParseCompanionsOptPayload {
 }
 
 function ParseCompanionsParseOptPayload() -> ParseCompanionsOptPayload {
-    client ParseCompanionsTestClient
-    prompt `${ctx.output_format}`
+    client: ParseCompanionsTestClient
+    prompt: `${ctx.output_format}`
 }
 
 function parse_companions_missing_optional_fn() -> bool {
@@ -47,8 +47,8 @@ class ParseCompanionsAliasPayload {
 }
 
 function ParseCompanionsParseAliasPayload() -> ParseCompanionsAliasPayload {
-    client ParseCompanionsTestClient
-    prompt `${ctx.output_format}`
+    client: ParseCompanionsTestClient
+    prompt: `${ctx.output_format}`
 }
 
 function parse_companions_missing_alias_fn() -> bool {

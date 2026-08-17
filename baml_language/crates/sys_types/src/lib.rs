@@ -91,11 +91,10 @@ pub fn resolve_name<'a, T>(
     ResolveOutcome::Found(first.0.as_str(), first.1)
 }
 
-/// Types generated from `llm_types.baml`.
+/// Types generated from the stdlib `.baml` sources.
 /// NOTE: sys_ops also generates the same code via its own build.rs because the
 /// generated IO traits contain blanket impls that must live in the crate that
-/// defines the SysOps struct (orphan rule). The owned structs here are used by
-/// sys_llm for provider option types.
+/// defines the SysOps struct (orphan rule).
 #[allow(warnings, clippy::all, clippy::pedantic)]
 pub mod generated {
 

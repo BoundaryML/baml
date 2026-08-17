@@ -254,6 +254,41 @@ function fs.$init_test_ns_fs_fs(registry: testing.TestCollector) -> null {
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.fs"
+    load_const "fs_chmod_on_existing_file"
+    make_closure .<lambda($init_test_ns_fs_fs, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.fs"
+    load_const "fs_chmod_rejects_high_mode"
+    make_closure .<lambda($init_test_ns_fs_fs, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.fs"
+    load_const "fs_chmod_rejects_negative_mode"
+    make_closure .<lambda($init_test_ns_fs_fs, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.fs"
+    load_const "fs_chmod_missing_path_errors"
+    make_closure .<lambda($init_test_ns_fs_fs, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.fs"
+    load_const "fs_symlink_onto_existing_path_errors"
+    make_closure .<lambda($init_test_ns_fs_fs, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -389,6 +424,120 @@ function fs.$init_test_ns_fs_fs_from_rust(registry: testing.TestCollector) -> nu
     return
 }
 
+function fs.fs_chmod_missing_path_errors_fn() -> bool {
+    load_const "chmod_missing.txt"
+    call user.fs.fs_tmp
+    load_const 420
+    sys_op baml.fs.chmod
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    jump L3
+
+  L2:
+    load_const false
+
+  L3:
+    return
+}
+
+function fs.fs_chmod_on_existing_file_fn() -> bool {
+    load_const "chmod_ok.txt"
+    call user.fs.fs_tmp
+    store_var path
+    load_var path
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    load_const 420
+    sys_op baml.fs.chmod
+    pop 1
+    load_var path
+    sys_op baml.fs.exists
+    store_var existed
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var existed
+    return
+}
+
+function fs.fs_chmod_rejects_high_mode_fn() -> bool {
+    load_const "chmod_high_mode.txt"
+    call user.fs.fs_tmp
+    store_var path
+    load_var path
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    load_const 4096
+    call user.fs.fs_chmod_rejects_mode
+    store_var threw
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var threw
+    return
+}
+
+function fs.fs_chmod_rejects_mode(path: string, mode: int) -> bool {
+    load_var2 1 2
+    sys_op baml.fs.chmod
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    jump L3
+
+  L2:
+    load_const false
+
+  L3:
+    return
+}
+
+function fs.fs_chmod_rejects_negative_mode_fn() -> bool {
+    load_const "chmod_negative_mode.txt"
+    call user.fs.fs_tmp
+    store_var path
+    load_var path
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    load_const 0
+    load_const 1
+    sub_int
+    call user.fs.fs_chmod_rejects_mode
+    store_var threw
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var threw
+    return
+}
+
 function fs.fs_exists_returns_false_fn() -> bool {
     load_const "exists_false_NOPE.txt"
     call user.fs.fs_tmp
@@ -459,7 +608,7 @@ function fs.fs_file_close_invalidates_handle_fn() -> bool {
     return
 }
 
-function fs.fs_file_close_is_idempotent_fn() -> null {
+function fs.fs_file_close_is_idempotent_fn() -> void {
     load_const "close_idempotent.txt"
     call user.fs.fs_tmp
     store_var path
@@ -1911,6 +2060,59 @@ function fs.fs_size_returns_length_fn() -> int {
     sys_op baml.fs.remove
     pop 1
     load_var n
+    return
+}
+
+function fs.fs_symlink_is_refused_at(path: string) -> bool {
+    load_var2 1 1
+    sys_op baml.fs.symlink
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    jump L3
+
+  L2:
+    load_const false
+
+  L3:
+    return
+}
+
+function fs.fs_symlink_onto_existing_path_errors_fn() -> bool {
+    load_const "symlink_taken.txt"
+    call user.fs.fs_tmp
+    store_var path
+    load_var path
+    load_const "keep me"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    call user.fs.fs_symlink_is_refused_at
+    store_var threw
+    load_var path
+    sys_op baml.fs.read
+    store_var _7
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var threw
+    jump_if_false L0
+    pop 1
+    load_var _7
+    load_const "keep me"
+    cmp_op ==
+
+  L0:
     return
 }
 

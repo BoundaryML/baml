@@ -265,7 +265,7 @@ function match_call_scrutinee.pick_two_arms(other: match_call_scrutinee.Coin) ->
     return
 }
 
-function match_call_scrutinee.pick_with_closure_local(which: int, cb: () -> null throws never) -> string {
+function match_call_scrutinee.pick_with_closure_local(which: int, cb: () -> void throws never) -> string {
     load_var which
     call user.match_call_scrutinee.decide
     store_var _3

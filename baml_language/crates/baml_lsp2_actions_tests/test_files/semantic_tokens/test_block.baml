@@ -2,11 +2,11 @@ class Input {
   text string
 }
 
-client GPT4 = openai.OpenAiClient.new(model = "gpt-4");
+client GPT4 = openai.ResponsesClient.new(model = "gpt-4");
 
 function Summarize(input: Input) -> string {
-  client GPT4
-  prompt `
+  client: GPT4
+  prompt: `
     Summarize: ${input.text}
   `
 }
@@ -33,20 +33,20 @@ test BasicTest {
 // test_block.baml:5:13 (operator) len=1 "="
 // test_block.baml:5:15 (namespace) [defaultLibrary] len=6 "openai"
 // test_block.baml:5:21 (namespace) [defaultLibrary] len=1 "."
-// test_block.baml:5:22 (class) [defaultLibrary] len=12 "OpenAiClient"
-// test_block.baml:5:35 (method) len=3 "new"
-// test_block.baml:5:39 (parameter) len=5 "model"
-// test_block.baml:5:45 (operator) len=1 "="
-// test_block.baml:5:47 (string) len=7 "\"gpt-4\""
+// test_block.baml:5:22 (class) [defaultLibrary] len=15 "ResponsesClient"
+// test_block.baml:5:38 (method) len=3 "new"
+// test_block.baml:5:42 (parameter) len=5 "model"
+// test_block.baml:5:48 (operator) len=1 "="
+// test_block.baml:5:50 (string) len=7 "\"gpt-4\""
 // test_block.baml:7:1 (keyword) len=8 "function"
 // test_block.baml:7:10 (function) [declaration] len=9 "Summarize"
 // test_block.baml:7:20 (parameter) [declaration] len=5 "input"
 // test_block.baml:7:27 (class) len=5 "Input"
 // test_block.baml:7:37 (type) [defaultLibrary] len=6 "string"
 // test_block.baml:8:3 (property) len=6 "client"
-// test_block.baml:8:10 (variable) len=4 "GPT4"
+// test_block.baml:8:11 (variable) len=4 "GPT4"
 // test_block.baml:9:3 (property) [declaration] len=6 "prompt"
-// test_block.baml:9:10 (string) len=1 "`"
+// test_block.baml:9:11 (string) len=1 "`"
 // test_block.baml:10:5 (string) len=9 "Summarize"
 // test_block.baml:10:14 (string) len=1 ":"
 // test_block.baml:10:18 (parameter) len=5 "input"

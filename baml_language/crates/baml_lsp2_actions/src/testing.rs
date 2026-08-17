@@ -59,7 +59,7 @@ impl Clone for TestDb {
 impl TestDb {
     fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
         let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
-        SourceFile::new(self, content.to_string(), path.into(), file_id)
+        SourceFile::new(self, content.to_string(), path.into(), file_id, false)
     }
 
     /// Initialize with builtins and a project root.
@@ -99,9 +99,6 @@ impl baml_compiler2_hir::Db for TestDb {
 
 #[salsa::db]
 impl baml_compiler2_ppir::Db for TestDb {}
-
-#[salsa::db]
-impl baml_compiler2_tir::Db for TestDb {}
 
 #[salsa::db]
 impl crate::Db for TestDb {}

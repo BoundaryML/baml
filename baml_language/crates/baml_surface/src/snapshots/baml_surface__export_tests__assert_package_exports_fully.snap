@@ -10,11 +10,11 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "id": "V:assert.approx_equal",
       "kind": "function",
       "name": "approx_equal",
-      "docstring": "Asserts that two floats are within `eps` of each other.\n\nParameters:\n- `actual`: The observed floating-point value.\n- `expected`: The expected floating-point value.\n- `eps`: The maximum allowed absolute difference (`|actual - expected|`).\n\nReturns:\n- `null` when `|actual - expected| <= eps`.\n\nErrors/Panics:\n- Panics when `eps` is negative or NaN.\n- Panics when the absolute difference exceeds `eps` or cannot be compared\n  (for example, when `actual`/`expected` produce NaN deltas).",
+      "docstring": "Asserts that two floats are within `eps` of each other.\n\nParameters:\n- `actual`: The observed floating-point value.\n- `expected`: The expected floating-point value.\n- `eps`: The maximum allowed absolute difference (`|actual - expected|`).\n\nReturns:\n- Nothing. Returns normally when `|actual - expected| <= eps`.\n\nErrors/Panics:\n- Panics when `eps` is negative or NaN.\n- Panics when the absolute difference exceeds `eps` or cannot be compared\n  (for example, when `actual`/`expected` produce NaN deltas).",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 2592,
-        "end": 3109
+        "start": 2552,
+        "end": 2998
       },
       "detail": "function",
       "signature": {
@@ -42,8 +42,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           }
         ],
         "returns": {
-          "display": "null",
-          "head": "T:baml.Null"
+          "display": "void"
         },
         "throws": {
           "display": "never"
@@ -57,8 +56,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "docstring": "Asserts that `haystack` contains `needle` as a substring. Panics if not.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 3188,
-        "end": 3408
+        "start": 3077,
+        "end": 3271
       },
       "detail": "function",
       "signature": {
@@ -79,8 +78,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           }
         ],
         "returns": {
-          "display": "null",
-          "head": "T:baml.Null"
+          "display": "void"
         },
         "throws": {
           "display": "never"
@@ -91,11 +89,11 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "id": "V:assert.equal",
       "kind": "function",
       "name": "equal",
-      "docstring": "Asserts that `actual` equals `expected` exactly. Panics if they differ.\n\nParameters:\n- `actual`: The observed value.\n- `expected`: The expected value.\n\nReturns:\n- `null` when `actual` and `expected` are exactly equal.\n\nErrors/Panics:\n- Panics when `actual != expected`.\n- For floating-point values this comparison is exact; prefer\n  `assert.approx_equal(actual, expected, eps)` when comparing computed\n  results within a tolerance.",
+      "docstring": "Asserts that `actual` equals `expected` exactly. Panics if they differ.\n\nParameters:\n- `actual`: The observed value.\n- `expected`: The expected value.\n\nReturns:\n- Nothing. Returns normally when `actual` and `expected` are exactly equal.\n\nErrors/Panics:\n- Panics when `actual != expected`.\n- For floating-point values this comparison is exact; prefer\n  `assert.approx_equal(actual, expected, eps)` when comparing computed\n  results within a tolerance.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 1791,
-        "end": 2052
+        "start": 1758,
+        "end": 1993
       },
       "detail": "function",
       "signature": {
@@ -114,8 +112,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           }
         ],
         "returns": {
-          "display": "null",
-          "head": "T:baml.Null"
+          "display": "void"
         },
         "throws": {
           "display": "never"
@@ -129,8 +126,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "docstring": "Renders one operand of a failed assertion.\n\nQuoted if it is a string, bare otherwise, so the reader can tell the two\napart. Interpolating every operand inside literal quotes printed an int as\n`\"1\"` — a number wearing a string's clothes — and interpolating none printed\n`assert.equal(1, \"1\")` as `left = 1, right = 1`: two identical-looking\nvalues for an assertion that failed precisely because they differ.\n\nParameters:\n- `value`: The operand value to render.\n\nReturns:\n- A JSON-style string representation for panic messages.\n\nErrors/Panics:\n- Never throws.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 1151,
-        "end": 1304
+        "start": 1099,
+        "end": 1252
       },
       "detail": "function",
       "signature": {
@@ -159,7 +156,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "source": {
         "file": "<builtin>/assert/assert.baml",
         "start": 139,
-        "end": 296
+        "end": 270
       },
       "detail": "function",
       "signature": {
@@ -173,8 +170,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           }
         ],
         "returns": {
-          "display": "null",
-          "head": "T:baml.Null"
+          "display": "void"
         },
         "throws": {
           "display": "never"
@@ -188,8 +184,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "docstring": "Asserts that `actual` is of type `T`. Panics if not.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 3467,
-        "end": 3733
+        "start": 3330,
+        "end": 3588
       },
       "detail": "function",
       "signature": {
@@ -222,8 +218,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "docstring": "Asserts that `value` is not `null`. Panics if it is.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 355,
-        "end": 526
+        "start": 329,
+        "end": 474
       },
       "detail": "function",
       "signature": {
@@ -236,8 +232,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           }
         ],
         "returns": {
-          "display": "null",
-          "head": "T:baml.Null"
+          "display": "void"
         },
         "throws": {
           "display": "never"

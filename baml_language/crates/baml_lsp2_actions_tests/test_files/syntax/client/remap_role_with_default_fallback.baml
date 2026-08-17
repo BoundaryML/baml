@@ -11,8 +11,8 @@ client<llm> MyClient {
 }
 
 function TestRemapWithFallback(input: string) -> string {
-  client MyClient
-  prompt `
+  client: MyClient
+  prompt: `
     ${role("assistant")}
     This should fallback to system role and then be remapped to instructions: ${input}
   `
@@ -22,7 +22,7 @@ function TestRemapWithFallback(input: string) -> string {
 //- diagnostics
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
 //   │ ai.RoundRobin)
 //     ╭─[client_remap_role_with_default_fallback.baml:1:1]
 //   1 │ ╭─▶ client<llm> MyClient {
@@ -41,7 +41,7 @@ function TestRemapWithFallback(input: string) -> string {
 // E0003
 //
 //   × unresolved name: `MyClient`
-//     ╭─[client_remap_role_with_default_fallback.baml:14:10]
-//  14 │   client MyClient
-//     ·          ────────
+//     ╭─[client_remap_role_with_default_fallback.baml:14:11]
+//  14 │   client: MyClient
+//     ·           ────────
 //     ╰────

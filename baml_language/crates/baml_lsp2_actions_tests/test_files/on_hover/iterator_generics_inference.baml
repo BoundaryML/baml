@@ -226,7 +226,94 @@ function hovers() -> void {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0097
+//
+//   ⚠ extraneous throws declaration: E, E2
+//     ╭─[iterator_generics_inference.baml:30:83]
+//  30 │ ╭─▶   function some<E2>(self, predicate: (T) -> bool throws E2) -> bool throws E | E2 {
+//  31 │ │       true
+//  32 │ ╰─▶   }
+//     ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: E, E2
+//     ╭─[iterator_generics_inference.baml:34:84]
+//  34 │ ╭─▶   function every<E2>(self, predicate: (T) -> bool throws E2) -> bool throws E | E2 {
+//  35 │ │       true
+//  36 │ ╰─▶   }
+//     ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: E, E2
+//     ╭─[iterator_generics_inference.baml:38:81]
+//  38 │ ╭─▶   function find<E2>(self, predicate: (T) -> bool throws E2) -> T? throws E | E2 {
+//  39 │ │       null
+//  40 │ ╰─▶   }
+//     ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: E
+//     ╭─[iterator_generics_inference.baml:42:42]
+//  42 │ ╭─▶   function collect(self) -> T[] throws E {
+//  43 │ │       []
+//  44 │ ╰─▶   }
+//     ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: E, E2
+//     ╭─[iterator_generics_inference.baml:79:51]
+//  79 │ ╭─▶     function next(self) -> R | Done throws E | E2 {
+//  80 │ │         Done {}
+//  81 │ ╰─▶     }
+//     ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: E, E2
+//     ╭─[iterator_generics_inference.baml:94:51]
+//  94 │ ╭─▶     function next(self) -> T | Done throws E | E2 {
+//  95 │ │         Done {}
+//  96 │ ╰─▶     }
+//     ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: E, E2
+//      ╭─[iterator_generics_inference.baml:109:51]
+//  109 │ ╭─▶     function next(self) -> R | Done throws E | E2 {
+//  110 │ │         Done {}
+//  111 │ ╰─▶     }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: E, E2, E3
+//      ╭─[iterator_generics_inference.baml:125:56]
+//  125 │ ╭─▶     function next(self) -> R | Done throws E | E2 | E3 {
+//  126 │ │         Done {}
+//  127 │ ╰─▶     }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: E, E3
+//      ╭─[iterator_generics_inference.baml:140:51]
+//  140 │ ╭─▶     function next(self) -> R | Done throws E | E3 {
+//  141 │ │         Done {}
+//  142 │ ╰─▶     }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: E
+//      ╭─[iterator_generics_inference.baml:156:46]
+//  156 │ ╭─▶     function next(self) -> T | Done throws E {
+//  157 │ │         Done {}
+//  158 │ ╰─▶     }
+//      ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: unknown
+//      ╭─[iterator_generics_inference.baml:181:42]
+//  181 │ ╭─▶   function get(self) -> T throws unknown {
+//  182 │ │       self.value
+//  183 │ ╰─▶   }
+//      ╰────
 //
 //- on_hover expressions
 // hover at iterator_generics_inference.baml:187:13

@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+273..274 'g': throws "neg"
+290..389 '{\n   ...(v)\n}': int
+320..325 'let f': (x: int) -> int throws "neg"
+328..377 '(x: in... } x }': (x: int) -> int throws "neg"
+344..377 '{ if (... } x }': int
+346..373 'if (x ...eg"; }': void
+350..351 'x': int
+350..355 'x < 0': bool
+354..355 '0': 0
+357..373 '{ thro...eg"; }': never
+365..370 '"neg"': "neg"
+374..375 'x': int
+383..384 'f': (x: int) -> int throws "neg"
+383..387 'f(v)': int
+385..386 'v': int

@@ -51,6 +51,15 @@ function to_string<T>(v: T) -> string throws JsonSerializationError {
     $rust_function
 }
 
+/// Encode a value using its concrete runtime shape. Unlike `to_string<T>`,
+/// this discovers runtime-created classes through the instance's authoritative
+/// class pointer, so it also works when `T` is statically `unknown` (for
+/// example a value parsed from `unreflect(...)`).
+//baml:mut_vm
+function encode<T>(v: T) -> string throws JsonSerializationError {
+  $rust_function
+}
+
 /// Serialize any BAML value to its `json` representation by dispatching on
 /// the value's runtime type.
 ///
@@ -217,19 +226,19 @@ function path<T>(j: json, selector: string) -> T throws JsonPathError {
     let current: json = j;
     let i = 0;
     while (i < selector.length()) {
-        let marker = selector.substring(i, i + 1);
+        let marker = selector.slice(i, i + 1);
         if (marker == ".") {
             i += 1;
             let start = i;
             while (
                 i < selector.length()
-                    && selector.substring(i, i + 1) != "."
-                    && selector.substring(i, i + 1) != "["
+                    && selector.slice(i, i + 1) != "."
+                    && selector.slice(i, i + 1) != "["
             ) {
                 i += 1;
             }
             if (i > start) {
-                current = _path_field(current, selector.substring(start, i), selector);
+                current = _path_field(current, selector.slice(start, i), selector);
             }
             continue;
         }
@@ -246,19 +255,19 @@ function path<T>(j: json, selector: string) -> T throws JsonPathError {
             throw JsonPathError { message: "unterminated '[' segment", selector: selector };
         }
 
-        let first = selector.substring(i, i + 1);
+        let first = selector.slice(i, i + 1);
         if (first == "\"" || first == "'") {
             let quote = first;
             i += 1;
             let key = "";
             let closed = false;
             while (i < selector.length()) {
-                let ch = selector.substring(i, i + 1);
+                let ch = selector.slice(i, i + 1);
                 if (ch == "\\") {
                     if (i + 1 >= selector.length()) {
                         throw JsonPathError { message: "unterminated escape in quoted bracket key", selector: selector };
                     }
-                    key = key + selector.substring(i + 1, i + 2);
+                    key = key + selector.slice(i + 1, i + 2);
                     i += 2;
                     continue;
                 }
@@ -270,7 +279,7 @@ function path<T>(j: json, selector: string) -> T throws JsonPathError {
                 key = key + ch;
                 i += 1;
             }
-            if (!closed || i >= selector.length() || selector.substring(i, i + 1) != "]") {
+            if (!closed || i >= selector.length() || selector.slice(i, i + 1) != "]") {
                 throw JsonPathError { message: "unterminated quoted bracket key", selector: selector };
             }
             i += 1;
@@ -279,13 +288,13 @@ function path<T>(j: json, selector: string) -> T throws JsonPathError {
         }
 
         let start = i;
-        while (i < selector.length() && selector.substring(i, i + 1) != "]") {
+        while (i < selector.length() && selector.slice(i, i + 1) != "]") {
             i += 1;
         }
         if (i >= selector.length()) {
             throw JsonPathError { message: "unterminated '[' segment", selector: selector };
         }
-        let token = selector.substring(start, i);
+        let token = selector.slice(start, i);
         i += 1;
         let idx = int.parse(token) catch (_) {
             root.errors.ParseError => {

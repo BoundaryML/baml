@@ -33,6 +33,8 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+use baml_path::{NativePathBuf, VfsPathBuf};
 use baml_workspace::{BAML_SRC_DIR, BAML_TOML, find_baml_project_root_from_ancestors};
 pub use wasm_helpers::BackgroundSpawner;
 
@@ -466,7 +468,8 @@ impl BexMultiProject {
     fn get_path_from_uri(&self, uri: &lsp_types::Url) -> Result<vfs::VfsPath, LspError> {
         let path = wasm_helpers::to_file_path(uri)
             .map_err(|()| LspError::InvalidParams(format!("URI is not a file path: {uri}")))?;
-        self.fs.get_path_from_path(&path, "get_path_from_uri")
+        self.fs
+            .get_path_from_platform_path(&path, "get_path_from_uri")
     }
 
     fn get_or_create_project(
@@ -735,9 +738,12 @@ impl BexMultiProject {
         // the OS-level walker applies whenever the path really exists on
         // disk. Fall back to the VFS walk otherwise (e.g. in-memory
         // filesystems in tests).
-        let os_root = std::path::Path::new(root.as_str());
-        if os_root.is_dir() {
-            return self.collect_marked_project_roots_native(os_root);
+        let os_root = VfsPathBuf::new(root.as_str().to_string())
+            .and_then(|root| NativePathBuf::try_from(&root));
+        if let Ok(os_root) = os_root
+            && os_root.as_path().is_dir()
+        {
+            return self.collect_marked_project_roots_native(os_root.as_path());
         }
         let mut found = Vec::new();
         Self::collect_marked_project_roots_vfs(root, &mut found);
@@ -757,7 +763,7 @@ impl BexMultiProject {
         for dir in Self::scan_marked_project_roots_native(os_root) {
             match self
                 .fs
-                .get_path_from_path(&dir, "discover_workspace_projects")
+                .get_path_from_platform_path(&dir, "discover_workspace_projects")
             {
                 Ok(vfs_path) => found.push(vfs_path),
                 Err(e) => tracing::warn!("Skipping discovered project root: {e}"),
@@ -1924,9 +1930,10 @@ impl super::BexLsp for BexMultiProject {
         &self,
         project: &str,
     ) -> Result<Vec<crate::bex_lsp::PlaygroundSourceFile>, LspError> {
-        let project_root = self
-            .fs
-            .get_path_from_path(std::path::Path::new(project), "playground source files")?;
+        let project_root = self.fs.get_path_from_vfs_path(
+            &crate::fs::FsPath::from_str(project.to_string()),
+            "playground source files",
+        )?;
         let project_handle = self.get_or_create_project(project_root.clone())?;
         let mut sources = self.load_project_sources(&project_root)?;
         {
@@ -1957,14 +1964,15 @@ impl super::BexLsp for BexMultiProject {
         path: &str,
         content: String,
     ) -> Result<(), LspError> {
-        let project_root = self.fs.get_path_from_path(
-            std::path::Path::new(project),
+        let project_root = self.fs.get_path_from_vfs_path(
+            &crate::fs::FsPath::from_str(project.to_string()),
             "playground update source file",
         )?;
-        let raw_path = std::path::Path::new(path);
-        let source_path = if raw_path.is_absolute() {
-            self.fs
-                .get_path_from_path(raw_path, "playground update source file path")?
+        let source_path = if path.starts_with('/') {
+            self.fs.get_path_from_vfs_path(
+                &crate::fs::FsPath::from_str(path.to_string()),
+                "playground update source file path",
+            )?
         } else {
             resolve_source_path_for_project(&project_root, path)?
         };
@@ -2004,7 +2012,10 @@ impl super::BexLsp for BexMultiProject {
     ) -> Result<Vec<String>, LspError> {
         let roots = roots
             .into_iter()
-            .map(|root| self.fs.get_path_from_path(&root, "lsp --workspace"))
+            .map(|root| {
+                self.fs
+                    .get_path_from_platform_path(&root, "lsp --workspace")
+            })
             .collect::<Result<Vec<_>, _>>()?;
         let projects = self.discover_workspace_projects(&roots);
         Ok(projects
@@ -2239,7 +2250,7 @@ mod tests {
         fn vfs_path(&self, rel: &str) -> vfs::VfsPath {
             let abs = self.root.join(rel);
             crate::fs::BamlVFS::new(std::sync::Arc::new(Box::new(vfs::PhysicalFS::new("/"))))
-                .get_path_from_path(&abs, "test workspace path")
+                .get_path_from_platform_path(&abs, "test workspace path")
                 .unwrap()
         }
     }
@@ -2508,8 +2519,12 @@ mod tests {
         let publisher = std::thread::spawn(move || {
             publishing_lsp.send_update_project("/p", &publishing_project);
         });
+        // Building the playground update walks the full builtin package listing.
+        // The native provider stdlib makes that legitimately exceed 10 seconds
+        // on slower targets (notably the musl CI runner), before the gated
+        // sender is reached.
         let diagnostics = publication_rx
-            .recv_timeout(std::time::Duration::from_secs(10))
+            .recv_timeout(std::time::Duration::from_secs(30))
             .expect("the failure-bearing update must reach the publication boundary");
         assert!(
             diagnostics

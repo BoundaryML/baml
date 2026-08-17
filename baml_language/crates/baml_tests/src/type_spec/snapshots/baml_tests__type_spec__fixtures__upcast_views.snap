@@ -1,0 +1,36 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+689..697 'describe': throws never
+727..756 '{\n   ...     }': "int"
+741..746 '"int"': "int"
+815..823 'describe': throws never
+853..885 '{\n   ...     }': "string"
+867..875 '"string"': "string"
+904..911 'uv_pick': throws never
+946..1081 '{\n   ...  s\n}': string
+952..957 'let v': user.UvParent<int>
+960..961 'b': user.UvBoth
+960..979 'b.as<U...<int>>': user.UvParent<int>
+1014..1019 'let s': string
+1022..1023 'b': user.UvBoth
+1022..1044 'b.as<U...ring>>': user.UvParent<string>
+1022..1053 'b.as<U...scribe': (self: user.UvParent<string>) -> string throws never
+1022..1055 'b.as<U...ribe()': string
+1078..1079 's': string
+1475..1478 'get': throws never
+1508..1541 '{\n   ...     }': string
+1522..1531 'self.text': string
+1819..1825 'render': throws never
+1860..1892 '{\n   ...n    }': string
+1870..1884 'self.inner.get': (self: T) -> string throws never
+1870..1886 'self.i....get()': string
+1905..1915 'uv_blanket': throws never
+1957..2037 '{\n   ...  r\n}': string
+1963..1968 'let r': string
+1971..1972 'w': user.UvBox<user.UvText>
+1971..2002 'w.as<U...ring>>': user.UvRender<Output = string>
+1971..2009 'w.as<U...render': (self: user.UvRender<Output = string>) -> string throws never
+1971..2011 'w.as<U...nder()': string
+2034..2035 'r': string

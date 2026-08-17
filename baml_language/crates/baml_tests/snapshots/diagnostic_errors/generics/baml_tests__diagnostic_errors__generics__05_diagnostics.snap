@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 34534
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -14,20 +15,13 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[classes.baml:96:9]
- 96 │         self.data
-    ·         ────┬────
-    ·             ╰── expected `T`, found `string`
+    ╭─[classes.baml:94:34]
+ 94 │ ╭─▶     function get_data(self) -> T {
+ 95 │ │           // error: method body returns string but declared return is T
+ 96 │ │           self.data
+ 97 │ ├─▶     }
+    · ╰──── expected `T`, found `string`
     ╰────
-
-  [type] E0001
-
-  × type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
-     ╭─[classes.baml:113:5]
- 113 │ ╭─▶     function bad<T>(x: T) -> T {
- 114 │ │           x
- 115 │ ╰─▶     }
-     ╰────
 
   [type] E0001
 
@@ -47,26 +41,10 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × type `Box` expects 1 type argument(s), got 2
-     ╭─[classes.baml:129:5]
- 129 │     Box<int, string> { value: 42 }
-     ·     ──────────────────────────────
-     ╰────
-
-  [type] E0001
-
   × type `Pair` expects 2 type argument(s), got 1
      ╭─[classes.baml:133:35]
  133 │ function wrong_arity_partial() -> Pair<int> {
      ·                                   ─────────
-     ╰────
-
-  [type] E0001
-
-  × type `Pair` expects 2 type argument(s), got 1
-     ╭─[classes.baml:134:5]
- 134 │     Pair<int> { first: 1, second: "two" }
-     ·     ─────────────────────────────────────
      ╰────
 
   [type] E0001
@@ -79,18 +57,10 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × type `Plain` expects 0 type argument(s), got 1
-     ╭─[classes.baml:146:5]
- 146 │     Plain<int> { name: "hello" }
-     ·     ────────────────────────────
-     ╰────
-
-  [type] E0001
-
   × type `Foo` expects 1 type argument(s), got 0
-     ╭─[classes.baml:234:33]
+     ╭─[classes.baml:234:44]
  234 │ function bare_in_union_param(f: Foo<int> | Foo) -> string {
-     ·                                 ──────────────
+     ·                                            ───
      ╰────
 
   [type] E0001
@@ -103,7 +73,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0003
 
-  × unresolved name: `fetch_as`
+  × unresolved name: `baml.fetch_as`
    ╭─[fetch_as.baml:9:5]
  9 │     baml.fetch_as<Todo>(baml.HttpRequest {
    ·     ─────────────
@@ -121,7 +91,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0003
 
-  × unresolved name: `HttpMethod`
+  × unresolved name: `baml.HttpMethod.Get`
     ╭─[fetch_as.baml:10:17]
  10 │         method: baml.HttpMethod.Get,
     ·                 ───────────────────

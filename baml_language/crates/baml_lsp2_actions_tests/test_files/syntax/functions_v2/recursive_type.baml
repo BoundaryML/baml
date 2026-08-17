@@ -5,8 +5,8 @@ class BinaryNode {
 }
 
 function GetTreeLen(input: BinaryNode) -> int {
-  client "openai/gpt-4o"
-  prompt `
+  client: "openai/gpt-4o"
+  prompt: `
     Return the number of elements in the input binary tree.
 
     INPUT:
@@ -17,8 +17,8 @@ function GetTreeLen(input: BinaryNode) -> int {
 }
 
 function BuildTree(input: int) -> BinaryNode {
-  client "openai/gpt-4o"
-  prompt `
+  client: "openai/gpt-4o"
+  prompt: `
     Return a binary tree with the specified number of elements.
 
     INPUT:

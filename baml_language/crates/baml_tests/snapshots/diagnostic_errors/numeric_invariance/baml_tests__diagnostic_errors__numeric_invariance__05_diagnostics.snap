@@ -5,46 +5,52 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[numeric_invariance.baml:11:5]
- 11 │     x
-    ·     ┬
-    ·     ╰── expected `float`, found `int`
+    ╭─[numeric_invariance.baml:10:38]
+ 10 │ ╭─▶ function IntToFloat(x: int) -> float {
+ 11 │ │       x
+ 12 │ ├─▶ }
+    · ╰──── expected `float`, found `int`
     ╰────
 
   [type] E0001
 
   × mismatched types
-    ╭─[numeric_invariance.baml:16:5]
- 16 │     1
-    ·     ┬
-    ·     ╰── expected `float`, found `1`
+    ╭─[numeric_invariance.baml:15:39]
+ 15 │ ╭─▶ function IntLiteralToFloat() -> float {
+ 16 │ │       1
+ 17 │ ├─▶ }
+    · ╰──── expected `float`, found `1`
     ╰────
 
   [type] E0001
 
   × mismatched types
-    ╭─[numeric_invariance.baml:22:5]
- 22 │     x
-    ·     ┬
-    ·     ╰── expected `bigint`, found `int`
+    ╭─[numeric_invariance.baml:21:40]
+ 21 │ ╭─▶ function IntToBigint(x: int) -> bigint {
+ 22 │ │       x
+ 23 │ ├─▶ }
+    · ╰──── expected `bigint`, found `int`
     ╰────
 
   [type] E0001
 
   × mismatched types
-    ╭─[numeric_invariance.baml:27:5]
- 27 │     1
-    ·     ┬
-    ·     ╰── expected `bigint`, found `1`
+    ╭─[numeric_invariance.baml:26:41]
+ 26 │ ╭─▶ function IntLiteralToBigint() -> bigint {
+ 27 │ │       1
+ 28 │ ├─▶ }
+    · ╰──── expected `bigint`, found `1`
     ╰────
 
   [type] E0001
 
   × mismatched types
-    ╭─[numeric_invariance.baml:33:5]
- 33 │     a
-    ·     ┬
-    ·     ╰── expected `bigint[]`, found `int[]`
+    ╭─[numeric_invariance.baml:31:46]
+ 31 │ ╭─▶ function IntArrayToBigintArray() -> bigint[] {
+ 32 │ │       let a = [1, 2];
+ 33 │ │       a
+ 34 │ ├─▶ }
+    · ╰──── expected `bigint[]`, found `int[]`
     ╰────
 
   [type] E0001
@@ -68,10 +74,12 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[numeric_invariance.baml:45:5]
- 45 │     a
-    ·     ┬
-    ·     ╰── expected `float[]`, found `int[]`
+    ╭─[numeric_invariance.baml:43:44]
+ 43 │ ╭─▶ function IntArrayToFloatArray() -> float[] {
+ 44 │ │       let a = [1, 2];
+ 45 │ │       a
+ 46 │ ├─▶ }
+    · ╰──── expected `float[]`, found `int[]`
     ╰────
 
   [type] E0001
@@ -95,10 +103,12 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[numeric_invariance.baml:56:5]
- 56 │     m
-    ·     ┬
-    ·     ╰── expected `map<string, bigint>`, found `map<string, int>`
+    ╭─[numeric_invariance.baml:54:53]
+ 54 │ ╭─▶ function IntMapToBigintMap() -> map<string, bigint> {
+ 55 │ │       let m = {"a": 1};
+ 56 │ │       m
+ 57 │ ├─▶ }
+    · ╰──── expected `map<string, bigint>`, found `map<string, int>`
     ╰────
 
   [type] E0001

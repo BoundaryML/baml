@@ -20,14 +20,141 @@ use std::{
     path::PathBuf,
 };
 
-use baml_codegen_types::{Name, Symbol, SymbolPool};
+use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 
 use crate::{
     emit::{build_emitted, typemap_file::render_typemap_module},
     leaf::{LeafBody, group_and_sort, render_leaf_body, render_leaf_body_pyi},
-    routing::{LeafPath, route},
+    routing::{LeafPath, route, route_class_ref},
 };
+
+fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
+    match ty {
+        Ty::Interface(name, generics, associated, _) => {
+            out.insert(name.clone());
+            for ty in generics.iter().chain(associated.iter().map(|(_, ty)| ty)) {
+                collect_interface_tys(ty, out);
+            }
+        }
+        Ty::Class(_, args, _) => {
+            for ty in args {
+                collect_interface_tys(ty, out);
+            }
+        }
+        Ty::List(inner, _) => collect_interface_tys(inner, out),
+        Ty::Map { key, value, .. } => {
+            collect_interface_tys(key, out);
+            collect_interface_tys(value, out);
+        }
+        Ty::Union(items, _) => {
+            for ty in items {
+                collect_interface_tys(ty, out);
+            }
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for param in params {
+                collect_interface_tys(&param.ty, out);
+            }
+            collect_interface_tys(ret, out);
+            collect_interface_tys(throws, out);
+        }
+        Ty::Future(value, error, _) => {
+            collect_interface_tys(value, out);
+            collect_interface_tys(error, out);
+        }
+        Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::TypeAlias(..)
+        | Ty::Literal(..)
+        | Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::TypeVar(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Void { .. }
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. } => {}
+    }
+}
+
+fn public_interface_tokens(pool: &SymbolPool) -> BTreeSet<Name> {
+    fn function(function: &baml_codegen_types::Function, out: &mut BTreeSet<Name>) {
+        for arg in &function.arguments {
+            collect_interface_tys(&arg.ty, out);
+        }
+        collect_interface_tys(&function.return_type, out);
+        if let Some(throws) = &function.throws {
+            collect_interface_tys(throws, out);
+        }
+        for (_, watcher) in &function.watchers {
+            collect_interface_tys(watcher, out);
+        }
+    }
+    let mut out = BTreeSet::new();
+    for symbol in pool.values() {
+        match symbol {
+            Symbol::Function(value) => function(value, &mut out),
+            Symbol::Class(value) => {
+                for property in &value.properties {
+                    collect_interface_tys(&property.ty, &mut out);
+                }
+                for method in value.static_methods.iter().chain(&value.instance_methods) {
+                    function(method, &mut out);
+                }
+            }
+            Symbol::TypeAlias(value) => collect_interface_tys(&value.resolves_to, &mut out),
+            Symbol::Enum(_) => {}
+        }
+    }
+    out
+}
+
+fn render_interface_tokens(tokens: impl Iterator<Item = Name>, stub: bool) -> String {
+    let mut out = String::new();
+    let mut public_names = Vec::new();
+    for name in tokens {
+        let bare = name.name();
+        let fqn = name.render_dotted(false);
+        public_names.push(bare.to_string());
+        if stub {
+            let _ = writeln!(
+                out,
+                "\nclass {bare}:\n    __baml_interface_fqn__: str\n\n    def __new__(cls, *args: typing.Any, **kwargs: typing.Any) -> typing.NoReturn: ...\n\n    @classmethod\n    def __class_getitem__(cls, args: typing.Any) -> typing.Any: ...\n"
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "\nclass {bare}:\n    \"\"\"Erased runtime token for BAML interface `{fqn}`.\"\"\"\n    __baml_interface_fqn__ = {fqn:?}\n\n    def __new__(cls, *args, **kwargs):\n        raise TypeError(\"BAML interface tokens cannot be instantiated\")\n\n    @classmethod\n    def __class_getitem__(cls, args):\n        import types\n        return types.GenericAlias(cls, args)\n"
+            );
+        }
+    }
+    if !public_names.is_empty() {
+        let names = public_names
+            .iter()
+            .map(|name| format!("{name:?}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(
+            out,
+            "\ntry:\n    __all__.extend([{names}])\nexcept NameError:\n    __all__ = [{names}]\n"
+        );
+    }
+    out
+}
 
 /// Banner prepended to every generated `.py` / `.pyi` file. Mirrors
 /// the legacy `engine/generators/languages/python` `CONTENT_PREFIX`,
@@ -165,9 +292,13 @@ fn to_source_code_internal(
     for (key, symbol) in pool {
         leaves.insert(route(key, symbol));
     }
+    let interface_tokens = public_interface_tokens(pool);
+    for name in &interface_tokens {
+        leaves.insert(route_class_ref(name));
+    }
 
     // `baml/` always exists — even if no stdlib symbols route there,
-    // leaves that reference `baml.media.*` / `baml.prompt.*` need the
+    // leaves that reference `baml.media.*` / `ai.*` need the
     // subpackage to import from. The root leaf itself is always emitted
     // as well. (25b2 Phase 2 relocated `_inlinedbaml.py` to the SDK
     // root; `baml/` is no longer load-bearing for the root init.)
@@ -228,6 +359,20 @@ fn to_source_code_internal(
             render_package_init(&kids)
         };
         content.push_str(&render_leaf_body(body, &callable_child_names));
+        content.push_str(&render_interface_tokens(
+            interface_tokens
+                .iter()
+                .filter(|name| route_class_ref(name) == leaf_path)
+                .cloned(),
+            false,
+        ));
+        if dir.is_empty() {
+            content.push_str(
+                "\n# BEP-066 host reflection surface.\nfrom .baml import reflect as reflect\n",
+            );
+        } else if dir == &["baml".to_string(), "reflect".to_string()] {
+            content.push_str("\nfrom baml_bridge.reflect import type_ as type_\n");
+        }
         out.insert(init_py_path(dir), content);
 
         // `.pyi` sibling — pyright wants the classical
@@ -242,6 +387,18 @@ fn to_source_code_internal(
         };
         let callable_child_bodies = callable_child_bodies(dir, &callable_child_names, &bodies);
         pyi_content.push_str(&render_leaf_body_pyi(body, &callable_child_bodies));
+        pyi_content.push_str(&render_interface_tokens(
+            interface_tokens
+                .iter()
+                .filter(|name| route_class_ref(name) == leaf_path)
+                .cloned(),
+            true,
+        ));
+        if dir.is_empty() {
+            pyi_content.push_str("\nfrom .baml import reflect as reflect\n");
+        } else if dir == &["baml".to_string(), "reflect".to_string()] {
+            pyi_content.push_str("\nfrom baml_bridge.reflect import type_ as type_\n");
+        }
         out.insert(init_pyi_path(dir), pyi_content);
     }
 
@@ -748,6 +905,7 @@ mod tests {
         assert!(root.contains("from . import _inlinedbaml"));
         assert!(root.contains("from ._typemap import _TYPE_MAP"));
         assert!(root.contains("set_type_map(_TYPE_MAP)"));
+        assert!(root.contains("from .baml import reflect as reflect"));
         // PEP 562 lazy re-export: root lists `baml` in `_LAZY_CHILDREN`
         // and exposes it through `__getattr__`. `to_source_code` always
         // synthesizes the `baml` leaf even when no stdlib symbols route
@@ -764,6 +922,7 @@ mod tests {
         // resolve dotted submodule access structurally.
         let root_pyi = &out[&PathBuf::from("__init__.pyi")];
         assert!(root_pyi.contains("from . import baml\n"));
+        assert!(root_pyi.contains("from .baml import reflect as reflect"));
         assert!(!root_pyi.contains("__getattr__"));
         assert!(!root_pyi.contains("BamlRuntime"));
 
@@ -821,6 +980,69 @@ mod tests {
         ));
         assert!(leaf.contains("__all__ = [\n    \"Resume\",\n]\n"));
         assert!(!leaf.contains("import enum"));
+    }
+
+    #[test]
+    fn reflect_kind_namespaces_are_routed_legally_across_the_generated_surface() {
+        let mut pool: SymbolPool = HashMap::new();
+        let kind_namespaces = [
+            ("class", "class_"),
+            ("enum", "enum"),
+            ("interface", "interface"),
+            ("function", "function"),
+        ];
+
+        for (source, _) in kind_namespaces {
+            let type_name = cg_name("baml", &["reflect", source], "Type");
+            pool.insert(type_name.clone(), class(type_name));
+        }
+
+        let consumer_name = cg_name("user", &["consumer"], "KindViews");
+        pool.insert(
+            consumer_name.clone(),
+            Symbol::Class(Class {
+                generic_params: Vec::new(),
+                name: consumer_name,
+                docstring: None,
+                properties: kind_namespaces
+                    .iter()
+                    .map(|(source, _)| ClassProperty {
+                        name: BaseName::new(format!("{source}_type")),
+                        docstring: None,
+                        ty: class_ty(cg_name("baml", &["reflect", source], "Type"), vec![]),
+                    })
+                    .collect(),
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let reflect_pyi = &out[&PathBuf::from("baml/reflect/__init__.pyi")];
+        let consumer_py = &out[&PathBuf::from("consumer/__init__.py")];
+        let consumer_pyi = &out[&PathBuf::from("consumer/__init__.pyi")];
+        let typemap = &out[&PathBuf::from("_typemap.py")];
+
+        for (source, routed) in kind_namespaces {
+            assert!(out.contains_key(&PathBuf::from(format!("baml/reflect/{routed}/__init__.py"))));
+            if source != routed {
+                assert!(
+                    !out.contains_key(&PathBuf::from(format!("baml/reflect/{source}/__init__.py")))
+                );
+            }
+            assert!(reflect_pyi.contains(&format!("from . import {routed}\n")));
+
+            let reference = format!("baml.reflect.{routed}.Type");
+            assert!(consumer_py.contains(&reference));
+            assert!(consumer_pyi.contains(&reference));
+            assert!(typemap.contains(&format!(
+                "\"baml.reflect.{source}.Type\": (\"baml_sdk.baml.reflect.{routed}\", \"Type\")"
+            )));
+        }
+
+        assert!(!consumer_py.contains("baml.reflect.class.Type"));
+        assert!(!consumer_pyi.contains("baml.reflect.class.Type"));
     }
 
     #[test]
@@ -1338,6 +1560,36 @@ mod tests {
             ),
             "missing stream async companion in:\n{leaf}"
         );
+    }
+
+    #[test]
+    fn stream_return_stub_imports_runtime_type_directly() {
+        let mut pool: SymbolPool = HashMap::new();
+        let stream_name = cg_name("ai", &["stream"], "Stream");
+        pool.insert(stream_name.clone(), class(stream_name.clone()));
+
+        let mut f = bare_func("extract_resume_stream", "x.baml", 0);
+        f.return_type = class_ty(
+            stream_name,
+            vec![
+                Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+        );
+        pool.insert(
+            cg_name("user", &["lorem"], "extract_resume_stream"),
+            Symbol::Function(f),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let stub = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(stub.contains("from baml_bridge import BamlStream as _BamlStream\n"));
+        assert!(stub.contains("def extract_resume_stream(x: int) -> _BamlStream[int, str]:"));
+        assert!(!stub.contains("ai.stream.Stream"));
     }
 
     #[test]
@@ -3625,6 +3877,28 @@ mod tests {
             pyi.contains("async def echo_async(value: T, *, _types: dict[str, type]) -> T: ..."),
             "pyi missing async echo signature:\n{pyi}",
         );
+    }
+
+    #[test]
+    fn public_interface_type_emits_erased_runtime_token() {
+        let interface = cg_name("user", &[], "Named");
+        let mut function = bare_func("read_name", "main.baml", 0);
+        function.arguments[0].ty =
+            Ty::Interface(interface, Vec::new(), Vec::new(), baml_base::TyAttr::EMPTY);
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            cg_name("user", &[], "read_name"),
+            Symbol::Function(function),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let py = &out[&PathBuf::from("__init__.py")];
+        let pyi = &out[&PathBuf::from("__init__.pyi")];
+        assert!(py.contains("class Named:"));
+        assert!(py.contains("__baml_interface_fqn__ = \"user.Named\""));
+        assert!(py.contains("__all__.extend([\"Named\"])"));
+        assert!(py.contains("BAML interface tokens cannot be instantiated"));
+        assert!(pyi.contains("class Named:"));
+        assert!(pyi.contains("def __class_getitem__"));
     }
 
     // ── 25b Phase 2: ClassVar + _register_* trailer emission ──────────────

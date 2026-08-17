@@ -21,8 +21,8 @@ function more_tools() -> ai.tools.Tool[] {
 }
 
 function PlainChat(q: string) -> string {
-  client "openai/gpt-4o-mini"
-  prompt `
+  client: "openai/gpt-4o-mini"
+  prompt: `
     Be terse.
     ${q}
     ${ctx.output_format}
@@ -30,18 +30,18 @@ function PlainChat(q: string) -> string {
 }
 
 function SpecAgent(q: string) -> Answer {
-  client "openai/gpt-4o-mini"
-  tools [double_it]
-  prompt `
+  client: "openai/gpt-4o-mini"
+  tools: [double_it]
+  prompt: `
     ${q}
     ${ctx.output_format}
   `
 }
 
 function NamedTools(q: string) -> Answer {
-  client "anthropic/claude-haiku-4-5"
-  tools more_tools()
-  prompt `
+  client: "anthropic/claude-haiku-4-5"
+  tools: more_tools()
+  prompt: `
     ${q}
     ${ctx.output_format}
   `

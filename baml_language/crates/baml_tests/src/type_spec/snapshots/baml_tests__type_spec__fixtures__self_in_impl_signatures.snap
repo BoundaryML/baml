@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+476..483 'compare': throws never
+523..625 '{\n   ...     }': int
+537..542 'let p': int
+545..557 'other.points': int
+593..612 'self.p...ompare': (self: int, other: int) -> int throws never
+593..615 'self.p...are(p)': int
+613..614 'p': int
+678..682 'twin': throws never
+722..787 '{\n   ...n    }': user.SisPair
+732..737 'let m': int
+740..749 'mate.left': int
+777..781 'self': user.SisPair
+800..807 'sis_use': throws never
+854..874 '{\n   ...(b)\n}': int
+860..869 'a.compare': (self: user.SisScore, other: user.SisScore) -> int throws never
+860..872 'a.compare(b)': int
+870..871 'b': user.SisScore

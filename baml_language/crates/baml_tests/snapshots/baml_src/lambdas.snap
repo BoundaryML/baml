@@ -482,7 +482,7 @@ function lambdas.lambdas_inferred_return_type_lambda() -> int {
 
 function lambdas.lambdas_inferred_signature() -> string {
     make_closure .<lambda(lambdas_inferred_signature, 0)>, 0
-    call reflect.signature
+    call baml.reflect.signature
     store_var sig
     load_var sig
     load_field .returns
@@ -502,7 +502,7 @@ function lambdas.lambdas_inferred_signature() -> string {
 
 function lambdas.lambdas_inferred_throwing_signature() -> string {
     make_closure .<lambda(lambdas_inferred_throwing_signature, 0)>, 0
-    call reflect.signature
+    call baml.reflect.signature
     store_var sig
     load_var sig
     load_field .returns

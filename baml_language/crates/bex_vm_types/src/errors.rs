@@ -28,8 +28,8 @@ pub enum VmPanic {
     #[error("integer overflow: {message}")]
     IntegerOverflow { message: String },
 
-    // Raised by array/byte-array subscripting and `string.char_at`, so the
-    // message stays generic ("index", not "array index").
+    // Raised by array and byte-array subscripting, so the message stays generic
+    // ("index", not "array index").
     #[error("index out of bounds: {index} of {length}")]
     IndexOutOfBounds { index: i64, length: usize },
 

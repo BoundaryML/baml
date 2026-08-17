@@ -1257,8 +1257,8 @@ fn reflect_class_implements_interface() {
         }
 
         function main() -> bool {
-            let dog_t = reflect.type_of<Dog>()
-            let animal_t = reflect.type_of<Animal>()
+            let dog_t = type.of<Dog>()
+            let animal_t = type.of<Animal>()
             return dog_t.implements(animal_t)
         }
         "#,
@@ -1279,8 +1279,8 @@ fn reflect_implemented_by_is_reverse() {
         }
 
         function main() -> bool {
-            let dog_t = reflect.type_of<Dog>()
-            let animal_t = reflect.type_of<Animal>()
+            let dog_t = type.of<Dog>()
+            let animal_t = type.of<Animal>()
             return animal_t.implemented_by(dog_t)
         }
         "#,
@@ -3000,6 +3000,51 @@ async fn same_generic_interface_different_type_params_disambiguated_with_as_proj
     assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
+/// A single generic function has one `VirtualCall` bytecode site even when it
+/// is invoked with heterogeneous interface arguments. The full VM fact context
+/// canonicalizes `Animal | Dog` to `Animal` because `Dog implements Animal`,
+/// but impl selection deliberately compares interface arguments under the
+/// fact-poor structural context. The dispatch cache must therefore retain the
+/// realized interface arguments in addition to the static type-value mint.
+#[tokio::test]
+async fn virtual_dispatch_cache_distinguishes_generic_interface_instantiations() {
+    let output = baml_test!(
+        r#"
+        interface Animal {}
+
+        class Dog {
+            implements Animal {}
+        }
+
+        interface Tagged<T> {
+            function tag(self) -> string throws never
+        }
+
+        class Both {
+            implements Tagged<Animal> {
+                function tag(self) -> string { return "animal" }
+            }
+            implements Tagged<Animal | Dog> {
+                function tag(self) -> string { return "animal-or-dog" }
+            }
+        }
+
+        function read_tag<T>(value: Tagged<T>) -> string {
+            return value.tag()
+        }
+
+        function main() -> string {
+            let value = Both {}
+            return read_tag<Animal>(value) + "|" + read_tag<Animal | Dog>(value)
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("animal|animal-or-dog".into())
+    );
+}
+
 #[tokio::test]
 async fn generic_bound_runtime() {
     // Interface-typed arrays preserve the interface field view and dispatch
@@ -3038,7 +3083,7 @@ async fn reflect_type_of_interface_to_string() {
             function speak(self) -> string throws never
         }
         function main() -> string {
-            return reflect.type_of<Animal>().to_string()
+            return type.of<Animal>().to_string()
         }
     "#
     );
@@ -3061,7 +3106,7 @@ async fn reflect_implements_true_for_implementor() {
             }
         }
         function main() -> bool {
-            return reflect.type_of<Dog>().implements(reflect.type_of<Animal>())
+            return type.of<Dog>().implements(type.of<Animal>())
         }
     "#
     );
@@ -3079,7 +3124,7 @@ async fn reflect_implements_false_for_non_implementor() {
             mass: int
         }
         function main() -> bool {
-            return reflect.type_of<Rock>().implements(reflect.type_of<Animal>())
+            return type.of<Rock>().implements(type.of<Animal>())
         }
     "#
     );
@@ -3099,8 +3144,8 @@ async fn reflect_implemented_by_inverse_runtime() {
             }
         }
         function main() -> bool {
-            let direct = reflect.type_of<Dog>().implements(reflect.type_of<Animal>())
-            let reverse = reflect.type_of<Animal>().implemented_by(reflect.type_of<Dog>())
+            let direct = type.of<Dog>().implements(type.of<Animal>())
+            let reverse = type.of<Animal>().implemented_by(type.of<Dog>())
             return direct == reverse
         }
     "#
@@ -3124,7 +3169,7 @@ async fn reflect_implements_transitive_via_requires() {
             }
         }
         function main() -> bool {
-            return reflect.type_of<Employee>().implements(reflect.type_of<Named>())
+            return type.of<Employee>().implements(type.of<Named>())
         }
     "#
     );
@@ -3144,7 +3189,7 @@ async fn reflect_implements_inside_generic_function() {
             }
         }
         function is_animal<T>() -> bool {
-            return reflect.type_of<T>().implements(reflect.type_of<Animal>())
+            return type.of<T>().implements(type.of<Animal>())
         }
         function main() -> bool {
             return is_animal<Dog>() && is_animal<int>() == false
@@ -3163,7 +3208,7 @@ async fn reflect_interface_does_not_implement_itself() {
             function speak(self) -> string throws never
         }
         function main() -> bool {
-            return reflect.type_of<Animal>().implements(reflect.type_of<Animal>())
+            return type.of<Animal>().implements(type.of<Animal>())
         }
     "#
     );
@@ -3735,8 +3780,8 @@ fn llm_function_can_return_interface_type() {
             }
         }
         function detect_animal(description: string) -> Animal {
-            client GPT4o
-            prompt `
+            client: GPT4o
+            prompt: `
                 Identify the animal from the description: ${description}.
                 ${ctx.output_format}
             `
@@ -3771,8 +3816,8 @@ fn llm_function_returning_interface_enumerates_implementors_in_schema() {
             }
         }
         function detect_animal(description: string) -> Animal {
-            client GPT4o
-            prompt `
+            client: GPT4o
+            prompt: `
                 Identify the animal: ${description}.
                 ${ctx.output_format}
             `
@@ -4894,8 +4939,8 @@ fn llm_function_with_interface_array_return_compiles() {
             }
         }
         function detect_zoo(description: string) -> Animal[] {
-            client GPT4o
-            prompt `
+            client: GPT4o
+            prompt: `
                 Identify every animal mentioned in ${description}.
                 ${ctx.output_format}
             `
@@ -4919,8 +4964,8 @@ fn llm_function_with_interface_in_union_return_compiles() {
             }
         }
         function detect_or_describe(description: string) -> Animal | string {
-            client GPT4o
-            prompt `
+            client: GPT4o
+            prompt: `
                 If ${description} clearly identifies an animal, return one.
                 Otherwise, paraphrase the description.
                 ${ctx.output_format}
@@ -4949,8 +4994,8 @@ fn llm_function_takes_interface_typed_parameter_compiles() {
             }
         }
         function describe_animal(a: Animal) -> string {
-            client GPT4o
-            prompt `
+            client: GPT4o
+            prompt: `
                 Describe the animal named ${a.name}.
                 ${ctx.output_format}
             `
@@ -5529,8 +5574,8 @@ async fn out_of_body_implements_is_visible_to_reflection_registry() {
             function speak(self) -> string { return "woof" }
         }
         function main() -> bool {
-            return reflect.type_of<Dog>().implements(reflect.type_of<Animal>())
-                && reflect.type_of<Animal>().implemented_by(reflect.type_of<Dog>())
+            return type.of<Dog>().implements(type.of<Animal>())
+                && type.of<Animal>().implemented_by(type.of<Dog>())
         }
         "#
     );
@@ -5751,7 +5796,7 @@ async fn generic_out_of_body_override_preserves_method_type_args_runtime() {
 
         implements<T> Describer<T> for Box<T> {
             function describe<U>(self, value: U) -> string {
-                return reflect.type_of<T>().to_string() + ":" + reflect.type_of<U>().to_string()
+                return type.of<T>().to_string() + ":" + type.of<U>().to_string()
             }
         }
 
@@ -6690,8 +6735,8 @@ async fn unified_rule_reflection_sees_generic_class_implementor_once() {
             function display(self) -> string { return "box" }
         }
         function main() -> bool {
-            return reflect.type_of<Box<int>>().implements(reflect.type_of<Printable>())
-                && reflect.type_of<Box<string>>().implements(reflect.type_of<Printable>())
+            return type.of<Box<int>>().implements(type.of<Printable>())
+                && type.of<Box<string>>().implements(type.of<Printable>())
         }
     "#
     );
@@ -6833,7 +6878,7 @@ async fn form2_reflect_implements_returns_true() {
             function display(self) -> string { return self.name }
         }
         function main() -> bool {
-            return reflect.type_of<Person>().implements(reflect.type_of<Printable>())
+            return type.of<Person>().implements(type.of<Printable>())
         }
     "#
     );
@@ -6862,9 +6907,9 @@ async fn form2_reflect_membership_includes_satisfying_classes() {
             function display(self) -> string { return self.name }
         }
         function main() -> bool {
-            let printable = reflect.type_of<Printable>()
-            return printable.implemented_by(reflect.type_of<Person>())
-                && printable.implemented_by(reflect.type_of<Team>())
+            let printable = type.of<Printable>()
+            return printable.implemented_by(type.of<Person>())
+                && printable.implemented_by(type.of<Team>())
         }
     "#
     );
@@ -6883,12 +6928,12 @@ async fn blanket_interface_rule_reflection_includes_concrete_container_implement
         function main() -> bool {
             let int_printable: Printable<int> = Container<int> { value: 1 }
             let string_printable: Printable<string> = Container<string> { value: "two" }
-            return reflect.type_of<Container<int>>().implements(reflect.type_of<Printable<int>>())
-                && reflect.type_of<Container<string>>().implements(reflect.type_of<Printable<string>>())
-                && reflect.type_of<Printable<int>>().implemented_by(reflect.type_of<Container<int>>())
-                && reflect.type_of<Printable<string>>().implemented_by(reflect.type_of<Container<string>>())
-                && !reflect.type_of<Printable<int>>().implemented_by(reflect.type_of<Container<string>>())
-                && !reflect.type_of<Printable<string>>().implemented_by(reflect.type_of<Container<int>>())
+            return type.of<Container<int>>().implements(type.of<Printable<int>>())
+                && type.of<Container<string>>().implements(type.of<Printable<string>>())
+                && type.of<Printable<int>>().implemented_by(type.of<Container<int>>())
+                && type.of<Printable<string>>().implemented_by(type.of<Container<string>>())
+                && !type.of<Printable<int>>().implemented_by(type.of<Container<string>>())
+                && !type.of<Printable<string>>().implemented_by(type.of<Container<int>>())
         }
     "#
     );
@@ -9393,7 +9438,7 @@ class IntBox {
 function main() -> bool {
     // IntBox only implements Box<int>, NOT Box<string>, so this is false —
     // `implements` respects the generic type argument.
-    return reflect.type_of<IntBox>().implements(reflect.type_of<Box<string>>())
+    return type.of<IntBox>().implements(type.of<Box<string>>())
 }
 "##
     );
@@ -9416,7 +9461,7 @@ class IntBox {
 function main() -> bool {
     // Box<string>.implemented_by(IntBox) is false — IntBox only implements
     // Box<int>, and `implemented_by` respects the type argument.
-    return reflect.type_of<Box<string>>().implemented_by(reflect.type_of<IntBox>())
+    return type.of<Box<string>>().implemented_by(type.of<IntBox>())
 }
 "##
     );
@@ -10030,7 +10075,7 @@ fn wf3_generic_default_method_overlapping_type_arg_impls_rejected() {
     );
 }
 
-/// wf3 #6 [high]: `reflect.type_of<Box<U>>()` inside a generic fn must substitute
+/// wf3 #6 [high]: `type.of<Box<U>>()` inside a generic fn must substitute
 /// the outer type param `U` into the interface arg — rendering `Box<int>`, not
 /// `Box<void>`. `_plan/wf3/generics-reflection/gen_reflect_naked_vs_wrapped.baml`
 #[tokio::test]
@@ -10041,8 +10086,8 @@ async fn wf3_reflect_type_of_wrapped_generic_substitutes_param_runtime() {
             function get(self) -> T throws never
         }
         function names<U>() -> string {
-            let naked = reflect.type_of<U>().to_string()
-            let wrapped = reflect.type_of<Box<U>>().to_string()
+            let naked = type.of<U>().to_string()
+            let wrapped = type.of<Box<U>>().to_string()
             return "naked=" + naked + " wrapped=" + wrapped
         }
         function main() -> string {
@@ -10077,10 +10122,10 @@ async fn wf3_reflect_implemented_by_generic_arg_substitution_runtime() {
             }
         }
         function box_impls_intbox<T>() -> bool {
-            return reflect.type_of<Box<T>>().implemented_by(reflect.type_of<IntBox>())
+            return type.of<Box<T>>().implemented_by(type.of<IntBox>())
         }
         function box_impls_stringbox<T>() -> bool {
-            return reflect.type_of<Box<T>>().implemented_by(reflect.type_of<StringBox>())
+            return type.of<Box<T>>().implemented_by(type.of<StringBox>())
         }
         function main() -> bool {
             return box_impls_intbox<int>()
@@ -10417,8 +10462,8 @@ async fn wf3_out_of_body_primitive_impl_visible_to_reflection_runtime() {
             function debug(self) -> string { return "int" }
         }
         function main() -> int {
-            let a = reflect.type_of<int>().implements(reflect.type_of<Debuggable>())
-            let b = reflect.type_of<Debuggable>().implemented_by(reflect.type_of<int>())
+            let a = type.of<int>().implements(type.of<Debuggable>())
+            let b = type.of<Debuggable>().implemented_by(type.of<int>())
             if a && b { return 1001 }
             return 0
         }
@@ -10892,6 +10937,39 @@ async fn wf3_union_member_method_call_works_pins() {
     );
 }
 
+/// A union may expose the same method through different roads: one member via
+/// an interface and another via an inherent method. Dispatch must stay
+/// per-member so the inherent-only receiver is not sent through the interface
+/// vtable selected for the first member.
+#[tokio::test]
+async fn heterogeneous_union_dispatch_calls_inherent_non_implementor_method() {
+    let output = baml_test!(
+        r#"
+        interface Speaker {
+            function speak(self) -> string throws never
+        }
+        class A {
+            implements Speaker {
+                function speak(self) -> string { return "interface" }
+            }
+        }
+        class B {
+            function speak(self) -> string { return "inherent" }
+        }
+        function speak(x: A | B) -> string {
+            return x.speak()
+        }
+        function main() -> string {
+            return speak(B {})
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("inherent".into())
+    );
+}
+
 /// wf3 pin: a class's own concrete field shadows same-named interface-field
 /// views — unqualified `i.name` reads the concrete field. Correct per the Group D
 /// shadow rule; pinned because the outcome silently flips based on whether a
@@ -10918,7 +10996,7 @@ async fn wf3_concrete_field_shadows_interface_views_pins() {
 }
 
 /// wf3: a bare generic interface in a type-argument position
-/// (`reflect.type_of<Box>()`, no type args) is an arity error like any other
+/// (`type.of<Box>()`, no type args) is an arity error like any other
 /// type position — a generic head is written fully explicit or inferred
 /// wholesale, never a partial wildcard. (This replaces the old undocumented
 /// wildcard-matching behavior; a deliberate every-instantiation reflection
@@ -10937,8 +11015,8 @@ async fn wf3_bare_generic_interface_reflection_is_arity_error() {
             }
         }
         function main() -> bool {
-            let bare = reflect.type_of<Box>()
-            return bare.implemented_by(reflect.type_of<IntBox>())
+            let bare = type.of<Box>()
+            return bare.implemented_by(type.of<IntBox>())
         }
         "#,
         "type `Box` expects 1 type argument(s), got 0",
@@ -11028,9 +11106,9 @@ async fn union_fuzz_pr_reflection_nested_union_arg_order_insensitive() {
           }
         }
         function main() -> int {
-          let ub = reflect.type_of<UBox>()
-          let fwd = reflect.type_of<Box<(int | string)?>>()
-          let rev = reflect.type_of<Box<(string | int)?>>()
+          let ub = type.of<UBox>()
+          let fwd = type.of<Box<(int | string)?>>()
+          let rev = type.of<Box<(string | int)?>>()
           let a = 0
           if ub.implements(fwd) { a = a + 1 }
           if ub.implements(rev) { a = a + 10 }
@@ -11197,11 +11275,11 @@ async fn union_fuzz_pr_reflection_duplicate_union_members_not_equivalent() {
           implements Box<int | int> { function get(self) -> int | int { return self.value } }
         }
         function main() -> int {
-          let ub = reflect.type_of<UBox>()
+          let ub = type.of<UBox>()
           let a = 0
           // UBox implements Box<int | int>, NOT Box<int | string>.
-          if ub.implements(reflect.type_of<Box<int | int>>()) { a = a + 1 }
-          if ub.implements(reflect.type_of<Box<int | string>>()) { a = a + 10 }
+          if ub.implements(type.of<Box<int | int>>()) { a = a + 1 }
+          if ub.implements(type.of<Box<int | string>>()) { a = a + 10 }
           return a
         }
         "#
@@ -11380,9 +11458,9 @@ async fn union_fuzz_f06_reflection_generic_union_arg_order_insensitive() {
           }
         }
         function main() -> int {
-          let ub = reflect.type_of<UBox>()
-          let fwd = reflect.type_of<Box<int | string>>()
-          let rev = reflect.type_of<Box<string | int>>()
+          let ub = type.of<UBox>()
+          let fwd = type.of<Box<int | string>>()
+          let rev = type.of<Box<string | int>>()
           let d1 = 0
           if ub.implements(fwd) { d1 = 1 }
           let d2 = 0
@@ -11740,6 +11818,37 @@ fn union_fuzz_f16_unqualified_ambiguous_union_field_is_e0131() {
         }
         "#,
         "E0131",
+    );
+}
+
+#[test]
+fn conjunction_ambiguous_source_fields_keep_field_diagnostic() {
+    assert_compile_error_contains(
+        r#"
+        interface Left { value: string }
+        interface Right { value: int }
+        function read<T extends Left & Right>(value: T) -> string {
+            return value.value
+        }
+        "#,
+        "field `value` on class",
+    );
+}
+
+#[test]
+fn conjunction_ambiguous_source_fields_diagnostic_names_ambiguity() {
+    // The assertion above pins the field; this pins the ambiguity wording so a
+    // different `value`-mentioning diagnostic (unknown field, bound failure)
+    // cannot satisfy the suite (PR #4332 review).
+    assert_compile_error_contains(
+        r#"
+        interface Left { value: string }
+        interface Right { value: int }
+        function read<T extends Left & Right>(value: T) -> string {
+            return value.value
+        }
+        "#,
+        "is ambiguous because it is declared by multiple interfaces",
     );
 }
 

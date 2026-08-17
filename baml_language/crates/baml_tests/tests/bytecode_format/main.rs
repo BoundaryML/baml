@@ -24,22 +24,24 @@ fn bytecode_display_formats() {
     // Normalize CRLF → LF so line numbers are consistent across platforms.
     let source = include_str!("bytecode_display.baml").replace("\r\n", "\n");
 
-    // 1. Textual format (optimized)
-    let o1 = compile_display_functions(&source, OptLevel::One);
-    let o1_refs: Vec<(String, &Function)> = o1.iter().map(|(n, f)| (n.clone(), f)).collect();
-    let textual = display_program(&o1_refs, BytecodeFormat::Textual);
+    let optimized = compile_display_functions(&source, OptLevel::One);
+    let optimized_refs: Vec<(String, &Function)> = optimized
+        .iter()
+        .map(|(name, function)| (name.clone(), function))
+        .collect();
+    let textual = display_program(&optimized_refs, BytecodeFormat::Textual);
+    let expanded = display_program(&optimized_refs, BytecodeFormat::Expanded);
 
-    // 2. Expanded format (optimized)
-    let expanded = display_program(&o1_refs, BytecodeFormat::Expanded);
-
-    // 3. Expanded format (unoptimized)
-    let o0 = compile_display_functions(&source, OptLevel::Zero);
-    let o0_refs: Vec<(String, &Function)> = o0.iter().map(|(n, f)| (n.clone(), f)).collect();
-    let expanded_unopt = display_program(&o0_refs, BytecodeFormat::Expanded);
+    let unoptimized = compile_display_functions(&source, OptLevel::Zero);
+    let unoptimized_refs: Vec<(String, &Function)> = unoptimized
+        .iter()
+        .map(|(name, function)| (name.clone(), function))
+        .collect();
+    let expanded_unoptimized = display_program(&unoptimized_refs, BytecodeFormat::Expanded);
 
     insta::with_settings!({omit_expression => true, snapshot_path => "snapshots"}, {
         insta::assert_snapshot!("bytecode_display_textual", textual);
         insta::assert_snapshot!("bytecode_display_expanded", expanded);
-        insta::assert_snapshot!("bytecode_display_expanded_unoptimized", expanded_unopt);
+        insta::assert_snapshot!("bytecode_display_expanded_unoptimized", expanded_unoptimized);
     });
 }

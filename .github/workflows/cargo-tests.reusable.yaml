@@ -269,90 +269,91 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-test-linux-musl.html
           if-no-files-found: ignore
 
-  cargo-test-macos:
-    name: "cargo test (aarch64-apple-darwin)"
-    # Skip in the merge queue: macos already ran on the PR. The merge_group
-    # event is inherited from ci.yaml through the workflow_call boundary.
-    if: ${{ github.event_name != 'merge_group' }}
-    runs-on: blacksmith-6vcpu-macos-latest
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
+  # TODO(B-1545): Temporarily disabled due to flakiness; re-enable via https://linear.app/boundaryml2/issue/B-1545/investigate-flakiness-in-cargo-test-aarch64-apple-darwin-ci-job
+  # cargo-test-macos:
+  #   name: "cargo test (aarch64-apple-darwin)"
+  #   # Skip in the merge queue: macos already ran on the PR. The merge_group
+  #   # event is inherited from ci.yaml through the workflow_call boundary.
+  #   if: ${{ github.event_name != 'merge_group' }}
+  #   runs-on: blacksmith-6vcpu-macos-latest
+  #   timeout-minutes: 35
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #       with:
+  #         persist-credentials: false
 
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
+  #     - name: "Install Rust toolchain"
+  #       run: rustup show
+  #       working-directory: baml_language
 
-      - name: "Install tools (mise)"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv cargo:cargo-nextest"
+  #     - name: "Install tools (mise)"
+  #       uses: ./.github/actions/setup-mise
+  #       with:
+  #         install_args: "sccache direnv cargo:cargo-nextest"
 
-      - name: "Verify sccache"
-        run: sccache --version
+  #     - name: "Verify sccache"
+  #       run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "macos-cargo"
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         workspaces: "baml_language -> target"
+  #         cache-all-crates: true
+  #         cache-targets: false
+  #         save-if: ${{ github.ref == 'refs/heads/canary' }}
+  #         shared-key: "macos-cargo"
 
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
+  #     - name: "Load .envrc with direnv"
+  #       run: |
+  #         set -euo pipefail
 
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+  #         direnv allow .envrc
+  #         direnv export gha >> "$GITHUB_ENV"
 
-      # Separate step so if fetch is slow, build is fast.
-      - name: "Fetch cargo dependencies"
-        run: cargo fetch
-        working-directory: baml_language
+  #     # Separate step so if fetch is slow, build is fast.
+  #     - name: "Fetch cargo dependencies"
+  #       run: cargo fetch
+  #       working-directory: baml_language
 
-      # Snapshot tests live in `baml_tests` and are exercised end-to-end by
-      # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
-      # and run in the dedicated `sdk-tests` matrix below. Skip both here —
-      # at the cargo level (`--exclude`), not a nextest `-E` filter, so their
-      # test binaries (the heaviest links in the workspace) aren't built.
-      - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
-        working-directory: baml_language
+  #     # Snapshot tests live in `baml_tests` and are exercised end-to-end by
+  #     # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
+  #     # and run in the dedicated `sdk-tests` matrix below. Skip both here —
+  #     # at the cargo level (`--exclude`), not a nextest `-E` filter, so their
+  #     # test binaries (the heaviest links in the workspace) aren't built.
+  #     - name: "Build tests with --timings"
+  #       run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+  #       working-directory: baml_language
 
-      - name: "Run tests with nextest"
-        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
-        working-directory: baml_language
+  #     - name: "Run tests with nextest"
+  #       run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+  #       working-directory: baml_language
 
-      - name: "Show sccache stats"
-        if: always()
-        run: sccache --show-stats
+  #     - name: "Show sccache stats"
+  #       if: always()
+  #       run: sccache --show-stats
 
-      - name: "Dump sccache stats (json)"
-        if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-test-macos.json
+  #     - name: "Dump sccache stats (json)"
+  #       if: always()
+  #       run: sccache --show-stats --stats-format json > sccache-stats-test-macos.json
 
-      - name: "Upload sccache stats"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: sccache-stats-test-macos
-          path: sccache-stats-test-macos.json
-          if-no-files-found: ignore
+  #     - name: "Upload sccache stats"
+  #       if: always()
+  #       uses: actions/upload-artifact@v7
+  #       with:
+  #         name: sccache-stats-test-macos
+  #         path: sccache-stats-test-macos.json
+  #         if-no-files-found: ignore
 
-      - name: "Rename cargo timings"
-        if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-macos.html
-        working-directory: baml_language
-      - name: "Upload cargo timings"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: cargo-timings-test-macos
-          path: baml_language/target/cargo-timings/cargo-timing-test-macos.html
-          if-no-files-found: ignore
+  #     - name: "Rename cargo timings"
+  #       if: always()
+  #       run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-macos.html
+  #       working-directory: baml_language
+  #     - name: "Upload cargo timings"
+  #       if: always()
+  #       uses: actions/upload-artifact@v7
+  #       with:
+  #         name: cargo-timings-test-macos
+  #         path: baml_language/target/cargo-timings/cargo-timing-test-macos.html
+  #         if-no-files-found: ignore
 
   cargo-test-windows:
     name: "cargo test (x86_64-pc-windows-msvc)"
@@ -494,6 +495,7 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       sdk-dirs: ${{ steps.matrix.outputs.sdk-dirs }}
+      temporarily-disabled-sdk-dirs: ${{ steps.matrix.outputs.temporarily-disabled-sdk-dirs }}
     steps:
       - name: "Build matrix"
         id: matrix
@@ -779,15 +781,21 @@ jobs:
               },
             ];
 
+            // TODO(B-1545): Re-enable macOS SDK tests after the SIGABRT flakiness is fixed: https://linear.app/boundaryml2/issue/B-1545/investigate-flakiness-in-cargo-test-aarch64-apple-darwin-ci-job
+            const enabledMatrix = baseMatrix.filter((entry) => entry["os-label"] !== "macos");
             const matrix = context.eventName === "merge_group"
-              ? baseMatrix.filter((entry) => entry["os-label"] === "linux")
-              : baseMatrix;
+              ? enabledMatrix.filter((entry) => entry["os-label"] === "linux")
+              : enabledMatrix;
+            const enabledSdkDirs = new Set(enabledMatrix.map((entry) => entry["sdk-dir"]));
+            const temporarilyDisabledSdkDirs = [...new Set(
+              baseMatrix
+                .map((entry) => entry["sdk-dir"])
+                .filter((sdkDir) => !enabledSdkDirs.has(sdkDir)),
+            )].sort();
 
             core.setOutput("matrix", JSON.stringify(matrix, null, 2));
-            core.setOutput(
-              "sdk-dirs",
-              JSON.stringify([...new Set(baseMatrix.map((entry) => entry["sdk-dir"]))].sort()),
-            );
+            core.setOutput("sdk-dirs", JSON.stringify([...enabledSdkDirs].sort()));
+            core.setOutput("temporarily-disabled-sdk-dirs", JSON.stringify(temporarilyDisabledSdkDirs));
 
   sdk-test-coverage:
     name: "sdk test coverage"
@@ -802,6 +810,7 @@ jobs:
         uses: actions/github-script@v8
         env:
           MATRIX_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.sdk-dirs }}
+          TEMPORARILY_DISABLED_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.temporarily-disabled-sdk-dirs }}
         with:
           script: |
             const fs = require("fs");
@@ -814,13 +823,23 @@ jobs:
               .filter((sdkDir) => sdkDir !== "agent-docs")
               .sort();
             const coveredSdkDirs = new Set(JSON.parse(process.env.MATRIX_SDK_DIRS));
-            const missingSdkDirs = sdkDirs.filter((sdkDir) => !coveredSdkDirs.has(sdkDir));
+            const temporarilyDisabledSdkDirs = new Set(JSON.parse(process.env.TEMPORARILY_DISABLED_SDK_DIRS));
+            const missingSdkDirs = sdkDirs.filter(
+              (sdkDir) => !coveredSdkDirs.has(sdkDir) && !temporarilyDisabledSdkDirs.has(sdkDir),
+            );
 
             await core.summary
               .addHeading("SDK test matrix coverage")
               .addTable([
                 [{ data: "SDK directory", header: true }, { data: "Matrix entry", header: true }],
-                ...sdkDirs.map((sdkDir) => [sdkDir, coveredSdkDirs.has(sdkDir) ? "yes" : "no"]),
+                ...sdkDirs.map((sdkDir) => [
+                  sdkDir,
+                  coveredSdkDirs.has(sdkDir)
+                    ? "yes"
+                    : temporarilyDisabledSdkDirs.has(sdkDir)
+                      ? "temporarily disabled (B-1545)"
+                      : "no",
+                ]),
               ])
               .write();
 
@@ -845,7 +864,7 @@ jobs:
       fail-fast: false
       # In the merge queue (`merge_group`) only the linux leg runs — the
       # macos/windows legs already ran on the PR. Keep these entries in sync
-      # with the standalone cargo-test-macos/windows jobs above.
+      # with the standalone platform cargo-test jobs above.
       matrix:
         include: ${{ fromJSON(needs.sdk-test-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.runs-on }}
@@ -1426,7 +1445,6 @@ jobs:
     needs:
       - cargo-test-linux
       - cargo-test-linux-musl
-      - cargo-test-macos
       - cargo-test-windows
       - sdk-tests
       - cargo-test-wasm
@@ -1446,7 +1464,6 @@ jobs:
     needs:
       - cargo-test-linux
       - cargo-test-linux-musl
-      - cargo-test-macos
       - cargo-test-windows
       - sdk-tests
       - cargo-test-wasm

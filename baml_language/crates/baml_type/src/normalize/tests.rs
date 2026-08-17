@@ -4,7 +4,9 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::{Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr};
+use crate::{
+    Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr, TyAttrValue,
+};
 
 // ── stub context ───────────────────────────────────────────────────────────
 
@@ -171,6 +173,75 @@ fn projection_reduces_to_its_binding() {
         &Ty::string(),
         &ctx,
     ));
+}
+
+// ── BEP-066 shared runtime-type algebra ──────────────────────────────────
+
+#[test]
+fn reflection_kind_classes_are_sealed_type_subtypes_in_both_entries() {
+    let ctx = Ctx::default();
+    let carrier = Ty::Type {
+        attr: TyAttr::default(),
+    };
+
+    for kind in crate::type_kind::TypeKind::ALL {
+        let view = Ty::Class(kind.class_name(), Vec::new(), TyAttr::default());
+        assert!(
+            is_subtype(&view, &carrier, &ctx),
+            "plain subtype entry rejected {kind:?}"
+        );
+        assert!(
+            is_subtype_interned(
+                &interned::Ty::from_plain(&view),
+                &interned::Ty::from_plain(&carrier),
+                &ctx,
+            ),
+            "interned subtype entry rejected {kind:?}"
+        );
+        assert!(
+            !definitely_disjoint(&view, &carrier, &ctx),
+            "reflection view and type carrier cannot be head-disjoint"
+        );
+    }
+
+    let user_lookalike = Ty::Class(
+        QualifiedTypeName::new(
+            Name::new("user"),
+            vec![Name::new("reflect"), Name::new("class")],
+            Name::new("Type"),
+        ),
+        Vec::new(),
+        TyAttr::default(),
+    );
+    assert!(!is_subtype(&user_lookalike, &carrier, &ctx));
+    assert!(!is_subtype_interned(
+        &interned::Ty::from_plain(&user_lookalike),
+        &interned::Ty::from_plain(&carrier),
+        &ctx,
+    ));
+}
+
+#[test]
+fn canonical_digest_is_stable_and_uses_canonical_plain_types() {
+    let ctx = Ctx::default();
+    let int = Ty::int();
+    let int_with_attr = Ty::Int {
+        attr: TyAttr {
+            sap_parse_without_null: TyAttrValue::Set,
+            ..TyAttr::default()
+        },
+    };
+    let ordered = union(vec![Ty::int(), Ty::string()]);
+    let permuted = union(vec![Ty::string(), Ty::int()]);
+
+    let int_digest = canonical_digest(&int, &ctx);
+    let union_digest = canonical_digest(&ordered, &ctx);
+    assert_eq!(int_digest, canonical_digest(&int, &ctx));
+    assert_eq!(int_digest, canonical_digest(&int_with_attr, &ctx));
+    assert_eq!(union_digest, canonical_digest(&permuted, &ctx));
+    assert_ne!(int_digest, union_digest);
+    assert_eq!(int_digest, 0xa8c7_f832_281a_39c5);
+    assert_eq!(union_digest, 0x9886_dba9_b789_ac56);
 }
 
 #[test]
@@ -1464,6 +1535,217 @@ fn any_function_existentials_are_covariant_in_their_pins() {
         TyAttr::default(),
     );
     assert!(!is_subtype(&other, &any_function(vec![]), &ctx));
+}
+
+// ── interned entry (S4b) ───────────────────────────────────────────────────
+
+mod interned_entry {
+    use super::*;
+    use crate::interned;
+
+    fn it(ty: &Ty) -> interned::Ty {
+        interned::Ty::from_plain(ty)
+    }
+
+    /// Every verdict must agree between the plain entry and the interned
+    /// entry - `from_interned` is an ingestion path, not a second algebra.
+    #[test]
+    fn subtype_and_equivalence_verdicts_match_the_plain_entry() {
+        let mut ctx = Ctx::default();
+        ctx.enums
+            .insert(qtn("Side"), vec![Name::new("L"), Name::new("R")]);
+        ctx.aliases.insert(
+            qtn("Loop"),
+            Ty::List(
+                Box::new(Ty::TypeAlias(qtn("Loop"), TyAttr::default())),
+                TyAttr::default(),
+            ),
+        );
+
+        let pairs = [
+            (lit_int(1), Ty::int()),
+            (Ty::int(), lit_int(1)),
+            (Ty::int(), union(vec![Ty::int(), Ty::string()])),
+            (union(vec![Ty::int(), Ty::string()]), Ty::int()),
+            (
+                Ty::List(Box::new(lit_int(1)), TyAttr::default()),
+                Ty::List(Box::new(Ty::int()), TyAttr::default()),
+            ),
+            (
+                Ty::Never {
+                    attr: TyAttr::default(),
+                },
+                class("Box"),
+            ),
+            (
+                class("Box"),
+                Ty::BuiltinUnknown {
+                    attr: TyAttr::default(),
+                },
+            ),
+            (variant("Side", "L"), enum_ty("Side")),
+            (enum_ty("Side"), variant("Side", "L")),
+            (
+                union(vec![variant("Side", "L"), variant("Side", "R")]),
+                enum_ty("Side"),
+            ),
+            (
+                Ty::TypeAlias(qtn("Loop"), TyAttr::default()),
+                Ty::List(
+                    Box::new(Ty::TypeAlias(qtn("Loop"), TyAttr::default())),
+                    TyAttr::default(),
+                ),
+            ),
+            (
+                class1("Box", Ty::int()),
+                class1("Box", union(vec![Ty::int(), Ty::string()])),
+            ),
+        ];
+        for (sub, sup) in &pairs {
+            assert_eq!(
+                is_subtype_interned(&it(sub), &it(sup), &ctx),
+                ctx.is_subtype(sub, sup),
+                "subtype verdict diverged for {sub:?} <: {sup:?}"
+            );
+            assert_eq!(
+                equivalent_interned(&it(sub), &it(sup), &ctx),
+                ctx.equivalent(sub, sup),
+                "equivalence verdict diverged for {sub:?} == {sup:?}"
+            );
+        }
+        // ACI equivalence through the interned entry.
+        assert!(equivalent_interned(
+            &it(&union(vec![Ty::int(), Ty::string()])),
+            &it(&union(vec![Ty::string(), Ty::int()])),
+            &ctx,
+        ));
+    }
+
+    #[test]
+    fn canonical_cache_matches_reject_free_canonical_relations() {
+        let mut ctx = Ctx::default();
+        ctx.enums
+            .insert(qtn("Side"), vec![Name::new("L"), Name::new("R")]);
+        ctx.requires.push((qtn("Readable"), qtn("Displayable")));
+        int_list_alias(&mut ctx, "JsonA");
+        int_list_alias(&mut ctx, "JsonB");
+
+        let pairs = [
+            (alias("JsonA"), alias("JsonB")),
+            (alias("JsonA"), Ty::int()),
+            (lit_int(1), Ty::int()),
+            (Ty::int(), union(vec![Ty::int(), Ty::string()])),
+            (
+                union(vec![variant("Side", "L"), variant("Side", "R")]),
+                enum_ty("Side"),
+            ),
+            (class("Left"), class("Right")),
+            // Distinct interface heads cannot be rejected: the context makes
+            // this pair a valid subtype through `requires`.
+            (iface("Readable"), iface("Displayable")),
+            (iface("Displayable"), iface("Readable")),
+        ];
+        let pairs = pairs.map(|(a, b)| (it(&a), it(&b)));
+        let cache = InternedCanonicalCache::default();
+
+        // Run twice: the first pass populates canonical forms and the second
+        // proves that the warm path returns the same relation verdicts. The
+        // oracle deliberately bypasses the interned-entry fast rejection.
+        for _ in 0..2 {
+            for (a, b) in &pairs {
+                let canonical_a = NormalTy::canonical_interned(a, &ctx);
+                let canonical_b = NormalTy::canonical_interned(b, &ctx);
+                assert_eq!(
+                    cache.equivalent(a, b, &ctx),
+                    canonical_a == canonical_b,
+                    "cached equivalence diverged for {a:?} == {b:?}"
+                );
+                assert_eq!(
+                    cache.is_subtype(a, b, &ctx),
+                    canonical_a.is_subtype_of(&canonical_b, &ctx, &mut HashSet::new()),
+                    "cached subtyping diverged for {a:?} <: {b:?}"
+                );
+            }
+        }
+    }
+
+    /// The plain entry gets the same spec rule (TYPE_SYSTEM.md:
+    /// `(true | false) == bool`); the collapse lives in the shared algebra,
+    /// not in an engine.
+    #[test]
+    fn complete_bool_literal_set_is_bool_in_the_plain_entry_too() {
+        let ctx = Ctx::default();
+        let lit_bool =
+            |b: bool| Ty::Literal(Literal::Bool(b), Freshness::Regular, TyAttr::default());
+        assert!(ctx.equivalent(&union(vec![lit_bool(true), lit_bool(false)]), &Ty::bool()));
+        assert!(!ctx.equivalent(&lit_bool(true), &Ty::bool()));
+    }
+
+    #[test]
+    fn canonical_union_joins_and_collapses() {
+        let ctx = Ctx::default();
+        let t = |b: bool| {
+            it(&Ty::Literal(
+                Literal::Bool(b),
+                Freshness::Regular,
+                TyAttr::default(),
+            ))
+        };
+        // The bool-join fixture's core: true | false collapses to bool.
+        let joined = canonical_union_interned(&[t(true), t(false)], &ctx);
+        assert!(joined == it(&Ty::bool()));
+        // Absorption: 1 | int collapses to int.
+        let absorbed = canonical_union_interned(&[it(&lit_int(1)), it(&Ty::int())], &ctx);
+        assert!(absorbed == it(&Ty::int()));
+        // Join identity: the empty union is never.
+        let empty = canonical_union_interned(&[], &ctx);
+        assert!(
+            empty
+                == it(&Ty::Never {
+                    attr: TyAttr::default()
+                })
+        );
+        // Reordered spellings canonicalize identically.
+        let ab = canonical_union_interned(&[it(&Ty::int()), it(&Ty::string())], &ctx);
+        let ba = canonical_union_interned(&[it(&Ty::string()), it(&Ty::int())], &ctx);
+        assert!(ab == ba);
+    }
+
+    #[test]
+    fn normalize_interned_produces_canonical_interned_types() {
+        let ctx = Ctx::default();
+        let messy = it(&union(vec![lit_int(1), Ty::int(), Ty::int()]));
+        assert!(normalize_interned(&messy, &ctx) == it(&Ty::int()));
+    }
+}
+
+#[test]
+fn self_referential_bound_subtyping_terminates() {
+    // B-1091 regression: `T extends Foo<T | int>` - the bound mentions its
+    // own variable, so the TypeVar subtype arm re-canonicalizes the bound
+    // while proving through it. Before `canonical_with` (assumption
+    // threading), that re-entry restarted the co-inductive set and the
+    // chain `canonical -> absorb_subtypes -> is_subtype(T, int) ->
+    // canonical(bound) -> ...` recursed to a stack overflow. These three
+    // calls TERMINATING is the test; the verdicts pin the co-inductive
+    // semantics.
+    let mut ctx = Ctx::default();
+    let foo = QualifiedTypeName::local(Name::new("Foo"));
+    let bound = Ty::Interface(
+        foo,
+        vec![Ty::union(vec![Ty::type_var("T"), Ty::int()])],
+        vec![],
+        TyAttr::default(),
+    );
+    ctx.var_bounds
+        .insert(ParamTy::new(0, Name::new("T")), vec![bound.clone()]);
+
+    // Proves through the carried bound (reflexive at the bound itself).
+    assert!(is_subtype(&Ty::type_var("T"), &bound, &ctx));
+    // The bound does not place `T` inside `int`.
+    assert!(!is_subtype(&Ty::type_var("T"), &Ty::int(), &ctx));
+    // Canonicalizing the bound itself terminates.
+    let _ = normalize(&bound, &ctx);
 }
 
 // ── review regressions: renderer totality, unguarded members, qualifiers ──--

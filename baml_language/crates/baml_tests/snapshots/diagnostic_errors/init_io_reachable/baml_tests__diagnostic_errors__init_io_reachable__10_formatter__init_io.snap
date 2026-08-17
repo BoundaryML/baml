@@ -1,0 +1,99 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// E0158 — io reachable from `$init`.
+//
+// Top-level `client` declarations are evaluated by the synthesized `$init`
+// chainer when the engine is created, on a path that cannot suspend. An io
+// sysop reached from one of those initializers therefore does not raise a
+// catchable BAML error — it aborts engine construction with an opaque
+// `InitFailed("$init yielded unexpectedly: SysOp BamlEnvGet")`. This project
+// pins the check-time error that replaces that runtime death, and — just as
+// importantly — the shapes that must stay CLEAN.
+
+// ── Tainted: a direct env read in the declaration ────────────────────────────
+// `baml.env.get_or_panic` is not itself a sysop; it calls `baml.env.get`,
+// which is. The message names the sysop AND the first hop.
+client DirectEnvRead = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = baml.env.get_or_panic("OPENAI_API_KEY"),
+);
+
+// ── Tainted: the sysop itself, with no intermediate hop ──────────────────────
+// The other half of the message: with nothing between the declaration and the
+// sysop there is no "through …" clause to print.
+client RawSysop = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = baml.env.get("OPENAI_API_KEY") ?? "unset",
+);
+
+// ── Tainted: the read is one helper away (transitive) ────────────────────────
+function load_secret() -> string {
+    baml.env.get_or_panic("OPENAI_API_KEY")
+}
+
+client ViaHelper = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = load_secret(),
+);
+
+// ── Tainted: a network read, to show the rule is about io, not about env ─────
+client ViaFetch = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = baml.http.fetch("https://vault.example/key").text(),
+);
+
+// ── Tainted: an IMMEDIATELY-INVOKED closure does run during `$init` ──────────
+// The counterpart to `StoredThunk` below: putting the read in a lambda only
+// helps when nothing calls the lambda. Here the call is right there.
+client InvokedThunk = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = (() -> { baml.env.get_or_panic("OPENAI_API_KEY") })(),
+);
+
+// ── Tainted: a `spawn { … }` body runs during `$init` too ────────────────────
+// A spawn LOOKS like the stored thunk below — it lowers to a lambda — but it is
+// a launch, not a value, and `$init` has no scheduler turn to launch onto, so
+// io inside one is just as fatal as io written inline. The lambda-excluding
+// walk has to re-seed the spawn body explicitly to see this.
+function spawned_secret() -> string {
+    await spawn { baml.env.get_or_panic("OPENAI_API_KEY") }
+}
+
+client ViaSpawn = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = spawned_secret(),
+);
+
+// ── CLEAN: `env.X` is a late-bound reference, not a read ─────────────────────
+// `env.X` desugars to `baml.env.ref("X")`, which only constructs a
+// `baml.env.Ref` holding the variable's NAME. Nothing is read until the
+// credential is used at request time, so `$init` performs no io. If this ever
+// starts erroring, the whole EnvRef feature is broken.
+client LateBoundRef = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = env.OPENAI_API_KEY,
+);
+
+// ── CLEAN: a closure that reads env but is STORED, never invoked ─────────────
+// `pick_eager` takes the thunk and drops it. Nothing runs the lambda during
+// `$init`, so nothing performs io then. This is load-bearing: deferring an
+// env read into a thunk the runner calls later is the pattern the feature
+// exists to enable, and flagging it would make the analysis useless.
+function pick_eager(
+    eager: string,
+    lazy: () -> string throws baml.errors.Io | baml.errors.ParseError,
+) -> string {
+    eager
+}
+
+client StoredThunk = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = pick_eager("literal-key", () -> { baml.env.get_or_panic("OPENAI_API_KEY") }),
+);
+
+// ── CLEAN: a plain literal, the baseline ─────────────────────────────────────
+client LiteralKey = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "literal-key",
+);

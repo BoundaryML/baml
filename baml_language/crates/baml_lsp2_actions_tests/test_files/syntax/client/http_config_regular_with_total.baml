@@ -21,7 +21,7 @@ client<llm> RegularWithTotal {
 //- diagnostics
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client RegularWithTotal = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client RegularWithTotal = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
 //   │ ai.RoundRobin)
 //    ╭─[client_http_config_regular_with_total.baml:1:1]
 //  1 │ ╭─▶ client<llm> RegularWithTotal {

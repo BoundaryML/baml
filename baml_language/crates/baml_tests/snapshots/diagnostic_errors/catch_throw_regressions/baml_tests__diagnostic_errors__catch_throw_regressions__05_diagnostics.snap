@@ -5,34 +5,47 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[regressions.baml:25:5]
- 25 │     WrapperAlwaysThrows(n) catch (e) {
-    ·     ───────────┬──────────
-    ·                ╰── expected `string`, found `Status`
+    ╭─[regressions.baml:24:46]
+ 24 │ ╭─▶ function CatchAlwaysThrows(n: int) -> string {
+ 25 │ │       WrapperAlwaysThrows(n) catch (e) {
+ 26 │ │           string => "http!"
+ 27 │ │       } catch (e2) {
+ 28 │ │           int => "index!"
+ 29 │ │       }
+ 30 │ ├─▶ }
+    · ╰──── expected `string`, found `"http!" | "index!" | Status`
     ╰────
 
   [type] E0001
 
   × mismatched types
-    ╭─[regressions.baml:43:5]
- 43 │     ThrowsAllStatusVariants(n) catch (e) {
-    ·     ─────────────┬────────────
-    ·                  ╰── expected `string`, found `Status`
-    ╰────
-
-  [type] E0062
-
-  × non-exhaustive catch_all on type string | BuildError; missing: string
-    ╭─[regressions.baml:92:5]
- 92 │ ╭─▶     BuildWithBuildError(ok) catch_all (e) {
- 93 │ │           BuildError => "recovered: " + e.reason,
- 94 │ ╰─▶     }
+    ╭─[regressions.baml:42:51]
+ 42 │ ╭─▶ function CatchAllStatusVariants(n: int) -> string {
+ 43 │ │       ThrowsAllStatusVariants(n) catch (e) {
+ 44 │ │           Status.HttpError => "http!"
+ 45 │ │       } catch (e) {
+ 46 │ │           Status.IndexError => "index!"
+ 47 │ │       } catch (e) {
+ 48 │ │           Status.AuthError => "auth!"
+ 49 │ │       } catch (e) {
+ 50 │ │           Status.SomeOtherError => "other!"
+ 51 │ │       }
+ 52 │ ├─▶ }
+    · ╰──── expected `string`, found `"auth!" | "http!" | "index!" | "other!" | Status`
     ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 2 statement(s) after diverging statement
-     ╭─[regressions.baml:101:9]
- 101 │         throw "error"
-     ·         ─────────────
+     ╭─[regressions.baml:102:9]
+ 102 │         let x = 123;
+     ·         ────────────
+     ╰────
+
+  [type] E0007
+
+  × type `int` has no member `missing`
+     ╭─[regressions.baml:103:9]
+ 103 │         x.missing
+     ·         ─────────
      ╰────

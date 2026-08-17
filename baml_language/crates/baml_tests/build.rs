@@ -91,10 +91,20 @@ fn generate_speedtest_benches(manifest_dir: &str) {
         Ok(w) => w,
         Err(e) => {
             println!("cargo:warning=speedtest benches disabled: {e}");
-            // Emit an empty (but valid) file so the include! in the bench compiles.
+            // Emit empty (but valid) files so the include!s in both bench
+            // targets compile.
             fs::write(
                 &dest_path,
                 "// speedtest workloads unavailable at build time; no benches generated.\n",
+            )
+            .unwrap();
+            fs::write(
+                Path::new(&out_dir).join("speedtest_profiling_sources.rs"),
+                "// speedtest workloads unavailable at build time.\n\
+                 pub const PROF_SRC_COMPUTE_PURE_CALL_1M: &str = \"\";\n\
+                 pub const PROF_SRC_COMPUTE_ARRAY_BUILD_SUM_100K: &str = \"\";\n\
+                 pub const PROF_SRC_COMPUTE_FIB32_RECURSIVE: &str = \"\";\n\
+                 pub const PROF_SRC_STRING_CONCAT_LOOP_10K: &str = \"\";\n",
             )
             .unwrap();
             return;
@@ -148,6 +158,41 @@ fn generate_speedtest_benches(manifest_dir: &str) {
 ";
 
     write_formatted_code(&dest_path, benches, header);
+
+    // Also emit the small fixed subset consumed by the `profiling_overhead`
+    // bench target: same single source of truth, but only the workloads chosen
+    // to characterize tracing cost (per-call ring pairs, allocation-heavy
+    // loops, the known ring-overflow reproducer, and a string baseline).
+    let subset = [
+        "compute::pure call 1m",
+        "compute::array build sum 100k",
+        "compute::fib32 recursive",
+        "string::concat loop 10k",
+    ];
+    let prof_consts: TokenStream = subset
+        .iter()
+        .map(|name| {
+            let slug = slugify(name);
+            let ident = format_ident!("PROF_SRC_{}", slug.to_uppercase());
+            let source = all_workloads
+                .iter()
+                .find(|w| w.name == *name)
+                .map(|w| w.baml.as_str())
+                .unwrap_or("");
+            quote! {
+                pub const #ident: &str = #source;
+            }
+        })
+        .collect();
+    let prof_path = Path::new(&out_dir).join("speedtest_profiling_sources.rs");
+    write_formatted_code(
+        &prof_path,
+        prof_consts,
+        "// Auto-generated profiling-overhead workload sources by build.rs.\n\
+         // Source of truth: tools/speedtest/workloads/*.md (expanded via export_baml.py).\n\
+         // An empty const means the corpus was unavailable at build time; the\n\
+         // corresponding bench skips itself.\n",
+    );
 }
 
 /// Run `export_baml.py` and parse its JSON output into the workload list.
@@ -442,18 +487,16 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
         Tier::DiagnosticErrors => {
             // Tier 2: HIR, TIR, formatter — no MIR, no codegen
             let hir = generate_hir_test(project, stdlib_package_filter);
-            let tir = generate_tir_test(project, stdlib_package_filter);
             let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
-            (hir, tir, quote! {}, quote! {}, fmt)
+            (hir, quote! {}, quote! {}, quote! {}, fmt)
         }
         Tier::Compiles | Tier::Passing | Tier::PassingLlm => {
             // Tier 3+: all compiler phases
             let hir = generate_hir_test(project, stdlib_package_filter);
-            let tir = generate_tir_test(project, stdlib_package_filter);
             let mir = generate_mir_test(project, stdlib_package_filter);
             let cg = generate_codegen_test(project, stdlib_package_filter);
             let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
-            (hir, tir, mir, cg, fmt)
+            (hir, quote! {}, mir, cg, fmt)
         }
     };
 
@@ -568,78 +611,6 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("03_ppir", output);
-            });
-        }
-    }
-}
-
-fn generate_tir_test(project: &TestProject, stdlib_package_filter: Option<&str>) -> TokenStream {
-    let file_loaders: TokenStream = project
-        .files
-        .iter()
-        .map(|baml_file| {
-            let full_path = baml_file.full_path.display().to_string();
-            let relative_path = baml_file.relative_path.display().to_string();
-            let include_content = make_include_str(&full_path);
-
-            quote! {
-                {
-                    let content = #include_content;
-                    let content = content.replace("\r\n", "\n");
-                    let sf = db.add_file(
-                        #relative_path,
-                        &content,
-                    );
-                    source_files.push(sf);
-                }
-            }
-        })
-        .collect();
-
-    let stdlib_section = if let Some(pkg_name) = stdlib_package_filter {
-        let pkg_lit = syn::LitStr::new(pkg_name, proc_macro2::Span::call_site());
-        quote! {
-            {
-                let pkg_filter = #pkg_lit;
-                writeln!(output, "\n=== TIR2 (package {}) ===", pkg_filter).unwrap();
-                use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
-                let mut baml_files: Vec<_> = compiler2_all_files(&db)
-                    .into_iter()
-                    .filter(|f| file_package(&db, *f).package.as_str() == pkg_filter)
-                    .collect();
-                baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
-                for sf in baml_files {
-                    writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
-                    output.push_str(&render_tir(&db, sf));
-                }
-            }
-        }
-    } else {
-        quote! {}
-    };
-
-    quote! {
-        #[test]
-        fn test_04_tir() {
-            use crate::compiler2_tir::support::render_tir;
-
-            let mut db = ProjectDatabase::new();
-            let _root = db.set_project_root(std::path::Path::new("."));
-            let mut source_files = Vec::new();
-
-            #file_loaders
-
-            let mut output = String::new();
-            writeln!(output, "=== TIR2 ===").unwrap();
-
-            for source_file in &source_files {
-                output.push_str(&render_tir(&db, *source_file));
-            }
-
-            #stdlib_section
-
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                assert_snapshot!("04_tir", output);
             });
         }
     }
@@ -1110,12 +1081,16 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
     let snapshot_name = format!("10_formatter__{}", baml_file.name);
     let full_path = baml_file.full_path.display().to_string();
     let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
 
     quote! {
         #[test]
         fn #test_name() {
-            let content = #include_content;
+            // Read at runtime rather than include_str!: an embedded copy goes
+            // stale when a restored CI target/ cache skips re-embedding a
+            // changed corpus file, making the formatter output disagree with a
+            // freshly-updated snapshot on CI only.
+            let content = std::fs::read_to_string(#full_path)
+                .unwrap_or_else(|e| panic!("failed to read {}: {e}", #full_path));
             // Normalize line endings for cross-platform compatibility
             let content = content.replace("\r\n", "\n");
             let options = baml_fmt::FormatOptions::default();

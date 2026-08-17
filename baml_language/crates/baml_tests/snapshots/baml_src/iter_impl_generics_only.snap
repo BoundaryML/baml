@@ -523,6 +523,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     jump L1
 
   L0:
+    load_type int
     load_var2 2 3
     call baml.Array.push
     pop 1
@@ -532,13 +533,14 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _14
-    load_var _14
+    store_var _15
+    load_var _15
     is_type iter_impl_generics_only.core.Done
     pop_jump_if_false L2
     jump L3
 
   L2:
+    load_type int
     load_var2 2 4
     call baml.Array.push
     pop 1
@@ -548,13 +550,14 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _19
-    load_var _19
+    store_var _21
+    load_var _21
     is_type iter_impl_generics_only.core.Done
     pop_jump_if_false L4
     jump L5
 
   L4:
+    load_type int
     load_var2 2 5
     call baml.Array.push
     pop 1
@@ -564,19 +567,21 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     load_type never
     load_var p
     call user.iter_impl_generics_only.core.Peekable.peek
-    store_var _24
-    load_var _24
+    store_var _27
+    load_var _27
     is_type iter_impl_generics_only.core.Done
     pop_jump_if_false L6
     jump L7
 
   L6:
+    load_type int
     load_var2 2 6
     call baml.Array.push
     pop 1
     jump L8
 
   L7:
+    load_type int
     load_var out
     load_const 99
     call baml.Array.push

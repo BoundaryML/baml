@@ -13,19 +13,17 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0154
 
   × `baml.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: baml.AnyFunction`)
-    ╭─[anyfunction.baml:12:1]
- 12 │ ╭─▶ function pick<T extends baml.AnyFunction>(f: T) -> T throws never {
- 13 │ │       return f
- 14 │ ╰─▶ }
+    ╭─[anyfunction.baml:12:25]
+ 12 │ function pick<T extends baml.AnyFunction>(f: T) -> T throws never {
+    ·                         ────────────────
     ╰────
 
   [type] E0154
 
   × `baml.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: baml.AnyFunction`)
-    ╭─[anyfunction.baml:16:1]
- 16 │ ╭─▶ class Holder<T extends baml.AnyFunction> {
- 17 │ │       f T
- 18 │ ╰─▶ }
+    ╭─[anyfunction.baml:16:24]
+ 16 │ class Holder<T extends baml.AnyFunction> {
+    ·                        ────────────────
     ╰────
 
   [type] E0154
@@ -51,7 +49,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[anyfunction.baml:46:56]
  46 │     let bad_throws: baml.AnyFunction<Throws = never> = web_search
     ·                                                        ─────┬────
-    ·                                                             ╰── expected `baml.AnyFunction<Throws = never, Returns = unknown>`, found `(q: string) -> Doc[] throws ToolError`
+    ·                                                             ╰── expected `baml.AnyFunction<Returns = unknown, Throws = never>`, found `(q: string) -> Doc[] throws ToolError`
     ╰────
 
   [type] E0001

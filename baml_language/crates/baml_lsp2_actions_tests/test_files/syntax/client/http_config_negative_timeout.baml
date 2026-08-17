@@ -19,7 +19,7 @@ client<llm> NegativeTimeout {
 //- diagnostics
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client NegativeTimeout = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client NegativeTimeout = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
 //   │ ai.RoundRobin)
 //    ╭─[client_http_config_negative_timeout.baml:1:1]
 //  1 │ ╭─▶ client<llm> NegativeTimeout {

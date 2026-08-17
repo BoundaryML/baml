@@ -700,6 +700,16 @@ pub(crate) fn group_and_sort(
     // their right-hand sides evaluate eagerly. Same-leaf dependencies are
     // topologically ordered within both alias phases so forward chains
     // evaluate safely; recursive strongly connected components stay stable.
+    //
+    // Exception: an alias whose RHS names nothing from this leaf's own
+    // package is HOISTED above the classes. A class body runs pydantic's
+    // eager annotation resolution, which imports the sibling leaves its
+    // fields name; those leaves may in turn name an alias back in THIS
+    // leaf, and the partially-initialized module would not have it yet
+    // (`ai.content.Media.media: ai.MediaPart`, reached while
+    // `ai/__init__.py` is still executing `class Journal`). Hoisting is
+    // safe only for aliases that cannot themselves start such a cascade —
+    // hence "nothing from this leaf's own package".
     let mut out: BTreeMap<LeafPath, LeafBody> = BTreeMap::new();
     for (leaf, mut pairs) in buckets {
         pairs.sort_by(|a, b| a.1.cmp(&b.1));
@@ -718,12 +728,164 @@ pub(crate) fn group_and_sort(
         let mut symbols = Vec::with_capacity(
             recursive_aliases.len() + other_symbols.len() + non_recursive_aliases.len(),
         );
+        let (hoisted_aliases, trailing_aliases) =
+            split_hoistable_aliases(&leaf, non_recursive_aliases);
         symbols.extend(sort_aliases(recursive_aliases));
+        symbols.extend(sort_aliases(hoisted_aliases));
         symbols.extend(other_symbols);
-        symbols.extend(sort_aliases(non_recursive_aliases));
+        symbols.extend(sort_aliases(trailing_aliases));
         out.insert(leaf.clone(), LeafBody { leaf, symbols });
     }
     out
+}
+
+/// One leaf symbol paired with the key it renders in order by.
+type SortedSymbol = (EmittedSymbol, SortKey);
+
+/// Split the leaf's non-recursive aliases into the ones safe to emit
+/// ABOVE the classes and the ones that must stay below them.
+///
+/// An alias is hoistable when every name its RHS mentions routes to a
+/// leaf under a DIFFERENT top-level package than this leaf — plus
+/// same-leaf aliases that are themselves hoistable. Anything naming this
+/// leaf's own package (a same-leaf class, or a sibling leaf like
+/// `ai.clients` from `ai`) can trigger an import that re-enters this
+/// still-executing module, so it stays below the classes exactly as
+/// before. The SDK root package (`LeafPath` with no segments) is never
+/// hoisted across: every leaf imports root names eagerly.
+fn split_hoistable_aliases(
+    leaf: &LeafPath,
+    aliases: Vec<SortedSymbol>,
+) -> (Vec<SortedSymbol>, Vec<SortedSymbol>) {
+    let alias_indices: BTreeMap<baml_codegen_types::Name, usize> = aliases
+        .iter()
+        .enumerate()
+        .map(|(index, (symbol, _))| match symbol {
+            EmittedSymbol::TypeAlias(alias) => (alias.source.clone(), index),
+            _ => unreachable!("only type aliases are passed here"),
+        })
+        .collect();
+
+    let mut hoistable = vec![true; aliases.len()];
+    let mut same_leaf_deps: Vec<Vec<usize>> = vec![Vec::new(); aliases.len()];
+    for (index, (symbol, _)) in aliases.iter().enumerate() {
+        let EmittedSymbol::TypeAlias(alias) = symbol else {
+            unreachable!("only type aliases are passed here");
+        };
+        let mut referenced = Vec::new();
+        collect_ty_names(&alias.resolves_to, &mut referenced);
+        for name in referenced {
+            if let Some(dependency) = alias_indices.get(&name) {
+                if *dependency != index {
+                    same_leaf_deps[index].push(*dependency);
+                }
+            } else if !routes_outside_package(leaf, &name) {
+                hoistable[index] = false;
+            }
+        }
+    }
+
+    // A hoisted alias may only depend on hoisted aliases.
+    loop {
+        let mut changed = false;
+        for index in 0..aliases.len() {
+            if hoistable[index] && same_leaf_deps[index].iter().any(|dep| !hoistable[*dep]) {
+                hoistable[index] = false;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    let mut hoisted = Vec::new();
+    let mut trailing = Vec::new();
+    for (index, pair) in aliases.into_iter().enumerate() {
+        if hoistable[index] {
+            hoisted.push(pair);
+        } else {
+            trailing.push(pair);
+        }
+    }
+    (hoisted, trailing)
+}
+
+/// Whether `name` lands in a leaf under a different top-level package
+/// than `leaf`. The SDK root package counts as nobody's outside.
+fn routes_outside_package(leaf: &LeafPath, name: &baml_codegen_types::Name) -> bool {
+    let routed = route_class_ref(name);
+    match (leaf.segments.first(), routed.segments.first()) {
+        (Some(current), Some(other)) => current != other,
+        _ => false,
+    }
+}
+
+/// Every named symbol (class, interface, enum, alias) `ty` mentions.
+fn collect_ty_names(ty: &Ty, out: &mut Vec<baml_codegen_types::Name>) {
+    match ty {
+        Ty::TypeAlias(name, _) | Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
+            out.push(name.clone());
+        }
+        Ty::Class(name, arguments, _) => {
+            out.push(name.clone());
+            for argument in arguments {
+                collect_ty_names(argument, out);
+            }
+        }
+        Ty::Interface(name, arguments, associated, _) => {
+            out.push(name.clone());
+            for argument in arguments {
+                collect_ty_names(argument, out);
+            }
+            for (_, assoc) in associated {
+                collect_ty_names(assoc, out);
+            }
+        }
+        Ty::List(inner, _) => collect_ty_names(inner, out),
+        Ty::Future(value, error, _) => {
+            collect_ty_names(value, out);
+            collect_ty_names(error, out);
+        }
+        Ty::Map { key, value, .. } => {
+            collect_ty_names(key, out);
+            collect_ty_names(value, out);
+        }
+        Ty::Union(members, _) => {
+            for member in members {
+                collect_ty_names(member, out);
+            }
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for param in params {
+                collect_ty_names(&param.ty, out);
+            }
+            collect_ty_names(ret, out);
+            collect_ty_names(throws, out);
+        }
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Literal(..)
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::TypeVar(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. }
+        | Ty::Void { .. } => {}
+    }
 }
 
 fn sort_aliases(aliases: Vec<(EmittedSymbol, SortKey)>) -> Vec<(EmittedSymbol, SortKey)> {
@@ -2252,6 +2414,16 @@ pub(crate) fn render_leaf_body_pyi(
             writeln!(out, "    \"{n}\",").unwrap();
         }
         out.push_str("]\n");
+    }
+
+    // Referencing `ai.stream.Stream` through the generated package tree makes
+    // pyright lose the `Stream` re-export while resolving the circular
+    // `ai`/`ai.stream` stub graph. Point annotations at the underlying runtime
+    // type directly; this is the same `BamlStream` class that the
+    // `ai.stream` leaf re-exports as `Stream`.
+    if out.contains("ai.stream.Stream[") {
+        out = out.replace("ai.stream.Stream[", "_BamlStream[");
+        out.insert_str(0, "\nfrom baml_bridge import BamlStream as _BamlStream\n");
     }
 
     out

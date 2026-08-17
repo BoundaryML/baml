@@ -833,7 +833,7 @@ function _buffer(options: WriterOptions?) -> CsvWriter throws CsvError {
 /// (internal) Check that every non-optional field of `T` is satisfiable by
 /// the reader's columns. Use `CsvReader.rows<T>`.
 //baml:mut_vm
-function _validate_columns<T>(r: CsvReader) -> null throws CsvError {
+function _validate_columns<T>(r: CsvReader) -> void throws CsvError {
     $rust_function
 }
 

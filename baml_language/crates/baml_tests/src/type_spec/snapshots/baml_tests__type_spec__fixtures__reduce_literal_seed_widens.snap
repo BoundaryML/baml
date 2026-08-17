@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+429..430 'f': throws never
+440..529 '{\n   ...tal\n}': int
+446..455 'let total': int
+458..467 '[1, 2, 3]': int[]
+458..474 '[1, 2,...reduce': (self: int[], reducer: (int, int) -> int throws never, initial: int) -> int throws never
+458..498 '[1, 2,... }, 0)': int
+459..460 '1': 1
+462..463 '2': 2
+465..466 '3': 3
+475..494 '(a, b)... + b }': (a: int, b: int) -> int throws never
+485..494 '{ a + b }': int
+487..488 'a': int
+487..492 'a + b': int
+491..492 'b': int
+496..497 '0': 0
+522..527 'total': int

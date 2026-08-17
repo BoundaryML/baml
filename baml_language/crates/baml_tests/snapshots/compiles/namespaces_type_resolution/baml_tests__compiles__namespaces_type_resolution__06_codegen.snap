@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17884
 ---
 function user.RootAliasParam(cfg: Config) -> string {
     load_var cfg

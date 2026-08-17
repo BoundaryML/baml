@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+380..386 'rtl_id': throws never
+414..423 '{\n    x\n}': T
+420..421 'x': T
+433..441 'rtl_wrap': throws never
+471..482 '{\n    [x]\n}': T[]
+477..480 '[x]': T[]
+478..479 'x': T
+492..500 'rtl_pins': throws never
+522..558 '{\n   ... 42\n}': 42
+528..534 'rtl_id': (x: 42) -> 42 throws never
+528..538 'rtl_id(42)': 42
+535..537 '42': 42
+568..585 'rtl_ne...widens': throws never
+610..662 '{\n   ... xs\n}': int[]
+616..622 'let xs': int[]
+625..633 'rtl_wrap': (x: int) -> int[] throws never
+625..636 'rtl_wrap(7)': int[]
+634..635 '7': 7
+658..660 'xs': int[]

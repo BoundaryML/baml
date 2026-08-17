@@ -1,7 +1,7 @@
 type Searcher = (query: string, max_results?: int) -> int throws never
 type NarrowSearcher = (query: string, filter?: string?) -> string[] throws never
 
-client TestClient = openai.OpenAiClient.new();
+client TestClient = openai.ResponsesClient.new();
 
 function DefaultFilter() -> string {
   "none"
@@ -49,8 +49,8 @@ function HostEntry(query: string, max_results: int = 10, filter: string? = null)
 // args positionally, and defaulted parameters must be passed by name (E0005).
 // This LLM function keeps only required parameters.
 function AskDocs(query: string, max_results: int, filter: string) -> string {
-  client TestClient
-  prompt `${query} ${max_results} ${filter}`
+  client: TestClient
+  prompt: `${query} ${max_results} ${filter}`
 }
 
 class SearchService {

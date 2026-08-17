@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+227..228 'f': throws "bad"
+245..294 '{\n   ...  1\n}': 1
+251..286 'if (c)...n    }': void
+255..256 'c': bool
+258..286 '{\n   ...n    }': never
+274..279 '"bad"': "bad"
+291..292 '1': 1
+305..306 'g': throws "bad"
+323..371 '{\n   ...ad"\n}': int
+329..330 'f': (c: bool) -> int throws "bad"
+329..333 'f(c)': int
+331..332 'c': bool

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6132
 ---
 function user.CatchAllTyped(x: int) -> string {
     load_var x

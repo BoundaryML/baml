@@ -32,6 +32,7 @@ function baml._compare_shim(a: T, b: T) -> int  [builtin]
 function baml._float_total_cmp(a: float, b: float) -> int  [builtin]
 function baml._is_primitive_array(arr: T[]) -> bool  [builtin]
 function baml._rust_sort(arr: A) -> A  [builtin]
+function baml.compare(self: ?, other: Self) -> int  [missing]
 function baml.compare(self: ?, other: Self) -> int  [expr] {
   {  } if (self Lt other) {  } Neg 1 else if (self Gt other) {  } 1 else {  } 0
 }
@@ -44,6 +45,7 @@ function baml.compare(self: ?, other: Self) -> int  [expr] {
 function baml.compare(self: ?, other: Self) -> int  [expr] {
   {  } root._float_total_cmp(self, other)
 }
+function baml.sort(self: ?) -> Self  [missing]
 function baml.sort(self: ?) -> Self  [expr] {
   {  } if (root._is_primitive_array(self)) {  } root._rust_sort(self) else {  } self.sort_by((a: T, b: T) -> int throws T.CompareError { {  } root._compare_shim(a, b) })
 }
@@ -89,15 +91,19 @@ function baml.has(self: ?, key: K) -> bool  [builtin]
 function baml.includes(self: ?, item: T) -> bool  [builtin]
 function baml.index_of(self: ?, item: T) -> int?  [builtin]
 function baml.insert(self: ?, item: T, idx: int) -> int  [builtin]
-function baml.join(self: ?, separator: string) -> string  [builtin]
+function baml.join(self: ?, separator: string) -> string  [expr] {
+  {  } match (self) { [] => "", [first, ..rest] => { let joined = string.from(first); for item in rest { joined = joined Add separator Add string.from(item) } } joined }
+}
 function baml.keys(self: ?) -> K[]  [builtin]
 function baml.last_index_of(self: ?, item: T) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.map(self: ?, f: (T) -> U throws E) -> U[]  [builtin]
+function baml.mean(self: ?) -> float  [missing]
 function baml.mean(self: ?) -> float  [expr] {
   {  } root._mean_float(self)
 }
+function baml.median(self: ?) -> float  [missing]
 function baml.median(self: ?) -> float  [expr] {
   {  } root._median_float(self)
 }
@@ -115,6 +121,7 @@ function baml.sort_by_key(self: ?, key: (T) -> U throws E) -> T[]  [expr] {
   { let n = self.length(); if (n Le 1) { return self }; let items = self.slice(0, n); let keys: U[] = []; for x in items { keys.push(key(x)) }; let order: int[] = []; let p = 0; while p Lt n { order.push(p); p Add= 1 }; order.sort_by((i: int, j: int) -> int throws U.CompareError { {  } match (keys.at(i)) { null => 0, ki: U => match (keys.at(j)) { null => 0, kj: U => ki.compare(kj) } } }); let sorted: T[] = []; for i in order {  } match (items.at(i)) { null => {  }, item: T => { sorted.push(item) } }; self.clear(); for s in sorted { self.push(s) }; return self }
 }
 function baml.splice(self: ?, start: int, count: int, replace: T[]) -> null  [builtin]
+function baml.sum(self: ?) -> Self.Sum  [missing]
 function baml.sum(self: ?) -> int  [expr] {
   {  } root._sum_int(self)
 }
@@ -134,6 +141,7 @@ function baml._to_json_default(value: T) -> baml.json.json  [builtin]
 function baml._to_json_shim(value: T) -> baml.json.json  [builtin]
 function baml._to_string_default(value: T) -> string  [builtin]
 function baml._to_string_shim(value: T) -> string  [builtin]
+function baml.from_json(j: baml.json.json) -> Self  [missing]
 function baml.to_json(self: ?) -> baml.json.json  [expr] {
   {  } root._to_json_default(self)
 }
@@ -233,6 +241,86 @@ function baml.pow(self: ?, exp: int) -> int  [builtin]
 function baml.random(lower: int, upper: int) -> int  [builtin]
 function baml.trailing_ones(self: ?) -> int  [builtin]
 function baml.trailing_zeros(self: ?) -> int  [builtin]
+
+--- <builtin>/baml/ns_crypto/aes_gcm_siv.baml ---
+class baml.crypto.Aes128GcmSiv {
+  _cipher: $rust_type
+}
+class baml.crypto.Aes128GcmSiv$stream {
+  _cipher: $rust_type
+}
+class baml.crypto.Aes256GcmSiv {
+  _cipher: $rust_type
+}
+class baml.crypto.Aes256GcmSiv$stream {
+  _cipher: $rust_type
+}
+function baml.crypto.decrypt(self: ?, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array  [builtin]
+function baml.crypto.decrypt(self: ?, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array  [builtin]
+function baml.crypto.encrypt(self: ?, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array  [builtin]
+function baml.crypto.encrypt(self: ?, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array  [builtin]
+function baml.crypto.new(key: uint8array) -> baml.crypto.Aes256GcmSiv  [builtin]
+function baml.crypto.new(key: uint8array) -> baml.crypto.Aes128GcmSiv  [builtin]
+function baml.crypto.random_key(rng: root.random.Rng) -> uint8array  [expr] {
+  {  } rng.random(32)
+}
+function baml.crypto.random_key(rng: root.random.Rng) -> uint8array  [expr] {
+  {  } rng.random(16)
+}
+
+--- <builtin>/baml/ns_crypto/chacha20poly1305.baml ---
+class baml.crypto.ChaCha20Poly1305 {
+  _cipher: $rust_type
+}
+class baml.crypto.ChaCha20Poly1305$stream {
+  _cipher: $rust_type
+}
+class baml.crypto.XChaCha20Poly1305 {
+  _cipher: $rust_type
+}
+class baml.crypto.XChaCha20Poly1305$stream {
+  _cipher: $rust_type
+}
+function baml.crypto.decrypt(self: ?, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array  [builtin]
+function baml.crypto.decrypt(self: ?, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array  [builtin]
+function baml.crypto.encrypt(self: ?, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array  [builtin]
+function baml.crypto.encrypt(self: ?, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array  [builtin]
+function baml.crypto.new(key: uint8array) -> baml.crypto.ChaCha20Poly1305  [builtin]
+function baml.crypto.new(key: uint8array) -> baml.crypto.XChaCha20Poly1305  [builtin]
+function baml.crypto.random_key(rng: root.random.Rng) -> uint8array  [expr] {
+  {  } rng.random(32)
+}
+function baml.crypto.random_key(rng: root.random.Rng) -> uint8array  [expr] {
+  {  } rng.random(32)
+}
+
+--- <builtin>/baml/ns_crypto/errors.baml ---
+class baml.crypto.DecryptionFailure {
+  algorithm: string
+  reason: string
+}
+class baml.crypto.DecryptionFailure$stream {
+  algorithm: string | null
+  reason: string | null
+}
+
+--- <builtin>/baml/ns_crypto/interfaces.baml ---
+function baml.crypto.decrypt(self: ?, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array  [missing]
+function baml.crypto.encrypt(self: ?, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array  [missing]
+function baml.crypto.finish(self: ?) -> uint8array  [missing]
+function baml.crypto.random_key(rng: root.random.Rng) -> Self.Key  [missing]
+function baml.crypto.update(self: ?, data: uint8array) -> void  [missing]
+
+--- <builtin>/baml/ns_crypto/sha2.baml ---
+class baml.crypto.Sha256 {
+  _state: $rust_type
+}
+class baml.crypto.Sha256$stream {
+  _state: $rust_type
+}
+function baml.crypto.finish(self: ?) -> uint8array  [builtin]
+function baml.crypto.new() -> baml.crypto.Sha256  [builtin]
+function baml.crypto.update(self: ?, data: uint8array) -> void  [builtin]
 
 --- <builtin>/baml/ns_csv/csv.baml ---
 class baml.csv.CsvError {
@@ -411,7 +499,7 @@ function baml.csv._reader(source: string | uint8array | root.fs.File, options: b
 function baml.csv._to_markdown(rows: T[], max_rows: int) -> string  [builtin]
 function baml.csv._to_markdown_records(records: string[][], headers: string[]?, max_rows: int) -> string  [builtin]
 function baml.csv._try_decode(rec: baml.csv.CsvRecord, r: baml.csv.CsvReader) -> T | baml.csv.CsvSkip  [builtin]
-function baml.csv._validate_columns(r: baml.csv.CsvReader) -> null  [builtin]
+function baml.csv._validate_columns(r: baml.csv.CsvReader) -> void  [builtin]
 function baml.csv._writer(file: root.fs.File, options: baml.csv.WriterOptions?, owns_file: bool) -> baml.csv.CsvWriter  [builtin]
 function baml.csv.buffer(options: baml.csv.WriterOptions? = null) -> baml.csv.CsvWriter  [expr] {
   {  } _buffer(options = options)
@@ -517,12 +605,30 @@ function baml.csv.writer(file: root.fs.File, options: baml.csv.WriterOptions? = 
 }
 
 --- <builtin>/baml/ns_env/env.baml ---
+class baml.env.Ref {
+  name: string
+}
+class baml.env.Ref$stream {
+  name: string | null
+}
 function baml.env.get(key: string) -> string?  [builtin]
+function baml.env.get(self: ?) -> string?  [expr] {
+  {  } root.env.get(self.name)
+}
 function baml.env.get_or_panic(key: string) -> string  [expr] {
   {  } get(key) NullCoalesce root.sys.panic("env var not found: " Add key)
 }
+function baml.env.get_or_panic(self: ?) -> string  [expr] {
+  {  } root.env.get_or_panic(self.name)
+}
 function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string  [expr] {
   {  } if (lenient) {  } get(key) NullCoalesce "" else {  } get_or_panic(key)
+}
+function baml.env.or(self: ?, fallback: string) -> string  [expr] {
+  {  } root.env.get(self.name) NullCoalesce fallback
+}
+function baml.env.ref(name: string) -> baml.env.Ref  [expr] {
+  {  } baml.env.Ref { name: name }
 }
 
 --- <builtin>/baml/ns_errors/error_context.baml ---
@@ -700,6 +806,7 @@ class baml.fs.MkdirOptions$stream {
   recursive: bool | null
 }
 function baml.fs.bytes(self: ?) -> uint8array  [builtin]
+function baml.fs.chmod(path: string, mode: int) -> void  [builtin]
 function baml.fs.close(self: ?) -> null  [builtin]
 function baml.fs.exists(path: string) -> bool  [builtin]
 function baml.fs.mkdir(path: string, options: baml.fs.MkdirOptions) -> null  [builtin]
@@ -713,6 +820,7 @@ function baml.fs.remove_dir(path: string) -> null  [builtin]
 function baml.fs.remove_dir_all(path: string) -> null  [builtin]
 function baml.fs.seek_from(self: ?, whence: "start" | "current" | "end", offset: int) -> int  [builtin]
 function baml.fs.size(path: string) -> int  [builtin]
+function baml.fs.symlink(target: string, path: string) -> void  [builtin]
 function baml.fs.text(self: ?) -> string  [builtin]
 function baml.fs.write(self: ?, data: string) -> int  [builtin]
 function baml.fs.write(path: string, content: string) -> int  [builtin]
@@ -1025,6 +1133,7 @@ function baml.iter.flatten(src: Iterator<Item = I, Error = E>) -> Iterator<Item 
 function baml.iter.for_each(self: ?, fn: (Self.Item) -> void throws E2) -> void  [expr] {
   { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Self.Item => { fn(x) } } }
 }
+function baml.iter.iter(self: ?) -> Iterator<Item = Self.Item, Error = Self.Error>  [missing]
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
   {  } self
 }
@@ -1076,6 +1185,7 @@ function baml.iter.new(min: int, max: int, step: int = 1) -> baml.iter.Range  [e
 function baml.iter.new(value: T, count: int = ...) -> baml.iter.Repeat<T>  [expr] {
   {  } baml.iter.Repeat { value: value, count: count }
 }
+function baml.iter.next(self: ?) -> Self.Item | baml.iter.Done  [missing]
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
   { if (self.idx Ge self.arr.length()) { return baml.iter.Done {  } }; let item = self.arr[self.idx]; self.idx Add= 1; return item }
 }
@@ -1169,6 +1279,7 @@ function baml.json._path_index(current: baml.json.json, idx: int, selector: stri
 function baml.json.deserialize(s: string) -> T  [expr] {
   {  } from_json(parse(s))
 }
+function baml.json.encode(v: T) -> string  [builtin]
 function baml.json.field(j: baml.json.json, key: string) -> baml.json.json  [builtin]
 function baml.json.from(value: T) -> baml.json.json  [expr] {
   {  } root._to_json_shim(value)
@@ -1177,7 +1288,7 @@ function baml.json.from_json(j: baml.json.json) -> T  [builtin]
 function baml.json.from_string(s: string) -> T  [builtin]
 function baml.json.parse(s: string) -> baml.json.json  [builtin]
 function baml.json.path(j: baml.json.json, selector: string) -> T  [expr] {
-  { if (Not selector.starts_with(".") Or selector.starts_with("[")) { throw baml.json.JsonPathError { message: "selector must sta..." Add selector Add "'", selector: selector } }; let current: baml.json.json = j; let i = 0; while i Lt selector.length() { let marker = selector.substring(i, i Add 1); if (marker Eq ".") { i Add= 1; let start = i; while i Lt selector.length() And selector.substring(i, i Add 1) Ne "." And selector.substring(i, i Add 1) Ne "[" { i Add= 1 }; if (i Gt start) { current = _path_field(current, selector.substring(start, i), selector) }; continue }; if (marker Ne "[") { throw baml.json.JsonPathError { message: "expected '.' or '..." Add i.to_string(), selector: selector } }; i Add= 1; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let first = selector.substring(i, i Add 1); if (first Eq "\"" Or first Eq "'") { let quote = first; i Add= 1; let key = ""; let closed = false; while i Lt selector.length() { let ch = selector.substring(i, i Add 1); if (ch Eq "\\") { if (i Add 1 Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated esca...", selector: selector } }; key = key Add selector.substring(i Add 1, i Add 2); i Add= 2; continue }; if (ch Eq quote) { closed = true; i Add= 1; break }; key = key Add ch; i Add= 1 }; if (Not closed Or i Ge selector.length() Or selector.substring(i, i Add 1) Ne "]") { throw baml.json.JsonPathError { message: "unterminated quot...", selector: selector } }; i Add= 1; current = _path_field(current, key, selector); continue }; let start = i; while i Lt selector.length() And selector.substring(i, i Add 1) Ne "]" { i Add= 1 }; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let token = selector.substring(start, i); i Add= 1; let idx = int.parse(token) catch (_) { root.errors.ParseError => { throw baml.json.JsonPathError { message: "bad bracket token '[" Add token Add "]'", selector: selector } } }; current = _path_index(current, idx, selector) } } to(current) catch (_) { baml.json.JsonDecodeError => { throw baml.json.JsonPathError { message: "leaf does not coe...", selector: selector } } }
+  { if (Not selector.starts_with(".") Or selector.starts_with("[")) { throw baml.json.JsonPathError { message: "selector must sta..." Add selector Add "'", selector: selector } }; let current: baml.json.json = j; let i = 0; while i Lt selector.length() { let marker = selector.slice(i, i Add 1); if (marker Eq ".") { i Add= 1; let start = i; while i Lt selector.length() And selector.slice(i, i Add 1) Ne "." And selector.slice(i, i Add 1) Ne "[" { i Add= 1 }; if (i Gt start) { current = _path_field(current, selector.slice(start, i), selector) }; continue }; if (marker Ne "[") { throw baml.json.JsonPathError { message: "expected '.' or '..." Add i.to_string(), selector: selector } }; i Add= 1; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let first = selector.slice(i, i Add 1); if (first Eq "\"" Or first Eq "'") { let quote = first; i Add= 1; let key = ""; let closed = false; while i Lt selector.length() { let ch = selector.slice(i, i Add 1); if (ch Eq "\\") { if (i Add 1 Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated esca...", selector: selector } }; key = key Add selector.slice(i Add 1, i Add 2); i Add= 2; continue }; if (ch Eq quote) { closed = true; i Add= 1; break }; key = key Add ch; i Add= 1 }; if (Not closed Or i Ge selector.length() Or selector.slice(i, i Add 1) Ne "]") { throw baml.json.JsonPathError { message: "unterminated quot...", selector: selector } }; i Add= 1; current = _path_field(current, key, selector); continue }; let start = i; while i Lt selector.length() And selector.slice(i, i Add 1) Ne "]" { i Add= 1 }; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let token = selector.slice(start, i); i Add= 1; let idx = int.parse(token) catch (_) { root.errors.ParseError => { throw baml.json.JsonPathError { message: "bad bracket token '[" Add token Add "]'", selector: selector } } }; current = _path_index(current, idx, selector) } } to(current) catch (_) { baml.json.JsonDecodeError => { throw baml.json.JsonPathError { message: "leaf does not coe...", selector: selector } } }
 }
 function baml.json.path_or(j: baml.json.json, selector: string, default: T) -> T  [expr] {
   {  } path(j, selector) catch (_) { baml.json.JsonPathError => default }
@@ -1305,7 +1416,35 @@ function baml.net.write(self: ?, data: uint8array, timeout: root.time.Duration? 
   {  } self._write(data, _timeout_nanos(timeout))
 }
 
+--- <builtin>/baml/ns_ops/bitwise.baml ---
+function baml.ops.bit_and(self: ?, rhs: Rhs) -> Self.Output  [missing]
+function baml.ops.bit_and(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.bit_and(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_and(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.bit_and(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_or(self: ?, rhs: Rhs) -> Self.Output  [missing]
+function baml.ops.bit_or(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.bit_or(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_or(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.bit_or(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: Rhs) -> Self.Output  [missing]
+function baml.ops.bit_xor(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shl(self: ?, rhs: Rhs) -> Self.Output  [missing]
+function baml.ops.shl(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.shl(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shl(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.shl(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shr(self: ?, rhs: Rhs) -> Self.Output  [missing]
+function baml.ops.shr(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.shr(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shr(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.shr(self: ?, rhs: bigint) -> bigint  [builtin]
+
 --- <builtin>/baml/ns_ops/comparison.baml ---
+function baml.ops.eq(self: ?, other: Self) -> bool  [missing]
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
@@ -1340,6 +1479,7 @@ function baml.ops.le(self: ?, other: Self) -> bool  [expr] {
 }
 function baml.ops.le(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.le(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.lt(self: ?, other: Self) -> bool  [missing]
 function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
@@ -1354,6 +1494,18 @@ function baml.ops.neq(self: ?, other: Self) -> bool  [expr] {
   {  } false
 }
 
+--- <builtin>/baml/ns_ops/index.baml ---
+function baml.ops.index(self: ?, idx: Idx) -> Self.Output  [missing]
+function baml.ops.index(self: ?, idx: int) -> T  [expr] {
+  {  } self[idx]
+}
+function baml.ops.index(self: ?, idx: string) -> V  [expr] {
+  {  } self[idx]
+}
+function baml.ops.index(self: ?, idx: int) -> int  [expr] {
+  {  } self[idx]
+}
+
 --- <builtin>/baml/ns_ops/math.baml ---
 function baml.ops.__union_add(a: unknown, b: unknown) -> unknown  [builtin]
 function baml.ops.__union_div(a: unknown, b: unknown) -> unknown  [builtin]
@@ -1361,6 +1513,7 @@ function baml.ops.__union_mul(a: unknown, b: unknown) -> unknown  [builtin]
 function baml.ops.__union_neg(a: unknown) -> unknown  [builtin]
 function baml.ops.__union_rem(a: unknown, b: unknown) -> unknown  [builtin]
 function baml.ops.__union_sub(a: unknown, b: unknown) -> unknown  [builtin]
+function baml.ops.add(self: ?, rhs: Rhs) -> Self.Output  [missing]
 function baml.ops.add(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.add(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.add(self: ?, rhs: int) -> float  [builtin]
@@ -1368,7 +1521,7 @@ function baml.ops.add(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.add(self: ?, rhs: bigint) -> bigint  [builtin]
 function baml.ops.add(self: ?, rhs: int) -> bigint  [builtin]
 function baml.ops.add(self: ?, rhs: bigint) -> bigint  [builtin]
-function baml.ops.add(self: ?, rhs: string) -> string  [builtin]
+function baml.ops.div(self: ?, rhs: Rhs) -> Self.Output  [missing]
 function baml.ops.div(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.div(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.div(self: ?, rhs: int) -> float  [builtin]
@@ -1376,6 +1529,7 @@ function baml.ops.div(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.div(self: ?, rhs: bigint) -> bigint  [builtin]
 function baml.ops.div(self: ?, rhs: int) -> bigint  [builtin]
 function baml.ops.div(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.mul(self: ?, rhs: Rhs) -> Self.Output  [missing]
 function baml.ops.mul(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.mul(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.mul(self: ?, rhs: int) -> float  [builtin]
@@ -1383,9 +1537,11 @@ function baml.ops.mul(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.mul(self: ?, rhs: bigint) -> bigint  [builtin]
 function baml.ops.mul(self: ?, rhs: int) -> bigint  [builtin]
 function baml.ops.mul(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.neg(self: ?) -> Self.Output  [missing]
 function baml.ops.neg(self: ?) -> int  [builtin]
 function baml.ops.neg(self: ?) -> float  [builtin]
 function baml.ops.neg(self: ?) -> bigint  [builtin]
+function baml.ops.rem(self: ?, rhs: Rhs) -> Self.Output  [missing]
 function baml.ops.rem(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.rem(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.rem(self: ?, rhs: int) -> float  [builtin]
@@ -1393,6 +1549,7 @@ function baml.ops.rem(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.rem(self: ?, rhs: bigint) -> bigint  [builtin]
 function baml.ops.rem(self: ?, rhs: int) -> bigint  [builtin]
 function baml.ops.rem(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.sub(self: ?, rhs: Rhs) -> Self.Output  [missing]
 function baml.ops.sub(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.sub(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.sub(self: ?, rhs: int) -> float  [builtin]
@@ -1511,169 +1668,6 @@ class baml.panics.UserPanic$stream {
 type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.HostContractViolation | baml.panics.IntegerOverflow
 type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.InvalidFieldAccess$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream | baml.panics.HostContractViolation$stream | baml.panics.IntegerOverflow$stream
 
---- <builtin>/baml/ns_prompt/prompt.baml ---
-class baml.prompt.Context {
-  client: baml.prompt.ContextClient
-  tags: map<string, unknown>
-  output_format: string
-  _output_format: baml.prompt.OutputFormat
-}
-class baml.prompt.Context$stream {
-  client: baml.prompt.ContextClient$stream | null
-  tags: map<string, unknown>
-  output_format: string | null
-  _output_format: baml.prompt.OutputFormat$stream | null
-}
-class baml.prompt.ContextClient {
-  name: string
-  provider: string
-  default_role: string
-  allowed_roles: string[]
-}
-class baml.prompt.ContextClient$stream {
-  name: string | null
-  provider: string | null
-  default_role: string | null
-  allowed_roles: string[]
-}
-class baml.prompt.OutputFormat {
-  _data: $rust_type
-}
-class baml.prompt.OutputFormat$stream {
-  _data: $rust_type
-}
-class baml.prompt.Role {
-  name: string
-  metadata: map<string, unknown>
-}
-class baml.prompt.Role$stream {
-  name: string | null
-  metadata: map<string, unknown>
-}
-function baml.prompt.build_output_format(return_type: type) -> baml.prompt.OutputFormat  [builtin]
-function baml.prompt.get_return_type(function_name: string) -> type  [builtin]
-function baml.prompt.make_role(name: string) -> baml.prompt.Role  [expr] {
-  {  } baml.prompt.Role { name: name, metadata: map {  } }
-}
-function baml.prompt.output_format_with(self: ?, prefix: string? = null, or_splitter: string? = null, enum_value_prefix: string? = null, hoisted_class_prefix: string? = null, always_hoist_enums: bool? = null, quote_class_fields: bool? = null, hoist_classes: string[]? = null, map_style: string? = null, render_null_as: string? = null) -> string  [builtin]
-function baml.prompt.render_output_format(return_type: type) -> string  [builtin]
-
---- <builtin>/baml/ns_prompt/sys_llm_types.baml ---
-class baml.prompt.AnthropicOptions {
-  max_tokens: int | null
-}
-class baml.prompt.AnthropicOptions$stream {
-  max_tokens: int | null
-}
-class baml.prompt.AzureOpenAiOptions {
-  resource_name: string | null
-  deployment_id: string | null
-  api_version: string
-  max_tokens: int | null
-}
-class baml.prompt.AzureOpenAiOptions$stream {
-  resource_name: string | null
-  deployment_id: string | null
-  api_version: string | null
-  max_tokens: int | null
-}
-class baml.prompt.BedrockOptions {
-  region: string | null
-  endpoint_url: string | null
-  access_key_id: string | null
-  secret_access_key: string | null
-  session_token: string | null
-  profile: string | null
-  stop_sequences: string[] | null
-  max_tokens: int | null
-  temperature: float | null
-  top_p: float | null
-}
-class baml.prompt.BedrockOptions$stream {
-  region: string | null
-  endpoint_url: string | null
-  access_key_id: string | null
-  secret_access_key: string | null
-  session_token: string | null
-  profile: string | null
-  stop_sequences: string[] | null
-  max_tokens: int | null
-  temperature: float | null
-  top_p: float | null
-}
-class baml.prompt.GoogleAiOptions {
-  enterprise: bool | null
-  credentials: string | null
-  credentials_content: string | null
-  location: string | null
-  project_id: string | null
-}
-class baml.prompt.GoogleAiOptions$stream {
-  enterprise: bool | null
-  credentials: string | null
-  credentials_content: string | null
-  location: string | null
-  project_id: string | null
-}
-class baml.prompt.MediaUrlHandler {
-  image: string | null
-  audio: string | null
-  video: string | null
-  pdf: string | null
-}
-class baml.prompt.MediaUrlHandler$stream {
-  image: string | null
-  audio: string | null
-  video: string | null
-  pdf: string | null
-}
-class baml.prompt.PrimitiveClientOptions {
-  model: string | null
-  base_url: string | null
-  allowed_role_metadata: unknown | null
-  finish_reason_allow_list: string[] | null
-  finish_reason_deny_list: string[] | null
-  supports_streaming: bool | null
-  default_role: string | null
-  allowed_roles: string[] | null
-  remap_roles: map<string, string> | null
-  api_key: string | null
-  provider_options: baml.prompt.AnthropicOptions | baml.prompt.AzureOpenAiOptions | baml.prompt.BedrockOptions | baml.prompt.GoogleAiOptions | baml.prompt.VertexAiOptions | null
-  media_url_handler: baml.prompt.MediaUrlHandler | null
-  headers: map<string, string>
-  query_params: map<string, string>
-  request_body: map<string, unknown>
-}
-class baml.prompt.PrimitiveClientOptions$stream {
-  model: string | null
-  base_url: string | null
-  allowed_role_metadata: unknown | null
-  finish_reason_allow_list: string[] | null
-  finish_reason_deny_list: string[] | null
-  supports_streaming: bool | null
-  default_role: string | null
-  allowed_roles: string[] | null
-  remap_roles: map<string, string> | null
-  api_key: string | null
-  provider_options: baml.prompt.AnthropicOptions$stream | baml.prompt.AzureOpenAiOptions$stream | baml.prompt.BedrockOptions$stream | baml.prompt.GoogleAiOptions$stream | baml.prompt.VertexAiOptions$stream | null
-  media_url_handler: baml.prompt.MediaUrlHandler$stream | null
-  headers: map<string, string>
-  query_params: map<string, string>
-  request_body: map<string, unknown>
-}
-class baml.prompt.VertexAiOptions {
-  credentials: string | null
-  credentials_content: string | null
-  location: string | null
-  project_id: string | null
-}
-class baml.prompt.VertexAiOptions$stream {
-  credentials: string | null
-  credentials_content: string | null
-  location: string | null
-  project_id: string | null
-}
-
 --- <builtin>/baml/ns_random/random.baml ---
 class baml.random.ChaCha20 {
   _state: $rust_type
@@ -1702,6 +1696,7 @@ function baml.random.new(seed: uint8array = SystemRandom.get().random(32)) -> ba
 function baml.random.new(seed: uint8array = SystemRandom.get().random(32)) -> baml.random.ChaCha20  [expr] {
   {  } ChaCha20._new(seed)
 }
+function baml.random.random(self: ?, bytes: int) -> uint8array  [missing]
 function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]
 function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]
 function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]
@@ -1711,6 +1706,308 @@ function baml.random.random_int(self: ?) -> int  [expr] {
 function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_array/array.baml ---
+class baml.reflect.array.Type {
+}
+class baml.reflect.array.Type$stream {
+}
+function baml.reflect.array.as_type(self: ?) -> type  [builtin]
+function baml.reflect.array.element_type(self: ?) -> type  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_class/class.baml ---
+class baml.reflect.class.Builder {
+  _handle: $rust_type
+  _roots: unknown[]
+  _neighbors: baml.reflect.class.Builder[]
+  _resolved: type?
+}
+class baml.reflect.class.Builder$stream {
+  _handle: $rust_type
+  _roots: unknown[]
+  _neighbors: baml.reflect.class.Builder$stream[]
+  _resolved: unknown | null
+}
+class baml.reflect.class.Field {
+  name: string
+  type: type?
+  meta: baml.reflect.Meta
+}
+class baml.reflect.class.Field$stream {
+  name: string | null
+  type: unknown | null
+  meta: baml.reflect.Meta$stream | null
+}
+class baml.reflect.class.PendingType {
+  _handle: $rust_type
+  _roots: unknown[]
+  _resolved: type?
+}
+class baml.reflect.class.PendingType$stream {
+  _handle: $rust_type
+  _roots: unknown[]
+  _resolved: unknown | null
+}
+class baml.reflect.class.Type {
+}
+class baml.reflect.class.Type$stream {
+}
+function baml.reflect.class._build(self: ?, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type  [builtin]
+function baml.reflect.class._new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type  [builtin]
+function baml.reflect.class.array(self: ?) -> baml.reflect.class.PendingType  [builtin]
+function baml.reflect.class.as_type(self: ?) -> type  [builtin]
+function baml.reflect.class.build(self: ?, implementations: baml.reflect.interface.Implementation[] = ...) -> baml.reflect.class.Type  [expr] {
+  {  } self._build(implementations)
+}
+function baml.reflect.class.builder(name: string) -> baml.reflect.class.Builder  [builtin]
+function baml.reflect.class.field(self: ?, name: string, ty: type | baml.reflect.WithMeta<type> | baml.reflect.class.PendingType) -> baml.reflect.class.Builder  [builtin]
+function baml.reflect.class.fields(self: ?) -> baml.reflect.class.Field[]  [builtin]
+function baml.reflect.class.get_field(value: unknown, name: string) -> T  [builtin]
+function baml.reflect.class.meta(self: ?) -> baml.reflect.Meta  [builtin]
+function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[] = ...) -> baml.reflect.class.Type  [expr] {
+  {  } _new(name, fields, implementations)
+}
+function baml.reflect.class.optional(self: ?) -> baml.reflect.class.PendingType  [builtin]
+function baml.reflect.class.resolved(self: ?) -> type?  [builtin]
+function baml.reflect.class.type(self: ?) -> baml.reflect.class.PendingType  [builtin]
+function baml.reflect.class.union(self: ?, others: type | baml.reflect.class.PendingType[]) -> baml.reflect.class.PendingType  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_enum/enum.baml ---
+class baml.reflect.enum.Type {
+}
+class baml.reflect.enum.Type$stream {
+}
+class baml.reflect.enum.Value {
+  name: string
+  meta: baml.reflect.Meta
+}
+class baml.reflect.enum.Value$stream {
+  name: string | null
+  meta: baml.reflect.Meta$stream | null
+}
+function baml.reflect.enum.as_type(self: ?) -> type  [builtin]
+function baml.reflect.enum.get_value(value: unknown) -> string  [builtin]
+function baml.reflect.enum.meta(self: ?) -> baml.reflect.Meta  [builtin]
+function baml.reflect.enum.new(name: string, values: string | baml.reflect.enum.Value[]) -> baml.reflect.enum.Type  [builtin]
+function baml.reflect.enum.value(name: string, alias: string? = null, description: string? = null, docstring: string? = null, other: map<string, string>? = null) -> baml.reflect.enum.Value  [builtin]
+function baml.reflect.enum.values(self: ?) -> baml.reflect.enum.Value[]  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_errors/errors.baml ---
+class baml.reflect.errors.CompilationError {
+  message: string
+  diagnostics: baml.reflect.Diagnostic[]
+}
+class baml.reflect.errors.CompilationError$stream {
+  message: string | null
+  diagnostics: baml.reflect.Diagnostic$stream[]
+}
+class baml.reflect.errors.EvaluationError {
+  message: string
+}
+class baml.reflect.errors.EvaluationError$stream {
+  message: string | null
+}
+class baml.reflect.errors.SessionBusy {
+  message: string
+}
+class baml.reflect.errors.SessionBusy$stream {
+  message: string | null
+}
+
+--- <builtin>/baml/ns_reflect/ns_function/function.baml ---
+class baml.reflect.function.Parameter {
+  name: string?
+  type: type
+  optional: bool
+}
+class baml.reflect.function.Parameter$stream {
+  name: string | null
+  type: unknown
+  optional: bool | null
+}
+class baml.reflect.function.Type {
+}
+class baml.reflect.function.Type$stream {
+}
+function baml.reflect.function.as_type(self: ?) -> type  [builtin]
+function baml.reflect.function.params(self: ?) -> baml.reflect.function.Parameter[]  [builtin]
+function baml.reflect.function.return_type(self: ?) -> type  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_interface/interface.baml ---
+class baml.reflect.interface.Implementation {
+  _handle: $rust_type
+}
+class baml.reflect.interface.Implementation$stream {
+  _handle: $rust_type
+}
+class baml.reflect.interface.Type {
+}
+class baml.reflect.interface.Type$stream {
+}
+function baml.reflect.interface.as_type(self: ?) -> type  [builtin]
+function baml.reflect.interface.field(self: ?, interface_field: string, class_field: string? = null) -> baml.reflect.interface.Implementation  [builtin]
+function baml.reflect.interface.implementation() -> baml.reflect.interface.Implementation  [builtin]
+function baml.reflect.interface.implemented_by(self: ?, other: type) -> bool  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_literal/literal.baml ---
+class baml.reflect.literal.Type {
+}
+class baml.reflect.literal.Type$stream {
+}
+function baml.reflect.literal.as_type(self: ?) -> type  [builtin]
+function baml.reflect.literal.new(value: string | int | bool) -> baml.reflect.literal.Type  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_map/map.baml ---
+class baml.reflect.map.Type {
+}
+class baml.reflect.map.Type$stream {
+}
+function baml.reflect.map.as_type(self: ?) -> type  [builtin]
+function baml.reflect.map.key_type(self: ?) -> type  [builtin]
+function baml.reflect.map.new(key: type, value: type) -> baml.reflect.map.Type  [builtin]
+function baml.reflect.map.value_type(self: ?) -> type  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_primitive/primitive.baml ---
+class baml.reflect.primitive.Type {
+}
+class baml.reflect.primitive.Type$stream {
+}
+function baml.reflect.primitive.as_type(self: ?) -> type  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_union/union.baml ---
+class baml.reflect.union.Type {
+}
+class baml.reflect.union.Type$stream {
+}
+function baml.reflect.union.as_type(self: ?) -> type  [builtin]
+function baml.reflect.union.member_types(self: ?) -> type[]  [builtin]
+function baml.reflect.union.new(types: type[]) -> baml.reflect.union.Type  [builtin]
+
+--- <builtin>/baml/ns_reflect/reflect.baml ---
+class baml.reflect.Arg {
+  name: string
+  type: type
+}
+class baml.reflect.Arg$stream {
+  name: string | null
+  type: unknown
+}
+class baml.reflect.Diagnostic {
+  code: string
+  span: baml.reflect.Span?
+  message: string
+}
+class baml.reflect.Diagnostic$stream {
+  code: string | null
+  span: baml.reflect.Span$stream | null
+  message: string | null
+}
+class baml.reflect.InvalidArgumentError {
+  argument: string
+  expected: type
+  got: type
+}
+class baml.reflect.InvalidArgumentError$stream {
+  argument: string | null
+  expected: unknown
+  got: unknown
+}
+class baml.reflect.Meta {
+  alias: string?
+  description: string?
+  docstring: string?
+  other: map<string, string>
+}
+class baml.reflect.Meta$stream {
+  alias: string | null
+  description: string | null
+  docstring: string | null
+  other: map<string, string>
+}
+class baml.reflect.Package {
+  _inner: unknown
+}
+class baml.reflect.Package$stream {
+  _inner: unknown
+}
+class baml.reflect.Session {
+  _inner: unknown
+}
+class baml.reflect.Session$stream {
+  _inner: unknown
+}
+class baml.reflect.Signature {
+  name: string?
+  args: baml.reflect.Arg[]
+  opts: map<string, baml.reflect.Arg>
+  returns: type
+  errors: type
+  docstring: string?
+}
+class baml.reflect.Signature$stream {
+  name: string | null
+  args: baml.reflect.Arg$stream[]
+  opts: map<string, baml.reflect.Arg$stream>
+  returns: unknown
+  errors: unknown
+  docstring: string | null
+}
+class baml.reflect.Span {
+  file: string?
+  start: int
+  end: int
+}
+class baml.reflect.Span$stream {
+  file: string | null
+  start: int | null
+  end: int | null
+}
+class baml.reflect.WithMeta {
+  ty: T
+  alias: string?
+  description: string?
+  docstring: string?
+  other: map<string, string>
+}
+class baml.reflect.WithMeta$stream {
+  ty: T | null
+  alias: string | null
+  description: string | null
+  docstring: string | null
+  other: map<string, string>
+}
+type baml.reflect.TypeKind = baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.union.Type | baml.reflect.literal.Type | baml.reflect.array.Type | baml.reflect.map.Type | baml.reflect.interface.Type | baml.reflect.primitive.Type | baml.reflect.function.Type
+type baml.reflect.TypeKind$stream = baml.reflect.class.Type$stream | baml.reflect.enum.Type$stream | baml.reflect.union.Type$stream | baml.reflect.literal.Type$stream | baml.reflect.array.Type$stream | baml.reflect.map.Type$stream | baml.reflect.interface.Type$stream | baml.reflect.primitive.Type$stream | baml.reflect.function.Type$stream
+function baml.reflect._compile(files: map<string, string>, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package  [builtin]
+function baml.reflect._compile(self: ?, source: string) -> baml.reflect.Package  [builtin]
+function baml.reflect._finish(artifact: baml.reflect.Package, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package  [builtin]
+function baml.reflect._finish(self: ?, artifact: baml.reflect.Package) -> T  [builtin]
+function baml.reflect._new(packages: map<string, baml.reflect.Package>) -> baml.reflect.Session  [builtin]
+function baml.reflect.as_type(self: ?) -> type  [missing]
+function baml.reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R  [builtin]
+function baml.reflect.classes(self: ?) -> map<string, baml.reflect.class.Type>  [builtin]
+function baml.reflect.compile(files: map<string, string>, packages: map<string, baml.reflect.Package> = ...) -> baml.reflect.Package  [expr] {
+  { let artifact = Package._compile(files, packages) } Package._finish(artifact, packages)
+}
+function baml.reflect.current() -> baml.reflect.Package  [builtin]
+function baml.reflect.diagnostics(self: ?) -> baml.reflect.Diagnostic[]  [builtin]
+function baml.reflect.diagnostics(self: ?) -> baml.reflect.Diagnostic[]  [builtin]
+function baml.reflect.enums(self: ?) -> map<string, baml.reflect.enum.Type>  [builtin]
+function baml.reflect.eval(self: ?, source: string) -> T  [expr] {
+  { let artifact = self._compile(source) } self._finish(artifact) catch (_) { _ => throw baml.reflect.errors.EvaluationError { message: "session evaluatio..." } }
+}
+function baml.reflect.functions(self: ?) -> map<string, baml.reflect.function.Type>  [builtin]
+function baml.reflect.get_class(self: ?, name: string) -> baml.reflect.class.Type?  [builtin]
+function baml.reflect.get_enum(self: ?, name: string) -> baml.reflect.enum.Type?  [builtin]
+function baml.reflect.get_function(self: ?, name: string) -> F?  [builtin]
+function baml.reflect.get_interface(self: ?, name: string) -> baml.reflect.interface.Type?  [builtin]
+function baml.reflect.interfaces(self: ?) -> map<string, baml.reflect.interface.Type>  [builtin]
+function baml.reflect.new(packages: map<string, baml.reflect.Package> = ...) -> baml.reflect.Session  [expr] {
+  {  } Session._new(packages)
+}
+function baml.reflect.signature(f: baml.AnyFunction) -> baml.reflect.Signature  [builtin]
+function baml.reflect.tests(self: ?) -> map<string, () -> null throws unknown>  [builtin]
+function baml.reflect.with_types(self: ?, types: map<string, type | baml.reflect.TypeView>) -> baml.reflect.Package  [builtin]
 
 --- <builtin>/baml/ns_sap/sap.baml ---
 class baml.sap.NoYield {
@@ -1724,7 +2021,7 @@ class baml.sap.ParseCache$stream {
   _data: $rust_type
 }
 function baml.sap.__new_parse_cache() -> baml.sap.ParseCache<TStream, TFinal>  [expr] {
-  { let cache: baml.sap.ParseCache<TStream, TFinal> = ParseCache.new(reflect.type_of(), reflect.type_of()) } cache
+  { let cache: baml.sap.ParseCache<TStream, TFinal> = ParseCache.new(type.of(), type.of()) } cache
 }
 function baml.sap.__parse_final(json: string, cache: baml.sap.ParseCache<TStream, TFinal>) -> TFinal  [builtin]
 function baml.sap.__parse_partial(json: string, cache: baml.sap.ParseCache<TStream, TFinal>) -> TStream | baml.sap.NoYield  [builtin]
@@ -1850,6 +2147,7 @@ function baml.sys.ok(self: ?) -> bool  [expr] {
   {  } self.exit_code Eq 0
 }
 function baml.sys.panic(message: string) -> never  [builtin]
+function baml.sys.pid() -> int  [builtin]
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.sleep(delay: root.time.Duration) -> null  [builtin]
 function baml.sys.start_process(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.Process  [builtin]
@@ -2290,6 +2588,10 @@ function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
   {  } baml.json.from(self.items)
 }
 
+--- <builtin>/baml/ns_type/type.baml ---
+function baml.type.of() -> type  [builtin]
+function baml.type.of_value(v: unknown) -> type  [builtin]
+
 --- <builtin>/baml/ns_ws/ws.baml ---
 class baml.ws.WsStream {
   _handle: $rust_type
@@ -2328,11 +2630,14 @@ class baml.String {
 }
 class baml.String$stream {
 }
+function baml.add(self: ?, rhs: string) -> string  [expr] {
+  {  } `...`
+}
+function baml.at(self: ?, index: int) -> string?  [builtin]
 function baml.byte_length(self: ?) -> int  [builtin]
-function baml.char_at(self: ?, index: int) -> string  [builtin]
 function baml.char_count(self: ?) -> int  [builtin]
 function baml.chars(self: ?) -> string[]  [builtin]
-function baml.code_point_at(self: ?, index: int) -> int  [builtin]
+function baml.code_point_at(self: ?, index: int) -> int?  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
 function baml.from(value: T) -> string  [expr] {
   {  } root._to_string_shim(value)
@@ -2359,15 +2664,15 @@ function baml.is_lowercase(self: ?) -> bool  [builtin]
 function baml.is_numeric(self: ?) -> bool  [builtin]
 function baml.is_uppercase(self: ?) -> bool  [builtin]
 function baml.is_whitespace(self: ?) -> bool  [builtin]
+function baml.last_index_of(self: ?, search: string) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.lines(self: ?) -> string[]  [builtin]
-function baml.matches(self: ?, substring: string) -> bool  [builtin]
 function baml.repeat(self: ?, count: int) -> string  [builtin]
 function baml.replace(self: ?, search: string, replacement: string) -> string  [builtin]
 function baml.replace_all(self: ?, search: string, replacement: string) -> string  [builtin]
+function baml.slice(self: ?, start: int, end: int) -> string  [builtin]
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
 function baml.starts_with(self: ?, prefix: string) -> bool  [builtin]
-function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
 function baml.to_code_points(self: ?) -> int[]  [builtin]
 function baml.to_lower_case(self: ?) -> string  [builtin]
 function baml.to_upper_case(self: ?) -> string  [builtin]
@@ -2382,8 +2687,23 @@ class baml.TypeValue {
 class baml.TypeValue$stream {
 }
 function baml._to_string_impl(self: ?) -> string  [builtin]
+function baml._validate_renderable(self: ?) -> void  [builtin]
+function baml.array(self: ?) -> baml.reflect.array.Type  [builtin]
+function baml.as_array(self: ?) -> baml.reflect.array.Type?  [builtin]
+function baml.as_class(self: ?) -> baml.reflect.class.Type?  [builtin]
+function baml.as_enum(self: ?) -> baml.reflect.enum.Type?  [builtin]
+function baml.as_function(self: ?) -> baml.reflect.function.Type?  [builtin]
+function baml.as_interface(self: ?) -> baml.reflect.interface.Type?  [builtin]
+function baml.as_literal(self: ?) -> baml.reflect.literal.Type?  [builtin]
+function baml.as_map(self: ?) -> baml.reflect.map.Type?  [builtin]
+function baml.as_primitive(self: ?) -> baml.reflect.primitive.Type?  [builtin]
+function baml.as_union(self: ?) -> baml.reflect.union.Type?  [builtin]
 function baml.implemented_by(self: ?, other: type) -> bool  [builtin]
 function baml.implements(self: ?, other: type) -> bool  [builtin]
+function baml.kind(self: ?) -> baml.reflect.TypeKind  [builtin]
+function baml.meta(self: ?, alias: string? = null, description: string? = null, docstring: string? = null, other: map<string, string>? = null) -> baml.reflect.WithMeta<type>  [builtin]
+function baml.optional(self: ?) -> baml.reflect.union.Type  [builtin]
+function baml.to_baml(self: ?) -> string  [builtin]
 function baml.to_string(self: ?) -> string  [expr] {
   {  } self._to_string_impl()
 }

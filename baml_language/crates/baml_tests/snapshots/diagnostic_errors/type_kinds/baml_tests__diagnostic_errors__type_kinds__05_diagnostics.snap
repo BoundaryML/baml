@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0062
+
+  × non-exhaustive match on type baml.reflect.array.Type | baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.function.Type | baml.reflect.interface.Type | baml.reflect.literal.Type |
+  │ baml.reflect.map.Type | baml.reflect.primitive.Type | baml.reflect.union.Type; missing: baml.reflect.function.Type {}
+    ╭─[main.baml:2:3]
+  2 │ ╭─▶   match (t.kind()) {
+  3 │ │       baml.reflect.class.Type => "class",
+  4 │ │       baml.reflect.enum.Type => "enum",
+  5 │ │       baml.reflect.union.Type => "union",
+  6 │ │       baml.reflect.literal.Type => "literal",
+  7 │ │       baml.reflect.array.Type => "array",
+  8 │ │       baml.reflect.map.Type => "map",
+  9 │ │       baml.reflect.interface.Type => "interface",
+ 10 │ │       baml.reflect.primitive.Type => "primitive"
+ 11 │ ╰─▶   }
+    ╰────
+
+  [type] E0001
+
+  × reflection kind `baml.reflect.class.Type` cannot be constructed; obtain it from a type value
+    ╭─[main.baml:15:3]
+ 15 │   baml.reflect.class.Type {}
+    ·   ──────────────────────────
+    ╰────

@@ -109,36 +109,53 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //     ╰────
 // E0007
 //
-//   × type `NarrowFoo | NarrowBar` has no member `field`: its members implement no common interface that declares `field`
-//     ╭─[expr_early_return_narrowing.baml:35:14]
+//   × type `NarrowBar | NarrowFoo` has no member `field`: its members implement no common interface that declares `field`
+//     ╭─[expr_early_return_narrowing.baml:35:12]
 //  35 │     return x.field;
-//     ·              ─────
+//     ·            ───────
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[expr_early_return_narrowing.baml:49:10]
+//  49 │     if (!x) {
+//     ·          ┬
+//     ·          ╰── expected `bool`, found `string | null`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[expr_early_return_narrowing.baml:53:12]
+//  53 │     return x;
+//     ·            ┬
+//     ·            ╰── expected `string`, found `string | null`
 //     ╰────
 // E0007
 //
-//   × type `NarrowFoo | NarrowBar` has no member `field`: its members implement no common interface that declares `field`
-//     ╭─[expr_early_return_narrowing.baml:66:14]
+//   × type `NarrowBar | NarrowFoo` has no member `field`: its members implement no common interface that declares `field`
+//     ╭─[expr_early_return_narrowing.baml:66:12]
 //  66 │     return x.field;
-//     ·              ─────
+//     ·            ───────
 //     ╰────
 // E0007
 //
-//   × type `NarrowFoo | NarrowBar` has no member `type`: its members implement no common interface that declares `type`
-//     ╭─[expr_early_return_narrowing.baml:71:9]
-//  71 │   if (x.type == "narrow_foo") {
-//     ·         ────
-//     ╰────
-// E0007
-//
-//   × type `NarrowFoo | NarrowBar` has no member `field`: its members implement no common interface that declares `field`
-//     ╭─[expr_early_return_narrowing.baml:72:14]
+//   × type `NarrowBar | NarrowFoo` has no member `field`: its members implement no common interface that declares `field`
+//     ╭─[expr_early_return_narrowing.baml:72:12]
 //  72 │     return x.field;
-//     ·              ─────
+//     ·            ───────
 //     ╰────
 // E0007
 //
-//   × type `NarrowFoo | NarrowBar` has no member `other`: its members implement no common interface that declares `other`
-//     ╭─[expr_early_return_narrowing.baml:74:5]
+//   × type `NarrowBar | NarrowFoo` has no member `other`: its members implement no common interface that declares `other`
+//     ╭─[expr_early_return_narrowing.baml:74:3]
 //  74 │   x.other
-//     ·     ─────
+//     ·   ───────
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[expr_early_return_narrowing.baml:78:7]
+//  78 │   if (x) {
+//     ·       ┬
+//     ·       ╰── expected `bool`, found `int | null`
 //     ╰────

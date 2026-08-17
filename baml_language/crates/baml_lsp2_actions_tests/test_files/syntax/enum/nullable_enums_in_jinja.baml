@@ -27,8 +27,8 @@ class MyInput {
 }
 
 function TestNullableEnumComparisons(input: MyInput) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
     Status: ${input.nullable_status ?? "none"}
     Priority: ${input.nullable_priority ?? "none"}
     Union: ${input.status_or_string ?? "none"}
@@ -38,8 +38,8 @@ function TestNullableEnumComparisons(input: MyInput) -> string {
 }
 
 function TestCrossNullableEnumComparisons(input: MyInput, other_input: MyInput) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `
+    client: "openai/gpt-4o-mini"
+    prompt: `
     First: ${input.regular_status}
     Second: ${other_input.regular_status}
 

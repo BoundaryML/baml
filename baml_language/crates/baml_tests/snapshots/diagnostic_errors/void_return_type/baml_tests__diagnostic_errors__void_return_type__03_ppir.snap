@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 59279
 ---
 === PPIR ===
 type user.ExplicitHandler = (value: int) -> string throws never

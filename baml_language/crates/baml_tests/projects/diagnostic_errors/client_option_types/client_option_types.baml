@@ -23,30 +23,30 @@ retry_policy LegacyRetry {
 
 // Jinja prompt migrated to a backtick prompt.
 function MigratedPrompt(input: string) -> string {
-    client ValidClient
-    prompt `Echo: ${input}`
+    client: ValidClient
+    prompt: `Echo: ${input}`
 }
 
 // Structural role markers remain valid while the surrounding fixture checks
 // the independently removed client forms.
 function LegacyRoleMarker(input: string) -> string {
-    client ValidClient
-    prompt `${role("system")}Be terse. ${input}`
+    client: ValidClient
+    prompt: `${role("system")}Be terse. ${input}`
 }
 
 // Removed: only a known "provider/model" prefix works as a client string.
 function UnknownProviderPrefix(input: string) -> string {
-    client "aws-bedrock/anthropic.claude-3-haiku"
-    prompt `${input}`
+    client: "aws-bedrock/anthropic.claude-3-haiku"
+    prompt: `${input}`
 }
 
 // Control: the new-world replacement compiles cleanly.
-client ValidClient = openai.OpenAiClient.new(
+client ValidClient = openai.ResponsesClient.new(
     model = "gpt-4",
     api_key = "test-key",
 );
 
 function ValidFunction(input: string) -> string {
-    client ValidClient
-    prompt `Echo: ${input}`
+    client: ValidClient
+    prompt: `Echo: ${input}`
 }

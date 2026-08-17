@@ -368,7 +368,7 @@ fn load_callable_throws(
     cache: &bex_cache::BytecodeCache,
     manifest: &bex_cache::ProjectManifest,
 ) -> BTreeMap<String, BTreeMap<u32, Ty>> {
-    use baml_db::baml_compiler2_tir::package_interface::CallableThrowsFragment;
+    use baml_db::baml_compiler2_hir_ty::package_interface::CallableThrowsFragment;
     use bex_cache::{CacheKey, unit_key};
     use bex_vm_types::CompilationUnit;
 
@@ -405,10 +405,11 @@ fn load_callable_throws(
 #[cfg(test)]
 mod tests {
     use baml_db::{
-        Name, baml_compiler2_hir, baml_compiler2_ppir,
-        baml_compiler2_tir::{
-            callable::callable_throws, package_interface, throw_inference::file_throw_facts,
+        Name, baml_compiler2_hir,
+        baml_compiler2_hir_ty::{
+            callable::callable_throws, package_interface, throw_facts::file_throw_facts,
         },
+        baml_compiler2_ppir,
     };
     use baml_project::ProjectDatabase;
 

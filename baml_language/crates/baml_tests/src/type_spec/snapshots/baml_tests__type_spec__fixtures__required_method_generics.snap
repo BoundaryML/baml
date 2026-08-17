@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+461..465 'seen': throws never
+508..535 '{\n   ...     }': "a"
+522..525 '"a"': "a"
+554..565 'rm_dispatch': throws never
+601..650 '{\n   ...  s\n}': string
+607..612 'let s': string
+615..621 'p.seen': (self: user.RmProbe, value: int) -> string throws never
+615..624 'p.seen(1)': string
+622..623 '1': 1
+647..648 's': string
+661..667 'rm_use': throws never
+693..720 '{\n   ...{})\n}': string
+699..710 'rm_dispatch': (p: user.RmProbe) -> string throws never
+699..718 'rm_dis...mA {})': string
+711..717 'RmA {}': user.RmA

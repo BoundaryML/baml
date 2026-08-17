@@ -1,7 +1,18 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6779
 ---
 === MIR2 ===
+fn user.Failure.is_transient(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
 fn user.QuotaExceeded.Failure.is_transient(self: QuotaExceeded) -> bool {
     // Locals:
     let _0: bool // _0 // return
@@ -157,7 +168,7 @@ fn user.local_throw() -> string {
 
     bb1: {
         _4 = copy _2;
-        _4 = narrow_bind copy _4 as Class(QualifiedTypeName { pkg: Local, namespace: [], name: "Throttled" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
+        _4 = narrow_bind copy _4 as Interface(QualifiedTypeName { pkg: Local, namespace: [], name: "Failure" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
     }
 
     bb2: {

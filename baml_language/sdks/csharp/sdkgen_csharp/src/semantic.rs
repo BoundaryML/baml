@@ -230,22 +230,15 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         "baml.csv.CsvNeedData"
         | "baml.csv.CsvSkip"
         | "baml.csv.CsvHeaders"
-        | "baml.prompt.OutputFormat"
+        | "ai.OutputFormat"
         | "baml.sap.ParseCache"
         | "baml.errors.HostCallable"
         | "ai.PromptMessage"
         | AI_STREAM_STREAM
         | AI_STREAM_DONE
-        | "baml.prompt.Role"
-        | "baml.prompt.ContextClient"
-        | "baml.prompt.Context"
-        | "baml.prompt.MediaUrlHandler"
-        | "baml.prompt.PrimitiveClientOptions"
-        | "baml.prompt.AzureOpenAiOptions"
-        | "baml.prompt.AnthropicOptions"
-        | "baml.prompt.GoogleAiOptions"
-        | "baml.prompt.VertexAiOptions"
-        | "baml.prompt.BedrockOptions" => Some(BuiltinProjection::UnsupportedInternal),
+        | "ai.Role"
+        | "ai.ContextClient"
+        | "ai.Context" => Some(BuiltinProjection::UnsupportedInternal),
         _ => None,
     }
 }

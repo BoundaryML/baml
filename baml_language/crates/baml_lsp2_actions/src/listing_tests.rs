@@ -160,8 +160,8 @@ fn llm_companions_remain_visible_to_describe() {
         "functions.baml",
         r##"
 function Summarize(input: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `Summarize ${input}`
+    client: "openai/gpt-4o-mini"
+    prompt: `Summarize ${input}`
 }
 "##,
     );

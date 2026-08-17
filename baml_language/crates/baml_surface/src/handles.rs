@@ -373,7 +373,7 @@ impl<'db> Function<'db> {
     /// effective set partitioned into panics and ordinary errors.
     pub fn throws(self, db: &'db dyn Db) -> Throws<'db> {
         let effective = facts::effective_throws(db, self.0);
-        let (panics, errors) = facts::throws_leaves(effective)
+        let (panics, errors) = facts::throws_leaves(&effective)
             .into_iter()
             .partition(is_panic_type);
         Throws {
@@ -429,7 +429,7 @@ pub struct Throws<'db> {
     pub declared: Option<&'db Ty>,
     /// The effective contract: the declared clause when written, otherwise
     /// inferred from the body.
-    pub effective: &'db Ty,
+    pub effective: Ty,
     /// Leaves of the effective set that are panic types (classes in
     /// `baml.panics`).
     pub panics: Vec<Ty>,
@@ -639,8 +639,8 @@ impl<'db> TypeAlias<'db> {
     }
 
     /// The aliased type, resolved.
-    pub fn resolved(self, db: &'db dyn Db) -> &'db Ty {
-        &facts::type_alias_resolved(db, self.0).ty
+    pub fn resolved(self, db: &'db dyn Db) -> Ty {
+        facts::type_alias_resolved(db, self.0)
     }
 
     pub fn docstring(self, db: &'db dyn Db) -> Option<&'db str> {
@@ -980,7 +980,7 @@ impl<'db> Field<'db> {
     /// symbolic.
     pub fn ty(self, db: &'db dyn Db) -> &'db Ty {
         match self.owner {
-            FieldOwner::Class(class) => &facts::class_fields(db, class.0).fields[self.index].1,
+            FieldOwner::Class(class) => &facts::class_fields(db, class.0)[self.index].1,
             FieldOwner::Interface(iface) => {
                 &facts::interface_fields(db, iface.0).fields[self.index].1
             }

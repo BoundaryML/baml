@@ -65,7 +65,6 @@ define_keyword_tokens! {
     "testset" => SyntaxKind::KW_TESTSET => TestSet;
     "retry_policy" => SyntaxKind::KW_RETRY_POLICY => RetryPolicy;
     "template_string" => SyntaxKind::KW_TEMPLATE_STRING => TemplateString;
-    "type_builder" => SyntaxKind::KW_TYPE_BUILDER => TypeBuilder;
     "if" => SyntaxKind::KW_IF => If;
     "else" => SyntaxKind::KW_ELSE => Else;
     "for" => SyntaxKind::KW_FOR => For;
@@ -83,7 +82,6 @@ define_keyword_tokens! {
     "catch_all_panics" => SyntaxKind::KW_CATCH_ALL_PANICS => CatchAllPanics;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "is" => SyntaxKind::KW_IS => Is;
-    "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
     "spawn" => SyntaxKind::KW_SPAWN => Spawn;
     "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
@@ -608,6 +606,9 @@ pub fn is_word_like(kind: SyntaxKind) -> bool {
         kind,
         SyntaxKind::WORD
             | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_CLASS
+            | SyntaxKind::KW_ENUM
+            | SyntaxKind::KW_FUNCTION
             | SyntaxKind::KW_IMPLEMENTS
             | SyntaxKind::KW_IMPLEMENT
             | SyntaxKind::KW_EXTENDS

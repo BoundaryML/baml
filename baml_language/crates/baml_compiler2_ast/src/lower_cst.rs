@@ -84,6 +84,28 @@ pub fn lower_file_with_path_and_test_owner(
     file_path: Option<&std::path::Path>,
     test_owner: Option<&str>,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, false)
+}
+
+/// Lower compiler-generated source for a `Session.eval` submission.
+///
+/// Session lowering rewrites persistent bindings into root lets before the
+/// transient source reaches HIR. This entry point is intentionally separate
+/// from ordinary file lowering so user-authored file-scope lets stay rejected.
+pub fn lower_session_file_with_path_and_test_owner(
+    root: &SyntaxNode,
+    file_path: Option<&std::path::Path>,
+    test_owner: Option<&str>,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, true)
+}
+
+fn lower_file_with_path_and_test_owner_impl(
+    root: &SyntaxNode,
+    file_path: Option<&std::path::Path>,
+    test_owner: Option<&str>,
+    is_session_submission: bool,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     let mut diags = Vec::new();
     let mut env_var_refs = Vec::new();
     let mut items = Vec::new();
@@ -129,11 +151,23 @@ pub fn lower_file_with_path_and_test_owner(
                 // Legacy `client<llm> Name { ... }` config block: removed in
                 // the single-path world. Parse succeeded so the error is one
                 // targeted diagnostic, not a cascade.
-                let name = ast::ClientDef::cast(child.clone())
-                    .and_then(|c| c.name())
+                let def = ast::ClientDef::cast(child.clone());
+                let name = def
+                    .as_ref()
+                    .and_then(ast::ClientDef::name)
                     .map_or_else(|| "MyClient".to_string(), |t| t.text().to_string());
+                // The block's own `provider`, so the suggested replacement
+                // names the client class that speaks to it rather than
+                // defaulting every migration to OpenAI.
+                let provider = def.as_ref().and_then(|c| {
+                    c.config_block()?
+                        .items()
+                        .find(|item| item.key().is_some_and(|key| key.text() == "provider"))?
+                        .value_str()
+                });
                 diags.push(LoweringDiagnostic::ClientBlockRemoved {
                     name,
+                    provider,
                     span: child.span_range(),
                 });
             }
@@ -173,6 +207,19 @@ pub fn lower_file_with_path_and_test_owner(
                     name,
                     span: child.span_range(),
                 });
+            }
+            baml_compiler_syntax::SyntaxKind::LET_STMT => {
+                if is_session_submission {
+                    if let Some(let_item) =
+                        lower_expr_body::lower_session_let(&child, &mut diags, &mut env_var_refs)
+                    {
+                        items.push(Item::Let(let_item));
+                    }
+                } else {
+                    diags.push(LoweringDiagnostic::TopLevelLetNotSupported {
+                        span: child.span_range(),
+                    });
+                }
             }
             baml_compiler_syntax::SyntaxKind::IMPLEMENTS_FOR => {
                 if let Some(imp) = lower_implements_for(&child, &mut diags, &mut env_var_refs) {
@@ -342,7 +389,14 @@ fn lower_function(
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let mut llm_body_def = lower_llm_body(&llm);
         reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
-        let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
+        // A prompt is a string literal: backtick (interpolating) or quoted
+        // (inert). Both become the same tagged template below; the parser
+        // rejects every other value shape.
+        let prompt_literal = llm.prompt_field().and_then(|pf| {
+            pf.backtick_string()
+                .map(LlmPromptLiteral::Backtick)
+                .or_else(|| pf.string().map(LlmPromptLiteral::Quoted))
+        });
 
         // Jinja prompts are removed: the single-path world renders prompts as
         // plain backtick templates through the spec.
@@ -350,6 +404,10 @@ fn lower_function(
             diags.push(LoweringDiagnostic::LlmJinjaPromptRemoved {
                 span: raw_prompt.syntax().span_range(),
             });
+        }
+
+        if let Some(LlmPromptLiteral::Quoted(quoted)) = &prompt_literal {
+            warn_quoted_prompt_interpolation(quoted, diags);
         }
 
         // Resolve the client: a quoted "provider/model" string maps at
@@ -366,11 +424,11 @@ fn lower_function(
             .map(|p| p.name.clone())
             .collect();
 
-        // Build and stash the `$spec` companion body while the CST backtick
-        // is in hand (read back by `companions::llm_spec`). Skipped when the
-        // prompt or client is unusable — the migration diagnostics above are
-        // the authoritative errors then.
-        if let (Some(backtick), Some(client_spec)) = (&prompt_backtick, client_spec) {
+        // Build and stash the `$spec` companion body while the CST prompt
+        // literal is in hand (read back by `companions::llm_spec`). Skipped
+        // when the prompt or client is unusable — the migration diagnostics
+        // above are the authoritative errors then.
+        if let (Some(prompt), Some(client_spec)) = (&prompt_literal, client_spec) {
             let tools_value = tools_value_element(&llm);
             let (spec_body, spec_sm, mut spec_diags, mut spec_env_refs) =
                 lower_expr_body::synthesize_llm_spec_body(
@@ -379,7 +437,7 @@ fn lower_function(
                     &client_spec,
                     return_type.clone(),
                     tools_value.as_ref(),
-                    backtick,
+                    prompt,
                     llm_body_def.span,
                 );
             diags.append(&mut spec_diags);
@@ -399,22 +457,13 @@ fn lower_function(
             .iter()
             .any(|(t, _)| t == "spec")
         {
-            let spec_type_args = generic_params
-                .iter()
-                .map(|param| {
-                    crate::ast::TypeExprKind::Path {
-                        segments: vec![param.name.clone()],
-                        generic_args: vec![],
-                        associated_type_bindings: vec![],
-                        attrs: vec![],
-                    }
-                    .at(llm_body_def.span)
-                })
-                .collect();
             let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
                 name.as_str(),
                 &param_names,
-                spec_type_args,
+                &generic_params
+                    .iter()
+                    .map(|param| param.name.clone())
+                    .collect::<Vec<_>>(),
                 return_type.clone(),
                 llm_body_def.span,
             );
@@ -718,7 +767,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
 }
 
 /// Whether the `tools` field can hold tools at runtime. An absent field and
-/// the literal empty list (`tools []`) are tool-less; a non-empty literal or
+/// the literal empty list (`tools: []`) are tool-less; a non-empty literal or
 /// any other expression is conservatively tools-bearing (an arbitrary
 /// expression may evaluate empty, but that is only known at runtime).
 fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
@@ -741,14 +790,74 @@ fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
 ///
 /// Kept in sync with the builtin provider packages (`baml_std/openai` etc.)
 /// and the user-land `resolve()` convention.
+///
+/// DRIFT HAZARD — this compile-time `"provider/model"` prefix map is mirrored
+/// at runtime by `ai.clients.resolve` (`baml_std/ai/ns_clients/clients.baml`),
+/// which handles the same shorthand when the `client:` value is a dynamic
+/// string / `baml.env.Ref` instead of a literal. Add a prefix in one place and
+/// you must add it in the other.
 pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'static str)> {
     let (prefix, _model) = client.split_once('/')?;
     match prefix {
-        "openai" => Some(("openai", "OpenAiClient")),
+        "openai" => Some(("openai", "ResponsesClient")),
+        "openai-chat" => Some(("openai", "ChatClient")),
+        "openai-images" => Some(("openai", "ImageClient")),
+        "azure" => Some(("openai", "AzureClient")),
+        "ollama" => Some(("openai", "OllamaClient")),
+        "openrouter" => Some(("openai", "OpenRouterClient")),
         "anthropic" => Some(("anthropic", "AnthropicClient")),
         "google" => Some(("google", "GoogleClient")),
+        "vertex" => Some(("google", "VertexClient")),
+        "bedrock" => Some(("aws", "BedrockClient")),
+        "ai-gateway-images" => Some(("vercel", "AiGatewayImageClient")),
         "claude-code" => Some(("claude_code", "ClaudeCodeClient")),
         _ => None,
+    }
+}
+
+/// The prompt literal shapes an LLM function accepts.
+///
+/// Both lower through the same `` prompt`...` `` tagged template into a
+/// `PromptAst`; they differ only in how the segment list is built. A quoted
+/// prompt has no `${...}` interpolation (regular strings are inert), so it is
+/// exactly a one-text-segment template.
+pub(crate) enum LlmPromptLiteral {
+    Backtick(baml_compiler_syntax::BacktickStringLiteral),
+    Quoted(ast::StringLiteral),
+}
+
+impl LlmPromptLiteral {
+    /// The literal's source range. Doubles as the synthesized prompt lambda's
+    /// span, which must be distinct from every other lambda synthesized into
+    /// the same body (lambda scopes are located by exact span).
+    pub(crate) fn span_range(&self) -> text_size::TextRange {
+        match self {
+            Self::Backtick(lit) => lit.syntax().span_range(),
+            Self::Quoted(lit) => lit.syntax().span_range(),
+        }
+    }
+}
+
+/// Warn on each `${` in a quoted prompt.
+///
+/// A quoted prompt is inert, so a `${...}` the author meant as an
+/// interpolation reaches the model verbatim with nothing else going wrong —
+/// no parse error, no unresolved name, just a wrong prompt. The marker is
+/// searched in the *raw* token text so the span lands on the source
+/// characters; a quoted string's escapes never introduce or remove a `${`
+/// (`\$` is not an escape in this flavor, so it decodes to `\$`).
+fn warn_quoted_prompt_interpolation(
+    quoted: &ast::StringLiteral,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    let range = quoted.syntax().span_range();
+    let text = quoted.syntax().text().to_string();
+    for (offset, _) in text.match_indices("${") {
+        let offset = u32::try_from(offset).expect("prompt literal exceeds u32 length");
+        let start = range.start() + text_size::TextSize::from(offset);
+        diags.push(LoweringDiagnostic::QuotedPromptInterpolation {
+            span: text_size::TextRange::new(start, start + text_size::TextSize::of("${")),
+        });
     }
 }
 
@@ -762,8 +871,11 @@ pub(crate) enum LlmClientSpec {
         class: &'static str,
         model: String,
     },
-    /// An arbitrary expression evaluating to `ai.Client` (a declared client
-    /// name, a constructor call, a wrapper, ...).
+    /// An arbitrary expression evaluating to `ai.ClientSelector` (a declared
+    /// client name, a constructor call, a wrapper, a runtime
+    /// `"provider/model"` string, an `env.X` reference, ...). Wrapped in
+    /// `ai.clients.resolve(...)` by `synthesize_llm_spec_body` and resolved
+    /// when the function is called.
     Expr(rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>),
 }
 
@@ -797,7 +909,7 @@ fn resolve_llm_client(
                     reason: format!(
                         "no builtin provider for prefix \"{prefix}\"; construct a client \
                          value instead (OpenAI-compatible endpoints: \
-                         openai.OpenAiClient.new(base_url = ..., model = \"{model}\"))"
+                         openai.GenericClient.new(base_url = ..., model = \"{model}\"))"
                     ),
                     span,
                 });
@@ -809,7 +921,7 @@ fn resolve_llm_client(
                 model: model.to_string(),
             });
         }
-        // The removed unquoted shorthand (`client openai/gpt-4o-mini`) parses
+        // The removed unquoted shorthand (`client: openai/gpt-4o-mini`) parses
         // as a whitespace-free division chain; catch it before it cascades
         // into unresolved-name errors.
         if node.kind() == SyntaxKind::BINARY_EXPR {
@@ -817,7 +929,7 @@ fn resolve_llm_client(
             if text.contains('/') && !text.contains(char::is_whitespace) {
                 diags.push(LoweringDiagnostic::InvalidLlmClient {
                     function_name: function_name.to_string(),
-                    reason: format!("quote the model string: client \"{text}\""),
+                    reason: format!("quote the model string: client: \"{text}\""),
                     span,
                 });
                 return None;
@@ -919,7 +1031,7 @@ fn lower_class(
                     let all_outer_attrs = std::mem::take(expr.attrs_mut());
                     let (hoist, keep): (Vec<_>, Vec<_>) =
                         all_outer_attrs.into_iter().partition(|a| {
-                            crate::disambiguate::is_field_attr(a.name.as_str())
+                            crate::disambiguate::should_hoist_field_attr(a.name.as_str())
                                 && direct_attr_spans.contains(&a.span)
                         });
                     *expr.attrs_mut() = keep;

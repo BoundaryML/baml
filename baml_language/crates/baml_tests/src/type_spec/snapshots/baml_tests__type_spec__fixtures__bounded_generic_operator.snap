@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+355..358 'add': throws never
+430..491 '{\n   ...put\n}': (T as baml.ops.Add<O>).Output
+436..439 'lhs': T
+436..445 'lhs + rhs': (T as baml.ops.Add<O>).Output
+442..445 'rhs': O

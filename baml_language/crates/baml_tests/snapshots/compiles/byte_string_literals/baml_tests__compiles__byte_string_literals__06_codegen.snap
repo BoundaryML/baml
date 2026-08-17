@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 5869
 ---
 function user.ByteStringBasic() -> int {
     load_const b"\x68\x65\x6c\x6c\x6f"

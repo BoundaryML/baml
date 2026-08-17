@@ -1,0 +1,15 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+316..319 'add': throws never
+362..418 '{\n   ...n    }': user.Meters
+372..412 'Meters...alue }': user.Meters
+388..398 'self.value': int
+388..410 'self.v....value': int
+401..410 'rhs.value': int
+431..432 'f': throws never
+465..500 '{\n   ...ers\n}': user.Meters
+471..472 'a': user.Meters
+471..476 'a + b': user.Meters
+475..476 'b': user.Meters

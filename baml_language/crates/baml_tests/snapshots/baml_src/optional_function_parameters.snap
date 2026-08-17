@@ -189,6 +189,7 @@ function optional_function_parameters.push_default(value: int, items: int[]) -> 
     store_var items
 
   L0:
+    load_type int
     load_var2 2 1
     call baml.Array.push
     pop 1

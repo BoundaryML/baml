@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+467..476 'aggregate': throws never
+503..546 '{\n   ... })\n}': string[]
+509..515 'xs.map': (self: string[], f: (string) -> string throws never) -> string[] throws never
+509..544 'xs.map...{ r })': string[]
+516..543 '(r: st... { r }': (r: string) -> string throws never
+538..543 '{ r }': string
+540..541 'r': string
+557..563 'caller': throws never
+603..658 '{\n   ...  r\n}': string[]
+609..614 'let r': string[]
+617..626 'aggregate': (xs: string[]) -> string[] throws never
+617..630 'aggregate(xs)': string[]
+627..629 'xs': string[]
+655..656 'r': string[]

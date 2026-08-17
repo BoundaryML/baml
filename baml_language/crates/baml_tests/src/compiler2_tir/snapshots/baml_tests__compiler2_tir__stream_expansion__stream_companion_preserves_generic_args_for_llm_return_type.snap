@@ -9,15 +9,17 @@ function user.GetBoxedInt(client: ai.Client | null = null) -> user.Box<int> thro
   ai.Agent.new<Box<int>>(client = client).run(GetBoxedInt$spec()).value : user.Box<int>
 }
 function user.GetBoxedInt$spec() -> ai.FunctionSpec<user.Box<int>> throws never {
-  ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: Dummy } : ai.FunctionSpec<user.Box<int>>
+  ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Dummy) } : ai.FunctionSpec<user.Box<int>>
 }
 lambda user.GetBoxedInt$spec {
 }
+block user.GetBoxedInt$spec {
+}
 function user.GetBoxedInt$render_prompt() -> ai.Prompt throws never {
-  GetBoxedInt$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of<Box<int>>())) : ai.Prompt
+  GetBoxedInt$spec().prompt(output_format = ai.wire.render_output_format(type.of<Box<int>>())) : ai.Prompt
 }
 function user.GetBoxedInt$parse(json: string) -> user.Box<int> throws never {
-  baml.sap.parse<T>(json) : user.Box<int>
+  baml.sap.parse(json) : user.Box<int>
 }
 class user.Box$stream {
   value: T | null

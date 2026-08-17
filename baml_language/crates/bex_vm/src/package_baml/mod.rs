@@ -3,6 +3,7 @@
 //! Each sub-module implements one or more generated traits:
 //!
 //! - `array` — `BamlClassArray` (length, push, at, concat, ...)
+//! - `crypto` — `BamlClassCrypto{Aes128,Aes256}GcmSiv` (AEAD seal/open)
 //! - `float` — `BamlClassFloat` (predicates, rounding, math, trig, ...)
 //! - `int` — `BamlClassInt` (abs, min, max, clamp, bit ops, ...)
 //! - `string` — `BamlClassString` (length, trim, split, ...)
@@ -23,6 +24,7 @@
 
 mod array;
 pub(crate) mod bigint;
+mod crypto;
 mod csv;
 mod error_context;
 mod float;
@@ -33,10 +35,13 @@ pub mod json;
 mod map;
 mod media;
 mod ops;
+mod ops_bitwise;
 mod ops_math;
 mod prompt;
 mod random;
+pub(crate) mod reflect;
 mod resolve;
+pub(crate) mod runtime_class_builder;
 pub(crate) use resolve::ImplResolver;
 mod root;
 mod spawn;
@@ -46,6 +51,7 @@ mod sys;
 mod time;
 mod toml;
 mod type_class;
+pub(crate) mod type_kinds;
 mod uint8array;
 mod yaml;
 
@@ -397,10 +403,6 @@ const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
         <crate::package_ai::PackageAiImpl as crate::package_ai::BamlPackageAi>::get_native_fn,
     ),
     (
-        "reflect.",
-        <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,
-    ),
-    (
         "boundary.",
         <crate::package_boundary::PackageBoundaryImpl as crate::package_boundary::BamlPackageBoundary>::get_native_fn,
     ),
@@ -459,6 +461,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 param_types: function.param_types,
                 param_has_default: function.param_has_default,
                 display_type_params: function.display_type_params,
+                generic_param_bounds: function.generic_param_bounds,
                 display_param_types: function.display_param_types,
                 display_return_type: function.display_return_type,
                 throws_type: function.throws_type,
@@ -466,6 +469,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 body_meta: function.body_meta,
                 capture: function.capture,
                 function_id: 0, // synthetic; not in the profiling function table
+                runtime_package: function.runtime_package,
             }))
         }
         other => other,

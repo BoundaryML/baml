@@ -3,7 +3,7 @@ use std::{
     fmt::Display,
     mem::MaybeUninit,
     sync::{
-        Arc, OnceLock,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicU8, Ordering},
     },
 };
@@ -12,9 +12,11 @@ use baml_type::RealizedTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 use tokio_util::sync::CancellationToken;
 
-use crate::{HeapPtr, Value, errors::StackFrame};
+use crate::{
+    HeapPtr, SessionEvalLease, Value, errors::StackFrame, runtime_compile::WeakSessionEvalLease,
+};
 
-/// Error payload carried by a future's [`Future::ready`] `SetOnce` when the
+/// Error payload carried by a future's [`Future::ready_waiter`] `SetOnce` when the
 /// underlying engine produced an unrecoverable internal error.
 ///
 /// Type-erased so this crate doesn't have to pull in `bex_engine`'s
@@ -24,6 +26,11 @@ use crate::{HeapPtr, Value, errors::StackFrame};
 /// consumers (on the await side) downcast when surfacing the error to
 /// the host.
 pub type FutureInternalError = Box<dyn std::error::Error + Send + Sync>;
+
+struct FutureSettlement {
+    ready: Arc<tokio::sync::SetOnce<Result<(), FutureInternalError>>>,
+    cancelled_session_leases: Mutex<Vec<WeakSessionEvalLease>>,
+}
 
 /// A future heap object.
 ///
@@ -87,12 +94,14 @@ pub struct Future {
     /// Cancellation signal observed by the producer. Fired by
     /// `f.cancel()` or by parent-cascade when an ancestor is cancelled.
     pub cancel: CancellationToken,
-    /// Cross-task wake: producer (or cancel) sets it on terminal
+    /// Cross-task settlement state: producer (or cancel) sets `ready` on terminal
     /// transition; awaiter clones the Arc and `.wait().await`s.
     /// `Ok(())` is "look at `state` for the actual outcome"; `Err(_)`
     /// carries an unrecoverable engine error for surfacing through the
-    /// engine's `Await` resume path.
-    pub ready: Arc<tokio::sync::SetOnce<Result<(), FutureInternalError>>>,
+    /// engine's `Await` resume path. It also carries weak Session eval leases
+    /// that cancellation releases before waking the awaiter; keeping both in
+    /// one Arc preserves `Future`'s interpreter-hot-loop size budget.
+    settlement: Arc<FutureSettlement>,
 }
 
 // SAFETY: All access to `value` is gated by the Acquire/Release handshake
@@ -238,7 +247,36 @@ impl Future {
             value: UnsafeCell::new(MaybeUninit::uninit()),
             error_trace: Arc::new(OnceLock::new()),
             cancel,
-            ready: Arc::new(tokio::sync::SetOnce::new()),
+            settlement: Arc::new(FutureSettlement {
+                ready: Arc::new(tokio::sync::SetOnce::new()),
+                cancelled_session_leases: Mutex::new(Vec::new()),
+            }),
+        }
+    }
+
+    /// Clone the wake signal used by an engine awaiter.
+    pub fn ready_waiter(&self) -> Arc<tokio::sync::SetOnce<Result<(), FutureInternalError>>> {
+        Arc::clone(&self.settlement.ready)
+    }
+
+    /// Associate a Session eval acquired by this future's producer with the
+    /// future's cancellation boundary.
+    ///
+    /// Registration and cancellation share the mutex so a racing cancel
+    /// either drains this lease before waking the awaiter or observes the
+    /// already-cancelled state here and releases it immediately.
+    pub fn register_session_lease(&self, lease: &SessionEvalLease) {
+        let mut leases = self
+            .settlement
+            .cancelled_session_leases
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match self.read() {
+            FutureRead::Pending(_) => leases.push(lease.downgrade()),
+            FutureRead::Cancelled
+            | FutureRead::Ready(_)
+            | FutureRead::Error(_)
+            | FutureRead::InternalError(_) => lease.release(),
         }
     }
 
@@ -384,7 +422,7 @@ impl Future {
             Ordering::Acquire,
         ) {
             Ok(_) => {
-                let _ = self.ready.set(Ok(()));
+                let _ = self.settlement.ready.set(Ok(()));
                 true
             }
             Err(_) => {
@@ -425,7 +463,7 @@ impl Future {
         );
         match transitioned {
             Ok(_) => {
-                let _ = self.ready.set(Ok(()));
+                let _ = self.settlement.ready.set(Ok(()));
                 true
             }
             Err(_) => {
@@ -452,7 +490,18 @@ impl Future {
         ) {
             Ok(_) => {
                 self.cancel.cancel();
-                let _ = self.ready.set(Ok(()));
+                let leases = {
+                    let mut leases = self
+                        .settlement
+                        .cancelled_session_leases
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    std::mem::take(&mut *leases)
+                };
+                for lease in leases {
+                    lease.release();
+                }
+                let _ = self.settlement.ready.set(Ok(()));
                 true
             }
             Err(_) => false,
@@ -481,7 +530,7 @@ impl Future {
             Ordering::Acquire,
         ) {
             Ok(_) => {
-                let _ = self.ready.set(Err(err));
+                let _ = self.settlement.ready.set(Err(err));
                 true
             }
             Err(_) => false,
@@ -502,7 +551,7 @@ impl Clone for Future {
         // primitives. Producers that hold a clone of `ready` from before
         // the GC move continue to wake the same set of waiters, and the
         // moved heap copy observes the same `ready.set(...)` because both
-        // copies' `Arc<SetOnce>` point at the same allocation.
+        // copies share the same settlement allocation.
         //
         // Futures are conceptually *handles*, not values: there is no
         // "the same future, but a copy" at the user level. User-side
@@ -518,7 +567,7 @@ impl Clone for Future {
             value: UnsafeCell::new(MaybeUninit::uninit()),
             error_trace: Arc::clone(&self.error_trace),
             cancel: self.cancel.clone(),
-            ready: Arc::clone(&self.ready),
+            settlement: Arc::clone(&self.settlement),
         };
         let tag: u8 = match read {
             FutureRead::Pending(_) => FutureTag::Pending as u8,

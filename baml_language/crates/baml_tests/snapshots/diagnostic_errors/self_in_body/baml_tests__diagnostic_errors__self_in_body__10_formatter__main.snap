@@ -42,7 +42,7 @@ class Box<T> {
         }
     }
     function turbofish_self(self) -> string {
-        reflect.type_of<Self>().to_string()
+        type.of<Self>().to_string()
     }
 }
 
@@ -54,7 +54,7 @@ interface Tester {
         other is Self
     }
     function describe(self) -> string throws never {
-        reflect.type_of<Self>().to_string()
+        type.of<Self>().to_string()
     }
     function bind_self(self, other: Self) -> bool throws never {
         let a: Self = other;

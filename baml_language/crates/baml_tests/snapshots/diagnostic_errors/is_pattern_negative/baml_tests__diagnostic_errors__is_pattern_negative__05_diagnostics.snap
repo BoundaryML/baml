@@ -21,9 +21,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × or-pattern binding `x` has conflicting types: int and string
-    ╭─[main.baml:23:34]
+    ╭─[main.baml:23:18]
  23 │     let _ = v is (let x: int) | (let x: string)
-    ·                                  ─────────────
+    ·                  ──────────────────────────────
     ╰────
 
   [type] E0003
@@ -45,9 +45,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × unresolved type: Missing
-    ╭─[main.baml:36:10]
+    ╭─[main.baml:36:22]
  36 │     v is WrapGeneric<Missing>
-    ·          ────────────────────
+    ·                      ───────
     ╰────
 
   [type] E0002

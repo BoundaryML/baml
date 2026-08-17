@@ -22,10 +22,17 @@ function BadCall4() -> string {
 //- diagnostics
 // E0005
 //
-//   × unknown named argument `b`
-//    ╭─[template_string_bad_calls.baml:6:28]
+//   × expected 1 argument(s), got 2
+//    ╭─[template_string_bad_calls.baml:6:6]
 //  6 │   `${WithParams(a = 2, b = 2)}`
-//    ·                            ─
+//    ·      ────────────────────────
+//    ╰────
+// E0005
+//
+//   × unknown named argument `b`
+//    ╭─[template_string_bad_calls.baml:6:6]
+//  6 │   `${WithParams(a = 2, b = 2)}`
+//    ·      ────────────────────────
 //    ╰────
 // E0001
 //

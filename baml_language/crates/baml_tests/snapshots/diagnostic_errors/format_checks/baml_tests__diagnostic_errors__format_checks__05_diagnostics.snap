@@ -7,7 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `string` has no member `len`
     ╭─[chain_expr.baml:86:5]
  86 │     user.name.len();
-    ·     ─────────────
+    ·     ───────────────
     ╰────
 
   [type] E0007
@@ -15,7 +15,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
     ╭─[chain_expr.baml:87:5]
  87 │     items.len();
-    ·     ─────────
+    ·     ───────────
     ╰────
 
   [type] E0007
@@ -23,19 +23,24 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `get`
     ╭─[chain_expr.baml:90:5]
  90 │     user.profile.items.get(0);
-    ·     ──────────────────────
+    ·     ─────────────────────────
     ╰────
 
   [type] E0007
 
   × type `ChainItem[]` has no member `get`
-    ╭─[chain_expr.baml:94:5]
- 94 │ ╭─▶     items // 2 callee trailing
- 95 │ │       // 3 open paren leading
- 96 │ │       . // 4 dot trailing
- 97 │ │       // 5 method leading
- 98 │ ╰─▶     get // 6 method trailing
-    ╰────
+     ╭─[chain_expr.baml:94:5]
+  94 │ ╭─▶     items // 2 callee trailing
+  95 │ │       // 3 open paren leading
+  96 │ │       . // 4 dot trailing
+  97 │ │       // 5 method leading
+  98 │ │       get // 6 method trailing
+  99 │ │       ( // 7 open paren trailing
+ 100 │ │       // 8 arg leading
+ 101 │ │       0 // 9 arg trailing
+ 102 │ │       // 10 close paren leading
+ 103 │ ╰─▶     ) // 11 close paren trailing
+     ╰────
 
   [type] E0007
 
@@ -45,7 +50,12 @@ source: crates/baml_tests/src/generated_tests.rs
  109 │ │       /* 3 dot leading */
  110 │ │       . /* 4 dot trailing */
  111 │ │       /* 5 method leading */
- 112 │ ╰─▶     get /* 6 method trailing */
+ 112 │ │       get /* 6 method trailing */
+ 113 │ │       ( /* 7 open paren trailing */
+ 114 │ │       /* 8 arg leading */
+ 115 │ │       0 /* 9 arg trailing */
+ 116 │ │       /* 10 close paren leading */
+ 117 │ ╰─▶     ) /* 11 close paren trailing */
      ╰────
 
   [type] E0007
@@ -53,7 +63,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `string` has no member `len`
      ╭─[chain_expr.baml:149:5]
  149 │     user.name.len().to_string();
-     ·     ─────────────
+     ·     ───────────────
      ╰────
 
   [type] E0007
@@ -61,15 +71,55 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `string` has no member `len`
      ╭─[chain_expr.baml:152:5]
  152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ·     ───────────────────────────────────────────
+     ·     ─────────────────────────────────────────────
      ╰────
 
   [type] E0007
 
   × type `string` has no member `len`
-     ╭─[chain_expr.baml:155:44]
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ───────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ─────────────────────────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ───────────────────────────────────────────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
  155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     ·                                            ───
+     ·     ────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     ·     ──────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     ·     ────────────────────────────────────────────────────────────────────────────────
      ╰────
 
   [type] E0007
@@ -77,7 +127,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `get`
      ╭─[chain_expr.baml:158:5]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·     ──────────────────────
+     ·     ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
      ╰────
 
   [type] E0007
@@ -85,7 +135,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:158:28]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·                            ──────────────────────
+     ·                            ────────────────────────
      ╰────
 
   [type] E0007
@@ -93,7 +143,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:158:59]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·                                                           ──────────────────────
+     ·                                                           ────────────────────────
      ╰────
 
   [type] E0007
@@ -101,7 +151,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:158:90]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·                                                                                          ──────────────────────
+     ·                                                                                          ────────────────────────
      ╰────
 
   [type] E0005
@@ -117,7 +167,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:161:33]
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
-     ·                                 ──────────────────────
+     ·                                 ────────────────────────
      ╰────
 
   [type] E0007
@@ -139,7 +189,43 @@ source: crates/baml_tests/src/generated_tests.rs
  177 │ │       color // 14 trailing
  178 │ │       . // 15 trailing
  179 │ │       // 16 leading
- 180 │ ╰─▶     len // 17 trailing
+ 180 │ │       len // 17 trailing
+ 181 │ │       ( // 18 trailing
+ 182 │ ╰─▶     ) // 19 trailing
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:165:5]
+ 165 │ ╭─▶     user // 2 trailing
+ 166 │ │       . // 3 trailing
+ 167 │ │       // 4 leading
+ 168 │ │       profile // 5 trailing
+ 169 │ │       . // 6 trailing
+ 170 │ │       // 7 leading
+ 171 │ │       settings // 8 trailing
+ 172 │ │       . // 9 trailing
+ 173 │ │       // 10 leading
+ 174 │ │       preferences // 11 trailing
+ 175 │ │       . // 12 trailing
+ 176 │ │       // 13 leading
+ 177 │ │       color // 14 trailing
+ 178 │ │       . // 15 trailing
+ 179 │ │       // 16 leading
+ 180 │ │       len // 17 trailing
+ 181 │ │       ( // 18 trailing
+ 182 │ │       ) // 19 trailing
+ 183 │ │       . // 20 trailing
+ 184 │ │       // 21 leading
+ 185 │ │       to_string // 22 trailing
+ 186 │ │       ( // 23 trailing
+ 187 │ │       ) // 24 trailing
+ 188 │ │       . // 25 trailing
+ 189 │ │       // 26 leading
+ 190 │ │       len // 27 trailing
+ 191 │ │       ( // 28 trailing
+ 192 │ ╰─▶     ) // 29 trailing
      ╰────
 
   [type] E0007
@@ -161,7 +247,43 @@ source: crates/baml_tests/src/generated_tests.rs
  209 │ │       color /* 14 trailing */
  210 │ │       . /* 15 trailing */
  211 │ │       /* 16 leading */
- 212 │ ╰─▶     len /* 17 trailing */
+ 212 │ │       len /* 17 trailing */
+ 213 │ │       ( /* 18 trailing */
+ 214 │ ╰─▶     ) /* 19 trailing */
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:197:5]
+ 197 │ ╭─▶     user /* 2 trailing */
+ 198 │ │       . /* 3 trailing */
+ 199 │ │       /* 4 leading */
+ 200 │ │       profile /* 5 trailing */
+ 201 │ │       . /* 6 trailing */
+ 202 │ │       /* 7 leading */
+ 203 │ │       settings /* 8 trailing */
+ 204 │ │       . /* 9 trailing */
+ 205 │ │       /* 10 leading */
+ 206 │ │       preferences /* 11 trailing */
+ 207 │ │       . /* 12 trailing */
+ 208 │ │       /* 13 leading */
+ 209 │ │       color /* 14 trailing */
+ 210 │ │       . /* 15 trailing */
+ 211 │ │       /* 16 leading */
+ 212 │ │       len /* 17 trailing */
+ 213 │ │       ( /* 18 trailing */
+ 214 │ │       ) /* 19 trailing */
+ 215 │ │       . /* 20 trailing */
+ 216 │ │       /* 21 leading */
+ 217 │ │       to_string /* 22 trailing */
+ 218 │ │       ( /* 23 trailing */
+ 219 │ │       ) /* 24 trailing */
+ 220 │ │       . /* 25 trailing */
+ 221 │ │       /* 26 leading */
+ 222 │ │       len /* 27 trailing */
+ 223 │ │       ( /* 28 trailing */
+ 224 │ ╰─▶     ) /* 29 trailing */
      ╰────
 
   [type] E0007
@@ -177,7 +299,11 @@ source: crates/baml_tests/src/generated_tests.rs
  235 │ │       items // 8 trailing
  236 │ │       . // 9 trailing
  237 │ │       // 10 leading
- 238 │ ╰─▶     get // 11 trailing
+ 238 │ │       get // 11 trailing
+ 239 │ │       ( // 12 trailing
+ 240 │ │       // 13 leading
+ 241 │ │       user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
+ 242 │ ╰─▶     ) // 15 trailing
      ╰────
 
   [type] E0007
@@ -185,7 +311,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:241:5]
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     ·     ──────────────────────
+     ·     ────────────────────────
      ╰────
 
   [type] E0007
@@ -193,7 +319,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:241:36]
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     ·                                    ──────────────────────
+     ·                                    ────────────────────────
      ╰────
 
   [type] E0007
@@ -201,15 +327,15 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `int[][]` has no member `len`
      ╭─[chain_expr.baml:251:17]
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
-     ·                 ───────────────
+     ·                 ─────────────────
      ╰────
 
   [type] E0007
 
   × type `int[]` has no member `len`
-     ╭─[chain_expr.baml:251:55]
+     ╭─[chain_expr.baml:251:40]
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
-     ·                                                       ───
+     ·                                        ────────────────────
      ╰────
 
   [type] E0007
@@ -217,23 +343,23 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `get`
      ╭─[chain_expr.baml:256:5]
  256 │     items  .  get  (  0  );
-     ·     ─────────────
+     ·     ──────────────────────
      ╰────
 
   [type] E0007
 
   × type `string` has no member `len`
-     ╭─[chain_expr.baml:259:18]
+     ╭─[chain_expr.baml:259:5]
  259 │     user.tags[0].len();
-     ·                  ───
+     ·     ──────────────────
      ╰────
 
   [type] E0007
 
   × type `string` has no member `len`
-     ╭─[chain_expr.baml:261:20]
+     ╭─[chain_expr.baml:261:5]
  261 │     items[0].label.len();
-     ·                    ───
+     ·     ────────────────────
      ╰────
 
   [hir] E0015
@@ -256,7 +382,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client BasicClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client BasicClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
     ╭─[config_decls.baml:5:1]
   5 │ ╭─▶ client<llm> BasicClient {
@@ -270,7 +396,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client FullClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client FullClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
     ╭─[config_decls.baml:13:1]
  13 │ ╭─▶ client<llm> FullClient {
@@ -288,8 +414,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client StringProviderClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
-  │ ai.Fallback / ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client StringProviderClient = openai.GenericClient.new(model = "...", base_url = "...");` (compose reliability with
+  │ ai.Retry / ai.Fallback / ai.RoundRobin)
     ╭─[config_decls.baml:25:1]
  25 │ ╭─▶ client<llm> StringProviderClient {
  26 │ │       provider "openai-generic"
@@ -303,8 +429,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client NestedConfigClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client NestedConfigClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
     ╭─[config_decls.baml:34:1]
  34 │ ╭─▶ client<llm> NestedConfigClient {
  35 │ │       provider openai
@@ -321,8 +447,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayConfigClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayConfigClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
     ╭─[config_decls.baml:46:1]
  46 │ ╭─▶ client<llm> ArrayConfigClient {
  47 │ │       provider openai
@@ -336,7 +462,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client LongOptionClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongOptionClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
     ╭─[config_decls.baml:55:1]
  55 │ ╭─▶ client<llm> LongOptionClient {
@@ -351,8 +477,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TypedValuesClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TypedValuesClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
     ╭─[config_decls.baml:64:1]
  64 │ ╭─▶ client<llm> TypedValuesClient {
  65 │ │       provider openai
@@ -368,7 +494,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client EnvClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client EnvClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
     ╭─[config_decls.baml:75:1]
  75 │ ╭─▶ client<llm> EnvClient {
@@ -383,7 +509,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayOfObjectsClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayOfObjectsClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:84:1]
   84 │ ╭─▶ client<llm> ArrayOfObjectsClient {
@@ -408,7 +534,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client RawStringConfigClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client RawStringConfigClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:103:1]
  103 │ ╭─▶ client<llm> RawStringConfigClient {
@@ -426,8 +552,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client MixedValuesClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client MixedValuesClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:115:1]
  115 │ ╭─▶ client<llm> MixedValuesClient {
  116 │ │       provider openai
@@ -446,7 +572,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
      ╭─[config_decls.baml:130:1]
  130 │ ╭─▶ client // 2 client keyword trailing
@@ -481,8 +607,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClientBlock = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:162:1]
  162 │ ╭─▶ client /* 2 client keyword trailing */
  163 │ │   /* 3 type angle leading */
@@ -517,7 +643,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] E0010
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns =
-  │ openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
+  │ openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:193:1]
  193 │ ╭─▶ client<llm> ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns {
  194 │ │       provider openai
@@ -530,8 +656,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client DeeplyNestedClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client DeeplyNestedClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:201:1]
  201 │ ╭─▶ client<llm> DeeplyNestedClient {
  202 │ │       provider openai
@@ -556,7 +682,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client LongNestedValuesClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongNestedValuesClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:221:1]
  221 │ ╭─▶ client<llm> LongNestedValuesClient {
@@ -575,8 +701,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client ManyOptionsClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ManyOptionsClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:234:1]
  234 │ ╭─▶ client<llm> ManyOptionsClient {
  235 │ │       provider openai
@@ -598,7 +724,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
      ╭─[config_decls.baml:251:1]
  251 │ ╭─▶ client<llm> LongArrayClient {
@@ -613,7 +739,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayOfObjectsClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayOfObjectsClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:260:1]
  260 │ ╭─▶ client<llm> LongArrayOfObjectsClient {
@@ -639,7 +765,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:281:1]
  281 │ ╭─▶ client // 2 client trailing
@@ -685,7 +811,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClientBlock = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:324:1]
  324 │ ╭─▶ client /* 2 client trailing */
@@ -733,7 +859,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:368:1]
  368 │ ╭─▶ client<llm> TriviaLongValueClient {
@@ -754,7 +880,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClientBlock = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
      ╭─[config_decls.baml:383:1]
  383 │ ╭─▶ client<llm> TriviaLongValueClientBlock {
@@ -847,82 +973,82 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `BasicClient`
-     ╭─[config_decls.baml:446:12]
- 446 │     client BasicClient
-     ·            ───────────
+     ╭─[config_decls.baml:446:13]
+ 446 │     client: BasicClient
+     ·             ───────────
      ╰────
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:658:1]
- 658 │ ╭─▶ client<llm> C {
- 659 │ │       provider openai
- 660 │ │       options {
- 661 │ │           model "gpt-4"
- 662 │ │       }
- 663 │ ├─▶ }
+  × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:498:1]
+ 498 │ ╭─▶ client<llm> C {
+ 499 │ │       provider openai
+ 500 │ │       options {
+ 501 │ │           model "gpt-4"
+ 502 │ │       }
+ 503 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`R` has no effect)
-     ╭─[config_decls.baml:665:1]
- 665 │ ╭─▶ retry_policy R {
- 666 │ │       max_retries 1
- 667 │ ├─▶ }
+     ╭─[config_decls.baml:505:1]
+ 505 │ ╭─▶ retry_policy R {
+ 506 │ │       max_retries 1
+ 507 │ ├─▶ }
      · ╰──── retry composes at the client boundary now
      ╰────
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client ExtraWhitespaceClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ExtraWhitespaceClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:670:1]
- 670 │ ╭─▶ client<llm>    ExtraWhitespaceClient    {
- 671 │ │       provider    openai
- 672 │ │       options    {
- 673 │ │           model    "gpt-4"
- 674 │ │       }
- 675 │ ├─▶ }
+     ╭─[config_decls.baml:510:1]
+ 510 │ ╭─▶ client<llm>    ExtraWhitespaceClient    {
+ 511 │ │       provider    openai
+ 512 │ │       options    {
+ 513 │ │           model    "gpt-4"
+ 514 │ │       }
+ 515 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`ExtraWhitespaceRetry` has no effect)
-     ╭─[config_decls.baml:677:1]
- 677 │ ╭─▶ retry_policy    ExtraWhitespaceRetry    {
- 678 │ │       max_retries    3
- 679 │ ├─▶ }
+     ╭─[config_decls.baml:517:1]
+ 517 │ ╭─▶ retry_policy    ExtraWhitespaceRetry    {
+ 518 │ │       max_retries    3
+ 519 │ ├─▶ }
      · ╰──── retry composes at the client boundary now
      ╰────
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client CommaClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client CommaClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
-     ╭─[config_decls.baml:682:1]
- 682 │ ╭─▶ client<llm> CommaClient {
- 683 │ │       provider openai,
- 684 │ │       options {
- 685 │ │           model "gpt-4",
- 686 │ │           max_tokens 100,
- 687 │ │       }
- 688 │ ├─▶ }
+     ╭─[config_decls.baml:522:1]
+ 522 │ ╭─▶ client<llm> CommaClient {
+ 523 │ │       provider openai,
+ 524 │ │       options {
+ 525 │ │           model "gpt-4",
+ 526 │ │           max_tokens 100,
+ 527 │ │       }
+ 528 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client SameLineClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client SameLineClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
-     ╭─[config_decls.baml:691:1]
- 691 │ ╭─▶ client<llm> SameLineClient {
- 692 │ │       provider openai
- 693 │ │       options { model "gpt-4" }
- 694 │ ├─▶ }
+     ╭─[config_decls.baml:531:1]
+ 531 │ ╭─▶ client<llm> SameLineClient {
+ 532 │ │       provider openai
+ 533 │ │       options { model "gpt-4" }
+ 534 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -967,42 +1093,43 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[function_decls.baml:73:5]
- 73 │     1
-    ·     ┬
-    ·     ╰── expected `(x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never`, found `1`
+    ╭─[function_decls.baml:72:167]
+ 72 │ ╭─▶ function DeepFnReturn() -> (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never {
+ 73 │ │       1
+ 74 │ ├─▶ }
+    · ╰──── expected `(x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never`, found `1`
     ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:454:12]
- 454 │     client GPT4
-     ·            ────
+     ╭─[function_decls.baml:454:13]
+ 454 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:465:12]
- 465 │     client GPT4
-     ·            ────
+     ╭─[function_decls.baml:465:13]
+ 465 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:482:12]
- 482 │     client GPT4
-     ·            ────
+     ╭─[function_decls.baml:482:13]
+ 482 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:489:12]
- 489 │     client GPT4
-     ·            ────
+     ╭─[function_decls.baml:489:13]
+ 489 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0146
@@ -1021,6 +1148,70 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                     ─────────
      ╰────
 
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:577:5]
+ 577 │     assert x > 0;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:578:5]
+ 578 │     assert x < 100;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:582:5]
+ 582 │     assert // 2 assert keyword trailing
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:589:5]
+ 589 │     assert /* 2 assert keyword trailing */
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:595:5]
+ 595 │     assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:598:5]
+ 598 │     assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 && y % 3 == 0 && x + y + x * y > 100 && x * x + y * y < 10000;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:602:5]
+ 602 │     assert // 2 assert trailing
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:611:5]
+ 611 │     assert /* 2 assert trailing */
+     ·     ──────
+     ╰────
+
   [type] E0001
 
   × mismatched types
@@ -1028,6 +1219,22 @@ source: crates/baml_tests/src/generated_tests.rs
  161 │         "bye" => "farewell",
      ·         ──┬──
      ·           ╰── expected `"hello"`, found `"bye"`
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exprs.baml:161:18]
+ 161 │         "bye" => "farewell",
+     ·                  ──────────
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exprs.baml:162:14]
+ 162 │         _ => "other"
+     ·              ───────
      ╰────
 
   [type] E0004
@@ -1124,107 +1331,6 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                                                                    ╰── expected `string`, found `0`
      ╰────
 
-  [type] E0002
-
-  × cannot infer type parameter `T`
-   ╭─[template_string_decls.baml:5:5]
- 5 │     `Hello, ${name}!`
-   ·     ─────────────────
-   ╰────
-
-  [type] E0001
-
-  × mismatched types
-   ╭─[template_string_decls.baml:5:15]
- 5 │     `Hello, ${name}!`
-   ·               ──┬─
-   ·                 ╰── expected `T`, found `string`
-   ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:13:5]
- 13 │ ╭─▶     `
- 14 │ │           Name: ${first} ${last}
- 15 │ │           Age: ${age}
- 16 │ ╰─▶     `
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:13:5]
- 13 │ ╭─▶     `
- 14 │ │           Name: ${first} ${last}
- 15 │ │           Age: ${age}
- 16 │ ╰─▶     `
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:14:17]
- 14 │         Name: ${first} ${last}
-    ·                 ──┬──
-    ·                   ╰── expected `T`, found `string`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:14:26]
- 14 │         Name: ${first} ${last}
-    ·                          ──┬─
-    ·                            ╰── expected `T`, found `string`
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:20:5]
- 20 │ ╭─▶     `
- 21 │ │           Items: ${items}
- 22 │ │           Config: ${config}
- 23 │ ╰─▶     `
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:20:5]
- 20 │ ╭─▶     `
- 21 │ │           Items: ${items}
- 22 │ │           Config: ${config}
- 23 │ ╰─▶     `
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:21:18]
- 21 │         Items: ${items}
-    ·                  ──┬──
-    ·                    ╰── expected `T`, found `string[]`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:22:19]
- 22 │         Config: ${config}
-    ·                   ───┬──
-    ·                      ╰── expected `T`, found `map<string, int>`
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:26:41]
- 26 │ function SingleLine(x: int) -> string { `Value is ${x}` }
-    ·                                         ───────────────
-    ╰────
-
   [validation] E0011
 
   × duplicate function `ManyParams`
@@ -1239,130 +1345,12 @@ source: crates/baml_tests/src/generated_tests.rs
           ·          ──────────
           ╰────
 
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:29:5]
- 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
-    ·     ───────────────────────────────────────────────────────────────────────────────
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:29:5]
- 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
-    ·     ───────────────────────────────────────────────────────────────────────────────
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:29:5]
- 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
-    ·     ───────────────────────────────────────────────────────────────────────────────
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:29:8]
- 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
-    ·        ───────┬───────
-    ·               ╰── expected `T`, found `string`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:29:27]
- 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
-    ·                           ────────┬───────
-    ·                                   ╰── expected `T`, found `string`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:29:66]
- 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
-    ·                                                                  ────────┬───────
-    ·                                                                          ╰── expected `T`, found `bool`
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:33:5]
- 33 │     `${items} ${config}`
-    ·     ────────────────────
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:33:5]
- 33 │     `${items} ${config}`
-    ·     ────────────────────
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:33:8]
- 33 │     `${items} ${config}`
-    ·        ──┬──
-    ·          ╰── expected `T`, found `(int | string | bool)[]`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:33:17]
- 33 │     `${items} ${config}`
-    ·                 ───┬──
-    ·                    ╰── expected `T`, found `map<string, int | string>`
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:37:5]
- 37 │     `${name} ${age} ${items}`
-    ·     ─────────────────────────
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:37:5]
- 37 │     `${name} ${age} ${items}`
-    ·     ─────────────────────────
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:37:5]
- 37 │     `${name} ${age} ${items}`
-    ·     ─────────────────────────
-    ╰────
-
   [type] E0001
 
   × cannot interpolate a value of type `string | null` — it may be null; coalesce with `?? "…"` or unwrap it first
     ╭─[template_string_decls.baml:37:7]
  37 │     `${name} ${age} ${items}`
     ·       ──────
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:37:8]
- 37 │     `${name} ${age} ${items}`
-    ·        ──┬─
-    ·          ╰── expected `T`, found `string | null`
     ╰────
 
   [type] E0001
@@ -1375,100 +1363,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × mismatched types
-    ╭─[template_string_decls.baml:37:16]
- 37 │     `${name} ${age} ${items}`
-    ·                ─┬─
-    ·                 ╰── expected `T`, found `int | null`
-    ╰────
-
-  [type] E0001
-
   × cannot interpolate a value of type `string[] | null` — it may be null; coalesce with `?? "…"` or unwrap it first
     ╭─[template_string_decls.baml:37:22]
  37 │     `${name} ${age} ${items}`
     ·                      ───────
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:37:23]
- 37 │     `${name} ${age} ${items}`
-    ·                       ──┬──
-    ·                         ╰── expected `T`, found `string[] | null`
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:52:5]
- 52 │     `Hello ${x}`
-    ·     ────────────
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:52:14]
- 52 │     `Hello ${x}`
-    ·              ┬
-    ·              ╰── expected `T`, found `string`
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:56:5]
- 56 │ ╭─▶     `
- 57 │ │           ${for (let item in items)}
- 58 │ │           - ${item}
- 59 │ │           ${endfor}
- 60 │ ╰─▶     `
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:56:5]
- 56 │ ╭─▶     `
- 57 │ │           ${for (let item in items)}
- 58 │ │           - ${item}
- 59 │ │           ${endfor}
- 60 │ ╰─▶     `
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:58:13]
- 58 │         - ${item}
-    ·             ──┬─
-    ·               ╰── expected `T`, found `string`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:58:13]
- 58 │         - ${item}
-    ·             ──┬─
-    ·               ╰── expected `T`, found `string`
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[template_string_decls.baml:64:5]
- 64 │     `${if (show)}${value}${else}hidden${endif}`
-    ·     ───────────────────────────────────────────
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[template_string_decls.baml:64:20]
- 64 │     `${if (show)}${value}${else}hidden${endif}`
-    ·                    ──┬──
-    ·                      ╰── expected `T`, found `string`
     ╰────

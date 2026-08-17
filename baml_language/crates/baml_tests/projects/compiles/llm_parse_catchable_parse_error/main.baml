@@ -16,7 +16,7 @@
 // types `baml.sap.parse` with a parse-flavored throw, this project should
 // return to ZERO diagnostics.
 
-client GPT4o = openai.OpenAiClient.new(
+client GPT4o = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = "test-key",
     base_url = "http://localhost:1234",
@@ -33,8 +33,8 @@ class Invoice {
 }
 
 function ExtractInvoice(text: string) -> Invoice {
-    client GPT4o
-    prompt `extract an invoice from ${text}`
+    client: GPT4o
+    prompt: `extract an invoice from ${text}`
 }
 
 // The documented pattern: parse an existing JSON payload locally and fall back

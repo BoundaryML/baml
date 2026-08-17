@@ -61,12 +61,9 @@ impl UnionMetadata {
     pub fn new(union_type: RuntimeTy, selected_option: RuntimeTy) -> Self {
         let (is_optional, is_single_pattern) = match &union_type {
             RuntimeTy::Union(members, _) => {
-                let has_null = members.iter().any(|m| matches!(m, RuntimeTy::Null { .. }));
-                let non_null_count = members
-                    .iter()
-                    .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
-                    .count();
-                (has_null, non_null_count == 1)
+                let is_optional = members.iter().any(RuntimeTy::is_null);
+                let non_null_count = members.iter().filter(|member| !member.is_null()).count();
+                (is_optional, non_null_count == 1)
             }
             _ => (false, false),
         };
@@ -86,6 +83,9 @@ impl UnionMetadata {
 pub enum BexExternalAdt {
     Collector(bex_vm_types::CollectorRef),
     Type(baml_type::RuntimeTy),
+    /// A reflected type plus portable runtime definitions. Unlike `Type`, this
+    /// is reminted on every inbound materialization.
+    TypeDef(bex_vm_types::types::PortableTypeDef),
     /// The Rust-backed payload inside a rendered `ai.Prompt`.
     PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
@@ -368,7 +368,7 @@ impl BexExternalAdt {
     pub fn type_name(&self) -> &'static str {
         match self {
             BexExternalAdt::Collector(_) => "collector",
-            BexExternalAdt::Type(_) => "type",
+            BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_) => "type",
             BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Media(_) => "media",
             BexExternalAdt::TaggedHeapHandle { .. } => "tagged_heap_handle",

@@ -11,8 +11,8 @@ class Fields {
 }
 
 function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-  client "openai/gpt-4o"
-  prompt `
+  client: "openai/gpt-4o"
+  prompt: `
     Merge these: ${i1} ${i2}
 
     ${ctx.output_format}
@@ -23,8 +23,8 @@ function InOutLiteralStringUnionMapKey(
   i1: map<"one" | "two" | ("three" | "four"), string>,
   i2: map<"one" | "two" | ("three" | "four"), string>
 ) -> map<"one" | "two" | ("three" | "four"), string> {
-  client "openai/gpt-4o"
-  prompt `
+  client: "openai/gpt-4o"
+  prompt: `
     Merge these:
 
     ${i1}
@@ -47,42 +47,16 @@ function InOutLiteralStringUnionMapKey(
 // E0067
 //
 //   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[map_literal_keys.baml:13:27]
+//    ╭─[map_literal_keys.baml:1:1]
+//  1 │ enum MapKey {
+//    · ▲
+//    ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[map_literal_keys.baml:13:76]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     ·                           ───────────────────
-//     ╰────
-// E0067
-//
-//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[map_literal_keys.baml:13:52]
-//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     ·                                                    ───────────────────
-//     ╰────
-// E0067
-//
-//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[map_literal_keys.baml:13:96]
-//  13 │ ╭─▶ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//  14 │ │     client "openai/gpt-4o"
-//  15 │ │     prompt `
-//  16 │ │       Merge these: ${i1} ${i2}
-//  17 │ │
-//  18 │ │       ${ctx.output_format}
-//  19 │ │     `
-//  20 │ ╰─▶ }
-//     ╰────
-// E0067
-//
-//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[map_literal_keys.baml:13:1]
-//  13 │ ╭─▶ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//  14 │ │     client "openai/gpt-4o"
-//  15 │ │     prompt `
-//  16 │ │       Merge these: ${i1} ${i2}
-//  17 │ │
-//  18 │ │       ${ctx.output_format}
-//  19 │ │     `
-//  20 │ ╰─▶ }
+//     ·                                                                            ───────────────────
 //     ╰────
 // E0067
 //
@@ -97,46 +71,6 @@ function InOutLiteralStringUnionMapKey(
 //     ╭─[map_literal_keys.baml:13:52]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
 //     ·                                                    ───────────────────
-//     ╰────
-// E0067
-//
-//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[map_literal_keys.baml:13:96]
-//  13 │ ╭─▶ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//  14 │ │     client "openai/gpt-4o"
-//  15 │ │     prompt `
-//  16 │ │       Merge these: ${i1} ${i2}
-//  17 │ │
-//  18 │ │       ${ctx.output_format}
-//  19 │ │     `
-//  20 │ ╰─▶ }
-//     ╰────
-// E0067
-//
-//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[map_literal_keys.baml:13:27]
-//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     ·                           ───────────────────
-//     ╰────
-// E0067
-//
-//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[map_literal_keys.baml:13:52]
-//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     ·                                                    ───────────────────
-//     ╰────
-// E0067
-//
-//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[map_literal_keys.baml:13:1]
-//  13 │ ╭─▶ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//  14 │ │     client "openai/gpt-4o"
-//  15 │ │     prompt `
-//  16 │ │       Merge these: ${i1} ${i2}
-//  17 │ │
-//  18 │ │       ${ctx.output_format}
-//  19 │ │     `
-//  20 │ ╰─▶ }
 //     ╰────
 // E0067
 //
@@ -148,15 +82,65 @@ function InOutLiteralStringUnionMapKey(
 // E0067
 //
 //   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[map_literal_keys.baml:13:1]
-//  13 │ ╭─▶ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//  14 │ │     client "openai/gpt-4o"
-//  15 │ │     prompt `
-//  16 │ │       Merge these: ${i1} ${i2}
-//  17 │ │
-//  18 │ │       ${ctx.output_format}
-//  19 │ │     `
-//  20 │ ╰─▶ }
+//     ╭─[map_literal_keys.baml:13:27]
+//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//     ·                           ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[map_literal_keys.baml:13:52]
+//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//     ·                                                    ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[map_literal_keys.baml:13:27]
+//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//     ·                           ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[map_literal_keys.baml:13:52]
+//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//     ·                                                    ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[map_literal_keys.baml:13:76]
+//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//     ·                                                                            ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[map_literal_keys.baml:13:27]
+//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//     ·                           ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[map_literal_keys.baml:13:52]
+//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//     ·                                                    ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//    ╭─[map_literal_keys.baml:1:1]
+//  1 │ enum MapKey {
+//    · ▲
+//    ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[map_literal_keys.baml:13:76]
+//  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//     ·                                                                            ───────────────────
 //     ╰────
 // E0067
 //
@@ -218,9 +202,9 @@ function InOutLiteralStringUnionMapKey(
 // map_literal_keys.baml:13:88 (type) [defaultLibrary] len=6 "string"
 // map_literal_keys.baml:13:94 (operator) len=1 ">"
 // map_literal_keys.baml:14:3 (property) len=6 "client"
-// map_literal_keys.baml:14:10 (string) len=15 "\"openai/gpt-4o\""
+// map_literal_keys.baml:14:11 (string) len=15 "\"openai/gpt-4o\""
 // map_literal_keys.baml:15:3 (property) [declaration] len=6 "prompt"
-// map_literal_keys.baml:15:10 (string) len=1 "`"
+// map_literal_keys.baml:15:11 (string) len=1 "`"
 // map_literal_keys.baml:16:5 (string) len=5 "Merge"
 // map_literal_keys.baml:16:11 (string) len=5 "these"
 // map_literal_keys.baml:16:16 (string) len=1 ":"
@@ -266,9 +250,9 @@ function InOutLiteralStringUnionMapKey(
 // map_literal_keys.baml:25:46 (type) [defaultLibrary] len=6 "string"
 // map_literal_keys.baml:25:52 (operator) len=1 ">"
 // map_literal_keys.baml:26:3 (property) len=6 "client"
-// map_literal_keys.baml:26:10 (string) len=15 "\"openai/gpt-4o\""
+// map_literal_keys.baml:26:11 (string) len=15 "\"openai/gpt-4o\""
 // map_literal_keys.baml:27:3 (property) [declaration] len=6 "prompt"
-// map_literal_keys.baml:27:10 (string) len=1 "`"
+// map_literal_keys.baml:27:11 (string) len=1 "`"
 // map_literal_keys.baml:28:5 (string) len=5 "Merge"
 // map_literal_keys.baml:28:11 (string) len=5 "these"
 // map_literal_keys.baml:28:16 (string) len=1 ":"

@@ -12,17 +12,11 @@ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// E0096
-//
-//   × declared throws is `Errors`, but this function may also throw `Errors.AuthError`
-//    ╭─[throw_throws_enum_extraneous.baml:9:56]
-//  9 │ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
-//    ·                                                        ──────
-//    ╰────
 // E0097
 //
 //   ⚠ extraneous throws declaration: Errors
-//    ╭─[throw_throws_enum_extraneous.baml:9:56]
-//  9 │ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
-//    ·                                                        ──────
-//    ╰────
+//     ╭─[throw_throws_enum_extraneous.baml:9:63]
+//   9 │ ╭─▶ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
+//  10 │ │     throw Errors.AuthError
+//  11 │ ╰─▶ }
+//     ╰────

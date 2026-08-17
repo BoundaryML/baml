@@ -24,3 +24,7 @@ sdks/java/**/build/
 
 # .bamlprof artifacts (profiling is default-on; BAML_PROFILE=0 opts out)
 **/.baml/profiles/
+_plan/
+
+# Per-installation telemetry state, generated at runtime.
+telemetry.toml

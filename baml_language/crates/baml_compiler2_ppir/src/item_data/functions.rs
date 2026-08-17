@@ -246,6 +246,29 @@ pub fn method_owner<'db>(
     })
 }
 
+/// Whether `function` has a body - the ONLY distinction between a
+/// default and a required interface method (r-a's shape); resolution
+/// and signatures never consult it, body lowering and the `default.`
+/// delegation gate do.
+#[salsa::tracked]
+pub fn function_has_body<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> bool {
+    let item_tree = crate::file_item_tree(db, function.file(db));
+    item_tree[function.id(db)].body.is_some()
+}
+
+/// A REQUIRED interface method: a bodyless function item owned by an
+/// interface. Signature/resolution consumers treat it like any other
+/// method (the r-a shape); BODY-LOWERING consumers (MIR, emit) skip it -
+/// there is nothing to compile, exactly as before it was an item.
+#[salsa::tracked]
+pub fn is_required_interface_method<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> bool {
+    !function_has_body(db, function)
+        && matches!(method_owner(db, function), Some(MethodOwner::Interface(_)))
+}
+
 /// The interface target a method was declared under, when it sits inside an
 /// `implements I { … }` block — plus the associated-type bindings from that
 /// block's header. `None` for class-level methods and for interface default

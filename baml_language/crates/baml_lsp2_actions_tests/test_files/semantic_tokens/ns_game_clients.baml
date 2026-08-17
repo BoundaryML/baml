@@ -4,19 +4,19 @@ function add(a: int, b: int) -> int {
     a + b
 }
 
-client CustomGPT5 = openai.OpenAiClient.new(
+client CustomGPT5 = openai.ResponsesClient.new(
     model = "gpt-5",
     api_key = env.TEMP_KEY,
 );
 
 // Retries compose by wrapping the inner client value.
 client CustomGPT5Mini = ai.clients.Retry.new(
-    inner = openai.OpenAiClient.new(model = "gpt-5-mini", api_key = env.OPENAI_API_KEY),
+    inner = openai.ResponsesClient.new(model = "gpt-5-mini", api_key = env.OPENAI_API_KEY),
     max_attempts = 2,
 );
 
 // Openai with chat completion
-client CustomGPT5Chat = openai.OpenAiClient.new(
+client CustomGPT5Chat = openai.ResponsesClient.new(
     model = "gpt-5",
     api_key = env.OPENAI_API_KEY,
 );
@@ -78,8 +78,8 @@ function double() -> void {
 // ns_game_clients.baml:7:19 (operator) len=1 "="
 // ns_game_clients.baml:7:21 (namespace) [defaultLibrary] len=6 "openai"
 // ns_game_clients.baml:7:27 (namespace) [defaultLibrary] len=1 "."
-// ns_game_clients.baml:7:28 (class) [defaultLibrary] len=12 "OpenAiClient"
-// ns_game_clients.baml:7:41 (method) len=3 "new"
+// ns_game_clients.baml:7:28 (class) [defaultLibrary] len=15 "ResponsesClient"
+// ns_game_clients.baml:7:44 (method) len=3 "new"
 // ns_game_clients.baml:8:5 (parameter) len=5 "model"
 // ns_game_clients.baml:8:11 (operator) len=1 "="
 // ns_game_clients.baml:8:13 (string) len=7 "\"gpt-5\""
@@ -98,13 +98,13 @@ function double() -> void {
 // ns_game_clients.baml:14:11 (operator) len=1 "="
 // ns_game_clients.baml:14:13 (namespace) [defaultLibrary] len=6 "openai"
 // ns_game_clients.baml:14:19 (namespace) [defaultLibrary] len=1 "."
-// ns_game_clients.baml:14:20 (class) [defaultLibrary] len=12 "OpenAiClient"
-// ns_game_clients.baml:14:33 (method) len=3 "new"
-// ns_game_clients.baml:14:37 (parameter) len=5 "model"
-// ns_game_clients.baml:14:43 (operator) len=1 "="
-// ns_game_clients.baml:14:45 (string) len=12 "\"gpt-5-mini\""
-// ns_game_clients.baml:14:59 (parameter) len=7 "api_key"
-// ns_game_clients.baml:14:67 (operator) len=1 "="
+// ns_game_clients.baml:14:20 (class) [defaultLibrary] len=15 "ResponsesClient"
+// ns_game_clients.baml:14:36 (method) len=3 "new"
+// ns_game_clients.baml:14:40 (parameter) len=5 "model"
+// ns_game_clients.baml:14:46 (operator) len=1 "="
+// ns_game_clients.baml:14:48 (string) len=12 "\"gpt-5-mini\""
+// ns_game_clients.baml:14:62 (parameter) len=7 "api_key"
+// ns_game_clients.baml:14:70 (operator) len=1 "="
 // ns_game_clients.baml:15:5 (parameter) len=12 "max_attempts"
 // ns_game_clients.baml:15:18 (operator) len=1 "="
 // ns_game_clients.baml:15:20 (number) len=1 "2"
@@ -113,8 +113,8 @@ function double() -> void {
 // ns_game_clients.baml:19:23 (operator) len=1 "="
 // ns_game_clients.baml:19:25 (namespace) [defaultLibrary] len=6 "openai"
 // ns_game_clients.baml:19:31 (namespace) [defaultLibrary] len=1 "."
-// ns_game_clients.baml:19:32 (class) [defaultLibrary] len=12 "OpenAiClient"
-// ns_game_clients.baml:19:45 (method) len=3 "new"
+// ns_game_clients.baml:19:32 (class) [defaultLibrary] len=15 "ResponsesClient"
+// ns_game_clients.baml:19:48 (method) len=3 "new"
 // ns_game_clients.baml:20:5 (parameter) len=5 "model"
 // ns_game_clients.baml:20:11 (operator) len=1 "="
 // ns_game_clients.baml:20:13 (string) len=7 "\"gpt-5\""

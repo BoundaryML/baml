@@ -3,7 +3,7 @@
 // keys, comments between entries — as ordinary map literals in expression
 // position.
 
-client MyClient = openai.OpenAiClient.new(
+client MyClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",

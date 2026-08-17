@@ -23,9 +23,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `GPT4`
-    ╭─[extra_greater.baml:24:10]
- 24 │   client GPT4
-    ·          ────
+    ╭─[extra_greater.baml:24:11]
+ 24 │   client: GPT4
+    ·           ────
     ╰────
 
   [parse] E0010
@@ -40,9 +40,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `GPT4`
-    ╭─[extra_greater.baml:30:10]
- 30 │   client GPT4
-    ·          ────
+    ╭─[extra_greater.baml:30:11]
+ 30 │   client: GPT4
+    ·           ────
     ╰────
 
   [parse] E0010

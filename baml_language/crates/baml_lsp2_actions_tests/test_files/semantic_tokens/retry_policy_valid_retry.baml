@@ -1,6 +1,6 @@
 // retry_policy blocks are gone; retries wrap the client value instead.
 client MyClient = ai.clients.Retry.new(
-  inner = openai.OpenAiClient.new(model = "gpt-4"),
+  inner = openai.ResponsesClient.new(model = "gpt-4"),
   max_attempts = 3,
 );
 
@@ -22,11 +22,11 @@ client MyClient = ai.clients.Retry.new(
 // retry_policy_valid_retry.baml:3:9 (operator) len=1 "="
 // retry_policy_valid_retry.baml:3:11 (namespace) [defaultLibrary] len=6 "openai"
 // retry_policy_valid_retry.baml:3:17 (namespace) [defaultLibrary] len=1 "."
-// retry_policy_valid_retry.baml:3:18 (class) [defaultLibrary] len=12 "OpenAiClient"
-// retry_policy_valid_retry.baml:3:31 (method) len=3 "new"
-// retry_policy_valid_retry.baml:3:35 (parameter) len=5 "model"
-// retry_policy_valid_retry.baml:3:41 (operator) len=1 "="
-// retry_policy_valid_retry.baml:3:43 (string) len=7 "\"gpt-4\""
+// retry_policy_valid_retry.baml:3:18 (class) [defaultLibrary] len=15 "ResponsesClient"
+// retry_policy_valid_retry.baml:3:34 (method) len=3 "new"
+// retry_policy_valid_retry.baml:3:38 (parameter) len=5 "model"
+// retry_policy_valid_retry.baml:3:44 (operator) len=1 "="
+// retry_policy_valid_retry.baml:3:46 (string) len=7 "\"gpt-4\""
 // retry_policy_valid_retry.baml:4:3 (parameter) len=12 "max_attempts"
 // retry_policy_valid_retry.baml:4:16 (operator) len=1 "="
 // retry_policy_valid_retry.baml:4:18 (number) len=1 "3"

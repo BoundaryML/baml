@@ -44,7 +44,7 @@ function UnknownProviderPrefix(input: string) -> string {
 }
 
 // Control: the new-world replacement compiles cleanly.
-client ValidClient = openai.OpenAiClient.new(
+client ValidClient = openai.ResponsesClient.new(
     model = "gpt-4",
     api_key = "test-key",
 );

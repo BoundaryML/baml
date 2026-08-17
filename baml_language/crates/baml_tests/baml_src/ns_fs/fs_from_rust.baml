@@ -16,9 +16,12 @@
 //   fs_file_invalid_mode              — mode "x" is not in the string-literal
 //                                       union (compile-time type error);
 //                                       requires #[should_panic].
-//   fs_remove_on_symlink_to_dir_removes_link — needs host-created symlink;
-//                                       baml.fs has no symlink primitive.
-//   fs_read_dir_reports_symlink_flag  — same: needs a host-created symlink.
+//   fs_remove_on_symlink_to_dir_removes_link — `baml.fs.symlink` can create the
+//                                       link, but the assertion needs
+//                                       symlink_metadata (BAML resolves through
+//                                       links), and Windows CI cannot create
+//                                       one; stays Unix-only in Rust.
+//   fs_read_dir_reports_symlink_flag  — same.
 
 // ============================================================================
 // open: nonexistent path errors

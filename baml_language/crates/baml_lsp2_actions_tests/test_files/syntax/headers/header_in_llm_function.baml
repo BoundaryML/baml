@@ -8,9 +8,9 @@ client GeminiFlash = google.GoogleClient.new(
 
 function FetchDatax(user_id: string) -> Hi {
     //# collect source material
-    client GeminiFlash
+    client: GeminiFlash
 
-    prompt `
+    prompt: `
         give short story 10 sentences
         make up data ${user_id}.
 
@@ -26,5 +26,5 @@ function FetchDatax(user_id: string) -> Hi {
 //     ╭─[headers_header_in_llm_function.baml:10:5]
 //  10 │     //# collect source material
 //     ·     ─────────────┬─────────────
-//     ·                  ╰── header comments (`//#`) are not allowed inside LLM functions
+//     ·                  ╰── header comments (`//#`) are only allowed in expression functions
 //     ╰────

@@ -45,7 +45,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × unresolved type: Nope
-    ╭─[requires_clause_shapes.baml:56:37]
+    ╭─[requires_clause_shapes.baml:56:44]
  56 │ interface RequiresErrorArg requires Parent<Nope> {
-    ·                                     ────────────
+    ·                                            ────
     ╰────

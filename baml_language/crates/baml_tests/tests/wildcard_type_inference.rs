@@ -15,8 +15,8 @@
 //! Both are filled during type checking from real inference — there is no
 //! spawn/throws special-casing; `_` lowers to a single `Ty::Infer` hole.
 //!
-//! Tests here use `#[should_panic]` for compile-error assertions and `#[ignore]` for
-//! unimplemented features — neither pattern can be expressed in the BAML corpus.
+//! Tests here use `#[should_panic]` for compile-error assertions, which cannot be
+//! expressed in the BAML corpus.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -35,7 +35,6 @@ function slow(x: int) -> int throws MyErr {
 
 /// `Future<int, _>` infers the spawned body's error type (`MyErr`) and runs.
 #[tokio::test]
-#[ignore = "`_` wildcard type inference is not yet implemented — `_` is currently a hard error. Un-ignore when wildcard inference is enabled."]
 async fn wildcard_future_error_is_inferred_and_runs() {
     let src = format!(
         "{SLOW}\nfunction main() -> int {{\n  let fs: baml.future.Future<int, _>[] = [spawn {{ slow(1) }}];\n  await fs[0]\n}}\n"
@@ -76,7 +75,6 @@ async fn wildcard_never_annotation_still_rejected() {
 /// still enforced. `Future<string, _>` against an `int`-returning body is a
 /// type error, exactly as the filled `Future<string, MyErr>` would be.
 #[tokio::test]
-#[ignore = "`_` wildcard type inference is not yet implemented — `_` is currently a hard error. Un-ignore when wildcard inference is enabled."]
 #[should_panic(expected = "[E0001]")]
 async fn wildcard_does_not_mask_wrong_explicit_arg() {
     let src = format!(
@@ -88,7 +86,6 @@ async fn wildcard_does_not_mask_wrong_explicit_arg() {
 /// `_` is a general type-argument hole, not a spawn special-case: a `_` value
 /// type in a `map<…>` annotation is inferred from a plain map initializer.
 #[tokio::test]
-#[ignore = "`_` wildcard type inference is not yet implemented — `_` is currently a hard error. Un-ignore when wildcard inference is enabled."]
 async fn wildcard_map_value_is_inferred() {
     let out = baml_test!(
         r#"
@@ -152,14 +149,21 @@ async fn wildcard_nested_in_throws_is_rejected() {
     );
 }
 
-/// A `_` that fill cannot align — a union member nested in an invariant class —
-/// is a clean error (`E0002`), not a compiler panic.
+/// `hir_ty` recursively fills a uniquely alignable hole inside a union member;
+/// invariant class matching does not erase the inferred member.
 #[tokio::test]
-#[ignore = "`_` wildcard type inference is not yet implemented — `_` is currently a hard error. Un-ignore when wildcard inference is enabled."]
-#[should_panic(expected = "unresolved type: _")]
-async fn wildcard_unfillable_union_member_is_rejected() {
-    let _ = baml_test!(
-        "class Box<T> { v T }\nfunction main() -> int { let b: Box<int | _> = Box<int|string> { v: 1 }; 0 }"
+async fn wildcard_nested_union_member_is_inferred() {
+    let out = baml_test!(
+        "class Box<T> { v T }\nfunction main() -> int | string { let b: Box<int | _> = Box<int|string> { v: 1 }; b.v }"
+    );
+    assert!(
+        matches!(
+            &out.result,
+            Ok(BexExternalValue::Union { value, .. })
+                if matches!(value.as_ref(), BexExternalValue::Int(1))
+        ),
+        "expected 1, got {:?}",
+        out.result
     );
 }
 
@@ -181,13 +185,12 @@ async fn wildcard_in_interface_method_throws_is_rejected() {
 /// `throws BadInput | _` compiles even though the body transitively throws the
 /// stdlib `baml.json.*` errors: the `_` absorbs them.
 #[tokio::test]
-#[ignore = "`_` wildcard type inference is not yet implemented — `_` is currently a hard error. Un-ignore when wildcard inference is enabled."]
 async fn throws_wildcard_absorbs_stdlib_throws() {
     let out = baml_test!(
         r#"
         class BadInput { msg string }
         function parse(s: string) -> int throws BadInput | _ {
-          let v = baml.json.from_string(s);
+          let v: json = baml.json.from_string(s);
           throw BadInput { msg: "nope" };
         }
         function main() -> int { 0 }
@@ -204,14 +207,13 @@ async fn throws_wildcard_absorbs_stdlib_throws() {
 /// full inferred union (the named `BadInput` plus the stdlib json throws), not
 /// just the declared member.
 #[tokio::test]
-#[ignore = "`_` wildcard type inference is not yet implemented — `_` is currently a hard error. Un-ignore when wildcard inference is enabled."]
 #[should_panic(expected = "JsonParseError")]
 async fn throws_wildcard_caller_sees_full_union() {
     let _ = baml_test!(
         r#"
         class BadInput { msg string }
         function parse(s: string) -> int throws BadInput | _ {
-          let v = baml.json.from_string(s);
+          let v: json = baml.json.from_string(s);
           throw BadInput { msg: "nope" };
         }
         function caller(s: string) -> int throws never {
@@ -231,7 +233,7 @@ async fn throws_plain_stays_exhaustive() {
         r#"
         class BadInput { msg string }
         function parse(s: string) -> int throws BadInput {
-          let v = baml.json.from_string(s);
+          let v: json = baml.json.from_string(s);
           throw BadInput { msg: "nope" };
         }
         function main() -> int { 0 }

@@ -1,4 +1,4 @@
-client Bar = openai.OpenAiClient.new(model = "gpt-4o");
+client Bar = openai.ResponsesClient.new(model = "gpt-4o");
 
 function Foo() -> string {
   `This! ${b}`
@@ -9,23 +9,23 @@ function Foo2() -> string {
 }
 
 function FooBar(a: string, b: int | bool) -> int {
-  client Bar
-  prompt `
+  client: Bar
+  prompt: `
     fa ${a}
   `
 }
 
 
 function FooBar1(a: string, b: int | bool) -> int {
-  client Bar
-  prompt `
+  client: Bar
+  prompt: `
     fa ${a}
   `
 }
 
 function Bar1(a: string) -> int {
-  client Bar
-  prompt `
+  client: Bar
+  prompt: `
     fa ${a}
   `
 }

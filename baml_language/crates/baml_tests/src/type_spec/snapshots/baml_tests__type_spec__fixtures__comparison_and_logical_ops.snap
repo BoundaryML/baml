@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+9..12 'cmp': throws never
+37..178 '{\n   ...ool\n}': bool
+43..49 'let lt': bool
+52..53 'a': int
+52..57 'a < b': bool
+56..57 'b': int
+79..85 'let eq': bool
+88..89 'a': int
+88..94 'a == b': bool
+93..94 'b': int
+116..122 'let ne': bool
+125..128 '!eq': bool
+126..128 'eq': bool
+150..152 'lt': bool
+150..158 'lt && ne': bool
+156..158 'ne': bool

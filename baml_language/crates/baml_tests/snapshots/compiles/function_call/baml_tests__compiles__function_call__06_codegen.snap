@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 9326
 ---
 function user.Bar() -> int {
     load_const 1

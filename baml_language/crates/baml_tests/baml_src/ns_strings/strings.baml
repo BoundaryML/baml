@@ -19,14 +19,6 @@ function strings_concat() -> string {
 // non-string-literal expression; otherwise the parser treats the opening `{` as
 // a map literal when the first token is a string literal.
 
-function strings_char_at(index: int) -> string {
-    "hello".char_at(index)
-}
-
-function strings_code_point_at(index: int) -> int {
-    "hello".code_point_at(index)
-}
-
 function strings_from_utf8_invalid() -> string {
     string.from_utf8(b"\xFF")
 }
@@ -137,13 +129,13 @@ test "string_split" {
     assert.equal("hello,world,test".split(","), ["hello", "world", "test"])
 }
 
-test "string_substring" {
-    assert.equal("hello world".substring(0, 5), "hello")
+test "string_slice" {
+    assert.equal("hello world".slice(0, 5), "hello")
 }
 
-test "string_substring_bounds" {
+test "string_slice_bounds" {
     // end byte offset clamped to length
-    assert.equal("hello".substring(2, 10), "llo")
+    assert.equal("hello".slice(2, 10), "llo")
 }
 
 // ─── codepoint-indexed semantics ─────────────────────────────────────────────
@@ -166,150 +158,144 @@ test "string_byte_length_emoji" {
     assert.equal("🐈".byte_length(), 4)
 }
 
-// substring uses codepoint indices.
-test "string_substring_codepoint_indexed" {
-    assert.equal("héllo".substring(0, 2), "hé")
+// slice uses codepoint indices.
+test "string_slice_codepoint_indexed" {
+    assert.equal("héllo".slice(0, 2), "hé")
 }
 
-test "string_substring_emoji_first_char" {
-    assert.equal("😀hello".substring(0, 1), "😀")
+test "string_slice_emoji_first_char" {
+    assert.equal("😀hello".slice(0, 1), "😀")
 }
 
-test "string_substring_after_emoji" {
-    assert.equal("😀hello".substring(1, 4), "hel")
+test "string_slice_after_emoji" {
+    assert.equal("😀hello".slice(1, 4), "hel")
 }
 
 // Negative indices count from the end (length 5): -3 → 2, -1 → 4.
-test "string_substring_negative_counts_from_end" {
-    assert.equal("hello".substring(-3, 4), "ll");
-    assert.equal("hello".substring(-3, -1), "ll")
+test "string_slice_negative_counts_from_end" {
+    assert.equal("hello".slice(-3, 4), "ll");
+    assert.equal("hello".slice(-3, -1), "ll")
 }
 
 // A negative index past the start clamps to 0.
-test "string_substring_negative_clamps_to_zero" {
-    assert.equal("hello".substring(-100, 4), "hell")
+test "string_slice_negative_clamps_to_zero" {
+    assert.equal("hello".slice(-100, 4), "hell")
 }
 
-test "string_substring_empty_when_start_past_end" {
-    assert.equal("hello".substring(4, 2), "")
+test "string_slice_empty_when_start_past_end" {
+    assert.equal("hello".slice(4, 2), "")
 }
 
-test "string_substring_out_of_bounds_clamps" {
-    assert.equal("hello".substring(0, 100), "hello")
+test "string_slice_out_of_bounds_clamps" {
+    assert.equal("hello".slice(0, 100), "hello")
 }
 
-// char_at uses codepoint index.
-test "string_char_at_multibyte" {
-    assert.equal("héllo".char_at(1), "é")
+// at uses codepoint index.
+test "string_at_multibyte" {
+    assert.equal("héllo".at(1), "é")
 }
 
-test "string_char_at_after_multibyte" {
-    assert.equal("héllo".char_at(2), "l")
+test "string_at_after_multibyte" {
+    assert.equal("héllo".at(2), "l")
 }
 
-test "string_char_at_emoji" {
-    assert.equal("😀hello".char_at(0), "😀")
+test "string_at_emoji" {
+    assert.equal("😀hello".at(0), "😀")
 }
 
-test "string_char_at_after_emoji" {
-    assert.equal("😀hello".char_at(1), "h")
+test "string_at_after_emoji" {
+    assert.equal("😀hello".at(1), "h")
 }
 
-// char_at at or past the end raises IndexOutOfBounds ("hello" has length 5).
-test "string_char_at_at_length_panics" {
-    {
-        strings_char_at(5);
-        baml.sys.panic("expected char_at to throw")
-    } catch (e) {
-        baml.panics.IndexOutOfBounds => null
-    }
+// at at or past the end returns null ("hello" has length 5).
+test "string_at_at_length_is_null" {
+    assert.equal("hello".at(5), null)
 }
 
-test "string_char_at_past_end_panics" {
-    {
-        strings_char_at(99);
-        baml.sys.panic("expected char_at to throw")
-    } catch (e) {
-        baml.panics.IndexOutOfBounds => null
-    }
+test "string_at_past_end_is_null" {
+    assert.equal("hello".at(99), null)
 }
 
 // Negative indices count from the end: -1 is the last character.
-test "string_char_at_negative_counts_from_end" {
-    assert.equal("hello".char_at(-1), "o");
+test "string_at_negative_counts_from_end" {
+    assert.equal("hello".at(-1), "o");
     // "héllo" = h é l l o; -4 normalizes to codepoint 1.
-    assert.equal("héllo".char_at(-4), "é")
+    assert.equal("héllo".at(-4), "é")
 }
 
-// Past the start (normalizes before index 0) also raises IndexOutOfBounds.
-test "string_char_at_past_start_panics" {
-    {
-        strings_char_at(-6);
-        baml.sys.panic("expected char_at to throw")
-    } catch (e) {
-        baml.panics.IndexOutOfBounds => null
-    }
+// Past the start (normalizes before index 0) also returns null.
+test "string_at_past_start_is_null" {
+    assert.equal("hello".at(-6), null)
+}
+
+// The empty string has no character at any index.
+test "string_at_empty_is_null" {
+    assert.equal("".at(0), null);
+    assert.equal("".at(-1), null)
+}
+
+// The optional result compares directly against a literal — an out-of-range
+// null is simply unequal to every character, so scanning loops need no unwrap.
+test "string_at_compares_against_literal" {
+    assert.is_true("hi".at(0) == "h");
+    assert.is_true("hi".at(9) != "h")
 }
 
 // ─── code_point_at ─────────────────────────────────────────────────────────────
 
-// code_point_at is the numeric counterpart of char_at: same codepoint indexing,
-// but returns the code point's value instead of a one-character string.
+// code_point_at is the numeric counterpart of at: same codepoint indexing and
+// the same null-when-out-of-range rule, but returns the code point's value
+// instead of a one-character string.
 test "string_code_point_at_ascii" {
-    assert.is_true("A".code_point_at(0) == 65)
+    assert.equal("A".code_point_at(0), 65)
 }
 
 test "string_code_point_at_multibyte" {
     // "héllo" = h é l l o; index 1 is é (U+00E9 = 233).
-    assert.is_true("héllo".code_point_at(1) == 233)
+    assert.equal("héllo".code_point_at(1), 233)
 }
 
 test "string_code_point_at_emoji" {
     // A single emoji is one codepoint, not a pair of UTF-16 units.
-    assert.is_true("🐑hello".code_point_at(0) == 128017)
+    assert.equal("🐑hello".code_point_at(0), 128017)
 }
 
 test "string_code_point_at_after_emoji" {
-    assert.is_true("😀hello".code_point_at(1) == 104)
+    assert.equal("😀hello".code_point_at(1), 104)
 }
 
 // Negative indices count from the end: -1 is the last character.
 test "string_code_point_at_negative_counts_from_end" {
-    assert.is_true("hello".code_point_at(-1) == 111);
-    assert.is_true("héllo".code_point_at(-4) == 233)
+    assert.equal("hello".code_point_at(-1), 111);
+    assert.equal("héllo".code_point_at(-4), 233)
 }
 
-// Every code_point_at value round-trips through from_code_points.
+// code_point_at at or past the end returns null ("hello" has length 5).
+test "string_code_point_at_at_length_is_null" {
+    assert.equal("hello".code_point_at(5), null)
+}
+
+test "string_code_point_at_past_end_is_null" {
+    assert.equal("hello".code_point_at(99), null)
+}
+
+// Past the start (normalizes before index 0) also returns null.
+test "string_code_point_at_past_start_is_null" {
+    assert.equal("hello".code_point_at(-6), null)
+}
+
+// `at` and `code_point_at` agree on which indices are in range.
+test "string_at_and_code_point_at_agree_on_range" {
+    assert.equal("hi".at(2), null);
+    assert.equal("hi".code_point_at(2), null)
+}
+
+// Every in-range code point round-trips through from_code_points.
 test "string_code_point_at_round_trips_through_from_code_points" {
-    assert.equal(string.from_code_points([("é").code_point_at(0)]), "é")
-}
-
-// code_point_at at or past the end raises IndexOutOfBounds ("hello" has length 5).
-test "string_code_point_at_at_length_panics" {
-    {
-        strings_code_point_at(5);
-        baml.sys.panic("expected code_point_at to throw")
-    } catch (e) {
-        baml.panics.IndexOutOfBounds => null
-    }
-}
-
-test "string_code_point_at_past_end_panics" {
-    {
-        strings_code_point_at(99);
-        baml.sys.panic("expected code_point_at to throw")
-    } catch (e) {
-        baml.panics.IndexOutOfBounds => null
-    }
-}
-
-// Past the start (normalizes before index 0) also raises IndexOutOfBounds.
-test "string_code_point_at_past_start_panics" {
-    {
-        strings_code_point_at(-6);
-        baml.sys.panic("expected code_point_at to throw")
-    } catch (e) {
-        baml.panics.IndexOutOfBounds => null
+    if let cp: int = ("é").code_point_at(0) {
+        assert.equal(string.from_code_points([cp]), "é")
+    } else {
+        baml.sys.panic("code_point_at(0) of a one-character string is never null")
     }
 }
 
@@ -324,6 +310,42 @@ test "string_index_of_after_emoji" {
 
 test "string_index_of_absent_is_null" {
     assert.equal("abc".index_of("z"), null)
+}
+
+// ─── last_index_of ───────────────────────────────────────────────────────────
+
+// Like index_of, but scans from the end; the reported index is still the
+// codepoint offset of the match's *start*.
+test "string_last_index_of_returns_last_match" {
+    assert.equal("hello world".last_index_of("o"), 7)
+}
+
+test "string_last_index_of_multi_character_needle" {
+    assert.equal("abcabc".last_index_of("bc"), 4)
+}
+
+// With exactly one occurrence the two agree.
+test "string_last_index_of_agrees_with_index_of_when_unique" {
+    assert.equal("hello world".last_index_of("world"), 6);
+    assert.equal("hello world".index_of("world"), 6)
+}
+
+test "string_last_index_of_codepoint_indexed" {
+    assert.equal("héllo".last_index_of("l"), 3)
+}
+
+test "string_last_index_of_after_emoji" {
+    assert.equal("😀hello".last_index_of("h"), 1)
+}
+
+test "string_last_index_of_absent_is_null" {
+    assert.equal("abc".last_index_of("z"), null)
+}
+
+// An empty needle matches at the end, mirroring index_of matching at the start.
+test "string_last_index_of_empty_needle" {
+    assert.equal("abc".index_of(""), 0);
+    assert.equal("abc".last_index_of(""), 3)
 }
 
 // ─── repeat ──────────────────────────────────────────────────────────────────

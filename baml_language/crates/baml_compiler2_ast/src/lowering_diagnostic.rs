@@ -129,6 +129,10 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
+    /// A source-authored `let` appeared at file scope. Only compiler-synthesized
+    /// globals (such as clients and retry policies) are supported.
+    TopLevelLetNotSupported { span: TextRange },
+
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
 
@@ -186,7 +190,15 @@ pub enum LoweringDiagnostic {
 
     /// A legacy `client<llm> Name { ... }` config block. Removed: clients are
     /// plain values now — `client Name = <expr>;`.
-    ClientBlockRemoved { name: String, span: TextRange },
+    ///
+    /// `provider` is the block's own `provider` value when it had one, so the
+    /// suggested replacement names the class that actually speaks to that
+    /// provider; see this module's private `client_replacement_expr`.
+    ClientBlockRemoved {
+        name: String,
+        provider: Option<String>,
+        span: TextRange,
+    },
 
     /// A legacy `retry_policy` block. Removed: retry composes at the client
     /// boundary via `ai.Retry.new(inner, ...)`.
@@ -195,6 +207,11 @@ pub enum LoweringDiagnostic {
     /// A legacy Jinja `#"..."#` prompt on an LLM function. Removed: prompts
     /// are backtick templates.
     LlmJinjaPromptRemoved { span: TextRange },
+
+    /// A `${` in a quoted LLM prompt. Regular strings do not interpolate, so
+    /// the marker reaches the model as literal text — almost always a prompt
+    /// ported from a form where it did interpolate.
+    QuotedPromptInterpolation { span: TextRange },
 
     /// A legacy `template_string` declaration. Removed: use a function
     /// returning a backtick string.
@@ -226,6 +243,40 @@ pub enum LoweringDiagnostic {
         error: baml_base::num_lit::IntLitError,
         span: TextRange,
     },
+}
+
+/// The client expression a removed `client<llm>` block should become, given the
+/// block's own `provider` value.
+///
+/// The suggestion is the whole point of the diagnostic, so it has to name the
+/// class that speaks the provider's protocol: telling the author of an
+/// `anthropic` block to write `openai.ResponsesClient` is migration guidance
+/// that changes behavior. The mapping is the legacy `provider` name -> the
+/// native client, and it is deliberately the same set the `"provider/model"`
+/// shorthand resolves (`baml_std/ai/ns_internal/clients.baml::_from_shorthand`).
+///
+/// An unrecognized or absent provider keeps the generic `OpenAI` suggestion:
+/// there is nothing better to say, and it is still a valid client expression.
+///
+/// KNOWN GAP: the composite providers only get a shape, not their configured
+/// `strategy` list — the diagnostic does not carry the block's option values.
+fn client_replacement_expr(provider: Option<&str>) -> &'static str {
+    match provider.map(str::trim).map(|p| p.trim_matches('"')) {
+        Some("anthropic") => "anthropic.AnthropicClient.new(model = \"...\")",
+        Some("google-ai" | "google" | "gemini") => "google.GoogleClient.new(model = \"...\")",
+        Some("vertex-ai" | "vertex") => "google.VertexClient.new(model = \"...\")",
+        Some("aws-bedrock" | "bedrock") => "aws.BedrockClient.new(model = \"...\")",
+        Some("azure-openai" | "azure") => {
+            "openai.AzureClient.new(model = \"...\", base_url = \"...\")"
+        }
+        Some("ollama") => "openai.OllamaClient.new(model = \"...\")",
+        Some("openrouter") => "openai.OpenRouterClient.new(model = \"...\")",
+        Some("openai-generic") => "openai.GenericClient.new(model = \"...\", base_url = \"...\")",
+        Some("openai-chat") => "openai.ChatClient.new(model = \"...\")",
+        Some("fallback") => "ai.Fallback.new(members = [FirstClient, SecondClient])",
+        Some("round-robin") => "ai.RoundRobin.new(members = [FirstClient, SecondClient])",
+        _ => "openai.ResponsesClient.new(model = \"...\")",
+    }
 }
 
 impl LoweringDiagnostic {
@@ -384,7 +435,7 @@ impl LoweringDiagnostic {
                 "invalid escape",
             ),
             LoweringDiagnostic::InstanceofRemoved { span } => (
-                DiagnosticId::InstanceofRemoved,
+                DiagnosticId::RemovedFeature,
                 Severity::Error,
                 "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
                 *span,
@@ -477,6 +528,13 @@ impl LoweringDiagnostic {
                 *span,
                 "type ascription not allowed here",
             ),
+            LoweringDiagnostic::TopLevelLetNotSupported { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "top-level `let` bindings are not supported".to_string(),
+                *span,
+                "move this binding into a function body",
+            ),
             LoweringDiagnostic::ConstBindingIntroducer { span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Warning,
@@ -557,13 +615,18 @@ impl LoweringDiagnostic {
                 *span,
                 "`tools` requires a backtick prompt and a \"provider/model\" client string",
             ),
-            LoweringDiagnostic::ClientBlockRemoved { name, span } => (
+            LoweringDiagnostic::ClientBlockRemoved {
+                name,
+                provider,
+                span,
+            } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
                 format!(
                     "`client<llm>` config blocks are removed; declare a client value instead: \
-                     `client {name} = openai.OpenAiClient.new(model = \"...\");` \
-                     (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)"
+                     `client {name} = {replacement};` \
+                     (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)",
+                    replacement = client_replacement_expr(provider.as_deref()),
                 ),
                 *span,
                 "replace with `client Name = <expr>;`",
@@ -586,6 +649,17 @@ impl LoweringDiagnostic {
                     .to_string(),
                 *span,
                 "use a backtick prompt instead",
+            ),
+            LoweringDiagnostic::QuotedPromptInterpolation { span } => (
+                DiagnosticId::InvalidSyntax,
+                // Advisory: the prompt is well-formed and renders, it just
+                // renders the marker verbatim. Erroring would reject prompts
+                // that legitimately want a literal `${`.
+                Severity::Warning,
+                r#"`${...}` in a quoted prompt is sent to the model as literal text — `"..."` strings do not interpolate. Use a backtick prompt to interpolate, or write `\${...}` in a backtick prompt to keep the literal `${`."#
+                    .to_string(),
+                *span,
+                "literal text here, not an interpolation",
             ),
             LoweringDiagnostic::TemplateStringRemoved { span } => (
                 DiagnosticId::InvalidSyntax,

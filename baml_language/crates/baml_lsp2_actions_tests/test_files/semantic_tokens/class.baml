@@ -119,99 +119,59 @@ function fo() -> int {
 // E0007
 //
 //   × type `Color` has no member `get_re`
-//     ╭─[class.baml:44:29]
+//     ╭─[class.baml:44:19]
 //  44 │   let first_red = colors[0].get_re();
-//     ·                             ──────
+//     ·                   ──────────────────
 //     ╰────
-//   ╰─▶   ☞ class defined here
-//          ╭─[class.baml:1:7]
-//        1 │ class Color {
-//          ·       ─────
-//          ╰────
 // E0007
 //
 //   × type `Color` has no member `gree`
-//     ╭─[class.baml:45:32]
+//     ╭─[class.baml:45:22]
 //  45 │   let second_green = colors[1].gree;
-//     ·                                ────
+//     ·                      ──────────────
 //     ╰────
-//   ╰─▶   ☞ class defined here
-//          ╭─[class.baml:1:7]
-//        1 │ class Color {
-//          ·       ─────
-//          ╰────
 // E0007
 //
 //   × type `Color` has no member `re`
-//     ╭─[class.baml:47:23]
+//     ╭─[class.baml:47:13]
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
-//     ·                       ──
+//     ·             ────────────
 //     ╰────
-//   ╰─▶   ☞ class defined here
-//          ╭─[class.baml:1:7]
-//        1 │ class Color {
-//          ·       ─────
-//          ╰────
 // E0007
 //
 //   × type `Color` has no member `gree`
-//     ╭─[class.baml:47:38]
+//     ╭─[class.baml:47:28]
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
-//     ·                                      ────
+//     ·                            ──────────────
 //     ╰────
-//   ╰─▶   ☞ class defined here
-//          ╭─[class.baml:1:7]
-//        1 │ class Color {
-//          ·       ─────
-//          ╰────
 // E0007
 //
 //   × type `Color` has no member `blu`
-//     ╭─[class.baml:47:55]
+//     ╭─[class.baml:47:45]
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
-//     ·                                                       ───
+//     ·                                             ─────────────
 //     ╰────
-//   ╰─▶   ☞ class defined here
-//          ╭─[class.baml:1:7]
-//        1 │ class Color {
-//          ·       ─────
-//          ╰────
 // E0007
 //
 //   × type `Color` has no member `get_re`
-//     ╭─[class.baml:49:27]
+//     ╭─[class.baml:49:17]
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
-//     ·                           ──────
+//     ·                 ──────────────────
 //     ╰────
-//   ╰─▶   ☞ class defined here
-//          ╭─[class.baml:1:7]
-//        1 │ class Color {
-//          ·       ─────
-//          ╰────
 // E0007
 //
 //   × type `Color` has no member `get_gree`
-//     ╭─[class.baml:49:47]
+//     ╭─[class.baml:49:37]
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
-//     ·                                               ────────
+//     ·                                     ────────────────────
 //     ╰────
-//   ╰─▶   ☞ class defined here
-//          ╭─[class.baml:1:7]
-//        1 │ class Color {
-//          ·       ─────
-//          ╰────
 // E0007
 //
 //   × type `Color` has no member `get_blu`
-//     ╭─[class.baml:49:69]
+//     ╭─[class.baml:49:59]
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
-//     ·                                                                     ───────
+//     ·                                                           ───────────────────
 //     ╰────
-//   ╰─▶   ☞ class defined here
-//          ╭─[class.baml:1:7]
-//        1 │ class Color {
-//          ·       ─────
-//          ╰────
 //
 //- semantic_tokens
 // class.baml:1:1 (keyword) len=5 "class"

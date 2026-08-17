@@ -75,29 +75,36 @@ fn abc_fixture_links_byte_identical() {
     assert_link_matches("abc-fixture", || build_db(ROOT, &files), false);
 }
 
-/// A file with a top-level `let` (client-like) exercises the `$init` synthesis
-/// path (design §9 R2). A single-let package: `$init` calls one helper and
-/// stores into the let slot.
+/// A file with a client-synthesized global exercises the `$init` synthesis path
+/// (design §9 R2). A single-client package: `$init` calls one helper and stores
+/// into the client slot.
 #[test]
-fn let_init_links_byte_identical() {
-    const LET_BAML: &str = r#"let greeting = "hi";
+fn client_init_links_byte_identical() {
+    const CLIENT_BAML: &str = r#"client<llm> TestClient {
+  provider openai
+  options {
+    model "unused"
+    api_key "unused"
+  }
+}
 
 function shout() -> string {
-  greeting
+  TestClient.name
 }
 "#;
     assert_link_matches(
-        "let-init",
-        || build_db(ROOT, &[("let.baml", LET_BAML)]),
+        "client-init",
+        || build_db(ROOT, &[("client.baml", CLIENT_BAML)]),
         false,
     );
 }
 
-/// Realistic project: the full `baml_src/` corpus (top-level `let` → `$init`,
-/// per-file `$init_test` chainer, generic-function values, template strings,
-/// tests). Exercises R1 (generic-fn interning), R2 (`$init`/`$init_test` tail
-/// synthesis), and R3 (pass-major placement) together. Built from an on-disk
-/// directory (mirrors `emit_determinism`'s discovery).
+/// Realistic project: the full `baml_src/` corpus (synthesized globals →
+/// `$init`, per-file `$init_test` chainer, generic-function values, template
+/// strings, tests). Exercises R1 (generic-fn interning), R2
+/// (`$init`/`$init_test` tail synthesis), and R3 (pass-major placement)
+/// together. Built from an on-disk directory (mirrors `emit_determinism`'s
+/// discovery).
 #[test]
 fn baml_src_links_byte_identical() {
     use baml_workspace::discover_baml_files;

@@ -320,8 +320,8 @@ impl RunCtx<'_> {
     }
 }
 
-fn finish_engine(ctx: &RunCtx<'_>) -> usize {
-    ctx.rt.block_on(ctx.engine.shutdown());
+fn finish_engine(ctx: &RunCtx<'_>, reporter: &Reporter) -> usize {
+    crate::shutdown::shutdown_engine(ctx.rt, ctx.engine, reporter);
     ctx.unhandled_spawn_failures.load(Ordering::SeqCst)
 }
 
@@ -451,13 +451,13 @@ impl TestArgs {
             // seed served every stdlib package); a cold run reports up to 6.
             crate::bytecode_cache::cache_debug(format_args!(
                 "stdlib interface: {} honest derivation(s) this process",
-                baml_db::baml_compiler2_tir::package_interface::stdlib_honest_derivations()
+                baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
             ));
             // Warm-incremental evidence: with the diagnostics cache serving clean
             // files this counts only the dirty files' scopes.
             crate::bytecode_cache::cache_debug(format_args!(
-                "scope inferences: {} this process",
-                baml_db::baml_compiler2_tir::inference::scope_inferences()
+                "body inferences: {} this process",
+                baml_db::baml_compiler2_hir_ty::infer::body_inferences()
             ));
 
             let bytecode = compiled.program;
@@ -513,7 +513,7 @@ impl TestArgs {
                     // continue as if there were no testset tests.
                     reporter.abandon();
                     crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
-                    return Ok(if finish_engine(&run_ctx) != 0 {
+                    return Ok(if finish_engine(&run_ctx, &reporter) != 0 {
                         crate::ExitCode::TestFailure
                     } else {
                         crate::ExitCode::Other
@@ -535,7 +535,7 @@ impl TestArgs {
                     Err(e) => {
                         reporter.abandon();
                         crate::reporter::print_error(format_args!("failed to list tests: {e}"));
-                        return Ok(if finish_engine(&run_ctx) != 0 {
+                        return Ok(if finish_engine(&run_ctx, &reporter) != 0 {
                             crate::ExitCode::TestFailure
                         } else {
                             crate::ExitCode::Other
@@ -545,7 +545,7 @@ impl TestArgs {
                 None => Vec::new(),
             };
 
-            if finish_engine(&run_ctx) != 0 {
+            if finish_engine(&run_ctx, &reporter) != 0 {
                 return Ok(crate::ExitCode::TestFailure);
             }
 
@@ -633,7 +633,7 @@ impl TestArgs {
             }
         }
 
-        let unhandled_spawn_failure_count = finish_engine(&run_ctx);
+        let unhandled_spawn_failure_count = finish_engine(&run_ctx, &reporter);
         if unhandled_spawn_failure_count != 0 {
             failed += unhandled_spawn_failure_count;
             total += unhandled_spawn_failure_count;

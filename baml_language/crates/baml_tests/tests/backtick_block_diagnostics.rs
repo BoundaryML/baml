@@ -21,7 +21,7 @@ fn messages(source: &str) -> Vec<String> {
 }
 
 fn prompt(body: &str) -> String {
-    format!("function G() -> string {{\n  client \"openai/gpt-4o-mini\"\n  prompt `{body}`\n}}\n")
+    format!("function G() -> string {{\n  client: \"openai/gpt-4o-mini\"\n  prompt: `{body}`\n}}\n")
 }
 
 fn untagged(body: &str) -> String {

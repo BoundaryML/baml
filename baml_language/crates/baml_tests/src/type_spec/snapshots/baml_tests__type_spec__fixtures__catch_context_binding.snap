@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+225..229 'boom': throws user.Boom
+259..288 '{\n   ..." }\n}': never
+271..286 'Boom { m: "x" }': user.Boom
+281..284 '"x"': "x"
+299..300 'f': throws never
+326..434 '{\n   ...  }\n}': string
+332..336 'boom': () -> string throws user.Boom
+332..338 'boom()': string
+332..432 'boom()...n    }': string
+346..347 'e': user.Boom
+349..352 'ctx': baml.errors.ErrorContext
+364..368 'Boom': user.Boom
+372..385 'ctx.to_string': (self: baml.errors.ErrorContext) -> string throws never
+372..387 'ctx.to_string()': string

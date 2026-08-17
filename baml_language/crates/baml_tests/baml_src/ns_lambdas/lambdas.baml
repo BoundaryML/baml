@@ -458,5 +458,5 @@ function lambdas_inferred_throwing_signature() -> string {
 }
 
 test "inferred_throwing_signature_is_reconstructed" {
-    assert.equal(lambdas_inferred_throwing_signature(), "int/string")
+    assert.equal(lambdas_inferred_throwing_signature(), "int/\"negative\"")
 }

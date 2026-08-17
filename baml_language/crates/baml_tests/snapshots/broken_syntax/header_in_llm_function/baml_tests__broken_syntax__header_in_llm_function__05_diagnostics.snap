@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client VertexGCP = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client VertexGCP = google.VertexClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
     ╭─[test.baml:5:1]
   5 │ ╭─▶ client<llm> VertexGCP {
@@ -58,13 +58,13 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[test.baml:13:5]
  13 │     //# collect source material
     ·     ─────────────┬─────────────
-    ·                  ╰── header comments (`//#`) are not allowed inside LLM functions
+    ·                  ╰── header comments (`//#`) are only allowed in expression functions
     ╰────
 
   [type] E0003
 
   × unresolved name: `VertexGCP`
-    ╭─[test.baml:14:12]
- 14 │     client VertexGCP
-    ·            ─────────
+    ╭─[test.baml:14:13]
+ 14 │     client: VertexGCP
+    ·             ─────────
     ╰────

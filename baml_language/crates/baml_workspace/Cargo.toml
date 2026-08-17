@@ -19,6 +19,8 @@ workspace = true
 [dependencies]
 baml_base = { workspace = true }
 baml_type = { workspace = true }
+ignore = { workspace = true }
 salsa = { workspace = true }
-walkdir = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }

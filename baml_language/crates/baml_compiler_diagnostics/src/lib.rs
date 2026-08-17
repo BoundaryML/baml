@@ -35,6 +35,7 @@ pub mod errors;
 pub mod highlight;
 pub mod message;
 pub mod render;
+pub mod runtime_type;
 pub mod to_diagnostic;
 
 // Re-export error types
