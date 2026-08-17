@@ -181,7 +181,10 @@ jobs:
           }
 
           echo "Inspecting $EXPECTED_REPOSITORY PR #$PR_NUMBER returned by create-pull-request"
-          pr_json=$(read_pr)
+          if ! pr_json=$(read_pr); then
+            echo "::error::Failed to inspect PR #$PR_NUMBER in $EXPECTED_REPOSITORY"
+            exit 1
+          fi
           if ! jq -e '.data.repository.pullRequest != null' <<< "$pr_json" >/dev/null; then
             echo "::error::PR #$PR_NUMBER was not found in $EXPECTED_REPOSITORY"
             exit 1
@@ -262,6 +265,8 @@ jobs:
           fi
 
           echo "All safety checks passed; enqueueing PR #$PR_NUMBER at head $head_oid"
+          enqueue_error_file=$(mktemp)
+          trap 'rm -f "$enqueue_error_file"' EXIT
           if enqueue_json=$(gh api graphql \
             -f query='mutation($prId: ID!, $headOid: GitObjectID!) {
               enqueuePullRequest(input: {pullRequestId: $prId, expectedHeadOid: $headOid}) {
@@ -269,26 +274,28 @@ jobs:
               }
             }' \
             -F prId="$pr_id" \
-            -F headOid="$head_oid" 2>&1); then
+            -F headOid="$head_oid" 2>"$enqueue_error_file"); then
             queue_position=$(jq -r '.data.enqueuePullRequest.mergeQueueEntry.position // "unknown"' <<< "$enqueue_json")
             echo "Enqueued PR #$PR_NUMBER in the canary merge queue at position $queue_position"
             exit 0
           fi
+          enqueue_error=$(<"$enqueue_error_file")
 
           # A concurrent run may have queued or merged the PR after the first
           # read. Treat only those confirmed outcomes as idempotent success.
-          latest_pr_json=$(read_pr)
-          latest_state=$(jq -r '.data.repository.pullRequest.state // ""' <<< "$latest_pr_json")
-          latest_merged=$(jq -r '.data.repository.pullRequest.merged // false' <<< "$latest_pr_json")
-          latest_queue_position=$(jq -r '.data.repository.pullRequest.mergeQueueEntry.position // ""' <<< "$latest_pr_json")
-          if [[ "$latest_merged" == 'true' || "$latest_state" == 'MERGED' ]]; then
-            echo "PR #$PR_NUMBER was merged concurrently; nothing left to enqueue"
-            exit 0
-          fi
-          if [[ -n "$latest_queue_position" ]]; then
-            echo "PR #$PR_NUMBER was queued concurrently at position $latest_queue_position"
-            exit 0
+          if latest_pr_json=$(read_pr); then
+            latest_state=$(jq -r '.data.repository.pullRequest.state // ""' <<< "$latest_pr_json")
+            latest_merged=$(jq -r '.data.repository.pullRequest.merged // false' <<< "$latest_pr_json")
+            latest_queue_position=$(jq -r '.data.repository.pullRequest.mergeQueueEntry.position // ""' <<< "$latest_pr_json")
+            if [[ "$latest_merged" == 'true' || "$latest_state" == 'MERGED' ]]; then
+              echo "PR #$PR_NUMBER was merged concurrently; nothing left to enqueue"
+              exit 0
+            fi
+            if [[ -n "$latest_queue_position" ]]; then
+              echo "PR #$PR_NUMBER was queued concurrently at position $latest_queue_position"
+              exit 0
+            fi
           fi
 
-          echo "::error::Failed to enqueue PR #$PR_NUMBER: $enqueue_json"
+          echo "::error::Failed to enqueue PR #$PR_NUMBER: $enqueue_error"
           exit 1
