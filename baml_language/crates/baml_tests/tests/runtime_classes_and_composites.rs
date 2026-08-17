@@ -82,7 +82,7 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
             let note = ExtractNote$parse<unreflect(note_t.as_type())>(
                 `{"height_cm": 183, "chief_complaint": "cough", "bullets": ["dry", "night"]}`,
             )
-            let height = reflect.class.get_field<int>(note, "height_cm")
+            let height = note.get_field<int>("height_cm")
             let complaint = reflect.class.get_field<string>(note, "chief_complaint")
             let bullets = reflect.class.get_field<string[]>(note, "bullets")
             return prompt
@@ -481,7 +481,7 @@ async fn get_field_missing_and_wrong_type_throw_compilation_diagnostics() {
                     e.diagnostics[0].code + ":" + e.diagnostics[0].message
                 }
             }
-            let wrong = reflect.class.get_field<string>(value, "count") catch (e) {
+            let wrong = value.get_field<string>("count") catch (e) {
                 baml.reflect.errors.CompilationError => {
                     e.diagnostics[0].code + ":" + e.diagnostics[0].message
                 }
@@ -512,5 +512,27 @@ async fn get_field_missing_and_wrong_type_throw_compilation_diagnostics() {
     assert!(
         result.contains("field `OneField.count` has type `int`, expected `string`"),
         "unexpected type mismatch: {result}"
+    );
+}
+
+#[tokio::test]
+async fn declared_get_field_method_shadows_dynamic_fallback() {
+    let output = baml_test!(
+        r#"
+        class UserClass {
+            function get_field<T>(self, name: string) -> string {
+                "owned:" + name
+            }
+        }
+
+        function main() -> string {
+            UserClass {}.get_field<int>("missing")
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("owned:missing".into()))
     );
 }

@@ -1117,6 +1117,13 @@ function baml.Uint8Array.to_hex(self: baml.Uint8Array) -> string {
 function baml.Uint8Array.zeroes(size: int) -> uint8array {
 }
 
+function baml.Unknown.get_field(self: baml.Unknown, name: string) -> #0 {
+    load_type #0
+    load_var2 1 2
+    call baml.reflect.class.get_field
+    return
+}
+
 function baml._cleanup_begin(value: #0) -> bool {
 }
 

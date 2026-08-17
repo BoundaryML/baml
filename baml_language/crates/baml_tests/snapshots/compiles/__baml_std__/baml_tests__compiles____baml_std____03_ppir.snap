@@ -158,7 +158,14 @@ class baml.TaggedString$stream {
   parts: string[]
   values: unknown[]
 }
+class baml.Unknown {
+}
+class baml.Unknown$stream {
+}
 function baml.deep_copy(value: T) -> T  [builtin]
+function baml.get_field(self: ?, name: string) -> T  [expr] {
+  {  } reflect.class.get_field(self, name)
+}
 
 --- <builtin>/baml/float.baml ---
 class baml.Float {

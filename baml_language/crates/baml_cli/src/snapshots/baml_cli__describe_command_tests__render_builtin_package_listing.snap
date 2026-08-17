@@ -28,9 +28,10 @@ function         baml._to_json_shim               <builtin>/baml/conversions.bam
 interface        baml.FromJson                    <builtin>/baml/conversions.baml:165
 function         baml._from_json_shim             <builtin>/baml/conversions.baml:184
 function         baml.deep_copy                   <builtin>/baml/core.baml:3
-interface        baml.Concrete                    <builtin>/baml/core.baml:9
-interface        baml.AnyFunction                 <builtin>/baml/core.baml:24
-class            baml.TaggedString                <builtin>/baml/core.baml:36
+class            baml.Unknown                     <builtin>/baml/core.baml:8
+interface        baml.Concrete                    <builtin>/baml/core.baml:17
+interface        baml.AnyFunction                 <builtin>/baml/core.baml:32
+class            baml.TaggedString                <builtin>/baml/core.baml:44
 class            baml.Float                       <builtin>/baml/float.baml:8
 function         baml._trunc_to_int               <builtin>/baml/float.baml:461
 class            baml.Int                         <builtin>/baml/int.baml:14
