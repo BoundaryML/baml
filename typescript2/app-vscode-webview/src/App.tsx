@@ -14,8 +14,8 @@ declare global {
     __PLAYGROUND_CURSOR_POSITION?: CursorPositionMessage['position'];
     /** Open target forwarded by the VS Code extension host. */
     __PLAYGROUND_OPEN_TARGET?: OpenPlaygroundMessage['target'];
-    /** Injected by the server's `/studio` shell so the app lands on the Runs tab. */
-    __STUDIO_INITIAL_TAB?: 'runs';
+    /** Injected by the server's `/studio` shell so the app lands on Telemetry. */
+    __STUDIO_INITIAL_TAB?: 'telemetry';
     acquireVsCodeApi?: () => { postMessage: (message: unknown) => void };
   }
 }

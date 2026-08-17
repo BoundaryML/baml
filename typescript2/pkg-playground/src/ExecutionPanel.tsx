@@ -49,7 +49,7 @@ import {
   selectMainFunctionName,
 } from './default-function-selection';
 import { useEnvVars } from './envAtoms';
-import { ObsRunsTab } from './obs/RunsView';
+import { ObsTelemetryTab } from './obs/TelemetryView';
 import type { ExecutionStoreSnapshot } from './execution-store';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
 import { FunctionSidebar } from './FunctionSidebar';
@@ -284,8 +284,8 @@ export interface ExecutionPanelProps {
   /** Called whenever the selected project changes. */
   onSelectedProjectChange?: (project: string | null) => void;
   /** Tab shown on mount (default 'run'). Embedded views often want 'graph'. */
-  initialTab?: 'run' | 'graph' | 'prompt' | 'curl' | 'runs';
-  /** Override the `/api/obs` observability WebSocket URL used by the Runs
+  initialTab?: 'run' | 'graph' | 'prompt' | 'curl' | 'telemetry';
+  /** Override the `/api/obs` observability WebSocket URL used by the Telemetry
       tab (default: derived the same way as the `/api/ws` URL). */
   obsUrl?: string;
   /** Auto-select this function once the project reports it (applied once). */
@@ -657,7 +657,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   );
   const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
-    'run' | 'graph' | 'prompt' | 'curl' | 'runs'
+    'run' | 'graph' | 'prompt' | 'curl' | 'telemetry'
   >(() => {
     // Normalize unknown tab names (e.g. the removed legacy 'trace'/'flame'
     // profile tabs from an older host) to the default run tab.
@@ -666,7 +666,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       case 'graph':
       case 'prompt':
       case 'curl':
-      case 'runs':
+      case 'telemetry':
         return initialTab;
       default:
         return 'run';
@@ -2488,23 +2488,25 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       >
         {/* ──── Combined top bar ──── */}
         <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  className="h-6 w-6 shrink-0"
-                  onClick={() => setSidebarOpen((prev) => !prev)}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <PanelLeft className="h-3.5 w-3.5 text-vsc-text-muted" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          {activeTab !== 'telemetry' && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    className="h-6 w-6 shrink-0"
+                    onClick={() => setSidebarOpen((prev) => !prev)}
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <PanelLeft className="h-3.5 w-3.5 text-vsc-text-muted" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
 
           {selectedTestName && !viewingCollection && !viewingTestRun && (
             <>
@@ -2550,10 +2552,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
             </>
           )}
 
-          {/* Observability runs list (§9.6) — available in every view state. */}
+          {/* Local observability — available in every view state. */}
           <TabsList className="bg-transparent border-b-0 ml-1 h-7">
-            <TabsTrigger className="py-1 h-7" value="runs">
-              Runs
+            <TabsTrigger className="py-1 h-7" value="telemetry">
+              Telemetry
             </TabsTrigger>
           </TabsList>
 
@@ -2802,7 +2804,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           }}
         >
           {/* Sidebar */}
-          {sidebarOpen && (
+          {sidebarOpen && activeTab !== 'telemetry' && (
             <>
               <div
                 className="shrink-0 overflow-hidden"
@@ -2854,8 +2856,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
           {/* Content area */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0">
-            {activeTab === 'runs' ? (
-              <ObsRunsTab obsUrl={obsUrl} />
+            {activeTab === 'telemetry' ? (
+              <ObsTelemetryTab obsUrl={obsUrl} />
             ) : viewingCollection && collectionDebug ? (
               <CollectionDebugView
                 expandedLogId={expandedLogId}

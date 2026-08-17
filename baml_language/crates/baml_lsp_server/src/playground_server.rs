@@ -2598,7 +2598,7 @@ fn dev_proxy_router(upstream: String) -> Router {
             "/studio",
             get(move || async move {
                 // §9.1 `/studio`: the same SPA shell, with the studio boot
-                // hint injected so the app lands on the Runs tab.
+                // hint injected so the app lands on the Telemetry tab.
                 let index_request = Request::builder()
                     .method(Method::GET)
                     .uri("/")
@@ -2802,13 +2802,13 @@ async fn static_index_handler(State(dir): State<PathBuf>) -> Response {
 // ---------------------------------------------------------------------------
 // `/studio` — the observability-first entry (§9.1). Serves the same SPA
 // shell as the playground, with a boot hint injected so the app lands on
-// the Runs tab.
+// the Telemetry tab.
 // ---------------------------------------------------------------------------
 
 /// Injected into the SPA shell served at `/studio`. The webview boot
 /// (`app-vscode-webview/src/App.tsx`) reads this global and passes it to
-/// `ExecutionPanel` as `initialTab`, making the runs list the landing view.
-const STUDIO_BOOT_SCRIPT: &str = "<script>window.__STUDIO_INITIAL_TAB=\"runs\";</script>";
+/// `ExecutionPanel` as `initialTab`, making Telemetry the landing view.
+const STUDIO_BOOT_SCRIPT: &str = "<script>window.__STUDIO_INITIAL_TAB=\"telemetry\";</script>";
 
 fn inject_studio_boot_script(html: &str) -> String {
     match html.find("</head>") {
@@ -3024,13 +3024,13 @@ mod tests {
     }
 
     /// The `/studio` shell is the playground shell plus a boot hint that
-    /// lands the app on the Runs tab; the hint goes inside `<head>` so it
+    /// lands the app on the Telemetry tab; the hint goes inside `<head>` so it
     /// runs before the bundle boots.
     #[test]
     fn studio_boot_script_is_injected_inside_head() {
         let html = "<html><head><title>BAML</title></head><body></body></html>";
         let injected = inject_studio_boot_script(html);
-        assert!(injected.contains("window.__STUDIO_INITIAL_TAB=\"runs\""));
+        assert!(injected.contains("window.__STUDIO_INITIAL_TAB=\"telemetry\""));
         assert!(
             injected.find(STUDIO_BOOT_SCRIPT).unwrap() < injected.find("</head>").unwrap(),
             "{injected}"

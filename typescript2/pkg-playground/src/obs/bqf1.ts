@@ -40,15 +40,15 @@ export const FLAG_MORE_LANES = 1 << 2;
 
 /** Frame kinds (u16 in the header). */
 export const FrameKind = {
-  RunsList: 1,
-  RunMeta: 2,
-  Timeline: 3,
+  BqlTable: 9,
   LeftHeavy: 4,
-  TopFunctions: 5,
-  Status: 6,
   LiveTotals: 7,
   RecentCalls: 8,
-  BqlTable: 9,
+  RunMeta: 2,
+  RunsList: 1,
+  Status: 6,
+  Timeline: 3,
+  TopFunctions: 5,
 } as const;
 export type FrameKind = (typeof FrameKind)[keyof typeof FrameKind];
 
@@ -163,22 +163,25 @@ export function decodeFrame(buf: ArrayBuffer): BqfFrame {
     }
     switch (colType) {
       case 1: {
-        if (at + nrows * 4 > end) throw new BqfDecodeError('BQF1 u32 column truncated');
-        cols.push({ type: 'u32', data: new Uint32Array(buf, at, nrows) });
+        if (at + nrows * 4 > end)
+          throw new BqfDecodeError('BQF1 u32 column truncated');
+        cols.push({ data: new Uint32Array(buf, at, nrows), type: 'u32' });
         break;
       }
       case 2: {
-        if (at + nrows * 8 > end) throw new BqfDecodeError('BQF1 u64 column truncated');
-        cols.push({ type: 'u64', data: new BigUint64Array(buf, at, nrows) });
+        if (at + nrows * 8 > end)
+          throw new BqfDecodeError('BQF1 u64 column truncated');
+        cols.push({ data: new BigUint64Array(buf, at, nrows), type: 'u64' });
         break;
       }
       case 3: {
-        if (at + nrows * 8 > end) throw new BqfDecodeError('BQF1 f64 column truncated');
-        cols.push({ type: 'f64', data: new Float64Array(buf, at, nrows) });
+        if (at + nrows * 8 > end)
+          throw new BqfDecodeError('BQF1 f64 column truncated');
+        cols.push({ data: new Float64Array(buf, at, nrows), type: 'f64' });
         break;
       }
       case 4: {
-        cols.push({ type: 'str', data: decodeStrColumn(buf, at, end, nrows) });
+        cols.push({ data: decodeStrColumn(buf, at, end, nrows), type: 'str' });
         break;
       }
       default:
@@ -186,7 +189,7 @@ export function decodeFrame(buf: ArrayBuffer): BqfFrame {
     }
   }
 
-  return { kind, flags, requestId, epoch, nrows, cols };
+  return { cols, epoch, flags, kind, nrows, requestId };
 }
 
 function decodeStrColumn(
@@ -273,15 +276,15 @@ export interface RunsListColumns {
 export function asRunsList(frame: BqfFrame): RunsListColumns {
   expectKind(frame, FrameKind.RunsList, 'RunsList');
   return {
-    runKey: expectCol(frame, 0, 'str', 'RunsList'),
     boundaryId: expectCol(frame, 1, 'str', 'RunsList'),
-    target: expectCol(frame, 2, 'str', 'RunsList'),
+    completedMs: u64ToNumbers(expectCol(frame, 7, 'u64', 'RunsList')),
+    createdMs: u64ToNumbers(expectCol(frame, 6, 'u64', 'RunsList')),
+    hasSnapshot: expectCol(frame, 8, 'u32', 'RunsList'),
+    revision: expectCol(frame, 5, 'str', 'RunsList'),
+    runKey: expectCol(frame, 0, 'str', 'RunsList'),
     source: expectCol(frame, 3, 'str', 'RunsList'),
     status: expectCol(frame, 4, 'str', 'RunsList'),
-    revision: expectCol(frame, 5, 'str', 'RunsList'),
-    createdMs: u64ToNumbers(expectCol(frame, 6, 'u64', 'RunsList')),
-    completedMs: u64ToNumbers(expectCol(frame, 7, 'u64', 'RunsList')),
-    hasSnapshot: expectCol(frame, 8, 'u32', 'RunsList'),
+    target: expectCol(frame, 2, 'str', 'RunsList'),
   };
 }
 
@@ -293,8 +296,8 @@ export interface RunMetaColumns {
 export function asRunMeta(frame: BqfFrame): RunMetaColumns {
   expectKind(frame, FrameKind.RunMeta, 'RunMeta');
   return {
-    functionId: expectCol(frame, 0, 'u32', 'RunMeta'),
     fqn: expectCol(frame, 1, 'str', 'RunMeta'),
+    functionId: expectCol(frame, 0, 'u32', 'RunMeta'),
   };
 }
 
@@ -312,13 +315,13 @@ export interface TimelineColumns {
 export function asTimeline(frame: BqfFrame): TimelineColumns {
   expectKind(frame, FrameKind.Timeline, 'Timeline');
   return {
-    thread: expectCol(frame, 0, 'u64', 'Timeline'),
-    firstTsNs: u64ToNumbers(expectCol(frame, 1, 'u64', 'Timeline')),
-    lastTsNs: u64ToNumbers(expectCol(frame, 2, 'u64', 'Timeline')),
-    busyNs: u64ToNumbers(expectCol(frame, 3, 'u64', 'Timeline')),
     awaitNs: u64ToNumbers(expectCol(frame, 4, 'u64', 'Timeline')),
+    busyNs: u64ToNumbers(expectCol(frame, 3, 'u64', 'Timeline')),
     dominantFunction: expectCol(frame, 5, 'u32', 'Timeline'),
     errors: u64ToNumbers(expectCol(frame, 6, 'u64', 'Timeline')),
+    firstTsNs: u64ToNumbers(expectCol(frame, 1, 'u64', 'Timeline')),
+    lastTsNs: u64ToNumbers(expectCol(frame, 2, 'u64', 'Timeline')),
+    thread: expectCol(frame, 0, 'u64', 'Timeline'),
   };
 }
 
@@ -337,12 +340,12 @@ export function asLeftHeavy(frame: BqfFrame): LeftHeavyColumns {
   expectKind(frame, FrameKind.LeftHeavy, 'LeftHeavy');
   return {
     depth: expectCol(frame, 0, 'u32', 'LeftHeavy'),
-    functionId: expectCol(frame, 1, 'u32', 'LeftHeavy'),
-    totalNs: u64ToNumbers(expectCol(frame, 2, 'u64', 'LeftHeavy')),
-    selfNs: u64ToNumbers(expectCol(frame, 3, 'u64', 'LeftHeavy')),
     enters: u64ToNumbers(expectCol(frame, 4, 'u64', 'LeftHeavy')),
     errors: u64ToNumbers(expectCol(frame, 5, 'u64', 'LeftHeavy')),
     foldedCount: expectCol(frame, 6, 'u32', 'LeftHeavy'),
+    functionId: expectCol(frame, 1, 'u32', 'LeftHeavy'),
+    selfNs: u64ToNumbers(expectCol(frame, 3, 'u64', 'LeftHeavy')),
+    totalNs: u64ToNumbers(expectCol(frame, 2, 'u64', 'LeftHeavy')),
   };
 }
 
@@ -357,11 +360,43 @@ export interface TopFunctionsColumns {
 export function asTopFunctions(frame: BqfFrame): TopFunctionsColumns {
   expectKind(frame, FrameKind.TopFunctions, 'TopFunctions');
   return {
-    functionId: expectCol(frame, 0, 'u32', 'TopFunctions'),
     calls: u64ToNumbers(expectCol(frame, 1, 'u64', 'TopFunctions')),
-    totalNs: u64ToNumbers(expectCol(frame, 2, 'u64', 'TopFunctions')),
-    selfNs: u64ToNumbers(expectCol(frame, 3, 'u64', 'TopFunctions')),
     errors: u64ToNumbers(expectCol(frame, 4, 'u64', 'TopFunctions')),
+    functionId: expectCol(frame, 0, 'u32', 'TopFunctions'),
+    selfNs: u64ToNumbers(expectCol(frame, 3, 'u64', 'TopFunctions')),
+    totalNs: u64ToNumbers(expectCol(frame, 2, 'u64', 'TopFunctions')),
+  };
+}
+
+export interface RecentCallsColumns {
+  /** Raw u64 `(partition << 32) | thread_idx` ids; use as identity only. */
+  thread: BigUint64Array;
+  /** Per-thread call ids; unique key is `(thread, callId)`. */
+  callId: BigUint64Array;
+  parentCallId: BigUint64Array;
+  functionId: Uint32Array;
+  /**
+   * Raw u64 nanosecond timestamps. Kept as BigUint64Array so callers can
+   * subtract a baseline in BigInt space before converting to Number (epoch-ns
+   * values exceed 2^53; deltas within a run do not).
+   */
+  startNs: BigUint64Array;
+  endNs: BigUint64Array;
+  /** FunctionEndStatus: 0 ok, 1 errored, 2 cancelled, 3 exited. */
+  status: Uint32Array;
+}
+
+/** §9.4 exact-recency tier: completed calls from the live engine's rings. */
+export function asRecentCalls(frame: BqfFrame): RecentCallsColumns {
+  expectKind(frame, FrameKind.RecentCalls, 'RecentCalls');
+  return {
+    callId: expectCol(frame, 1, 'u64', 'RecentCalls'),
+    endNs: expectCol(frame, 5, 'u64', 'RecentCalls'),
+    functionId: expectCol(frame, 3, 'u32', 'RecentCalls'),
+    parentCallId: expectCol(frame, 2, 'u64', 'RecentCalls'),
+    startNs: expectCol(frame, 4, 'u64', 'RecentCalls'),
+    status: expectCol(frame, 6, 'u32', 'RecentCalls'),
+    thread: expectCol(frame, 0, 'u64', 'RecentCalls'),
   };
 }
 
@@ -429,12 +464,12 @@ export function asBqlTable(frame: BqfFrame): BqlTableResult {
   }
   return {
     columns,
-    rows: dataRows,
     footer: {
+      degraded: meta.footer?.degraded ?? [],
       sealed: meta.footer?.sealed ?? true,
       torn: meta.footer?.torn ?? false,
-      degraded: meta.footer?.degraded ?? [],
     },
+    rows: dataRows,
   };
 }
 

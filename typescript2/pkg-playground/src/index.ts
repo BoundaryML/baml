@@ -114,7 +114,7 @@ export {
   type WasmPanic,
 } from './wasm-panic';
 
-// Observability (§9.3 BQF1 wire + /api/obs client + Runs tab)
+// Observability (§9.3 BQF1 wire + /api/obs client + Telemetry tab)
 export {
   decodeFrame,
   crc32c,
@@ -123,6 +123,7 @@ export {
   asTimeline,
   asLeftHeavy,
   asTopFunctions,
+  asRecentCalls,
   asStatus,
   FrameKind,
   FOLD_ROW_FUNCTION,
@@ -136,9 +137,10 @@ export type {
   TimelineColumns,
   LeftHeavyColumns,
   TopFunctionsColumns,
+  RecentCallsColumns,
   StatusColumns,
 } from './obs/bqf1';
 export { WsObserveClient, defaultObsUrl } from './obs/observe-client';
 export type { ObsQueryMethod, ObsQueryParams } from './obs/observe-client';
-export { ObsRunsTab } from './obs/RunsView';
-export type { ObsRunsTabProps } from './obs/RunsView';
+export { ObsTelemetryTab } from './obs/TelemetryView';
+export type { ObsTelemetryTabProps } from './obs/TelemetryView';

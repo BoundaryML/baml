@@ -22,7 +22,7 @@ type EncCol =
   | { type: 'f64'; data: number[] }
   | { type: 'str'; data: string[] };
 
-const COL_TYPE_CODE = { u32: 1, u64: 2, f64: 3, str: 4 } as const;
+const COL_TYPE_CODE = { f64: 3, str: 4, u32: 1, u64: 2 } as const;
 
 function encodeFrame(
   kind: number,
@@ -114,7 +114,11 @@ function encodeFrame(
 
   // Payload + trailer
   out.set(payload, 40 + dirLen);
-  view.setBigUint64(total - 8, BigInt(crc32c(out.subarray(0, total - 8))), true);
+  view.setBigUint64(
+    total - 8,
+    BigInt(crc32c(out.subarray(0, total - 8))),
+    true,
+  );
   return out.buffer;
 }
 
@@ -132,10 +136,10 @@ describe('bqf1 crc32c', () => {
 describe('bqf1 decodeFrame', () => {
   it('round-trips all column types', () => {
     const buf = encodeFrame(FrameKind.TopFunctions, 0b010, 42, 7, [
-      { type: 'u32', data: [1, 2, 0xffffffff] },
-      { type: 'u64', data: [10n, 20n, 9007199254740991n] },
-      { type: 'f64', data: [0.5, -1.5, 2.25] },
-      { type: 'str', data: ['alpha', '', 'γreeké'] },
+      { data: [1, 2, 0xffffffff], type: 'u32' },
+      { data: [10n, 20n, 9007199254740991n], type: 'u64' },
+      { data: [0.5, -1.5, 2.25], type: 'f64' },
+      { data: ['alpha', '', 'γreeké'], type: 'str' },
     ]);
 
     const frame = decodeFrame(buf);
@@ -157,16 +161,18 @@ describe('bqf1 decodeFrame', () => {
       9007199254740991n,
     ]);
     expect(frame.cols[2]).toMatchObject({ type: 'f64' });
-    expect([...(frame.cols[2]!.data as Float64Array)]).toEqual([0.5, -1.5, 2.25]);
+    expect([...(frame.cols[2]!.data as Float64Array)]).toEqual([
+      0.5, -1.5, 2.25,
+    ]);
     expect(frame.cols[3]).toMatchObject({ type: 'str' });
     expect(frame.cols[3]!.data).toEqual(['alpha', '', 'γreeké']);
   });
 
   it('produces aligned zero-copy views over the frame buffer', () => {
     const buf = encodeFrame(FrameKind.TopFunctions, 0, 1, 0, [
-      { type: 'str', data: ['x'] }, // odd utf8 length exercises padding
-      { type: 'u64', data: [123n] },
-      { type: 'f64', data: [4.5] },
+      { data: ['x'], type: 'str' }, // odd utf8 length exercises padding
+      { data: [123n], type: 'u64' },
+      { data: [4.5], type: 'f64' },
     ]);
     const frame = decodeFrame(buf);
     const u64 = frame.cols[1]!.data as BigUint64Array;
@@ -181,8 +187,8 @@ describe('bqf1 decodeFrame', () => {
 
   it('rejects a corrupted frame (CRC mismatch)', () => {
     const buf = encodeFrame(FrameKind.Status, 0, 1, 0, [
-      { type: 'u32', data: [9] },
-      { type: 'str', data: ['boom'] },
+      { data: [9], type: 'u32' },
+      { data: ['boom'], type: 'str' },
     ]);
     const corrupted = new Uint8Array(buf.slice(0));
     corrupted[Math.floor(corrupted.length / 2)] ^= 0xff;
@@ -192,8 +198,8 @@ describe('bqf1 decodeFrame', () => {
 
   it('rejects bad magic and truncated frames', () => {
     const buf = encodeFrame(FrameKind.Status, 0, 1, 0, [
-      { type: 'u32', data: [0] },
-      { type: 'str', data: ['ok'] },
+      { data: [0], type: 'u32' },
+      { data: ['ok'], type: 'str' },
     ]);
     const badMagic = new Uint8Array(buf.slice(0));
     badMagic[0] = 0x41;
@@ -203,15 +209,15 @@ describe('bqf1 decodeFrame', () => {
 
   it('decodes a RunsList fixture into named typed columns', () => {
     const buf = encodeFrame(FrameKind.RunsList, 0, 5, 3, [
-      { type: 'str', data: ['proj/b-0001', 'proj/b-0002'] },
-      { type: 'str', data: ['b-0001', 'b-0002'] },
-      { type: 'str', data: ['ExtractResume', 'ClassifyTicket'] },
-      { type: 'str', data: ['playground', 'cli'] },
-      { type: 'str', data: ['succeeded', 'running'] },
-      { type: 'str', data: ['rev-abcdef1234567890', ''] },
-      { type: 'u64', data: [1753900000000n, 1753900050000n] },
-      { type: 'u64', data: [1753900001500n, 0n] },
-      { type: 'u32', data: [1, 0] },
+      { data: ['proj/b-0001', 'proj/b-0002'], type: 'str' },
+      { data: ['b-0001', 'b-0002'], type: 'str' },
+      { data: ['ExtractResume', 'ClassifyTicket'], type: 'str' },
+      { data: ['playground', 'cli'], type: 'str' },
+      { data: ['succeeded', 'running'], type: 'str' },
+      { data: ['rev-abcdef1234567890', ''], type: 'str' },
+      { data: [1753900000000n, 1753900050000n], type: 'u64' },
+      { data: [1753900001500n, 0n], type: 'u64' },
+      { data: [1, 0], type: 'u32' },
     ]);
 
     const frame = decodeFrame(buf);
@@ -230,15 +236,15 @@ describe('bqf1 decodeFrame', () => {
 
   it('decodes an empty RunsList frame (no history dirs in dev)', () => {
     const buf = encodeFrame(FrameKind.RunsList, 0, 9, 0, [
-      { type: 'str', data: [] },
-      { type: 'str', data: [] },
-      { type: 'str', data: [] },
-      { type: 'str', data: [] },
-      { type: 'str', data: [] },
-      { type: 'str', data: [] },
-      { type: 'u64', data: [] },
-      { type: 'u64', data: [] },
-      { type: 'u32', data: [] },
+      { data: [], type: 'str' },
+      { data: [], type: 'str' },
+      { data: [], type: 'str' },
+      { data: [], type: 'str' },
+      { data: [], type: 'str' },
+      { data: [], type: 'str' },
+      { data: [], type: 'u64' },
+      { data: [], type: 'u64' },
+      { data: [], type: 'u32' },
     ]);
     const runs = asRunsList(decodeFrame(buf));
     expect(runs.runKey).toEqual([]);
@@ -247,13 +253,13 @@ describe('bqf1 decodeFrame', () => {
 
   it('typed helpers enforce frame kind and expose fold sentinels', () => {
     const leftHeavy = encodeFrame(FrameKind.LeftHeavy, 0, 2, 0, [
-      { type: 'u32', data: [0, 1, 1] },
-      { type: 'u32', data: [7, 8, FOLD_ROW_FUNCTION] },
-      { type: 'u64', data: [1000n, 600n, 400n] },
-      { type: 'u64', data: [0n, 600n, 400n] },
-      { type: 'u64', data: [1n, 3n, 5n] },
-      { type: 'u64', data: [0n, 1n, 0n] },
-      { type: 'u32', data: [0, 0, 4] },
+      { data: [0, 1, 1], type: 'u32' },
+      { data: [7, 8, FOLD_ROW_FUNCTION], type: 'u32' },
+      { data: [1000n, 600n, 400n], type: 'u64' },
+      { data: [0n, 600n, 400n], type: 'u64' },
+      { data: [1n, 3n, 5n], type: 'u64' },
+      { data: [0n, 1n, 0n], type: 'u64' },
+      { data: [0, 0, 4], type: 'u32' },
     ]);
     const frame = decodeFrame(leftHeavy);
     const rows = asLeftHeavy(frame);
@@ -266,8 +272,8 @@ describe('bqf1 decodeFrame', () => {
 
   it('decodes a Status frame', () => {
     const buf = encodeFrame(FrameKind.Status, 0, 11, 0, [
-      { type: 'u32', data: [404] },
-      { type: 'str', data: ['run not found'] },
+      { data: [404], type: 'u32' },
+      { data: ['run not found'], type: 'str' },
     ]);
     const status = asStatus(decodeFrame(buf));
     expect(status.code[0]).toBe(404);

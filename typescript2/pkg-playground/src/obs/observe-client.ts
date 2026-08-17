@@ -17,7 +17,7 @@
  * intent — they are re-sent after every reconnect.
  */
 
-import { asStatus, decodeFrame, FrameKind, type BqfFrame } from './bqf1';
+import { asStatus, type BqfFrame, decodeFrame, FrameKind } from './bqf1';
 
 const MAX_RECONNECT_DELAY = 5000;
 
@@ -27,6 +27,7 @@ export type ObsQueryMethod =
   | 'timeline'
   | 'left_heavy'
   | 'top_functions'
+  | 'recent_calls'
   | 'bql';
 
 export interface ObsQueryParams {
@@ -60,9 +61,8 @@ interface Subscription {
  * `__PLAYGROUND_WS_URL` (pointing at `/api/ws`); otherwise same-origin.
  */
 export function defaultObsUrl(): string {
-  const injected = (
-    globalThis as { window?: { __PLAYGROUND_WS_URL?: string } }
-  ).window?.__PLAYGROUND_WS_URL;
+  const injected = (globalThis as { window?: { __PLAYGROUND_WS_URL?: string } })
+    .window?.__PLAYGROUND_WS_URL;
   if (injected) return injected.replace(/\/api\/ws\/?$/, '/api/obs');
   const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
   return `${scheme}://${window.location.host}/api/obs`;
@@ -108,14 +108,17 @@ export class WsObserveClient {
    * Queries issued while the socket is still connecting are held and sent
    * on open; a close rejects everything in flight (no cross-session replay).
    */
-  query(method: ObsQueryMethod, params: ObsQueryParams = {}): Promise<BqfFrame> {
+  query(
+    method: ObsQueryMethod,
+    params: ObsQueryParams = {},
+  ): Promise<BqfFrame> {
     if (this.disposed) {
       return Promise.reject(new Error('WsObserveClient disposed'));
     }
     const id = this.nextId++;
-    const msg = { op: 'query', id, ...wireParams(method, params) };
+    const msg = { id, op: 'query', ...wireParams(method, params) };
     return new Promise<BqfFrame>((resolve, reject) => {
-      const pending: PendingQuery = { resolve, reject, msg, sent: false };
+      const pending: PendingQuery = { msg, reject, resolve, sent: false };
       this.pendingQueries.set(id, pending);
       if (this.connected) {
         pending.sent = true;
@@ -135,13 +138,13 @@ export class WsObserveClient {
     cb: (frame: BqfFrame) => void,
   ): () => void {
     const id = this.nextId++;
-    this.subscriptions.set(id, { method, params, cb });
+    this.subscriptions.set(id, { cb, method, params });
     if (this.connected) {
-      this.send({ op: 'sub', id, ...wireParams(method, params) });
+      this.send({ id, op: 'sub', ...wireParams(method, params) });
     }
     return () => {
       if (!this.subscriptions.delete(id)) return;
-      if (this.connected) this.send({ op: 'unsub', id });
+      if (this.connected) this.send({ id, op: 'unsub' });
     };
   }
 
@@ -182,7 +185,7 @@ export class WsObserveClient {
       // Subscriptions are standing intent: re-assert every one of them on
       // every (re)connect so live views resume without caller involvement.
       for (const [id, sub] of this.subscriptions) {
-        this.send({ op: 'sub', id, ...wireParams(sub.method, sub.params) });
+        this.send({ id, op: 'sub', ...wireParams(sub.method, sub.params) });
       }
       // Flush queries that were issued while the socket was connecting.
       for (const pending of this.pendingQueries.values()) {
@@ -258,7 +261,10 @@ export class WsObserveClient {
       this.reconnectTimer = null;
       this.connect();
     }, this.reconnectDelay);
-    this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY);
+    this.reconnectDelay = Math.min(
+      this.reconnectDelay * 2,
+      MAX_RECONNECT_DELAY,
+    );
   }
 }
 
