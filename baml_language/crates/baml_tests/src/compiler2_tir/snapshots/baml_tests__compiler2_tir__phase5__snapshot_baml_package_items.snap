@@ -23,7 +23,6 @@ namespace baml:
   type ToString
   class TypeValue { methods: [array, optional, to_baml, kind, as_class, as_enum, as_union, as_literal, as_array, as_map, as_interface, as_primitive, as_function, _validate_renderable, meta, _to_string_impl, implements, implemented_by, to_string] }
   class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, to_string] }
-  class Unknown { methods: [get_field] }
   function _cleanup_begin<T>
   function _compare_shim<T>
   function _float_total_cmp

@@ -132,8 +132,6 @@ pub(crate) fn external_class_for_type(
         TyKind::Bool { .. } | TyKind::Literal(Literal::Bool(_), _, _) => {
             builtin(&[], "Bool", Vec::new())
         }
-        // Keep this entry in sync with `receiver_class`.
-        TyKind::Unknown { .. } => builtin(&[], "Unknown", Vec::new()),
         TyKind::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
         TyKind::Type { .. } => builtin(&[], "TypeValue", Vec::new()),
         TyKind::Media(kind, _) => {
@@ -203,8 +201,6 @@ pub(crate) fn receiver_class<'db>(
         TyKind::Bool { .. } | TyKind::Literal(Literal::Bool(_), _, _) => {
             builtin(&[], "Bool", Vec::new())
         }
-        // Keep this entry in sync with `external_class_for_type`.
-        TyKind::Unknown { .. } => builtin(&[], "Unknown", Vec::new()),
         TyKind::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
         // The `type` primitive's members (reflection, BEP-039) live on
         // `class baml.TypeValue` - `reflect.type_of<T>().to_string()`.

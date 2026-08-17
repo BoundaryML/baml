@@ -1219,10 +1219,6 @@ fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Com
             completions_for_builtin_class_methods(db, &["Map"], BuiltinMethodMode::Instance)
         }
 
-        Ty::BuiltinUnknown { .. } => {
-            completions_for_builtin_class_methods(db, &["Unknown"], BuiltinMethodMode::Instance)
-        }
-
         Ty::String { .. }
         | Ty::Uint8Array { .. }
         | Ty::Media(_, _)

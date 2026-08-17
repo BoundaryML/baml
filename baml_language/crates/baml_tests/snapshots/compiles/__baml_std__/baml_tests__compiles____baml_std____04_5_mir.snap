@@ -1043,23 +1043,6 @@ fn baml._from_json_shim = builtin(vm)
 
 fn baml.deep_copy = builtin(vm)
 
-fn baml.Unknown.get_field(self: baml.Unknown, name: string) -> T {
-    // Locals:
-    let _0: T // _0 // return
-    let _1: baml.Unknown // self // param
-    let _2: string // name // param
-    let _3: type
-
-    bb0: {
-        _3 = load_type(#0);
-        _0 = call const fn baml.reflect.class.get_field<copy _3>(copy _1, copy _2) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.Float.is_nan = builtin(vm)
 
 fn baml.Float.is_infinite = builtin(vm)

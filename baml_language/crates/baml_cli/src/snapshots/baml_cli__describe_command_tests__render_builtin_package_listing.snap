@@ -31,7 +31,6 @@ function         baml.deep_copy                   <builtin>/baml/core.baml:3
 interface        baml.Concrete                    <builtin>/baml/core.baml:9
 interface        baml.AnyFunction                 <builtin>/baml/core.baml:24
 class            baml.TaggedString                <builtin>/baml/core.baml:36
-class            baml.Unknown                     <builtin>/baml/core.baml:46
 class            baml.Float                       <builtin>/baml/float.baml:8
 function         baml._trunc_to_int               <builtin>/baml/float.baml:461
 class            baml.Int                         <builtin>/baml/int.baml:14
@@ -269,8 +268,8 @@ function         baml.reflect.class._new          <builtin>/baml/ns_reflect/ns_c
 function         baml.reflect.class.builder       <builtin>/baml/ns_reflect/ns_class/class.baml:33
 class            baml.reflect.class.Builder       <builtin>/baml/ns_reflect/ns_class/class.baml:39
 class            baml.reflect.class.PendingType   <builtin>/baml/ns_reflect/ns_class/class.baml:81
-function         baml.reflect.class.get_field     <builtin>/baml/ns_reflect/ns_class/class.baml:114
-class            baml.reflect.class.Type          <builtin>/baml/ns_reflect/ns_class/class.baml:119
+function         baml.reflect.class.get_field     <builtin>/baml/ns_reflect/ns_class/class.baml:113
+class            baml.reflect.class.Type          <builtin>/baml/ns_reflect/ns_class/class.baml:118
 class            baml.reflect.enum.Value          <builtin>/baml/ns_reflect/ns_enum/enum.baml:1
 function         baml.reflect.enum.value          <builtin>/baml/ns_reflect/ns_enum/enum.baml:8
 function         baml.reflect.enum.new            <builtin>/baml/ns_reflect/ns_enum/enum.baml:20
