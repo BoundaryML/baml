@@ -151,7 +151,7 @@ Usage:
   baml toolchain install [canary|nightly|version] [--force]
 
 When the selector is omitted, install uses the toolchain pin from the nearest
-baml.toml.
+baml.toml, or canary if the project does not specify one.
 
 Options:
   --force  Reinstall the toolchain if it is already installed
@@ -426,14 +426,12 @@ fn install_toolchain_command(args: &[String], manifest_base_url: Option<&str>) -
 
     let (selector, activate_channel) = match selector {
         Some(selector) => (selector.to_string(), false),
-        None => project_toolchain_selector()?
-            .map(|(_, selector)| selector)
-            .ok_or_else(|| {
-                anyhow!(
-                    "no BAML toolchain is pinned in baml.toml\nRun: baml toolchain install <canary|nightly|version>"
-                )
-            })
-            .map(|selector| (selector, true))?,
+        None => (
+            project_toolchain_selector()?
+                .map(|(_, selector)| selector)
+                .unwrap_or_else(|| "canary".to_string()),
+            true,
+        ),
     };
     install_toolchain(&selector, activate_channel, manifest_base_url, force)
 }
