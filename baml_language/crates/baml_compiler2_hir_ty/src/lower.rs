@@ -1995,6 +1995,47 @@ unsafe impl salsa::Update for FunctionSignature {
     }
 }
 
+/// A function's signature SHAPE: frame, params, return, and the RAW lowered
+/// `throws` clause - never the caller-facing merged effect.
+///
+/// This is the half of [`function_signature`] a body's OWN inference reads.
+/// The merged `throws` surface (declared-else-inferred, via
+/// [`crate::callable::callable_throws`]) is derived FROM the body run, so a
+/// body reading it through its own signature closes the
+/// `infer_body -> function_signature -> callable_throws -> infer_body`
+/// fixpoint cycle on every function with an omitted or partial clause -
+/// salsa then converges by re-running complete body inferences whose result
+/// the body never consumed (it checks throw sites against the raw written
+/// clause). Splitting the shape out leaves only genuine cross-function
+/// recursion on the fixpoint road.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionSignatureShape {
+    pub generic_params: Vec<ParamTy>,
+    pub params: Vec<SignatureParam>,
+    pub ret: Ty,
+    /// The lowered written clause, holes preserved (`throws T | _` keeps its
+    /// hole so the partial-clause policy stays decidable downstream).
+    /// `None` when the clause is omitted.
+    pub throws_clause: Option<Ty>,
+}
+
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for FunctionSignatureShape {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
 fn function_signature_cycle_initial<'db>(
     _db: &'db dyn baml_compiler2_ppir::Db,
     _id: salsa::Id,
@@ -2622,11 +2663,17 @@ pub fn type_alias_lowering_diagnostics<'db>(
     out
 }
 
-#[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]
-pub fn function_signature<'db>(
+/// The signature SHAPE road: everything [`function_signature`] computes
+/// EXCEPT the merged throws surface. Deliberately has NO cycle seed - the
+/// only cycle through the signature was the throws road (see
+/// [`function_signature_cycle_initial`]'s comment), which this query never
+/// takes; an unexpected new cycle should panic loudly rather than converge
+/// through a silent degenerate seed.
+#[salsa::tracked(returns(ref))]
+pub fn function_signature_shape<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
-) -> FunctionSignature {
+) -> FunctionSignatureShape {
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let bounds = function_generic_bounds(db, function);
@@ -2676,29 +2723,37 @@ pub fn function_signature<'db>(
         .return_type
         .map(|ret| reject_holes(&ctx.lower_type_ref(&data.type_refs, ret)))
         .unwrap_or_else(Ty::error);
-    let throws_declared = data.throws.is_some();
-    let throws = data
+    let throws_clause = data
         .throws
-        .map(|throws| {
-            let lowered = ctx.lower_type_ref(&data.type_refs, throws);
-            if throws_clause_parts(&lowered).1 {
-                // A PARTIAL clause (`throws T | _`, spec rule 3): callers
-                // see the merged surface (declared + inferred), which is
-                // what `callable_throws` computes through the body run.
-                Ty::from_plain(&crate::callable::callable_throws(db, function).0)
-            } else {
-                reject_holes(&lowered)
-            }
-        })
-        .unwrap_or_else(|| {
-            // Omitted: the body-inferred effect, fixpoint over mutual
-            // recursion (S12's callable_throws).
-            Ty::from_plain(&crate::callable::callable_throws(db, function).0)
-        });
-    FunctionSignature {
+        .map(|throws| ctx.lower_type_ref(&data.type_refs, throws));
+    FunctionSignatureShape {
         generic_params: frame,
         params,
         ret,
+        throws_clause,
+    }
+}
+
+#[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]
+pub fn function_signature<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> FunctionSignature {
+    let shape = function_signature_shape(db, function);
+    let throws_declared = shape.throws_clause.is_some();
+    let throws = match &shape.throws_clause {
+        // A COMPLETE written clause is the contract verbatim.
+        Some(lowered) if !throws_clause_parts(lowered).1 => reject_holes(lowered),
+        // A PARTIAL clause (`throws T | _`, spec rule 3) or an omitted one:
+        // callers see the merged surface (declared + inferred), which is
+        // what `callable_throws` computes through the body run - fixpoint
+        // over genuine cross-function recursion (S12).
+        _ => Ty::from_plain(&crate::callable::callable_throws(db, function).0),
+    };
+    FunctionSignature {
+        generic_params: shape.generic_params.clone(),
+        params: shape.params.clone(),
+        ret: shape.ret.clone(),
         throws,
         throws_declared,
     }
