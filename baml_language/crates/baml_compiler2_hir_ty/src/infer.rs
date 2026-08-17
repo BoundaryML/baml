@@ -2944,12 +2944,9 @@ impl<'db> InferenceContext<'db> {
             // wherever it later reaches a real binding or join.
             let narrowed = self.table.resolve_completely(&assigned);
             let fits = match &declared {
-                Some(declared) if !declared.has_error() => crate::infer::pat::provable_subtype(
-                    &narrowed,
-                    declared,
-                    &self.facts,
-                    &self.canonical_cache,
-                ),
+                Some(declared) if !declared.has_error() => {
+                    self.provable_subtype(&narrowed, declared)
+                }
                 _ => false,
             };
             if fits {
@@ -3381,6 +3378,25 @@ impl<'db> InferenceContext<'db> {
         if sub.has_infer() || sup.has_infer() {
             return is_subtype_interned(sub, sup, &self.facts);
         }
+        self.canonical_cache.is_subtype(sub, sup, &self.facts)
+    }
+
+    /// A PROVABLE subtype verdict: ground on both sides and confirmed by this
+    /// inference body's paired facts and canonical cache. Rigid or unresolved
+    /// pairs are not provable, the conservative direction for coverage and
+    /// claiming.
+    fn provable_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
+        if sub == sup {
+            return true;
+        }
+        if sub.has_infer() || sup.has_infer() || sub.has_error() || sup.has_error() {
+            return false;
+        }
+        // Rigid variables go to the oracle too: its typevar arms are already
+        // conservative (`T <: T`, `T <: unknown`, `never <: T` prove; a rigid
+        // against an unrelated concrete does not - which is exactly the B-633
+        // rule). The corpus pins the case this matters for: a synthetic effect
+        // var IS covered by `throws unknown`.
         self.canonical_cache.is_subtype(sub, sup, &self.facts)
     }
 
@@ -8441,15 +8457,10 @@ impl<'db> InferenceContext<'db> {
                 let mut may: Vec<Ty> = Vec::new();
                 let mut definite: Vec<Ty> = Vec::new();
                 for fact in &facts {
-                    if pat::provable_subtype(fact, &claim, &self.facts, &self.canonical_cache) {
+                    if self.provable_subtype(fact, &claim) {
                         may.push(fact.clone());
                         definite.push(fact.clone());
-                    } else if pat::provable_subtype(
-                        &claim,
-                        fact,
-                        &self.facts,
-                        &self.canonical_cache,
-                    ) {
+                    } else if self.provable_subtype(&claim, fact) {
                         may.push(fact.clone());
                     }
                 }
