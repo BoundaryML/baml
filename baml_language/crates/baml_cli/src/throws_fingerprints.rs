@@ -96,12 +96,27 @@ pub(crate) struct FileFpInput<'a> {
     pub content_hash: [u8; 32],
 }
 
+/// Node-population statistics from one fingerprint computation, for the
+/// `BAML_CACHE_DEBUG` summary: how much of the graph is firewalled behind
+/// closed `throws` contracts, how much is environment-dependent (unresolved
+/// edges ⇒ the impl/layout env term folds in), and how many distinct edge
+/// names failed to resolve to a node.
+#[derive(Default, Debug, Clone, Copy)]
+pub(crate) struct FpStats {
+    pub nodes: usize,
+    pub firewalled: usize,
+    pub env_dependent: usize,
+    pub unresolved_edges: usize,
+}
+
 /// Compute the per-file throws fingerprints for a full project snapshot.
 ///
 /// Pure and deterministic: same inputs (in any order) → same output. The
 /// caller supplies EVERY current user file — the environment term and edge
 /// resolution are project-global.
-pub(crate) fn compute_file_fingerprints(files: &[FileFpInput<'_>]) -> BTreeMap<String, [u8; 32]> {
+pub(crate) fn compute_file_fingerprints(
+    files: &[FileFpInput<'_>],
+) -> (BTreeMap<String, [u8; 32]>, FpStats) {
     // ── Environment term ────────────────────────────────────────────────
     // Sorted fold over (rel, layout_hash) for every file plus (rel,
     // content_hash) for impl-declaring files.
@@ -313,7 +328,28 @@ pub(crate) fn compute_file_fingerprints(files: &[FileFpInput<'_>]) -> BTreeMap<S
         }
         out.insert(f.rel.to_string(), h.finalize().into());
     }
-    out
+
+    let mut unresolved: BTreeSet<&str> = BTreeSet::new();
+    for node in &nodes {
+        if node.firewalled {
+            continue;
+        }
+        for name in &node.edge_names {
+            if !key_to_idx.contains_key(name.as_str()) {
+                unresolved.insert(name);
+            }
+        }
+    }
+    let stats = FpStats {
+        nodes: nodes.len(),
+        firewalled: nodes.iter().filter(|n| n.firewalled).count(),
+        env_dependent: nodes
+            .iter()
+            .filter(|n| !n.firewalled && n.env_dependent)
+            .count(),
+        unresolved_edges: unresolved.len(),
+    };
+    (out, stats)
 }
 
 #[cfg(test)]
@@ -352,15 +388,19 @@ mod tests {
         }
     }
 
+    fn compute_file_fingerprints_map(files: &[FileFpInput<'_>]) -> BTreeMap<String, [u8; 32]> {
+        compute_file_fingerprints(files).0
+    }
+
     #[test]
     fn stable_and_order_independent() {
         let fa = [fact("a", true, &["b"], false)];
         let fb = [fact("b", false, &[], false)];
-        let one = compute_file_fingerprints(&[
+        let one = compute_file_fingerprints_map(&[
             input("x", &fa, 1, false, 1),
             input("y", &fb, 2, false, 2),
         ]);
-        let two = compute_file_fingerprints(&[
+        let two = compute_file_fingerprints_map(&[
             input("y", &fb, 2, false, 2),
             input("x", &fa, 1, false, 1),
         ]);
@@ -371,14 +411,14 @@ mod tests {
     fn each_input_perturbation_changes_fp() {
         let fa = [fact("a", true, &["b"], false)];
         let fb = [fact("b", false, &[], false)];
-        let base = compute_file_fingerprints(&[
+        let base = compute_file_fingerprints_map(&[
             input("x", &fa, 1, false, 1),
             input("y", &fb, 2, false, 2),
         ]);
 
         // Callee's direct throws change → caller fp changes.
         let fb2 = [fact("b", true, &[], false)];
-        let v = compute_file_fingerprints(&[
+        let v = compute_file_fingerprints_map(&[
             input("x", &fa, 1, false, 1),
             input("y", &fb2, 2, false, 2),
         ]);
@@ -387,7 +427,7 @@ mod tests {
 
         // Own edge set changes → own fp changes.
         let fa2 = [fact("a", true, &[], false)];
-        let v = compute_file_fingerprints(&[
+        let v = compute_file_fingerprints_map(&[
             input("x", &fa2, 1, false, 1),
             input("y", &fb, 2, false, 2),
         ]);
@@ -396,24 +436,24 @@ mod tests {
 
         // Unresolved edge ⇒ env-dependent ⇒ layout change flows in.
         let fu = [fact("u", false, &["not.a.node"], false)];
-        let b1 = compute_file_fingerprints(&[input("x", &fu, 1, false, 1)]);
-        let b2 = compute_file_fingerprints(&[input("x", &fu, 9, false, 1)]);
+        let b1 = compute_file_fingerprints_map(&[input("x", &fu, 1, false, 1)]);
+        let b2 = compute_file_fingerprints_map(&[input("x", &fu, 9, false, 1)]);
         assert_ne!(b1["x"], b2["x"], "env-dependent node must fold layout env");
 
         // …but a fully-resolved, firewall-free local graph ignores env.
-        let b1 = compute_file_fingerprints(&[
+        let b1 = compute_file_fingerprints_map(&[
             input("x", &fa, 1, false, 1),
             input("y", &fb, 2, false, 2),
         ]);
-        let b2 = compute_file_fingerprints(&[
+        let b2 = compute_file_fingerprints_map(&[
             input("x", &fa, 9, false, 1),
             input("y", &fb, 2, false, 2),
         ]);
         assert_eq!(b1["x"], b2["x"], "resolved-only node must not fold env");
 
         // Impl-file content joins the env term.
-        let b1 = compute_file_fingerprints(&[input("x", &fu, 1, true, 1)]);
-        let b2 = compute_file_fingerprints(&[input("x", &fu, 1, true, 7)]);
+        let b1 = compute_file_fingerprints_map(&[input("x", &fu, 1, true, 1)]);
+        let b2 = compute_file_fingerprints_map(&[input("x", &fu, 1, true, 7)]);
         assert_ne!(b1["x"], b2["x"]);
     }
 
@@ -422,11 +462,11 @@ mod tests {
         // a → b(firewalled) → env-dependent world: b's contract isolates a.
         let fb = [fact("b", true, &["unresolved.thing"], true)];
         let fa = [fact("a", false, &["b"], false)];
-        let b1 = compute_file_fingerprints(&[
+        let b1 = compute_file_fingerprints_map(&[
             input("x", &fa, 1, false, 1),
             input("y", &fb, 1, false, 1),
         ]);
-        let b2 = compute_file_fingerprints(&[
+        let b2 = compute_file_fingerprints_map(&[
             input("x", &fa, 9, false, 1),
             input("y", &fb, 9, false, 1),
         ]);
@@ -434,7 +474,7 @@ mod tests {
         assert_eq!(b1["y"], b2["y"], "firewalled node ignores env entirely");
         // But the firewalled declaration itself changing DOES flow.
         let fb2 = [fact("b", false, &["unresolved.thing"], true)];
-        let b3 = compute_file_fingerprints(&[
+        let b3 = compute_file_fingerprints_map(&[
             input("x", &fa, 1, false, 1),
             input("y", &fb2, 1, false, 1),
         ]);
@@ -447,12 +487,12 @@ mod tests {
         let fa = [fact("a", true, &["b"], false)];
         let fb = [fact("b", false, &["a"], false)];
         let fc = [fact("c", false, &["a"], false)];
-        let one = compute_file_fingerprints(&[
+        let one = compute_file_fingerprints_map(&[
             input("fa", &fa, 1, false, 1),
             input("fb", &fb, 1, false, 1),
             input("fc", &fc, 1, false, 1),
         ]);
-        let two = compute_file_fingerprints(&[
+        let two = compute_file_fingerprints_map(&[
             input("fc", &fc, 1, false, 1),
             input("fb", &fb, 1, false, 1),
             input("fa", &fa, 1, false, 1),
@@ -460,7 +500,7 @@ mod tests {
         assert_eq!(one, two);
         // A change to either cycle member invalidates both members AND c.
         let fb2 = [fact("b", true, &["a"], false)];
-        let three = compute_file_fingerprints(&[
+        let three = compute_file_fingerprints_map(&[
             input("fa", &fa, 1, false, 1),
             input("fb", &fb2, 1, false, 1),
             input("fc", &fc, 1, false, 1),
@@ -474,10 +514,10 @@ mod tests {
     fn added_and_removed_definitions_invalidate_referencers() {
         // `a` calls `helper`, which is initially UNRESOLVED (env-dependent).
         let fa = [fact("a", false, &["helper"], false)];
-        let before = compute_file_fingerprints(&[input("x", &fa, 1, false, 1)]);
+        let before = compute_file_fingerprints_map(&[input("x", &fa, 1, false, 1)]);
         // A new file defines `helper`: the edge now resolves — fp changes.
         let fh = [fact("helper", true, &[], false)];
-        let after = compute_file_fingerprints(&[
+        let after = compute_file_fingerprints_map(&[
             input("x", &fa, 1, false, 1),
             input("h", &fh, 1, false, 1),
         ]);

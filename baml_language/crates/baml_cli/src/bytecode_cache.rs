@@ -953,7 +953,11 @@ fn validate_throws_fingerprints(
             },
         )
         .collect();
-    let fps = crate::throws_fingerprints::compute_file_fingerprints(&inputs);
+    let (fps, stats) = crate::throws_fingerprints::compute_file_fingerprints(&inputs);
+    cache_debug(format_args!(
+        "throws fp graph: {} nodes, {} firewalled, {} env-dependent, {} unresolved edge names",
+        stats.nodes, stats.firewalled, stats.env_dependent, stats.unresolved_edges
+    ));
     let mut invalid = std::collections::BTreeSet::new();
     let mut checked = 0usize;
     for entry in &manifest.files {
@@ -1984,7 +1988,7 @@ impl CacheContext {
                     }
                 })
                 .collect();
-            crate::throws_fingerprints::compute_file_fingerprints(&inputs)
+            crate::throws_fingerprints::compute_file_fingerprints(&inputs).0
         };
 
         let mut referenced = referenced_names_by_file(program);
