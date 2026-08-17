@@ -132,6 +132,9 @@ jobs:
 
       - name: "Enqueue to merge queue"
         # No diff means no PR number and nothing to enqueue.
+        # We want "merge when ready" immediately after filing the PR. While
+        # checks are pending, `gh pr merge` tries repository auto-merge instead;
+        # `enqueuePullRequest` directly enrolls the PR in canary's merge queue.
         if: steps.cpr.outputs.pull-request-number
         env:
           GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
