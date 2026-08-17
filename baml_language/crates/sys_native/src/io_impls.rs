@@ -2662,6 +2662,7 @@ impl io::IoClassHttpServer for NativeSysOps {
         _call_id: CallId,
         server: owned::http::Server,
         handler: bex_external_types::Handle,
+        websocket: bex_external_types::Handle,
         tls_config: Option<owned::http::TlsConfig>,
         allow_http1: bool,
         allow_http2: bool,
@@ -2673,6 +2674,7 @@ impl io::IoClassHttpServer for NativeSysOps {
         crate::http_server::serve(
             server,
             handler,
+            websocket,
             tls_config,
             allow_http1,
             allow_http2,
@@ -2706,6 +2708,7 @@ impl io::IoClassHttpServer for NativeSysOps {
         _call_id: CallId,
         _server: owned::http::Server,
         _handler: bex_external_types::Handle,
+        _websocket: bex_external_types::Handle,
         _tls_config: Option<owned::http::TlsConfig>,
         _allow_http1: bool,
         _allow_http2: bool,
@@ -3501,7 +3504,8 @@ impl io::IoNamespaceWs for NativeSysOps {
                 message: format!("WebSocket connect failed: {error}"),
             })?;
             let (sink, source) = transport.split();
-            let handle = crate::registry::REGISTRY.register_ws_stream(sink, source, url);
+            let handle =
+                crate::registry::REGISTRY.register_ws_stream(Box::new(sink), Box::new(source), url);
             Ok(owned::ws::WebSocket {
                 _handle: Arc::new(handle),
             })
