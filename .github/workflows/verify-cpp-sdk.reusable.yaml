@@ -64,7 +64,7 @@ jobs:
                         elif .os == "linux" then (if .arch == "aarch64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)
                         else (if .arch == "aarch64" then "windows-11-arm" else "windows-2022" end) end),
                smoke_container: (if .libc == "musl" then "alpine:3.21" else null end),
-               msvc_arch: (if .arch == "aarch64" then "arm64" else "amd64" end)}]}' release/platforms.json)"
+               msvc_arch: (if .arch == "aarch64" then "arm64" else "amd64" end)}]}' baml_language/crates/baml_release/platforms.json)"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   verify:

@@ -77,7 +77,7 @@ jobs:
                      | .artifacts.toolchain.runner),
                 toolchain: "1.91.1",
                 label: " (MSRV)",
-                compile_only: true}])}' release/platforms.json)"
+                compile_only: true}])}' baml_language/crates/baml_release/platforms.json)"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   verify:

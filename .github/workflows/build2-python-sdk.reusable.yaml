@@ -29,7 +29,7 @@ defaults:
 
 jobs:
   # Target set + per-target runner/manylinux/architecture come from the platform
-  # contract (`release/platforms.json`), not a hand-copied matrix list.
+  # contract (`baml_language/crates/baml_release/platforms.json`), not a hand-copied matrix list.
   matrix:
     name: Compute target matrix
     runs-on: ubuntu-latest
@@ -52,7 +52,7 @@ jobs:
             | .artifacts.python as $p
             | {target: .triple, runs_on: $p.runner}
               + (if $p.manylinux then {manylinux: $p.manylinux} else {} end)
-              + (if $p.architecture then {architecture: $p.architecture} else {} end)]' release/platforms.json)"
+              + (if $p.architecture then {architecture: $p.architecture} else {} end)]' baml_language/crates/baml_release/platforms.json)"
           echo "include=$include" >> "$GITHUB_OUTPUT"
           jq . <<<"$include"
 

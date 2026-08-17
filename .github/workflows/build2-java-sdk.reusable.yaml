@@ -10,7 +10,7 @@ name: BAML SDK Release - Build Java
 #     canary → `0.15.0`, nightly → `0.15.0-nightly.YYYYMMDD.a`), injected via
 #     `-PbamlVersion`.
 #   - the 8-target build matrix is generated from the repository platform
-#     contract (`release/platforms.json`) `java` artifact key, not a hand-copied
+#     contract (`baml_language/crates/baml_release/platforms.json`) `java` artifact key, not a hand-copied
 #     list. Experimental targets (musl, windows-arm64) carry `experimental: true`
 #     there, which drives `continue-on-error` so they never block the release.
 #
@@ -63,7 +63,7 @@ defaults:
 
 jobs:
   # The java build matrix is generated from the platform contract
-  # (`release/platforms.json`) so the target set + per-target runner live in one
+  # (`baml_language/crates/baml_release/platforms.json`) so the target set + per-target runner live in one
   # machine-readable place. `libc` rides along so the musl setup step can key on
   # it; `experimental` is emitted only when true (drives continue-on-error).
   matrix:
@@ -90,7 +90,7 @@ jobs:
             | select(.artifacts.java != null)
             | .artifacts.java as $j
             | {target: .triple, os: $j.runner, platform: $j.platform, libc: .libc}
-              + ({experimental: $j.experimental} | with_entries(select(.value == true)))]' release/platforms.json)"
+              + ({experimental: $j.experimental} | with_entries(select(.value == true)))]' baml_language/crates/baml_release/platforms.json)"
           echo "include=$include" >> "$GITHUB_OUTPUT"
           jq . <<<"$include"
 

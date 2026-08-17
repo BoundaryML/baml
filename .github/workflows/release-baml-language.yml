@@ -266,7 +266,7 @@ jobs:
           path: release-plan.json
 
   # The toolchain/wrapper build matrix (and, over time, the others) is generated
-  # from the repository's platform contract (`release/platforms.json`) so the
+  # from the repository's platform contract (`baml_language/crates/baml_release/platforms.json`) so the
   # target set + per-target runners live in one machine-readable place.
   build-matrix:
     name: Compute build matrices
@@ -289,7 +289,7 @@ jobs:
           # setup step can key on it.
           toolchain="$(jq -c '[.targets[]
             | select(.artifacts.toolchain != null)
-            | {target: .triple, os: .artifacts.toolchain.runner, libc: .libc}]' release/platforms.json)"
+            | {target: .triple, os: .artifacts.toolchain.runner, libc: .libc}]' baml_language/crates/baml_release/platforms.json)"
           echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
           jq . <<<"$toolchain"
           wrapper="$(scripts/baml-release-platforms wrapper-matrix)"
