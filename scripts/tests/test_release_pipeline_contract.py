@@ -684,7 +684,10 @@ class WorkflowGraphTests(unittest.TestCase):
             "RELEASE_SUCCEEDED: ${{ needs.publish-pkg-channel.result == 'success' }}",
             notify_step,
         )
-        self.assertIn('if not failures and channel != "canary"', notifier)
+        self.assertIn(
+            'if release_succeeded and not failures and channel != "canary"',
+            notifier,
+        )
         self.assertIn(
             'SUCCESSFUL_JOB_CONCLUSIONS = {"success", "skipped"}',
             notifier,
