@@ -2464,12 +2464,15 @@ impl<'db> InferenceContext<'db> {
                 self.field_access(expr, &nonnull, member)
             }
             Expr::OptionalCall { callee, args } => {
+                self.validate_runtime_type_arg_operands(body, expr);
                 let callee_ty = self.infer_expr(body, *callee, &Expectation::None);
                 self.report_mounted_reserved_call(expr, *callee);
                 self.check_needless_chain(body, expr, *callee, &callee_ty);
                 let nonnull = self.peel_chain_null(&callee_ty);
                 let args = args.clone();
-                self.check_call_args(body, expr, *callee, &nonnull, false, &args)
+                let ret = self.check_call_args(body, expr, *callee, &nonnull, false, &args);
+                self.report_runtime_indirect_call(expr, *callee);
+                ret
             }
             Expr::Lambda(def) => self.infer_lambda(body, expr, def, expected),
             Expr::Match {
