@@ -245,11 +245,22 @@ jobs:
           # filters hard-error against the export's trimmed cargo metadata
           # (those packages are not in the unit graph); nextest-l2.toml is
           # the unit-graph-scoped config. See the comment in that file.
+          # -E: arm equivalence with the cargo arm's --exclude list. The
+          # export CONTAINS baml_cli and baml_lsp2_actions (so the
+          # predicates resolve), but this job's cargo arm never runs them -
+          # they run in the snapshot-tests job. Running them here also
+          # fails structurally: their file-based insta snapshots resolve
+          # against the unit build's baked /build/<crate>/ manifest dir,
+          # which INSTA_WORKSPACE_ROOT cannot remap, so every assertion
+          # reads as "+new results". baml_tests / sdk_test_* / baml_bridge
+          # need no exclusion: they are not in the export, and naming an
+          # absent package in a filterset is itself a hard parse error.
           INSTA_WORKSPACE_ROOT="$PWD" cargo nextest run \
             --config-file "$PWD/.config/nextest-l2.toml" \
             --binaries-metadata "$export_dir/binaries-metadata.json" \
             --cargo-metadata "$export_dir/cargo-metadata.json" \
-            --workspace-remap "$PWD"
+            --workspace-remap "$PWD" \
+            -E 'not (package(=baml_cli) or package(=baml_lsp2_actions))'
 
       - name: "Run tests with nextest"
         if: steps.l2.outputs.hit != 'true'
@@ -459,11 +470,16 @@ jobs:
           # binary is not in the export at all, and a CLI filterset naming a
           # binary absent from the metadata is the same hard parse error the
           # config hit ("operator didn't match any binary names").
+          # -E: arm equivalence with the cargo arm's --exclude list; same
+          # reasoning as the gnu lane (baml_cli / baml_lsp2_actions run in
+          # the snapshot-tests job, and their file-based insta snapshots
+          # cannot resolve from the unit build's relocated manifest dir).
           INSTA_WORKSPACE_ROOT="$PWD" cargo nextest run \
             --config-file "$PWD/.config/nextest-l2.toml" \
             --binaries-metadata "$export_dir/binaries-metadata.json" \
             --cargo-metadata "$export_dir/cargo-metadata.json" \
-            --workspace-remap "$PWD"
+            --workspace-remap "$PWD" \
+            -E 'not (package(=baml_cli) or package(=baml_lsp2_actions))'
 
       - name: "Run tests with nextest"
         if: steps.l2.outputs.hit != 'true'
