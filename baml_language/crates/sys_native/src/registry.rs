@@ -16,6 +16,8 @@ use sys_types::sse::SseEvent;
 use tokio::sync::Mutex as TokioMutex;
 #[cfg(feature = "bundle-http")]
 use tokio::{sync::Notify, task::AbortHandle};
+#[cfg(feature = "bundle-http")]
+use tokio_tungstenite::tungstenite::{Error as WsError, Message as WsMessage};
 
 /// Buffer for SSE events accumulated by a background task.
 pub struct SseBuffer {
@@ -37,13 +39,18 @@ pub struct SseStreamResource {
 #[cfg(feature = "bundle-http")]
 type SseStreamParts = (Arc<TokioMutex<SseBuffer>>, Arc<Notify>, Arc<AtomicBool>);
 
+/// The write half of a connected WebSocket.
+///
+/// Type-erased rather than tied to one transport: a client socket
+/// (`baml.ws.connect`) splits a plain-or-TLS TCP stream, while a server socket
+/// (an HTTP upgrade inside `baml.http.Server.serve`) splits hyper's upgraded
+/// IO. Both reach the registry — and therefore the whole `baml.ws.WebSocket`
+/// surface — through this one type.
 #[cfg(feature = "bundle-http")]
-pub type WsTransport =
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+pub type WsSink = Box<dyn futures::Sink<WsMessage, Error = WsError> + Send + Unpin>;
+/// The read half of a connected WebSocket. See [`WsSink`].
 #[cfg(feature = "bundle-http")]
-pub type WsSink = futures::stream::SplitSink<WsTransport, tokio_tungstenite::tungstenite::Message>;
-#[cfg(feature = "bundle-http")]
-pub type WsSource = futures::stream::SplitStream<WsTransport>;
+pub type WsSource = Box<dyn futures::Stream<Item = Result<WsMessage, WsError>> + Send + Unpin>;
 
 /// How a WebSocket connection ended, as reported to BAML by
 /// `baml.ws.WebSocket.next` (a `baml.ws.CloseEvent`).
@@ -95,6 +102,42 @@ impl WsStreamResource {
         }
         *source = None;
         self.close.get_or_init(|| close)
+    }
+
+    /// Hang up: the side that owns this connection is done with it.
+    ///
+    /// Used by the HTTP server when a `WsAccept` handler returns, so a served
+    /// connection's lifetime is the handler's rather than the garbage
+    /// collector's.
+    ///
+    /// Takes the full teardown when nothing else is reading. If a `next` is in
+    /// flight it closes only the write half and leaves that reader to publish
+    /// the close event when the peer's echo (or EOF) arrives — waiting on the
+    /// read lock here would block until a frame that may never come.
+    pub async fn hangup(&self) {
+        use futures::SinkExt;
+
+        match self.source.try_lock() {
+            Ok(mut source) => {
+                if self.close.get().is_none() {
+                    // `SinkExt::close` sends a status-less close frame, so
+                    // `1005` is what both ends observe.
+                    self.finish(
+                        &mut source,
+                        WsClose {
+                            code: 1005,
+                            reason: String::new(),
+                        },
+                    )
+                    .await;
+                }
+            }
+            Err(_) => {
+                if let Some(mut sink) = self.sink.lock().await.take() {
+                    let _ = sink.close().await;
+                }
+            }
+        }
     }
 }
 

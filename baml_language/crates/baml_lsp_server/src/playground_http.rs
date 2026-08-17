@@ -267,6 +267,7 @@ impl io::IoClassHttpServer for PlaygroundHttp {
         _call_id: CallId,
         _server: owned::http::Server,
         _handler: sys_types::Handle,
+        _websocket: sys_types::Handle,
         _tls_config: Option<owned::http::TlsConfig>,
         _allow_http1: bool,
         _allow_http2: bool,

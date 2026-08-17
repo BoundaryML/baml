@@ -1255,6 +1255,7 @@ impl io::IoClassHttpServer for DefaultIoOps {
         _c: CallId,
         _server: io::owned::http::Server,
         _handler: bex_external_types::Handle,
+        _websocket: bex_external_types::Handle,
         _tls_config: Option<io::owned::http::TlsConfig>,
         _allow_http1: bool,
         _allow_http2: bool,

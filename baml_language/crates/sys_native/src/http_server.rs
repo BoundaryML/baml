@@ -8,6 +8,12 @@
 //! thread. The closure reaches native code as a rooted [`Handle`]; it is never
 //! serialized.
 //!
+//! An HTTP/1.1 WebSocket handshake (RFC 6455) is routed to the separate
+//! `websocket` closure instead. That one returns either a `Response` refusing
+//! the upgrade or a `WsAccept` callable; accepting hands hyper's upgraded IO to
+//! `tokio_tungstenite` and registers it as a `baml.ws.WebSocket`, so a served
+//! socket and a `baml.ws.connect` socket are the same BAML value.
+//!
 //! Also hosts the `TlsConfig.new` / `Response.new` constructors and the unified
 //! [`HttpBody`] used by both client (`fetch`/`send`) and server responses.
 
@@ -23,12 +29,16 @@ use std::{
     time::Duration,
 };
 
+use bex_external_types::BexExternalAdt;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full, LengthLimitError, Limited, StreamBody, combinators::BoxBody};
 use hyper::{
     Request as HyperRequest, Response as HyperResponse,
     body::{Frame, Incoming},
-    header::{HeaderName, HeaderValue},
+    header::{
+        CONNECTION, HeaderMap, HeaderName, HeaderValue, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY,
+        SEC_WEBSOCKET_VERSION, UPGRADE,
+    },
     service::service_fn,
 };
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
@@ -46,6 +56,10 @@ use tokio_rustls::{
         self,
         pki_types::{CertificateDer, PrivateKeyDer},
     },
+};
+use tokio_tungstenite::{
+    WebSocketStream,
+    tungstenite::{handshake::derive_accept_key, protocol::Role},
 };
 
 // `timeout_from_nanos` lives in `io_impls` (always compiled) since the net
@@ -196,6 +210,11 @@ pub(crate) fn downcast_body(
 /// can be either fully buffered ([`Full`]) or incrementally streamed
 /// ([`StreamBody`], for [`HttpBody::Streaming`]).
 type WireBody = BoxBody<Bytes, Infallible>;
+
+/// A connection's `max_connections` slot, shared with the request service so a
+/// WebSocket upgrade can take it over from the HTTP connection that carried the
+/// handshake. Empty once taken, or once the connection has ended.
+type ConnPermit = Arc<std::sync::Mutex<Option<tokio::sync::OwnedSemaphorePermit>>>;
 
 /// A plaintext or TLS connection, unified so hyper can serve either.
 enum MaybeTlsStream {
@@ -357,6 +376,7 @@ pub(crate) fn bind(addr: String) -> SysOpOutput<owned::http::Server> {
 pub(crate) fn serve(
     server: owned::http::Server,
     handler: Handle,
+    websocket: Handle,
     tls_config: Option<owned::http::TlsConfig>,
     allow_http1: bool,
     allow_http2: bool,
@@ -452,11 +472,15 @@ pub(crate) fn serve(
 
             let acceptor = acceptor.clone();
             let handler = handler.clone();
+            let websocket = websocket.clone();
             let spawner = Arc::clone(&spawner);
             let cancel = cancel.clone();
             conns.spawn(async move {
-                // Held for the connection's lifetime; dropping it frees the slot.
-                let _permit = permit;
+                // Held for the connection's lifetime; dropping it frees the
+                // slot. A WebSocket upgrade takes it over (see
+                // `handle_websocket`) so a socket that outlives its HTTP
+                // connection keeps counting against `max_connections`.
+                let permit = Arc::new(std::sync::Mutex::new(Some(permit)));
                 let stream = match acceptor {
                     Some((acceptor, handshake_timeout)) => {
                         let handshake = acceptor.accept(stream);
@@ -479,11 +503,22 @@ pub(crate) fn serve(
                 let io = TokioIo::new(stream);
                 let service = service_fn(move |req: HyperRequest<Incoming>| {
                     let handler = handler.clone();
+                    let websocket = websocket.clone();
                     let spawner = Arc::clone(&spawner);
                     let cancel = cancel.child_token();
+                    let permit = Arc::clone(&permit);
                     async move {
                         Ok::<_, Infallible>(
-                            handle_request(req, handler, spawner, cancel, max_body_size).await,
+                            handle_request(
+                                req,
+                                handler,
+                                websocket,
+                                spawner,
+                                cancel,
+                                max_body_size,
+                                permit,
+                            )
+                            .await,
                         )
                     }
                 });
@@ -497,6 +532,11 @@ pub(crate) fn serve(
 /// Serve a single connection with the protocol(s) the server allows. Both
 /// allowed → negotiate automatically (ALPN for TLS, prefix sniffing for
 /// cleartext); otherwise pin to the single allowed protocol.
+///
+/// The HTTP/1 paths are bound with upgrades enabled, without which
+/// `hyper::upgrade::on` never resolves and a WebSocket handshake would answer
+/// `101` and then hang. HTTP/2 has no such mode: it carries WebSocket over
+/// extended CONNECT (RFC 8441), which this server does not implement.
 async fn serve_connection<S>(
     io: TokioIo<MaybeTlsStream>,
     service: S,
@@ -521,13 +561,13 @@ async fn serve_connection<S>(
                 .timer(TokioTimer::new())
                 .header_read_timeout(t);
         }
-        let _ = builder.serve_connection(io, service).await;
+        let _ = builder.serve_connection_with_upgrades(io, service).await;
     } else if allow_http1 {
         let mut builder = hyper::server::conn::http1::Builder::new();
         if let Some(t) = header_read_timeout {
             builder.timer(TokioTimer::new()).header_read_timeout(t);
         }
-        let _ = builder.serve_connection(io, service).await;
+        let _ = builder.serve_connection(io, service).with_upgrades().await;
     } else if allow_http2 {
         let _ = hyper::server::conn::http2::Builder::new(TokioExecutor::new())
             .serve_connection(io, service)
@@ -541,10 +581,16 @@ async fn serve_connection<S>(
 async fn handle_request(
     req: HyperRequest<Incoming>,
     handler: Handle,
+    websocket: Handle,
     spawner: Arc<dyn VmSpawner>,
     cancel: CancellationToken,
     max_body_size: usize,
+    conn_permit: ConnPermit,
 ) -> HyperResponse<WireBody> {
+    if let Some(key) = websocket_key(&req) {
+        return handle_websocket(req, key, websocket, spawner, cancel, conn_permit).await;
+    }
+
     let request = match to_baml_request(req, max_body_size).await {
         Ok(request) => request,
         Err(BadRequest::TooLarge) => return status_response(413, "payload too large"),
@@ -573,6 +619,212 @@ async fn handle_request(
     }
 }
 
+// ============================================================================
+// WebSocket upgrades
+// ============================================================================
+
+/// The `Sec-WebSocket-Key` of an RFC 6455 upgrade handshake, or `None` if `req`
+/// is an ordinary request.
+///
+/// Every condition is required by §4.1, and only all of them together separate
+/// an upgrade from a plain `GET` — so a request that merely looks websocket-ish
+/// falls through to the normal `handler` rather than being refused. HTTP/2
+/// carries WebSocket over extended CONNECT (RFC 8441) instead, which this
+/// server does not implement; the `HTTP_11` check is what excludes it.
+fn websocket_key(req: &HyperRequest<Incoming>) -> Option<HeaderValue> {
+    if req.method() != hyper::Method::GET || req.version() != hyper::Version::HTTP_11 {
+        return None;
+    }
+    if !header_has_token(req.headers(), &CONNECTION, "upgrade")
+        || !header_has_token(req.headers(), &UPGRADE, "websocket")
+    {
+        return None;
+    }
+    // 13 is the only version this (and every current) implementation speaks.
+    if req
+        .headers()
+        .get(SEC_WEBSOCKET_VERSION)
+        .map(HeaderValue::as_bytes)
+        != Some(b"13")
+    {
+        return None;
+    }
+    req.headers().get(SEC_WEBSOCKET_KEY).cloned()
+}
+
+/// Whether any comma-separated token of header `name` equals `token`, ignoring
+/// case. Both `Connection` and `Upgrade` are token lists (`keep-alive, Upgrade`),
+/// and either may also be split across repeated header fields.
+fn header_has_token(headers: &HeaderMap, name: &HeaderName, token: &str) -> bool {
+    headers.get_all(name).iter().any(|value| {
+        value.to_str().is_ok_and(|value| {
+            value
+                .split(',')
+                .any(|part| part.trim().eq_ignore_ascii_case(token))
+        })
+    })
+}
+
+/// What a `websocket` handler decided.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "One short-lived local per handshake, moved straight into the \
+              matching branch; boxing would add an allocation to the refuse \
+              path to shrink a value that is never stored."
+)]
+enum WsOutcome {
+    /// Complete the handshake and run this `WsAccept` with the socket.
+    Accept(Handle),
+    /// Refuse the upgrade and serve this `Response` instead.
+    Refuse(BexExternalValue),
+}
+
+/// Classify a `websocket` handler's `Response | WsAccept` return.
+///
+/// The two arms are told apart by *shape*, not by the declared type: a callable
+/// crosses as a rooted `TaggedHeapHandle` — the same handle
+/// `spawn_with_callable` consumes, so the accept callback can be invoked later
+/// without re-entering the heap — while a `Response` crosses as a plain
+/// `Instance`.
+///
+/// Deliberately not keyed on the handle's `ty`: closures do not participate in
+/// the engine's union discrimination, so a returned `WsAccept` is tagged with
+/// whichever union member happens to come first (here `Response`). The only
+/// other value the engine tags this way is an `ai.stream.Stream` instance,
+/// which this union cannot hold.
+///
+/// Anything that is not a tagged handle is the `Response` arm and is validated
+/// by [`wire_response`], which reports a malformed one as a 500 rather than
+/// guessing.
+fn websocket_outcome(value: BexExternalValue) -> WsOutcome {
+    // A union-typed return arrives wrapped in its union metadata.
+    let value = match value {
+        BexExternalValue::Union { value, .. } => *value,
+        value => value,
+    };
+    match value {
+        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) => {
+            WsOutcome::Accept(heap_handle)
+        }
+        value => WsOutcome::Refuse(value),
+    }
+}
+
+/// Serve a WebSocket upgrade: run the BAML `websocket` handler, then either
+/// refuse with the `Response` it returned or complete the handshake and hand
+/// the connected socket to its `WsAccept`.
+async fn handle_websocket(
+    mut req: HyperRequest<Incoming>,
+    key: HeaderValue,
+    websocket: Handle,
+    spawner: Arc<dyn VmSpawner>,
+    cancel: CancellationToken,
+    conn_permit: ConnPermit,
+) -> HyperResponse<WireBody> {
+    // A handshake carries no body (RFC 6455 §4.1), and reading one would
+    // consume the stream the upgrade needs, so the handler sees the usual
+    // `Request` shape with an empty body.
+    let request = owned::http::Request {
+        method: req.method().as_str().to_string(),
+        url: req.uri().to_string(),
+        headers: collect_headers(req.headers()),
+        body: String::new(),
+    };
+    let url = request.url.clone();
+
+    // Same isolation as an ordinary request: one failed handshake never stops
+    // the server. See `handle_request` for why this logs at `debug`.
+    let Ok(outcome) = Arc::clone(&spawner)
+        .spawn_with_callable(
+            websocket,
+            vec![request.into_bex_external_value()],
+            cancel.clone(),
+        )
+        .await
+    else {
+        tracing::debug!("WebSocket handler failed (threw, panicked, or was cancelled)");
+        return status_response(500, "websocket handler failed");
+    };
+
+    let accept = match websocket_outcome(outcome) {
+        WsOutcome::Accept(accept) => accept,
+        WsOutcome::Refuse(response) => {
+            return match wire_response(response).await {
+                Ok(resp) => resp,
+                Err(e) => {
+                    tracing::warn!("WebSocket handler returned an invalid response: {e}");
+                    status_response(500, "websocket handler returned an invalid response")
+                }
+            };
+        }
+    };
+
+    // Registered before the response is handed back: hyper resolves this only
+    // once the 101 has been written and the connection released to us.
+    let upgraded = hyper::upgrade::on(&mut req);
+    let handler_cancel = cancel.child_token();
+    // Taken over from the HTTP connection, whose task ends at the upgrade: the
+    // socket, not the exchange that created it, is what occupies the slot.
+    let permit = conn_permit
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    tokio::spawn(async move {
+        let _permit = permit;
+        // The socket outlives the request, so it is bounded by the serve's
+        // cancellation rather than by hyper — without this a shut-down server
+        // would leave its sockets running.
+        tokio::select! {
+            () = cancel.cancelled() => {}
+            () = run_websocket(upgraded, url, accept, spawner, handler_cancel) => {}
+        }
+    });
+
+    HyperResponse::builder()
+        .status(101)
+        .header(CONNECTION, "Upgrade")
+        .header(UPGRADE, "websocket")
+        .header(SEC_WEBSOCKET_ACCEPT, derive_accept_key(key.as_bytes()))
+        .body(Full::new(Bytes::new()).boxed())
+        .unwrap_or_else(|_| status_response(500, "could not build the upgrade response"))
+}
+
+/// Complete the upgrade and run the BAML `WsAccept` handler with the connected
+/// socket, which it owns: the connection is hung up once it returns.
+async fn run_websocket(
+    upgraded: hyper::upgrade::OnUpgrade,
+    url: String,
+    accept: Handle,
+    spawner: Arc<dyn VmSpawner>,
+    cancel: CancellationToken,
+) {
+    use futures::StreamExt;
+
+    // The client can still disappear between the 101 and the handover.
+    let Ok(upgraded) = upgraded.await else {
+        return;
+    };
+    let stream = WebSocketStream::from_raw_socket(TokioIo::new(upgraded), Role::Server, None).await;
+    let (sink, source) = stream.split();
+    // Holding `handle` past the call keeps the registry entry alive for the
+    // handler's whole run; dropping it at the end of this function is what
+    // finally releases the socket.
+    let handle =
+        crate::registry::REGISTRY.register_ws_stream(Box::new(sink), Box::new(source), url);
+    let socket = owned::ws::WebSocket {
+        _handle: Arc::new(handle.clone()),
+    };
+
+    let _ = spawner
+        .spawn_with_callable(accept, vec![socket.into_bex_external_value()], cancel)
+        .await;
+
+    // The handler is done with the connection whether it returned or failed.
+    if let Some(resource) = crate::registry::REGISTRY.get_ws_stream(handle.key()) {
+        resource.hangup().await;
+    }
+}
+
 /// Why a request couldn't be turned into a BAML `Request`.
 enum BadRequest {
     /// The body exceeded `max_body_size` → 413.
@@ -591,26 +843,7 @@ async fn to_baml_request(
     let (parts, body) = req.into_parts();
     let method = parts.method.as_str().to_string();
     let url = parts.uri.to_string();
-    // `headers` is `map<string,string>`, but a header name may repeat. Fold
-    // repeated values with ", " (RFC 7230 §3.2.2) — except `Cookie`, which folds
-    // with "; " (RFC 6265 §5.4); HTTP/2 in particular may split it across fields.
-    // Keeping every value means multiple `X-Forwarded-For` / `Via` aren't lost.
-    let mut headers: IndexMap<String, String> = IndexMap::new();
-    for (name, value) in &parts.headers {
-        let value = String::from_utf8_lossy(value.as_bytes());
-        let sep = if name == hyper::header::COOKIE {
-            "; "
-        } else {
-            ", "
-        };
-        headers
-            .entry(name.as_str().to_string())
-            .and_modify(|existing| {
-                existing.push_str(sep);
-                existing.push_str(&value);
-            })
-            .or_insert_with(|| value.into_owned());
-    }
+    let headers = collect_headers(&parts.headers);
     // `Limited` stops reading past the cap, so an oversized (or unbounded
     // chunked) body can't force unbounded allocation: a length overflow is a
     // 413, any other read error a 400.
@@ -629,6 +862,32 @@ async fn to_baml_request(
         headers,
         body,
     })
+}
+
+/// Fold hyper's headers into the `map<string, string>` shape of `Request.headers`.
+///
+/// A header name may repeat, so repeated values are joined with ", " (RFC 7230
+/// §3.2.2) — except `Cookie`, which joins with "; " (RFC 6265 §5.4); HTTP/2 in
+/// particular may split it across fields. Keeping every value means multiple
+/// `X-Forwarded-For` / `Via` aren't lost.
+fn collect_headers(headers: &HeaderMap) -> IndexMap<String, String> {
+    let mut collected: IndexMap<String, String> = IndexMap::new();
+    for (name, value) in headers {
+        let value = String::from_utf8_lossy(value.as_bytes());
+        let sep = if name == hyper::header::COOKIE {
+            "; "
+        } else {
+            ", "
+        };
+        collected
+            .entry(name.as_str().to_string())
+            .and_modify(|existing| {
+                existing.push_str(sep);
+                existing.push_str(&value);
+            })
+            .or_insert_with(|| value.into_owned());
+    }
+    collected
 }
 
 /// Response headers a handler must not set, because hyper owns message framing

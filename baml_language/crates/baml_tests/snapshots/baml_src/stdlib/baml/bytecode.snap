@@ -3141,69 +3141,78 @@ function baml.http.Response.text(self: baml.http.Response) -> string {
 function baml.http.Response.write(self: baml.http.Response, data: uint8array) -> null {
 }
 
-function baml.http.Server._serve(self: baml.http.Server, handler: (baml.http.Request) -> baml.http.Response throws never, tls_config: baml.http.TlsConfig | null, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout_nanos: bigint) -> never {
+function baml.http.Server._serve(self: baml.http.Server, handler: (baml.http.Request) -> baml.http.Response throws never, websocket: (baml.http.Request) -> baml.http.Response | ((baml.ws.WebSocket) -> void throws never) throws never, tls_config: baml.http.TlsConfig | null, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout_nanos: bigint) -> never {
 }
 
 function baml.http.Server.bind(addr: string) -> baml.http.Server {
 }
 
-function baml.http.Server.serve(self: baml.http.Server, handler: (baml.http.Request) -> baml.http.Response throws never, tls_config: baml.http.TlsConfig | null, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout: baml.time.Duration) -> never {
-    load_var tls_config
+function baml.http.Server.serve(self: baml.http.Server, handler: (baml.http.Request) -> baml.http.Response throws never, websocket: (baml.http.Request) -> baml.http.Response | ((baml.ws.WebSocket) -> void throws never) throws never, tls_config: baml.http.TlsConfig | null, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout: baml.time.Duration) -> never {
+    load_var websocket
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_const null
-    store_var tls_config
+    load_const baml.http.reject_websocket
+    store_var websocket
 
   L0:
-    load_var allow_http1
+    load_var tls_config
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L1
-    load_const true
-    store_var allow_http1
+    load_const null
+    store_var tls_config
 
   L1:
-    load_var allow_http2
+    load_var allow_http1
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L2
     load_const true
-    store_var allow_http2
+    store_var allow_http1
 
   L2:
-    load_var max_body_size
+    load_var allow_http2
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L3
-    load_const 104857600
-    store_var max_body_size
+    load_const true
+    store_var allow_http2
 
   L3:
-    load_var max_connections
+    load_var max_body_size
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L4
-    load_const 1024
-    store_var max_connections
+    load_const 104857600
+    store_var max_body_size
 
   L4:
-    load_var header_read_timeout
+    load_var max_connections
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L5
+    load_const 1024
+    store_var max_connections
+
+  L5:
+    load_var header_read_timeout
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L6
     load_const 30n
     call baml.time.Duration.from_seconds
     store_var header_read_timeout
 
-  L5:
+  L6:
     load_var header_read_timeout
     call baml.time.Duration.to_nanoseconds
-    store_var _15
+    store_var _17
     load_var2 1 2
     load_var2 3 4
     load_var2 5 6
-    load_var2 7 9
+    load_var2 7 8
+    load_var _17
     sys_op baml.http.Server._serve
     return
 }
@@ -3315,6 +3324,19 @@ function baml.http.fetch_sse(request: baml.http.Request, timeout: baml.time.Dura
     load_var2 1 4
     load_var _7
     sys_op baml.http._fetch_sse
+    return
+}
+
+function baml.http.reject_websocket(req: baml.http.Request) -> baml.http.Response {
+    load_const "websocket upgrade is not supported"
+    call baml.String.to_utf8
+    store_var _3
+    load_const 501
+    load_type string
+    load_type string
+    alloc_map 0
+    load_var _3
+    sys_op baml.http.Response.new
     return
 }
 

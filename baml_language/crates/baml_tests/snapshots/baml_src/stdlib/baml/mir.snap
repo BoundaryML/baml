@@ -4743,48 +4743,50 @@ fn baml.http._fetch_sse = builtin(io)
 
 fn baml.http.Server.bind = builtin(io)
 
-fn baml.http.Server.serve(self: baml.http.Server, handler: (baml.http.Request) -> baml.http.Response throws never, tls_config: null | baml.http.TlsConfig, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout: baml.time.Duration) -> never {
+fn baml.http.Server.serve(self: baml.http.Server, handler: (baml.http.Request) -> baml.http.Response throws never, websocket: (baml.http.Request) -> baml.http.Response | ((baml.ws.WebSocket) -> void throws never) throws never, tls_config: null | baml.http.TlsConfig, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout: baml.time.Duration) -> never {
     // Locals:
     let _0: never // _0 // return
     let _1: baml.http.Server // self // param
     let _2: (baml.http.Request) -> baml.http.Response throws never // handler // param
-    let _3: null | baml.http.TlsConfig // tls_config // param
-    let _4: bool // allow_http1 // param
-    let _5: bool // allow_http2 // param
-    let _6: int // max_body_size // param
-    let _7: int // max_connections // param
-    let _8: baml.time.Duration // header_read_timeout // param
-    let _9: bool
+    let _3: (baml.http.Request) -> baml.http.Response | ((baml.ws.WebSocket) -> void throws never) throws never // websocket // param
+    let _4: null | baml.http.TlsConfig // tls_config // param
+    let _5: bool // allow_http1 // param
+    let _6: bool // allow_http2 // param
+    let _7: int // max_body_size // param
+    let _8: int // max_connections // param
+    let _9: baml.time.Duration // header_read_timeout // param
     let _10: bool
     let _11: bool
     let _12: bool
     let _13: bool
     let _14: bool
-    let _15: bigint
+    let _15: bool
+    let _16: bool
+    let _17: bigint
 
     bb0: {
-        _9 = copy _3 == const <omitted>;
-        branch copy _9 -> [bb1, bb2];
+        _10 = copy _3 == const <omitted>;
+        branch copy _10 -> [bb1, bb2];
     }
 
     bb1: {
-        _3 = const null;
+        _3 = const fn baml.http.reject_websocket;
         goto -> bb2;
     }
 
     bb2: {
-        _10 = copy _4 == const <omitted>;
-        branch copy _10 -> [bb3, bb4];
+        _11 = copy _4 == const <omitted>;
+        branch copy _11 -> [bb3, bb4];
     }
 
     bb3: {
-        _4 = const true;
+        _4 = const null;
         goto -> bb4;
     }
 
     bb4: {
-        _11 = copy _5 == const <omitted>;
-        branch copy _11 -> [bb5, bb6];
+        _12 = copy _5 == const <omitted>;
+        branch copy _12 -> [bb5, bb6];
     }
 
     bb5: {
@@ -4793,48 +4795,79 @@ fn baml.http.Server.serve(self: baml.http.Server, handler: (baml.http.Request) -
     }
 
     bb6: {
-        _12 = copy _6 == const <omitted>;
-        branch copy _12 -> [bb7, bb8];
+        _13 = copy _6 == const <omitted>;
+        branch copy _13 -> [bb7, bb8];
     }
 
     bb7: {
-        _6 = const 104857600_i64;
+        _6 = const true;
         goto -> bb8;
     }
 
     bb8: {
-        _13 = copy _7 == const <omitted>;
-        branch copy _13 -> [bb9, bb10];
+        _14 = copy _7 == const <omitted>;
+        branch copy _14 -> [bb9, bb10];
     }
 
     bb9: {
-        _7 = const 1024_i64;
+        _7 = const 104857600_i64;
         goto -> bb10;
     }
 
     bb10: {
-        _14 = copy _8 == const <omitted>;
-        branch copy _14 -> [bb11, bb12];
+        _15 = copy _8 == const <omitted>;
+        branch copy _15 -> [bb11, bb12];
     }
 
     bb11: {
-        _8 = call const fn baml.time.Duration.from_seconds(const 30n) -> [bb12];
+        _8 = const 1024_i64;
+        goto -> bb12;
     }
 
     bb12: {
-        _15 = call const fn baml.time.Duration.to_nanoseconds(copy _8) -> [bb13];
+        _16 = copy _9 == const <omitted>;
+        branch copy _16 -> [bb13, bb14];
     }
 
     bb13: {
-        _0 = sys_op const fn baml.http.Server._serve(copy _1, copy _2, copy _3, copy _4, copy _5, copy _6, copy _7, copy _15) -> bb14;
+        _9 = call const fn baml.time.Duration.from_seconds(const 30n) -> [bb14];
     }
 
     bb14: {
+        _17 = call const fn baml.time.Duration.to_nanoseconds(copy _9) -> [bb15];
+    }
+
+    bb15: {
+        _0 = sys_op const fn baml.http.Server._serve(copy _1, copy _2, copy _3, copy _4, copy _5, copy _6, copy _7, copy _8, copy _17) -> bb16;
+    }
+
+    bb16: {
         return;
     }
 }
 
 fn baml.http.Server._serve = builtin(io)
+
+fn baml.http.reject_websocket(req: baml.http.Request) -> baml.http.Response {
+    // Locals:
+    let _0: baml.http.Response // _0 // return
+    let _1: baml.http.Request // req // param
+    let _2: map<string, string>
+    let _3: uint8array
+
+    bb0: {
+        _2 = {  }: map<string, string>;
+        _3 = call const fn baml.String.to_utf8(const "websocket upgrade is not supported") -> [bb1];
+    }
+
+    bb1: {
+        _0 = sys_op const fn baml.http.Response.new(const 501_i64, copy _2, copy _3) -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.http.TlsConfig.new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout: baml.time.Duration) -> baml.http.TlsConfig {
     // Locals:

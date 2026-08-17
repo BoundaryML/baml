@@ -152,7 +152,9 @@ function         baml.http._send                  <builtin>/baml/ns_http/http.ba
 function         baml.http.fetch_sse              <builtin>/baml/ns_http/http.baml:173
 function         baml.http._fetch_sse             <builtin>/baml/ns_http/http.baml:185
 class            baml.http.Server                 <builtin>/baml/ns_http/server.baml:10
-class            baml.http.TlsConfig              <builtin>/baml/ns_http/server.baml:110
+type             baml.http.WsAccept               <builtin>/baml/ns_http/server.baml:140
+function         baml.http.reject_websocket       <builtin>/baml/ns_http/server.baml:148
+class            baml.http.TlsConfig              <builtin>/baml/ns_http/server.baml:164
 function         baml.id.current                  <builtin>/baml/ns_id/id.baml:6
 function         baml.id.new                      <builtin>/baml/ns_id/id.baml:13
 function         baml.id.set                      <builtin>/baml/ns_id/id.baml:25
