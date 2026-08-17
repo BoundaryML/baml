@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 use web_time::Duration;
 
-fn builder() -> reqwest::ClientBuilder {
+fn builder() -> baml_http::ClientBuilder {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
-            reqwest::Client::builder()
+            baml_http::Client::builder()
         } else {
             let danger_accept_invalid_certs = matches!(std::env::var("DANGER_ACCEPT_INVALID_CERTS").as_deref(), Ok("1"));
-            reqwest::Client::builder()
+            baml_http::Client::builder()
                 // NB: we can NOT set a total request timeout here: our users
                 // regularly have requests that take multiple minutes, due to how
                 // long LLMs take
@@ -26,22 +26,22 @@ fn builder() -> reqwest::ClientBuilder {
     }
 }
 
-pub fn create_client() -> Result<reqwest::Client> {
+pub fn create_client() -> Result<baml_http::Client> {
     builder().build().context("Failed to create reqwest client")
 }
 
 pub fn create_http_client(
     http_config: &internal_llm_client::HttpConfig,
-) -> Result<reqwest::Client> {
+) -> Result<baml_http::Client> {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             // WASM doesn't support timeouts, use default builder
-            reqwest::Client::builder()
+            baml_http::Client::builder()
                 .build()
                 .context("Failed to create reqwest client")
         } else {
             let danger_accept_invalid_certs = matches!(std::env::var("DANGER_ACCEPT_INVALID_CERTS").as_deref(), Ok("1"));
-            let mut builder = reqwest::Client::builder()
+            let mut builder = baml_http::Client::builder()
                 .danger_accept_invalid_certs(danger_accept_invalid_certs)
                 .http2_keep_alive_interval(Some(Duration::from_secs(10)));
 
@@ -75,7 +75,7 @@ pub fn create_http_client(
     }
 }
 
-pub(crate) fn create_tracing_client() -> Result<reqwest::Client> {
+pub(crate) fn create_tracing_client() -> Result<baml_http::Client> {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             let cb = builder();

@@ -6,8 +6,10 @@ use pyo3::{
     prelude::{pymethods, PyResult},
     pyclass,
     types::{PyAnyMethods, PyDict, PyList},
-    Bound, IntoPyObjectExt, PyObject, PyRef, Python,
+    Bound, IntoPyObjectExt, PyRef, Python,
 };
+
+use crate::PyObject;
 
 // Type alias for pickle reduce return type
 type PickleReduceResult = PyResult<(
@@ -48,7 +50,7 @@ crate::lang_wrapper!(
 );
 
 #[derive(Debug, Clone)]
-#[pyclass]
+#[pyclass(from_py_object)]
 pub struct BamlLogEvent {
     pub metadata: LogEventMetadata,
     pub prompt: Option<String>,
@@ -59,7 +61,7 @@ pub struct BamlLogEvent {
 }
 
 #[derive(Debug, Clone)]
-#[pyclass]
+#[pyclass(from_py_object)]
 pub struct LogEventMetadata {
     pub event_id: String,
     pub parent_id: Option<String>,
@@ -130,7 +132,7 @@ fn extract_handlers_recursive(
 
     // Extract block handlers from this level
     if let Ok(block_bound) = bindings.getattr("block") {
-        if let Ok(block_list) = block_bound.downcast::<PyList>() {
+        if let Ok(block_list) = block_bound.cast::<PyList>() {
             for handler in block_list {
                 if let Ok(h) = handler.into_py_any(py) {
                     block_handlers.push(Arc::new(h));
@@ -141,10 +143,10 @@ fn extract_handlers_recursive(
 
     // Extract var handlers from this level
     if let Ok(vars_bound) = bindings.getattr("vars") {
-        if let Ok(vars_dict) = vars_bound.downcast::<PyDict>() {
+        if let Ok(vars_dict) = vars_bound.cast::<PyDict>() {
             for (key, value) in vars_dict {
                 if let Ok(var_name) = key.extract::<String>() {
-                    if let Ok(handler_list) = value.downcast::<PyList>() {
+                    if let Ok(handler_list) = value.cast::<PyList>() {
                         let handlers: Vec<Arc<PyObject>> = handler_list
                             .into_iter()
                             .filter_map(|h| h.into_py_any(py).ok().map(Arc::new))
@@ -162,10 +164,10 @@ fn extract_handlers_recursive(
 
     // Extract stream handlers from this level
     if let Ok(streams_bound) = bindings.getattr("streams") {
-        if let Ok(streams_dict) = streams_bound.downcast::<PyDict>() {
+        if let Ok(streams_dict) = streams_bound.cast::<PyDict>() {
             for (key, value) in streams_dict {
                 if let Ok(var_name) = key.extract::<String>() {
-                    if let Ok(handler_list) = value.downcast::<PyList>() {
+                    if let Ok(handler_list) = value.cast::<PyList>() {
                         let handlers: Vec<Arc<PyObject>> = handler_list
                             .into_iter()
                             .filter_map(|h| h.into_py_any(py).ok().map(Arc::new))
@@ -183,7 +185,7 @@ fn extract_handlers_recursive(
 
     // Recursively extract from nested functions
     if let Ok(functions_bound) = bindings.getattr("functions") {
-        if let Ok(functions_dict) = functions_bound.downcast::<PyDict>() {
+        if let Ok(functions_dict) = functions_bound.cast::<PyDict>() {
             for (key, value) in functions_dict {
                 if let Ok(_child_fn_name) = key.extract::<String>() {
                     // Recursively extract from child function's bindings
@@ -363,7 +365,7 @@ impl BamlRuntime {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let watch_handler = shared_handler(move |notification| {
                 if let Some(ref callbacks) = notification_callbacks {
-                    Python::with_gil(|py| {
+                    Python::attach(|py| {
                         match notification.value {
                             baml_compiler::watch::WatchBamlValue::Value(value) => {
                                 if let Some(var_name) = &notification.variable_name {
@@ -562,10 +564,10 @@ impl BamlRuntime {
             None
         };
 
-        let (result, _event_id) = py.allow_threads(|| {
+        let (result, _event_id) = py.detach(|| {
             let watch_handler = shared_handler(move |event| {
                 if let Some(ref callbacks) = notification_callbacks {
-                    Python::with_gil(|py| {
+                    Python::attach(|py| {
                         match event.value {
                             baml_compiler::watch::WatchBamlValue::Value(value) => {
                                 if let Some(var_name) = &event.variable_name {
@@ -903,7 +905,7 @@ impl BamlRuntime {
 
         // TODO: Figure out if this will be async or not (images, media, etc).
         // If it's not async then skip gil and threads.
-        let result = py.allow_threads(|| {
+        let result = py.detach(|| {
             self.inner.build_request_sync(
                 function_name,
                 &args_map,
@@ -993,7 +995,7 @@ impl BamlRuntime {
             baml_runtime
                 .as_ref()
                 .set_log_event_callback(Some(Box::new(move |log_event| {
-                    Python::with_gil(|py| {
+                    Python::attach(|py| {
                         match arc_callback.call1(
                             py,
                             (BamlLogEvent {

@@ -143,8 +143,7 @@ impl RenderTestExecutionStatus for AggregateRenderer {
 }
 
 async fn file_reader(path: String) -> Result<Vec<u8>> {
-    let file_path = async_std::path::PathBuf::from(&path);
-    let file_content = async_std::fs::read(file_path).await?;
+    let file_content = tokio::fs::read(&path).await?;
     Ok(file_content)
 }
 

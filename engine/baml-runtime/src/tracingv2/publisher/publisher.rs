@@ -100,7 +100,7 @@ struct RuntimeAST {
     #[serde(skip)]
     env_vars: PublisherEnvVars,
     #[serde(skip)]
-    pub client: reqwest::Client,
+    pub client: baml_http::Client,
     #[serde(skip)]
     blob_cache: BlobRefCache,
 }
@@ -136,7 +136,7 @@ impl RuntimeAST {
         let fut = async {
             if self.api_key().is_none() {
                 return Err(ApiError::Http {
-                    status: reqwest::StatusCode::UNAUTHORIZED,
+                    status: baml_http::StatusCode::UNAUTHORIZED,
                     body: format!("BOUNDARY_API_KEY is not set for {}", TEndpoint::path()),
                 });
             }
@@ -190,10 +190,10 @@ impl RuntimeAST {
 #[derive(thiserror::Error, Debug)]
 pub enum ApiError {
     #[error("Transport error: {0}")]
-    Transport(reqwest::Error),
+    Transport(baml_http::Error),
     #[error("HTTP error: {status} {body}")]
     Http {
-        status: reqwest::StatusCode,
+        status: baml_http::StatusCode,
         body: String,
     },
     #[error("Failed to deserialize response: {0}")]
@@ -309,7 +309,7 @@ fn ensure_publisher_started() -> Option<&'static mpsc::Sender<PublisherMessage>>
     let runtime_ast = Arc::new(RuntimeAST {
         ast: config.ast.clone(),
         env_vars: config.env_vars.clone(),
-        client: reqwest::Client::new(),
+        client: baml_http::Client::new(),
         blob_cache: BlobRefCache::with_upload_channel(blob_tx.clone()),
     });
 
@@ -655,12 +655,12 @@ impl TracePublisher {
             .put(upload_url)
             .json(&payload)
             .headers({
-                let mut headers = reqwest::header::HeaderMap::new();
+                let mut headers = baml_http::header::HeaderMap::new();
                 for (key, value) in upload_metadata.to_map() {
                     let header_name = format!("x-amz-meta-{key}");
                     if let (Ok(name), Ok(val)) = (
-                        reqwest::header::HeaderName::from_bytes(header_name.as_bytes()),
-                        reqwest::header::HeaderValue::from_str(&value),
+                        baml_http::header::HeaderName::from_bytes(header_name.as_bytes()),
+                        baml_http::header::HeaderValue::from_str(&value),
                     ) {
                         headers.insert(name, val);
                     }
@@ -977,7 +977,7 @@ impl BlobUploader {
                 return Err(e.into());
             }
         };
-        if let Ok(parsed_url) = reqwest::Url::parse(&upload_response.s3_presigned_url) {
+        if let Ok(parsed_url) = baml_http::Url::parse(&upload_response.s3_presigned_url) {
             log::debug!(
                 "Received blob upload URL host={} path={} ({} blobs excluded)",
                 parsed_url.host_str().unwrap_or_default(),

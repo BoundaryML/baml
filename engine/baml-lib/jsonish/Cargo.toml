@@ -32,7 +32,6 @@ serde_json.workspace = true
 serde.workspace = true
 # jsonschema = "0.17.1"
 either.workspace = true
-test-log.workspace = true
 regex.workspace = true
 thiserror = "2.0.9"
 unicode-normalization = "0.1.24"
@@ -42,6 +41,7 @@ uuid = { workspace = true, features = ["v4", "js"] }
 getrandom = { version = "0.2.15", features = ["js"] }
 
 [dev-dependencies]
+test-log.workspace = true
 assert-json-diff = "2.0.2"
 wasm-bindgen-test = "0.3"
 peak_alloc = "0.2.0"

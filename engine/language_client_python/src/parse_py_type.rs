@@ -7,10 +7,13 @@ use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
     types::{PyBool, PyBoolMethods, PyDict, PyDictMethods, PyList},
-    IntoPyObjectExt, PyErr, PyObject, PyResult, Python,
+    IntoPyObjectExt, PyErr, PyResult, Python,
 };
 
-use crate::types::{BamlAudioPy, BamlImagePy, BamlPdfPy, BamlVideoPy};
+use crate::{
+    types::{BamlAudioPy, BamlImagePy, BamlPdfPy, BamlVideoPy},
+    PyObject,
+};
 
 struct SerializationError {
     position: Vec<String>,
@@ -209,7 +212,7 @@ pub fn parse_py_type(
     any: PyObject,
     serialize_unknown_types_as_str: bool,
 ) -> PyResult<Option<BamlValue>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let enum_type = py.import("enum").and_then(|m| m.getattr("Enum"))?;
         let pydantic = py.import("pydantic")?;
         let base_model = pydantic.getattr("BaseModel")?;
@@ -274,7 +277,7 @@ pub fn parse_py_type(
 
                 // Get extra fields (like if this is a @@dynamic class)
                 if let Ok(extra) = any.getattr(py, "__pydantic_extra__") {
-                    if let Ok(extra_dict) = extra.downcast_bound::<PyDict>(py) {
+                    if let Ok(extra_dict) = extra.cast_bound::<PyDict>(py) {
                         for (key, value) in extra_dict.iter() {
                             if let (Ok(key), value) = (key.extract::<String>(), value) {
                                 fields.insert(key, value.into_py_any(py)?);
@@ -285,7 +288,7 @@ pub fn parse_py_type(
 
                 Ok(MappedPyType::Class(name, fields))
                 // use downcast only
-            } else if let Ok(list) = any.downcast_bound::<PyList>(py) {
+            } else if let Ok(list) = any.cast_bound::<PyList>(py) {
                 let mut items = vec![];
                 let len = list.len()?;
                 for idx in 0..len {
@@ -294,7 +297,7 @@ pub fn parse_py_type(
                 Ok(MappedPyType::List(items))
             } else if let Ok(kv) = any.extract::<HashMap<String, PyObject>>(py) {
                 Ok(MappedPyType::Map(kv))
-            } else if let Ok(b) = any.downcast_bound::<PyBool>(py) {
+            } else if let Ok(b) = any.cast_bound::<PyBool>(py) {
                 Ok(MappedPyType::Bool(b.is_true()))
             } else if let Ok(i) = any.extract::<i64>(py) {
                 Ok(MappedPyType::Int(i))
@@ -306,16 +309,16 @@ pub fn parse_py_type(
                 Ok(MappedPyType::String(s))
             } else if any.is_none(py) {
                 Ok(MappedPyType::None)
-            } else if let Ok(b) = any.downcast_bound::<BamlImagePy>(py) {
+            } else if let Ok(b) = any.cast_bound::<BamlImagePy>(py) {
                 let b = b.borrow();
                 Ok(MappedPyType::BamlMedia(b.inner.clone()))
-            } else if let Ok(b) = any.downcast_bound::<BamlAudioPy>(py) {
+            } else if let Ok(b) = any.cast_bound::<BamlAudioPy>(py) {
                 let b = b.borrow();
                 Ok(MappedPyType::BamlMedia(b.inner.clone()))
-            } else if let Ok(b) = any.downcast_bound::<BamlPdfPy>(py) {
+            } else if let Ok(b) = any.cast_bound::<BamlPdfPy>(py) {
                 let b = b.borrow();
                 Ok(MappedPyType::BamlMedia(b.inner.clone()))
-            } else if let Ok(b) = any.downcast_bound::<BamlVideoPy>(py) {
+            } else if let Ok(b) = any.cast_bound::<BamlVideoPy>(py) {
                 let b = b.borrow();
                 Ok(MappedPyType::BamlMedia(b.inner.clone()))
             } else if matches!(unknown_type_handler, UnknownTypeHandler::SerializeAsStr) {

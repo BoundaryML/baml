@@ -2758,7 +2758,7 @@ async fn evaluate_builtin_function(
             let target_type = &type_args[0];
 
             // Make HTTP request
-            let response = reqwest::get(&url).await.with_context(|| {
+            let response = baml_http::get(&url).await.with_context(|| {
                 format!(
                     "baml.fetch_as: failed to fetch URL '{}' at {:?}",
                     url, meta.0

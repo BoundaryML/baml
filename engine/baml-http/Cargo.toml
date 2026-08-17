@@ -1,0 +1,81 @@
+[package]
+name = "baml-http"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description = "HTTP client facade for BAML: hyper-backed native, reqwest on wasm"
+license = "Apache-2.0"
+
+[lints.rust]
+elided_named_lifetimes = "deny"
+unused_imports = "deny"
+unused_must_use = "deny"
+unused_variables = "deny"
+
+[features]
+# TLS backend for the native (hyper) client. Exactly one should be enabled.
+#
+#   native-tls (default): links the platform TLS (SChannel / Security.framework
+#     / system OpenSSL). Picks up the OS trust store automatically, so it works
+#     out of the box in environments with corporate/internal CAs, and avoids
+#     the `ring` crate entirely. This is the friendliest option for monorepos
+#     that ban ring and mandate the system/BoringSSL crypto.
+#
+#   rustls-tls: statically links rustls + ring with bundled webpki roots. No
+#     system TLS dependency, which is the most portable option for prebuilt
+#     wheels, but pulls in `ring`.
+default = ["native-tls"]
+native-tls = ["dep:hyper-tls", "dep:native-tls", "dep:tokio-native-tls"]
+# Build native-tls against a statically-vendored OpenSSL (portable wheels
+# without a system libssl). Ignored on macOS/Windows, which use the OS stack.
+native-tls-vendored = ["native-tls", "native-tls?/vendored"]
+rustls-tls = ["dep:hyper-rustls", "dep:rustls", "dep:webpki-roots"]
+
+[dependencies]
+bytes.workspace = true
+futures.workspace = true
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+hyper = { version = "1", default-features = false, features = [
+  "client",
+  "http1",
+  "http2",
+] }
+hyper-util = { version = "0.1.14", default-features = false, features = [
+  "client",
+  "client-legacy",
+  "http1",
+  "http2",
+  "tokio",
+] }
+# native-tls backend (default)
+hyper-tls = { version = "0.6", optional = true }
+native-tls = { version = "0.2", features = ["alpn"], optional = true }
+tokio-native-tls = { version = "0.3", optional = true }
+# rustls backend (opt-in)
+hyper-rustls = { version = "0.27", default-features = false, features = [
+  "http1",
+  "http2",
+  "webpki-roots",
+  "ring",
+  "tls12",
+  "native-tokio",
+], optional = true }
+rustls = { version = "0.23", default-features = false, features = [
+  "ring",
+  "std",
+  "tls12",
+], optional = true }
+webpki-roots = { version = "1.0", optional = true }
+http-body-util = { version = "0.1" }
+serde_urlencoded = { version = "0.7" }
+tokio = { version = "1", default-features = false, features = ["time"] }
+
+# On wasm32 the reqwest (browser fetch) backend is used; hyper cannot run in
+# the browser. On native targets the hyper backend is the only implementation.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+reqwest.workspace = true

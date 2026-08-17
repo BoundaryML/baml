@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_std::stream::StreamExt;
 use baml_ids::HttpRequestId;
 use baml_types::BamlValue;
 use futures::StreamExt as FuturesStreamExt;
@@ -526,7 +525,9 @@ where
                 // Sleep if needed
                 if let Some(duration) = sleep_duration {
                     total_sleep_duration += duration;
-                    async_std::task::sleep(duration).await;
+                    // tokio::time (native) / wasmtimer::tokio (wasm), per the
+                    // cfg'd glob imports above.
+                    sleep(duration).await;
                 }
 
                 Some(result)

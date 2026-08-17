@@ -125,11 +125,11 @@ impl Decoder {
     }
 }
 
-/// Decode a byte stream (e.g. `reqwest::Response::bytes_stream()`) into a stream
+/// Decode a byte stream (e.g. `baml_http::Response::bytes_stream()`) into a stream
 /// of SSE events. Transport errors are surfaced unchanged.
-pub fn eventsource<S>(stream: S) -> impl Stream<Item = Result<SseEvent, reqwest::Error>>
+pub fn eventsource<S>(stream: S) -> impl Stream<Item = Result<SseEvent, baml_http::Error>>
 where
-    S: Stream<Item = reqwest::Result<Bytes>>,
+    S: Stream<Item = baml_http::Result<Bytes>>,
 {
     struct State<S> {
         inner: std::pin::Pin<Box<S>>,

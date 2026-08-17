@@ -3,7 +3,11 @@ use baml_ids::HttpRequestId;
 use baml_types::BamlValue;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::{BamlValueWithFlags, ResponseBamlValue};
+#[cfg(not(target_family = "wasm"))]
+use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
+#[cfg(target_family = "wasm")]
+use wasmtimer::tokio::sleep;
 use web_time::Duration;
 
 use super::{OrchestrationScope, OrchestratorNodeIterator};
@@ -170,7 +174,7 @@ pub async fn orchestrate(
                 // Sleep if needed
                 if let Some(duration) = sleep_duration {
                     total_sleep_duration += duration;
-                    async_std::task::sleep(duration).await;
+                    sleep(duration).await;
                 }
 
                 Some(result)

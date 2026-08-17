@@ -593,7 +593,7 @@ impl BamlAsyncVmRuntime {
 
                                 async move {
                                     let response = 'res: {
-                                        let client = reqwest::Client::new();
+                                        let client = baml_http::Client::new();
 
                                         let req = match &url_or_request {
                                             BamlValue::String(url) => {
@@ -629,10 +629,10 @@ impl BamlAsyncVmRuntime {
                                                 };
 
                                                 if let Some(BamlValue::Map(headers)) = fields.get("headers") {
-                                                    let mut header_map = reqwest::header::HeaderMap::new();
+                                                    let mut header_map = baml_http::header::HeaderMap::new();
 
                                                     for (k, v) in headers {
-                                                        let Ok(key) = reqwest::header::HeaderName::from_str(k) else {
+                                                        let Ok(key) = baml_http::header::HeaderName::from_str(k) else {
                                                             break 'res Err(anyhow!(
                                                                 "baml.fetch_as: expected header key to be a valid HTTP header name, got {}",
                                                                 k
@@ -646,7 +646,7 @@ impl BamlAsyncVmRuntime {
                                                             ));
                                                         };
 
-                                                        let Ok(value) = reqwest::header::HeaderValue::from_str(value_as_string) else {
+                                                        let Ok(value) = baml_http::header::HeaderValue::from_str(value_as_string) else {
                                                             break 'res Err(anyhow!(
                                                                 "baml.fetch_as: expected header value to be a string, got {}",
                                                                 v

@@ -91,7 +91,7 @@ pub(super) struct CompleteAPIConfig {
     pub log_redaction_placeholder: String,
     pub max_log_chunk_chars: usize,
 
-    client: reqwest::Client,
+    client: baml_http::Client,
 }
 
 impl PartialEq for CompleteAPIConfig {

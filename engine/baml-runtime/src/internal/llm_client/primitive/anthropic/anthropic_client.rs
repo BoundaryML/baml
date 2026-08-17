@@ -44,7 +44,7 @@ pub struct AnthropicClient {
     properties: ResolvedAnthropic,
 
     // clients
-    client: reqwest::Client,
+    client: baml_http::Client,
 }
 
 // resolves/constructs PostRequestProperties from the client's options and runtime context, fleshing out the needed headers and parameters
@@ -252,7 +252,7 @@ impl AnthropicClient {
 
 // how to build the HTTP request for requests
 impl RequestBuilder for AnthropicClient {
-    fn http_client(&self) -> &reqwest::Client {
+    fn http_client(&self) -> &baml_http::Client {
         &self.client
     }
 
@@ -262,7 +262,7 @@ impl RequestBuilder for AnthropicClient {
         allow_proxy: bool,
         stream: bool,
         expose_secrets: bool,
-    ) -> Result<reqwest::RequestBuilder> {
+    ) -> Result<baml_http::RequestBuilder> {
         let destination_url = if allow_proxy {
             self.properties
                 .proxy_url

@@ -3,11 +3,11 @@ use jsonish::{ResponseBamlValue, ResponseValueMeta};
 use pyo3::{
     prelude::{pymethods, PyResult},
     types::{PyAnyMethods, PyDict, PyDictMethods, PyModule, PyTuple, PyType},
-    Bound, IntoPyObject, IntoPyObjectExt, Py, PyAny, PyErr, PyObject, Python,
+    Bound, IntoPyObject, IntoPyObjectExt, Py, PyAny, PyErr, Python,
 };
 
 use super::{BamlAudioPy, BamlImagePy, BamlPdfPy, BamlVideoPy};
-use crate::{errors::BamlError, runtime::BamlRuntime};
+use crate::{errors::BamlError, runtime::BamlRuntime, PyObject};
 
 crate::lang_wrapper!(FunctionResult, baml_runtime::FunctionResult);
 
@@ -67,7 +67,7 @@ fn pythonize_checks<'a>(
 ) -> PyResult<Bound<'a, PyDict>> {
     let dict = PyDict::new(py);
     let check_class = types_module.getattr("Check")?;
-    let check_class = check_class.downcast::<PyType>()?;
+    let check_class = check_class.cast::<PyType>()?;
     checks.iter().try_for_each(
         |ResponseCheck {
              name,
@@ -360,7 +360,7 @@ pub(crate) fn pythonize_strict(
         properties_dict.set_item("state", format!("{:?}", completion_state.state))?;
 
         // Prepare type parameters for StreamingState[...]
-        let type_parameters_tuple = PyTuple::new(py, [value_type.as_ref()]).expect("PyTuple::new");
+        let type_parameters_tuple = PyTuple::new(py, [value_type]).expect("PyTuple::new");
 
         let class_streaming_state_type_constructor = partial_cls_module
             .getattr("StreamState")

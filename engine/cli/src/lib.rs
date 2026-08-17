@@ -1,11 +1,18 @@
+#[cfg(feature = "cloud")]
 pub(crate) mod api_client;
+#[cfg(feature = "cloud")]
 pub(crate) mod auth;
+#[cfg(feature = "cloud")]
 pub(crate) mod colordiff;
 pub(crate) mod commands;
+#[cfg(feature = "cloud")]
 pub(crate) mod deploy;
 pub(crate) mod format;
+#[cfg(feature = "lsp")]
 pub(crate) mod lsp;
+#[cfg(feature = "cloud")]
 pub(crate) mod propelauth;
+#[cfg(feature = "cloud")]
 pub(crate) mod tui;
 use anyhow::Result;
 

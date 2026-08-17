@@ -5,6 +5,10 @@ mod runtime;
 mod serde_py;
 mod types;
 
+// pyo3 0.28 removed the `PyObject` alias from its root; it was always
+// `Py<PyAny>`. Re-provide it crate-wide so type signatures are unchanged.
+pub(crate) type PyObject = pyo3::Py<pyo3::PyAny>;
+
 use pyo3::{
     prelude::{pyfunction, pymodule, PyAnyMethods, PyModule, PyResult},
     types::PyModuleMethods,

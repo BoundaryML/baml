@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result};
+use baml_http::{header::HeaderMap, Response, StatusCode};
 use baml_types::{
     tracing::events::{ClientDetails, HTTPBody, HTTPRequest, HTTPResponse, TraceEvent},
     BamlMap,
@@ -9,7 +10,6 @@ use bytes::Bytes;
 use http::Response as HttpResponse;
 use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage, RenderedPrompt};
 pub use internal_llm_client::ResponseType;
-use reqwest::{header::HeaderMap, Response, StatusCode};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
@@ -30,7 +30,7 @@ pub struct LoggedHttpResponse {
 }
 
 impl LoggedHttpResponse {
-    pub async fn new_from_reqwest(resp: reqwest::Response) -> Result<Self, reqwest::Error> {
+    pub async fn new_from_reqwest(resp: baml_http::Response) -> Result<Self, baml_http::Error> {
         let status = resp.status();
         let url = resp.url().to_string();
         let headers = resp.headers().clone();
@@ -63,10 +63,10 @@ pub trait RequestBuilder {
         allow_proxy: bool,
         stream: bool,
         expose_secrets: bool,
-    ) -> Result<reqwest::RequestBuilder>;
+    ) -> Result<baml_http::RequestBuilder>;
 
     fn request_options(&self) -> &BamlMap<String, serde_json::Value>;
-    fn http_client(&self) -> &reqwest::Client;
+    fn http_client(&self) -> &baml_http::Client;
     fn http_config(&self) -> &internal_llm_client::HttpConfig;
 }
 
@@ -80,7 +80,7 @@ pub(crate) fn to_prompt(
 }
 
 pub enum JsonBodyInput<'a> {
-    ReqwestBody(Option<&'a reqwest::Body>),
+    ReqwestBody(Option<&'a baml_http::Body>),
     Bytes(&'a [u8]),
     String(String),
 }
@@ -150,7 +150,7 @@ pub(crate) async fn build_and_log_outbound_request(
     allow_proxy: bool,
     stream: bool,
     runtime_context: &impl HttpContext,
-) -> Result<(web_time::SystemTime, web_time::Instant, reqwest::Request), LLMResponse> {
+) -> Result<(web_time::SystemTime, web_time::Instant, baml_http::Request), LLMResponse> {
     let system_now = web_time::SystemTime::now();
     let instant_now = web_time::Instant::now();
 
@@ -200,7 +200,7 @@ pub(crate) async fn build_and_log_outbound_request(
                 HTTPBody::new(
                     built_req
                         .body()
-                        .and_then(reqwest::Body::as_bytes)
+                        .and_then(baml_http::Body::as_bytes)
                         .unwrap_or_default()
                         .into(),
                 ),
@@ -219,7 +219,7 @@ pub(crate) async fn build_and_log_outbound_request(
 
 pub async fn execute_request(
     client: &(impl WithClient + RequestBuilder),
-    built_req: reqwest::Request,
+    built_req: baml_http::Request,
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     system_now: web_time::SystemTime,
     instant_now: web_time::Instant,
@@ -255,7 +255,7 @@ pub async fn execute_request(
             log_http_response(
                 runtime_context,
                 e.status()
-                    .unwrap_or(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
+                    .unwrap_or(baml_http::StatusCode::INTERNAL_SERVER_ERROR)
                     .as_u16(),
                 None,
                 HTTPBody::new(format!("No response. Error: {message}").into_bytes()),

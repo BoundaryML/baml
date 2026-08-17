@@ -149,7 +149,7 @@ impl ServiceAccount {
             .map_err(|e| anyhow::anyhow!(format!("{e:?}")))?;
 
         // Make the token request
-        let client = reqwest::Client::new();
+        let client = baml_http::Client::new();
         let params = [
             ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
             ("assertion", &jwt),

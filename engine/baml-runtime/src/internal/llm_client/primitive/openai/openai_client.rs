@@ -38,7 +38,7 @@ pub struct OpenAIClient {
     features: ModelFeatures,
     properties: ResolvedOpenAI,
     // clients
-    client: reqwest::Client,
+    client: baml_http::Client,
 }
 
 impl WithRetryPolicy for OpenAIClient {
@@ -392,7 +392,7 @@ impl OpenAIClient {
 }
 
 impl RequestBuilder for OpenAIClient {
-    fn http_client(&self) -> &reqwest::Client {
+    fn http_client(&self) -> &baml_http::Client {
         &self.client
     }
 
@@ -402,7 +402,7 @@ impl RequestBuilder for OpenAIClient {
         allow_proxy: bool,
         stream: bool,
         expose_secrets: bool,
-    ) -> Result<reqwest::RequestBuilder> {
+    ) -> Result<baml_http::RequestBuilder> {
         let destination_url = if allow_proxy {
             self.properties
                 .proxy_url
@@ -918,7 +918,7 @@ mod tests {
                 media_url_handler: internal_llm_client::MediaUrlHandler::default(),
                 http_config: Default::default(),
             },
-            client: reqwest::Client::new(),
+            client: baml_http::Client::new(),
         };
 
         let strategy = responses_client.get_provider_strategy();
@@ -972,7 +972,7 @@ mod tests {
                 media_url_handler: internal_llm_client::MediaUrlHandler::default(),
                 http_config: Default::default(),
             },
-            client: reqwest::Client::new(),
+            client: baml_http::Client::new(),
         };
 
         let strategy = openai_client.get_provider_strategy();
@@ -1098,7 +1098,7 @@ mod tests {
                 media_url_handler: internal_llm_client::MediaUrlHandler::default(),
                 http_config: Default::default(),
             },
-            client: reqwest::Client::new(),
+            client: baml_http::Client::new(),
         };
 
         let body_value = strategy

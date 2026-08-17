@@ -1,13 +1,13 @@
 use std::{collections::HashMap, ops::Deref};
 
 use anyhow::{Context, Result};
+use baml_http::Response;
 use baml_types::{
     tracing::events::{HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent, TraceEvent},
     BamlMap,
 };
 use futures::{StreamExt, TryStreamExt};
 use internal_baml_jinja::RenderedChatMessage;
-use reqwest::Response;
 use serde::de::DeserializeOwned;
 
 use super::{

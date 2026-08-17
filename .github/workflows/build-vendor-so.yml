@@ -1,0 +1,124 @@
+# One-off, manually-triggered build of the vendored `baml_py` native extension
+# for hermetic monorepo consumers (e.g. a Blaze/Forge sandbox with an old GLIBC
+# and no libgcc_s.so.1).
+#
+# Produces an x86_64 `.so` that is:
+#   - built on manylinux2014 (GLIBC 2.17), so it runs on old glibc sandboxes;
+#   - statically linked against libgcc/libstdc++ (no libgcc_s.so.1 at runtime);
+#   - built with vendored OpenSSL (native-tls-vendored), so no system libssl;
+#   - the minimal vendor profile: --no-default-features --features vertex.
+#
+# Trigger from the Actions tab ("Build vendored baml_py .so" -> Run workflow),
+# then download the `baml_py-vendor-so` artifact and drop `baml_py.so` into
+# third_party.
+name: Build vendored baml_py .so
+
+on:
+  # Manual trigger (only works once this workflow is on the default branch).
+  workflow_dispatch:
+    inputs:
+      features:
+        description: "Cargo features (comma-separated, added on top of --no-default-features)"
+        required: true
+        default: "vertex,native-tls-vendored"
+  # Tag trigger: works from any branch without the default-branch requirement.
+  # To run a one-off: `git tag vendor-so-1 && git push origin vendor-so-1`.
+  push:
+    tags:
+      - "vendor-so-*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: x86_64 manylinux2014 static-libgcc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.8"
+
+      - name: Inject -static-libgcc into [build].rustflags (runner-local)
+        run: |
+          set -euo pipefail
+          cfg=engine/.cargo/config.toml
+          # maturin reads [build].rustflags and encodes them into
+          # CARGO_ENCODED_RUSTFLAGS, which overrides RUSTFLAGS /
+          # CARGO_BUILD_RUSTFLAGS / target-specific config. So the only reliable
+          # way to add a link flag is via [build].rustflags itself. We only edit
+          # the ephemeral CI checkout here (never committed), so mac/windows
+          # release builds are unaffected. -static-libgcc drops libgcc_s.so.1.
+          python3 - "$cfg" <<'PY'
+          import sys
+          p = sys.argv[1]
+          s = open(p).read()
+          old = 'rustflags = ["--cfg", "tracing_unstable"]'
+          new = 'rustflags = ["--cfg", "tracing_unstable", "-C", "link-arg=-static-libgcc"]'
+          assert old in s, "expected [build].rustflags line not found"
+          open(p, "w").write(s.replace(old, new, 1))
+          print("patched:", new)
+          PY
+          grep -A2 '^\[build\]' "$cfg"
+
+      - name: Build wheel (manylinux2014, static libgcc, vendored OpenSSL)
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x86_64-unknown-linux-gnu
+          command: build
+          # Build from engine/ so .cargo/config.toml is picked up.
+          working-directory: engine
+          manylinux: "2_17"
+          # Vendored OpenSSL is built from source, so the container needs perl.
+          before-script-linux: |
+            if command -v yum &> /dev/null; then
+              yum update -y && yum install -y perl-core pkgconfig libatomic
+            fi
+          args: >-
+            --release
+            --no-default-features
+            --features ${{ github.event.inputs.features || 'vertex,native-tls-vendored' }}
+            --out language_client_python/dist
+            --manifest-path language_client_python/Cargo.toml
+
+      - name: Extract .so and verify hermeticity
+        working-directory: engine/language_client_python/dist
+        run: |
+          set -euo pipefail
+          # maturin-action builds inside a container as root, so dist/ is
+          # root-owned; take ownership before writing into it.
+          sudo chown -R "$(id -u):$(id -g)" .
+          whl=$(ls *.whl)
+          echo "Built wheel: $whl"
+          python -m zipfile -e "$whl" extracted/
+          so=$(find extracted -name '*.so' | head -1)
+          cp "$so" baml_py.so
+          echo "::group::dynamic NEEDED libraries"
+          readelf -d baml_py.so | grep NEEDED || true
+          echo "::endgroup::"
+          echo "::group::max GLIBC symbol version"
+          maxglibc=$(objdump -T baml_py.so 2>/dev/null | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -uV | tail -1)
+          echo "$maxglibc"
+          echo "::endgroup::"
+          # Hard gates: fail the build if the artifact is not hermetic.
+          if readelf -d baml_py.so | grep -q 'libgcc_s'; then
+            echo "::error::baml_py.so still dynamically depends on libgcc_s.so.1"
+            exit 1
+          fi
+          if [ "$(printf '%s\nGLIBC_2.17\n' "$maxglibc" | sort -V | tail -1)" != "GLIBC_2.17" ]; then
+            echo "::error::baml_py.so requires a GLIBC newer than 2.17 ($maxglibc)"
+            exit 1
+          fi
+          echo "OK: no libgcc_s dependency, GLIBC <= 2.17"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: baml_py-vendor-so
+          path: |
+            engine/language_client_python/dist/baml_py.so
+            engine/language_client_python/dist/*.whl
+          if-no-files-found: error

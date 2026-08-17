@@ -1,11 +1,14 @@
 use pyo3::{
     prelude::{pymethods, PyResult},
     types::{PyTuple, PyType},
-    Bound, PyAny, PyObject, Python,
+    Bound, PyAny, Python,
 };
 
 use super::media_repr::{self, UserFacingBamlMedia};
-use crate::errors::{BamlError, BamlInvalidArgumentError};
+use crate::{
+    errors::{BamlError, BamlInvalidArgumentError},
+    PyObject,
+};
 crate::lang_wrapper!(BamlPdfPy, baml_types::BamlMedia);
 
 #[pymethods]

@@ -5,9 +5,11 @@ use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, MediaBase64, MediaU
 use pyo3::{
     ffi::c_str,
     types::{PyAnyMethods, PyModule, PyType},
-    Bound, IntoPyObjectExt, PyAny, PyObject, PyResult, Python,
+    Bound, IntoPyObjectExt, PyAny, PyResult, Python,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::PyObject;
 
 /// We rely on the serialization and deserialization of this struct for:
 ///
@@ -84,7 +86,7 @@ pub fn __get_pydantic_core_schema__(
     _source_type: Bound<'_, PyAny>,
     _handler: Bound<'_, PyAny>,
 ) -> PyResult<PyObject> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let code = c_str!(
             r#"
 from pydantic_core import core_schema, SchemaValidator

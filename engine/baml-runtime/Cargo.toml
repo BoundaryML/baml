@@ -29,13 +29,14 @@ arc_with_non_send_sync = "allow"
 [dependencies]
 anyhow.workspace = true
 baml-compiler = { path = "../baml-compiler" }
+baml-http = { workspace = true }
 baml-ids.workspace = true
 internal-baml-ast = { path = "../baml-lib/ast" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 baml-log.workspace = true
 baml-viz-events = { path = "../baml-viz-events" }
 baml-types.workspace = true
-baml-rpc.workspace = true
+baml-rpc = { workspace = true, optional = true }
 baml-vm = { path = "../baml-vm" }
 base64.workspace = true
 bytes.workspace = true
@@ -91,10 +92,7 @@ mime = "0.3.17"
 # For tracing
 chrono = "0.4.38"
 tokio-util = { version = "0.7", features = ["rt"] }
-async-std = "1.12.0"
 fastrand = "2.1.0"
-test-log = "0.2.16"
-include_dir = "0.7.3"
 infer = "0.16.0"
 url = "2.5.2"
 shell-escape = "0.1.5"
@@ -107,7 +105,6 @@ aws-smithy-types = { version = "1.2.0", optional = true }
 aws-smithy-runtime = { version = "1.6.0", optional = true }
 enum_dispatch = "0.3.13"
 aws-smithy-json = { version = "0.60.7", optional = true }
-pretty_assertions = "1.4.0"
 valuable = { version = "0.1.0", features = ["derive"] }
 tracing = { version = "0.1.40", features = ["valuable"] }
 tracing-log = "0.2.0"
@@ -121,9 +118,8 @@ log-once = "0.4.1"
 once_cell.workspace = true
 time.workspace = true
 tempfile = "3.19.0"
-sha2 = "0.10.9"
-blake3 = "1.8.2"
-flate2 = "1.1.5"
+blake3 = { version = "1.8.2", optional = true }
+flate2 = { version = "1.1.5", optional = true }
 similar = "2.6"
 
 
@@ -142,14 +138,6 @@ colored = { version = "2.1.0", default-features = false, features = [
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
 js-sys.workspace = true
-reqwest = { version = "0.12.12", default-features = false, features = [
-  "charset",
-  "http2",
-  "stream",
-  "json",
-  "rustls-tls",
-] }
-#
 send_wrapper = { version = "0.6.0", features = ["futures"] }
 serde-wasm-bindgen = "0.6.5"
 uuid = { workspace = true, features = ["v4", "serde", "js"] }
@@ -172,34 +160,68 @@ aws-config = { version = "=1.5.3", optional = true }
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
 aws-sdk-bedrockruntime = { version = "=1.106.0", default-features = false, optional = true, features = [
 ] }
-axum = "0.7.5"
-axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
-criterion = "0.5.1"
-# depends on ring
-gcp_auth = "0.12.3"
+axum = { version = "0.7.5", optional = true }
+axum-extra = { version = "0.9.3", features = [
+  "erased-json",
+  "typed-header",
+], optional = true }
+# Vendored, ring-free fork (native-tls + rsa crate). See vendored/gcp-auth.
+gcp_auth = { path = "../vendored/gcp-auth", optional = true }
 hostname = "0.3.1"
-jsonwebtoken = { version = "9.3.0" }
-notify-debouncer-full = "0.3.1"
-ring = { version = "0.17.4", features = ["std"] }
+http-body-util = "0.1"
+notify-debouncer-full = { version = "0.3.1", optional = true }
 tokio = { version = "1", features = ["full"] }
-reqwest.workspace = true
 walkdir = "2.5.0"
-which = "6.0.3"
+which = "7"
 indicatif = "0.17"
 junit-report = "0.8.3"
-ratatui = "0.29"
-unicode-width = "0.1"
-dirs = "5.0"
-supports-color = "3"
-crossterm = "0.28"
-reedline = "0.37"
+ratatui = { version = "0.29", optional = true }
+unicode-width = { version = "0.1", optional = true }
+dirs = { version = "5.0", optional = true }
+supports-color = { version = "3", optional = true }
+crossterm = { version = "0.28", optional = true }
 
 
 [features]
-default = ["bedrock"]
+default = [
+  "bedrock",
+  "serve",
+  "dev",
+  "repl",
+  "vertex",
+  "optimize",
+  "tui",
+  "studio",
+]
 defaults = ["skip-integ-tests"]
+# Statically vendor OpenSSL for the native-tls backend (portable Linux builds
+# with no system libssl). Forwarded from baml-http.
+native-tls-vendored = ["baml-http/native-tls-vendored"]
 internal = []
 skip-integ-tests = []
+# `baml serve`: the local OpenAPI HTTP server. Off in minimal/vendored builds to
+# drop the axum/tower web-server tree.
+serve = ["dep:axum", "dep:axum-extra"]
+# `baml dev`: serve + file-watching (notify).
+dev = ["serve", "dep:notify-debouncer-full"]
+# Interactive terminal UIs (ratatui + crossterm). Without it, `baml init`
+# falls back to its plain-text output.
+tui = ["dep:ratatui", "dep:crossterm"]
+# `baml optimize` (GEPA prompt optimizer; TUI-driven).
+optimize = ["tui"]
+# Boundary Studio tracing publisher (trace/blob upload, RPC event conversion).
+# Off in vendored builds: drops baml-rpc (ts-rs, serde_with) and blake3.
+studio = [
+  "dep:baml-rpc",
+  "dep:blake3",
+  "dep:flate2",
+  "internal-baml-core/ir-hasher",
+]
+# `baml repl`: interactive REPL.
+repl = ["dep:dirs", "dep:supports-color", "dep:unicode-width", "tui"]
+# Vertex AI (Google Cloud) provider auth. Off to drop the gcp_auth tree if the
+# vertex-ai provider is not used.
+vertex = ["dep:gcp_auth"]
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
 thir-interpreter = []
 # AWS Bedrock provider support. On by default; disable (e.g. --no-default-features)
@@ -222,6 +244,10 @@ bedrock = [
 assert_cmd = "2"
 console_log = "1"
 criterion = "0.5.1"
+# Tests use reqwest directly; production code goes through baml-http.
+reqwest.workspace = true
+pretty_assertions = "1.4.0"
+test-log = "0.2.16"
 dissimilar = "1.0.4"
 expect-test = "1.1.0"
 indoc.workspace = true

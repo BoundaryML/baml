@@ -1,4 +1,5 @@
 mod ir_features;
+#[cfg(feature = "studio")]
 mod publisher;
 
 use std::{
@@ -7,6 +8,7 @@ use std::{
 };
 
 use anyhow::Result;
+#[cfg(feature = "studio")]
 pub(super) use publisher::AstSignatureWrapper;
 
 cfg_if::cfg_if!(

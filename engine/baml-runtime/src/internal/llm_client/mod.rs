@@ -12,6 +12,7 @@ pub mod traits;
 use std::error::Error;
 
 use anyhow::{Context, Result};
+use baml_http::StatusCode;
 use baml_types::{BamlMap, BamlValueWithMeta, JinjaExpression, ResponseCheck, TypeIR};
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker, IRHelper, IRHelperExtended};
 use internal_baml_jinja::RenderedPrompt;
@@ -24,7 +25,6 @@ use jsonish::{
     },
     BamlValueWithFlags,
 };
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;

@@ -20,99 +20,109 @@ unused_variables = "deny"
 
 [dependencies]
 anyhow.workspace = true
-axum.workspace = true
-axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
 baml-runtime = { path = "../baml-runtime", default-features = false, features = ["internal"] }
-language-server = { path = "../language_server", default-features = false }
+language-server = { path = "../language_server", default-features = false, optional = true }
 baml-types.workspace = true
 baml-log.workspace = true
-base64.workspace = true
-bstd.workspace = true
-bytes.workspace = true
-cfg-if.workspace = true
 clap = { workspace = true, features = ["color", "env"] }
-clap-cargo = "0.14.1"
-colored.workspace = true
-console = "0.15.0"
-dashmap.workspace = true
-derive_more.workspace = true
-dialoguer = "0.11.0"
-difference = "2.0.0"
-dunce = "1.0.4"
-either.workspace = true
-env_logger.workspace = true
-etcetera = "0.8.0"
-futures.workspace = true
-http.workspace = true
-http-body.workspace = true
-indexmap.workspace = true
-indicatif = "0.17.8"
-indicatif-log-bridge = "0.2.3"
-indoc.workspace = true
+clap-cargo = "0.12"
+ctrlc = "3.4"
 internal-baml-core.workspace = true
-generators-lib = { path = "../generators/utils/generators_lib" }
 log.workspace = true
-open = "5.3.0"
-pathdiff = "0.1.0"
-rand.workspace = true
-reqwest.workspace = true
-scopeguard.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-similar = { version = "2.6.0", features = ["inline"] }
-strsim.workspace = true
-strum.workspace = true
-strum_macros.workspace = true
 tokio = { version = "1", default-features = false, features = [
   "macros",
   "time",
 ] }
-tokio-stream = "0.1.15"
-# NOTE(sam): adding this caused a build error, I suspect because tower uses nightly features or something
-# tower = "0.5.0"
-walkdir.workspace = true
-uuid.workspace = true
-web-time.workspace = true
-static_assertions.workspace = true
-mime_guess = "2.0.4"
-mime = "0.3.17"
 
-# For tracing
-chrono = "0.4.38"
-async-std = "1.12.0"
-fastrand = "2.1.0"
-test-log = "0.2.16"
-infer = "0.16.0"
-url = "2.5.2"
-shell-escape = "0.1.5"
-enum_dispatch = "0.3.13"
-jsonwebtoken = "9.3.0"
-pretty_assertions = "1.4.0"
-sha2 = "0.10.8"
-tracing = "0.1.40"
-# Valuable is needed to prevent serializing objects using Debug, and instead use Serialize.
-# https://github.com/tokio-rs/tracing/issues/1570
-tracing-subscriber = { version = "0.3.18", features = [
-  "json",
-  "env-filter",
-  "valuable",
-] }
-ctrlc = "3.4"
-
-# openssl = { version = "0.10", optional = true }
+# Boundary Cloud (auth/login/deploy) dependencies, behind the `cloud` feature.
+axum = { workspace = true, optional = true }
+baml-http = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+bstd = { workspace = true, optional = true }
+console = { version = "0.15.0", optional = true }
+derive_more = { workspace = true, optional = true }
+dialoguer = { version = "0.11.0", optional = true }
+etcetera = { version = "0.8.0", optional = true }
+futures = { workspace = true, optional = true }
+generators-lib = { path = "../generators/utils/generators_lib", optional = true }
+indexmap = { workspace = true, optional = true }
+indicatif = { version = "0.17.8", optional = true }
+open = { version = "5.3.0", optional = true }
+pathdiff = { version = "0.1.0", optional = true }
+rand = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+sha2 = { version = "0.10.8", optional = true }
+similar = { version = "2.6.0", features = ["inline"], optional = true }
+web-time = { workspace = true, optional = true }
 
 [features]
-default = ["bedrock"]
+default = [
+  "bedrock",
+  "lsp",
+  "serve",
+  "dev",
+  "repl",
+  "cloud",
+  "vertex",
+  "optimize",
+  "tui",  "studio",
+]
 # AWS Bedrock provider support, forwarded through the runtime stack. On by
 # default; a parent (e.g. baml-python-ffi) that sets default-features = false on
 # this crate drops the aws-* dependency tree.
-bedrock = ["baml-runtime/bedrock", "language-server/bedrock"]
+# NOTE: language-server is a weak ("?") dep here so enabling bedrock does not
+# force the LSP (and its ~87-crate tree) back in when lsp is disabled.
+bedrock = ["baml-runtime/bedrock", "language-server?/bedrock"]
+# Language server (LSP) subcommand. On by default for the standalone `baml`
+# binary; a parent that sets default-features = false (e.g. baml-python-ffi)
+# drops the entire language-server dependency tree (tonic/prost, a second axum,
+# lsp-server/lsp-types, tokio-tungstenite, schemars, tar, ...).
+lsp = ["dep:language-server"]
+# `baml serve` / `baml dev` (axum HTTP server + file watching, via the runtime).
+serve = ["baml-runtime/serve"]
+dev = ["baml-runtime/dev", "serve"]
+# `baml repl`.
+repl = ["baml-runtime/repl"]
+# `baml optimize` (GEPA; TUI-driven).
+optimize = ["baml-runtime/optimize"]
+# Boundary Studio tracing publisher in the runtime.
+studio = ["baml-runtime/studio"]
+# Interactive terminal UIs (ratatui/crossterm) in the runtime.
+tui = ["baml-runtime/tui"]
+# Vertex AI provider auth (gcp_auth), forwarded to the runtime.
+vertex = ["baml-runtime/vertex"]
+# Boundary Cloud commands: `baml auth`, `baml login`, `baml deploy`.
+cloud = [
+  "dep:axum",
+  "dep:baml-http",
+  "dep:base64",
+  "dep:bstd",
+  "dep:console",
+  "dep:derive_more",
+  "dep:dialoguer",
+  "dep:etcetera",
+  "dep:futures",
+  "dep:generators-lib",
+  "dep:indexmap",
+  "dep:indicatif",
+  "dep:open",
+  "dep:pathdiff",
+  "dep:rand",
+  "dep:serde",
+  "dep:serde_json",
+  "dep:sha2",
+  "dep:similar",
+  "dep:web-time",
+]
 defaults = []
 internal = []
 skip-integ-tests = []
-# Kept as a no-op alias: rustls-tls (the default now) already statically links its
-# crypto (ring), so there is no system OpenSSL to opt into anymore.
-static-ssl = ["reqwest/rustls-tls"]
+# Kept as a no-op alias: the HTTP stack (baml-http) statically links its
+# crypto (rustls + ring), so there is no system OpenSSL to opt into anymore.
+static-ssl = []
+# Statically vendor OpenSSL (forwarded to the runtime).
+native-tls-vendored = ["baml-runtime/native-tls-vendored"]
 
 [dev-dependencies]
 assert_cmd = "2"

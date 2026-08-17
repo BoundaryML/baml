@@ -34,7 +34,7 @@ internal-llm-client = { path = "../llm-client" }
 internal-baml-jinja-types = { path = "../jinja" }
 internal-baml-parser-database = { path = "../parser-database" }
 internal-baml-prompt-parser = { path = "../prompt-parser" }
-baml-rpc.workspace = true
+baml-rpc = { workspace = true, optional = true }
 minijinja.workspace = true
 minijinja-contrib.workspace = true
 rayon = "1.8.0"
@@ -46,10 +46,15 @@ shellwords = "1.1.0"
 strsim.workspace = true
 strum.workspace = true
 textwrap.workspace = true
-whoami = "1.4.1"
 itertools.workspace = true
 once_cell.workspace = true
 
+
+[features]
+# RPC-typed IR signature hashing, used by the Boundary Studio publisher in
+# baml-runtime (enabled via its `studio` feature). Off by default so builds
+# without Studio drop the baml-rpc (ts-rs/serde_with) tree.
+ir-hasher = ["dep:baml-rpc"]
 
 [dev-dependencies]
 base64.workspace = true

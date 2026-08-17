@@ -1,4 +1,7 @@
 pub mod helpers;
+// Test-only: keep behind cfg(test) so the (large) test corpus and its
+// dependencies don't ship in production builds of dependents.
+#[cfg(test)]
 pub mod tests;
 
 use anyhow::Result;

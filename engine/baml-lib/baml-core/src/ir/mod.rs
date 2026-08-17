@@ -1,4 +1,5 @@
 pub mod builtin;
+#[cfg(feature = "ir-hasher")]
 pub mod ir_hasher;
 pub mod ir_helpers;
 pub mod jinja_helpers;

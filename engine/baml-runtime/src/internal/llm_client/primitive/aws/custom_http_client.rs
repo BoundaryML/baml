@@ -19,7 +19,7 @@ use {futures::channel::oneshot, wasm_bindgen_futures::spawn_local};
 
 use crate::request::create_client;
 
-/// Returns a wrapper around the global reqwest client.
+/// Returns a wrapper around the global baml-http client.
 /// [HttpClient].
 #[cfg(not(target_arch = "wasm32"))] // Keep function non-WASM for now
 pub fn client() -> anyhow::Result<Client> {
@@ -35,16 +35,16 @@ pub fn client() -> anyhow::Result<Client> {
     Ok(Client::new(client.clone()))
 }
 
-/// A wrapper around [reqwest::Client] that implements [HttpClient].
+/// A wrapper around [baml_http::Client] that implements [HttpClient].
 ///
 /// This is required to support using proxy servers with the AWS SDK.
 #[derive(Debug, Clone)]
 pub struct Client {
-    inner: reqwest::Client,
+    inner: baml_http::Client,
 }
 
 impl Client {
-    pub fn new(client: reqwest::Client) -> Self {
+    pub fn new(client: baml_http::Client) -> Self {
         Self { inner: client }
     }
 }
@@ -133,8 +133,8 @@ impl From<CallError> for ConnectorError {
     }
 }
 
-impl From<reqwest::Error> for CallError {
-    fn from(err: reqwest::Error) -> Self {
+impl From<baml_http::Error> for CallError {
+    fn from(err: baml_http::Error) -> Self {
         if err.is_timeout() {
             return CallError::timeout(err);
         }
@@ -161,13 +161,13 @@ enum CallErrorKind {
 }
 
 #[derive(Debug)]
-struct ReqwestConnector {
-    client: reqwest::Client,
+struct HttpClientConnector {
+    client: baml_http::Client,
     timeout: Option<Duration>,
 }
 
 // See https://github.com/aws/amazon-q-developer-cli/pull/1199
-impl HttpConnector for ReqwestConnector {
+impl HttpConnector for HttpClientConnector {
     fn call(&self, request: Request) -> HttpConnectorFuture {
         let client = self.client.clone();
         let timeout = self.timeout;
@@ -176,7 +176,7 @@ impl HttpConnector for ReqwestConnector {
         let future = async move {
             // Non-WASM logic (direct send)
             let mut req_builder = client.request(
-                reqwest::Method::from_bytes(request.method().as_bytes()).map_err(|err| {
+                baml_http::Method::from_bytes(request.method().as_bytes()).map_err(|err| {
                     CallError::user_with_source("failed to create method name", err)
                 })?,
                 request.uri().to_owned(),
@@ -196,11 +196,28 @@ impl HttpConnector for ReqwestConnector {
                 req_builder = req_builder.timeout(timeout);
             }
 
-            let reqwest_response = req_builder.send().await.map_err(CallError::from)?;
+            let response = req_builder.send().await.map_err(CallError::from)?;
 
             let http_response = {
-                let (parts, body) = http::Response::from(reqwest_response).into_parts();
-                http::Response::from_parts(parts, SdkBody::from_body_1_x(body))
+                use futures::StreamExt;
+                let status = response.status();
+                let headers = response.headers().clone();
+                // Preserve streaming (needed for e.g. ConverseStream) by
+                // wrapping the chunk stream as an http_body 1.x Body.
+                let frames = response.bytes_stream().map(|chunk| {
+                    chunk
+                        .map(http_body::Frame::data)
+                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+                });
+                let body = SdkBody::from_body_1_x(http_body_util::StreamBody::new(frames));
+
+                let mut builder = http::Response::builder().status(status);
+                for (name, value) in headers.iter() {
+                    builder = builder.header(name, value);
+                }
+                builder
+                    .body(body)
+                    .map_err(|e| CallError::other("failed to build http::Response", e))?
             };
 
             Ok(
@@ -219,7 +236,7 @@ impl HttpConnector for ReqwestConnector {
                 // Use a closure to handle errors
                 let result = (async {
                     let mut req_builder = client.request(
-                        reqwest::Method::from_bytes(request.method().as_bytes()).map_err(
+                        baml_http::Method::from_bytes(request.method().as_bytes()).map_err(
                             |err| CallError::user_with_source("failed to create method name", err),
                         )?,
                         request.uri().to_owned(),
@@ -235,13 +252,13 @@ impl HttpConnector for ReqwestConnector {
                         .to_owned();
                     req_builder = req_builder.body(body_bytes);
 
-                    let reqwest_response = req_builder.send().await.map_err(CallError::from)?;
+                    let response = req_builder.send().await.map_err(CallError::from)?;
 
                     // Use manual construction for WASM response conversion
                     let http_response = {
-                        let status = reqwest_response.status();
-                        let headers = reqwest_response.headers().clone();
-                        let body_bytes = reqwest_response
+                        let status = response.status();
+                        let headers = response.headers().clone();
+                        let body_bytes = response
                             .bytes()
                             .await
                             .map_err(|e| CallError::other("failed to read response body", e))?;
@@ -292,16 +309,10 @@ impl HttpClient for Client {
         } else {
             settings.read_timeout()
         };
-        let connector = ReqwestConnector {
+        let connector = HttpClientConnector {
             client: self.inner.clone(),
             timeout,
         };
         SharedHttpConnector::new(connector)
     }
-}
-
-// --- Non-WASM Implementation using Reqwest ---
-#[cfg(not(target_arch = "wasm32"))]
-mod reqwest_impl {
-    use std::time::Duration;
 }

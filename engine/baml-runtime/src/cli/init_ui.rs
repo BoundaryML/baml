@@ -4,11 +4,13 @@ use std::{
 };
 
 use anyhow::Result;
+#[cfg(feature = "tui")]
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+#[cfg(feature = "tui")]
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -33,6 +35,7 @@ pub enum StepStatus {
     Failed,
 }
 
+#[cfg(feature = "tui")]
 pub struct InitUI {
     steps: Vec<InitStep>,
     terminal: Terminal<CrosstermBackend<io::Stdout>>,
@@ -41,10 +44,46 @@ pub struct InitUI {
     last_update: Instant,
 }
 
+/// Stub used when built without the `tui` feature: `new()` always fails, so
+/// `InitUIContext` takes its plain-text (non-interactive) path everywhere.
+#[cfg(not(feature = "tui"))]
+pub struct InitUI {
+    steps: Vec<InitStep>,
+}
+
+#[cfg(not(feature = "tui"))]
+impl InitUI {
+    pub fn new() -> Result<Self> {
+        anyhow::bail!("interactive UI unavailable: BAML was built without the `tui` feature")
+    }
+
+    pub fn add_step(&mut self, message: String) {
+        self.steps.push(InitStep {
+            message,
+            status: StepStatus::Pending,
+            completion_time: None,
+        });
+    }
+
+    pub fn update_step(&mut self, _index: usize, _status: StepStatus) {}
+
+    pub fn render(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn cleanup(self) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "tui")]
 const PURPLE_COLOR: Color = Color::Rgb(142, 36, 170);
+#[cfg(feature = "tui")]
 const ANIMATION_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+#[cfg(feature = "tui")]
 const DOT_ANIMATION: &[&str] = &["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"];
 
+#[cfg(feature = "tui")]
 impl InitUI {
     pub fn new() -> Result<Self> {
         enable_raw_mode()?;
@@ -339,23 +378,28 @@ impl InitUIContext {
 #[allow(clippy::print_stderr)]
 pub fn show_error(message: &str) -> Result<()> {
     // Check if we're in a TTY before attempting to create a fancy error UI
-    if !io::stdout().is_terminal() {
+    // (and that the fancy UI was compiled in at all).
+    if !cfg!(feature = "tui") || !io::stdout().is_terminal() {
         // Non-interactive mode: just print the error to stderr
         eprintln!("Error: {}", message);
         return Ok(());
     }
 
     // Try to create the fancy error UI, but fallback gracefully if it fails
+    #[cfg(feature = "tui")]
     match show_error_ui(message) {
-        Ok(()) => Ok(()),
+        Ok(()) => return Ok(()),
         Err(_) => {
             // Failed to create UI, fallback to simple error message
             eprintln!("Error: {}", message);
-            Ok(())
+            return Ok(());
         }
     }
+    #[allow(unreachable_code)]
+    Ok(())
 }
 
+#[cfg(feature = "tui")]
 fn show_error_ui(message: &str) -> Result<()> {
     enable_raw_mode()?;
 
