@@ -44,8 +44,7 @@ use baml_db::{
         CompileOptions, LoweringError, OptLevel, decompose_units, generate_project_bytecode,
         generate_project_bytecode_with_reuse_artifacts,
         generate_project_bytecode_with_reuse_artifacts_pregated,
-        generate_project_bytecode_with_stdlib,
-        generate_stdlib_program, reuse_throws_mismatches,
+        generate_project_bytecode_with_stdlib, generate_stdlib_program, reuse_throws_mismatches,
     },
     baml_compiler2_hir, baml_compiler2_ppir,
 };
