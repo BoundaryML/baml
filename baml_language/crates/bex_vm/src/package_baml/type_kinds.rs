@@ -641,24 +641,20 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
                 &[compiler_diagnostic(DiagnosticId::TypeMismatch, message)],
             ))
         };
+        let fail_non_instance = |vm: &mut BexVm| {
+            let diagnostic = runtime_type::expected_class_instance(
+                "reflect.class.get_field",
+                &vm.type_of(value).to_string(),
+            )
+            .with_phase(DiagnosticPhase::Hir);
+            crate::errors::VmRustFnError::Thrown(alloc_compilation_error(vm, &[diagnostic]))
+        };
         let Some(instance_ptr) = value.as_object_ptr() else {
-            return Err(fail(
-                vm,
-                format!(
-                    "reflect.class.get_field expected a class instance, got {}",
-                    vm.type_of(value)
-                ),
-            ));
+            return Err(fail_non_instance(vm));
         };
         let (field_value, class_name) = {
             let Object::Instance(instance) = vm.get_object(instance_ptr) else {
-                return Err(fail(
-                    vm,
-                    format!(
-                        "reflect.class.get_field expected a class instance, got {}",
-                        vm.type_of(value)
-                    ),
-                ));
+                return Err(fail_non_instance(vm));
             };
             let Object::Class(class) = vm.get_object(instance.class) else {
                 unreachable!("Instance.class must point to Object::Class")

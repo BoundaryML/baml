@@ -81,6 +81,14 @@ pub fn mismatched_types() -> Diagnostic {
     Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
 }
 
+/// E0001 — a reflection class operation received a non-instance value.
+pub fn expected_class_instance(callee: &str, got: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::TypeMismatch,
+        format!("{callee} expected a class instance, got {got}"),
+    )
+}
+
 /// E0002 — a value-shaped generic argument omitted the required marker.
 pub fn computed_generic_argument_requires_unreflect(name: &str) -> Diagnostic {
     Diagnostic::error(
@@ -159,6 +167,11 @@ mod tests {
     fn constructors_own_code_and_complete_message() {
         let cases = [
             (mismatched_types(), "E0001", "mismatched types"),
+            (
+                expected_class_instance("reflect.class.get_field", "int"),
+                "E0001",
+                "reflect.class.get_field expected a class instance, got int",
+            ),
             (
                 computed_generic_argument_requires_unreflect("runtime_t"),
                 "E0002",
