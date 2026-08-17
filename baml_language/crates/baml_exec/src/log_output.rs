@@ -10,7 +10,10 @@ use std::{
     time::Duration,
 };
 
-use bex_engine::{FunctionCallContext, FunctionCallContextBuilder, logger::TraceLogger};
+use bex_engine::{
+    FunctionCallContext, FunctionCallContextBuilder,
+    logger::{TraceLogLevel, TraceLogger},
+};
 use clap::ValueEnum;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
@@ -27,22 +30,18 @@ pub enum LogLevel {
 impl LogLevel {
     #[must_use]
     pub fn allows(self, event_level: Option<&str>) -> bool {
-        let threshold = match self {
-            Self::Off => return false,
-            Self::Error => 1,
-            Self::Warn => 2,
-            Self::Info => 3,
-            Self::Debug => 4,
-            Self::Trace => 5,
-        };
-        let event = match event_level.unwrap_or("info").to_ascii_lowercase().as_str() {
-            "error" => 1,
-            "warn" | "warning" => 2,
-            "info" => 3,
-            "debug" => 4,
-            _ => 3,
-        };
-        event <= threshold
+        self.trace_level().allows(event_level)
+    }
+
+    const fn trace_level(self) -> TraceLogLevel {
+        match self {
+            Self::Off => TraceLogLevel::Off,
+            Self::Error => TraceLogLevel::Error,
+            Self::Warn => TraceLogLevel::Warn,
+            Self::Info => TraceLogLevel::Info,
+            Self::Debug => TraceLogLevel::Debug,
+            Self::Trace => TraceLogLevel::Trace,
+        }
     }
 
     /// Read the CLI-compatible log threshold from `BAML_LOG`.
@@ -123,7 +122,12 @@ impl LogOutput {
             return (builder.build(), None);
         }
 
-        let logger = TraceLogger::bounded(100_000);
+        let capture_level = if self.file.is_some() {
+            self.file_level
+        } else {
+            self.terminal_level
+        };
+        let logger = TraceLogger::bounded_with_log_level(100_000, capture_level.trace_level());
         let context = builder.with_logger(logger.clone()).build();
         (context, Some(logger))
     }
@@ -243,7 +247,9 @@ mod tests {
 
         let (_, producer) = LogOutput::new(LogLevel::Info, "test")
             .call_context(FunctionCallContextBuilder::new(CallId::next()));
-        assert!(producer.is_some());
+        let producer = producer.expect("enabled terminal logging");
+        assert!(producer.captures_log_level(Some("info")));
+        assert!(!producer.captures_log_level(Some("debug")));
     }
 
     #[test]
@@ -252,6 +258,8 @@ mod tests {
         let output =
             LogOutput::with_file(LogLevel::Off, "test", &tmp.path().join("run.log")).unwrap();
         let (_, producer) = output.call_context(FunctionCallContextBuilder::new(CallId::next()));
-        assert!(producer.is_some());
+        let producer = producer.expect("enabled file logging");
+        assert!(producer.captures_log_level(Some("debug")));
+        assert!(producer.captures_log_level(Some("trace")));
     }
 }

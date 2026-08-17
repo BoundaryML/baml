@@ -40,21 +40,56 @@ pub struct RenderedTraceLog {
     pub body: String,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TraceLogLevel {
+    Off,
     Error,
     Warn,
     Info,
     Debug,
+    Trace,
 }
 
 impl TraceLogLevel {
-    fn parse(raw: Option<&str>) -> Self {
+    #[must_use]
+    pub fn from_baml_log(raw: Option<&str>) -> Self {
+        match raw.unwrap_or_default().trim().to_ascii_lowercase().as_str() {
+            "off" | "" => Self::Off,
+            "error" => Self::Error,
+            "warn" | "warning" => Self::Warn,
+            "info" => Self::Info,
+            "debug" => Self::Debug,
+            "trace" => Self::Trace,
+            _ => Self::Info,
+        }
+    }
+
+    #[must_use]
+    pub fn allows(self, raw_event_level: Option<&str>) -> bool {
+        if self == Self::Off {
+            return false;
+        }
+        Self::parse_event(raw_event_level).severity() >= self.severity()
+    }
+
+    fn parse_event(raw: Option<&str>) -> Self {
         match raw.unwrap_or("info").to_ascii_lowercase().as_str() {
             "error" => Self::Error,
             "warn" | "warning" => Self::Warn,
-            "debug" | "trace" => Self::Debug,
+            "debug" => Self::Debug,
+            "trace" => Self::Trace,
             _ => Self::Info,
+        }
+    }
+
+    const fn severity(self) -> u8 {
+        match self {
+            Self::Off => u8::MAX,
+            Self::Error => 4,
+            Self::Warn => 3,
+            Self::Info => 2,
+            Self::Debug => 1,
+            Self::Trace => 0,
         }
     }
 }
@@ -123,6 +158,7 @@ struct TraceLogDraft {
 
 impl TraceLogger {
     /// Returns whether another logger handle can still publish events.
+    #[cfg(not(target_arch = "wasm32"))]
     #[must_use]
     pub fn has_other_handles(&self) -> bool {
         self.enabled
@@ -137,24 +173,28 @@ impl TraceLogger {
 
     #[must_use]
     pub fn bounded(max_pending_logs: usize) -> Self {
-        Self::bounded_inner(max_pending_logs, None)
+        Self {
+            enabled: Some(Arc::new(TraceLoggerEnabled {
+                heap: TraceHeap::new(),
+                maximum_level: None,
+                inner: Mutex::new(TraceLoggerInner {
+                    max_pending: max_pending_logs,
+                    reserved: 0,
+                    pending: VecDeque::new(),
+                    stats: TraceLoggerStats::default(),
+                }),
+            })),
+        }
     }
 
     /// Create a logger that rejects suppressed levels before snapshot copying
     /// or bounded-queue reservation.
     #[must_use]
-    pub fn bounded_with_log_level(
-        max_pending_logs: usize,
-        maximum_level: TraceLogLevel,
-    ) -> Self {
-        Self::bounded_inner(max_pending_logs, Some(maximum_level))
-    }
-
-    fn bounded_inner(max_pending_logs: usize, maximum_level: Option<TraceLogLevel>) -> Self {
+    pub fn bounded_with_log_level(max_pending_logs: usize, maximum_level: TraceLogLevel) -> Self {
         Self {
             enabled: Some(Arc::new(TraceLoggerEnabled {
                 heap: TraceHeap::new(),
-                maximum_level,
+                maximum_level: Some(maximum_level),
                 inner: Mutex::new(TraceLoggerInner {
                     max_pending: max_pending_logs,
                     reserved: 0,
@@ -170,7 +210,7 @@ impl TraceLogger {
         self.enabled.as_ref().is_some_and(|enabled| {
             enabled
                 .maximum_level
-                .is_none_or(|maximum| TraceLogLevel::parse(level) <= maximum)
+                .is_none_or(|configured| configured.allows(level))
         })
     }
 

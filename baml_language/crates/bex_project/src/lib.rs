@@ -18,13 +18,13 @@ pub use bex::{Bex, BexCallTraceResult};
 pub use bex_engine::BexCallResult;
 #[cfg(target_arch = "wasm32")]
 pub use bex_engine::configure_workerd_runtime;
+#[cfg(not(target_arch = "wasm32"))]
+pub use bex_engine::logger::{RenderedTraceLog, TraceLogLevel};
 pub use bex_engine::{
     BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
     InboundUnionAmbiguityPolicy, UnhandledSpawnError, UnhandledSpawnErrorHandler,
     is_cancelled_engine_error,
-    logger::{
-        RenderedTraceLog, TraceLogDrainReport, TraceLogLevel, TraceLogMetadata, TraceLogger,
-    },
+    logger::{TraceLogDrainReport, TraceLogMetadata, TraceLogger},
     register_inbound_union_ambiguity_policy,
 };
 pub use bex_external_types::{

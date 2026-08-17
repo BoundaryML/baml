@@ -25,6 +25,16 @@ def test_main_single_required_arg_round_trips():
     assert single_required_arg("hi") == "hi"
 
 
+# SDK_PARITY_LINT(skip): native SDK stderr delivery is covered by the Python CFFI integration
+def test_baml_logs_are_off_by_default(monkeypatch, capfd):
+    monkeypatch.delenv("BAML_LOG", raising=False)
+    assert sdk_bridge_logs() == 42
+
+    stderr = capfd.readouterr().err
+    assert "sdk bridge" not in stderr
+
+
+# SDK_PARITY_LINT(skip): native SDK stderr delivery is covered by the Python CFFI integration
 def test_baml_logs_reach_sdk_stderr_and_respect_level(monkeypatch, capfd):
     monkeypatch.setenv("BAML_LOG", "DEBUG")
     assert sdk_bridge_logs() == 42
@@ -45,6 +55,7 @@ def test_baml_logs_reach_sdk_stderr_and_respect_level(monkeypatch, capfd):
     assert "[BAML ERROR] sdk bridge error" in stderr
 
 
+# SDK_PARITY_LINT(skip): native SDK stderr delivery is covered by the Python CFFI integration
 def test_baml_logs_from_detached_tasks_reach_sdk_stderr(monkeypatch, capfd):
     monkeypatch.setenv("BAML_LOG", "INFO")
     assert sdk_bridge_detached_log() == 42
@@ -58,6 +69,7 @@ def test_baml_logs_from_detached_tasks_reach_sdk_stderr(monkeypatch, capfd):
     assert "[BAML INFO] sdk bridge detached info" in stderr
 
 
+# SDK_PARITY_LINT(skip): native SDK stderr delivery is covered by the Python CFFI integration
 async def test_baml_logs_survive_async_call_cancellation(monkeypatch, capfd):
     monkeypatch.setenv("BAML_LOG", "INFO")
     task = asyncio.create_task(sdk_bridge_cancelled_log_async())
