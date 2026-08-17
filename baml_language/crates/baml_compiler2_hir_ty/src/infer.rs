@@ -8323,10 +8323,7 @@ impl<'db> InferenceContext<'db> {
             }
             return var_ty;
         }
-        Ty::intern(
-            ty.kind()
-                .map_children(|child| self.instantiate_holes(child, at)),
-        )
+        ty.map_children_preserving(|child| self.instantiate_holes(child, at))
     }
 
     /// [`Self::instantiate_holes`] for EXPRESSION-position type arguments
@@ -8346,10 +8343,7 @@ impl<'db> InferenceContext<'db> {
                 .push(PendingDiag::ExprPositionHole { expr: at });
             return self.table.new_var_ty();
         }
-        Ty::intern(
-            ty.kind()
-                .map_children(|child| self.reject_expr_position_holes(child, at)),
-        )
+        ty.map_children_preserving(|child| self.reject_expr_position_holes(child, at))
     }
 
     /// `base catch (e) { arms }` / `catch_all`: narrowing on the ERROR
@@ -9939,10 +9933,7 @@ impl<'db> InferenceContext<'db> {
         if fuel == 0 || !ty.has_projection() {
             return ty.clone();
         }
-        let rebuilt = Ty::intern(
-            ty.kind()
-                .map_children(|child| self.reduce_projections(child, fuel)),
-        );
+        let rebuilt = ty.map_children_preserving(|child| self.reduce_projections(child, fuel));
         // Node-local normalization (rustc's lazy normalize): a projection
         // reduces when ITS OWN subtree is ground - var-carrying siblings
         // elsewhere in the type are irrelevant to this lookup. A
@@ -10039,6 +10030,13 @@ impl<'db> InferenceContext<'db> {
     /// tier snapshots, so the convention applies at this crate's result
     /// boundary; it folds into the shared algebra at cutover (S16).
     fn canonicalize_unions(&self, ty: &Ty) -> Ty {
+        // No union node anywhere means every arm below is the identity
+        // rebuild — return the original handle instead of re-interning the
+        // whole tree (this runs on every finalized expression/pattern type,
+        // and union-free is the common case).
+        if !ty.has_union() {
+            return ty.clone();
+        }
         match ty.kind() {
             TyKind::Union(members, _) => {
                 let members: Vec<Ty> = members
@@ -10072,10 +10070,9 @@ impl<'db> InferenceContext<'db> {
                     _ => joined,
                 }
             }
-            _ => Ty::intern(
-                ty.kind()
-                    .map_children(|child| self.canonicalize_unions(child)),
-            ),
+            // Identity-preserving: subtrees without unions come back as the
+            // same handle, so this re-interns only spines that changed.
+            _ => ty.map_children_preserving(|child| self.canonicalize_unions(child)),
         }
     }
 
@@ -10633,7 +10630,7 @@ fn skolemize_infer(ty: &Ty) -> Ty {
             attr.clone(),
         ));
     }
-    Ty::intern(ty.kind().map_children(skolemize_infer))
+    ty.map_children_preserving(skolemize_infer)
 }
 
 /// Every unsolved inference var occurring in `ty`, for structural
@@ -10810,10 +10807,7 @@ fn substitute_static_call_params(
     if !ty.has_typevar() {
         return ty.clone();
     }
-    Ty::intern(
-        ty.kind()
-            .map_children(|child| substitute_static_call_params(child, args, runtime_params)),
-    )
+    ty.map_children_preserving(|child| substitute_static_call_params(child, args, runtime_params))
 }
 
 fn replace_rigid_param(ty: &Ty, param: &baml_type::ParamTy, replacement: &Ty) -> Ty {
@@ -10823,10 +10817,7 @@ fn replace_rigid_param(ty: &Ty, param: &baml_type::ParamTy, replacement: &Ty) ->
     if !ty.has_typevar() {
         return ty.clone();
     }
-    Ty::intern(
-        ty.kind()
-            .map_children(|child| replace_rigid_param(child, param, replacement)),
-    )
+    ty.map_children_preserving(|child| replace_rigid_param(child, param, replacement))
 }
 
 fn substitute_static_interface_params(
@@ -10915,7 +10906,7 @@ fn erase_infer(ty: &Ty) -> Ty {
     if matches!(ty.kind(), TyKind::Infer { .. }) {
         return Ty::error();
     }
-    Ty::intern(ty.kind().map_children(erase_infer))
+    ty.map_children_preserving(erase_infer)
 }
 
 /// A fresh literal widens to its base primitive at binding sites (the spec's
