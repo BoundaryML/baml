@@ -45,6 +45,7 @@ pub mod playground_sender;
 pub mod playground_server;
 pub mod playground_session;
 pub mod playground_ws;
+mod pool_sweeper;
 
 use std::{
     collections::BTreeMap,
@@ -484,6 +485,7 @@ fn run_server_inner(
 
     tracing::info!("baml-lsp v{} starting", version());
     deadlock_watchdog::spawn();
+    pool_sweeper::spawn();
 
     let tokio_runtime = tokio::runtime::Runtime::new()?;
 

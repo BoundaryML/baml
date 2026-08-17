@@ -1430,10 +1430,7 @@ pub fn substitute_params(ty: &baml_type::interned::Ty, args: &[baml_type::intern
     {
         return replacement.clone();
     }
-    Ty::intern(
-        ty.kind()
-            .map_children(|child| substitute_params(child, args)),
-    )
+    ty.map_children_preserving(|child| substitute_params(child, args))
 }
 
 /// Generic-arity recovery without diagnostics (S17): extras truncated,
@@ -1725,7 +1722,7 @@ pub fn reject_holes(ty: &Ty) -> Ty {
     if matches!(ty.kind(), TyKind::Infer { var: None, .. }) {
         return Ty::error();
     }
-    Ty::intern(ty.kind().map_children(reject_holes))
+    ty.map_children_preserving(reject_holes)
 }
 
 /// The declared interface bounds for a CLASS's own generic frame - the
@@ -1766,10 +1763,51 @@ pub fn class_generic_bounds<'db>(
     out
 }
 
+/// Memoized bounds map for [`function_generic_bounds`]. Wrapped for the
+/// manual `salsa::Update` impl (the `CallableThrows` precedent).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionGenericBounds(pub FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>);
+
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for FunctionGenericBounds {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
 /// The declared interface bounds for a function's full generic frame
 /// (class prefix + own params; effect params unbounded), keyed by the
 /// same `ParamTy` identities `function_generic_frame` assigns.
+///
+/// TRACKED via [`function_generic_bounds_tracked`]: consumers are per-USE
+/// (every direct call site re-lowered the callee's bound type-refs, and
+/// emit metadata recomputed them per function per compile).
 pub fn function_generic_bounds<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+    function_generic_bounds_tracked(db, function).0.clone()
+}
+
+#[salsa::tracked(returns(ref))]
+fn function_generic_bounds_tracked<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> FunctionGenericBounds {
+    FunctionGenericBounds(function_generic_bounds_impl(db, function))
+}
+
+fn function_generic_bounds_impl<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
 ) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
@@ -1995,21 +2033,76 @@ unsafe impl salsa::Update for FunctionSignature {
     }
 }
 
+/// A function's signature SHAPE: frame, params, return, and the RAW lowered
+/// `throws` clause - never the caller-facing merged effect.
+///
+/// This is the half of [`function_signature`] a body's OWN inference reads.
+/// The merged `throws` surface (declared-else-inferred, via
+/// [`crate::callable::callable_throws`]) is derived FROM the body run, so a
+/// body reading it through its own signature closes the
+/// `infer_body -> function_signature -> callable_throws -> infer_body`
+/// fixpoint cycle on every function with an omitted or partial clause -
+/// salsa then converges by re-running complete body inferences whose result
+/// the body never consumed (it checks throw sites against the raw written
+/// clause). Splitting the shape out leaves only genuine cross-function
+/// recursion on the fixpoint road.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionSignatureShape {
+    pub generic_params: Vec<ParamTy>,
+    pub params: Vec<SignatureParam>,
+    pub ret: Ty,
+    /// The lowered written clause, holes preserved (`throws T | _` keeps its
+    /// hole so the partial-clause policy stays decidable downstream).
+    /// `None` when the clause is omitted.
+    pub throws_clause: Option<Ty>,
+}
+
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for FunctionSignatureShape {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
 fn function_signature_cycle_initial<'db>(
-    _db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_ppir::Db,
     _id: salsa::Id,
-    _function: FunctionLoc<'db>,
+    function: FunctionLoc<'db>,
 ) -> FunctionSignature {
     // The fixpoint seed for the signature/throws/inference cycle (an
     // omitted or partial throws clause reads `callable_throws`, which
-    // runs `infer_body`, which reads the signature): a degenerate empty
-    // signature; iteration converges to the real one.
+    // runs `infer_body`, whose call sites can read the signature back).
+    // Seed from the SHAPE - acyclic and memoized - so a mid-cycle reader
+    // sees the real frame/params/ret and only `throws` is provisional
+    // (`never`, `callable_throws`' own lattice bottom).
+    //
+    // The historical fully-degenerate seed (empty params, error ret)
+    // relied on the OWN-signature read poisoning a recursive body's
+    // param types badly enough that method resolution never resolved the
+    // recursive call; with the shape split the body types normally
+    // mid-cycle, and call-site consumers index into `generic_params`
+    // trusting the frame invariant - which the degenerate seed broke
+    // (observed: slice-out-of-bounds on a self-recursive generic method).
+    let shape = function_signature_shape(db, function);
     FunctionSignature {
-        generic_params: Vec::new(),
-        params: Vec::new(),
-        ret: Ty::error(),
+        generic_params: shape.generic_params.clone(),
+        params: shape.params.clone(),
+        ret: shape.ret.clone(),
         throws: Ty::never(),
-        throws_declared: false,
+        // Fixed by syntax, not iterated - give mid-cycle readers the
+        // truth (a partial clause is declared even while its merged
+        // surface is still converging).
+        throws_declared: shape.throws_clause.is_some(),
     }
 }
 
@@ -2622,11 +2715,17 @@ pub fn type_alias_lowering_diagnostics<'db>(
     out
 }
 
-#[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]
-pub fn function_signature<'db>(
+/// The signature SHAPE road: everything [`function_signature`] computes
+/// EXCEPT the merged throws surface. Deliberately has NO cycle seed - the
+/// only cycle through the signature was the throws road (see
+/// [`function_signature_cycle_initial`]'s comment), which this query never
+/// takes; an unexpected new cycle should panic loudly rather than converge
+/// through a silent degenerate seed.
+#[salsa::tracked(returns(ref))]
+pub fn function_signature_shape<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
-) -> FunctionSignature {
+) -> FunctionSignatureShape {
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let bounds = function_generic_bounds(db, function);
@@ -2676,59 +2775,139 @@ pub fn function_signature<'db>(
         .return_type
         .map(|ret| reject_holes(&ctx.lower_type_ref(&data.type_refs, ret)))
         .unwrap_or_else(Ty::error);
-    let throws_declared = data.throws.is_some();
-    let throws = data
+    let throws_clause = data
         .throws
-        .map(|throws| {
-            let lowered = ctx.lower_type_ref(&data.type_refs, throws);
-            if throws_clause_parts(&lowered).1 {
-                // A PARTIAL clause (`throws T | _`, spec rule 3): callers
-                // see the merged surface (declared + inferred), which is
-                // what `callable_throws` computes through the body run.
-                Ty::from_plain(&crate::callable::callable_throws(db, function).0)
-            } else {
-                reject_holes(&lowered)
-            }
-        })
-        .unwrap_or_else(|| {
-            // Omitted: the body-inferred effect, fixpoint over mutual
-            // recursion (S12's callable_throws).
-            Ty::from_plain(&crate::callable::callable_throws(db, function).0)
-        });
-    FunctionSignature {
+        .map(|throws| ctx.lower_type_ref(&data.type_refs, throws));
+    FunctionSignatureShape {
         generic_params: frame,
         params,
         ret,
+        throws_clause,
+    }
+}
+
+#[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]
+pub fn function_signature<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> FunctionSignature {
+    let shape = function_signature_shape(db, function);
+    let throws_declared = shape.throws_clause.is_some();
+    let throws = match &shape.throws_clause {
+        // A COMPLETE written clause is the contract verbatim.
+        Some(lowered) if !throws_clause_parts(lowered).1 => reject_holes(lowered),
+        // A PARTIAL clause (`throws T | _`, spec rule 3) or an omitted one:
+        // callers see the merged surface (declared + inferred), which is
+        // what `callable_throws` computes through the body run - fixpoint
+        // over genuine cross-function recursion (S12).
+        _ => Ty::from_plain(&crate::callable::callable_throws(db, function).0),
+    };
+    FunctionSignature {
+        generic_params: shape.generic_params.clone(),
+        params: shape.params.clone(),
+        ret: shape.ret.clone(),
         throws,
         throws_declared,
     }
 }
 
+/// Memoized field-type list for [`class_field_types`]. Wrapped for the
+/// manual `salsa::Update` impl (the `CallableThrows` precedent).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassFieldTypes(pub Vec<(Name, Ty)>);
+
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for ClassFieldTypes {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
+/// TRACKED: per-declaration, because the consumers are per-USE - every
+/// field access, object literal, class pattern, and exhaustiveness walk
+/// re-lowered every field of the class before this memo existed.
+#[salsa::tracked(returns(ref))]
+fn class_field_types_tracked<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    class: ClassLoc<'db>,
+) -> ClassFieldTypes {
+    let data = baml_compiler2_ppir::item_data::class_data(db, class);
+    let ctx = lower_ctx_for_file(db, class.file(db)).with_frame(class_generic_frame(db, class));
+    ClassFieldTypes(
+        data.fields
+            .iter()
+            .map(|field| {
+                (
+                    field.name.clone(),
+                    reject_holes(&ctx.lower_type_ref(&data.type_refs, field.type_ref)),
+                )
+            })
+            .collect(),
+    )
+}
+
 /// A class's field types, lowered in the class's own generic frame.
+/// The clone off the memo is Name/interned-handle refcount bumps -
+/// vastly cheaper than the re-lowering it replaces.
 pub fn class_field_types<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     class: ClassLoc<'db>,
 ) -> Vec<(Name, Ty)> {
-    let data = baml_compiler2_ppir::item_data::class_data(db, class);
-    let ctx = lower_ctx_for_file(db, class.file(db)).with_frame(class_generic_frame(db, class));
-    data.fields
-        .iter()
-        .map(|field| {
-            (
-                field.name.clone(),
-                reject_holes(&ctx.lower_type_ref(&data.type_refs, field.type_ref)),
-            )
-        })
-        .collect()
+    class_field_types_tracked(db, class).0.clone()
+}
+
+/// Memoized alias RHS for [`type_alias_value`]. Wrapped for the manual
+/// `salsa::Update` impl (the `CallableThrows` precedent).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeAliasValue(pub Ty);
+
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for TypeAliasValue {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
+/// TRACKED: per-declaration - alias definitions were re-lowered once per
+/// inference body via `Facts::alias_def` misses and once per alias in
+/// every body's overlap map before this memo existed.
+#[salsa::tracked(returns(ref))]
+fn type_alias_value_tracked<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    alias: TypeAliasLoc<'db>,
+) -> TypeAliasValue {
+    let data = baml_compiler2_ppir::item_data::type_alias_data(db, alias);
+    let ctx = lower_ctx_for_file(db, alias.file(db));
+    TypeAliasValue(
+        data.value
+            .map(|value| reject_holes(&ctx.lower_type_ref(&data.type_refs, value)))
+            .unwrap_or_else(Ty::error),
+    )
 }
 
 /// A type alias's right-hand side, lowered (aliases are non-generic).
 pub fn type_alias_value<'db>(db: &'db dyn baml_compiler2_ppir::Db, alias: TypeAliasLoc<'db>) -> Ty {
-    let data = baml_compiler2_ppir::item_data::type_alias_data(db, alias);
-    let ctx = lower_ctx_for_file(db, alias.file(db));
-    data.value
-        .map(|value| reject_holes(&ctx.lower_type_ref(&data.type_refs, value)))
-        .unwrap_or_else(Ty::error)
+    type_alias_value_tracked(db, alias).0.clone()
 }
 
 /// One associated type's bound or default, lowered once in the interface

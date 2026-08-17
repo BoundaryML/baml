@@ -138,12 +138,27 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
 /// value is consumed by the first pull, so later pulls would pop unrelated
 /// stack slots and a zero-pull form would orphan it (see `stack_carry`'s
 /// `Terminator::Switch` arm, the sole consumer).
+///
+/// The pull count is computed arithmetically rather than by calling
+/// [`analyze_switch`]: every ≥4-arm strategy (`JumpTable`, `PerfectHash`,
+/// `BinarySearch` — `JUMP_TABLE_MIN_ARMS` and `BINARY_SEARCH_MIN_ARMS` are
+/// both 4, so one of them always applies) pulls exactly once, and below 4
+/// arms the strategy is always `IfElseChain`. Running the full analysis here
+/// would repeat the perfect-hash search once per stack-carry candidate only
+/// to discard everything but the arm-count bucket. The
+/// `pin_switch_discriminant_pull_counts` test holds this equivalence to the
+/// emitters' actual pull behavior.
 pub(crate) fn switch_discriminant_pulls(arms: &[(i64, BlockId)], exhaustive: bool) -> usize {
-    match analyze_switch(arms) {
-        SwitchStrategy::JumpTable { .. }
-        | SwitchStrategy::PerfectHash(_)
-        | SwitchStrategy::BinarySearch => 1,
-        SwitchStrategy::IfElseChain => arms.len().saturating_sub(usize::from(exhaustive)),
+    const {
+        assert!(
+            JUMP_TABLE_MIN_ARMS == BINARY_SEARCH_MIN_ARMS,
+            "pull arithmetic assumes one shared >=N-arm threshold"
+        );
+    }
+    if arms.len() >= BINARY_SEARCH_MIN_ARMS {
+        1
+    } else {
+        arms.len().saturating_sub(usize::from(exhaustive))
     }
 }
 

@@ -80,7 +80,7 @@
 //! oracle, the renderer **bails** and the pipeline degrades to the sound
 //! pre-automaton form (see [`canonicalize_mu`]).
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::{MuDisplay, NormalParam, NormalTy, TypeContext};
 use crate::{FunctionParamMode, Name, QualifiedTypeName, Ty, TyAttr};
@@ -878,13 +878,14 @@ fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C
                     }
                     if !items[i]
                         .0
-                        .is_subtype_of(&items[j].0, ctx, &mut HashSet::new())
+                        .is_subtype_of(&items[j].0, ctx, &mut super::Assumptions::new())
                     {
                         continue;
                     }
-                    let mutual = items[j]
-                        .0
-                        .is_subtype_of(&items[i].0, ctx, &mut HashSet::new());
+                    let mutual =
+                        items[j]
+                            .0
+                            .is_subtype_of(&items[i].0, ctx, &mut super::Assumptions::new());
                     if !mutual || j < i {
                         keep[i] = false;
                         break;

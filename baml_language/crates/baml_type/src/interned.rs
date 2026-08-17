@@ -19,8 +19,11 @@
 //!   ids (`FunctionLoc`, `ScopeId`), types must outlive any database - they
 //!   are held by the runtime, serialized, and crossed over FFI. This is the
 //!   same reason rust-analyzer interns its types in a global pool despite
-//!   being salsa-based throughout. Entries are freed when the last handle
-//!   drops.
+//!   being salsa-based throughout. Dead entries (no handle outside the pool)
+//!   linger until an explicit [`Ty::sweep_pool`] — dropping a handle is a
+//!   plain refcount decrement, never a pool lock. Short-lived processes (the
+//!   CLI) never need to sweep; the long-lived LSP must sweep on idle to
+//!   reclaim (a compile churns through far more transient types than survive).
 //!
 //! Variants, payload shapes, and discriminant order mirror the master
 //! [`ty_family!`](crate::Ty) enum (conversions are exhaustive matches, so
@@ -39,6 +42,8 @@ use std::{
     hash::{Hash, Hasher},
     sync::{Arc, Mutex, OnceLock},
 };
+
+use rustc_hash::FxBuildHasher;
 
 use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, TyAttr, TypeName};
 
@@ -59,6 +64,8 @@ bitflags::bitflags! {
         const HAS_PROJECTION = 1 << 3;
         /// Contains a fresh (unwidened) literal.
         const HAS_FRESH_LITERAL = 1 << 4;
+        /// Contains a `Union` node (anywhere, own node included).
+        const HAS_UNION = 1 << 5;
     }
 }
 
@@ -142,6 +149,13 @@ impl Ty {
     pub fn has_projection(&self) -> bool {
         self.0.flags.contains(TypeFlags::HAS_PROJECTION)
     }
+
+    /// Whether this type contains a union node anywhere (own node included).
+    /// Union-shape folds (e.g. inference's union canonicalization) are the
+    /// identity on types without one, so they short-circuit on this.
+    pub fn has_union(&self) -> bool {
+        self.0.flags.contains(TypeFlags::HAS_UNION)
+    }
 }
 
 impl Clone for Ty {
@@ -150,19 +164,59 @@ impl Clone for Ty {
     }
 }
 
-impl Drop for Ty {
-    fn drop(&mut self) {
-        // Evict when only this handle and the pool's entry remain. The count
-        // is re-checked under the lock: a concurrent intern of the same kind
-        // bumps the count before we can remove it, and a count of 2 under the
-        // lock proves no other handle exists. The removed entry's `TyData` is
-        // freed after the guard is released (this handle still holds it), so
-        // child handles' recursive drops never run under the pool lock.
-        if Arc::strong_count(&self.0) == 2 {
+// NOTE deliberately no `Drop` impl: dropping a handle is a plain `Arc`
+// decrement. Compilation churns through millions of transient types (probe
+// constructions that hit the pool, inference scratch); evicting on drop made
+// every one of those pay a second full hash plus the global pool lock on the
+// way out. Dead entries are reclaimed explicitly via [`Ty::sweep_pool`].
+
+impl Ty {
+    /// Evicts every pool entry with no live handle outside the pool,
+    /// returning how many were reclaimed.
+    ///
+    /// Contract: dropping a `Ty` never touches the pool, so dead entries
+    /// accumulate until this runs. The short-lived CLI never needs to call
+    /// it (process exit reclaims everything); the long-lived LSP is expected
+    /// to call it on a periodic timer (every N seconds). Repeated calls are
+    /// safe; an idle-pool call costs one scan and reclaims nothing. Safe to
+    /// call concurrently with interning from other threads: only entries
+    /// with no outside handle are removed, and a concurrent intern of an
+    /// equal kind re-inserts a fresh entry.
+    ///
+    /// Deliberately a plain scan, not insert-watermark-gated: entries die
+    /// via handle *drops*, which are untracked (that is the whole point), so
+    /// "no interns since last sweep" would NOT imply "nothing to reclaim" —
+    /// it would skip reclamation exactly in the idle-editor window where the
+    /// timer is supposed to release a finished compile's memory. Each pass
+    /// scans the whole pool under the global pool mutex, stalling concurrent
+    /// interns for the scan's duration; callers can adapt their cadence from
+    /// the returned count (an incremental/sharded sweep is the follow-up if
+    /// the stall ever matters).
+    pub fn sweep_pool() -> usize {
+        let mut total = 0;
+        // A dead parent's child handles keep the children alive until the
+        // parent entry itself is freed, so reclamation is transitive: iterate
+        // passes until a pass evicts nothing.
+        loop {
             let mut pool = pool().lock().expect("ty intern pool poisoned");
-            if Arc::strong_count(&self.0) == 2 {
-                pool.remove(&*self.0);
+            // Collect evictees first so their (recursive) frees run after the
+            // guard is released, keeping the critical section short. A count
+            // of 1 under the lock proves no outside handle exists, and none
+            // can appear: minting a handle requires either the pool lock
+            // (intern) or an existing outside handle (clone).
+            let dead: Vec<Arc<TyData>> = pool
+                .iter()
+                .filter(|entry| Arc::strong_count(entry) == 1)
+                .map(Arc::clone)
+                .collect();
+            for entry in &dead {
+                pool.remove(&**entry);
             }
+            drop(pool);
+            if dead.is_empty() {
+                return total;
+            }
+            total += dead.len();
         }
     }
 }
@@ -206,9 +260,14 @@ impl std::fmt::Debug for Ty {
     }
 }
 
-fn pool() -> &'static Mutex<HashSet<Arc<TyData>>> {
-    static POOL: OnceLock<Mutex<HashSet<Arc<TyData>>>> = OnceLock::new();
-    POOL.get_or_init(|| Mutex::new(HashSet::new()))
+/// The intern pool. FxHash rather than the default SipHash: the pool is
+/// in-process only — never iterated for output, never serialized — so
+/// HashDoS resistance buys nothing, and node hashing (discriminant + attrs +
+/// name strings + child pointers) is hot enough to show as a top profile
+/// leaf under SipHash.
+fn pool() -> &'static Mutex<HashSet<Arc<TyData>, FxBuildHasher>> {
+    static POOL: OnceLock<Mutex<HashSet<Arc<TyData>, FxBuildHasher>>> = OnceLock::new();
+    POOL.get_or_init(|| Mutex::new(HashSet::default()))
 }
 
 // -- Kind ---------------------------------------------------------------------
@@ -607,6 +666,41 @@ impl TyKind {
     }
 }
 
+impl Ty {
+    /// Rebuilds this type with each direct child replaced by `f(child)`
+    /// (satellite-nested children included), interning only when a child
+    /// actually changed: if every child maps to itself the ORIGINAL handle
+    /// is returned — no candidate kind materialization, no pool lock. This
+    /// is the form every fold/substitution pass should use: on the common
+    /// mostly-unchanged tree it turns per-node intern traffic into pointer
+    /// compares.
+    ///
+    /// `f` is called exactly once per child (it may be stateful), in
+    /// [`for_each_child`] order, which [`TyKind::map_children`] mirrors.
+    pub fn map_children_preserving(&self, mut f: impl FnMut(&Ty) -> Ty) -> Ty {
+        let mut mapped: Vec<Ty> = Vec::new();
+        let mut changed = false;
+        for_each_child(self.kind(), |child| {
+            let new = f(child);
+            changed |= new != *child;
+            mapped.push(new);
+        });
+        if !changed {
+            return self.clone();
+        }
+        let mut next = mapped.into_iter();
+        let rebuilt = Ty::intern(self.kind().map_children(|_| {
+            next.next()
+                .expect("map_children visits the same children as for_each_child")
+        }));
+        debug_assert!(
+            next.next().is_none(),
+            "map_children visited more children than for_each_child"
+        );
+        rebuilt
+    }
+}
+
 fn compute_flags(kind: &TyKind) -> TypeFlags {
     let own = match kind {
         TyKind::Literal(_, Freshness::Fresh, _) => TypeFlags::HAS_FRESH_LITERAL,
@@ -614,6 +708,7 @@ fn compute_flags(kind: &TyKind) -> TypeFlags {
         TyKind::AssociatedTypeProjection { .. } => TypeFlags::HAS_PROJECTION,
         TyKind::Error { .. } => TypeFlags::HAS_ERROR,
         TyKind::Infer { .. } => TypeFlags::HAS_INFER,
+        TyKind::Union(..) => TypeFlags::HAS_UNION,
         _ => TypeFlags::empty(),
     };
     let mut flags = own;
@@ -837,54 +932,40 @@ impl Ty {
 
 // -- Leaf helpers -------------------------------------------------------------
 
+/// A default-attr leaf helper pinned in a `OnceLock`: after first use the
+/// call is a refcount bump — no pool lock, no hashing. The pinned handle
+/// also keeps the entry's strong count ≥ 2 forever, so leaves never churn
+/// through [`Ty::sweep_pool`].
+macro_rules! pinned_leaf {
+    ($(#[$doc:meta])* $name:ident, $variant:ident) => {
+        $(#[$doc])*
+        pub fn $name() -> Ty {
+            static PINNED: OnceLock<Ty> = OnceLock::new();
+            PINNED
+                .get_or_init(|| {
+                    Ty::intern(TyKind::$variant {
+                        attr: TyAttr::default(),
+                    })
+                })
+                .clone()
+        }
+    };
+}
+
 impl Ty {
-    pub fn int() -> Ty {
-        Ty::intern(TyKind::Int {
-            attr: TyAttr::default(),
-        })
-    }
-
-    pub fn float() -> Ty {
-        Ty::intern(TyKind::Float {
-            attr: TyAttr::default(),
-        })
-    }
-
-    pub fn string() -> Ty {
-        Ty::intern(TyKind::String {
-            attr: TyAttr::default(),
-        })
-    }
-
-    pub fn bool() -> Ty {
-        Ty::intern(TyKind::Bool {
-            attr: TyAttr::default(),
-        })
-    }
-
-    pub fn null() -> Ty {
-        Ty::intern(TyKind::Null {
-            attr: TyAttr::default(),
-        })
-    }
-
-    pub fn never() -> Ty {
-        Ty::intern(TyKind::Never {
-            attr: TyAttr::default(),
-        })
-    }
-
-    pub fn void() -> Ty {
-        Ty::intern(TyKind::Void {
-            attr: TyAttr::default(),
-        })
-    }
-
-    pub fn error() -> Ty {
-        Ty::intern(TyKind::Error {
-            attr: TyAttr::default(),
-        })
-    }
+    pinned_leaf!(int, Int);
+    pinned_leaf!(float, Float);
+    pinned_leaf!(string, String);
+    pinned_leaf!(bool, Bool);
+    pinned_leaf!(null, Null);
+    pinned_leaf!(never, Never);
+    pinned_leaf!(void, Void);
+    pinned_leaf!(error, Error);
+    pinned_leaf!(
+        /// The spec top type (the plain enum's `BuiltinUnknown`).
+        unknown,
+        Unknown
+    );
 
     pub fn infer_var(var: InferVar) -> Ty {
         Ty::intern(TyKind::Infer {
@@ -1065,6 +1146,14 @@ mod tests {
     }
 
     #[test]
+    fn union_flag_propagates() {
+        assert!(Ty::union([Ty::int(), Ty::string()]).has_union());
+        assert!(Ty::list(Ty::optional(Ty::int())).has_union());
+        assert!(!Ty::list(Ty::int()).has_union());
+        assert!(!Ty::int().has_union());
+    }
+
+    #[test]
     fn map_children_rebuilds_nested_structure() {
         let var = Ty::infer_var(InferVar::new(7));
         let nested = Ty::list(Ty::union([Ty::int(), var.clone()]));
@@ -1085,6 +1174,58 @@ mod tests {
         // Untouched subtrees keep their identity.
         let unchanged = substitute(&nested, &Ty::infer_var(InferVar::new(8)), &Ty::string());
         assert!(unchanged == nested);
+    }
+
+    #[test]
+    fn map_children_preserving_matches_map_children_and_preserves_identity() {
+        let var = Ty::infer_var(InferVar::new(11));
+        // Children in every satellite position: function params/ret/throws,
+        // projection base + interface generics + associated types.
+        let samples: Vec<Ty> = plain_samples().iter().map(Ty::from_plain).collect();
+        let deep = Ty::intern(TyKind::Function {
+            params: [FunctionParam::required(None, var.clone())].into(),
+            ret: Ty::intern(TyKind::AssociatedTypeProjection {
+                base: var.clone(),
+                interface: InterfaceRef::new(
+                    TypeName::local(Name::new("I")),
+                    [var.clone()].into(),
+                    vec![(Name::new("Item"), var.clone())],
+                ),
+                member: Name::new("Item"),
+                attr: TyAttr::default(),
+            }),
+            throws: Ty::never(),
+            attr: TyAttr::default(),
+        });
+
+        for ty in samples.iter().chain([&deep]) {
+            // Identity mapping returns the ORIGINAL handle, calling f once
+            // per child.
+            let mut calls_a = 0;
+            let same = ty.map_children_preserving(|child| {
+                calls_a += 1;
+                child.clone()
+            });
+            assert!(same == *ty);
+
+            // A real substitution agrees with the plain map_children +
+            // intern road, and visits the same children in the same order.
+            let mut calls_b = 0;
+            let subst = |child: &Ty| {
+                if child == &var {
+                    Ty::string()
+                } else {
+                    child.clone()
+                }
+            };
+            let preserving = ty.map_children_preserving(|child| {
+                calls_b += 1;
+                subst(child)
+            });
+            let baseline = Ty::intern(ty.kind().map_children(subst));
+            assert!(preserving == baseline);
+            assert_eq!(calls_a, calls_b);
+        }
     }
 
     #[test]
@@ -1109,26 +1250,48 @@ mod tests {
     }
 
     #[test]
-    fn dropping_last_handle_evicts_pool_entry() {
-        let probe_kind = TyKind::Literal(
-            Literal::String("interned-eviction-probe".into()),
+    fn sweep_reclaims_dead_entries_transitively() {
+        // Unique probe kinds so concurrent tests can't intern equal entries.
+        // Only handle-free kinds (literals) are kept across the sweep for
+        // probing — a `TyKind::List` probe would itself hold a child handle
+        // and keep the leaf alive.
+        let leaf_kind = TyKind::Literal(
+            Literal::String("interned-sweep-probe-leaf".into()),
             Freshness::Regular,
             TyAttr::default(),
         );
-        assert!(!pool_contains(&probe_kind));
-        let ty = Ty::intern(probe_kind.clone());
-        assert!(pool_contains(&probe_kind));
-        let second = ty.clone();
-        drop(ty);
-        assert!(
-            pool_contains(&probe_kind),
-            "live handle must keep the entry"
+        let keep_kind = TyKind::Literal(
+            Literal::String("interned-sweep-probe-keep".into()),
+            Freshness::Regular,
+            TyAttr::default(),
         );
-        drop(second);
-        assert!(!pool_contains(&probe_kind), "last drop must evict");
+        let keep = Ty::intern(keep_kind.clone());
+        {
+            let leaf = Ty::intern(leaf_kind.clone());
+            let _parent = Ty::intern(TyKind::List(leaf, TyAttr::default()));
+        } // both handles dropped; pool entries linger (parent's entry still
+        // holds a child handle to the leaf's entry)
+        assert!(pool_contains(&leaf_kind), "drop must not evict");
+
+        // The leaf can only die after the parent entry is freed (the parent
+        // holds a child handle to it), so leaf eviction proves the sweep is
+        // transitive across passes. Live entries must survive.
+        Ty::sweep_pool();
+        assert!(
+            !pool_contains(&leaf_kind),
+            "sweep must transitively evict the dead parent then the dead leaf"
+        );
+        assert!(pool_contains(&keep_kind), "sweep must keep live entries");
+
+        // Pinned leaf helpers survive sweeps: the static handle keeps them live.
+        let int_before = Ty::int();
+        Ty::sweep_pool();
+        assert!(int_before == Ty::int());
+
         // Re-interning after eviction works.
-        let again = Ty::intern(probe_kind.clone());
-        assert!(pool_contains(&probe_kind));
+        let again = Ty::intern(leaf_kind.clone());
+        assert!(pool_contains(&leaf_kind));
         drop(again);
+        drop(keep);
     }
 }

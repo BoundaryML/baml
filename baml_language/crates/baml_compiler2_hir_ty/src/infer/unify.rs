@@ -222,10 +222,9 @@ impl InferenceTable {
         if !ty.has_infer() {
             return ty;
         }
-        Ty::intern(
-            ty.kind()
-                .map_children(|child| self.resolve_completely(child)),
-        )
+        // Identity-preserving: when no child actually resolves (vars still
+        // unknown), the original handle comes back with no re-intern.
+        ty.map_children_preserving(|child| self.resolve_completely(child))
     }
 
     /// Eagerly unifies `left` and `right` structurally, solving variables.

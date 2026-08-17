@@ -1222,8 +1222,11 @@ fn union_arm_interfaces<'db>(
 
 /// Whether the interface declares `name`, and as which kind
 /// (`Some(true)` = field). Side-effect-free - used to count shared
-/// declarers before committing to a virtual resolution.
-fn interface_declares_member<'db>(
+/// declarers before committing to a virtual resolution, and as the
+/// impl-member probe's name-only pre-filter (a candidate whose interface
+/// never declares the member can't apply, so the probe skips its
+/// snapshot + subject-confirmation entirely).
+pub(crate) fn interface_declares_member<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
     target: &InterfaceRef,
