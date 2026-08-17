@@ -18,7 +18,7 @@ use crate::{Db, FunctionOwner, Package, Symbol};
 /// such a runner point insta at the real checkout's `src/snapshots`; unset
 /// (every local and cargo-arm run), behavior is byte-identical to a bare
 /// `assert_snapshot!`. Same pattern as `BAML_PARAM_SCHEMA_GOLDEN` in
-/// baml_project, which exists for the same relocated-build reason.
+/// `baml_project`, which exists for the same relocated-build reason.
 pub(crate) fn with_snapshot_dir(assertion: impl FnOnce()) {
     let mut settings = insta::Settings::clone_current();
     if let Some(dir) = std::env::var_os("BAML_SURFACE_SNAPSHOT_DIR") {
