@@ -721,6 +721,9 @@ enum PendingDiag<'db> {
         expr: ExprId,
         callee: baml_type::Name,
     },
+    RuntimeTypeArgumentOnIndirectCall {
+        expr: ExprId,
+    },
     CannotConstructReflectionKind {
         expr: ExprId,
         class_name: baml_type::QualifiedTypeName,
@@ -2461,12 +2464,15 @@ impl<'db> InferenceContext<'db> {
                 self.field_access(expr, &nonnull, member)
             }
             Expr::OptionalCall { callee, args } => {
+                self.validate_runtime_type_arg_operands(body, expr);
                 let callee_ty = self.infer_expr(body, *callee, &Expectation::None);
                 self.report_mounted_reserved_call(expr, *callee);
                 self.check_needless_chain(body, expr, *callee, &callee_ty);
                 let nonnull = self.peel_chain_null(&callee_ty);
                 let args = args.clone();
-                self.check_call_args(body, expr, *callee, &nonnull, false, &args)
+                let ret = self.check_call_args(body, expr, *callee, &nonnull, false, &args);
+                self.report_runtime_indirect_call(expr, *callee);
+                ret
             }
             Expr::Lambda(def) => self.infer_lambda(body, expr, def, expected),
             Expr::Match {
@@ -4304,8 +4310,52 @@ impl<'db> InferenceContext<'db> {
         self.report_runtime_streaming_call(body, call, callee);
         self.seed_implicit_llm_schema(body, call, callee, args);
         let ret = self.check_call_args(body, call, callee, &callee_fn_ty, bound_receiver, args);
+        self.report_runtime_indirect_call(call, callee);
         self.default_uncontracted_session_eval(body, call, callee);
         ret
+    }
+
+    fn report_runtime_indirect_call(&mut self, call: ExprId, callee: ExprId) {
+        let Some(plan) = self.result.call_plans.get(&call) else {
+            return;
+        };
+        let requires_runtime_check = plan
+            .slots
+            .iter()
+            .any(|slot| matches!(slot, CallTypeArgPlan::Runtime { .. }))
+            || !plan.deferred_checks.is_empty()
+            || self.result.runtime_checks.iter().any(|check| match check {
+                RuntimeCheck::Argument { arg, .. } => plan.bindings.iter().any(|binding| {
+                    matches!(binding, ParamBinding::Provided { arg: provided, .. } if provided == arg)
+                }),
+                RuntimeCheck::Bound { .. } => !self.scoped_type_bindings.is_empty(),
+            });
+        if !requires_runtime_check {
+            return;
+        }
+
+        let resolution = self.result.member_resolutions.get(&callee).or_else(|| {
+            self.result
+                .path_resolutions
+                .get(&callee)
+                .and_then(|path| path.segments.last())
+                .and_then(|segment| segment.resolution.as_ref())
+        });
+        let direct_or_checked = matches!(
+            resolution,
+            Some(
+                MemberResolution::Free { .. }
+                    | MemberResolution::BoundMethod { .. }
+                    | MemberResolution::UnboundMethod { .. }
+                    | MemberResolution::InterfaceVirtualMethod { .. }
+                    | MemberResolution::InterfaceConcreteMethod { .. }
+                    | MemberResolution::External(_)
+            )
+        );
+        if !direct_or_checked {
+            self.pending_diags
+                .push(PendingDiag::RuntimeTypeArgumentOnIndirectCall { expr: call });
+        }
     }
 
     fn report_mounted_reserved_call(&mut self, call: ExprId, callee: ExprId) {
@@ -9264,6 +9314,9 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::RuntimeTypeArgumentOnIndirectCall { expr } => {
+                        (TirTypeError::RuntimeTypeArgumentOnIndirectCall, expr)
+                    }
                     PendingDiag::CannotConstructReflectionKind { expr, class_name } => (
                         TirTypeError::CannotConstructReflectionKind { class_name },
                         expr,

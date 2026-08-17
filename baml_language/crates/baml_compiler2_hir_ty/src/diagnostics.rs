@@ -392,6 +392,10 @@ pub enum TirTypeError {
     /// Runtime type arguments cannot enter the generated streaming
     /// specialization path.
     RuntimeTypeArgumentOnStreamingCall { callee_name: Name },
+    /// Indirect call opcodes have no runtime-type-check operand, so allowing
+    /// one would either panic during debug emission or skip the check in
+    /// release builds.
+    RuntimeTypeArgumentOnIndirectCall,
     /// Type arguments were supplied for a type that is not generic
     /// (enums and type aliases cannot take type parameters).
     TypeIsNotGeneric { type_name: Name, kind: &'static str },
@@ -1309,6 +1313,12 @@ impl fmt::Display for TirTypeError {
                     f,
                     "runtime type arguments are not supported on streaming call `{callee_name}`"
                 )
+            }
+            TirTypeError::RuntimeTypeArgumentOnIndirectCall => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::runtime_type_argument_on_indirect_call(
+                    );
+                f.write_str(diagnostic.message.as_str())
             }
             TirTypeError::TypeIsNotGeneric { type_name, kind } => {
                 write!(

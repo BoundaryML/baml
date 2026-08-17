@@ -89,6 +89,14 @@ pub fn computed_generic_argument_requires_unreflect(name: &str) -> Diagnostic {
     )
 }
 
+/// E0010 — an indirect call cannot carry a deferred runtime argument check.
+pub fn runtime_type_argument_on_indirect_call() -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::InvalidSyntax,
+        "runtime-checked arguments are not supported on indirect calls",
+    )
+}
+
 /// E0001 — sealed reflection-kind values come only from an existing `type`.
 pub fn cannot_construct_reflection_kind(class_name: &str) -> Diagnostic {
     Diagnostic::error(
@@ -155,6 +163,11 @@ mod tests {
                 computed_generic_argument_requires_unreflect("runtime_t"),
                 "E0002",
                 "computed type argument `runtime_t` must be written as `unreflect(runtime_t)`",
+            ),
+            (
+                runtime_type_argument_on_indirect_call(),
+                "E0010",
+                "runtime-checked arguments are not supported on indirect calls",
             ),
             (
                 duplicate_member(DuplicateMemberKind::Field, "Collision", "wire"),

@@ -8879,11 +8879,20 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn callee_builtin_kind(&self, callee: AstExprId) -> Option<baml_compiler2_ast::BuiltinKind> {
-        if let Some(kind) = self
-            .external_callee(callee)
-            .and_then(|external| external.builtin_kind)
-        {
-            return Some(kind);
+        if let Some(external) = self.external_callee(callee) {
+            let package = match &external.target {
+                baml_compiler2_hir_ty::callable::ExternalCallTarget::Free { package, .. }
+                | baml_compiler2_hir_ty::callable::ExternalCallTarget::Method { package, .. } => {
+                    package
+                }
+                baml_compiler2_hir_ty::callable::ExternalCallTarget::Interface {
+                    interface,
+                    ..
+                } => interface.package(),
+            };
+            if baml_compiler2_hir::package::is_precompiled_package(self.db, package) {
+                return external.builtin_kind;
+            }
         }
         // ── Path callee (single- or multi-segment) ─────────────────────────────
         if let AstExpr::Path(segments) = &self.body.exprs[callee] {
@@ -9033,12 +9042,13 @@ impl<'db> LoweringContext<'db> {
         use baml_compiler2_ast::BuiltinKind;
 
         if let Some(external) = self.external_callee(callee)
-            && external.builtin_kind == Some(BuiltinKind::Intrinsic)
             && let baml_compiler2_hir_ty::callable::ExternalCallTarget::Free {
                 package,
                 namespace,
                 name,
             } = &external.target
+            && baml_compiler2_hir::package::is_precompiled_package(self.db, package)
+            && external.builtin_kind == Some(BuiltinKind::Intrinsic)
             && package.as_str() == "log"
             && namespace.is_empty()
         {
@@ -9135,6 +9145,7 @@ impl LoweringContext<'_> {
                         namespace,
                         name,
                     } if package.as_str() == "baml"
+                        && baml_compiler2_hir::package::is_precompiled_package(self.db, package)
                         && namespace.as_slice() == [baml_type::Name::new("type")]
                         && name.as_str() == "of"
                 )
