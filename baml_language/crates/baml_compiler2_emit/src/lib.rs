@@ -55,7 +55,7 @@ fn build_alias_caches(
         let pkg_info = file_package(db, *file);
         caches.entry(pkg_info.package.clone()).or_insert_with(|| {
             let pkg_id = PackageId::new(db, pkg_info.package.clone());
-            baml_compiler2_mir::resolved_aliases_for_package(db, pkg_id)
+            baml_compiler2_mir::resolved_aliases_for_package(db, pkg_id).clone()
         });
     }
     caches
@@ -1576,6 +1576,36 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
             .collect();
         &effective_clean
     };
+    generate_project_bytecode_with_reuse_artifacts_pregated(
+        db,
+        options,
+        opt,
+        base,
+        prev_units,
+        clean_files,
+    )
+}
+
+/// [`generate_project_bytecode_with_reuse_artifacts`] minus its
+/// `reuse_throws_mismatches` gate, for callers that already ran that exact
+/// gate against the same seeds this invocation compiles under and demoted
+/// nothing (the CLI's `prepare_reuse_plan` clean path). The gate derives the
+/// package alias tables and re-walks every clean file × function — running
+/// it twice per warm compile was the single largest redundant cost on the
+/// warm path. Debug builds re-run the gate here and assert it agrees.
+pub fn generate_project_bytecode_with_reuse_artifacts_pregated(
+    db: &dyn crate::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: &Program,
+    prev_units: &[CompilationUnit],
+    clean_files: &HashSet<String>,
+) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
+    debug_assert!(
+        reuse_throws_mismatches(db, prev_units, clean_files).is_empty(),
+        "pregated reuse emit requires the caller's throws gate to have passed \
+         with zero demotions under the currently-installed seeds"
+    );
 
     // Direct per-file emit: lower ONLY the dirty files (clean files are skipped in
     // Pass 4), producing a partial program whose dirty content decomposes into
@@ -3240,6 +3270,12 @@ fn emit_file_group(
             // validator enforces/link-checks them before emit.
             let merged_fields =
                 collect_class_fields_with_implements(&pkg_info.namespace_path, class);
+            // One lowering context per class, shared across its fields:
+            // `lower_type_ref` takes `&self` and the context carries no
+            // cross-call state, so the per-field rebuild (package-items
+            // lookup + frame clone) was pure waste.
+            let field_ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, *file)
+                .with_frame(class_generic_params.clone());
             for (idx, (name, type_ref, attrs, docstring, _gen_params, _ns)) in
                 merged_fields.iter().enumerate()
             {
@@ -3247,17 +3283,15 @@ fn emit_file_group(
                 let (field_type, field_template) = {
                     let id = type_ref;
                     {
-                        // Pass `class_generic_params` as the binding context so
-                        // `T`-references inside `class Container<T> { item: T }`
-                        // lower to `Tir2Ty::TypeVar("T")` rather than
+                        // Lower with `class_generic_params` as the binding
+                        // context (via `field_ctx`'s frame) so `T`-references
+                        // inside `class Container<T> { item: T }` lower to
+                        // `Tir2Ty::TypeVar("T")` rather than
                         // `Tir2Ty::Unknown`.  This is the input both to the
                         // erased-`Ty` (TypeVar→BuiltinUnknown) used by codegen and to
                         // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
                         // typed runtime walking.
-                        let tir_ty = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, *file)
-                            .with_frame(class_generic_params.clone())
-                            .lower_type_ref(store, *id)
-                            .to_plain();
+                        let tir_ty = field_ctx.lower_type_ref(store, *id).to_plain();
                         let resolved_ty = cache.convert(&tir_ty);
                         let template = baml_compiler2_mir::tir2_to_template(
                             &tir_ty,
@@ -3364,6 +3398,10 @@ fn emit_file_group(
                     },
                     ObjectIndex::from_raw(class_obj_idx),
                 );
+            // Kept for the display-/short-name registrations below — they
+            // must agree with the emitted runtime field indices, and this IS
+            // that map (same `merged_fields` enumeration).
+            let field_indices_for_aliases = field_indices.clone();
             classes.insert(fq_name.clone(), field_indices);
             // MIR TypeName display for user-defined classes omits the `user.`
             // package prefix in diagnostics/snapshots. Register the same key
@@ -3392,18 +3430,15 @@ fn emit_file_group(
                 .entry(short_name.clone())
                 .or_insert(class_obj_idx);
             // The display- and short-name maps must agree with the emitted
-            // runtime field indices used by the Class object above. Use a
-            // closure that rebuilds the same ordering.
-            let rebuild_indices = || {
-                let merged = collect_class_fields_with_implements(&pkg_info.namespace_path, class);
-                let mut m = HashMap::new();
-                for (idx, (name, _, _, _, _, _)) in merged.iter().enumerate() {
-                    m.insert(name.clone(), idx);
-                }
-                m
-            };
-            classes.entry(display_name).or_insert_with(rebuild_indices);
-            classes.entry(short_name).or_insert_with(rebuild_indices);
+            // runtime field indices used by the Class object above — reuse
+            // that exact map (built from the same `merged_fields`
+            // enumeration) instead of re-collecting the merged fields.
+            classes
+                .entry(display_name)
+                .or_insert_with(|| field_indices_for_aliases.clone());
+            classes
+                .entry(short_name)
+                .or_insert_with(|| field_indices_for_aliases.clone());
         }
     }
 
@@ -4164,7 +4199,12 @@ fn compute_function_metadata<'db>(
     // projection resolution. Namespace-relative resolution (e.g. `MyLorem` in a
     // signature under `ns_lorem/`) uses the file's namespace so a non-root-ns class
     // does not erase to `unknown`.
-    let scoped_ctx = || {
+    // Built once per function and reused across every parameter and the
+    // return type: `lower_type_ref` takes `&self` and the context carries no
+    // cross-call state (the diagnostic sink is off here), so rebuilding it —
+    // with its bounds-map/frame clones and the `owner_impl_target`
+    // recomputation — per signature slot was pure waste.
+    let scoped_ctx = {
         let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
             .with_bounds(scope_bounds.clone());
         if enclosing_interface.is_some() {
@@ -4185,7 +4225,7 @@ fn compute_function_metadata<'db>(
     };
     let lower_scoped =
         |store: &TypeRefStore, id: TypeRefId, _diags: &mut Vec<TirTypeError>| -> Ty {
-            let lowered = scoped_ctx().lower_type_ref(store, id).to_plain();
+            let lowered = scoped_ctx.lower_type_ref(store, id).to_plain();
             let realized = if enclosing_interface.is_some() {
                 substitute_ty(&lowered, &interface_signature_bindings)
             } else {
@@ -4301,8 +4341,10 @@ fn compute_function_metadata<'db>(
     // *value* of it reconstructs precisely by substituting the realized args it
     // carries. `frame_generic_params` is the same layout the body's `TypeArgRef`s
     // and the frames callers seed use — templating against any other list would
-    // silently name the wrong types.
-    let frame_params = baml_compiler2_hir_ty::lower::function_generic_frame(db, func_loc);
+    // silently name the wrong types. It is exactly `function_generic_frame`,
+    // which `enclosing_generics` above already holds — one computation serves
+    // both roles.
+    let frame_params: &[baml_type::ParamTy] = &enclosing_generics;
     let to_template = |tir_ty: &Ty| {
         // Metadata shows what the type IS: a projection over a ground base
         // (`(UserRepository as Repository<Record = UserRecord>).Record`)
@@ -4310,7 +4352,7 @@ fn compute_function_metadata<'db>(
         // (`(T as BoxLike).Item`), rendered as written.
         let tir_ty =
             &baml_compiler2_hir_ty::package_interface::reduce_ground_projections(db, tir_ty, 8);
-        baml_compiler2_mir::tir2_to_template(tir_ty, cache, &frame_params)
+        baml_compiler2_mir::tir2_to_template(tir_ty, cache, frame_params)
     };
     let runtime_generic_param_bounds = frame_params
         .iter()
@@ -4372,7 +4414,7 @@ fn compute_function_metadata<'db>(
         return_type,
         // TIR's inferred transitive throw set — richer than the declared
         // clause (a declared clause is a firewall the inference respects).
-        throws_type: compute_throws_type(db, file, &func.name, cache, &frame_params),
+        throws_type: compute_throws_type(db, file, &func.name, cache, frame_params),
         docstring: func.docstring.clone(),
         name: Some(func.name.to_string()),
         display_type_params,
@@ -5153,6 +5195,12 @@ fn emit_functions_parallel(
         .collect();
 
     // --- Stage C: merge fragments + serial tail (original function order) ---
+    // Metadata (signature lowering, origin, LLM client) is computed for every
+    // work item across worker handles first — see [`compute_fn_metas`] — so
+    // the serial merge below only splices fragments and applies precomputed
+    // bundles, in the exact original order.
+    let metas = compute_fn_metas(db, &work, alias_caches);
+
     // Seed the GenericFunction interning table with anything already pooled
     // below the watermark: the serial scan's candidate set when compiling
     // function N is {pre-Pass-4 pool} ∪ {mints of functions 1..N-1} ∪ {own
@@ -5163,7 +5211,7 @@ fn emit_functions_parallel(
             intern.insert_if_absent(gf, idx);
         }
     }
-    for (item, slot) in work.into_iter().zip(compiled) {
+    for ((item, slot), meta) in work.into_iter().zip(compiled).zip(metas) {
         let mut compiled_fn = match slot {
             Some((function, fragment)) => {
                 merge_function_fragment(program, watermark, fragment, function, &mut intern)
@@ -5181,17 +5229,7 @@ fn emit_functions_parallel(
             }
         };
 
-        let func_loc = FunctionLoc::new(db, item.file, item.local_id);
-        let pkg_info = file_package(db, item.file);
-        let cache = &alias_caches[&pkg_info.package];
-        attach_function_metadata(
-            db,
-            func_loc,
-            cache,
-            item.is_builtin_file,
-            &item.fq_name,
-            &mut compiled_fn,
-        );
+        apply_fn_emit_metadata(&meta, &mut compiled_fn);
         register_compiled_function(
             program,
             globals,
@@ -5363,32 +5401,148 @@ fn attach_function_metadata<'db>(
     fq_name: &str,
     compiled_fn: &mut Function,
 ) {
-    let func = function_data(db, func_loc);
-    // Set function metadata from signature
-    let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
-    let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
-    apply_signature_metadata(compiled_fn, &signature_metadata);
-    compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
+    let meta = compute_fn_emit_metadata(db, func_loc, cache, is_builtin_file, fq_name);
+    apply_fn_emit_metadata(&meta, compiled_fn);
+}
 
-    // Set LLM-specific body_meta if this is an LLM function with a client.
-    //
+/// The per-function metadata bundle Pass 4 attaches after codegen: the
+/// runtime/display signature, the emitted origin, and the LLM client (when
+/// the function is an LLM function). Computing it is pure salsa reads plus
+/// alias-cache conversion; applying it is pure mutation of the compiled
+/// `Function` — split so the parallel pass can compute across worker
+/// database handles and apply on the serial merge thread.
+struct FnEmitMetadata {
+    signature: baml_compiler2_mir::RuntimeSignature,
+    origin: FunctionOrigin,
+    llm_client: Option<String>,
+}
+
+fn compute_fn_emit_metadata<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    cache: &ResolvedAliases,
+    is_builtin_file: bool,
+    fq_name: &str,
+) -> FnEmitMetadata {
+    let func = function_data(db, func_loc);
+    let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+    let signature = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
+    let origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
     // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
     // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
     // The stream return type is now carried by the synthesized `$stream` companion's
     // own `return_type` (see ppir's `companion_stream_return_type`), so the old
     // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
     // of `ctx.output_format` should be re-verified against canary's streaming.
-    if let Some(llm_meta) = function_llm_meta(db, func_loc)
-        && let Some(client) = &llm_meta.client_name
-    {
+    let llm_client = match function_llm_meta(db, func_loc) {
+        Some(llm_meta) => llm_meta.client_name.as_ref().map(ToString::to_string),
+        None => None,
+    };
+    FnEmitMetadata {
+        signature,
+        origin,
+        llm_client,
+    }
+}
+
+fn apply_fn_emit_metadata(meta: &FnEmitMetadata, compiled_fn: &mut Function) {
+    apply_signature_metadata(compiled_fn, &meta.signature);
+    compiled_fn.origin = meta.origin.clone();
+    // Set LLM-specific body_meta if this is an LLM function with a client.
+    if let Some(client) = &meta.llm_client {
         compiled_fn.body_meta = Some(FunctionMeta::Llm {
-            client: client.to_string(),
+            client: client.clone(),
         });
         compiled_fn.capture = FunctionCaptureProps::disabled()
             .with_auto(CaptureCategory::Input)
             .with_auto(CaptureCategory::Output)
             .with_auto(CaptureCategory::Error);
     }
+}
+
+/// Compute every work item's [`FnEmitMetadata`] for the parallel pass,
+/// fanned across worker database handles exactly like Stage A's
+/// [`lower_seed_mirs`] (same chunking, same handle discipline, same
+/// serial-first memo warmup). Metadata is a pure function of frozen salsa
+/// inputs plus the read-only alias caches, and the results are reassembled
+/// in work order, so the serial merge thread applies byte-identical
+/// metadata in the identical order — only the computation moves off the
+/// merge thread, which previously ground through per-function signature
+/// lowering while Stage B workers sat idle.
+fn compute_fn_metas(
+    db: &dyn crate::Db,
+    work: &[FnWorkItem],
+    alias_caches: &HashMap<Name, ResolvedAliases>,
+) -> Vec<FnEmitMetadata> {
+    const CHUNK: usize = 4;
+    const MIN_PARALLEL: usize = 9;
+
+    fn compute_one(
+        db: &dyn baml_compiler2_mir::Db,
+        item: &FnWorkItem,
+        alias_caches: &HashMap<Name, ResolvedAliases>,
+    ) -> FnEmitMetadata {
+        let func_loc = FunctionLoc::new(db, item.file, item.local_id);
+        let pkg_info = file_package(db, item.file);
+        let cache = &alias_caches[&pkg_info.package];
+        compute_fn_emit_metadata(db, func_loc, cache, item.is_builtin_file, &item.fq_name)
+    }
+
+    if work.len() < MIN_PARALLEL || rayon::current_num_threads() <= 1 {
+        return work
+            .iter()
+            .map(|item| compute_one(db, item, alias_caches))
+            .collect();
+    }
+    let (first, rest) = work.split_first().expect("work checked non-empty above");
+
+    let chunks: Vec<&[FnWorkItem]> = rest.chunks(CHUNK).collect();
+    let mut handles: Vec<Box<dyn baml_compiler2_mir::Db + Send>> = Vec::with_capacity(chunks.len());
+    for _ in &chunks {
+        match db.parallel_db_handle() {
+            Some(handle) => handles.push(handle),
+            None => {
+                return work
+                    .iter()
+                    .map(|item| compute_one(db, item, alias_caches))
+                    .collect();
+            }
+        }
+    }
+
+    let first_meta = compute_one(db, first, alias_caches);
+
+    let (tx, rx) = std::sync::mpsc::channel::<(usize, Vec<FnEmitMetadata>)>();
+    rayon::scope(|s| {
+        let mut next_start = 1usize;
+        for (chunk, handle) in chunks.into_iter().zip(handles) {
+            let tx = tx.clone();
+            let chunk_start = next_start;
+            next_start += chunk.len();
+            s.spawn(move |_| {
+                let db: &dyn baml_compiler2_mir::Db = &*handle;
+                let out: Vec<FnEmitMetadata> = chunk
+                    .iter()
+                    .map(|item| compute_one(db, item, alias_caches))
+                    .collect();
+                let _ = tx.send((chunk_start, out));
+            });
+        }
+        drop(tx);
+    });
+
+    let mut metas: Vec<Option<FnEmitMetadata>> = Vec::with_capacity(work.len());
+    metas.resize_with(work.len(), || None);
+    metas[0] = Some(first_meta);
+    for (chunk_start, out) in rx {
+        for (offset, meta) in out.into_iter().enumerate() {
+            metas[chunk_start + offset] = Some(meta);
+        }
+    }
+    metas
+        .into_iter()
+        .map(|meta| meta.expect("every chunk reports exactly its items"))
+        .collect()
 }
 
 /// Pool the compiled function object and register its global slot — the

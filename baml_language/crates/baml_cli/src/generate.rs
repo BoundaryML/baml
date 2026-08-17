@@ -256,6 +256,7 @@ impl GenerateArgs {
         }
         let _ = session.warm_prep_seeds_only();
         session.prime();
+        let cache = session.cache.take();
         let (db, from) = (session.db, session.resolved.root);
         // Compile-time diagnostics — same shape as run/pack: render the
         // diagnostic block after abandoning the spinner so the colored
@@ -335,9 +336,21 @@ impl GenerateArgs {
         let pool = baml_project::build_symbol_pool(&db);
 
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
-        let program = db
-            .get_bytecode()
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        // Same shape as `run`: diagnostics were collected (and errors bailed
+        // on) once above, so compile without `get_bytecode`'s redundant
+        // full-project diagnostics gate — and through the shared
+        // precompiled-stdlib splice, instead of re-emitting every builtin
+        // from source on each generate.
+        let program = crate::bytecode_cache::compile_program_artifacts(
+            &db,
+            &baml_db::baml_compiler2_emit::CompileOptions {
+                emit_test_cases: false,
+            },
+            cache.as_ref(),
+            None,
+        )
+        .map_err(|e| anyhow!("compilation failed: {e:?}"))?
+        .program;
         let baml_bytecode = borsh::to_vec(&program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
 
