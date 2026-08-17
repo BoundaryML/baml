@@ -1277,6 +1277,18 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIShorthand", llm_response=llm_response, mode="request")
         return typing.cast(str, __result__)
 
+    def TestOpenAITranscription(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAITranscription", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestOpenAITranscriptionMultipartChat(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAITranscriptionMultipartChat", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
     def TestOpenAIWithFinishReasonError(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -3047,6 +3059,18 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIShorthand", llm_response=llm_response, mode="stream")
+        return typing.cast(str, __result__)
+
+    def TestOpenAITranscription(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAITranscription", llm_response=llm_response, mode="stream")
+        return typing.cast(str, __result__)
+
+    def TestOpenAITranscriptionMultipartChat(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAITranscriptionMultipartChat", llm_response=llm_response, mode="stream")
         return typing.cast(str, __result__)
 
     def TestOpenAIWithFinishReasonError(
