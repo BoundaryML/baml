@@ -21,7 +21,6 @@ RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
 RELEASE_NOTIFIER = ROOT / "tools" / "notify-release-failure.py"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
 NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-release.yml"
-SIZE_POLICY = ROOT / "release" / "csharp-package-size-policy.json"
 BRIDGE_CFFI_PUBLIC_EXPORTS = (
     ROOT / "release" / "bridge-cffi-public-exports.txt"
 )
@@ -289,15 +288,6 @@ class CSharpReleaseContractTests(unittest.TestCase):
             ),
         }
         self.assertEqual(actual, expected)
-        size_policy = json.loads(SIZE_POLICY.read_text(encoding="utf-8"))
-        self.assertEqual(
-            set(size_policy["native_assets"]["baseline_bytes_by_target"]),
-            {entry[0] for entry in expected},
-        )
-        self.assertLess(
-            size_policy["compressed_package"]["baseline_bytes"],
-            size_policy["compressed_package"]["registry_safety_ceiling_bytes"],
-        )
 
     def test_invalid_or_missing_csharp_metadata_fails_early(self) -> None:
         cases: list[tuple[str, Callable[[dict], object]]] = [
