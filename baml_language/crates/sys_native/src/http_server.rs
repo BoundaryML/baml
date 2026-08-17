@@ -93,8 +93,8 @@ impl HttpBody {
             HttpBody::Bytes(b) => Ok(b.clone()),
             HttpBody::Client(slot) => {
                 let resp = Self::take_client(slot)?;
-                resp.bytes().await.map_err(|e| VmBamlError::Io {
-                    message: format!("failed to read response body: {e}"),
+                resp.bytes().await.map_err(|e| {
+                    crate::io_impls::http_transport_error("failed to read response body", &e)
                 })
             }
             HttpBody::Streaming(_) => Err(VmBamlError::Io {
@@ -148,14 +148,15 @@ impl HttpBody {
     /// the `Content-Type` charset (via `reqwest`); buffered bytes are UTF-8.
     pub(crate) async fn read_text(&self) -> Result<String, VmBamlError> {
         match self {
-            // `text()` declares `throws Io`, so a decode failure maps to `Io`.
+            // Decode failures remain `Io`; a client request deadline can also
+            // elapse while the lazy response body is being consumed.
             HttpBody::Bytes(b) => String::from_utf8(b.to_vec()).map_err(|e| VmBamlError::Io {
                 message: format!("Invalid UTF-8 in response body: {e}"),
             }),
             HttpBody::Client(slot) => {
                 let resp = Self::take_client(slot)?;
-                resp.text().await.map_err(|e| VmBamlError::Io {
-                    message: format!("failed to read response body: {e}"),
+                resp.text().await.map_err(|e| {
+                    crate::io_impls::http_transport_error("failed to read response body", &e)
                 })
             }
             HttpBody::Streaming(_) => Err(VmBamlError::Io {

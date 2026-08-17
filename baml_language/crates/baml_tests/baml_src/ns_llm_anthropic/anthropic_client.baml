@@ -213,6 +213,30 @@ test "anthropic_request_shape" {
     assert.contains(got, "input=9")
 }
 
+function anthropic_request_timeout_ms() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(anth_canned_text("pong", "end_turn"))],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = anthropic.AnthropicClient.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                request_timeout_ms = 20,
+            );
+            let outcome = anth_invoke_label(cl, anth_turn_input(AnthMockPlain@spec())) catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.request_timeout_ms ?? -1}|${outcome}`
+        },
+        response_delay_ms = 200,
+    )
+}
+
+test "anthropic_request_timeout_ms" {
+    assert.equal(anthropic_request_timeout_ms(), "20|Timeout")
+}
+
 // Typed first-class parameters lower into the typed request; `headers` are
 // applied BEFORE the auth header (so anthropic-beta is reachable and
 // anthropic-version is overridable, while x-api-key still wins);
@@ -628,6 +652,36 @@ test "anthropic_stream_text" {
     let got = anthropic_stream_text();
     assert.contains(got, "value=pong|");
     assert.contains(got, "stream=true")
+}
+
+function anthropic_stream_time_to_first_token_timeout_ms() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_event(
+                "message_start",
+                #"{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5}}}"#,
+            ),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = anthropic.AnthropicClient.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                request_timeout_ms = 1000,
+                time_to_first_token_timeout_ms = 20,
+            );
+            let outcome = anth_stream_value(cl) catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+        },
+        first_event_delay_ms = 200,
+    )
+}
+
+test "anthropic_stream_time_to_first_token_timeout_ms" {
+    assert.equal(anthropic_stream_time_to_first_token_timeout_ms(), "20|Timeout")
 }
 
 // A connection that ends BEFORE `message_stop` is a truncated turn, not a

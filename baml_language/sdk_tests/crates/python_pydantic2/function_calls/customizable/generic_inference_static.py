@@ -2,6 +2,8 @@
 
 from typing import assert_type
 
+from baml_bridge import BamlType
+from baml_sdk import reflect
 from baml_sdk.generic_tests import (
     GenericBox,
     apply,
@@ -43,6 +45,13 @@ assert_type(two_in_union_with_values(1, "left", True), str)
 optional_only()
 optional_only(x=7)
 optional_only(_types={"T": int})
+
+# Reflected BAML type handles are also valid type tokens. Cover both generated
+# stub shapes: inferable generics make `_types` optional, while body-only
+# generics require it.
+reflected_int: BamlType = reflect.type_.of(int)
+optional_only(_types={"T": reflected_int})
+assert_type(one_type_arg(_types={"T": reflected_int}), str)
 
 # Return/body-only TypeVars cannot be inferred from a value argument. The
 # explicit `_types=` surface remains accepted for those calls.

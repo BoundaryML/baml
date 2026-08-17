@@ -194,6 +194,30 @@ test "oai_request_shape" {
     assert.is_true(!got.includes(`"stream"`))
 }
 
+function oai_request_timeout_ms() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_text_response())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                request_timeout_ms = 20,
+            );
+            let outcome = `turn:${cl.invoke(_oai_input(OaiEcho@spec("Say pong."), ai.Journal { log: [] }, ai.tools.Toolbox.new([]))).terminal_text() ?? ""}` catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.request_timeout_ms ?? -1}|${outcome}`
+        },
+        response_delay_ms = 200,
+    )
+}
+
+test "oai_request_timeout_ms" {
+    assert.equal(oai_request_timeout_ms(), "20|Timeout")
+}
+
 // request_body deep-merges over the serialized typed request: a scalar
 // replaces, a map merges key by key, and a null DELETES the key the client
 // injected. Headers and query params are the user's, authorization is not.
@@ -608,6 +632,32 @@ function _oai_stream_final(cl: openai.ResponsesClient) -> string {
         client = cl,
     );
     stream.final()
+}
+
+function oai_stream_time_to_first_token_timeout_ms() -> string {
+    let completed = `{"type":"response.completed","response":{"status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":1}}}`;
+    root.llm_mock.mock_sse_serve(
+        [root.llm_mock.sse_data(completed)],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                request_timeout_ms = 1000,
+                time_to_first_token_timeout_ms = 20,
+            );
+            let outcome = _oai_stream_final(cl) catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+        },
+        first_event_delay_ms = 200,
+    )
+}
+
+test "oai_stream_time_to_first_token_timeout_ms" {
+    assert.equal(oai_stream_time_to_first_token_timeout_ms(), "20|Timeout")
 }
 
 // A stream whose text arrives ONLY as `output_text.done` still yields it.

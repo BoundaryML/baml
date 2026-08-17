@@ -220,14 +220,38 @@ const HEADER: &str = concat!(
 /// `rel_path` is relative to the `baml_src/` root (e.g. `"lorem/foo.baml"`).
 pub type UserBamlFile = (PathBuf, String);
 
+/// Python SDK generation policy. The opt-in nullable-field default is kept
+/// here rather than on the shared type IR so other language generators and
+/// function parameter semantics remain unchanged.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PythonGenOptions {
+    pub naming_convention: NamingConvention,
+    pub nullable_fields_default_none: bool,
+}
+
+impl PythonGenOptions {
+    pub const fn new(naming_convention: NamingConvention) -> Self {
+        Self {
+            naming_convention,
+            nullable_fields_default_none: false,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum RuntimePayload<'a> {
     SourceFiles(&'a [UserBamlFile]),
-    Bytecode(&'a [u8], Option<&'a str>),
+    Bytecode(&'a [u8], Option<&'a str>, &'a [UserBamlFile]),
 }
-impl RuntimePayload<'_> {
+impl<'a> RuntimePayload<'a> {
     fn is_bytecode(self) -> bool {
-        matches!(self, RuntimePayload::Bytecode(_, _))
+        matches!(self, RuntimePayload::Bytecode(_, _, _))
+    }
+
+    fn source_files(self) -> &'a [UserBamlFile] {
+        match self {
+            RuntimePayload::SourceFiles(files) | RuntimePayload::Bytecode(_, _, files) => files,
+        }
     }
 }
 
@@ -238,11 +262,19 @@ pub fn to_source_code(
     user_baml_files: &[UserBamlFile],
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
-    to_source_code_internal(
+    to_source_code_with_options(
         pool,
-        RuntimePayload::SourceFiles(user_baml_files),
-        naming_convention,
+        user_baml_files,
+        &PythonGenOptions::new(naming_convention),
     )
+}
+
+pub fn to_source_code_with_options(
+    pool: &SymbolPool,
+    user_baml_files: &[UserBamlFile],
+    options: &PythonGenOptions,
+) -> HashMap<PathBuf, String> {
+    to_source_code_internal(pool, RuntimePayload::SourceFiles(user_baml_files), options)
 }
 
 /// Build the Python SDK output tree using precompiled BAML bytecode as the
@@ -252,10 +284,22 @@ pub fn to_source_code_with_bytecode(
     baml_bytecode: &[u8],
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
+    to_source_code_with_bytecode_and_options(
+        pool,
+        baml_bytecode,
+        &PythonGenOptions::new(naming_convention),
+    )
+}
+
+pub fn to_source_code_with_bytecode_and_options(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    options: &PythonGenOptions,
+) -> HashMap<PathBuf, String> {
     to_source_code_internal(
         pool,
-        RuntimePayload::Bytecode(baml_bytecode, None),
-        naming_convention,
+        RuntimePayload::Bytecode(baml_bytecode, None, &[]),
+        options,
     )
 }
 
@@ -265,24 +309,55 @@ pub fn to_source_code_with_bytecode_and_metadata(
     embedded_baml_toml: &str,
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
+    to_source_code_with_bytecode_and_metadata_and_options(
+        pool,
+        baml_bytecode,
+        embedded_baml_toml,
+        &PythonGenOptions::new(naming_convention),
+    )
+}
+
+pub fn to_source_code_with_bytecode_and_metadata_and_options(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    options: &PythonGenOptions,
+) -> HashMap<PathBuf, String> {
+    to_source_code_with_bytecode_and_metadata_and_source_files_and_options(
+        pool,
+        baml_bytecode,
+        embedded_baml_toml,
+        &[],
+        options,
+    )
+}
+
+pub fn to_source_code_with_bytecode_and_metadata_and_source_files_and_options(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    user_baml_files: &[UserBamlFile],
+    options: &PythonGenOptions,
+) -> HashMap<PathBuf, String> {
     to_source_code_internal(
         pool,
-        RuntimePayload::Bytecode(baml_bytecode, Some(embedded_baml_toml)),
-        naming_convention,
+        RuntimePayload::Bytecode(baml_bytecode, Some(embedded_baml_toml), user_baml_files),
+        options,
     )
 }
 
 fn to_source_code_internal(
     pool: &SymbolPool,
     runtime_payload: RuntimePayload<'_>,
-    naming_convention: NamingConvention,
+    options: &PythonGenOptions,
 ) -> HashMap<PathBuf, String> {
     // Only `PreserveCase` is wired up so far; `Language`-mode rewriting
     // is the next piece of work and panics loudly until then.
     assert!(
-        matches!(naming_convention, NamingConvention::PreserveCase),
+        matches!(options.naming_convention, NamingConvention::PreserveCase),
         "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase \
-         (got {naming_convention})",
+         (got {})",
+        options.naming_convention,
     );
     let mut out: HashMap<PathBuf, String> = HashMap::new();
 
@@ -358,7 +433,11 @@ fn to_source_code_internal(
         } else {
             render_package_init(&kids)
         };
-        content.push_str(&render_leaf_body(body, &callable_child_names));
+        content.push_str(&render_leaf_body(
+            body,
+            &callable_child_names,
+            options.nullable_fields_default_none,
+        ));
         content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
@@ -386,7 +465,11 @@ fn to_source_code_internal(
             render_package_init_pyi(&kids, &callable_child_names)
         };
         let callable_child_bodies = callable_child_bodies(dir, &callable_child_names, &bodies);
-        pyi_content.push_str(&render_leaf_body_pyi(body, &callable_child_bodies));
+        pyi_content.push_str(&render_leaf_body_pyi(
+            body,
+            &callable_child_bodies,
+            options.nullable_fields_default_none,
+        ));
         pyi_content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
@@ -410,6 +493,10 @@ fn to_source_code_internal(
     out.insert(
         PathBuf::from("_inlinedbaml.py"),
         render_inlinedbaml(runtime_payload),
+    );
+    out.insert(
+        PathBuf::from("_baml_sources.py"),
+        render_inlinedbaml_source(runtime_payload.source_files()),
     );
 
     // Codegen-emitted typemap (25b2 Phase 2 / 25a2 §4.1): three literal
@@ -555,6 +642,9 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
         out.push_str("    \"baml_src\", _inlinedbaml.FILES\n");
         out.push_str(")\n\n");
     }
+    out.push_str("def get_baml_source_files() -> dict[str, str]:\n");
+    out.push_str("    from ._baml_sources import FILES\n");
+    out.push_str("    return FILES\n\n");
     out.push_str("set_type_map(_TYPE_MAP)\n");
     if !top_children.is_empty() {
         append_lazy_children_block(&mut out, top_children);
@@ -571,6 +661,7 @@ fn render_root_init_pyi(
     hidden_children: &BTreeSet<String>,
 ) -> String {
     let mut out = String::from("from __future__ import annotations\n");
+    out.push_str("\ndef get_baml_source_files() -> dict[str, str]: ...\n");
     if !top_children.is_empty() {
         out.push('\n');
         for child in top_children {
@@ -623,14 +714,22 @@ struct InlinedEntry {
 
 fn render_inlinedbaml(payload: RuntimePayload<'_>) -> String {
     match payload {
-        RuntimePayload::SourceFiles(files) => render_inlinedbaml_source(files),
-        RuntimePayload::Bytecode(bytecode, embedded_baml_toml) => {
+        RuntimePayload::SourceFiles(_) => {
+            "from __future__ import annotations\n\nfrom ._baml_sources import FILES\n".to_string()
+        }
+        RuntimePayload::Bytecode(bytecode, embedded_baml_toml, _) => {
             render_inlinedbaml_bytecode(bytecode, embedded_baml_toml)
         }
     }
 }
 
 fn render_inlinedbaml_source(files: &[UserBamlFile]) -> String {
+    let mut out = String::from("from __future__ import annotations\n\n");
+    out.push_str(&render_baml_source_files(files));
+    out
+}
+
+fn render_baml_source_files(files: &[UserBamlFile]) -> String {
     use askama::Template;
     let mut entries: Vec<(&PathBuf, &String)> = files.iter().map(|(p, c)| (p, c)).collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
@@ -643,9 +742,13 @@ fn render_inlinedbaml_source(files: &[UserBamlFile]) -> String {
         })
         .collect();
 
-    let mut out = InlinedBaml { entries }
+    let rendered = InlinedBaml { entries }
         .render()
         .expect("inlinedbaml template should always render");
+    let mut out = rendered
+        .strip_prefix("from __future__ import annotations\n\n")
+        .expect("inlinedbaml template must start with its future import")
+        .to_string();
     out.push('\n');
     out
 }
@@ -1904,17 +2007,21 @@ mod tests {
 
         let inl = &out[&PathBuf::from("_inlinedbaml.py")];
         assert!(inl.starts_with(HEADER));
-        assert!(inl.contains("FILES: dict[str, str] = {"));
+        assert!(inl.contains("from ._baml_sources import FILES"));
+
+        let sources = &out[&PathBuf::from("_baml_sources.py")];
+        assert!(sources.starts_with(HEADER));
+        assert!(sources.contains("FILES: dict[str, str] = {"));
         // On Windows the path renders `lorem\bar.baml`, which `py_string`
         // escapes to `lorem\\bar.baml` in the emitted Python literal.
         #[cfg(windows)]
         let nested_key = "lorem\\\\bar.baml";
         #[cfg(not(windows))]
         let nested_key = "lorem/bar.baml";
-        let lo = inl.find(nested_key).unwrap();
-        let mo = inl.find("main.baml").unwrap();
+        let lo = sources.find(nested_key).unwrap();
+        let mo = sources.find("main.baml").unwrap();
         assert!(lo < mo);
-        assert!(inl.contains("\"class Foo {}\\n\""));
+        assert!(sources.contains("\"class Foo {}\\n\""));
     }
 
     #[test]
@@ -1928,13 +2035,52 @@ mod tests {
             root.contains("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)")
         );
         assert!(!root.contains("BamlRuntime.initialize_runtime("));
-        assert!(!root.contains("_inlinedbaml.FILES"));
+        assert!(root.contains("def get_baml_source_files() -> dict[str, str]:"));
 
         let inl = &out[&PathBuf::from("_inlinedbaml.py")];
         assert!(inl.starts_with(HEADER));
         assert!(inl.contains("BYTECODE: bytes = ("));
         assert!(inl.contains("b\"\\x00BAML\\\"\\x0a\\xff\""));
         assert!(!inl.contains("FILES: dict[str, str]"));
+
+        let sources = &out[&PathBuf::from("_baml_sources.py")];
+        assert!(sources.contains("FILES: dict[str, str] = {\n}"));
+    }
+
+    #[test]
+    fn bytecode_payload_retains_sorted_user_sources() {
+        let pool: SymbolPool = HashMap::new();
+        let files = vec![
+            (
+                PathBuf::from("z.baml"),
+                "function z() -> int { 1 }\n".to_string(),
+            ),
+            (
+                PathBuf::from("nested").join("a.baml"),
+                "function a() -> int { 2 }\n".to_string(),
+            ),
+        ];
+        let out = to_source_code_with_bytecode_and_metadata_and_source_files_and_options(
+            &pool,
+            b"bytecode",
+            "[package]\nname = \"test\"\n",
+            &files,
+            &PythonGenOptions::new(NamingConvention::PreserveCase),
+        );
+
+        let inlined = &out[&PathBuf::from("_inlinedbaml.py")];
+        assert!(inlined.contains("BYTECODE: bytes = ("));
+        assert!(inlined.contains("EMBEDDED_BAML_TOML: str | None = "));
+        assert!(!inlined.contains("function a()"));
+
+        let sources = &out[&PathBuf::from("_baml_sources.py")];
+        let nested = sources.find("nested/a.baml").unwrap();
+        let root = sources.find("z.baml").unwrap();
+        assert!(nested < root);
+        assert!(sources.contains("function a() -> int { 2 }\\n"));
+
+        let root_stub = &out[&PathBuf::from("__init__.pyi")];
+        assert!(root_stub.contains("def get_baml_source_files() -> dict[str, str]: ..."));
     }
 
     #[test]
@@ -2018,6 +2164,105 @@ mod tests {
                         \x20   email: typing.Optional[str]\n\
                         \x20   tags: typing.List[str]\n";
         assert!(leaf.contains(expected), "leaf missing class body:\n{leaf}");
+    }
+
+    #[test]
+    fn nullable_field_defaults_are_opt_in_and_do_not_change_function_parameters() {
+        let mut pool: SymbolPool = HashMap::new();
+        let nullable_string = union(vec![
+            Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            Ty::Null {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+        ]);
+        let nullable_alias = cg_name("user", &["lorem"], "NullableText");
+        pool.insert(
+            nullable_alias.clone(),
+            alias_full(
+                nullable_alias.clone(),
+                nullable_string.clone(),
+                false,
+                "x.baml",
+                0,
+            ),
+        );
+        let model = cg_name("user", &["lorem"], "Payload");
+        pool.insert(
+            model.clone(),
+            class_with_props(
+                model,
+                vec![
+                    (
+                        "required",
+                        Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    ),
+                    ("nullable", nullable_string.clone()),
+                    (
+                        "nullable_union",
+                        union(vec![
+                            Ty::Int {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                            Ty::String {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                            Ty::Null {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                        ]),
+                    ),
+                    ("nullable_alias", alias_ty(nullable_alias)),
+                    ("nullable_items", list(Box::new(nullable_string.clone()))),
+                ],
+                "x.baml",
+                10,
+            ),
+        );
+        let function_name = cg_name("user", &["lorem"], "accept_nullable");
+        let mut function = make_func("accept_nullable", &["value"], "x.baml", 20);
+        function.arguments[0].ty = nullable_string;
+        pool.insert(function_name, Symbol::Function(function));
+
+        let default_output = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let default_py = &default_output[&PathBuf::from("lorem/__init__.py")];
+        assert!(default_py.contains("    nullable: typing.Optional[str]\n"));
+        assert!(!default_py.contains("    nullable: typing.Optional[str] = None\n"));
+
+        let output = to_source_code_with_options(
+            &pool,
+            &[],
+            &PythonGenOptions {
+                naming_convention: NamingConvention::PreserveCase,
+                nullable_fields_default_none: true,
+            },
+        );
+        for path in ["lorem/__init__.py", "lorem/__init__.pyi"] {
+            let leaf = &output[&PathBuf::from(path)];
+            assert!(leaf.contains("    required: str\n"), "{path}:\n{leaf}");
+            assert!(
+                leaf.contains("    nullable: typing.Optional[str] = None\n"),
+                "{path}:\n{leaf}"
+            );
+            assert!(
+                leaf.contains("    nullable_union: typing.Union[int, str, None] = None\n"),
+                "{path}:\n{leaf}"
+            );
+            assert!(
+                leaf.contains("    nullable_alias: NullableText = None\n"),
+                "{path}:\n{leaf}"
+            );
+            assert!(
+                leaf.contains("    nullable_items: typing.List[typing.Optional[str]]\n"),
+                "{path}:\n{leaf}"
+            );
+        }
+        let pyi = &output[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(pyi.contains("def accept_nullable(value: typing.Optional[str]) -> int: ...\n"));
+        assert!(!pyi.contains("def accept_nullable(value: typing.Optional[str] = None)"));
     }
 
     #[test]
@@ -3972,23 +4217,27 @@ mod tests {
         );
         // Required value arguments make `_types=` optional.
         assert!(
-            pyi.contains("def echo(value: T, *, _types: dict[str, type] | None = None) -> T: ..."),
+            pyi.contains(
+                "def echo(value: T, *, _types: dict[str, typing.Any] | None = None) -> T: ..."
+            ),
             "pyi missing typed echo signature:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "async def echo_async(value: T, *, _types: dict[str, type] | None = None) -> T: ..."
+                "async def echo_async(value: T, *, _types: dict[str, typing.Any] | None = None) -> T: ..."
             ),
             "pyi missing async echo signature:\n{pyi}",
         );
         // A body-only TypeVar has no inference source, so `_types=` stays
         // statically required on both host modes.
         assert!(
-            pyi.contains("def one_type_arg(*, _types: dict[str, type]) -> str: ..."),
+            pyi.contains("def one_type_arg(*, _types: dict[str, typing.Any]) -> str: ..."),
             "pyi should require body-only TypeVars:\n{pyi}",
         );
         assert!(
-            pyi.contains("async def one_type_arg_async(*, _types: dict[str, type]) -> str: ..."),
+            pyi.contains(
+                "async def one_type_arg_async(*, _types: dict[str, typing.Any]) -> str: ..."
+            ),
             "pyi should require async body-only TypeVars:\n{pyi}",
         );
     }
@@ -4161,7 +4410,7 @@ mod tests {
             .find(|line| line.starts_with("def identity_with_default("))
             .expect("identity_with_default stub");
         assert!(
-            inferred.contains("_types: dict[str, type] | None = None"),
+            inferred.contains("_types: dict[str, typing.Any] | None = None"),
             "a required value should infer T after defaulted args: {inferred}"
         );
         assert!(
@@ -4174,7 +4423,7 @@ mod tests {
             .find(|line| line.starts_with("def optional_only("))
             .expect("optional_only stub");
         assert!(
-            optional_only.contains("_types: dict[str, type] | None = None"),
+            optional_only.contains("_types: dict[str, typing.Any] | None = None"),
             "a defaulted value position should infer T via Rule 4: {optional_only}"
         );
         assert!(
@@ -4187,7 +4436,7 @@ mod tests {
             .find(|line| line.starts_with("def ambiguous_with_values("))
             .expect("ambiguous_with_values stub");
         assert!(
-            rich.contains("_types: dict[str, type] | None = None"),
+            rich.contains("_types: dict[str, typing.Any] | None = None"),
             "separate ordinary value positions should bind both union vars: {rich}"
         );
 
@@ -4198,11 +4447,11 @@ mod tests {
                 .find(|line| line.starts_with(&prefix))
                 .unwrap_or_else(|| panic!("missing {name} stub:\n{pyi}"));
             assert!(
-                line.contains("_types: dict[str, type]"),
+                line.contains("_types: dict[str, typing.Any]"),
                 "{name} should expose `_types`: {line}"
             );
             assert!(
-                !line.contains("_types: dict[str, type] | None"),
+                !line.contains("_types: dict[str, typing.Any] | None"),
                 "{name} must require `_types`: {line}"
             );
         }
@@ -4314,35 +4563,35 @@ mod tests {
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             pyi.contains(
-                "def pair_with(self, other: U, *, _types: dict[str, type] | None = None) -> U: ..."
+                "def pair_with(self, other: U, *, _types: dict[str, typing.Any] | None = None) -> U: ..."
             ),
             "pyi should allow inferred method TypeVars:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "async def pair_with_async(self, other: U, *, _types: dict[str, type] | None = None) -> U: ..."
+                "async def pair_with_async(self, other: U, *, _types: dict[str, typing.Any] | None = None) -> U: ..."
             ),
             "pyi should allow inferred async method TypeVars:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "def pair_with_default(self, other: U, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, type] | None = None) -> U: ..."
+                "def pair_with_default(self, other: U, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, typing.Any] | None = None) -> U: ..."
             ),
             "pyi should keep inferred `_types` after instance defaults:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "def static_with_default(value: V, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, type] | None = None) -> V: ..."
+                "def static_with_default(value: V, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, typing.Any] | None = None) -> V: ..."
             ),
             "pyi should keep inferred `_types` after static defaults:\n{pyi}",
         );
         assert!(
-            pyi.contains("def static_type_name(*, _types: dict[str, type]) -> str: ..."),
+            pyi.contains("def static_type_name(*, _types: dict[str, typing.Any]) -> str: ..."),
             "zero-arg static own generics should require `_types`:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "async def static_type_name_async(*, _types: dict[str, type]) -> str: ..."
+                "async def static_type_name_async(*, _types: dict[str, typing.Any]) -> str: ..."
             ),
             "zero-arg async static own generics should require `_types`:\n{pyi}",
         );

@@ -1361,8 +1361,12 @@ function _chat_send(
     request: baml.http.Request,
     provider: string,
     audio_mime: string = "audio/wav",
+    request_timeout_ms: int? = null,
 ) -> ai.ModelTurn {
-    let response = baml.http.send(request) catch_all (e) {
+    let response = baml.http.send(
+        request,
+        timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+    ) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw ai.errors.NetworkFailure {
@@ -1373,6 +1377,7 @@ function _chat_send(
         },
     };
     let text = response.text() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw ai.errors.NetworkFailure {
                 provider: provider,
@@ -1403,9 +1408,15 @@ function chat_invoke(
     compat: ChatCompat,
     params: ChatParams,
     input: ai.ModelTurnInput,
+    request_timeout_ms: int? = null,
 ) -> ai.ModelTurn {
     let request = chat_render(compat, params, input, false);
-    _chat_send(request, compat.provider, audio_mime = _chat_audio_output_mime(params.request_body))
+    _chat_send(
+        request,
+        compat.provider,
+        audio_mime = _chat_audio_output_mime(params.request_body),
+        request_timeout_ms = request_timeout_ms,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -1610,10 +1621,16 @@ function chat_invoke_stream(
     compat: ChatCompat,
     params: ChatParams,
     input: ai.ModelTurnInput,
+    request_timeout_ms: int? = null,
+    time_to_first_token_timeout_ms: int? = null,
 ) -> ai.stream.TurnStream {
     let request = chat_render(compat, params, input, true);
     let decoder = ChatStreamDecoder.new(provider = compat.provider);
-    let sse = baml.http.fetch_sse(request) catch_all (e) {
+    let sse = baml.http.fetch_sse(
+        request,
+        timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+        first_event_timeout = baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
+    ) catch_all (e) {
         _ => _chat_stream_open_failure(compat.provider, e),
     };
     // Chat completions has an explicit terminator — the literal `data: [DONE]`

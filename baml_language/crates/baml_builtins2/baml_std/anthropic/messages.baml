@@ -71,6 +71,11 @@ class AnthropicClient {
     // and a `Ref` keeps the secret out of the client value entirely.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
+    // Native request deadline, including a streaming response body. Null or a
+    // non-positive value is unbounded; browser/Wasm does not enforce it.
+    request_timeout_ms: int?,
+    // Native streaming deadline from SSE open until the first parsed event.
+    time_to_first_token_timeout_ms: int?,
 
     // First-class typed parameters. Each is lowered into the typed request
     // ONLY when non-null, so an unset option never reaches the wire.
@@ -107,6 +112,8 @@ class AnthropicClient {
         model: string = "claude-haiku-4-5",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
+        request_timeout_ms: int? = null,
+        time_to_first_token_timeout_ms: int? = null,
         max_tokens: int = 8192,
         temperature: float? = null,
         top_p: float? = null,
@@ -122,6 +129,8 @@ class AnthropicClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
+            request_timeout_ms: request_timeout_ms,
+            time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
             max_tokens: max_tokens,
             temperature: temperature,
             top_p: top_p,

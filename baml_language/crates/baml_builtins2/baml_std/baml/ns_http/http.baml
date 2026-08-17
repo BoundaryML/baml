@@ -23,14 +23,16 @@ class Response {
     _body: $rust_type,
 
     /// Returns the response body as a UTF-8 string.
-    /// Throws an error if the body was not available or was not valid UTF-8.
-    function text(self) -> string throws root.errors.Io {
+    /// Throws `Timeout` if the request deadline elapses while reading the body,
+    /// or `Io` if the body was unavailable or was not valid UTF-8.
+    function text(self) -> string throws root.errors.Io | root.errors.Timeout {
         $rust_io_function
     }
 
     /// Returns the response body as raw bytes.
-    /// Throws an error if the body was not available.
-    function bytes(self) -> uint8array throws root.errors.Io {
+    /// Throws `Timeout` if the request deadline elapses while reading the body,
+    /// or `Io` if the body was unavailable.
+    function bytes(self) -> uint8array throws root.errors.Io | root.errors.Timeout {
         $rust_io_function
     }
 
@@ -102,7 +104,7 @@ class SseStream {
 
     /// Only returns `null` if the stream is done/closed.
     /// Otherwise, waits until a new event is available.
-    function next(self) -> string? throws root.errors.Io {
+    function next(self) -> string? throws root.errors.Io | root.errors.Timeout {
         $rust_io_function
     }
 
@@ -162,6 +164,26 @@ function _send(
 }
 
 /// Sends an HTTP request and returns a Server-Sent Events stream for streaming responses.
-function fetch_sse(request: Request) -> SseStream throws root.errors.Io | root.errors.Timeout {
+///
+/// On native transports, `timeout` covers the request and streaming body.
+/// `first_event_timeout` starts after open and ends on the first parsed event.
+/// Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
+function fetch_sse(
+    request: Request,
+    timeout: root.time.Duration? = null,
+    first_event_timeout: root.time.Duration? = null,
+) -> SseStream throws root.errors.Io | root.errors.Timeout {
+    _fetch_sse(
+        request,
+        _timeout_nanos(timeout),
+        _timeout_nanos(first_event_timeout),
+    )
+}
+
+function _fetch_sse(
+    request: Request,
+    timeout_nanos: bigint,
+    first_event_timeout_nanos: bigint,
+) -> SseStream throws root.errors.Io | root.errors.Timeout {
     $rust_io_function
 }

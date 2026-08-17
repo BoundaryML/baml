@@ -998,7 +998,11 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
 // The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = openai_render(c, input);
-    let resp = ai.wire.send_as<OaResponse>(req, "openai");
+    let resp = ai.wire.send_as<OaResponse>(
+        req,
+        "openai",
+        request_timeout_ms = c.request_timeout_ms,
+    );
     openai_parse(resp)
 }
 
@@ -1222,7 +1226,11 @@ function _openai_stream_open_failure(error: unknown) -> never {
 // wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _openai_request(c, input, true, preview = false);
-    let sse = baml.http.fetch_sse(req) catch_all (e) {
+    let sse = baml.http.fetch_sse(
+        req,
+        timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
+        first_event_timeout = baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
+    ) catch_all (e) {
         _ => _openai_stream_open_failure(e),
     };
     let state = OaStreamState.new();

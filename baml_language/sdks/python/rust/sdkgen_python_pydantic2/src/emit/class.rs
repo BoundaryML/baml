@@ -45,6 +45,10 @@ pub(crate) struct PyClass {
 pub(crate) struct PyClassProperty {
     pub(crate) name: String,
     pub(crate) ty: Ty,
+    /// Whether the field's top-level BAML type admits `null`. This is kept
+    /// separate from its rendered annotation so generator policy never relies
+    /// on parsing Python type strings.
+    pub(crate) nullable: bool,
     /// Joined `///` doc-comment lines preceding the field. Folded into
     /// the parent `PyClass`'s `"""…"""` docstring under an
     /// `Attributes:` section — never rendered as an inline `# …`

@@ -878,7 +878,11 @@ function anthropic_parse(resp: AnthropicResponse) -> ai.ModelTurn {
 // The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = _anthropic_request(c, input, false, preview = false);
-    let resp = ai.wire.send_as<AnthropicResponse>(req, "anthropic");
+    let resp = ai.wire.send_as<AnthropicResponse>(
+        req,
+        "anthropic",
+        request_timeout_ms = c.request_timeout_ms,
+    );
     anthropic_parse(resp)
 }
 
@@ -1247,7 +1251,11 @@ function _anthropic_stream_open_failure(
 // `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _anthropic_request(c, input, true, preview = false);
-    let sse = baml.http.fetch_sse(req) catch (e) {
+    let sse = baml.http.fetch_sse(
+        req,
+        timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
+        first_event_timeout = baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
+    ) catch (e) {
         baml.errors.Io => _anthropic_stream_open_failure(e),
         baml.errors.Timeout => _anthropic_stream_open_failure(e),
     };

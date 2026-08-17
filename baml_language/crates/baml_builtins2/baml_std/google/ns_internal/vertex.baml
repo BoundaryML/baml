@@ -369,11 +369,19 @@ function _vertex_request(
 function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = vertex_render(c, input);
     if (_vertex_publisher(c) == "anthropic") {
-        let resp = ai.wire.send_as<anthropic.internal.AnthropicResponse>(req, "vertex");
+        let resp = ai.wire.send_as<anthropic.internal.AnthropicResponse>(
+            req,
+            "vertex",
+            request_timeout_ms = c.request_timeout_ms,
+        );
         return anthropic.internal.anthropic_parse(resp);
     }
     let seq = input.journal.entries().length();
-    let resp = ai.wire.send_as<root.internal.GmResponse>(req, "vertex");
+    let resp = ai.wire.send_as<root.internal.GmResponse>(
+        req,
+        "vertex",
+        request_timeout_ms = c.request_timeout_ms,
+    );
     root.internal.google_parse(resp, seq, provider = "vertex")
 }
 
@@ -390,7 +398,12 @@ function vertex_invoke_stream(
     input: ai.ModelTurnInput,
 ) -> ai.stream.TurnStream {
     let req = _vertex_request(c, input, true, preview = false);
-    let sse = root.internal._gm_open_sse(req, "vertex");
+    let sse = root.internal._gm_open_sse(
+        req,
+        "vertex",
+        request_timeout_ms = c.request_timeout_ms,
+        time_to_first_token_timeout_ms = c.time_to_first_token_timeout_ms,
+    );
     // Both decoders yield an explicit `TurnDone` (Anthropic's `message_stop`,
     // Gemini's `finishReason` fragment), so both streams are strict: a
     // connection cut mid-answer raises instead of reporting the partial text

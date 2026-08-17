@@ -19,6 +19,10 @@ class GenericClient {
     // configuration error as no base_url at all.
     base_url: ai.Credential?,
     api_key: ai.Credential?,
+    // Native request deadline; TTFT begins only after a streaming response opens.
+    // Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
+    request_timeout_ms: int?,
+    time_to_first_token_timeout_ms: int?,
 
     request_body: baml.json.json?,
     headers: map<string, string>?,
@@ -34,6 +38,8 @@ class GenericClient {
         model: string,
         base_url: ai.Credential? = null,
         api_key: ai.Credential? = null,
+        request_timeout_ms: int? = null,
+        time_to_first_token_timeout_ms: int? = null,
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
@@ -47,6 +53,8 @@ class GenericClient {
             model: model,
             base_url: base_url,
             api_key: api_key,
+            request_timeout_ms: request_timeout_ms,
+            time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
             request_body: request_body,
             headers: headers,
             query_params: query_params,
@@ -125,7 +133,12 @@ class GenericClient {
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            root.internal.chat_invoke(self.compat(), self.params(), input) catch_all (e) {
+            root.internal.chat_invoke(
+                self.compat(),
+                self.params(),
+                input,
+                request_timeout_ms = self.request_timeout_ms,
+            ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }
@@ -133,7 +146,13 @@ class GenericClient {
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-            root.internal.chat_invoke_stream(self.compat(), self.params(), input) catch_all (e) {
+            root.internal.chat_invoke_stream(
+                self.compat(),
+                self.params(),
+                input,
+                request_timeout_ms = self.request_timeout_ms,
+                time_to_first_token_timeout_ms = self.time_to_first_token_timeout_ms,
+            ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }

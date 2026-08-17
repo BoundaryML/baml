@@ -32,6 +32,13 @@ def test_main_lorem_resume_class_shape():
     assert set(fields) == {"name", "email"}
 
 
+def test_main_nullable_model_field_can_be_omitted_when_generator_option_is_enabled():
+    from baml_sdk.lorem import Resume
+
+    resume = Resume(name="Ada")
+    assert resume.email is None
+
+
 def test_main_lorem_streaming_doc_class_shape():
     import pydantic
     from baml_sdk.lorem import StreamingDoc

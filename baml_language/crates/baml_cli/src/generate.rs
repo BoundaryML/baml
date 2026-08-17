@@ -96,6 +96,7 @@ struct GeneratorDef {
     /// another. Other generators leave this unset.
     sdk_import_path: Option<String>,
     max_typed_union_arity: usize,
+    nullable_fields_default_none: bool,
 }
 
 impl AddGeneratorArgs {
@@ -204,6 +205,9 @@ fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(St
         let max_typed_union_arity = i64::try_from(max_typed_union_arity)
             .context("max_typed_union_arity exceeds TOML's integer range")?;
         table.insert("max_typed_union_arity", value(max_typed_union_arity));
+    }
+    if generator.nullable_fields_default_none {
+        table.insert("nullable_fields_default_none", value(true));
     }
     generators.insert(&name, Item::Table(table));
 
@@ -340,6 +344,27 @@ impl GenerateArgs {
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         let baml_bytecode = borsh::to_vec(&program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
+        let source_root = from.join("baml_src");
+        let user_baml_files = source_files
+            .iter()
+            .map(|source_file| {
+                let path = source_file.path(&db);
+                let relative_path = path
+                    .strip_prefix(&source_root)
+                    .or_else(|_| path.strip_prefix(&from))
+                    .with_context(|| {
+                        format!(
+                            "BAML source {} is outside project root {}",
+                            path.display(),
+                            from.display()
+                        )
+                    })?;
+                Ok((
+                    relative_path.to_path_buf(),
+                    source_file.text(&db).to_string(),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let mut total_files = 0;
 
@@ -385,11 +410,15 @@ impl GenerateArgs {
             // a binary file.
             let generated: Vec<(PathBuf, Vec<u8>)> = match generator.output_type {
                 OutputType::PythonPydantic | OutputType::PythonPydanticV1 => {
-                    sdkgen_python_pydantic2::to_source_code_with_bytecode_and_metadata(
+                    sdkgen_python_pydantic2::to_source_code_with_bytecode_and_metadata_and_source_files_and_options(
                         &pool,
                         &baml_bytecode,
                         &embedded_baml_toml,
-                        generator.naming_convention,
+                        &user_baml_files,
+                        &sdkgen_python_pydantic2::PythonGenOptions {
+                            naming_convention: generator.naming_convention,
+                            nullable_fields_default_none: generator.nullable_fields_default_none,
+                        },
                     )
                     .into_iter()
                     .map(|(path, content)| (path, content.into_bytes()))
@@ -669,6 +698,36 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             }
             sdkgen_go::DEFAULT_MAX_TYPED_UNION_ARITY
         };
+        let nullable_fields_default_none = if matches!(
+            output_type,
+            Some(OutputType::PythonPydantic | OutputType::PythonPydanticV1)
+        ) {
+            generator
+                .nullable_fields_default_none
+                .as_ref()
+                .is_some_and(|value| *value.get_ref())
+        } else {
+            if let Some(value) = generator.nullable_fields_default_none.as_ref() {
+                diags.push(
+                    Diagnostic::error(
+                        DiagnosticId::InvalidGeneratorPropertyValue,
+                        format!(
+                            "generator `{name}` sets Python-only property \
+                             `nullable_fields_default_none` on a non-Python target"
+                        ),
+                    )
+                    .with_primary(
+                        Span {
+                            file_id: manifest_file_id(),
+                            range: to_text_range(value.span()),
+                        },
+                        "remove this Python-only property",
+                    )
+                    .with_phase(DiagnosticPhase::Validation),
+                );
+            }
+            false
+        };
 
         // `output_dir` is resolved relative to the project root and defaults
         // to "..", with the target-owned generated directory appended.
@@ -718,6 +777,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             naming_convention,
             sdk_import_path,
             max_typed_union_arity,
+            nullable_fields_default_none,
         });
     }
 
@@ -873,6 +933,15 @@ mod tests {
         )
     }
 
+    fn python_manifest(nullable_fields_default_none: Option<bool>) -> String {
+        let nullable_fields_default_none = nullable_fields_default_none
+            .map(|value| format!("nullable_fields_default_none = {value}\n"))
+            .unwrap_or_default();
+        format!(
+            "[package]\nname = \"test\"\n\n[generator.python]\noutput_type = \"python/pydantic\"\nnaming_convention = \"preserve-case\"\n{nullable_fields_default_none}"
+        )
+    }
+
     fn discover_with_manifest(content: &str) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
         let directory = tempfile::tempdir().unwrap();
         fs::write(directory.path().join("baml.toml"), content).unwrap();
@@ -969,6 +1038,25 @@ mod tests {
     }
 
     #[test]
+    fn add_python_generator_writes_enabled_nullable_field_default() {
+        let mut generator = Generator::from(OutputType::PythonPydantic);
+        generator.nullable_fields_default_none = true;
+
+        let (updated, name) =
+            add_generator_to_manifest("[package]\nname = \"test\"\n", &generator).unwrap();
+
+        let manifest = crate::manifest::parse(&updated).unwrap();
+        assert!(
+            *manifest.generator[&name]
+                .get_ref()
+                .nullable_fields_default_none
+                .as_ref()
+                .unwrap()
+                .get_ref()
+        );
+    }
+
+    #[test]
     fn add_command_updates_project_manifest() {
         let directory = tempfile::tempdir().unwrap();
         fs::write(
@@ -1046,6 +1134,28 @@ mod tests {
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert!(
             format!("{diagnostics:?}").contains("Go-only property"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn python_nullable_field_default_is_false_by_default_and_accepts_true() {
+        let (defaults, default_diags) = discover_with_manifest(&python_manifest(None));
+        assert!(default_diags.is_empty(), "{default_diags:?}");
+        assert!(!defaults[0].nullable_fields_default_none);
+
+        let (enabled, enabled_diags) = discover_with_manifest(&python_manifest(Some(true)));
+        assert!(enabled_diags.is_empty(), "{enabled_diags:?}");
+        assert!(enabled[0].nullable_fields_default_none);
+    }
+
+    #[test]
+    fn python_nullable_field_default_on_non_python_generator_is_rejected() {
+        let manifest = "[package]\nname = \"test\"\n\n[generator.ts]\noutput_type = \"typescript/node\"\nnaming_convention = \"preserve-case\"\nnullable_fields_default_none = true\n";
+        let (_, diagnostics) = discover_with_manifest(manifest);
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            format!("{diagnostics:?}").contains("Python-only property"),
             "{diagnostics:?}"
         );
     }

@@ -1082,7 +1082,7 @@ fn is_media_reexport(s: &EmittedSymbol) -> bool {
 {%- endif %}
     model_config = pydantic.ConfigDict(extra="ignore")
 {%- for prop in properties %}
-    {{ prop.name }}: {{ prop.ty_py }}
+    {{ prop.name }}: {{ prop.ty_py }}{% if prop.default_none %} = None{% endif %}
 {%- endfor %}
 {%- if !static_methods.is_empty() %}
 
@@ -1123,6 +1123,7 @@ struct ClassBodyPy {
 struct ClassPropertyView {
     name: String,
     ty_py: String,
+    default_none: bool,
 }
 
 struct MethodLineView {
@@ -1215,7 +1216,7 @@ fn build_method_line_views(
 }
 
 /// Render one symbol into its `.py` source block, including trailing `\n`.
-fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
+fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath, nullable_fields_default_none: bool) -> String {
     use askama::Template;
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
@@ -1246,6 +1247,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                 .map(|prop| ClassPropertyView {
                     name: prop.name.clone(),
                     ty_py: translate_ty(&prop.ty, &ctx),
+                    default_none: nullable_fields_default_none && prop.nullable,
                 })
                 .collect();
             let attrs: Vec<(String, Option<String>)> = c
@@ -1566,7 +1568,11 @@ fn required_positional_count(
 ///     ...
 /// ]
 /// ```
-pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<String>) -> String {
+pub(crate) fn render_leaf_body(
+    body: &LeafBody,
+    callable_child_names: &BTreeSet<String>,
+    nullable_fields_default_none: bool,
+) -> String {
     if body.is_empty() {
         return String::new();
     }
@@ -1700,7 +1706,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
 
     let mut prev: Option<(&SortKey, &EmittedSymbol)> = None;
     for (sym, key) in &body.symbols {
-        let body_text = render_symbol(sym, &body.leaf);
+        let body_text = render_symbol(sym, &body.leaf, nullable_fields_default_none);
         if body_text.is_empty() {
             continue;
         }
@@ -1786,7 +1792,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
     ...
 {%- endif %}
 {%- for prop in properties %}
-    {{ prop.name }}: {{ prop.ty_py }}
+    {{ prop.name }}: {{ prop.ty_py }}{% if prop.default_none %} = None{% endif %}
 {%- endfor %}
 {%- if !properties.is_empty() && (!static_methods.is_empty() || !instance_methods.is_empty()) %}
 
@@ -1945,9 +1951,9 @@ fn append_types_kwarg(typed_params: &mut String, has_keyword_only_marker: bool, 
         typed_params.push_str(", *, ");
     }
     if optional {
-        typed_params.push_str("_types: dict[str, type] | None = None");
+        typed_params.push_str("_types: dict[str, typing.Any] | None = None");
     } else {
-        typed_params.push_str("_types: dict[str, type]");
+        typed_params.push_str("_types: dict[str, typing.Any]");
     }
 }
 
@@ -2032,6 +2038,7 @@ fn render_symbol_pyi(
     s: &EmittedSymbol,
     leaf: &LeafPath,
     callback_protocols: Option<&std::rc::Rc<IndexMap<Ty, String>>>,
+    nullable_fields_default_none: bool,
 ) -> String {
     use askama::Template;
     let ctx = TranslateCtx {
@@ -2057,6 +2064,7 @@ fn render_symbol_pyi(
                 .map(|prop| ClassPropertyView {
                     name: prop.name.clone(),
                     ty_py: translate_ty(&prop.ty, &ctx),
+                    default_none: nullable_fields_default_none && prop.nullable,
                 })
                 .collect();
             let mut out = ClassBodyPyi {
@@ -2396,6 +2404,7 @@ fn render_literal_default(lit: &Literal) -> String {
 pub(crate) fn render_leaf_body_pyi(
     body: &LeafBody,
     callable_child_bodies: &BTreeMap<String, &LeafBody>,
+    nullable_fields_default_none: bool,
 ) -> String {
     if body.is_empty() {
         return String::new();
@@ -2555,7 +2564,12 @@ pub(crate) fn render_leaf_body_pyi(
         {
             continue;
         }
-        let body_text = render_symbol_pyi(sym, &body.leaf, callback_protocols.as_ref());
+        let body_text = render_symbol_pyi(
+            sym,
+            &body.leaf,
+            callback_protocols.as_ref(),
+            nullable_fields_default_none,
+        );
         if body_text.is_empty() {
             continue;
         }

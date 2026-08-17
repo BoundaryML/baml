@@ -1003,8 +1003,19 @@ function _gm_route_sse_open(
 }
 
 // Open the SSE connection, classifying the failure precisely.
-function _gm_open_sse(req: baml.http.Request, provider: string) -> baml.http.SseStream {
-    _gm_route_sse_open(provider, () -> { baml.http.fetch_sse(req) })
+function _gm_open_sse(
+    req: baml.http.Request,
+    provider: string,
+    request_timeout_ms: int? = null,
+    time_to_first_token_timeout_ms: int? = null,
+) -> baml.http.SseStream {
+    _gm_route_sse_open(provider, () -> {
+        baml.http.fetch_sse(
+            req,
+            timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+            first_event_timeout = baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
+        )
+    })
 }
 
 // One SseStream batch -> provider-agnostic stream events.

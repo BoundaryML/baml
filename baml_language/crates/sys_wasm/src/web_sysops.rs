@@ -266,11 +266,13 @@ impl IoNamespaceHttp for WebHttp {
         self.send(SysOp::BamlHttpSend, request, timeout_nanos.as_ref())
     }
 
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _request: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         unsupported()

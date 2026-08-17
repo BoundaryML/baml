@@ -118,9 +118,9 @@ impl Script {
 }
 
 /// `[generator.<name>]` — code-generation configuration. Values are kept as
-/// raw `Spanned<String>` here; the string→enum validation (and the spans for
-/// any diagnostics) is performed by `generate.rs`, so non-codegen tooling
-/// never needs to know codegen rules.
+/// spanned values here; validation (and the spans for any diagnostics) is
+/// performed by `generate.rs`, so non-codegen tooling never needs to know
+/// codegen rules.
 #[derive(Debug, Deserialize)]
 pub(crate) struct GeneratorManifest {
     /// e.g. `"python/pydantic"`, `"typescript/node"`, `"go"`. Required for codegen;
@@ -143,6 +143,10 @@ pub(crate) struct GeneratorManifest {
     /// Maximum non-null union arity represented as a closed generated Go
     /// union. Larger unions use `any`. Go-only; defaults to 3.
     pub max_typed_union_arity: Option<Spanned<i64>>,
+
+    /// Render nullable Python model fields with `= None`. Python-only;
+    /// defaults to false so existing generated model semantics do not change.
+    pub nullable_fields_default_none: Option<Spanned<bool>>,
 
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
@@ -301,7 +305,8 @@ mod tests {
              output_type = \"python/pydantic\"\n\
              naming_convention = \"preserve-case\"\n\
              output_dir = \"../python\"\n\
-             sdk_import_path = \"example.com/project/baml_sdk\"\n",
+             sdk_import_path = \"example.com/project/baml_sdk\"\n\
+             nullable_fields_default_none = true\n",
         )
         .unwrap();
         let g = &m.generator["lang_python"];
@@ -313,6 +318,13 @@ mod tests {
         assert_eq!(
             g.get_ref().sdk_import_path.as_ref().unwrap().get_ref(),
             "example.com/project/baml_sdk"
+        );
+        assert!(
+            *g.get_ref()
+                .nullable_fields_default_none
+                .as_ref()
+                .unwrap()
+                .get_ref()
         );
     }
 
