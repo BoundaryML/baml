@@ -9,13 +9,17 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
-use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
+use bex_engine::{
+    BexEngine, FunctionCallContext, FunctionCallContextBuilder, UserFunctionInfo,
+    value_capture::TraceCaptureProducer,
+};
 // `surface_clap_error` is defined later in this file.
 // For --log-file event sink.
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
 use crate::{
+    log_output::{LogLevel as RunLogLevel, LogOutput},
     project_load::{
         find_project_root_from, load_project_or_default, resolve_standalone_file,
         validate_file_project_flags,
@@ -212,7 +216,25 @@ pub struct RunArgs {
     )]
     pub output_format: OutputFormat,
 
-    /// Write run logs to a file.
+    /// Print BAML `log.*` events to stdout at or above this level.
+    #[arg(
+        long = "log",
+        env = "BAML_LOG",
+        value_enum,
+        default_value_t = RunLogLevel::Off,
+        ignore_case = true,
+        value_name = "LEVEL",
+        help = "Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error, warn, info, debug, trace]",
+        hide_default_value = true,
+        hide_env = true,
+        hide_possible_values = true,
+        help_heading = "Run output options"
+    )]
+    pub log: RunLogLevel,
+
+    /// Write CLI diagnostic logs to a file.
+    ///
+    /// Unrelated to `--log`, which prints BAML `log.*` events to stdout.
     #[arg(long, help_heading = "Run output options")]
     pub log_file: Option<PathBuf>,
 
@@ -238,6 +260,24 @@ pub use baml_exec::OutputFormat;
 // ============================================================================
 
 impl RunArgs {
+    fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
+        let builder = FunctionCallContextBuilder::new(call_id);
+        LogOutput::new(self.log, "run").call_context(builder)
+    }
+
+    fn print_logs(&self, producer: Option<&TraceCaptureProducer>) {
+        LogOutput::new(self.log, "run").print(producer);
+    }
+
+    fn block_on_with_logs<T>(
+        &self,
+        rt: &tokio::runtime::Runtime,
+        future: impl std::future::Future<Output = T>,
+        producer: Option<&TraceCaptureProducer>,
+    ) -> T {
+        LogOutput::new(self.log, "run").block_on(rt, future, producer)
+    }
+
     /// Emit the "your code is unformatted" advisory. This is the one
     /// user-facing warning `baml run` keeps on successful execution.
     fn emit_format_hint_if_needed(reporter: &Reporter, needs_format_hint: bool) {
@@ -638,14 +678,25 @@ impl RunArgs {
         let engine = Arc::new(engine);
         let output_format = self.output_format;
         let start = std::time::Instant::now();
-        let dispatch_result = rt.block_on(baml_exec::dispatch_target(
-            Arc::clone(&engine),
-            function_name,
-            cli_values,
-            json_args,
-            output_format,
-        ));
-        crate::shutdown::shutdown_engine(&rt, &engine, reporter);
+        let (call_context, logs) = self.call_context(CallId::next());
+        let dispatch_result = self.block_on_with_logs(
+            &rt,
+            baml_exec::dispatch_target_with_context(
+                Arc::clone(&engine),
+                function_name,
+                cli_values,
+                json_args,
+                output_format,
+                call_context,
+                || self.print_logs(logs.as_ref()),
+            ),
+            logs.as_ref(),
+        );
+        self.block_on_with_logs(
+            &rt,
+            crate::shutdown::shutdown_engine_future(&engine, reporter),
+            logs.as_ref(),
+        );
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
         self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
@@ -983,31 +1034,49 @@ impl RunArgs {
                 attr: baml_type::TyAttr::default(),
             });
         let output_format = self.output_format;
-        let result: std::result::Result<(), bex_engine::EngineError> = rt.block_on(async {
-            let engine_for_call = Arc::clone(&engine);
-            let value = engine_for_call
-                .call_function(
-                    "baml_run_expr_main__",
-                    vec![],
-                    FunctionCallContextBuilder::new(CallId::next()).build(),
-                    true,
-                )
-                .await?;
-            if !matches!(return_type, bex_engine::RuntimeTy::Void { .. }) {
-                if let Err(e) =
-                    baml_exec::write_output(&engine, value, &return_type, output_format).await
-                {
-                    crate::reporter::print_error(format_args!("failed to serialize output: {e}"));
-                }
-            }
-            Ok(())
-        });
-        crate::shutdown::shutdown_engine(&rt, &engine, reporter);
+        let (call_context, logs) = self.call_context(CallId::next());
+        let capture = baml_exec::CallContextCapture::from_call_context(&call_context);
+        let call_result = self.block_on_with_logs(
+            &rt,
+            engine.call_function("baml_run_expr_main__", vec![], call_context, true),
+            logs.as_ref(),
+        );
+        let output_succeeded: std::result::Result<bool, bex_engine::EngineError> = self
+            .block_on_with_logs(
+                &rt,
+                async {
+                    let value = call_result?;
+                    if !matches!(return_type, bex_engine::RuntimeTy::Void { .. }) {
+                        if let Err(e) = baml_exec::write_output_with_context(
+                            &engine,
+                            value,
+                            &return_type,
+                            output_format,
+                            &capture,
+                            || self.print_logs(logs.as_ref()),
+                        )
+                        .await
+                        {
+                            crate::reporter::print_error(format_args!(
+                                "failed to serialize output: {e}"
+                            ));
+                            return Ok(false);
+                        }
+                    }
+                    Ok(true)
+                },
+                logs.as_ref(),
+            );
+        self.block_on_with_logs(
+            &rt,
+            crate::shutdown::shutdown_engine_future(&engine, reporter),
+            logs.as_ref(),
+        );
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
-        match result {
-            Ok(()) if !unhandled_spawn_failed => Ok(crate::ExitCode::Success),
-            Ok(()) => Ok(crate::ExitCode::TargetError),
+        match output_succeeded {
+            Ok(true) if !unhandled_spawn_failed => Ok(crate::ExitCode::Success),
+            Ok(_) => Ok(crate::ExitCode::TargetError),
             Err(bex_engine::EngineError::Exit { code }) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
@@ -1907,6 +1976,7 @@ mod tests {
             file: None,
             list: false,
             output_format: OutputFormat::Debug,
+            log: RunLogLevel::Off,
             log_file: None,
             include_generated: false,
             from: None,
