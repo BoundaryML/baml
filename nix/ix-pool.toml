@@ -11,17 +11,15 @@
 pool-name = "baml"
 
 # ix regions the members live in, member index modulo the list - an even
-# 16/16 split. Two regions instead of one after 2026-08-17: three us-west-1
-# host incidents in one day, and every member PLUS every replacement lived
-# there, so each incident ate the whole pool and the reconcile kept feeding
-# new members into the melting region. Split, one region's bad day costs
-# half the pool, and a create that fails in a member's home region retries
-# once in the other one the same tick (the failover half of the feature).
+# 16/16 split. Two regions so that one region's bad day costs half the
+# pool instead of all of it, and a create that fails in a member's home
+# region retries once in the other one the same tick (the failover half
+# of the feature).
 #
-# The us-east caveat that used to forbid this - the public-v6 NDP blackhole
-# (ENG-10881) that killed the xwin cross lanes - is mitigated in the member
-# image itself (gai.conf v4-precedence in ci-runner.nix), so east members
-# fall back to v4 instead of hanging on dead AAAA routes.
+# The us-east caveat that used to forbid this - guests preferring dead v6
+# routes for AAAA-bearing destinations - is mitigated in the member image
+# itself (gai.conf v4-precedence in ci-runner.nix), so east members fall
+# back to v4 instead of hanging.
 #
 # NOTE the reconcile matches members by NAME only - a region-list change
 # alone moves nothing. Existing members adopt their new home organically,

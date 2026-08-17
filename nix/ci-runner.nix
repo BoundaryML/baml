@@ -150,19 +150,18 @@ in
     max-free = 100 * 1024 * 1024 * 1024;
   };
 
-  # Prefer IPv4 for every destination: this region's guests hold global v6
-  # addresses whose vRack gateway does not answer NDP (ENG-10881), so any
+  # Prefer IPv4 for every destination: some regions' guests hold global v6
+  # addresses whose upstream gateway does not yet answer NDP, so any
   # AAAA-bearing destination dies with EHOSTUNREACH before the client falls
-  # back (killed the cargo-xwin lanes via download.visualstudio's AAAA).
-  # glibc-level so every client is covered; remove when the block is
-  # actually delivered.
+  # back (this killed the cargo-xwin lanes via download.visualstudio's AAAA).
+  # glibc-level so every client is covered; remove once v6 delivery lands.
   environment.etc."gai.conf".text = ''
     precedence ::ffff:0:0/96 100
   '';
 
   services.ix-runner = {
     enable = true;
-    url = "https://github.com/indexable-inc/baml";
+    url = "https://github.com/boundaryml/baml";
     # One job per VM: co-tenancy missed upstream wall-clock test bounds
     # (details: PR body). Pool size lives in flake.nix's mkPool.
     slots = 1;
