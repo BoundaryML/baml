@@ -1766,10 +1766,51 @@ pub fn class_generic_bounds<'db>(
     out
 }
 
+/// Memoized bounds map for [`function_generic_bounds`]. Wrapped for the
+/// manual `salsa::Update` impl (the `CallableThrows` precedent).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionGenericBounds(pub FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>);
+
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for FunctionGenericBounds {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
 /// The declared interface bounds for a function's full generic frame
 /// (class prefix + own params; effect params unbounded), keyed by the
 /// same `ParamTy` identities `function_generic_frame` assigns.
+///
+/// TRACKED via [`function_generic_bounds_tracked`]: consumers are per-USE
+/// (every direct call site re-lowered the callee's bound type-refs, and
+/// emit metadata recomputed them per function per compile).
 pub fn function_generic_bounds<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+    function_generic_bounds_tracked(db, function).0.clone()
+}
+
+#[salsa::tracked(returns(ref))]
+fn function_generic_bounds_tracked<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> FunctionGenericBounds {
+    FunctionGenericBounds(function_generic_bounds_impl(db, function))
+}
+
+fn function_generic_bounds_impl<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
 ) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
@@ -2759,31 +2800,103 @@ pub fn function_signature<'db>(
     }
 }
 
+/// Memoized field-type list for [`class_field_types`]. Wrapped for the
+/// manual `salsa::Update` impl (the `CallableThrows` precedent).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassFieldTypes(pub Vec<(Name, Ty)>);
+
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for ClassFieldTypes {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
+/// TRACKED: per-declaration, because the consumers are per-USE - every
+/// field access, object literal, class pattern, and exhaustiveness walk
+/// re-lowered every field of the class before this memo existed.
+#[salsa::tracked(returns(ref))]
+fn class_field_types_tracked<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    class: ClassLoc<'db>,
+) -> ClassFieldTypes {
+    let data = baml_compiler2_ppir::item_data::class_data(db, class);
+    let ctx = lower_ctx_for_file(db, class.file(db)).with_frame(class_generic_frame(db, class));
+    ClassFieldTypes(
+        data.fields
+            .iter()
+            .map(|field| {
+                (
+                    field.name.clone(),
+                    reject_holes(&ctx.lower_type_ref(&data.type_refs, field.type_ref)),
+                )
+            })
+            .collect(),
+    )
+}
+
 /// A class's field types, lowered in the class's own generic frame.
+/// The clone off the memo is Name/interned-handle refcount bumps -
+/// vastly cheaper than the re-lowering it replaces.
 pub fn class_field_types<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     class: ClassLoc<'db>,
 ) -> Vec<(Name, Ty)> {
-    let data = baml_compiler2_ppir::item_data::class_data(db, class);
-    let ctx = lower_ctx_for_file(db, class.file(db)).with_frame(class_generic_frame(db, class));
-    data.fields
-        .iter()
-        .map(|field| {
-            (
-                field.name.clone(),
-                reject_holes(&ctx.lower_type_ref(&data.type_refs, field.type_ref)),
-            )
-        })
-        .collect()
+    class_field_types_tracked(db, class).0.clone()
+}
+
+/// Memoized alias RHS for [`type_alias_value`]. Wrapped for the manual
+/// `salsa::Update` impl (the `CallableThrows` precedent).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeAliasValue(pub Ty);
+
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for TypeAliasValue {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
+/// TRACKED: per-declaration - alias definitions were re-lowered once per
+/// inference body via `Facts::alias_def` misses and once per alias in
+/// every body's overlap map before this memo existed.
+#[salsa::tracked(returns(ref))]
+fn type_alias_value_tracked<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    alias: TypeAliasLoc<'db>,
+) -> TypeAliasValue {
+    let data = baml_compiler2_ppir::item_data::type_alias_data(db, alias);
+    let ctx = lower_ctx_for_file(db, alias.file(db));
+    TypeAliasValue(
+        data.value
+            .map(|value| reject_holes(&ctx.lower_type_ref(&data.type_refs, value)))
+            .unwrap_or_else(Ty::error),
+    )
 }
 
 /// A type alias's right-hand side, lowered (aliases are non-generic).
 pub fn type_alias_value<'db>(db: &'db dyn baml_compiler2_ppir::Db, alias: TypeAliasLoc<'db>) -> Ty {
-    let data = baml_compiler2_ppir::item_data::type_alias_data(db, alias);
-    let ctx = lower_ctx_for_file(db, alias.file(db));
-    data.value
-        .map(|value| reject_holes(&ctx.lower_type_ref(&data.type_refs, value)))
-        .unwrap_or_else(Ty::error)
+    type_alias_value_tracked(db, alias).0.clone()
 }
 
 /// One associated type's bound or default, lowered once in the interface

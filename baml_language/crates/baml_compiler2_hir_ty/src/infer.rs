@@ -1142,6 +1142,14 @@ fn infer_parameter_defaults<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
+    // The overwhelmingly common case: no parameter has a default. Skip
+    // building the whole inference apparatus (signature shape, generic
+    // frame/bounds, facts, context, finalize) just to visit an empty
+    // arena - the result is indistinguishable from running it.
+    let defaults = baml_compiler2_ppir::function_parameter_defaults(db, function);
+    if defaults.params.iter().all(Option::is_none) {
+        return InferenceResult::default();
+    }
     infer_body_impl(db, BodyOwnerId::ParameterDefaults(function))
 }
 
