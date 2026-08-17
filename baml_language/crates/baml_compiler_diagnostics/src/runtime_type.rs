@@ -159,6 +159,14 @@ pub fn open_interface_at_render(field: &str, open_type: &str) -> Diagnostic {
     )
 }
 
+/// E0164 — a non-data type reached an LLM schema render.
+pub fn non_data_type_at_render(ty: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::NonDataTypeAtRender,
+        format!("non-data type `{ty}` cannot be rendered as an LLM output schema"),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,6 +229,11 @@ mod tests {
                 open_interface_at_render("payload", "user.Open"),
                 "E0161",
                 "field `payload` has open interface type `user.Open`, which cannot be rendered as an LLM output schema",
+            ),
+            (
+                non_data_type_at_render("never"),
+                "E0164",
+                "non-data type `never` cannot be rendered as an LLM output schema",
             ),
         ];
 

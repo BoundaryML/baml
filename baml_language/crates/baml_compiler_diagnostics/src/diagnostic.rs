@@ -368,6 +368,10 @@ pub enum DiagnosticId {
     ConflictingTypeDefinitionAtRender,
     /// A top-level declaration ($init) can reach a yielding io sysop.
     InitIoNotAllowed,
+
+    /// A non-data type reached an LLM output schema renderer. These types are
+    /// valid in BAML's type system but have no output-format representation.
+    NonDataTypeAtRender,
 }
 
 impl DiagnosticId {
@@ -546,6 +550,7 @@ impl DiagnosticId {
             DiagnosticId::OpenInterfaceAtRender => "E0161",
             DiagnosticId::ConflictingTypeDefinitionAtRender => "E0162",
             DiagnosticId::InitIoNotAllowed => "E0163",
+            DiagnosticId::NonDataTypeAtRender => "E0164",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 

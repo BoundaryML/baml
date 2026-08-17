@@ -191,28 +191,40 @@ impl BamlClassTypeValue for PackageBamlImpl {
             _ => "output".to_string(),
         };
         let mut visited = std::collections::HashSet::new();
-        let Some((field, open_ty)) =
+        if let Some((field, open_ty)) =
             first_open_interface(vm, &type_value.ty, type_value.defs(), &root, &mut visited)
-        else {
-            if let Some(name) = first_conflicting_render_name(vm, &type_value.ty, type_value.defs())
-            {
-                let diagnostic = super::type_kinds::compiler_diagnostic(
-                    baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
-                    format!(
-                        "type `{name}` has non-equivalent definitions in the same LLM render context"
-                    ),
-                );
-                return Err(VmRustFnError::Thrown(
-                    super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-                ));
-            }
-            return Ok(());
-        };
-        let diagnostic =
-            baml_compiler_diagnostics::runtime_type::open_interface_at_render(&field, &open_ty);
-        Err(VmRustFnError::Thrown(
-            super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-        ))
+        {
+            let diagnostic =
+                baml_compiler_diagnostics::runtime_type::open_interface_at_render(&field, &open_ty);
+            return Err(VmRustFnError::Thrown(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
+
+        if let Some(name) = first_conflicting_render_name(vm, &type_value.ty, type_value.defs()) {
+            let diagnostic = super::type_kinds::compiler_diagnostic(
+                baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
+                format!(
+                    "type `{name}` has non-equivalent definitions in the same LLM render context"
+                ),
+            );
+            return Err(VmRustFnError::Thrown(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
+
+        let mut visited = std::collections::HashSet::new();
+        if let Some(non_data_ty) =
+            first_non_data_type(vm, &type_value.ty, type_value.defs(), &mut visited)
+        {
+            let diagnostic =
+                baml_compiler_diagnostics::runtime_type::non_data_type_at_render(&non_data_ty);
+            return Err(VmRustFnError::Thrown(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
+
+        Ok(())
     }
 
     /// Returns the `RealizedTy`'s display name.  Includes namespaces and (for
@@ -790,6 +802,126 @@ fn first_open_interface(
     }
 }
 
+/// Find the first type that has no output-format representation.
+///
+/// This match is exhaustive over `RealizedTy` so a newly added runtime type
+/// must make an explicit renderability decision at the shared LLM boundary.
+fn is_non_data_render_type(ty: &baml_type::RealizedTy) -> bool {
+    match ty {
+        baml_type::RealizedTy::Uint8Array { .. }
+        | baml_type::RealizedTy::EnumVariant(..)
+        | baml_type::RealizedTy::Function { .. }
+        | baml_type::RealizedTy::Future(..)
+        | baml_type::RealizedTy::RustType { .. }
+        | baml_type::RealizedTy::Type { .. }
+        | baml_type::RealizedTy::Resource { .. }
+        | baml_type::RealizedTy::PromptAst { .. }
+        | baml_type::RealizedTy::Void { .. }
+        | baml_type::RealizedTy::BuiltinUnknown { .. }
+        | baml_type::RealizedTy::Never { .. } => true,
+        baml_type::RealizedTy::Int { .. }
+        | baml_type::RealizedTy::Bigint { .. }
+        | baml_type::RealizedTy::Float { .. }
+        | baml_type::RealizedTy::String { .. }
+        | baml_type::RealizedTy::Bool { .. }
+        | baml_type::RealizedTy::Null { .. }
+        | baml_type::RealizedTy::Media(..)
+        | baml_type::RealizedTy::Literal(..)
+        | baml_type::RealizedTy::Class(..)
+        | baml_type::RealizedTy::Interface(..)
+        | baml_type::RealizedTy::Enum(..)
+        | baml_type::RealizedTy::List(..)
+        | baml_type::RealizedTy::Map { .. }
+        | baml_type::RealizedTy::Union(..)
+        | baml_type::RealizedTy::TypeAlias(..) => false,
+    }
+}
+
+fn first_non_data_type(
+    vm: &BexVm,
+    ty: &baml_type::RealizedTy,
+    defs: &DynTypeDefs,
+    visited: &mut std::collections::HashSet<baml_type::RealizedTy>,
+) -> Option<String> {
+    if is_non_data_render_type(ty) {
+        return Some(ty.to_string());
+    }
+
+    match ty {
+        baml_type::RealizedTy::Class(name, args, _) => {
+            if !visited.insert(ty.clone()) {
+                return None;
+            }
+            let class_ptr = defs
+                .classes
+                .get(name)
+                .copied()
+                .or_else(|| vm.lookup_type(name))?;
+            let Object::Class(class) = vm.get_object(class_ptr) else {
+                return None;
+            };
+            for field in &class.fields {
+                if let Some(runtime) = &field.runtime_type {
+                    if let Some(found) =
+                        first_non_data_type(vm, &runtime.ty, runtime.defs(), visited)
+                    {
+                        return Some(found);
+                    }
+                    continue;
+                }
+                let field_ty = field
+                    .field_template
+                    .substitute(args, vm)
+                    .ok()
+                    .or_else(|| baml_type::RealizedTy::try_from(field.field_type.clone()).ok());
+                if let Some(field_ty) = field_ty
+                    && let Some(found) = first_non_data_type(vm, &field_ty, defs, visited)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        baml_type::RealizedTy::List(element, _) => first_non_data_type(vm, element, defs, visited),
+        baml_type::RealizedTy::Map { key, value, .. } => {
+            first_non_data_type(vm, key, defs, visited)
+                .or_else(|| first_non_data_type(vm, value, defs, visited))
+        }
+        baml_type::RealizedTy::Union(members, _) => members
+            .iter()
+            .find_map(|member| first_non_data_type(vm, member, defs, visited)),
+        baml_type::RealizedTy::TypeAlias(name, _) => {
+            if !visited.insert(ty.clone()) {
+                return None;
+            }
+            vm.recursive_type_alias(name)
+                .and_then(|alias| baml_type::RealizedTy::try_from(alias.clone()).ok())
+                .and_then(|alias| first_non_data_type(vm, &alias, defs, visited))
+        }
+        baml_type::RealizedTy::Int { .. }
+        | baml_type::RealizedTy::Bigint { .. }
+        | baml_type::RealizedTy::Float { .. }
+        | baml_type::RealizedTy::String { .. }
+        | baml_type::RealizedTy::Bool { .. }
+        | baml_type::RealizedTy::Null { .. }
+        | baml_type::RealizedTy::Uint8Array { .. }
+        | baml_type::RealizedTy::Media(..)
+        | baml_type::RealizedTy::Literal(..)
+        | baml_type::RealizedTy::Interface(..)
+        | baml_type::RealizedTy::Enum(..)
+        | baml_type::RealizedTy::EnumVariant(..)
+        | baml_type::RealizedTy::Function { .. }
+        | baml_type::RealizedTy::Future(..)
+        | baml_type::RealizedTy::RustType { .. }
+        | baml_type::RealizedTy::Type { .. }
+        | baml_type::RealizedTy::Resource { .. }
+        | baml_type::RealizedTy::PromptAst { .. }
+        | baml_type::RealizedTy::Void { .. }
+        | baml_type::RealizedTy::BuiltinUnknown { .. }
+        | baml_type::RealizedTy::Never { .. } => None,
+    }
+}
+
 fn cloned_type_value(vm: &BexVm, value: Value) -> TypeValue {
     let ptr = value
         .as_object_ptr()
@@ -1091,4 +1223,84 @@ fn primitive_type_name(ty: &baml_type::RealizedTy) -> Option<baml_type::TypeName
     Some(baml_type::QualifiedTypeName::local(baml_type::Name::new(
         name,
     )))
+}
+
+#[cfg(test)]
+mod renderability_tests {
+    use super::*;
+
+    fn attr() -> baml_type::TyAttr {
+        baml_type::TyAttr::default()
+    }
+
+    #[test]
+    fn full_realized_type_family_has_an_explicit_renderability_classification() {
+        let name = baml_type::TypeName::local(baml_type::Name::new("Example"));
+        let non_data = vec![
+            baml_type::RealizedTy::Uint8Array { attr: attr() },
+            baml_type::RealizedTy::EnumVariant(name.clone(), baml_type::Name::new("VALUE"), attr()),
+            baml_type::RealizedTy::Function {
+                params: vec![],
+                ret: Box::new(baml_type::RealizedTy::int()),
+                throws: Box::new(baml_type::RealizedTy::never()),
+                attr: attr(),
+            },
+            baml_type::RealizedTy::Future(
+                Box::new(baml_type::RealizedTy::int()),
+                Box::new(baml_type::RealizedTy::never()),
+                attr(),
+            ),
+            baml_type::RealizedTy::RustType { attr: attr() },
+            baml_type::RealizedTy::Type { attr: attr() },
+            baml_type::RealizedTy::Resource { attr: attr() },
+            baml_type::RealizedTy::PromptAst { attr: attr() },
+            baml_type::RealizedTy::Void { attr: attr() },
+            baml_type::RealizedTy::unknown(),
+            baml_type::RealizedTy::never(),
+        ];
+        for ty in non_data {
+            assert!(
+                is_non_data_render_type(&ty),
+                "expected `{ty}` to be rejected before output-format rendering"
+            );
+        }
+
+        let data = vec![
+            baml_type::RealizedTy::int(),
+            baml_type::RealizedTy::Bigint { attr: attr() },
+            baml_type::RealizedTy::Float { attr: attr() },
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::Bool { attr: attr() },
+            baml_type::RealizedTy::null(),
+            baml_type::RealizedTy::Media(baml_type::MediaKind::Image, attr()),
+            baml_type::RealizedTy::Literal(
+                baml_type::Literal::String("value".to_string()),
+                baml_type::Freshness::Regular,
+                attr(),
+            ),
+            baml_type::RealizedTy::Class(name.clone(), vec![], attr()),
+            baml_type::RealizedTy::Interface(name.clone(), vec![], vec![], attr()),
+            baml_type::RealizedTy::Enum(name.clone(), attr()),
+            baml_type::RealizedTy::list(baml_type::RealizedTy::string()),
+            baml_type::RealizedTy::Map {
+                key: Box::new(baml_type::RealizedTy::string()),
+                value: Box::new(baml_type::RealizedTy::int()),
+                attr: attr(),
+            },
+            baml_type::RealizedTy::Union(
+                vec![
+                    baml_type::RealizedTy::string(),
+                    baml_type::RealizedTy::null(),
+                ],
+                attr(),
+            ),
+            baml_type::RealizedTy::TypeAlias(name, attr()),
+        ];
+        for ty in data {
+            assert!(
+                !is_non_data_render_type(&ty),
+                "expected `{ty}` to remain eligible for output-format rendering"
+            );
+        }
+    }
 }
