@@ -754,7 +754,12 @@ pub(crate) fn prepare_reuse_plan(
     // across workers first so that derivation is a cheap fold instead of a
     // serial parse of the whole project under one salsa memo claim.
     baml_project::prime_file_indexes_parallel(db);
+    let pre_gate_inferences = baml_db::baml_compiler2_hir_ty::infer::body_inferences();
     let mismatches = reuse_throws_mismatches(db, &plan.prev_units, &plan.clean_files);
+    cache_debug(format_args!(
+        "throws gate: {} body inferences",
+        baml_db::baml_compiler2_hir_ty::infer::body_inferences() - pre_gate_inferences
+    ));
     if mismatches.is_empty() {
         db.set_seeded_callable_throws(callable_seeds);
         plan.throws_gate_verified = true;
@@ -1971,6 +1976,17 @@ impl CacheContext {
                 },
             }
         };
+        // Serving observability: which serve layers engaged, and how many user
+        // files each covers. A dirty warm check that re-infers most of the
+        // project shows up here as blobs≪clean or degraded≫0.
+        cache_debug(format_args!(
+            "diagnostics serve: plan={} clean={} blobs={} degraded={} serve_builtins={}",
+            plan.is_some(),
+            plan.as_ref().map_or(0, |p| p.clean_files.len()),
+            plan.as_ref().map_or(0, |p| p.clean_diagnostics.len()),
+            degrade.len(),
+            serve_builtins,
+        ));
 
         let narrowed =
             baml_project::collect_compiler2_diagnostics_narrowed(db, &should_check, precomputed);
