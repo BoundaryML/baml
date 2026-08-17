@@ -1487,17 +1487,25 @@ fn can_be_virtual(
             }
         }
 
-        // Check if the use block is a loop header (has back-edge predecessors)
-        // If so, be conservative and don't inline
+        // Preserve the existing protection for values used directly in a loop
+        // header.
         let use_preds = predecessors
             .get(&use_loc.block)
-            .map_or(&[] as &[_], |v| v.as_slice());
-
-        let has_back_edge = use_preds
+            .map_or(&[] as &[_], Vec::as_slice);
+        let use_is_loop_header = use_preds
             .iter()
             .any(|&pred| dominators.dominates(use_loc.block, pred));
 
-        if has_back_edge {
+        // A map allocation also has observable mutable identity. Merely checking
+        // whether the use block is a loop header misses the common shape
+        // `header -> body(use) -> header`: sinking a map allocated before that
+        // loop into its body creates a fresh map on every iteration. Look for a
+        // path from the use back to itself which does not cross the definition
+        // block, and keep the allocation materialized when such a path exists.
+        let repeats_map_allocation = matches!(&def.rvalue, Rvalue::Map(..))
+            && use_repeats_without_definition(body, def.block, use_loc.block);
+
+        if use_is_loop_header || repeats_map_allocation {
             return false;
         }
 
@@ -1524,6 +1532,43 @@ fn can_be_virtual(
     }
 
     true
+}
+
+/// Whether `use_block` can execute again without first executing `def_block`.
+///
+/// `can_be_virtual` sinks an rvalue from its definition to its use. If a CFG
+/// cycle can revisit the use while bypassing the definition, sinking changes a
+/// once-evaluated binding into a per-iteration evaluation. That is observably
+/// wrong for a mutable map allocation, so its cross-block virtualization must
+/// reject the shape.
+fn use_repeats_without_definition(
+    body: &MirFunctionBody,
+    def_block: BlockId,
+    use_block: BlockId,
+) -> bool {
+    let Some(terminator) = body.block(use_block).terminator.as_ref() else {
+        return false;
+    };
+
+    let mut worklist = terminator.successors();
+    let mut visited = HashSet::new();
+
+    while let Some(block) = worklist.pop() {
+        if block == def_block {
+            continue;
+        }
+        if block == use_block {
+            return true;
+        }
+        if !visited.insert(block) {
+            continue;
+        }
+        if let Some(terminator) = body.block(block).terminator.as_ref() {
+            worklist.extend(terminator.successors());
+        }
+    }
+
+    false
 }
 
 /// Whether evaluating this rvalue reads through any field/index projection.
