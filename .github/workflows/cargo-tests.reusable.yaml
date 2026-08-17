@@ -272,6 +272,7 @@ jobs:
           # this override for exactly that case. Point it at the real tree.
           INSTA_WORKSPACE_ROOT="$PWD" \
           BAML_PARAM_SCHEMA_GOLDEN="$PWD/../typescript2/pkg-playground/src/__fixtures__/param-schema-golden.json" \
+          BAML_SURFACE_SNAPSHOT_DIR="$PWD/crates/baml_surface/src/snapshots" \
           cargo nextest run \
             --config-file "$PWD/.config/nextest-l2.toml" \
             --binaries-metadata "$export_dir/binaries-metadata.json" \
@@ -505,6 +506,7 @@ jobs:
           # test's relative path does not survive the relocated unit build.
           INSTA_WORKSPACE_ROOT="$PWD" \
           BAML_PARAM_SCHEMA_GOLDEN="$PWD/../typescript2/pkg-playground/src/__fixtures__/param-schema-golden.json" \
+          BAML_SURFACE_SNAPSHOT_DIR="$PWD/crates/baml_surface/src/snapshots" \
           cargo nextest run \
             --config-file "$PWD/.config/nextest-l2.toml" \
             --binaries-metadata "$export_dir/binaries-metadata.json" \

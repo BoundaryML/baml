@@ -23,7 +23,11 @@ fn assert_package_exports_fully() {
         !export.items.is_empty(),
         "the assert package resolves and exports items"
     );
-    insta::assert_snapshot!(serde_json::to_string_pretty(&export).unwrap());
+    // See handles_tests::with_snapshot_dir: file snapshots need a real
+    // directory when the binary was compiled in a build sandbox.
+    crate::handles_tests::with_snapshot_dir(|| {
+        insta::assert_snapshot!(serde_json::to_string_pretty(&export).unwrap());
+    });
 }
 
 /// Every `id` in the document addresses exactly one *symbol*.

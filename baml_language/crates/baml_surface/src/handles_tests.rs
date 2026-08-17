@@ -7,6 +7,26 @@ use baml_project::ProjectDatabase;
 
 use crate::{Db, FunctionOwner, Package, Symbol};
 
+/// Bind insta's snapshot directory for FILE-based snapshots in relocated
+/// builds.
+///
+/// insta resolves a file snapshot against the compile-time
+/// `CARGO_MANIFEST_DIR`, and the CI nix unit graph compiles this crate in a
+/// build sandbox (`/build/baml_surface-<ver>/`) that does not exist when the
+/// prebuilt test binary later runs on a runner - insta then reads every
+/// assertion as "+new results" and fails. `BAML_SURFACE_SNAPSHOT_DIR` lets
+/// such a runner point insta at the real checkout's `src/snapshots`; unset
+/// (every local and cargo-arm run), behavior is byte-identical to a bare
+/// `assert_snapshot!`. Same pattern as `BAML_PARAM_SCHEMA_GOLDEN` in
+/// baml_project, which exists for the same relocated-build reason.
+pub(crate) fn with_snapshot_dir(assertion: impl FnOnce()) {
+    let mut settings = insta::Settings::clone_current();
+    if let Some(dir) = std::env::var_os("BAML_SURFACE_SNAPSHOT_DIR") {
+        settings.set_snapshot_path(std::path::PathBuf::from(dir));
+    }
+    settings.bind(assertion);
+}
+
 fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.set_project_root(std::path::Path::new("."));
@@ -101,7 +121,7 @@ fn user_surface_lists_every_kind_with_spans_and_docs() {
     let file = db.add_file("fixture.baml", FIXTURE);
     let _ = file;
 
-    insta::assert_snapshot!(render_user_surface(&db, FIXTURE));
+    with_snapshot_dir(|| insta::assert_snapshot!(render_user_surface(&db, FIXTURE)));
 }
 
 #[test]
@@ -328,7 +348,7 @@ fn typed_surface_resolves_signatures_throws_and_fields() {
     let mut db = make_db();
     db.add_file("typed.baml", TYPED_FIXTURE);
 
-    insta::assert_snapshot!(render_typed_surface(&db));
+    with_snapshot_dir(|| insta::assert_snapshot!(render_typed_surface(&db)));
 }
 
 #[test]
