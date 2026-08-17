@@ -266,9 +266,9 @@ impl<'db> AliasOnlyFacts<'db> {
         AliasOnlyFacts { db, memoized: None }
     }
 
-    /// A scan-local alias/enum context. Cached Salsa-derived rows widen the
-    /// re-entrancy window versus direct lookup, so this must not outlive the
-    /// surrounding candidate scan.
+    /// A scan-local alias/enum context. A memo must not outlive one query
+    /// execution - it would serve rows from a stale revision and suppress the
+    /// dependency reads a later execution needs.
     fn memoized(db: &'db dyn baml_compiler2_ppir::Db) -> AliasOnlyFacts<'db> {
         AliasOnlyFacts {
             db,
