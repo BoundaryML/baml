@@ -189,7 +189,7 @@ function mismatched_function_contract() -> null throws unknown {
   null
 }
 
-function generic_function_requires_explicit_specialization() -> null throws unknown {
+function unspecialized_generic_function_cannot_be_extracted() -> null throws unknown {
   let pkg = reflect.Package.compile({
     "main.baml": #"
 client Dummy = openai.ResponsesClient.new(
@@ -216,6 +216,40 @@ function Present(value: string) -> string { value }
   })
   let functions = pkg.functions()
   functions.get("root.identity") == null && functions.get("root.Present") != null
+}
+
+function generic_function_companion_is_extractable() -> bool throws unknown {
+  let pkg = reflect.Package.compile({
+    "main.baml": #"
+client Dummy = openai.ResponsesClient.new(
+  model = "unused-reflection-only",
+  api_key = "unused",
+)
+
+function Extract<T>(document: string) -> T {
+  client: Dummy
+  prompt: `Extract ${document}`
+}
+"#
+  })
+  pkg.get_function<(string) -> ai.Prompt>("root.Extract$render_prompt") != null
+}
+
+function generic_function_companion_is_listed() -> bool throws unknown {
+  let pkg = reflect.Package.compile({
+    "main.baml": #"
+client Dummy = openai.ResponsesClient.new(
+  model = "unused-reflection-only",
+  api_key = "unused",
+)
+
+function Extract<T>(document: string) -> T {
+  client: Dummy
+  prompt: `Extract ${document}`
+}
+"#
+  })
+  pkg.functions().get("root.Extract$render_prompt") != null
 }
 
 function alias_order_and_reserved_names() -> bool throws unknown {
@@ -481,10 +515,10 @@ async fn get_function_mismatch_throws_compiler_subtyping_diagnostic() {
 }
 
 #[tokio::test]
-async fn generic_get_function_requires_explicit_specialization() {
+async fn unspecialized_generic_get_function_reports_reflection_limit() {
     let output = baml_test!(
         baml: SCENARIO_6_SOURCE,
-        entry: "generic_function_requires_explicit_specialization"
+        entry: "unspecialized_generic_function_cannot_be_extracted"
     );
     let Err(EngineError::UnhandledThrow { value, .. }) = output.result else {
         panic!("expected CompilationError, got {:?}", output.result)
@@ -502,9 +536,9 @@ async fn generic_get_function_requires_explicit_specialization() {
     assert!(items.iter().any(|item| matches!(
         item,
         BexExternalValue::Instance { fields, .. }
-            if fields.get("code") == Some(&BexExternalValue::String("E0001".into()))
+            if fields.get("code") == Some(&BexExternalValue::String("E0165".into()))
                 && fields.get("message") == Some(&BexExternalValue::String(
-                    "generic function `root.Extract` requires explicit specialization before it can be used through reflection".into()
+                    "generic function `root.Extract` cannot be extracted through reflection: reflected packages cannot supply type arguments yet".into()
                 ))
     )));
 }
@@ -514,6 +548,24 @@ async fn function_listing_omits_unspecialized_generics() {
     let output = baml_test!(
         baml: SCENARIO_6_SOURCE,
         entry: "function_listing_omits_unspecialized_generics"
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn generic_function_companion_remains_extractable() {
+    let output = baml_test!(
+        baml: SCENARIO_6_SOURCE,
+        entry: "generic_function_companion_is_extractable"
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn generic_function_companion_remains_in_function_listing() {
+    let output = baml_test!(
+        baml: SCENARIO_6_SOURCE,
+        entry: "generic_function_companion_is_listed"
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

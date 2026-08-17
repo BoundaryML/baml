@@ -372,6 +372,9 @@ pub enum DiagnosticId {
     /// A non-data type reached an LLM output schema renderer. These types are
     /// valid in BAML's type system but have no output-format representation.
     NonDataTypeAtRender,
+    /// Reflection attempted to extract or dynamically invoke a generic
+    /// callable without a complete runtime type-argument frame.
+    UnspecializedReflectedGeneric,
 }
 
 impl DiagnosticId {
@@ -574,6 +577,8 @@ impl DiagnosticId {
             DiagnosticId::InterfaceProjectionBase => "E0156",
             DiagnosticId::MountedPackageCallUnsupported => "E0158",
             DiagnosticId::EmptyEnumAtRender => "E0159",
+            // E0164 is owned by the non-data output-format diagnostic in #4470.
+            DiagnosticId::UnspecializedReflectedGeneric => "E0165",
         }
     }
 }

@@ -896,7 +896,7 @@ fn describe_package_functions_documents_unspecialized_generic_omission() {
     let output = describe_via_dispatch(&db, "baml.reflect.Package.functions");
     assert!(
         output.contains("Unspecialized generic functions are omitted")
-            && output.contains("functions can be explicitly specialized."),
+            && output.contains("cannot supply type arguments yet."),
         "expected generic-listing contract in builtin method docs:\n{output}",
     );
     insta::assert_snapshot!(output);

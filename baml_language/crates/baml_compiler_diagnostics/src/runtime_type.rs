@@ -89,12 +89,16 @@ pub fn expected_class_instance(callee: &str, got: &str) -> Diagnostic {
     )
 }
 
-/// E0001 — reflected package extraction cannot infer a generic frame.
-pub fn reflected_generic_function_requires_specialization(name: &str) -> Diagnostic {
+/// E0165 — reflection cannot construct a complete generic frame.
+///
+/// Package extraction supplies a package-qualified display name; dynamic
+/// `call_any` has no package context and supplies the callable's bare declared
+/// name. The difference is intentional and keeps both diagnostics actionable.
+pub fn unspecialized_reflected_generic(name: &str) -> Diagnostic {
     Diagnostic::error(
-        DiagnosticId::TypeMismatch,
+        DiagnosticId::UnspecializedReflectedGeneric,
         format!(
-            "generic function `{name}` requires explicit specialization before it can be used through reflection"
+            "generic function `{name}` cannot be extracted through reflection: reflected packages cannot supply type arguments yet"
         ),
     )
 }
@@ -201,9 +205,9 @@ mod tests {
                 "reflect.class.get_field expected a class instance, got int",
             ),
             (
-                reflected_generic_function_requires_specialization("root.Extract"),
-                "E0001",
-                "generic function `root.Extract` requires explicit specialization before it can be used through reflection",
+                unspecialized_reflected_generic("root.Extract"),
+                "E0165",
+                "generic function `root.Extract` cannot be extracted through reflection: reflected packages cannot supply type arguments yet",
             ),
             (
                 computed_generic_argument_requires_unreflect("runtime_t"),

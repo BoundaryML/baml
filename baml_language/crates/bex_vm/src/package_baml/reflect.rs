@@ -1089,24 +1089,23 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             Object::Package(package) => package.functions.get(&local).copied(),
             _ => None,
         };
-        let Some(function) = function else {
+        if function.is_none() {
             return Ok(None);
-        };
-        if matches!(
-            vm.get_object(function),
-            Object::Function(function) if !function.generic_param_bounds.is_empty()
-        ) {
-            let diagnostic = runtime_type::reflected_generic_function_requires_specialization(
-                &display_local_name(&local),
-            );
-            return Err(VmRustFnError::Thrown(
-                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-            ));
         }
         let Some(function_value) = package_function_value(vm, package_ptr, &local) else {
             return Ok(None);
         };
         let Some(signature) = vm.callable_signature(function_value) else {
+            if vm
+                .unspecialized_generic_callable_name(function_value)
+                .is_some()
+            {
+                let diagnostic =
+                    runtime_type::unspecialized_reflected_generic(&display_local_name(&local));
+                return Err(VmRustFnError::Thrown(
+                    super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+                ));
+            }
             return Ok(None);
         };
         let actual = callee_fn_ty(&signature);
@@ -2115,7 +2114,7 @@ fn prepare_call_any_argument(vm: &mut BexVm, value: Value, expected: &RealizedTy
     value_fits(vm, value, expected).then_some(value)
 }
 
-/// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError`.
+/// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError | CompilationError`.
 ///
 /// Every argument is keyed by parameter name; a nameless positional is
 /// addressed by the same `$argN` placeholder `reflect.signature` reports, so
@@ -2137,8 +2136,7 @@ fn call_any_impl(
     };
     let Some(sig) = vm.callable_signature(f_val) else {
         if let Some(name) = vm.unspecialized_generic_callable_name(f_val) {
-            let diagnostic =
-                runtime_type::reflected_generic_function_requires_specialization(&name);
+            let diagnostic = runtime_type::unspecialized_reflected_generic(&name);
             return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
                 vm,
                 &[diagnostic],

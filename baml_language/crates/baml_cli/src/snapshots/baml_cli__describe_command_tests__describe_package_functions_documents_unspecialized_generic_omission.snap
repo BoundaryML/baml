@@ -1,14 +1,13 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 902
 expression: output
 ---
 method functions  <builtin>/baml/ns_reflect/reflect.baml:161-163
 
 /// Exported free-function signatures, keyed by package-local name.
 ///
-/// Unspecialized generic functions are omitted until reflected package
-/// functions can be explicitly specialized.
+/// Unspecialized generic functions are omitted because reflected packages
+/// cannot supply type arguments yet. Generated non-generic companions remain listed.
 function functions(self) -> map<string, root.reflect.function.Type>
 
 container:
