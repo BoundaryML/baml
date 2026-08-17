@@ -97,13 +97,13 @@ fn bare_install_records_project_channel_resolution() {
     let baml_home = project.path().join(".baml-home");
     fs::write(
         project.path().join("baml.toml"),
-        "[package]\nname = \"demo\"\n\n[toolchain]\nchannel = \"canary\"\n",
+        "[package]\nname = \"demo\"\n\n[toolchain]\nchannel = \"nightly\"\n",
     )
     .unwrap();
     let installed = baml_home.join("toolchains/0.15.0");
     fs::create_dir_all(&installed).unwrap();
     fs::write(installed.join("VERSION"), "0.15.0\n").unwrap();
-    let (manifest_base_url, server) = serve_manifest("0.15.0", "canary");
+    let (manifest_base_url, server) = serve_manifest("0.15.0", "nightly");
 
     let output = baml_command(&project)
         .args(["--manifest-base-url", &manifest_base_url])
@@ -117,30 +117,32 @@ fn bare_install_records_project_channel_resolution() {
         String::from_utf8_lossy(&output.stderr)
     );
     let state = fs::read_to_string(baml_home.join("state.toml")).unwrap();
-    assert!(state.contains("[channels.canary]"), "{state}");
+    assert!(state.contains("[channels.nightly]"), "{state}");
     assert!(state.contains("active_version = \"0.15.0\""), "{state}");
 }
 
 #[test]
 fn install_help_is_not_parsed_as_a_version() {
-    let project = tempfile::tempdir().unwrap();
-    let output = baml_command(&project)
-        .args([
-            "--help",
-            "--manifest-base-url",
-            "http://127.0.0.1:1/manifest",
-        ])
-        .output()
-        .unwrap();
+    for help_arg in ["--help", "-h", "help"] {
+        let project = tempfile::tempdir().unwrap();
+        let output = baml_command(&project)
+            .args([
+                help_arg,
+                "--manifest-base-url",
+                "http://127.0.0.1:1/manifest",
+            ])
+            .output()
+            .unwrap();
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("baml toolchain install [canary|nightly|version] [--force]"),
-        "{stdout}"
-    );
-    assert!(!stdout.contains("127.0.0.1"), "{stdout}");
+        assert!(output.status.success(), "{help_arg}");
+        assert!(output.stderr.is_empty(), "{help_arg}");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("baml toolchain install [canary|nightly|version] [--force]"),
+            "{help_arg}: {stdout}"
+        );
+        assert!(!stdout.contains("127.0.0.1"), "{help_arg}: {stdout}");
+    }
 }
 
 #[test]
