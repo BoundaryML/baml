@@ -10,13 +10,23 @@
 # replaces the whole fleet.  (default: the repository's name)
 pool-name = "baml"
 
-# ix region the members live in.                    (default: "us-west-1")
-# us-west-hil: 3 compute hosts (384 cores) vs us-east's 2, and the region's
-# public v6 block actually answers NDP (the us-east blackhole class, ENG-10881,
-# does not apply here). Verified 2026-08-16. NOTE the reconcile matches members
-# by NAME only - a region flip alone moves nothing; it took effect here because
-# the same push changed the member config (labels), forcing full replacement.
-region = "us-west-1"
+# ix regions the members live in, member index modulo the list - an even
+# 16/16 split. Two regions instead of one after 2026-08-17: three us-west-1
+# host incidents in one day, and every member PLUS every replacement lived
+# there, so each incident ate the whole pool and the reconcile kept feeding
+# new members into the melting region. Split, one region's bad day costs
+# half the pool, and a create that fails in a member's home region retries
+# once in the other one the same tick (the failover half of the feature).
+#
+# The us-east caveat that used to forbid this - the public-v6 NDP blackhole
+# (ENG-10881) that killed the xwin cross lanes - is mitigated in the member
+# image itself (gai.conf v4-precedence in ci-runner.nix), so east members
+# fall back to v4 instead of hanging on dead AAAA routes.
+#
+# NOTE the reconcile matches members by NAME only - a region-list change
+# alone moves nothing. Existing members adopt their new home organically,
+# each at its next natural replacement; there is no forced 32-member wave.
+regions = ["us-west-1", "us-east-1"]
 
 # Members that exist, and the number of flake attrs mkPool generates. Most
 # of them are switched OFF most of the time - see min-warm.   (default: 8)
