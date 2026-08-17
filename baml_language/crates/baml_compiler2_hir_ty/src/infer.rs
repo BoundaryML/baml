@@ -1142,6 +1142,14 @@ fn infer_parameter_defaults<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
+    // The overwhelmingly common case: no parameter has a default. Skip
+    // building the whole inference apparatus (signature shape, generic
+    // frame/bounds, facts, context, finalize) just to visit an empty
+    // arena - the result is indistinguishable from running it.
+    let defaults = baml_compiler2_ppir::function_parameter_defaults(db, function);
+    if defaults.params.iter().all(Option::is_none) {
+        return InferenceResult::default();
+    }
     infer_body_impl(db, BodyOwnerId::ParameterDefaults(function))
 }
 
@@ -1184,18 +1192,18 @@ fn infer_body_impl<'db>(
     // The owner's generic frame makes `T` in body annotations resolve; the
     // signature gives parameter references their types and the body its
     // return expectation.
+    // The owner reads its own signature SHAPE (params/ret), never the
+    // caller-facing merged throws: that surface is derived FROM this body
+    // run via `callable_throws`, and reading it here would close the
+    // per-function fixpoint self-cycle the shape split exists to remove.
     let (frame, param_tys, return_ty, declared_throws_ref) = match owner {
         BodyOwnerId::Function(function) => {
-            let signature = function_signature(db, function);
+            let shape = crate::lower::function_signature_shape(db, function);
             let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
             (
                 function_generic_frame(db, function),
-                signature
-                    .params
-                    .iter()
-                    .map(|param| param.ty.clone())
-                    .collect(),
-                Some(signature.ret.clone()),
+                shape.params.iter().map(|param| param.ty.clone()).collect(),
+                Some(shape.ret.clone()),
                 // The owner checks its throw sites against the RAW written
                 // clause (holes preserved - a partial clause opens the
                 // contract), never the caller-facing surface, which for a
@@ -1208,14 +1216,10 @@ fn infer_body_impl<'db>(
         // default's expectation) with no return expectation and no
         // declared throws clause of their own.
         BodyOwnerId::ParameterDefaults(function) => {
-            let signature = function_signature(db, function);
+            let shape = crate::lower::function_signature_shape(db, function);
             (
                 function_generic_frame(db, function),
-                signature
-                    .params
-                    .iter()
-                    .map(|param| param.ty.clone())
-                    .collect(),
+                shape.params.iter().map(|param| param.ty.clone()).collect(),
                 None,
                 None,
             )

@@ -1707,19 +1707,12 @@ fn direct_requires(
     let Some((interface, data)) = assoc_realization_env(db, of) else {
         return Vec::new();
     };
-    let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
-        .with_frame(crate::lower::interface_frame(db, interface))
-        .with_bounds(crate::lower::interface_scope_bounds(db, interface));
     let instantiation = crate::method_resolution::interface_instantiation(self_ty, of, data);
-    data.requires
+    interface_requires_symbolic(db, interface)
+        .0
         .iter()
-        .filter_map(|&required| {
-            let target = InterfaceRef::of_ty(&ctx.lower_type_ref_at(
-                &data.type_refs,
-                required,
-                crate::lower::TypePosition::ConstraintHead,
-            ))?;
-            Some(InterfaceRef::new(
+        .map(|target| {
+            InterfaceRef::new(
                 target.name.clone(),
                 target
                     .generics
@@ -1737,9 +1730,64 @@ fn direct_requires(
                         )
                     })
                     .collect(),
-            ))
+            )
         })
         .collect()
+}
+
+/// Memoized symbolic `requires` targets for [`interface_requires_symbolic`].
+/// Wrapped for the manual `salsa::Update` impl (the `CallableThrows`
+/// precedent).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SymbolicRequires(pub Vec<InterfaceRef>);
+
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for SymbolicRequires {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
+/// An interface's direct `requires` targets lowered SYMBOLICALLY - in the
+/// interface's own frame, `Self` and params unsubstituted, non-interface
+/// targets filtered exactly as the per-call path did.
+///
+/// TRACKED per declaration: the subtype oracle demands `direct_requires`
+/// from inside every interface-vs-interface check (fuel-8 recursive
+/// closure walks), and each call re-built the lowering ctx and re-lowered
+/// every requires clause before this memo existed. Callers substitute the
+/// per-call instantiation over the memoized symbolic form.
+#[salsa::tracked(returns(ref))]
+fn interface_requires_symbolic<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> SymbolicRequires {
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
+        .with_frame(crate::lower::interface_frame(db, interface))
+        .with_bounds(crate::lower::interface_scope_bounds(db, interface));
+    SymbolicRequires(
+        data.requires
+            .iter()
+            .filter_map(|&required| {
+                InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+                    &data.type_refs,
+                    required,
+                    crate::lower::TypePosition::ConstraintHead,
+                ))
+            })
+            .collect(),
+    )
 }
 
 /// The transitive `requires` closure: whether interface `sub` (with its
