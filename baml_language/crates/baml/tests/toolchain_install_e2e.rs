@@ -144,14 +144,26 @@ fn install_help_is_not_parsed_as_a_version() {
 }
 
 #[test]
-fn bare_install_without_a_project_pin_is_actionable() {
+fn bare_install_without_a_project_pin_falls_back_to_canary() {
     let project = tempfile::tempdir().unwrap();
-    let output = baml_command(&project).output().unwrap();
+    let baml_home = project.path().join(".baml-home");
+    let installed = baml_home.join("toolchains/0.15.0");
+    fs::create_dir_all(&installed).unwrap();
+    fs::write(installed.join("VERSION"), "0.15.0\n").unwrap();
+    let (manifest_base_url, server) = serve_manifest("0.15.0", "canary");
 
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr),
-        "no BAML toolchain is pinned in baml.toml\nRun: baml toolchain install <canary|nightly|version>\n"
+    let output = baml_command(&project)
+        .args(["--manifest-base-url", &manifest_base_url])
+        .output()
+        .unwrap();
+    server.join().unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
+    let state = fs::read_to_string(baml_home.join("state.toml")).unwrap();
+    assert!(state.contains("[channels.canary]"), "{state}");
+    assert!(state.contains("active_version = \"0.15.0\""), "{state}");
 }
