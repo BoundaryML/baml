@@ -4,7 +4,7 @@ use std::{future::Future, io::Write as _, time::Duration};
 
 use bex_engine::{
     CaptureDefaults, FunctionCallContext, FunctionCallContextBuilder,
-    value_capture::{TraceCaptureConfig, TraceCaptureProducer},
+    value_capture::{TraceCaptureConfig, TraceCaptureProducer, TraceLogLevel},
 };
 use clap::ValueEnum;
 
@@ -20,23 +20,15 @@ pub(crate) enum LogLevel {
 }
 
 impl LogLevel {
-    pub(crate) fn allows(self, event_level: Option<&str>) -> bool {
-        let threshold = match self {
-            Self::Off => return false,
-            Self::Error => 1,
-            Self::Warn => 2,
-            Self::Info => 3,
-            Self::Debug => 4,
-            Self::Trace => 5,
-        };
-        let event = match event_level.unwrap_or("info").to_ascii_lowercase().as_str() {
-            "error" => 1,
-            "warn" | "warning" => 2,
-            "info" => 3,
-            "debug" => 4,
-            _ => 3,
-        };
-        event <= threshold
+    const fn trace_level(self) -> TraceLogLevel {
+        match self {
+            Self::Off => TraceLogLevel::Off,
+            Self::Error => TraceLogLevel::Error,
+            Self::Warn => TraceLogLevel::Warn,
+            Self::Info => TraceLogLevel::Info,
+            Self::Debug => TraceLogLevel::Debug,
+            Self::Trace => TraceLogLevel::Trace,
+        }
     }
 }
 
@@ -59,7 +51,10 @@ impl LogOutput {
             return (builder.build(), None);
         }
 
-        let producer = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(100_000));
+        let producer = TraceCaptureProducer::new_with_log_level(
+            TraceCaptureConfig::logs_only(100_000),
+            self.level.trace_level(),
+        );
         let context = builder
             .with_capture_defaults(CaptureDefaults {
                 values_enabled: false,
@@ -76,15 +71,13 @@ impl LogOutput {
         };
         let report = producer.drain_rendered_logs();
         for log in report.logs {
-            if self.level.allows(log.metadata.level.as_deref()) {
-                let level = log
-                    .metadata
-                    .level
-                    .as_deref()
-                    .unwrap_or("info")
-                    .to_ascii_uppercase();
-                println!("[{level}] {}", log.body);
-            }
+            let level = log
+                .metadata
+                .level
+                .as_deref()
+                .unwrap_or("info")
+                .to_ascii_uppercase();
+            println!("[{level}] {}", log.body);
         }
         for failure in report.failures {
             eprintln!(
@@ -128,17 +121,17 @@ mod tests {
     use super::{LogLevel, LogOutput};
 
     #[test]
-    fn filters_at_or_above_threshold() {
-        assert!(!LogLevel::Off.allows(Some("error")));
-        assert!(LogLevel::Error.allows(Some("error")));
-        assert!(!LogLevel::Error.allows(Some("warn")));
-        assert!(LogLevel::Info.allows(Some("error")));
-        assert!(LogLevel::Info.allows(Some("warning")));
-        assert!(LogLevel::Info.allows(Some("info")));
-        assert!(LogLevel::Info.allows(None));
-        assert!(!LogLevel::Info.allows(Some("debug")));
-        assert!(LogLevel::Debug.allows(Some("debug")));
-        assert!(LogLevel::Trace.allows(Some("debug")));
+    fn uses_the_shared_engine_filter() {
+        assert!(!LogLevel::Off.trace_level().allows(Some("error")));
+        assert!(LogLevel::Error.trace_level().allows(Some("error")));
+        assert!(!LogLevel::Error.trace_level().allows(Some("warn")));
+        assert!(LogLevel::Info.trace_level().allows(Some("error")));
+        assert!(LogLevel::Info.trace_level().allows(Some("warning")));
+        assert!(LogLevel::Info.trace_level().allows(Some("info")));
+        assert!(LogLevel::Info.trace_level().allows(None));
+        assert!(!LogLevel::Info.trace_level().allows(Some("debug")));
+        assert!(LogLevel::Debug.trace_level().allows(Some("debug")));
+        assert!(LogLevel::Trace.trace_level().allows(Some("debug")));
     }
 
     #[test]

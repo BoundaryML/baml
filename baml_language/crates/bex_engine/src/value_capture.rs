@@ -105,21 +105,59 @@ pub struct TraceCaptureConfig {
     pub max_pending_root_result_drafts: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TraceLogLevel {
+    Off,
     Error,
     Warn,
     Info,
     Debug,
+    Trace,
 }
 
 impl TraceLogLevel {
-    fn parse(raw: Option<&str>) -> Self {
+    /// Parse the process-wide `BAML_LOG` setting used by native SDK bridges.
+    /// An unset or empty setting preserves the capture-disabled default.
+    #[must_use]
+    pub fn from_baml_log(raw: Option<&str>) -> Self {
+        match raw.unwrap_or_default().trim().to_ascii_lowercase().as_str() {
+            "off" => Self::Off,
+            "error" => Self::Error,
+            "warn" | "warning" => Self::Warn,
+            "debug" => Self::Debug,
+            "trace" => Self::Trace,
+            "" => Self::Off,
+            "info" => Self::Info,
+            _ => Self::Info,
+        }
+    }
+
+    #[must_use]
+    pub fn allows(self, raw_event_level: Option<&str>) -> bool {
+        if self == Self::Off {
+            return false;
+        }
+        Self::parse_event(raw_event_level).severity() >= self.severity()
+    }
+
+    fn parse_event(raw: Option<&str>) -> Self {
         match raw.unwrap_or("info").to_ascii_lowercase().as_str() {
             "error" => Self::Error,
             "warn" | "warning" => Self::Warn,
-            "debug" | "trace" => Self::Debug,
+            "debug" => Self::Debug,
+            "trace" => Self::Trace,
             _ => Self::Info,
+        }
+    }
+
+    const fn severity(self) -> u8 {
+        match self {
+            Self::Off => u8::MAX,
+            Self::Error => 4,
+            Self::Warn => 3,
+            Self::Info => 2,
+            Self::Debug => 1,
+            Self::Trace => 0,
         }
     }
 }
@@ -177,7 +215,7 @@ pub struct TraceCaptureProducer {
 #[derive(Debug)]
 struct TraceCaptureInner {
     config: TraceCaptureConfig,
-    minimum_log_level: Option<TraceLogLevel>,
+    log_level: Option<TraceLogLevel>,
     reserved_value_slots: usize,
     reserved_log_slots: usize,
     reserved_root_result_slots: usize,
@@ -209,7 +247,7 @@ impl TraceCaptureProducer {
             trace_heap: TraceHeap::new(),
             inner: Arc::new(Mutex::new(TraceCaptureInner {
                 config,
-                minimum_log_level: None,
+                log_level: None,
                 reserved_value_slots: 0,
                 reserved_log_slots: 0,
                 reserved_root_result_slots: 0,
@@ -227,16 +265,13 @@ impl TraceCaptureProducer {
     /// Create a producer that rejects suppressed log levels before snapshot
     /// copying or bounded-queue reservation.
     #[must_use]
-    pub fn new_with_log_level(
-        config: TraceCaptureConfig,
-        minimum_log_level: TraceLogLevel,
-    ) -> Self {
+    pub fn new_with_log_level(config: TraceCaptureConfig, log_level: TraceLogLevel) -> Self {
         let producer = Self::new(config);
         producer
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .minimum_log_level = Some(minimum_log_level);
+            .log_level = Some(log_level);
         producer
     }
 
@@ -258,8 +293,8 @@ impl TraceCaptureProducer {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.config.enabled
             && inner
-                .minimum_log_level
-                .is_none_or(|minimum| TraceLogLevel::parse(level) <= minimum)
+                .log_level
+                .is_none_or(|configured| configured.allows(level))
     }
 
     #[must_use]
