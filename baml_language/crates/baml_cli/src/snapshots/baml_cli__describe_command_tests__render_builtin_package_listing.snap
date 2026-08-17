@@ -1,5 +1,6 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
+assertion_line: 417
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:30
@@ -258,9 +259,9 @@ type             baml.reflect.TypeKind            <builtin>/baml/ns_reflect/refl
 class            baml.reflect.Signature           <builtin>/baml/ns_reflect/reflect.baml:59
 class            baml.reflect.InvalidArgumentError <builtin>/baml/ns_reflect/reflect.baml:81
 class            baml.reflect.Package             <builtin>/baml/ns_reflect/reflect.baml:88
-class            baml.reflect.Session             <builtin>/baml/ns_reflect/reflect.baml:175
-function         baml.reflect.signature           <builtin>/baml/ns_reflect/reflect.baml:217
-function         baml.reflect.call_any            <builtin>/baml/ns_reflect/reflect.baml:232
+class            baml.reflect.Session             <builtin>/baml/ns_reflect/reflect.baml:181
+function         baml.reflect.signature           <builtin>/baml/ns_reflect/reflect.baml:223
+function         baml.reflect.call_any            <builtin>/baml/ns_reflect/reflect.baml:238
 class            baml.reflect.array.Type          <builtin>/baml/ns_reflect/ns_array/array.baml:2
 class            baml.reflect.class.Field         <builtin>/baml/ns_reflect/ns_class/class.baml:1
 function         baml.reflect.class.new           <builtin>/baml/ns_reflect/ns_class/class.baml:8

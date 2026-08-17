@@ -129,8 +129,11 @@ class Package {
   function with_types(self, types: map<string, type | baml.reflect.TypeView>) -> Package throws baml.reflect.errors.CompilationError {
     $rust_function
   }
-  /// Extract an exported function through an ordinary function-type contract.
   //baml:mut_vm
+  /// Extract an exported function through an ordinary function-type contract.
+  ///
+  /// Unspecialized generic functions cannot be extracted until reflected
+  /// package functions can be explicitly specialized.
   function get_function<F>(self, name: string) -> F? throws baml.reflect.errors.CompilationError {
     $rust_function
   }
@@ -150,8 +153,11 @@ class Package {
     $rust_function
   }
 
-  /// Exported free-function signatures, keyed by package-local name.
   //baml:mut_vm
+  /// Exported free-function signatures, keyed by package-local name.
+  ///
+  /// Unspecialized generic functions are omitted until reflected package
+  /// functions can be explicitly specialized.
   function functions(self) -> map<string, baml.reflect.function.Type> throws never {
     $rust_function
   }

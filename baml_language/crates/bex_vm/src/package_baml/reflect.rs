@@ -1089,8 +1089,19 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             Object::Package(package) => package.functions.get(&local).copied(),
             _ => None,
         };
-        if function.is_none() {
+        let Some(function) = function else {
             return Ok(None);
+        };
+        if matches!(
+            vm.get_object(function),
+            Object::Function(function) if !function.generic_param_bounds.is_empty()
+        ) {
+            let diagnostic = runtime_type::reflected_generic_function_requires_specialization(
+                &display_local_name(&local),
+            );
+            return Err(VmRustFnError::Thrown(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
         }
         let Some(function_value) = package_function_value(vm, package_ptr, &local) else {
             return Ok(None);
@@ -2125,6 +2136,15 @@ fn call_any_impl(
         return non_callable_error("reflect.call_any").into();
     };
     let Some(sig) = vm.callable_signature(f_val) else {
+        if let Some(name) = vm.unspecialized_generic_callable_name(f_val) {
+            let diagnostic =
+                runtime_type::reflected_generic_function_requires_specialization(&name);
+            return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+                vm,
+                &[diagnostic],
+            ))
+            .into();
+        }
         return non_callable_error("reflect.call_any").into();
     };
 

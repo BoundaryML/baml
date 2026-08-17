@@ -189,6 +189,35 @@ function mismatched_function_contract() -> null throws unknown {
   null
 }
 
+function generic_function_requires_explicit_specialization() -> null throws unknown {
+  let pkg = reflect.Package.compile({
+    "main.baml": #"
+client Dummy = openai.ResponsesClient.new(
+  model = "unused-reflection-only",
+  api_key = "unused",
+)
+
+function Extract<T>(document: string) -> T {
+  client: Dummy
+  prompt: `Extract ${document}`
+}
+"#
+  })
+  let _ = pkg.get_function<(string) -> string>("root.Extract")
+  null
+}
+
+function function_listing_omits_unspecialized_generics() -> bool throws unknown {
+  let pkg = reflect.Package.compile({
+    "main.baml": #"
+function identity<T>(value: T) -> T { value }
+function Present(value: string) -> string { value }
+"#
+  })
+  let functions = pkg.functions()
+  functions.get("root.identity") == null && functions.get("root.Present") != null
+}
+
 function alias_order_and_reserved_names() -> bool throws unknown {
   let root_package = reflect.Package.current()
   let generated = reflect.Package.compile(
@@ -449,6 +478,44 @@ async fn get_function_mismatch_throws_compiler_subtyping_diagnostic() {
             if fields.get("code") == Some(&BexExternalValue::String("E0001".into()))
                 && matches!(fields.get("message"), Some(BexExternalValue::String(message)) if message.contains("not a subtype"))
     )));
+}
+
+#[tokio::test]
+async fn generic_get_function_requires_explicit_specialization() {
+    let output = baml_test!(
+        baml: SCENARIO_6_SOURCE,
+        entry: "generic_function_requires_explicit_specialization"
+    );
+    let Err(EngineError::UnhandledThrow { value, .. }) = output.result else {
+        panic!("expected CompilationError, got {:?}", output.result)
+    };
+    let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = *value
+    else {
+        panic!("expected CompilationError instance")
+    };
+    assert_eq!(class_name, "baml.reflect.errors.CompilationError");
+    let Some(BexExternalValue::Array { items, .. }) = fields.get("diagnostics") else {
+        panic!("missing diagnostics: {fields:?}")
+    };
+    assert!(items.iter().any(|item| matches!(
+        item,
+        BexExternalValue::Instance { fields, .. }
+            if fields.get("code") == Some(&BexExternalValue::String("E0001".into()))
+                && fields.get("message") == Some(&BexExternalValue::String(
+                    "generic function `root.Extract` requires explicit specialization before it can be used through reflection".into()
+                ))
+    )));
+}
+
+#[tokio::test]
+async fn function_listing_omits_unspecialized_generics() {
+    let output = baml_test!(
+        baml: SCENARIO_6_SOURCE,
+        entry: "function_listing_omits_unspecialized_generics"
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
 #[tokio::test]

@@ -430,6 +430,34 @@ async fn instantiated_generic_function_reflects_precisely_and_dispatches() {
     );
 }
 
+#[tokio::test]
+async fn call_any_reports_unspecialized_generic_function() {
+    let output = baml_test!(
+        r#"
+        function ident<T>(x: T) -> T throws never {
+            return x
+        }
+
+        function main() -> string throws unknown {
+            let f: baml.AnyFunction = ident
+            let _ = reflect.call_any(f, { "x": 42 }) catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    return e.diagnostics[0].code + "|" + e.diagnostics[0].message
+                },
+                _ => throw e,
+            }
+            return "generic call unexpectedly succeeded"
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "E0001|generic function `ident` requires explicit specialization before it can be used through reflection".into()
+        ))
+    );
+}
+
 /// An *uninstantiated* generic reference — no turbofish and nothing to infer
 /// from — is a compile error: a callable value must carry a realized frame, so
 /// there is no such thing as a half-generic one to reflect on. Ignored until
