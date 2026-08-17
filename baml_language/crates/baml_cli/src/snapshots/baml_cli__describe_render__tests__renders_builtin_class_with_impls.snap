@@ -75,4 +75,4 @@ implements:
     function sub(self, other: baml.time.Duration) -> baml.time.Duration
 
 blanket implementations:
-  baml.Concrete   (<builtin>/baml/core.baml:21)
+  baml.Concrete   (<builtin>/baml/core.baml:13)

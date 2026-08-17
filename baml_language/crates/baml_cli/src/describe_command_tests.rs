@@ -1247,6 +1247,13 @@ fn dispatch_schema_attributes_and_intrinsic_types_resolve_to_topics() {
 }
 
 #[test]
+fn render_unknown_topic_mentions_checked_field_reads() {
+    let output = capture_keyword("unknown");
+    assert!(output.contains(r#"value.get_field<T>("name")"#));
+    assert!(output.contains(r#"reflect.class.get_field<T>(value, "name")"#));
+}
+
+#[test]
 fn render_schema_attribute_topic() {
     let output = capture_keyword("alias");
     assert!(output.contains("Overrides the serialized and parsed name"));

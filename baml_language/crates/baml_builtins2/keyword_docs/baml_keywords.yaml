@@ -372,6 +372,7 @@ unknown:
     }
   details: |
     Narrow an `unknown` value with pattern matching or an `is` test before using type-specific fields or methods.
+    Runtime-shaped class values support checked field reads with `value.get_field<T>("name")`, equivalent to `reflect.class.get_field<T>(value, "name")`.
 
 types:
   summary: "Concept page for BAML type syntax, aliases, generic bounds, and associated type bindings."

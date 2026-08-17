@@ -12,7 +12,7 @@ fields:
   _cache string
 
 blanket implementations:
-  baml.Concrete   (<builtin>/baml/core.baml:21)
+  baml.Concrete   (<builtin>/baml/core.baml:13)
 ════ Mode ════
 enum Mode   app.baml:8
 
@@ -21,7 +21,7 @@ variants:
   Slow
 
 blanket implementations:
-  baml.Concrete   (<builtin>/baml/core.baml:21)
+  baml.Concrete   (<builtin>/baml/core.baml:13)
 ════ Id ════
 type Id = string   app.baml:10
 ════ greet ════

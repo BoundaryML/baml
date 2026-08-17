@@ -4,14 +4,6 @@ function deep_copy<T>(value: T) -> T throws never {
     $rust_function
 }
 
-/// Builtin companion for operations available on dynamically shaped values.
-class Unknown {
-  /// Assert-read a named field from a runtime-shaped class instance.
-  function get_field<T>(self, name: string) -> T throws baml.reflect.errors.CompilationError {
-    reflect.class.get_field<T>(self, name)
-  }
-}
-
 /// Implemented by all concrete types.
 /// Can be used to check or bound a type to only include concrete types.
 interface Concrete {
@@ -47,4 +39,14 @@ class TaggedString {
     /// Interpolated values, in source order. Heterogeneous: each entry has the
     /// type of its `${expr}` site; tags inspect element types at runtime.
     values: unknown[],
+}
+
+/// Builtin companion for the source-level `unknown` primitive.
+/// Users never construct this class.
+class Unknown {
+  /// Assert-read a named field from a runtime-shaped class instance.
+  /// This is the method spelling of `reflect.class.get_field<T>(self, name)`.
+  function get_field<T>(self, name: string) -> T throws baml.reflect.errors.CompilationError {
+    reflect.class.get_field<T>(self, name)
+  }
 }
