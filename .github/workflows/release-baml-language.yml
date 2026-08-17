@@ -2368,4 +2368,5 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
           VERSION: ${{ needs.plan.outputs.version }}
           CHANNEL: ${{ needs.plan.outputs.channel }}
+          RELEASE_SUCCEEDED: ${{ needs.publish-pkg-channel.result == 'success' }}
         run: uv run --script tools/notify-release-failure.py

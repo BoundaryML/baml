@@ -665,9 +665,31 @@ class WorkflowGraphTests(unittest.TestCase):
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         notifier = RELEASE_NOTIFIER.read_text(encoding="utf-8")
         notify_slack = job_block(workflow, "notify-slack")
+        notify_step = step_block(notify_slack, "Notify Slack of the release result")
 
         self.assertIn("always()", notify_slack)
+        self.assertIn(
+            "run: uv run --script tools/notify-release-failure.py",
+            notify_step,
+        )
+        self.assertIn(
+            "CHANNEL: ${{ needs.plan.outputs.channel }}",
+            notify_step,
+        )
+        self.assertIn(
+            "VERSION: ${{ needs.plan.outputs.version }}",
+            notify_step,
+        )
+        self.assertIn(
+            "RELEASE_SUCCEEDED: ${{ needs.publish-pkg-channel.result == 'success' }}",
+            notify_step,
+        )
         self.assertIn('if not failures and channel != "canary"', notifier)
+        self.assertIn(
+            'SUCCESSFUL_JOB_CONCLUSIONS = {"success", "skipped"}',
+            notifier,
+        )
+        self.assertIn("conclusion not in SUCCESSFUL_JOB_CONCLUSIONS", notifier)
         self.assertIn("❌ BAML {channel} release failed", notifier)
         self.assertIn("✅ BAML {channel} release succeeded", notifier)
 

@@ -21,12 +21,14 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError, SlackClientError
 
 GITHUB_API_TIMEOUT_SECONDS = 30
+SUCCESSFUL_JOB_CONCLUSIONS = {"success", "skipped"}
 
 
 @dataclass(frozen=True)
 class Failure:
     job_name: str
     job_url: str
+    conclusion: str
     step_names: list[str]
 
 
@@ -80,16 +82,20 @@ def find_failures(
     while url:
         payload, link_header = get_json(url, token)
         for job in payload["jobs"]:
+            conclusion = job.get("conclusion")
             failed_steps = [
                 step["name"]
                 for step in job.get("steps", [])
                 if step.get("conclusion") == "failure"
             ]
-            if job.get("conclusion") == "failure" or failed_steps:
+            if (
+                conclusion not in SUCCESSFUL_JOB_CONCLUSIONS and conclusion is not None
+            ) or failed_steps:
                 failures.append(
                     Failure(
                         job_name=job["name"],
                         job_url=job["html_url"],
+                        conclusion=conclusion or "failure",
                         step_names=failed_steps,
                     )
                 )
@@ -117,10 +123,13 @@ def format_pacific_time(timestamp: datetime) -> str:
 
 def format_failure(failure: Failure) -> str:
     job = f"<{failure.job_url}|{failure.job_name}>"
-    if not failure.step_names:
+    if failure.step_names:
+        suffix = "" if len(failure.step_names) == 1 else "s"
+        return f"• {job} — failed step{suffix}: {', '.join(failure.step_names)}"
+    if failure.conclusion == "failure":
         return f"• {job} — job failed before a failed step was reported"
-    suffix = "" if len(failure.step_names) == 1 else "s"
-    return f"• {job} — failed step{suffix}: {', '.join(failure.step_names)}"
+    conclusion = failure.conclusion.replace("_", " ")
+    return f"• {job} — job concluded {conclusion}"
 
 
 def main() -> int:
@@ -134,6 +143,7 @@ def main() -> int:
 
         version = os.environ.get("VERSION") or "unknown version"
         channel = os.environ.get("CHANNEL") or "unknown channel"
+        release_succeeded = os.environ.get("RELEASE_SUCCEEDED") == "true"
         started_at = get_run_started_at(repository, run_id, run_attempt, github_token)
         failures = find_failures(repository, run_id, run_attempt, github_token)
         if not failures and channel != "canary":
@@ -144,8 +154,13 @@ def main() -> int:
             f"https://github.com/{repository}/actions/runs/{run_id}"
             f"/attempts/{run_attempt}"
         )
-        if failures:
-            failure_text = "\n".join(format_failure(failure) for failure in failures)
+        if failures or not release_succeeded:
+            if failures:
+                failure_text = "\n".join(
+                    format_failure(failure) for failure in failures
+                )
+            else:
+                failure_text = "• Required release completion gate did not succeed"
             message = (
                 f"❌ BAML {channel} release failed: {version}, "
                 f"started at {format_pacific_time(started_at)}\n\n"
