@@ -11,69 +11,16 @@ use std::{
     time::Duration,
 };
 
+use bex_project::{FunctionCallContext, FunctionCallContextBuilder};
 #[cfg(not(target_arch = "wasm32"))]
 use bex_project::{RenderedTraceLog, TraceLogDrainReport, TraceLogLevel, TraceLogger};
-use bex_project::{FunctionCallContext, FunctionCallContextBuilder};
 
 #[cfg(not(target_arch = "wasm32"))]
 const MAX_PENDING_LOGS: usize = 100_000;
 
 #[cfg(not(target_arch = "wasm32"))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum LogLevel {
-    Error,
-    Warn,
-    Info,
-    Debug,
-    Off,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl LogLevel {
-    fn parse(raw: Option<&str>) -> Self {
-        let Some(raw) = raw else {
-            return Self::Off;
-        };
-        match raw.trim().to_ascii_uppercase().as_str() {
-            "OFF" => Self::Off,
-            "ERROR" => Self::Error,
-            "WARN" | "WARNING" => Self::Warn,
-            "DEBUG" | "TRACE" => Self::Debug,
-            "" | "INFO" => Self::Info,
-            _ => Self::Info,
-        }
-    }
-
-    fn allows(self, event_level: Option<&str>) -> bool {
-        if self == Self::Off {
-            return false;
-        }
-        Self::parse_event(event_level) <= self
-    }
-
-    fn parse_event(raw: Option<&str>) -> Self {
-        match raw.unwrap_or("info").to_ascii_lowercase().as_str() {
-            "error" => Self::Error,
-            "warn" | "warning" => Self::Warn,
-            "debug" | "trace" => Self::Debug,
-            _ => Self::Info,
-        }
-    }
-
-    fn capture_level(self) -> Option<TraceLogLevel> {
-        match self {
-            Self::Error => Some(TraceLogLevel::Error),
-            Self::Warn => Some(TraceLogLevel::Warn),
-            Self::Info => Some(TraceLogLevel::Info),
-            Self::Debug => Some(TraceLogLevel::Debug),
-            Self::Off => None,
-        }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn configured_level() -> LogLevel {
-    LogLevel::parse(std::env::var("BAML_LOG").ok().as_deref())
+fn configured_level() -> TraceLogLevel {
+    TraceLogLevel::from_baml_log(std::env::var("BAML_LOG").ok().as_deref())
 }
 
 /// Opt native SDK calls into the engine's structured-log capture when
@@ -84,9 +31,10 @@ pub(crate) fn configure_call_context(
 ) -> FunctionCallContextBuilder {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let Some(level) = configured_level().capture_level() else {
+        let level = configured_level();
+        if level == TraceLogLevel::Off {
             return builder;
-        };
+        }
         builder.with_logger(TraceLogger::bounded_with_log_level(MAX_PENDING_LOGS, level))
     }
 
@@ -97,8 +45,6 @@ pub(crate) fn configure_call_context(
 pub(crate) struct SdkLogCapture {
     #[cfg(not(target_arch = "wasm32"))]
     logger: TraceLogger,
-    #[cfg(not(target_arch = "wasm32"))]
-    level: LogLevel,
     #[cfg(not(target_arch = "wasm32"))]
     finish_on_drop: bool,
 }
@@ -112,7 +58,6 @@ impl SdkLogCapture {
             }
             Some(Self {
                 logger: context.logger.clone(),
-                level: configured_level(),
                 finish_on_drop: true,
             })
         }
@@ -128,7 +73,7 @@ impl SdkLogCapture {
     fn drain_to_stderr(&self) {
         let stderr = io::stderr();
         let mut stderr = stderr.lock();
-        write_report(self.level, self.logger.drain_rendered_logs(), &mut stderr);
+        write_report(self.logger.drain_rendered_logs(), &mut stderr);
         // Ignore broken stderr: there is no safer diagnostic channel here.
         let _ = stderr.flush();
     }
@@ -147,7 +92,6 @@ impl SdkLogCapture {
 
         let capture = Self {
             logger: self.logger.clone(),
-            level: self.level,
             finish_on_drop: false,
         };
         self.finish_on_drop = false;
@@ -218,11 +162,9 @@ where
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn write_report(writer_level: LogLevel, report: TraceLogDrainReport, writer: &mut impl Write) {
+fn write_report(report: TraceLogDrainReport, writer: &mut impl Write) {
     for log in report.logs {
-        if writer_level.allows(log.metadata.level.as_deref()) {
-            write_log(log, writer);
-        }
+        write_log(log, writer);
     }
     for failure in report.failures {
         let _ = writeln!(
@@ -249,22 +191,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn log_level_requires_the_env_var_and_accepts_aliases() {
-        assert_eq!(LogLevel::parse(None), LogLevel::Off);
-        assert_eq!(LogLevel::parse(Some("")), LogLevel::Info);
-        assert_eq!(LogLevel::parse(Some(" warning ")), LogLevel::Warn);
-        assert_eq!(LogLevel::parse(Some("TRACE")), LogLevel::Debug);
-        assert_eq!(LogLevel::parse(Some("not-a-level")), LogLevel::Info);
-    }
-
-    #[test]
-    fn log_level_filters_less_severe_events() {
-        assert!(LogLevel::Info.allows(Some("error")));
-        assert!(LogLevel::Info.allows(Some("warn")));
-        assert!(LogLevel::Info.allows(Some("info")));
-        assert!(!LogLevel::Info.allows(Some("debug")));
-        assert!(!LogLevel::Off.allows(Some("error")));
-        assert!(LogLevel::Debug.allows(Some("debug")));
+    fn baml_log_setting_uses_the_shared_engine_levels() {
+        assert_eq!(TraceLogLevel::from_baml_log(None), TraceLogLevel::Off);
+        assert_eq!(TraceLogLevel::from_baml_log(Some("")), TraceLogLevel::Off);
+        assert_eq!(
+            TraceLogLevel::from_baml_log(Some(" warning ")),
+            TraceLogLevel::Warn
+        );
+        assert_eq!(
+            TraceLogLevel::from_baml_log(Some("TRACE")),
+            TraceLogLevel::Trace
+        );
+        assert_eq!(
+            TraceLogLevel::from_baml_log(Some("not-a-level")),
+            TraceLogLevel::Info
+        );
     }
 
     #[test]

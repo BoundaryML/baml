@@ -5406,13 +5406,21 @@ impl BexEngine {
             thread_id: BexThreadId(thread.vm.prof_thread_id),
             call_id: BexCallId(thread.vm.current_call_id()),
         };
-        let (level, body) = Self::extract_baml_log_payload(data);
-        if !capture.logger.captures_log_level(level.as_deref()) {
-            return;
-        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let data = {
+            let (level, body) = Self::extract_baml_log_payload(data);
+            if !capture.logger.captures_log_level(level.as_deref()) {
+                return;
+            }
+            (level, body)
+        };
         capture
             .logger
             .capture_with(capture.boundary_id, call, |trace_heap| {
+                #[cfg(target_arch = "wasm32")]
+                let (level, body) = Self::extract_baml_log_payload(data);
+                #[cfg(not(target_arch = "wasm32"))]
+                let (level, body) = data;
                 let metadata = TraceLogMetadata {
                     level,
                     source: Self::source_location_from_event(source_location),
