@@ -919,6 +919,9 @@
         #   ci-msrv - same shell pinned to the baml_language MSRV, read from
         #             the workspace manifest so the shell and the
         #             cargo-build-msrv gate cannot drift.
+        #   ci-sdk  - the ci surface plus the sdk-test language toolchains
+        #             (node/pnpm, temurin+gradle); one attr for the whole
+        #             ix-sdk runner family.
         devShells =
           let
             rustOverlayPkgs = import nixpkgs-unstable {
@@ -943,6 +946,36 @@
             ci-msrv = import ./nix/ci-shell.nix {
               inherit pkgs pkgs-unstable protocGenGo;
               toolchain = rustOverlayPkgs.rust-bin.stable.${msrv}.default;
+            };
+            # The sdk-tests matrix's shell: the ci surface plus the language
+            # toolchains its lanes spawn from PATH. One shared attr (not one
+            # per lane) because every Linux sdk lane runs on the same ix-sdk
+            # runner family, so one closure warms all of them. Versions track
+            # mise.toml's pins as closely as the pinned nixpkgs allows; the
+            # accepted drift is listed in the converting PR. dotnet is NOT
+            # here: the csharp lane's SDK comes from actions/setup-dotnet on
+            # both arms, independent of mise, and stays that way.
+            ci-sdk = import ./nix/ci-shell.nix {
+              inherit
+                pkgs
+                pkgs-unstable
+                toolchain
+                protocGenGo
+                ;
+              extras = [
+                # typescript / typescript-web (mise: node 22, pnpm)
+                pkgs.nodejs_22
+                pkgs.pnpm
+                # java (mise: temurin-23 + gradle 8.14; the sdk_test_java
+                # setup builds the bridge with `gradle` from PATH)
+                pkgs.temurin-bin-23
+                pkgs.gradle
+              ];
+              extraEnv = {
+                # gradle resolves the JDK from JAVA_HOME; pin it to the same
+                # temurin the fallback arm's mise config selects.
+                JAVA_HOME = "${pkgs.temurin-bin-23}";
+              };
             };
           };
       }

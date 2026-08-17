@@ -981,14 +981,18 @@ jobs:
           # skip relinking the world.
           clean: false
 
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install sdk test tools"
-        uses: ./.github/actions/setup-mise
+      # Two arms (see the action): on the ix pool this enters devShells.ci-sdk
+      # once (~seconds warm, closure substituted from the pool caches) instead
+      # of re-provisioning language toolchains imperatively every visit -
+      # measured 27s/job for mise on a warm persistent runner. On the
+      # Blacksmith fork-PR fallback (and the macOS lanes, which have no nix)
+      # the arm below is byte-identical to the two steps it replaces:
+      # `rustup show` + setup-mise with this lane's install-args.
+      - name: "Set up CI toolchains"
+        uses: ./.github/actions/setup-ci-shell
         with:
-          install_args: ${{ matrix.install-args }}
+          shell: ci-sdk
+          mise-install-args: ${{ matrix.install-args }}
 
       - name: "Install .NET SDK"
         if: matrix.sdk-label == 'csharp'

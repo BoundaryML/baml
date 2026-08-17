@@ -14,6 +14,12 @@
   pkgs-unstable,
   toolchain,
   protocGenGo,
+  # Extra toolchains for shells that need more than the Rust lanes do
+  # (devShells.ci-sdk adds the sdk-test language toolchains here). A list
+  # instead of a second shell file so ci-env, the openssl seam, and the
+  # bindgen env stay defined exactly once.
+  extras ? [ ],
+  extraEnv ? { },
 }:
 let
   # Prints the shell's environment in GITHUB_ENV `KEY=value` form. A job runs
@@ -74,12 +80,14 @@ pkgs.mkShell {
     # snapshot-tests fixtures run python through uv.
     pkgs.python313
     pkgs-unstable.uv
-  ];
+  ]
+  ++ extras;
 
   env = {
     LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
     # Same derivation as the flake devshell: clang's resource dir is named by
     # MAJOR version only since LLVM 16.
     BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.lib.versions.major pkgs.llvmPackages.libclang.version}/include -isystem ${pkgs.llvmPackages.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
-  };
+  }
+  // extraEnv;
 }
