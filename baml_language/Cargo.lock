@@ -1102,6 +1102,7 @@ dependencies = [
  "axum",
  "baml_compiler2_visualization",
  "baml_path",
+ "baml_type",
  "baml_version",
  "base64",
  "bex_events",
