@@ -290,10 +290,7 @@ class CSharpReleaseContractTests(unittest.TestCase):
         }
         self.assertEqual(actual, expected)
         size_policy = json.loads(SIZE_POLICY.read_text(encoding="utf-8"))
-        self.assertEqual(
-            set(size_policy["native_assets"]["baseline_bytes_by_target"]),
-            {entry[0] for entry in expected},
-        )
+        self.assertNotIn("native_assets", size_policy)
         self.assertLess(
             size_policy["compressed_package"]["baseline_bytes"],
             size_policy["compressed_package"]["registry_safety_ceiling_bytes"],

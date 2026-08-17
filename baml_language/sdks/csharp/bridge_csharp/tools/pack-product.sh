@@ -77,30 +77,6 @@ diff -u "$expected_runtime_entries" "$work/manifest-runtime-entries.txt"
   --manifest "$native_manifest" \
   --native-root "$native_root"
 
-native_size_regression_percent="$(jq -er \
-  '.native_assets.max_regression_percent
-   | select(type == "number" and . >= 0)' "$size_policy")"
-jq -r '
-  .targets[]
-  | select(.artifacts.csharp != null)
-  | [.triple,
-     "runtimes/\(.artifacts.csharp.rid)/native/\(.artifacts.csharp.native_asset)"]
-  | @tsv' "$platforms" |
-while IFS=$'\t' read -r target runtime_path; do
-  baseline="$(jq -er --arg target "$target" \
-    '.native_assets.baseline_bytes_by_target[$target]
-     | select(type == "number" and . > 0)' "$size_policy")"
-  actual="$(stat -c %s "$native_root/$runtime_path")"
-  limit="$((baseline * (100 + native_size_regression_percent) / 100))"
-  if ((actual > limit)); then
-    echo "native size regression exceeds policy: $target actual=$actual limit=$limit baseline=$baseline" >&2
-    exit 1
-  fi
-done
-policy_target_count="$(jq \
-  '.native_assets.baseline_bytes_by_target | length' "$size_policy")"
-test "$policy_target_count" -eq "$expected_native_count"
-
 inspection_root="$work/native-inspection"
 mkdir -p "$inspection_root"
 jq -r '

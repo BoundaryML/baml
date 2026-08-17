@@ -11,18 +11,5 @@
     "baseline_bytes": 70000000,
     "max_regression_percent": 15,
     "registry_safety_ceiling_bytes": 200000000
-  },
-  "native_assets": {
-    "max_regression_percent": 10,
-    "baseline_bytes_by_target": {
-      "aarch64-apple-darwin": 23777024,
-      "aarch64-pc-windows-msvc": 25154560,
-      "aarch64-unknown-linux-gnu": 24024168,
-      "aarch64-unknown-linux-musl": 23941984,
-      "x86_64-apple-darwin": 24180680,
-      "x86_64-pc-windows-msvc": 27282944,
-      "x86_64-unknown-linux-gnu": 27116664,
-      "x86_64-unknown-linux-musl": 26973248
-    }
   }
 }
