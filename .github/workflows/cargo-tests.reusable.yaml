@@ -80,12 +80,18 @@ env:
   # runner unit env; the image pin only reaches VMs at a pool roll, and a
   # roll cannot converge while CI keeps the members busy). vitest sizes its
   # pool off availableParallelism()-1 = 63 on the 64-vCPU guests and
-  # vitest-pool-workers spawns one workerd per worker; the elastic guest can
-  # hold ~6 GiB when the spawn burst lands, so the kernel OOM-kills workerd
-  # ("Worker exited unexpectedly"). Measured on the pool: 63 and 16 workers
-  # fail 2/2 (cgroup oom_kill increments), 4 passes 2/2. Pairs with the
-  # one-pool-at-a-time nextest group in baml_language/.config/nextest.toml.
-  VITEST_MAX_WORKERS: "4"
+  # vitest-pool-workers spawns one workerd per worker; 63 workers OOM-killed
+  # the suite 2/2 on the elastic guests, 4 passed 2/2, measured by cgroup
+  # oom_kill. 4 was tuned against the pre-2026-08-17 platform, where the
+  # elastic guest could be deflated to ~6 GiB with nothing holding its
+  # working set; the fleet now runs the working-set floor (a guest that ran
+  # this suite keeps its learned peak plugged for ~an hour) plus the
+  # post-boot inflation holdoff, which is what this raise banks on. 12 was
+  # the marginal point of the old A/B (1 pass / 1 fail pre-floor); if this
+  # lane goes red with "Worker exited unexpectedly" again, step down to 8
+  # before reverting to 4. Pairs with the two-pool nextest group in
+  # baml_language/.config/nextest.toml.
+  VITEST_MAX_WORKERS: "12"
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
