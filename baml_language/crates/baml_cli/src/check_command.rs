@@ -115,10 +115,23 @@ impl CheckArgs {
         // nothing to store, and skipping keeps the no-op check emit-free.
         // Seeding is an optimization: a failed emit on a diagnostics-clean
         // project is logged, never surfaced as a check failure.
+        //
+        // DEFAULT OFF as of the batch-check work: seeding runs the ENTIRE
+        // emit pipeline (MIR lowering + codegen + metadata for every
+        // function) inside `baml check`, so every dirty check paid a full
+        // compile on top of diagnostics. `BAML_CHECK_DRIVER=salsa` restores
+        // the seeding behavior (warm repeated checks + warm later run/test
+        // at the price of emit-per-dirty-check). Deliberate trade under
+        // review: without seeding, repeated checks stay on the full-compile
+        // diagnostics path (no served clean files) - the bet is that the
+        // batch-path inference speedups make the cold path cheaper than
+        // the emit tax was.
+        let seed_enabled = std::env::var("BAML_CHECK_DRIVER").is_ok_and(|v| v == "salsa");
         if let Some(ctx) = cache {
-            let should_seed = reuse_plan
-                .as_ref()
-                .is_none_or(|plan| !plan.dirty_files.is_empty());
+            let should_seed = seed_enabled
+                && reuse_plan
+                    .as_ref()
+                    .is_none_or(|plan| !plan.dirty_files.is_empty());
             if should_seed {
                 match crate::bytecode_cache::compile_program_artifacts(
                     db,

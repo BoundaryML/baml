@@ -2078,20 +2078,34 @@ unsafe impl salsa::Update for FunctionSignatureShape {
 }
 
 fn function_signature_cycle_initial<'db>(
-    _db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_ppir::Db,
     _id: salsa::Id,
-    _function: FunctionLoc<'db>,
+    function: FunctionLoc<'db>,
 ) -> FunctionSignature {
     // The fixpoint seed for the signature/throws/inference cycle (an
     // omitted or partial throws clause reads `callable_throws`, which
-    // runs `infer_body`, which reads the signature): a degenerate empty
-    // signature; iteration converges to the real one.
+    // runs `infer_body`, whose call sites can read the signature back).
+    // Seed from the SHAPE - acyclic and memoized - so a mid-cycle reader
+    // sees the real frame/params/ret and only `throws` is provisional
+    // (`never`, `callable_throws`' own lattice bottom).
+    //
+    // The historical fully-degenerate seed (empty params, error ret)
+    // relied on the OWN-signature read poisoning a recursive body's
+    // param types badly enough that method resolution never resolved the
+    // recursive call; with the shape split the body types normally
+    // mid-cycle, and call-site consumers index into `generic_params`
+    // trusting the frame invariant - which the degenerate seed broke
+    // (observed: slice-out-of-bounds on a self-recursive generic method).
+    let shape = function_signature_shape(db, function);
     FunctionSignature {
-        generic_params: Vec::new(),
-        params: Vec::new(),
-        ret: Ty::error(),
+        generic_params: shape.generic_params.clone(),
+        params: shape.params.clone(),
+        ret: shape.ret.clone(),
         throws: Ty::never(),
-        throws_declared: false,
+        // Fixed by syntax, not iterated - give mid-cycle readers the
+        // truth (a partial clause is declared even while its merged
+        // surface is still converging).
+        throws_declared: shape.throws_clause.is_some(),
     }
 }
 
