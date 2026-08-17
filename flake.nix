@@ -212,8 +212,7 @@
         # not carry, and a null channel is an accept arm - the guard
         # structurally cannot fire for an external consumer, so the failure
         # would land as thousands of broken compiles instead of one eval
-        # error. index hit the same wall on its own stable graphs
-        # (ENG-12992).
+        # error. index hit the same wall on its own stable graphs.
         #
         # recursiveUpdate, not `//`: the preset is a partial policy resolved
         # through evalModules. Today it carries no `compiler` key, so `//`
@@ -345,7 +344,7 @@
         # every unit, so exporting the openssl and libclang variables
         # workspace-wide would make every unit in the graph depend on
         # openssl -- wrong, and expensive. index learned this the costly
-        # way (ENG-10488).
+        # way.
         #
         # Keys are checked against Cargo.lock, not against the graph's
         # package selection, so one table serves every graph: an entry for a
