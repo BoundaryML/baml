@@ -9042,12 +9042,13 @@ impl<'db> LoweringContext<'db> {
         use baml_compiler2_ast::BuiltinKind;
 
         if let Some(external) = self.external_callee(callee)
-            && external.builtin_kind == Some(BuiltinKind::Intrinsic)
             && let baml_compiler2_hir_ty::callable::ExternalCallTarget::Free {
                 package,
                 namespace,
                 name,
             } = &external.target
+            && baml_compiler2_hir::package::is_precompiled_package(self.db, package)
+            && external.builtin_kind == Some(BuiltinKind::Intrinsic)
             && package.as_str() == "log"
             && namespace.is_empty()
         {
@@ -9144,6 +9145,7 @@ impl LoweringContext<'_> {
                         namespace,
                         name,
                     } if package.as_str() == "baml"
+                        && baml_compiler2_hir::package::is_precompiled_package(self.db, package)
                         && namespace.as_slice() == [baml_type::Name::new("type")]
                         && name.as_str() == "of"
                 )

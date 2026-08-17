@@ -1620,8 +1620,15 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             .iter()
             .map(|(name, blob, _)| (name.clone(), blob.clone()))
             .collect::<BTreeMap<_, _>>();
+        let precompiled_stdlib_names = stdlib.interfaces.keys().cloned().collect::<Vec<_>>();
         db.set_mounted_packages(mounted);
         db.set_precompiled_stdlib_packages(stdlib.interfaces);
+        debug_assert!(
+            precompiled_stdlib_names.iter().all(|name| {
+                baml_compiler2_hir::package::is_precompiled_package(&db, &Name::new(name))
+            }),
+            "set_mounted_packages must run before set_precompiled_stdlib_packages"
+        );
         // Emit needs concrete pool/global slots while producing the consumer's
         // relocatable units. Materialize link-only native stubs in the mounted
         // package; the mounted interface remains the semantic authority, and

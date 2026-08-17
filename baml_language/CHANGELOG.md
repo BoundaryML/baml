@@ -26,6 +26,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Fixes
 
+- [review] Rejected runtime-checked arguments on indirect calls with E0010; release builds had previously compiled them while silently omitting the check. ([#4460](https://github.com/BoundaryML/baml/pull/4460)) - Antonio Sarosi
 - [review] Enabled runtime package compilation from `baml run` scripts and expressions. ([#4451](https://github.com/BoundaryML/baml/pull/4451)) - Antonio Sarosi
 - Supported double-quoted LLM prompts as literal, non-interpolating prompts and fixed the segfault they could cause. ([#4432](https://github.com/BoundaryML/baml/pull/4432)) - 2kai2kai2
 - Made `Array.join` stringify non-string elements instead of silently replacing them with empty strings. ([#4433](https://github.com/BoundaryML/baml/pull/4433)) - 2kai2kai2

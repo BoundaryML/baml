@@ -9,7 +9,7 @@ use baml_base::Name;
 use baml_compiler2_hir::package::PackageId;
 use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::package_interface};
 use baml_compiler2_mir::{
-    MirFunctionKind, OptLevel, Terminator, lower_function, pretty::display_function,
+    MirFunctionKind, OptLevel, StatementKind, Terminator, lower_function, pretty::display_function,
 };
 use baml_compiler2_ppir::item_data::{file_functions, function_data, function_source_map};
 use baml_project::{ProjectDatabase, testing::assert_no_diagnostic_errors};
@@ -79,13 +79,13 @@ function main(call_id: boundary.LocalId, sysop_id: boundary.LocalId) -> int thro
 }
 
 #[test]
-fn mounted_builtin_kind_is_trusted_only_for_precompiled_packages() {
+fn mounted_await_any_kind_is_trusted_only_for_precompiled_packages() {
     let mut dependency = make_db();
     dependency.add_compiler2_virtual_file(
         "<builtin>/dependency/native.baml",
         r#"
-function untrusted_io() -> int throws never {
-  $rust_io_function
+function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
+  $await_any
 }
 "#,
     );
@@ -99,8 +99,8 @@ function untrusted_io() -> int throws never {
         .functions
         .values_mut()
         .flat_map(|namespace| namespace.values_mut())
-        .find(|function| function.name.as_str() == "untrusted_io")
-        .expect("exported IO builtin");
+        .find(|function| function.name.as_str() == "untrusted_await_any")
+        .expect("exported await-any builtin");
     // Model a hostile/corrupt mounted blob that widens its own linkability.
     // The builtin marker must still not grant compiler-owned lowering trust.
     exported.linkability = ExternalLinkability::Linkable;
@@ -111,7 +111,11 @@ function untrusted_io() -> int throws never {
     );
     let file = db.add_file(
         "test.baml",
-        "function main() -> int throws never { dependency.untrusted_io() }",
+        r#"
+function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
+  dependency.untrusted_await_any(futures)
+}
+"#,
     );
     assert_no_diagnostic_errors(&db);
     let main_loc = *file_functions(&db, file)
@@ -133,8 +137,103 @@ function untrusted_io() -> int throws never {
         !body
             .blocks
             .iter()
-            .any(|block| matches!(block.terminator, Some(Terminator::SysOp { .. }))),
-        "untrusted mounted builtin marker selected compiler-owned lowering: {}",
+            .any(|block| matches!(block.terminator, Some(Terminator::AwaitAny { .. }))),
+        "untrusted mounted await-any marker selected compiler-owned lowering: {}",
+        display_function(&mir)
+    );
+}
+
+#[test]
+fn mounted_intrinsic_kinds_are_trusted_only_for_precompiled_packages() {
+    use baml_compiler2_hir_ty::callable::ExternalCallTarget;
+
+    let mut dependency = make_db();
+    dependency.add_compiler2_virtual_file(
+        "<builtin>/dependency/native.baml",
+        r#"
+function forged_log(data: unknown) -> void {
+  $compiler_intrinsic
+}
+
+function forged_type_of<T>() -> type {
+  $compiler_intrinsic
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&dependency);
+    let mut interface = package_interface(
+        &dependency,
+        PackageId::new(&dependency, Name::new("dependency")),
+    )
+    .clone();
+    let mut configured = 0;
+    for exported in interface
+        .functions
+        .values_mut()
+        .flat_map(|namespace| namespace.values_mut())
+    {
+        let target = match exported.name.as_str() {
+            "forged_log" => ExternalCallTarget::Free {
+                package: Name::new("log"),
+                namespace: Vec::new(),
+                name: Name::new("info"),
+            },
+            "forged_type_of" => ExternalCallTarget::Free {
+                package: Name::new("baml"),
+                namespace: vec![Name::new("type")],
+                name: Name::new("of"),
+            },
+            _ => continue,
+        };
+        exported.target = target;
+        exported.linkability = ExternalLinkability::Linkable;
+        configured += 1;
+    }
+    assert_eq!(
+        configured, 2,
+        "both forged intrinsic exports were configured"
+    );
+
+    let mut db = make_db();
+    db.set_mounted_packages(
+        [("dependency".to_string(), borsh::to_vec(&interface).unwrap())].into(),
+    );
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function main() -> type {
+  dependency.forged_log("not compiler-owned")
+  dependency.forged_type_of<string>()
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let main_loc = *file_functions(&db, file)
+        .iter()
+        .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
+        .expect("main function");
+    let mir = lower_function(&db, main_loc, OptLevel::Two);
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        panic!("main must lower to bytecode")
+    };
+    let call_count = body
+        .blocks
+        .iter()
+        .filter(|block| matches!(block.terminator, Some(Terminator::Call { .. })))
+        .count();
+    assert_eq!(
+        call_count,
+        2,
+        "forged intrinsics did not lower as ordinary calls: {}",
+        display_function(&mir)
+    );
+    assert!(
+        !body
+            .blocks
+            .iter()
+            .flat_map(|block| &block.statements)
+            .any(|statement| { matches!(&statement.kind, StatementKind::Intrinsic { .. }) }),
+        "forged intrinsic metadata selected compiler-owned lowering: {}",
         display_function(&mir)
     );
 }

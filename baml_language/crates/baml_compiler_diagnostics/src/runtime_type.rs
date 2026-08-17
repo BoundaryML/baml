@@ -89,12 +89,11 @@ pub fn computed_generic_argument_requires_unreflect(name: &str) -> Diagnostic {
     )
 }
 
-/// E0010 — an indirect call cannot carry the runtime check encoded by
-/// `unreflect(...)` type arguments.
+/// E0010 — an indirect call cannot carry a deferred runtime argument check.
 pub fn runtime_type_argument_on_indirect_call() -> Diagnostic {
     Diagnostic::error(
         DiagnosticId::InvalidSyntax,
-        "runtime type arguments are not supported on indirect calls",
+        "runtime-checked arguments are not supported on indirect calls",
     )
 }
 
@@ -168,7 +167,7 @@ mod tests {
             (
                 runtime_type_argument_on_indirect_call(),
                 "E0010",
-                "runtime type arguments are not supported on indirect calls",
+                "runtime-checked arguments are not supported on indirect calls",
             ),
             (
                 duplicate_member(DuplicateMemberKind::Field, "Collision", "wire"),

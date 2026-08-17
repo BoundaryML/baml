@@ -48,7 +48,7 @@ function main() -> int {
     assert!(
         rows.iter().any(|(code, message)| {
             code == "E0010"
-                && message == "runtime type arguments are not supported on indirect calls"
+                && message == "runtime-checked arguments are not supported on indirect calls"
         }),
         "expected the indirect-call runtime-type diagnostic, got {rows:?}"
     );
@@ -68,7 +68,7 @@ function main() -> int? {
     assert!(
         rows.iter().any(|(code, message)| {
             code == "E0010"
-                && message == "runtime type arguments are not supported on indirect calls"
+                && message == "runtime-checked arguments are not supported on indirect calls"
         }),
         "expected the optional indirect-call runtime-type diagnostic, got {rows:?}"
     );
