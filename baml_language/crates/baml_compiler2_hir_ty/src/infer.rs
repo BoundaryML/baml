@@ -2944,9 +2944,12 @@ impl<'db> InferenceContext<'db> {
             // wherever it later reaches a real binding or join.
             let narrowed = self.table.resolve_completely(&assigned);
             let fits = match &declared {
-                Some(declared) if !declared.has_error() => {
-                    crate::infer::pat::provable_subtype(&narrowed, declared, &self.facts)
-                }
+                Some(declared) if !declared.has_error() => crate::infer::pat::provable_subtype(
+                    &narrowed,
+                    declared,
+                    &self.facts,
+                    &self.canonical_cache,
+                ),
                 _ => false,
             };
             if fits {
@@ -8438,10 +8441,15 @@ impl<'db> InferenceContext<'db> {
                 let mut may: Vec<Ty> = Vec::new();
                 let mut definite: Vec<Ty> = Vec::new();
                 for fact in &facts {
-                    if pat::provable_subtype(fact, &claim, &self.facts) {
+                    if pat::provable_subtype(fact, &claim, &self.facts, &self.canonical_cache) {
                         may.push(fact.clone());
                         definite.push(fact.clone());
-                    } else if pat::provable_subtype(&claim, fact, &self.facts) {
+                    } else if pat::provable_subtype(
+                        &claim,
+                        fact,
+                        &self.facts,
+                        &self.canonical_cache,
+                    ) {
                         may.push(fact.clone());
                     }
                 }

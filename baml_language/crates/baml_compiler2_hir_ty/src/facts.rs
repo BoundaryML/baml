@@ -59,9 +59,55 @@ impl<'db> Facts<'db> {
     /// Resolves a qualified name back to its definition through the owning
     /// package's canonical (ppir) items.
     pub fn definition_of(&self, name: &QualifiedTypeName) -> Option<Definition<'db>> {
-        let package = PackageId::new(self.db, name.package().clone());
-        baml_compiler2_ppir::package_items(self.db, package)
-            .lookup_type(name.namespace(), name.name())
+        definition_of(self.db, name)
+    }
+}
+
+fn definition_of<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    name: &QualifiedTypeName,
+) -> Option<Definition<'db>> {
+    let package = PackageId::new(db, name.package().clone());
+    baml_compiler2_ppir::package_items(db, package).lookup_type(name.namespace(), name.name())
+}
+
+/// Resolves an alias without allocating a memo table. Short-lived fact-poor
+/// contexts use this directly; body-lifetime [`Facts`] caches its result.
+pub(crate) fn uncached_alias_def(
+    db: &dyn baml_compiler2_ppir::Db,
+    name: &QualifiedTypeName,
+) -> Option<Ty> {
+    if let Some(Definition::TypeAlias(alias)) = definition_of(db, name) {
+        return Some(crate::lower::type_alias_value(db, alias).to_plain());
+    }
+    match crate::package_interface::mounted_type_row(db, name) {
+        Some(crate::package_interface::ExportedType::TypeAlias { resolved, .. }) => {
+            Some(resolved.clone())
+        }
+        _ => None,
+    }
+}
+
+/// Resolves enum variants without allocating a memo table. Short-lived
+/// fact-poor contexts use this directly; body-lifetime [`Facts`] caches it.
+pub(crate) fn uncached_enum_variants(
+    db: &dyn baml_compiler2_ppir::Db,
+    name: &QualifiedTypeName,
+) -> Option<Vec<Name>> {
+    if let Some(Definition::Enum(enum_loc)) = definition_of(db, name) {
+        return Some(
+            baml_compiler2_ppir::item_data::enum_data(db, enum_loc)
+                .variants
+                .iter()
+                .map(|variant| variant.name.clone())
+                .collect(),
+        );
+    }
+    match crate::package_interface::mounted_type_row(db, name) {
+        Some(crate::package_interface::ExportedType::Enum { variants, .. }) => {
+            Some(variants.clone())
+        }
+        _ => None,
     }
 }
 
@@ -70,16 +116,7 @@ impl TypeContext for Facts<'_> {
         if let Some(cached) = self.alias_defs.borrow().get(name) {
             return cached.clone();
         }
-        let resolved = if let Some(Definition::TypeAlias(alias)) = self.definition_of(name) {
-            Some(crate::lower::type_alias_value(self.db, alias).to_plain())
-        } else {
-            match crate::package_interface::mounted_type_row(self.db, name) {
-                Some(crate::package_interface::ExportedType::TypeAlias { resolved, .. }) => {
-                    Some(resolved.clone())
-                }
-                _ => None,
-            }
-        };
+        let resolved = uncached_alias_def(self.db, name);
         self.alias_defs
             .borrow_mut()
             .insert(name.clone(), resolved.clone());
@@ -90,22 +127,7 @@ impl TypeContext for Facts<'_> {
         if let Some(cached) = self.enum_variants.borrow().get(name) {
             return cached.clone();
         }
-        let resolved = if let Some(Definition::Enum(enum_loc)) = self.definition_of(name) {
-            Some(
-                baml_compiler2_ppir::item_data::enum_data(self.db, enum_loc)
-                    .variants
-                    .iter()
-                    .map(|variant| variant.name.clone())
-                    .collect(),
-            )
-        } else {
-            match crate::package_interface::mounted_type_row(self.db, name) {
-                Some(crate::package_interface::ExportedType::Enum { variants, .. }) => {
-                    Some(variants.clone())
-                }
-                _ => None,
-            }
-        };
+        let resolved = uncached_enum_variants(self.db, name);
         self.enum_variants
             .borrow_mut()
             .insert(name.clone(), resolved.clone());
