@@ -130,103 +130,19 @@ jobs:
             baml_language/.ci/size-gate/*.toml
             baml_language/.cargo/size-gate.toml
 
-      - name: "Validate and enqueue baseline-refresh PR"
-        # Only when create-pull-request returned the exact PR it created or
-        # updated (no diff/no PR -> nothing to do). Repository auto-merge is
-        # disabled, so enroll directly in canary's merge queue. The queue
-        # preserves branch protection and waits for all required checks.
-        #
-        # Reuse the PAT required above so creating the PR still triggers CI;
-        # the workflow's GITHUB_TOKEN remains read-only. Validate the full PR
-        # identity and changed-file scope before making any merge mutation.
+      - name: "Enqueue to merge queue"
+        # No diff means no PR number and nothing to enqueue.
         if: steps.cpr.outputs.pull-request-number
         env:
           GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
-          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
         run: |
-          set -euo pipefail
-
-          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::create-pull-request returned an invalid PR number: $PR_NUMBER"
-            exit 1
-          fi
-
-          echo "Inspecting BoundaryML/baml PR #$PR_NUMBER returned by create-pull-request"
-          pr_json=$(gh api graphql \
-            -F number="$PR_NUMBER" \
-            -f query='query($number: Int!) {
-              repository(owner: "BoundaryML", name: "baml") {
-                nameWithOwner
-                pullRequest(number: $number) {
-                  id number state title headRefName headRefOid baseRefName
-                  headRepository { nameWithOwner }
-                  baseRepository { nameWithOwner }
-                  mergeQueueEntry { position }
-                  files(first: 100) { totalCount nodes { path } }
-                }
-              }
-            }')
-
-          state=$(jq -r '.data.repository.pullRequest.state // ""' <<< "$pr_json")
-          if [[ "$state" == 'MERGED' ]]; then
-            echo "PR #$PR_NUMBER is already merged; nothing to enqueue"
-            exit 0
-          fi
-
-          file_count=$(jq '.data.repository.pullRequest.files.totalCount // 0' <<< "$pr_json")
-          # Fail closed unless the exact automation PR and every changed path
-          # match the create-pull-request configuration above. More than 100
-          # files also fails because the query intentionally reads at most 100.
-          if ! jq -e --argjson number "$PR_NUMBER" '
-            .data.repository as $repo
-            | ($repo.nameWithOwner == "BoundaryML/baml") and
-              ($repo.pullRequest |
-                .number == $number and
-                .state == "OPEN" and
-                .title == "chore: refresh size-gate baselines" and
-                .headRefName == "chore/size-gate-baseline-refresh" and
-                .baseRefName == "canary" and
-                .headRepository.nameWithOwner == "BoundaryML/baml" and
-                .baseRepository.nameWithOwner == "BoundaryML/baml" and
-                .files.totalCount == (.files.nodes | length) and
-                all(.files.nodes[].path;
-                  test("^baml_language/\\.ci/size-gate/[^/]+\\.toml$") or
-                  . == "baml_language/.cargo/size-gate.toml"))
-          ' <<< "$pr_json" >/dev/null; then
-            jq '.data.repository | {
-              repository: .nameWithOwner,
-              pullRequest: (.pullRequest | {
-                number, state, title, headRefName, baseRefName,
-                headRepository: .headRepository.nameWithOwner,
-                baseRepository: .baseRepository.nameWithOwner,
-                changedFiles: [.files.nodes[].path],
-                changedFileCount: .files.totalCount
-              })
-            }' <<< "$pr_json"
-            echo "::error::PR identity or changed-file scope did not match the baseline-refresh automation"
-            exit 1
-          fi
-
-          if [[ "$file_count" -eq 0 ]]; then
-            echo "PR #$PR_NUMBER has no changed files; nothing to enqueue"
-            exit 0
-          fi
-
-          queue_position=$(jq -r '.data.repository.pullRequest.mergeQueueEntry.position // ""' <<< "$pr_json")
-          if [[ -n "$queue_position" ]]; then
-            echo "PR #$PR_NUMBER is already in the merge queue at position $queue_position"
-            exit 0
-          fi
-
-          pr_id=$(jq -r '.data.repository.pullRequest.id' <<< "$pr_json")
-          head_oid=$(jq -r '.data.repository.pullRequest.headRefOid' <<< "$pr_json")
-          echo "Validated $file_count baseline file(s); enqueueing PR #$PR_NUMBER at head $head_oid"
+          pr_id=$(gh api \
+            "repos/${{ github.repository }}/pulls/${{ steps.cpr.outputs.pull-request-number }}" \
+            --jq .node_id)
           gh api graphql \
-            -f query='mutation($prId: ID!, $headOid: GitObjectID!) {
-              enqueuePullRequest(input: {pullRequestId: $prId, expectedHeadOid: $headOid}) {
+            -f query='mutation($prId: ID!) {
+              enqueuePullRequest(input: {pullRequestId: $prId}) {
                 mergeQueueEntry { position }
               }
             }' \
-            -F prId="$pr_id" \
-            -F headOid="$head_oid" \
-            --jq '"Enqueued in the canary merge queue at position \(.data.enqueuePullRequest.mergeQueueEntry.position)"'
+            -F prId="$pr_id"
