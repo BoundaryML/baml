@@ -455,13 +455,15 @@ jobs:
           export_dir="$(nix build --no-link --print-out-paths --print-build-logs .#musl-test-export)"
           cd baml_language
           # --config-file: same trimmed-metadata hard-error as the gnu lane;
-          # see .config/nextest-l2.toml.
+          # see .config/nextest-l2.toml. No pack_e2e exclusion here: that
+          # binary is not in the export at all, and a CLI filterset naming a
+          # binary absent from the metadata is the same hard parse error the
+          # config hit ("operator didn't match any binary names").
           INSTA_WORKSPACE_ROOT="$PWD" cargo nextest run \
             --config-file "$PWD/.config/nextest-l2.toml" \
             --binaries-metadata "$export_dir/binaries-metadata.json" \
             --cargo-metadata "$export_dir/cargo-metadata.json" \
-            --workspace-remap "$PWD" \
-            -E 'not binary(=pack_e2e)'
+            --workspace-remap "$PWD"
 
       - name: "Run tests with nextest"
         if: steps.l2.outputs.hit != 'true'
