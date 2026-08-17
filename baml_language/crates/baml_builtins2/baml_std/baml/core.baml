@@ -40,3 +40,13 @@ class TaggedString {
     /// type of its `${expr}` site; tags inspect element types at runtime.
     values: unknown[],
 }
+
+/// Builtin companion for the source-level `unknown` primitive.
+/// Users never construct this class.
+class Unknown {
+  /// Assert-read a named field from a runtime-shaped class instance.
+  /// This is the method spelling of `reflect.class.get_field<T>(self, name)`.
+  function get_field<T>(self, name: string) -> T throws baml.reflect.errors.CompilationError {
+    reflect.class.get_field<T>(self, name)
+  }
+}

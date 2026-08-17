@@ -2,6 +2,8 @@
 //! through offline LLM companions, retain mint identity, and remain usable
 //! through the dynamic access/JSON surfaces.
 
+use baml_compiler_diagnostics::Severity;
+use baml_project::{collect_diagnostics, testing::setup_test_db};
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
@@ -82,7 +84,7 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
             let note = ExtractNote$parse<unreflect(note_t.as_type())>(
                 `{"height_cm": 183, "chief_complaint": "cough", "bullets": ["dry", "night"]}`,
             )
-            let height = reflect.class.get_field<int>(note, "height_cm")
+            let height = note.get_field<int>("height_cm")
             let complaint = reflect.class.get_field<string>(note, "chief_complaint")
             let bullets = reflect.class.get_field<string[]>(note, "bullets")
             return prompt
@@ -476,25 +478,43 @@ async fn get_field_missing_and_wrong_type_throw_compilation_diagnostics() {
         function main() -> string {
             let t = reflect.class.new("OneField", { "count": type.of<int>() })
             let value = Extract$parse<unreflect(t.as_type())>(`{"count": 4}`)
-            let missing = reflect.class.get_field<int>(value, "absent") catch (e) {
+            let missing_function = reflect.class.get_field<int>(value, "absent") catch (e) {
                 baml.reflect.errors.CompilationError => {
                     e.diagnostics[0].code + ":" + e.diagnostics[0].message
                 }
             }
-            let wrong = reflect.class.get_field<string>(value, "count") catch (e) {
+            let missing_method = value.get_field<int>("absent") catch (e) {
                 baml.reflect.errors.CompilationError => {
                     e.diagnostics[0].code + ":" + e.diagnostics[0].message
                 }
             }
-            let missing_text = "missing read did not throw"
-            if missing is string {
-                missing_text = missing
+            let wrong_function = reflect.class.get_field<string>(value, "count") catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    e.diagnostics[0].code + ":" + e.diagnostics[0].message
+                }
             }
-            let wrong_text = "wrong read did not throw"
-            if wrong is string {
-                wrong_text = wrong
+            let wrong_method = value.get_field<string>("count") catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    e.diagnostics[0].code + ":" + e.diagnostics[0].message
+                }
             }
-            return missing_text + "|" + wrong_text
+            let missing_function_text = "function missing read did not throw"
+            if missing_function is string {
+                missing_function_text = missing_function
+            }
+            let missing_method_text = "method missing read did not throw"
+            if missing_method is string {
+                missing_method_text = missing_method
+            }
+            let wrong_function_text = "function wrong read did not throw"
+            if wrong_function is string {
+                wrong_function_text = wrong_function
+            }
+            let wrong_method_text = "method wrong read did not throw"
+            if wrong_method is string {
+                wrong_method_text = wrong_method
+            }
+            return missing_function_text + "|" + missing_method_text + "|" + wrong_function_text + "|" + wrong_method_text
         }
         "##
     );
@@ -505,12 +525,56 @@ async fn get_field_missing_and_wrong_type_throw_compilation_diagnostics() {
     else {
         panic!("expected a string result")
     };
-    assert!(
-        result.starts_with("E0001:class `OneField` has no field `absent`|E0001:"),
-        "unexpected diagnostic: {result}"
+    let diagnostics: Vec<_> = result.split('|').collect();
+    assert_eq!(diagnostics.len(), 4, "unexpected diagnostics: {result}");
+    assert_eq!(
+        diagnostics[0], diagnostics[1],
+        "missing-field diagnostics differ between spellings: {result}"
+    );
+    assert_eq!(
+        diagnostics[2], diagnostics[3],
+        "wrong-type diagnostics differ between spellings: {result}"
+    );
+    assert_eq!(
+        diagnostics[0], "E0001:class `OneField` has no field `absent`",
+        "unexpected missing-field diagnostic: {result}"
     );
     assert!(
-        result.contains("field `OneField.count` has type `int`, expected `string`"),
+        diagnostics[2].starts_with("E0001:")
+            && diagnostics[2].contains("field `OneField.count` has type `int`, expected `string`"),
         "unexpected type mismatch: {result}"
+    );
+}
+
+#[test]
+fn typed_class_without_get_field_remains_e0007() {
+    let db = setup_test_db(
+        r#"
+        class UserClass {}
+
+        function main() -> int {
+            UserClass {}.get_field<int>("missing")
+        }
+        "#,
+    );
+    let errors: Vec<_> = collect_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| matches!(diagnostic.severity, Severity::Error))
+        .map(|diagnostic| {
+            format!(
+                "[{}] {}",
+                diagnostic.code(),
+                diagnostic.message_with_primary_label()
+            )
+        })
+        .collect();
+    assert!(
+        errors.iter().any(|error| {
+            error.starts_with("[E0007]")
+                && error.contains("UserClass")
+                && error.contains("get_field")
+        }),
+        "expected typed class access to remain E0007; got:\n  {}",
+        errors.join("\n  ")
     );
 }

@@ -109,6 +109,7 @@ class PendingType {
 }
 
 /// Assert-read a named field from a runtime-shaped class instance.
+/// This is the function spelling of `value.get_field<T>(name)`.
 //baml:mut_vm
 function get_field<T>(value: unknown, name: string) -> T throws baml.reflect.errors.CompilationError {
   $rust_function
