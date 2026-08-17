@@ -708,15 +708,17 @@
             CARGO_PROFILE_DEV_OPT_LEVEL = "1";
             CARGO_PROFILE_TEST_OPT_LEVEL = "1";
 
-            # NO debug=0 here, per the msrv graph's own warning: this lane
-            # RUNS its binaries, so dropping debuginfo costs backtrace
-            # quality on real failures. The closure consequence is real
-            # (msrv measured 93.29 GiB at full dev debuginfo vs 10.23 GiB at
-            # debug=0) and is why nix/l2-roots.txt demands measuring this
-            # graph's closure BEFORE the builder picks it up. If it blows
-            # the builder's 30 GiB refusal, the mitigation is
-            # `line-tables-only` set on BOTH arms in the same commit (the
-            # workflow env and here), never on one.
+            # Debuginfo is `line-tables-only`, not full and not 0, and the
+            # SAME value is pinned in the lane's workflow env so both arms
+            # compile the same program shape. Measured (hc1, 2026-08-17):
+            # this graph's closure at full dev debuginfo is 43.6 GiB, over
+            # the builder's 30 GiB refusal (nix/l2-roots.txt). debug=0 would
+            # fit but costs file:line backtraces on real test failures -
+            # this lane RUNS its binaries, per the msrv graph's warning.
+            # line-tables-only keeps file:line and drops the variable and
+            # type info that is ~all of the bloat.
+            CARGO_PROFILE_DEV_DEBUG = "line-tables-only";
+            CARGO_PROFILE_TEST_DEBUG = "line-tables-only";
 
             # The linker seam the job wires via setup-musl-cross: without
             # it, the musl target links with the default glibc gcc and dies
@@ -794,9 +796,13 @@
             RUST_MIN_STACK = "67108864";
             CARGO_PROFILE_DEV_OPT_LEVEL = "1";
             CARGO_PROFILE_TEST_OPT_LEVEL = "1";
-            # NO debug=0: this lane RUNS its binaries (see the musl graph's
-            # note; the closure-measure-first rule in nix/l2-roots.txt is
-            # the enforcement).
+            # line-tables-only, mirrored in the lane's workflow env (arm
+            # equivalence). Measured (hc1, 2026-08-17): 41.2 GiB closure at
+            # full dev debuginfo, over the builder's 30 GiB refusal. Not
+            # debug=0: this lane RUNS its binaries and keeps file:line
+            # backtraces; line-tables drops the variable/type bloat.
+            CARGO_PROFILE_DEV_DEBUG = "line-tables-only";
+            CARGO_PROFILE_TEST_DEBUG = "line-tables-only";
           };
 
           nativeBuildInputs = graphNativeBuildInputs;

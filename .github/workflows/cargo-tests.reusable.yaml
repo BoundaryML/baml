@@ -108,6 +108,14 @@ jobs:
     # The cap is a hang backstop, not a perf gate - the L2 conversion of this
     # lane (nextest binaries-metadata export) is what removes the recompiles.
     timeout-minutes: 40
+    env:
+      # Arm equivalence with the nix unit graph (flake.nix gnuWorkspace):
+      # the graph pins line-tables-only debuginfo because its closure at
+      # full dev debuginfo measured 41.2 GiB, over the L2 builder's 30 GiB
+      # refusal. Both arms must compile the same program shape, so the
+      # cargo arm pins the same value. file:line backtraces survive.
+      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+      CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -294,6 +302,13 @@ jobs:
     timeout-minutes: 45
     env:
       CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
+      # Arm equivalence with the nix unit graph (flake.nix muslWorkspace):
+      # the graph pins line-tables-only debuginfo because its closure at
+      # full dev debuginfo measured 43.6 GiB, over the L2 builder's 30 GiB
+      # refusal. Both arms must compile the same program shape, so the
+      # cargo arm pins the same value. file:line backtraces survive.
+      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+      CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
     steps:
       - uses: actions/checkout@v6
         with:
