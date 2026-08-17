@@ -33,12 +33,23 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    sync::Arc,
 };
+
+use rustc_hash::FxHashMap;
 
 use crate::{
     FunctionParamMode, FunctionParamTy, Interface, Literal, MediaKind, Name, ParamTy,
     QualifiedTypeName, Ty, TyAttr,
 };
+
+/// Co-inductive assumption stack for equirecursive subtyping. Entries are
+/// pushed/popped in strict stack discipline around the expanding arms of
+/// [`NormalTy::is_subtype_of`] and probed by linear scan (the live set is
+/// bounded by expanding-arm recursion depth), so a Vec: a HashSet here paid
+/// deep pair clones plus two full-tree hashes per expanding step for a set
+/// that was never hash-probed.
+type Assumptions = Vec<(NormalTy, NormalTy)>;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTEXT
@@ -303,7 +314,7 @@ pub trait TypeContext {
         }
         let sub = NormalTy::canonical(sub, self);
         let sup = NormalTy::canonical(sup, self);
-        sub.is_subtype_of(&sup, self, &mut HashSet::new())
+        sub.is_subtype_of(&sup, self, &mut Assumptions::new())
     }
 
     /// Whether no value of type `a` can ever be `==`-equal to a value of type `b` —
@@ -634,7 +645,7 @@ impl NormalTy {
     /// ([`mu`]), which makes the result a unique representative of the
     /// equirecursive equivalence class.
     fn canonical<C: TypeContext>(ty: &Ty, ctx: &C) -> NormalTy {
-        Self::canonical_with(ty, ctx, &mut HashSet::new())
+        Self::canonical_with(ty, ctx, &mut Assumptions::new())
     }
 
     /// [`Self::canonical`] with the caller's co-inductive assumption set
@@ -645,11 +656,7 @@ impl NormalTy {
     /// (`T extends Foo<T | int>`) then recurses unboundedly - a stack
     /// overflow, B-1091. Threading extends the declared co-inductive
     /// semantics to the re-entry instead of restarting it.
-    fn canonical_with<C: TypeContext>(
-        ty: &Ty,
-        ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
-    ) -> NormalTy {
+    fn canonical_with<C: TypeContext>(ty: &Ty, ctx: &C, assumptions: &mut Assumptions) -> NormalTy {
         let (t, saw_mu) = Self::canonical_bottom_up(ty, ctx, assumptions);
         if saw_mu && t.contains_mu() {
             mu::canonicalize_mu(t, ctx)
@@ -664,7 +671,7 @@ impl NormalTy {
     /// constructor; nested recursion stays folded as alias names), so
     /// `normalize` never calls [`Self::into_ty`] on a mu root.
     fn canonical_render<C: TypeContext>(ty: &Ty, ctx: &C) -> Ty {
-        let (t, saw_mu) = Self::canonical_bottom_up(ty, ctx, &mut HashSet::new());
+        let (t, saw_mu) = Self::canonical_bottom_up(ty, ctx, &mut Assumptions::new());
         if saw_mu && t.contains_mu() {
             mu::canonicalize_mu_with_render(t, ctx).1
         } else {
@@ -677,7 +684,7 @@ impl NormalTy {
     fn canonical_bottom_up<C: TypeContext>(
         ty: &Ty,
         ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut Assumptions,
     ) -> (NormalTy, bool) {
         let named = NormalTy::from_ty(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL);
         let mut saw_mu = false;
@@ -1669,7 +1676,7 @@ impl NormalTy {
         self,
         ctx: &C,
         saw_mu: bool,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut Assumptions,
     ) -> NormalTy {
         match self {
             NormalTy::Class(qn, args) => NormalTy::Class(
@@ -1781,7 +1788,7 @@ impl NormalTy {
         &self,
         other: &NormalTy,
         ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut Assumptions,
     ) -> bool {
         self.is_subtype_of(other, ctx, assumptions) && other.is_subtype_of(self, ctx, assumptions)
     }
@@ -1799,7 +1806,7 @@ impl NormalTy {
         args: &[NormalTy],
         pin: &(Name, NormalTy),
         ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut Assumptions,
     ) -> bool {
         let (member, value) = pin;
         let NormalTy::AssociatedTypeProjection {
@@ -1832,7 +1839,7 @@ impl NormalTy {
         &self,
         sup: &NormalTy,
         ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut Assumptions,
     ) -> bool {
         if self == sup {
             return true;
@@ -1883,16 +1890,17 @@ impl NormalTy {
         if !expanding {
             return self.is_subtype_of_inner(sup, ctx, assumptions);
         }
-        // On the (few) expanding arms, probe by linear scan rather than cloning
-        // to hash: the pairs on the current path are bounded by the
-        // expanding-arm recursion depth, so a scan beats hashing the whole tree.
+        // On the (few) expanding arms, probe by linear scan: the pairs on the
+        // current path are bounded by the expanding-arm recursion depth. The
+        // set is a strict push/pop stack around the recursion, so it is a Vec
+        // — one clone pair per expanding step and zero full-tree hashes
+        // (the former HashSet paid four deep clones and two hashes here).
         if assumptions.iter().any(|(a, b)| a == self && b == sup) {
             return true;
         }
-        let pair = (self.clone(), sup.clone());
-        assumptions.insert(pair.clone());
+        assumptions.push((self.clone(), sup.clone()));
         let result = self.is_subtype_of_inner(sup, ctx, assumptions);
-        assumptions.remove(&pair);
+        assumptions.pop();
         result
     }
 
@@ -1904,7 +1912,7 @@ impl NormalTy {
         &self,
         sup: &NormalTy,
         ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut Assumptions,
     ) -> bool {
         match (self, sup) {
             // μ-unfolding (equirecursive). The closed-term substitution needs no
@@ -2305,7 +2313,7 @@ impl NormalTy {
         members: Vec<NormalTy>,
         ctx: &C,
         saw_mu: bool,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut Assumptions,
     ) -> NormalTy {
         // Flatten one level (members are canonical, but a μ-unfold or alias could
         // surface a nested union) and drop `never`.
@@ -2482,7 +2490,7 @@ impl NormalTy {
         members: &[NormalTy],
         ctx: &C,
         saw_mu: bool,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut Assumptions,
     ) -> Vec<NormalTy> {
         let n = members.len();
         // Only computed when a μ exists somewhere in the term (rare) — the hot
@@ -2693,7 +2701,7 @@ impl NormalParam {
         sub: &[NormalParam],
         sup: &[NormalParam],
         ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut Assumptions,
     ) -> bool {
         let sub_required: Vec<&NormalParam> = sub.iter().filter(|p| p.is_required()).collect();
         let sup_required: Vec<&NormalParam> = sup.iter().filter(|p| p.is_required()).collect();
@@ -2748,21 +2756,33 @@ use crate::interned;
 /// keeping one cache scoped to one fact set (compiler inference uses one per
 /// body). Inference-bearing types should be resolved before entering because
 /// their meaning is table-relative rather than a property of the handle alone.
+///
+/// Two memo layers, both keyed on interned handles (pointer hash/eq, so hits
+/// are near-free):
+/// - canonical forms, shared via `Arc` so a hit is a refcount bump rather
+///   than a deep `NormalTy` clone;
+/// - relation VERDICTS (`is_subtype`/`equivalent` results). Sound because
+///   the fact set is immutable for the cache's lifetime and both relations
+///   are deterministic functions of (handle pair, facts). Only top-level
+///   verdicts are memoized — never intermediate results computed under a
+///   non-empty co-inductive assumption stack, which are hypothesis-relative.
 #[derive(Default)]
 pub struct InternedCanonicalCache {
-    canonical: RefCell<HashMap<interned::Ty, NormalTy>>,
+    canonical: RefCell<HashMap<interned::Ty, Arc<NormalTy>>>,
+    subtype_verdicts: RefCell<FxHashMap<(interned::Ty, interned::Ty), bool>>,
+    equivalent_verdicts: RefCell<FxHashMap<(interned::Ty, interned::Ty), bool>>,
 }
 
 impl InternedCanonicalCache {
-    fn canonical<C: TypeContext>(&self, ty: &interned::Ty, ctx: &C) -> NormalTy {
+    fn canonical<C: TypeContext>(&self, ty: &interned::Ty, ctx: &C) -> Arc<NormalTy> {
         debug_assert!(!ty.has_infer());
         if let Some(canonical) = self.canonical.borrow().get(ty) {
-            return canonical.clone();
+            return Arc::clone(canonical);
         }
-        let canonical = NormalTy::canonical_interned(ty, ctx);
+        let canonical = Arc::new(NormalTy::canonical_interned(ty, ctx));
         self.canonical
             .borrow_mut()
-            .insert(ty.clone(), canonical.clone());
+            .insert(ty.clone(), Arc::clone(&canonical));
         canonical
     }
 
@@ -2773,7 +2793,16 @@ impl InternedCanonicalCache {
         if interned_heads_definitely_differ(a, b) {
             return false;
         }
-        self.canonical(a, ctx) == self.canonical(b, ctx)
+        let key = (a.clone(), b.clone());
+        if let Some(&verdict) = self.equivalent_verdicts.borrow().get(&key) {
+            return verdict;
+        }
+        let ca = self.canonical(a, ctx);
+        let cb = self.canonical(b, ctx);
+        // Same canonical Arc means same canonical form; otherwise deep-compare.
+        let verdict = Arc::ptr_eq(&ca, &cb) || *ca == *cb;
+        self.equivalent_verdicts.borrow_mut().insert(key, verdict);
+        verdict
     }
 
     pub fn is_subtype<C: TypeContext>(
@@ -2795,8 +2824,15 @@ impl InternedCanonicalCache {
         {
             return false;
         }
-        self.canonical(sub, ctx)
-            .is_subtype_of(&self.canonical(sup, ctx), ctx, &mut HashSet::new())
+        let key = (sub.clone(), sup.clone());
+        if let Some(&verdict) = self.subtype_verdicts.borrow().get(&key) {
+            return verdict;
+        }
+        let csub = self.canonical(sub, ctx);
+        let csup = self.canonical(sup, ctx);
+        let verdict = csub.is_subtype_of(&csup, ctx, &mut Assumptions::new());
+        self.subtype_verdicts.borrow_mut().insert(key, verdict);
+        verdict
     }
 }
 
@@ -2813,7 +2849,7 @@ impl NormalTy {
         let mut saw_mu = false;
         let resolved = named.resolve_binders(&mut Vec::new(), &mut saw_mu);
         (
-            resolved.canonicalize(ctx, saw_mu, &mut HashSet::new()),
+            resolved.canonicalize(ctx, saw_mu, &mut Assumptions::new()),
             saw_mu,
         )
     }
@@ -3021,7 +3057,7 @@ pub fn is_subtype_interned<C: TypeContext>(
     }
     let sub = NormalTy::canonical_interned(sub, ctx);
     let sup = NormalTy::canonical_interned(sup, ctx);
-    sub.is_subtype_of(&sup, ctx, &mut HashSet::new())
+    sub.is_subtype_of(&sup, ctx, &mut Assumptions::new())
 }
 
 /// [`TypeContext::equivalent`] for interned types.
@@ -3078,7 +3114,7 @@ pub fn canonical_union_interned<C: TypeContext>(members: &[interned::Ty], ctx: &
     );
     let mut saw_mu = false;
     let resolved = named.resolve_binders(&mut Vec::new(), &mut saw_mu);
-    let t = resolved.canonicalize(ctx, saw_mu, &mut HashSet::new());
+    let t = resolved.canonicalize(ctx, saw_mu, &mut Assumptions::new());
     let t = if saw_mu && t.contains_mu() {
         mu::canonicalize_mu(t, ctx)
     } else {
