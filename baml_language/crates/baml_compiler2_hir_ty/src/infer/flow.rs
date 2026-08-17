@@ -165,7 +165,7 @@ impl InferenceContext<'_> {
     /// The tighter of two refinements of the same binding (approximate
     /// meet, same policy as pattern narrowing).
     fn narrow_meet(&self, a: &Ty, b: &Ty) -> Ty {
-        if crate::infer::pat::provable_subtype(a, b, &self.facts, &self.canonical_cache) {
+        if self.provable_subtype(a, b) {
             a.clone()
         } else {
             b.clone()
@@ -216,14 +216,7 @@ impl InferenceContext<'_> {
         };
         let kept: Vec<Ty> = members
             .iter()
-            .filter(|member| {
-                !crate::infer::pat::provable_subtype(
-                    member,
-                    matched,
-                    &self.facts,
-                    &self.canonical_cache,
-                )
-            })
+            .filter(|member| !self.provable_subtype(member, matched))
             .cloned()
             .collect();
         if kept.len() == members.len() {

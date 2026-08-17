@@ -71,8 +71,8 @@ fn definition_of<'db>(
     baml_compiler2_ppir::package_items(db, package).lookup_type(name.namespace(), name.name())
 }
 
-/// Resolves an alias without allocating a memo table. Short-lived fact-poor
-/// contexts use this directly; body-lifetime [`Facts`] caches its result.
+/// Resolves an alias without retaining the result in a memo. One-shot
+/// fact-poor contexts use this directly; repeated scans use a cached context.
 pub(crate) fn uncached_alias_def(
     db: &dyn baml_compiler2_ppir::Db,
     name: &QualifiedTypeName,
@@ -88,8 +88,8 @@ pub(crate) fn uncached_alias_def(
     }
 }
 
-/// Resolves enum variants without allocating a memo table. Short-lived
-/// fact-poor contexts use this directly; body-lifetime [`Facts`] caches it.
+/// Resolves enum variants without retaining the result in a memo. One-shot
+/// fact-poor contexts use this directly; repeated scans use a cached context.
 pub(crate) fn uncached_enum_variants(
     db: &dyn baml_compiler2_ppir::Db,
     name: &QualifiedTypeName,

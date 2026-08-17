@@ -256,20 +256,39 @@ pub fn package_impl_locs<'db>(
 /// re-enter the resolver that called it).
 pub(crate) struct AliasOnlyFacts<'db> {
     db: &'db dyn baml_compiler2_ppir::Db,
+    memoized: Option<crate::facts::Facts<'db>>,
 }
 
 impl<'db> AliasOnlyFacts<'db> {
+    /// A one-shot alias/enum context. Use [`Self::memoized`] when the same
+    /// context spans a candidate scan and will see repeated type heads.
     pub(crate) fn new(db: &'db dyn baml_compiler2_ppir::Db) -> AliasOnlyFacts<'db> {
-        AliasOnlyFacts { db }
+        AliasOnlyFacts { db, memoized: None }
+    }
+
+    /// A scan-local alias/enum context. A memo must not outlive one query
+    /// execution - it would serve rows from a stale revision and suppress the
+    /// dependency reads a later execution needs.
+    fn memoized(db: &'db dyn baml_compiler2_ppir::Db) -> AliasOnlyFacts<'db> {
+        AliasOnlyFacts {
+            db,
+            memoized: Some(crate::facts::Facts::new(db)),
+        }
     }
 }
 
 impl TypeContext for AliasOnlyFacts<'_> {
     fn alias_def(&self, name: &TypeName) -> Option<baml_type::Ty> {
-        crate::facts::uncached_alias_def(self.db, name)
+        self.memoized.as_ref().map_or_else(
+            || crate::facts::uncached_alias_def(self.db, name),
+            |facts| facts.alias_def(name),
+        )
     }
     fn enum_variants(&self, name: &TypeName) -> Option<Vec<Name>> {
-        crate::facts::uncached_enum_variants(self.db, name)
+        self.memoized.as_ref().map_or_else(
+            || crate::facts::uncached_enum_variants(self.db, name),
+            |facts| facts.enum_variants(name),
+        )
     }
     fn implements_interface(&self, _: &baml_type::Ty, _: &baml_type::Interface) -> bool {
         false
@@ -805,7 +824,7 @@ fn impls_for_type_cached<'db>(
     type_key: ImplTypeKey<'db>,
 ) -> Vec<CachedResolvedImpl<'db>> {
     let concrete = type_key.concrete(db);
-    let eq = AliasOnlyFacts::new(db);
+    let eq = AliasOnlyFacts::memoized(db);
     let mut out = Vec::new();
     for &package in all_packages(db) {
         // Do not short-circuit this iterator: `impl_facts` dependencies are
@@ -1111,7 +1130,7 @@ fn resolve_within_depth<'db>(
         return None;
     }
     in_progress.push((concrete.clone(), interface.clone()));
-    let eq = AliasOnlyFacts::new(db);
+    let eq = AliasOnlyFacts::memoized(db);
     let mut resolved = None;
     'search: for package in search_roots(db, concrete, interface) {
         for (origin, facts) in package_impl_candidates(db, package) {
