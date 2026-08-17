@@ -4,12 +4,6 @@ source: crates/baml_tests/src/corpus.rs
 === MIR2 (package baml) ===
 fn baml.Bigint.abs = builtin(vm)
 
-fn baml.Bigint.min = builtin(vm)
-
-fn baml.Bigint.max = builtin(vm)
-
-fn baml.Bigint.clamp = builtin(vm)
-
 fn baml.Bigint.isqrt = builtin(vm)
 
 fn baml.Bigint.pow = builtin(vm)
@@ -1253,12 +1247,6 @@ fn baml.Float.is_finite(self: baml.Float) -> bool {
 
 fn baml.Float.abs = builtin(vm)
 
-fn baml.Float.min = builtin(vm)
-
-fn baml.Float.max = builtin(vm)
-
-fn baml.Float.clamp = builtin(vm)
-
 fn baml.Float.floor = builtin(vm)
 
 fn baml.Float.ceil = builtin(vm)
@@ -1401,12 +1389,6 @@ fn baml.Float.inf = builtin(vm)
 fn baml._trunc_to_int = builtin(vm)
 
 fn baml.Int.abs = builtin(vm)
-
-fn baml.Int.min = builtin(vm)
-
-fn baml.Int.max = builtin(vm)
-
-fn baml.Int.clamp = builtin(vm)
 
 fn baml.Int.isqrt = builtin(vm)
 
@@ -8232,7 +8214,7 @@ fn baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
     }
 }
 
-fn baml.ops.Compare.lt(_1: void, _2: void) -> void {
+fn baml.ops.Compare.cmp(_1: void, _2: void) -> void {
     // Locals:
     let _0: void // return
     let _1: void // param
@@ -8243,23 +8225,45 @@ fn baml.ops.Compare.lt(_1: void, _2: void) -> void {
     }
 }
 
+fn baml.ops.Compare.lt(self: baml.ops.Compare, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.ops.Compare // self // param
+    let _2: Self // other // param
+    let _3: baml.ops.Ordering
+
+    bb0: {
+        _3 = virtual_call cmp as baml.ops.Compare(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.ops.equals_equals(copy _3, const baml.ops.Ordering.Less) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.ops.Compare.le(self: baml.ops.Compare, other: Self) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: baml.ops.Compare // self // param
     let _2: Self // other // param
-    let _3: bool
+    let _3: baml.ops.Ordering
+    let _4: bool
 
     bb0: {
-        _3 = virtual_call lt as baml.ops.Compare(copy _1, copy _2) -> [bb1];
+        _3 = virtual_call cmp as baml.ops.Compare(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
-        _0 = short_circuit(||) copy _3 -> [eval: bb2, join: bb3];
+        _4 = call const fn baml.ops.equals_equals(copy _3, const baml.ops.Ordering.Greater) -> [bb2];
     }
 
     bb2: {
-        _0 = virtual_call eq as baml.ops.Equals(copy _1, copy _2) -> [bb3];
+        _0 = !copy _4;
+        goto -> bb3;
     }
 
     bb3: {
@@ -8272,15 +8276,14 @@ fn baml.ops.Compare.gt(self: baml.ops.Compare, other: Self) -> bool {
     let _0: bool // _0 // return
     let _1: baml.ops.Compare // self // param
     let _2: Self // other // param
-    let _3: bool
+    let _3: baml.ops.Ordering
 
     bb0: {
-        _3 = virtual_call le as baml.ops.Compare(copy _1, copy _2) -> [bb1];
+        _3 = virtual_call cmp as baml.ops.Compare(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
-        _0 = !copy _3;
-        goto -> bb2;
+        _0 = call const fn baml.ops.equals_equals(copy _3, const baml.ops.Ordering.Greater) -> [bb2];
     }
 
     bb2: {
@@ -8293,15 +8296,123 @@ fn baml.ops.Compare.ge(self: baml.ops.Compare, other: Self) -> bool {
     let _0: bool // _0 // return
     let _1: baml.ops.Compare // self // param
     let _2: Self // other // param
-    let _3: bool
+    let _3: baml.ops.Ordering
+    let _4: bool
 
     bb0: {
-        _3 = virtual_call lt as baml.ops.Compare(copy _1, copy _2) -> [bb1];
+        _3 = virtual_call cmp as baml.ops.Compare(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
-        _0 = !copy _3;
-        goto -> bb2;
+        _4 = call const fn baml.ops.equals_equals(copy _3, const baml.ops.Ordering.Less) -> [bb2];
+    }
+
+    bb2: {
+        _0 = !copy _4;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.ops.Compare.max(self: baml.ops.Compare, other: Self) -> Self {
+    // Locals:
+    let _0: Self // _0 // return
+    let _1: baml.ops.Compare // self // param
+    let _2: Self // other // param
+    let _3: baml.ops.Ordering
+    let _4: int
+
+    bb0: {
+        _3 = virtual_call cmp as baml.ops.Compare(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        _4 = discriminant(_3);
+        switch copy _4 [Ordering.Less: bb5, Ordering.Equal: bb4, Ordering.Greater: bb3, otherwise: bb2] (exhaustive);
+    }
+
+    bb2: {
+        unreachable;
+    }
+
+    bb3: {
+        _0 = copy _1;
+        goto -> bb6;
+    }
+
+    bb4: {
+        _0 = copy _1;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _0 = copy _2;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn baml.ops.Compare.min(self: baml.ops.Compare, other: Self) -> Self {
+    // Locals:
+    let _0: Self // _0 // return
+    let _1: baml.ops.Compare // self // param
+    let _2: Self // other // param
+    let _3: baml.ops.Ordering
+    let _4: int
+
+    bb0: {
+        _3 = virtual_call cmp as baml.ops.Compare(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        _4 = discriminant(_3);
+        switch copy _4 [Ordering.Less: bb5, Ordering.Equal: bb4, Ordering.Greater: bb3, otherwise: bb2] (exhaustive);
+    }
+
+    bb2: {
+        unreachable;
+    }
+
+    bb3: {
+        _0 = copy _2;
+        goto -> bb6;
+    }
+
+    bb4: {
+        _0 = copy _1;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _0 = copy _1;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn baml.ops.Compare.clamp(self: baml.ops.Compare, min: Self, max: Self) -> Self {
+    // Locals:
+    let _0: Self // _0 // return
+    let _1: baml.ops.Compare // self // param
+    let _2: Self // min // param
+    let _3: Self // max // param
+    let _4: Self
+
+    bb0: {
+        _4 = virtual_call min as baml.ops.Compare(copy _1, copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = virtual_call max as baml.ops.Compare(copy _4, copy _2) -> [bb2];
     }
 
     bb2: {
@@ -8313,62 +8424,171 @@ fn baml.ops.equals_equals = builtin(vm)
 
 fn baml.ops.<(int as baml.ops.Equals)>.eq = builtin(vm)
 
-fn baml.ops.<(int as baml.ops.Compare)>.lt = builtin(vm)
-
-fn baml.ops.<(bigint as baml.ops.Equals)>.eq = builtin(vm)
-
-fn baml.ops.<(bigint as baml.ops.Compare)>.lt = builtin(vm)
-
-fn baml.ops.<(float as baml.ops.Equals)>.eq = builtin(vm)
-
-fn baml.ops.<(float as baml.ops.Compare)>.lt = builtin(vm)
-
-fn baml.ops.<(float as baml.ops.Compare)>.gt = builtin(vm)
-
-fn baml.ops.<(float as baml.ops.Compare)>.ge = builtin(vm)
-
-fn baml.ops.<(float as baml.ops.Compare)>.le = builtin(vm)
-
-fn baml.ops.<(bool as baml.ops.Equals)>.eq = builtin(vm)
-
-fn baml.ops.<(bool as baml.ops.Compare)>.lt(self: bool, other: bool) -> bool {
+fn baml.ops.<(int as baml.ops.Compare)>.cmp(self: int, other: int) -> baml.ops.Ordering {
     // Locals:
-    let _0: bool // _0 // return
-    let _1: bool // self // param
-    let _2: bool // other // param
+    let _0: baml.ops.Ordering // _0 // return
+    let _1: int // self // param
+    let _2: int // other // param
     let _3: bool
+    let _4: bool
 
     bb0: {
-        _3 = !copy _1;
-        _0 = short_circuit(&&) copy _3 -> [eval: bb1, join: bb2];
+        _3 = copy _1 < copy _2;
+        branch copy _3 -> [bb4, bb1];
     }
 
     bb1: {
-        _0 = copy _2;
-        goto -> bb2;
+        _4 = copy _1 > copy _2;
+        branch copy _4 -> [bb3, bb2];
     }
 
     bb2: {
+        _0 = const baml.ops.Ordering.Equal;
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const baml.ops.Ordering.Greater;
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const baml.ops.Ordering.Less;
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
 
-fn baml.ops.<(bool as baml.ops.Compare)>.gt(self: bool, other: bool) -> bool {
+fn baml.ops.<(bigint as baml.ops.Equals)>.eq = builtin(vm)
+
+fn baml.ops.<(bigint as baml.ops.Compare)>.cmp(self: bigint, other: bigint) -> baml.ops.Ordering {
     // Locals:
-    let _0: bool // _0 // return
-    let _1: bool // self // param
-    let _2: bool // other // param
+    let _0: baml.ops.Ordering // _0 // return
+    let _1: bigint // self // param
+    let _2: bigint // other // param
+    let _3: bool
+    let _4: bool
 
     bb0: {
-        _0 = short_circuit(&&) copy _1 -> [eval: bb1, join: bb2];
+        _3 = copy _1 < copy _2;
+        branch copy _3 -> [bb4, bb1];
     }
 
     bb1: {
-        _0 = !copy _2;
-        goto -> bb2;
+        _4 = copy _1 > copy _2;
+        branch copy _4 -> [bb3, bb2];
     }
 
     bb2: {
+        _0 = const baml.ops.Ordering.Equal;
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const baml.ops.Ordering.Greater;
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const baml.ops.Ordering.Less;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn baml.ops.<(float as baml.ops.Equals)>.eq = builtin(vm)
+
+fn baml.ops.<(float as baml.ops.Compare)>.cmp(self: float, other: float) -> baml.ops.Ordering {
+    // Locals:
+    let _0: baml.ops.Ordering // _0 // return
+    let _1: float // self // param
+    let _2: float // other // param
+    let _3: bool
+    let _4: bool
+
+    bb0: {
+        _3 = copy _1 < copy _2;
+        branch copy _3 -> [bb4, bb1];
+    }
+
+    bb1: {
+        _4 = copy _1 > copy _2;
+        branch copy _4 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = const baml.ops.Ordering.Equal;
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const baml.ops.Ordering.Greater;
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const baml.ops.Ordering.Less;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn baml.ops.<(bool as baml.ops.Equals)>.eq = builtin(vm)
+
+fn baml.ops.<(bool as baml.ops.Compare)>.cmp(self: bool, other: bool) -> baml.ops.Ordering {
+    // Locals:
+    let _0: baml.ops.Ordering // _0 // return
+    let _1: bool // self // param
+    let _2: bool // other // param
+    let _3: bool
+    let _4: bool
+    let _5: bool
+
+    bb0: {
+        _3 = is_type(copy _1, true);
+        branch copy _3 -> [bb4, bb1];
+    }
+
+    bb1: {
+        _5 = is_type(copy _2, true);
+        branch copy _5 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = const baml.ops.Ordering.Equal;
+        goto -> bb7;
+    }
+
+    bb3: {
+        _0 = const baml.ops.Ordering.Less;
+        goto -> bb7;
+    }
+
+    bb4: {
+        _4 = is_type(copy _2, true);
+        branch copy _4 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _0 = const baml.ops.Ordering.Greater;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _0 = const baml.ops.Ordering.Equal;
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }
@@ -8407,13 +8627,43 @@ fn baml.ops.<(null as baml.ops.Equals)>.neq(self: null, other: null) -> bool {
 
 fn baml.ops.<(string as baml.ops.Equals)>.eq = builtin(vm)
 
-fn baml.ops.<(string as baml.ops.Compare)>.lt = builtin(vm)
+fn baml.ops.<(string as baml.ops.Compare)>.cmp(self: string, other: string) -> baml.ops.Ordering {
+    // Locals:
+    let _0: baml.ops.Ordering // _0 // return
+    let _1: string // self // param
+    let _2: string // other // param
+    let _3: bool
+    let _4: bool
 
-fn baml.ops.<(string as baml.ops.Compare)>.gt = builtin(vm)
+    bb0: {
+        _3 = copy _1 < copy _2;
+        branch copy _3 -> [bb4, bb1];
+    }
 
-fn baml.ops.<(string as baml.ops.Compare)>.ge = builtin(vm)
+    bb1: {
+        _4 = copy _1 > copy _2;
+        branch copy _4 -> [bb3, bb2];
+    }
 
-fn baml.ops.<(string as baml.ops.Compare)>.le = builtin(vm)
+    bb2: {
+        _0 = const baml.ops.Ordering.Equal;
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const baml.ops.Ordering.Greater;
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const baml.ops.Ordering.Less;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
 
 fn baml.ops.<(uint8array as baml.ops.Equals)>.eq = builtin(vm)
 

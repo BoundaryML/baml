@@ -24,7 +24,7 @@
 ///   `bigint.parse(s)` when `s` carries more decimal digits than the cap
 ///   permits.
 class Bigint {
-    // ─── Comparisons / clamping ───────────────────────────────────────────────
+    // ─── Magnitude ────────────────────────────────────────────────────────────
 
     /// Returns the absolute value of `self`.
     ///
@@ -38,47 +38,21 @@ class Bigint {
         $rust_function
     }
 
-    /// Returns the smaller of `self` and `other`.
-    ///
-    /// # Examples
-    ///
-    /// ```baml
-    /// (3n).min(5n)   // 3n
-    /// (3n).min(3)    // 3n  (the int widens to bigint)
-    /// (-2n).min(0n)  // -2n
-    /// ```
-    function min(self, other: bigint) -> bigint throws never {
-        $rust_function
-    }
-
-    /// Returns the larger of `self` and `other`.
-    ///
-    /// # Examples
-    ///
-    /// ```baml
-    /// (3n).max(5n)   // 5n
-    /// (3n).max(3)    // 3n  (the int widens to bigint)
-    /// (-2n).max(0n)  // 0n
-    /// ```
-    function max(self, other: bigint) -> bigint throws never {
-        $rust_function
-    }
-
-    /// Clamps `self` into the range `[min, max]`.
-    ///
-    /// Equivalent to `self.min(max).max(min)`. Pass `min <= max`; if `min > max`
-    /// the result is always `min`, because the lower clamp runs last.
-    ///
-    /// # Examples
-    ///
-    /// ```baml
-    /// (5n).clamp(0n, 10n)   // 5n
-    /// (-3n).clamp(0, 10)    // 0n  (the ints widen to bigint)
-    /// (15n).clamp(0n, 10n)  // 10n
-    /// ```
-    function clamp(self, min: bigint, max: bigint) -> bigint throws never {
-        $rust_function
-    }
+    // `min` / `max` / `clamp` are NOT declared here. They come from
+    // `baml.ops.Compare`, which `bigint` implements — one definition of
+    // "smaller" per type, so `(3n).max(x)` cannot mean something different from
+    // the `max` a `T extends baml.ops.Compare` bound reaches.
+    //
+    // Arguments must be `bigint`. The versions declared here used to document
+    // `(3n).min(3)` as widening an `int` argument, but nothing did: an `int` is
+    // not assignable to a `bigint` parameter on any call path, and no test
+    // covered it. Use `3n`, or convert explicitly.
+    //
+    // ```
+    // (3n).min(5n)           // 3n
+    // (-2n).max(0n)          // 0n
+    // (15n).clamp(0n, 10n)   // 10n
+    // ```
 
     // ─── Math ─────────────────────────────────────────────────────────────────
 

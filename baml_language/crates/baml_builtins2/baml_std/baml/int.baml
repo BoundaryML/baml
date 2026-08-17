@@ -31,7 +31,7 @@
 /// `self` and `-1` for a negative one.
 
 class Int {
-    // ─── Comparisons / clamping ───────────────────────────────────────────────
+    // ─── Magnitude ────────────────────────────────────────────────────────────
 
     /// Returns the absolute value of `self`.
     ///
@@ -52,45 +52,16 @@ class Int {
         $rust_function
     }
 
-    /// Returns the smaller of `self` and `other`.
-    ///
-    /// # Examples
-    ///
-    /// ```baml
-    /// (3).min(5)   // 3
-    /// (-2).min(0)  // -2
-    /// ```
-    function min(self, other: int) -> int throws never {
-        $rust_function
-    }
-
-    /// Returns the larger of `self` and `other`.
-    ///
-    /// # Examples
-    ///
-    /// ```baml
-    /// (3).max(5)   // 5
-    /// (-2).max(0)  // 0
-    /// ```
-    function max(self, other: int) -> int throws never {
-        $rust_function
-    }
-
-    /// Clamps `self` into the range `[min, max]`.
-    ///
-    /// Equivalent to `self.min(max).max(min)`. Pass `min <= max`; if `min > max`
-    /// the result is always `min`, because the lower clamp runs last.
-    ///
-    /// # Examples
-    ///
-    /// ```baml
-    /// (5).clamp(0, 10)    // 5
-    /// (-3).clamp(0, 10)   // 0
-    /// (15).clamp(0, 10)   // 10
-    /// ```
-    function clamp(self, min: int, max: int) -> int throws never {
-        $rust_function
-    }
+    // `min` / `max` / `clamp` are NOT declared here. They come from
+    // `baml.ops.Compare`, which `int` implements — one definition of "smaller"
+    // per type, so `(3).max(x)` cannot mean something different from the `max` a
+    // `T extends baml.ops.Compare` bound reaches.
+    //
+    // ```
+    // (3).min(5)          // 3
+    // (-2).max(0)         // 0
+    // (15).clamp(0, 10)   // 10
+    // ```
 
     // ─── Math ─────────────────────────────────────────────────────────────────
 

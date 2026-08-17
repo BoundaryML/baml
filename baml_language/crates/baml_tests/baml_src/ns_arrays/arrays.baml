@@ -107,8 +107,9 @@ test "array_sort_floats" {
 //   • `(int | string)[].sort()` — rollback now pinned via `sort_by`
 //     (`array_sort_by_callback_throws`)
 // 02-PLAN cutover (reverses the 01b NaN decision): `float` now binds
-// `type CompareError = never` and orders by `f64::total_cmp`, so `float[].sort()`
-// no longer rejects NaN — NaN sorts deterministically after +inf.
+// `type CompareError = never` and orders by BAML's total float order, so
+// `float[].sort()` no longer rejects NaN — NaN sorts deterministically
+// after +inf.
 test "array_sort_nan_sorts_last" {
     let xs = [1.0, float.nan()];
     xs.sort();
@@ -857,6 +858,16 @@ test "array_includes_empty" {
 
 test "array_includes_strings" {
     assert.is_true(["a", "b", "c"].includes("b"))
+}
+
+// `includes` / `index_of` compare with BAML's `==`, which is reflexive — so a
+// NaN needle finds a NaN element, matching `float.nan() == float.nan()`.
+test "array_includes_nan" {
+    assert.is_true([1.0, float.nan()].includes(float.nan()))
+}
+
+test "array_index_of_nan" {
+    assert.equal([1.0, float.nan()].index_of(float.nan()), 1)
 }
 
 test "array_index_of_present" {

@@ -678,7 +678,7 @@ fn element_is_dispatch_int_callsite_normalizes_to_never() {
 #[test]
 fn element_is_dispatch_float_callsite_normalizes_to_never() {
     // Relies on the 02-plan float decision: `float.CompareError = never`
-    // (total_cmp ordering), so a `float[]` call site needs no handling.
+    // (BAML's total float order), so a `float[]` call site needs no handling.
     assert_zero_compile_errors(&format!(
         r#"
         {ELEMENT_DISPATCH_SCAFFOLD}

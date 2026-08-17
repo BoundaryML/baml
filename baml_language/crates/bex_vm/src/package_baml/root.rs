@@ -29,12 +29,13 @@ impl BamlPackageBaml for PackageBamlImpl {
         deep_copy_value_recursive(vm, *value, &mut copied_objects)
     }
 
-    /// `baml._float_total_cmp(a, b)` — bit-exact `f64::total_cmp` three-way
-    /// comparison backing `Comparable for float`. Kept in lockstep with the
-    /// float domain of `compare_natural_values` (the `_rust_sort` fast path)
-    /// so the two sort paths can never disagree on a float ordering.
+    /// `baml._float_total_cmp(a, b)` — three-way comparison in BAML's total
+    /// float order, backing `Comparable for float`. Shares its definition with
+    /// the float domain of `compare_natural_values` (the `_rust_sort` fast
+    /// path) and with `baml.ops.Compare for float`, so no two float orderings
+    /// in the language can disagree.
     fn _float_total_cmp(a: f64, b: f64) -> i64 {
-        match a.total_cmp(&b) {
+        match bex_vm_types::float_order::cmp(a, b) {
             std::cmp::Ordering::Less => -1,
             std::cmp::Ordering::Equal => 0,
             std::cmp::Ordering::Greater => 1,
@@ -52,7 +53,8 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// Stable natural-order sort of a homogeneous primitive array, in place
     /// (the receiver's backing `Vec` is sorted or replaced; the returned value
     /// IS the receiver). The comparator is pure Rust — no per-pair yield to
-    /// BAML — and the float domain uses `f64::total_cmp`, so no domain throws.
+    /// BAML — and the float domain uses BAML's total float order, so no domain
+    /// throws.
     /// The validation rejections are defensive only: the `_is_primitive_array`
     /// guard plus `T[]` homogeneity make them unreachable from `Sortable.sort`.
     fn _rust_sort(vm: &mut BexVm, arr: &Value) -> NativeCallResult {
@@ -224,9 +226,9 @@ impl BamlPackageBaml for PackageBamlImpl {
 
     /// `baml._median_float(values)` — native backing for `float[].median()`.
     ///
-    /// Sorts a copy with `f64::total_cmp` (BAML's total float ordering, matching
-    /// `float[].sort()`) so the caller's array is left untouched. Throws
-    /// `InvalidArgument` when `values` is empty.
+    /// Sorts a copy in BAML's total float order (matching `float[].sort()`) so
+    /// the caller's array is left untouched. Throws `InvalidArgument` when
+    /// `values` is empty.
     fn _median_float(vm: &BexVm, values: &[Value]) -> Result<f64, VmRustFnError> {
         if values.is_empty() {
             return Err(VmBamlError::InvalidArgument {
@@ -239,7 +241,7 @@ impl BamlPackageBaml for PackageBamlImpl {
             .enumerate()
             .map(|(index, value)| expect_float(vm, *value, "_median_float", index))
             .collect();
-        sorted.sort_by(f64::total_cmp);
+        sorted.sort_by(|a, b| bex_vm_types::float_order::cmp(*a, *b));
         let mid = sorted.len() / 2;
         if sorted.len() % 2 == 1 {
             Ok(sorted[mid])

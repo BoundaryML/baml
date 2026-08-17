@@ -4,8 +4,8 @@
 // Phase 2 of thoughts/sam-projects/array-sort/01b-option-5-tdd-plan.md
 // (float semantics updated by the 02 follow-up): builtin impls for
 // int/float/bigint/string, `type CompareError = never` for all four — float
-// orders by IEEE 754 totalOrder (`f64::total_cmp`), so NaN has a defined
-// position and `compare` never throws.
+// orders by BAML's total float order (the one `baml.ops.Compare for float` and
+// `<` use), so NaN has a defined position and `compare` never throws.
 
 // NB on shape: receivers are *annotated* test-block locals and arguments are
 // literals (or inline calls). The annotation widens the receiver's literal
@@ -55,8 +55,8 @@ test "comparable_float_compare" {
 }
 
 // DECISION TEST (02-plan Phase 3, reverses the 01b NaN decision): float
-// comparison no longer throws on NaN — `total_cmp` orders NaN after +inf
-// (`… < +inf < +NaN`) and equal to itself.
+// comparison no longer throws on NaN — BAML's total float order puts NaN after
+// +inf (`… < +inf < NaN`) and equal to itself.
 test "comparable_float_nan_total_order" {
     let one: float = 1.0;
     assert.is_true(one.compare(float.nan()) < 0);
@@ -187,7 +187,7 @@ test "sort_bigints_match_sort" {
     assert.equal(xs, expected)
 }
 
-// float's SortError is `never` (total_cmp decision) — infallible like int.
+// float's SortError is `never` (the total-order decision) — infallible like int.
 function sort_floats(xs: float[]) -> float[] throws never {
     xs.sort()
 }
@@ -199,15 +199,14 @@ test "sort_floats_match_sort" {
     assert.equal(xs, expected)
 }
 
-// DECISION TEST (02-plan Phase 3): NaN no longer throws — `total_cmp` is a
-// total order over all doubles, so NaN sorts deterministically after +inf.
+// DECISION TEST (02-plan Phase 3): NaN no longer throws — BAML's float order is
+// total, so NaN sorts deterministically after +inf.
 test "sort_floats_nan_sorts_last" {
     let xs = [1.0, float.nan(), 0.5];
     xs.sort();
     assert.equal(xs.length(), 3);
     assert.equal(xs.at(0), 0.5);
     assert.equal(xs.at(1), 1.0);
-    // NaN != NaN under `==`; assert positionally via is_nan.
     let last = xs.at(2);
     match (last) {
         null => assert.is_true(false)

@@ -641,19 +641,10 @@ function baml.Bigint._random_in_range(draw: uint8array, lower: bigint, upper: bi
 function baml.Bigint.abs(self: bigint) -> bigint {
 }
 
-function baml.Bigint.clamp(self: bigint, min: bigint, max: bigint) -> bigint {
-}
-
 function baml.Bigint.ilog(self: bigint, base: bigint) -> bigint {
 }
 
 function baml.Bigint.isqrt(self: bigint) -> bigint {
-}
-
-function baml.Bigint.max(self: bigint, other: bigint) -> bigint {
-}
-
-function baml.Bigint.min(self: bigint, other: bigint) -> bigint {
 }
 
 function baml.Bigint.parse(text: string) -> bigint {
@@ -792,9 +783,6 @@ function baml.Float.atanh(self: float) -> float {
 function baml.Float.ceil(self: float) -> float {
 }
 
-function baml.Float.clamp(self: float, min: float, max: float) -> float {
-}
-
 function baml.Float.cos(self: float) -> float {
 }
 
@@ -852,12 +840,6 @@ function baml.Float.itrunc(self: float) -> int {
 }
 
 function baml.Float.log(self: float, base: float) -> float {
-}
-
-function baml.Float.max(self: float, other: float) -> float {
-}
-
-function baml.Float.min(self: float, other: float) -> float {
 }
 
 function baml.Float.nan() -> float {
@@ -939,9 +921,6 @@ function baml.Int._random_in_range(draw: int, lower: int, upper: int) -> int {
 function baml.Int.abs(self: int) -> int {
 }
 
-function baml.Int.clamp(self: int, min: int, max: int) -> int {
-}
-
 function baml.Int.count_ones(self: int) -> int {
 }
 
@@ -960,15 +939,9 @@ function baml.Int.leading_ones(self: int) -> int {
 function baml.Int.leading_zeros(self: int) -> int {
 }
 
-function baml.Int.max(self: int, other: int) -> int {
-}
-
 function baml.Int.max_value() -> int {
     load_const 4611686018427387903
     return
-}
-
-function baml.Int.min(self: int, other: int) -> int {
 }
 
 function baml.Int.min_value() -> int {
@@ -5619,7 +5592,34 @@ function baml.ops.<(bigint as baml.ops.BitXor<bigint>)>.bit_xor(self: bigint, rh
 function baml.ops.<(bigint as baml.ops.BitXor<int>)>.bit_xor(self: bigint, rhs: int) -> bigint {
 }
 
-function baml.ops.<(bigint as baml.ops.Compare)>.lt(self: bigint, other: bigint) -> bool {
+function baml.ops.<(bigint as baml.ops.Compare)>.cmp(self: bigint, other: bigint) -> baml.ops.Ordering {
+    load_var2 1 2
+    cmp_bigint_op <
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var2 1 2
+    cmp_bigint_op >
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+    jump L4
+
+  L2:
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
+    jump L4
+
+  L3:
+    load_const baml.ops.Ordering.Less
+    alloc_variant baml.ops.Ordering
+
+  L4:
+    return
 }
 
 function baml.ops.<(bigint as baml.ops.Divide<bigint>)>.div(self: bigint, rhs: bigint) -> bigint {
@@ -5664,25 +5664,44 @@ function baml.ops.<(bigint as baml.ops.Subtract<bigint>)>.sub(self: bigint, rhs:
 function baml.ops.<(bigint as baml.ops.Subtract<int>)>.sub(self: bigint, rhs: int) -> bigint {
 }
 
-function baml.ops.<(bool as baml.ops.Compare)>.gt(self: bool, other: bool) -> bool {
+function baml.ops.<(bool as baml.ops.Compare)>.cmp(self: bool, other: bool) -> baml.ops.Ordering {
     load_var self
-    jump_if_false L0
-    pop 1
-    load_var other
-    unary_op !
+    is_type true
+    pop_jump_if_false L0
+    jump L3
 
   L0:
-    return
-}
-
-function baml.ops.<(bool as baml.ops.Compare)>.lt(self: bool, other: bool) -> bool {
-    load_var self
-    unary_op !
-    jump_if_false L0
-    pop 1
     load_var other
+    is_type true
+    pop_jump_if_false L1
+    jump L2
 
-  L0:
+  L1:
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+    jump L6
+
+  L2:
+    load_const baml.ops.Ordering.Less
+    alloc_variant baml.ops.Ordering
+    jump L6
+
+  L3:
+    load_var other
+    is_type true
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
+    jump L6
+
+  L5:
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+
+  L6:
     return
 }
 
@@ -5695,16 +5714,34 @@ function baml.ops.<(float as baml.ops.Add<float>)>.add(self: float, rhs: float) 
 function baml.ops.<(float as baml.ops.Add<int>)>.add(self: float, rhs: int) -> float {
 }
 
-function baml.ops.<(float as baml.ops.Compare)>.ge(self: float, other: float) -> bool {
-}
+function baml.ops.<(float as baml.ops.Compare)>.cmp(self: float, other: float) -> baml.ops.Ordering {
+    load_var2 1 2
+    cmp_float_op <
+    pop_jump_if_false L0
+    jump L3
 
-function baml.ops.<(float as baml.ops.Compare)>.gt(self: float, other: float) -> bool {
-}
+  L0:
+    load_var2 1 2
+    cmp_float_op >
+    pop_jump_if_false L1
+    jump L2
 
-function baml.ops.<(float as baml.ops.Compare)>.le(self: float, other: float) -> bool {
-}
+  L1:
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+    jump L4
 
-function baml.ops.<(float as baml.ops.Compare)>.lt(self: float, other: float) -> bool {
+  L2:
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
+    jump L4
+
+  L3:
+    load_const baml.ops.Ordering.Less
+    alloc_variant baml.ops.Ordering
+
+  L4:
+    return
 }
 
 function baml.ops.<(float as baml.ops.Divide<float>)>.div(self: float, rhs: float) -> float {
@@ -5764,7 +5801,34 @@ function baml.ops.<(int as baml.ops.BitXor<bigint>)>.bit_xor(self: int, rhs: big
 function baml.ops.<(int as baml.ops.BitXor<int>)>.bit_xor(self: int, rhs: int) -> int {
 }
 
-function baml.ops.<(int as baml.ops.Compare)>.lt(self: int, other: int) -> bool {
+function baml.ops.<(int as baml.ops.Compare)>.cmp(self: int, other: int) -> baml.ops.Ordering {
+    load_var2 1 2
+    cmp_int_op <
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var2 1 2
+    cmp_int_op >
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+    jump L4
+
+  L2:
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
+    jump L4
+
+  L3:
+    load_const baml.ops.Ordering.Less
+    alloc_variant baml.ops.Ordering
+
+  L4:
+    return
 }
 
 function baml.ops.<(int as baml.ops.Divide<bigint>)>.div(self: int, rhs: bigint) -> bigint {
@@ -5843,16 +5907,34 @@ function baml.ops.<(null as baml.ops.Equals)>.neq(self: null, other: null) -> bo
     return
 }
 
-function baml.ops.<(string as baml.ops.Compare)>.ge(self: string, other: string) -> bool {
-}
+function baml.ops.<(string as baml.ops.Compare)>.cmp(self: string, other: string) -> baml.ops.Ordering {
+    load_var2 1 2
+    cmp_op <
+    pop_jump_if_false L0
+    jump L3
 
-function baml.ops.<(string as baml.ops.Compare)>.gt(self: string, other: string) -> bool {
-}
+  L0:
+    load_var2 1 2
+    cmp_op >
+    pop_jump_if_false L1
+    jump L2
 
-function baml.ops.<(string as baml.ops.Compare)>.le(self: string, other: string) -> bool {
-}
+  L1:
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+    jump L4
 
-function baml.ops.<(string as baml.ops.Compare)>.lt(self: string, other: string) -> bool {
+  L2:
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
+    jump L4
+
+  L3:
+    load_const baml.ops.Ordering.Less
+    alloc_variant baml.ops.Ordering
+
+  L4:
+    return
 }
 
 function baml.ops.<(string as baml.ops.Equals)>.eq(self: string, other: string) -> bool {
@@ -5867,13 +5949,31 @@ function baml.ops.<(uint8array as baml.ops.Index<int>)>.index(self: uint8array, 
     return
 }
 
+function baml.ops.Compare.clamp(self: baml.ops.Compare, min: #0, max: #0) -> #0 {
+    load_var2 1 3
+    load_type baml.ops.Compare
+    load_const "min"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var2 5 2
+    load_type baml.ops.Compare
+    load_const "max"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
 function baml.ops.Compare.ge(self: baml.ops.Compare, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
-    load_const "lt"
+    load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
     load_var _3
+    load_const baml.ops.Ordering.Less
+    alloc_variant baml.ops.Ordering
+    call baml.ops.equals_equals
     unary_op !
     return
 }
@@ -5881,32 +5981,112 @@ function baml.ops.Compare.ge(self: baml.ops.Compare, other: #0) -> bool {
 function baml.ops.Compare.gt(self: baml.ops.Compare, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
-    load_const "le"
+    load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
     load_var _3
-    unary_op !
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
+    call baml.ops.equals_equals
     return
 }
 
 function baml.ops.Compare.le(self: baml.ops.Compare, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
-    load_const "lt"
+    load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
     load_var _3
-    jump_if_false L0
-    jump L1
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
+    call baml.ops.equals_equals
+    unary_op !
+    return
+}
+
+function baml.ops.Compare.lt(self: baml.ops.Compare, other: #0) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "cmp"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_const baml.ops.Ordering.Less
+    alloc_variant baml.ops.Ordering
+    call baml.ops.equals_equals
+    return
+}
+
+function baml.ops.Compare.max(self: baml.ops.Compare, other: #0) -> #0 {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "cmp"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    discriminant
+    load_const Ordering.Less
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
 
   L0:
-    pop 1
-    load_var2 1 2
-    load_type baml.ops.Equals
-    load_const "eq"
-    virtual_call nargs=2 ntypeargs=0
+    load_var _3
+    discriminant
+    load_const Ordering.Equal
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
 
   L1:
+    load_var self
+    jump L4
+
+  L2:
+    load_var self
+    jump L4
+
+  L3:
+    load_var other
+
+  L4:
+    return
+}
+
+function baml.ops.Compare.min(self: baml.ops.Compare, other: #0) -> #0 {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "cmp"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    discriminant
+    load_const Ordering.Less
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _3
+    discriminant
+    load_const Ordering.Equal
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var other
+    jump L4
+
+  L2:
+    load_var self
+    jump L4
+
+  L3:
+    load_var self
+
+  L4:
     return
 }
 

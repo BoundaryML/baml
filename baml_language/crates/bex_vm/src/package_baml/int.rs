@@ -7,7 +7,7 @@ use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 const INT_DOMAIN_SPAN: u128 = (Value::INT_MAX as i128 - Value::INT_MIN as i128 + 1).cast_unsigned();
 
 impl BamlClassInt for PackageBamlImpl {
-    // ── Comparisons / clamping ────────────────────────────────────────────────
+    // ── Magnitude ─────────────────────────────────────────────────────────────
 
     fn abs(int: i64) -> Result<i64, VmRustFnError> {
         // BAML int is i63 (low bit reserved for the Value tag). The
@@ -22,21 +22,8 @@ impl BamlClassInt for PackageBamlImpl {
         Ok(int.wrapping_abs())
     }
 
-    fn min(int: i64, other: i64) -> i64 {
-        std::cmp::min(int, other)
-    }
-
-    fn max(int: i64, other: i64) -> i64 {
-        std::cmp::max(int, other)
-    }
-
-    fn clamp(int: i64, min: i64, max: i64) -> i64 {
-        // Two-step (clamp) so we do not panic when min > max — Rust's
-        // `i64::clamp` debug-asserts `min <= max`. The behavior matches:
-        // first cap at max, then floor at min.
-        let v = std::cmp::min(int, max);
-        std::cmp::max(v, min)
-    }
+    // No `min` / `max` / `clamp` here: `int` gets them from
+    // `baml.ops.Compare`. See the note in `int.baml`.
 
     // ── Math ──────────────────────────────────────────────────────────────────
 

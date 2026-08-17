@@ -3787,6 +3787,12 @@ impl<'db> LoweringContext<'db> {
         recv_ty: &Tir2Ty,
         method: &Name,
     ) -> Option<InterfaceTypeView> {
+        // A literal-typed receiver is concrete and dispatches as its base
+        // primitive — the same widening `l1_impl_views_for_recv` applies below,
+        // hoisted so the kind test admits `(3.0).cmp(x)` rather than dropping it
+        // to the direct-call path, which would name an interface-keyed global
+        // that a required method has no body for.
+        let recv_ty = &widen_literal_bases(recv_ty);
         // Only concrete receivers — interfaces/type-vars dispatch via the
         // arms above. Containers are concrete too (`implements<T> I for T[]`),
         // and so is a reflected type value (`reflect.Type` is its canonical
@@ -7507,12 +7513,12 @@ impl<'db> LoweringContext<'db> {
     /// it still goes through `__union_neg`.)
     ///
     /// Each operator dispatches its *own* method rather than deriving the other
-    /// three from `lt`. `implement Compare for float` overrides all four
-    /// natively so that NaN is unordered in every direction, which `ge = !lt`
-    /// would break; and rewriting `a > b` as `b.lt(a)` would ignore a user's
-    /// `gt` override. The interface's defaults still supply whichever methods an
-    /// impl leaves out — they are merged into the impl's method table when the
-    /// program is baked.
+    /// three from `lt` (or from `cmp`): rewriting `a > b` as `b.lt(a)` would
+    /// ignore a user's `gt` override, and an impl overrides `gt` precisely to
+    /// avoid paying for `cmp`. Where an impl declares only the required `cmp`,
+    /// the interface's `lt`/`le`/`gt`/`ge` defaults supply the rest — they are
+    /// merged into the impl's method table when the program is baked, so this
+    /// dispatch finds a method either way.
     fn lower_ordering_via_virtual_call(
         &mut self,
         method: &str,

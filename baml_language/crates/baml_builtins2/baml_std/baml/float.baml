@@ -10,6 +10,10 @@
 ///
 /// Neither has a JSON representation, so `baml.json.from` renders NaN and both
 /// infinities as `null`.
+///
+/// Comparison departs from raw IEEE: `==` is reflexive and `<`/`<=`/`>`/`>=`
+/// are a *total* order, with NaN a single value ordered above every number
+/// (`-inf < …reals… < +inf < NaN`) — see `baml.ops.Compare for float`.
 class Float {
     // mut_vm: Float values are heap-boxed (Object::Float); construction needs a TLAB.
     // ─── Predicates ───────────────────────────────────────────────────────────
@@ -18,8 +22,9 @@ class Float {
     /// operations produce, such as `(-1.0).sqrt()`, `float.inf() - float.inf()`,
     /// or `0.0 / 0.0`.
     ///
-    /// NaN is the only float that is not equal to itself, so this is the only
-    /// correct test for it: `x != x` exactly when `x.is_nan()`.
+    /// This predicate is the only way to test for NaN: BAML's `==` is
+    /// reflexive, so `x != x` is false for every float — including NaN, which
+    /// equals itself and every other NaN.
     ///
     /// # Examples
     ///
@@ -61,7 +66,7 @@ class Float {
         !self.is_nan() && !self.is_infinite()
     }
 
-    // ─── Comparisons / clamping ───────────────────────────────────────────────
+    // ─── Magnitude ────────────────────────────────────────────────────────────
 
     /// Returns the absolute value of `self`. NaN stays NaN.
     ///
@@ -77,48 +82,13 @@ class Float {
         $rust_function
     }
 
-    /// Returns the smaller of `self` and `other`.
-    ///
-    /// A single NaN operand is suppressed: if exactly one of the two is NaN,
-    /// the other one is returned. Only two NaNs give NaN. Check with
-    /// `is_nan()` beforehand if you need stricter handling.
-    ///
-    /// # Examples
-    ///
-    /// ```baml
-    /// (3.0).min(5.0)              // 3.0
-    /// (3.0).min(float.nan())      // 3.0  (NaN suppressed)
-    /// float.nan().min(float.nan()) // NaN
-    /// ```
-    function min(self, other: float) -> float throws never {
-        $rust_function
-    }
-
-    /// Returns the larger of `self` and `other`. NaN is suppressed exactly as
-    /// `min` suppresses it.
-    function max(self, other: float) -> float throws never {
-        $rust_function
-    }
-
-    /// Clamps `self` into the range `[min, max]`.
-    ///
-    /// Equivalent to `self.min(max).max(min)`. Pass `min <= max`; if `min > max`
-    /// the result is always `min`, because the lower clamp runs last.
-    ///
-    /// A NaN `self` clamps to `max`, not NaN: `self.min(max)` suppresses the
-    /// NaN and yields `max`, which then passes through `.max(min)` unchanged.
-    ///
-    /// # Examples
-    ///
-    /// ```baml
-    /// (5.0).clamp(0.0, 10.0)         // 5.0
-    /// (-3.0).clamp(0.0, 10.0)        // 0.0
-    /// (15.0).clamp(0.0, 10.0)        // 10.0
-    /// float.nan().clamp(0.0, 10.0)   // 10.0  (NaN suppressed; clamps to max)
-    /// ```
-    function clamp(self, min: float, max: float) -> float throws never {
-        $rust_function
-    }
+    // `min` / `max` / `clamp` are NOT declared here. They come from
+    // `baml.ops.Compare`, which `float` implements — one definition, driven by
+    // the total float order, so `(3.0).max(x)` cannot mean something different
+    // from the `max` a `T extends baml.ops.Compare` bound reaches. Note the
+    // total order makes NaN the largest float, so it wins a `max` and loses a
+    // `min` rather than being suppressed the way IEEE `minNum`/`maxNum` and
+    // Rust's `f64::min`/`f64::max` suppress it.
 
     // ─── Rounding (returns float) ─────────────────────────────────────────────
     //

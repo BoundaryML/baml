@@ -38,8 +38,10 @@ fn baml_eq(vm: &BexVm, a: Value, b: Value) -> bool {
             // Heap-boxed floats compare by content (the post-tagged-pointer
             // encoding allocates a fresh `Object::Float` per float, so two
             // semantically-equal floats land at distinct `HeapPtr`s and
-            // would otherwise miss the reference-equality fallback).
-            (Object::Float(lf), Object::Float(rf)) => lf == rf,
+            // would otherwise miss the reference-equality fallback), through
+            // the same reflexive equality `==` uses — so `[nan].includes(nan)`
+            // agrees with `nan == nan`.
+            (Object::Float(lf), Object::Float(rf)) => bex_vm_types::float_order::eq(*lf, *rf),
             _ => la == rb,
         }
     } else {
@@ -138,9 +140,10 @@ fn expect_int(vm: &BexVm, value: Value) -> Result<i64, NativeCallResult> {
 // `Sortable.sort` routes homogeneous primitive arrays (int/bigint/string/
 // float) here via the `_is_primitive_array` guard; everything else goes
 // through `sort_by` + `_compare_shim`. The float domain orders by
-// `f64::total_cmp` — a total order over all doubles including NaN — kept
-// bit-exact with `_float_total_cmp` (which backs `Comparable for float`), so
-// the fast path and the comparator path can never disagree on an ordering.
+// `float_order::cmp` — BAML's total float order, which gives NaN a defined
+// position — shared with `_float_total_cmp` (which backs `Comparable for
+// float`) and with the comparison opcodes, so the fast path and the
+// comparator path can never disagree on an ordering.
 // The mixed-domain / null / non-primitive rejections below are defensive:
 // `_rust_sort` is only reached for arrays the type system already proved
 // homogeneous primitive.
@@ -213,8 +216,8 @@ fn natural_kind(vm: &BexVm, context: &str, value: Value) -> Result<NaturalKind, 
         ));
     };
     match vm.get_object(ptr) {
-        // NaN is *not* rejected: the float domain orders by `total_cmp`,
-        // which gives NaN a defined position.
+        // NaN is *not* rejected: the float domain orders by BAML's total
+        // float order, which gives NaN a defined position.
         Object::Float(_) => Ok(NaturalKind::Float),
         Object::Bigint(_) => Ok(NaturalKind::Bigint),
         Object::String(_) => Ok(NaturalKind::String),
@@ -323,9 +326,10 @@ pub(super) fn compare_natural_values(
                     .as_int()
                     .expect("validated int sort value should be int"),
             ),
-        NaturalDomain::Float => {
-            value_as_float_for_sort(vm, left).total_cmp(&value_as_float_for_sort(vm, right))
-        }
+        NaturalDomain::Float => bex_vm_types::float_order::cmp(
+            value_as_float_for_sort(vm, left),
+            value_as_float_for_sort(vm, right),
+        ),
         NaturalDomain::Bigint => {
             value_as_bigint_cow_for_sort(vm, left).cmp(&value_as_bigint_cow_for_sort(vm, right))
         }

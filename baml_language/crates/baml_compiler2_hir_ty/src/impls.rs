@@ -1072,6 +1072,24 @@ pub fn impls_for_type<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     concrete: &baml_type::Ty,
 ) -> Vec<ResolvedImpl<'db>> {
+    // A literal-typed value implements what its base primitive does -
+    // the same rule `resolve_impl` applies to a single goal, applied to
+    // enumeration. Without it a literal RECEIVER (`(3.0).cmp(x)`) sees
+    // no impls at all while an identically-valued `float`-typed one sees
+    // them, so the same call would resolve differently by spelling.
+    // Widening also binds `Self` to the primitive, which is what makes
+    // an `other: Self` parameter accept any value of that type rather
+    // than only the receiver's own literal.
+    //
+    // Widen BEFORE the memo key is built, so both spellings share one
+    // cache entry instead of the literal interning a second, empty one.
+    if let baml_type::Ty::Literal(literal, _, attr) = concrete {
+        let widened = baml_type::Ty::from_primitive(
+            baml_type::PrimitiveType::from_literal(literal),
+            attr.clone(),
+        );
+        return impls_for_type(db, &widened);
+    }
     impls_for_type_cached(db, ImplTypeKey::new(db, concrete.clone()))
         .iter()
         .map(|cached| match &cached.origin {

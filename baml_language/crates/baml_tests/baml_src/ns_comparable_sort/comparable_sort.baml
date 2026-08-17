@@ -457,9 +457,9 @@ test "element_is_dispatch_runtime_both_branches" {
 
 // The native natural sort and the `sort_by` + `compare` path must produce
 // identical orderings for every primitive domain — including float with
-// NaN/±inf/±0, where both paths must agree on `total_cmp`. The user-class
-// domain rides along as a sanity check (both sides take the comparator
-// path there).
+// NaN/±inf/±0, where both paths must agree on BAML's total float order. The
+// user-class domain rides along as a sanity check (both sides take the
+// comparator path there).
 class ParityItem {
     rank int
     implements baml.Comparable {
@@ -470,10 +470,10 @@ class ParityItem {
     }
 }
 
-// Element-wise `compare(...) == 0` rather than `xs == ys`. The float domain
-// below includes NaN, and `==` is IEEE — `NaN != NaN`, so an array holding one
-// is not even equal to itself. `Comparable for float` is `total_cmp`, which is
-// both total and the very ordering these two sort paths are being compared on.
+// Element-wise `compare(...) == 0` rather than `xs == ys`, so the check is on
+// the very ordering the two sort paths are being compared on rather than on
+// `==`. `Comparable for float` is BAML's total float order, which is total over
+// the NaN/±inf/±0 domain below.
 function check<T extends baml.Comparable>(xs: T[], ys: T[]) -> bool throws T.CompareError {
     xs.sort();
     ys.sort_by((a: T, b: T) -> int throws T.CompareError { a.compare(b) });

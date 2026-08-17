@@ -937,14 +937,13 @@ implements FloatStats for float[] {
 
     /// Returns the median (the middle value) of `self`.
     ///
-    /// The elements are copied and sorted ascending by IEEE 754 `totalOrder`,
-    /// matching `float[].sort()`, so the caller's array is left untouched. An
-    /// odd element count yields the single middle element; an even count yields
-    /// the arithmetic mean of the two middle elements, computed so the
-    /// intermediate sum cannot overflow. `totalOrder` gives `NaN` a defined
-    /// position at the extremes, so a `NaN` element shifts the middle; the
-    /// result is `NaN` only when a `NaN` is itself one of the two middle
-    /// elements of an even-length array.
+    /// The elements are copied and sorted ascending by BAML's total float
+    /// order, matching `float[].sort()`, so the caller's array is left
+    /// untouched. An odd element count yields the single middle element; an
+    /// even count yields the arithmetic mean of the two middle elements,
+    /// computed so the intermediate sum cannot overflow. The total order places
+    /// `NaN` above every number, so a `NaN` element shifts the middle; the
+    /// result is `NaN` only when a `NaN` is itself a middle element.
     ///
     /// # Throws
     /// - `baml.errors.InvalidArgument` when `self` is empty.
@@ -986,7 +985,7 @@ function _sum_float(values: float[]) -> float throws never {
 }
 
 /// (internal) Native backing for `float[].median()`; call that instead. Sorts a
-/// *copy* of `values` by IEEE 754 `totalOrder` and returns the middle element,
+/// *copy* of `values` by BAML's total float order and returns the middle element,
 /// or the mean of the two middle elements for an even count, leaving `values`
 /// untouched.
 ///

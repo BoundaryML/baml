@@ -14,9 +14,9 @@ class            baml.Array                       <builtin>/baml/containers.baml
 class            baml.Map                         <builtin>/baml/containers.baml:700
 interface        baml.Summable                    <builtin>/baml/containers.baml:829
 interface        baml.FloatStats                  <builtin>/baml/containers.baml:898
-function         baml._sum_int                    <builtin>/baml/containers.baml:975
-function         baml._sum_float                  <builtin>/baml/containers.baml:984
-function         baml._median_float               <builtin>/baml/containers.baml:996
+function         baml._sum_int                    <builtin>/baml/containers.baml:974
+function         baml._sum_float                  <builtin>/baml/containers.baml:983
+function         baml._median_float               <builtin>/baml/containers.baml:995
 interface        baml.ToString                    <builtin>/baml/conversions.baml:25
 function         baml._to_string_default          <builtin>/baml/conversions.baml:54
 function         baml._cleanup_begin              <builtin>/baml/conversions.baml:71
@@ -28,8 +28,8 @@ function         baml._from_json_shim             <builtin>/baml/conversions.bam
 function         baml.deep_copy                   <builtin>/baml/core.baml:10
 interface        baml.Concrete                    <builtin>/baml/core.baml:18
 class            baml.TaggedString                <builtin>/baml/core.baml:34
-class            baml.Float                       <builtin>/baml/float.baml:13
-function         baml._trunc_to_int               <builtin>/baml/float.baml:514
+class            baml.Float                       <builtin>/baml/float.baml:17
+function         baml._trunc_to_int               <builtin>/baml/float.baml:484
 class            baml.Int                         <builtin>/baml/int.baml:33
 class            baml.Null                        <builtin>/baml/null.baml:2
 class            baml.String                      <builtin>/baml/string.baml:17
@@ -211,9 +211,10 @@ interface        baml.ops.BitOr                   <builtin>/baml/ns_ops/bitwise.
 interface        baml.ops.BitXor                  <builtin>/baml/ns_ops/bitwise.baml:77
 interface        baml.ops.ShiftLeft               <builtin>/baml/ns_ops/bitwise.baml:101
 interface        baml.ops.ShiftRight              <builtin>/baml/ns_ops/bitwise.baml:125
-interface        baml.ops.Equals                  <builtin>/baml/ns_ops/comparison.baml:37
-interface        baml.ops.Compare                 <builtin>/baml/ns_ops/comparison.baml:76
-function         baml.ops.equals_equals           <builtin>/baml/ns_ops/comparison.baml:133
+interface        baml.ops.Equals                  <builtin>/baml/ns_ops/comparison.baml:43
+interface        baml.ops.Compare                 <builtin>/baml/ns_ops/comparison.baml:83
+enum             baml.ops.Ordering                <builtin>/baml/ns_ops/comparison.baml:142
+function         baml.ops.equals_equals           <builtin>/baml/ns_ops/comparison.baml:177
 interface        baml.ops.Index                   <builtin>/baml/ns_ops/index.baml:32
 interface        baml.ops.Add                     <builtin>/baml/ns_ops/math.baml:47
 interface        baml.ops.Subtract                <builtin>/baml/ns_ops/math.baml:64

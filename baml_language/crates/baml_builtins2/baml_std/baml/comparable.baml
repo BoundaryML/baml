@@ -104,13 +104,12 @@ function _compare_shim<T extends Comparable>(a: T, b: T) -> int throws T.Compare
     $rust_function
 }
 
-// Floats order by IEEE 754 `totalOrder` (`f64::total_cmp`): a *total* order
-// over all doubles that places NaN deterministically
-// (`-NaN < -inf < … < -0.0 < +0.0 < … < +inf < +NaN`), so `compare` — and
-// therefore `float[].sort()` — never fails. The comparison is delegated to
-// the native `_float_total_cmp` so it is bit-exact `total_cmp` (the sign of
-// NaN and of zero participate in the order), matching the comparator the
-// native `_rust_sort` fast path uses for the float domain.
+// Floats order by BAML's total float order (`baml.ops.Compare for float`),
+// which places NaN deterministically as a single value above every number
+// (`-inf < … < 0.0 < … < +inf < NaN`), so `compare` — and therefore
+// `float[].sort()` — never fails. The comparison is delegated to the native
+// `_float_total_cmp` so it is the *same* order the comparison operators use
+// and the one the native `_rust_sort` fast path applies to the float domain.
 implements Comparable for float {
   type CompareError = never
 
@@ -119,7 +118,8 @@ implements Comparable for float {
   }
 }
 
-/// (internal) Three-way compares two floats by IEEE 754 `totalOrder`.
+/// (internal) Three-way compares two floats in BAML's total float order — the
+/// one `baml.ops.Compare for float`, `<`, and `float[].sort()` all share.
 ///
 /// Backs `Comparable for float` above and is kept bit-exact with the float
 /// comparator inside the native `_rust_sort`. Not part of the public
@@ -148,11 +148,11 @@ function _is_primitive_array<T extends Comparable>(arr: T[]) -> bool throws neve
 /// (internal) Sorts a primitive array (`int`, `bigint`, `string`, `float`) in
 /// place by its natural order and returns the same array object, with no copy.
 ///
-/// Total and infallible for every supported element type: `float` uses IEEE
-/// 754 `totalOrder`, a total order over all doubles including NaN, so it never
-/// throws. Only reached from `Sortable.sort`'s primitive fast path (guarded by
-/// `_is_primitive_array`), where the element type is known to be one of these;
-/// every other element type goes through `sort_by`.
+/// Total and infallible for every supported element type: `float` uses BAML's
+/// total float order, which covers NaN, so it never throws. Only reached from
+/// `Sortable.sort`'s primitive fast path (guarded by `_is_primitive_array`),
+/// where the element type is known to be one of these; every other element
+/// type goes through `sort_by`.
 ///
 /// `arr` is typed as a bare generic (`A`, not `T[]` with `T extends
 /// Comparable`) because the native-glue codegen passes generic parameters as
