@@ -442,6 +442,22 @@ impl<'db> InferenceContext<'db> {
         }
         let mut applicable = None;
         for facts in crate::impls::all_impl_facts(self.db) {
+            // Name-only reject before any snapshot/unification: a
+            // candidate whose interface never declares `name` cannot
+            // produce a member (`member_on_interface` would return None),
+            // so it can't apply and can't create ambiguity. The probe
+            // previously cloned the whole bounds table per impl block in
+            // the project just to discover this.
+            if crate::method_resolution::interface_declares_member(
+                self.db,
+                &self.facts,
+                &facts.interface,
+                name,
+            )
+            .is_none()
+            {
+                continue;
+            }
             let snapshot = self.table.snapshot();
             let applies = self.probe_candidate(receiver, name, facts).is_some();
             self.table.rollback_to(snapshot);
