@@ -67,9 +67,15 @@ use baml_type::{
 /// `baml_type` ([`ResolvedAliases::convert`]), wrapped compiler-side by
 /// `convert_tir_ty_for_runtime`; only this db-querying constructor stays
 /// compiler-side.
-pub fn resolved_aliases_for_package(
-    db: &dyn crate::Db,
-    pkg_id: baml_compiler2_hir::package::PackageId,
+///
+/// Salsa-memoized per package: emit's `build_alias_caches`, the warm-path
+/// throws gate, and [`package_lowering_data`] all need this environment, and
+/// as a plain function each rebuilt it (per-alias re-lowering plus the
+/// `from_aliases` recursion DFS) — up to three times per compile.
+#[salsa::tracked(returns(ref))]
+pub fn resolved_aliases_for_package<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: baml_compiler2_hir::package::PackageId<'db>,
 ) -> ResolvedAliases {
     use baml_compiler2_hir::package::{package_dependencies, package_items};
 
@@ -1567,7 +1573,7 @@ fn package_lowering_data<'db>(
         class_fields,
         class_field_types,
         enum_variants,
-        resolved_aliases,
+        resolved_aliases: resolved_aliases.clone(),
         interface_method_names,
     }
 }

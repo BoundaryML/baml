@@ -42,7 +42,9 @@ use baml_db::{
     SourceFile,
     baml_compiler2_emit::{
         CompileOptions, LoweringError, OptLevel, decompose_units, generate_project_bytecode,
-        generate_project_bytecode_with_reuse_artifacts, generate_project_bytecode_with_stdlib,
+        generate_project_bytecode_with_reuse_artifacts,
+        generate_project_bytecode_with_reuse_artifacts_pregated,
+        generate_project_bytecode_with_stdlib,
         generate_stdlib_program, reuse_throws_mismatches,
     },
     baml_compiler2_hir, baml_compiler2_ppir,
@@ -605,14 +607,29 @@ pub(crate) fn compile_program_artifacts(
         }
     };
     if let Some(plan) = plan {
-        match generate_project_bytecode_with_reuse_artifacts(
-            db,
-            options,
-            CLI_OPT_LEVEL,
-            &base,
-            &plan.prev_units,
-            &plan.clean_files,
-        ) {
+        // `prepare_reuse_plan` already ran the serve-time throws gate against
+        // these exact seeds; when it demoted nothing, skip emit's identical
+        // re-run of the gate (see `throws_gate_verified`).
+        let reuse_result = if plan.throws_gate_verified {
+            generate_project_bytecode_with_reuse_artifacts_pregated(
+                db,
+                options,
+                CLI_OPT_LEVEL,
+                &base,
+                &plan.prev_units,
+                &plan.clean_files,
+            )
+        } else {
+            generate_project_bytecode_with_reuse_artifacts(
+                db,
+                options,
+                CLI_OPT_LEVEL,
+                &base,
+                &plan.prev_units,
+                &plan.clean_files,
+            )
+        };
+        match reuse_result {
             Ok((program, units)) => {
                 return Ok(CompiledArtifacts {
                     program,
@@ -687,6 +704,15 @@ pub(crate) struct ReusePlan {
     /// deterministic pure function), so it is skipped — and unit payloads are
     /// not loaded at all (nothing will be re-emitted or relinked from them).
     pub(crate) no_delta: bool,
+    /// True once [`prepare_reuse_plan`] has run the serve-time throws gate
+    /// (or proven it a tautology via `no_delta`) with zero demotions — i.e.
+    /// `clean_files` already reflects the gate's verdict under the seeds now
+    /// installed in the database. Emit may then skip its own
+    /// `reuse_throws_mismatches` re-run (the second of two identical gates
+    /// per warm compile). Left `false` when the gate demoted anything: that
+    /// path clears the inference seeds, so emit's re-check runs against
+    /// honestly-derived inference and can demote further.
+    pub(crate) throws_gate_verified: bool,
 }
 
 /// The result of the warm-database preamble ([`CacheContext::prepare_warm_db`]).
@@ -721,6 +747,7 @@ pub(crate) fn prepare_reuse_plan(
     // project). Any real edit, added or removed file takes the gate below.
     if plan.no_delta {
         db.set_seeded_callable_throws(callable_seeds);
+        plan.throws_gate_verified = true;
         return Some(plan);
     }
     // The gate's runtime-type conversion derives the package alias tables,
@@ -731,6 +758,7 @@ pub(crate) fn prepare_reuse_plan(
     let mismatches = reuse_throws_mismatches(db, &plan.prev_units, &plan.clean_files);
     if mismatches.is_empty() {
         db.set_seeded_callable_throws(callable_seeds);
+        plan.throws_gate_verified = true;
         return Some(plan);
     }
 
@@ -1609,6 +1637,7 @@ impl CacheContext {
             clean_diagnostics,
             clean_fragments,
             no_delta,
+            throws_gate_verified: false,
         })
     }
 
