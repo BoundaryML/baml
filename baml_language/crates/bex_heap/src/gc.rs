@@ -749,12 +749,19 @@ impl BexHeap {
             Object::HostClosure(_) => {}
             // `GenericFunction` references its base function by `GlobalIndex`
             // (not a `HeapPtr`) and holds only inline `RuntimeTy`s — nothing to trace.
+            // An impl rule points at its interface and at each method body. For
+            // the static image those are compile-time pointers, but a rule a
+            // runtime package or an anonymous-class witness allocated points at
+            // moving objects, so the edges are traced like any other.
+            Object::ImplRule(rule) => {
+                worklist.push(rule.interface_head);
+                worklist.extend(rule.methods.values().map(|method| method.fqn));
+            }
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::TypeAlias(_)
             | Object::Interface(_)
-            | Object::ImplRule(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
@@ -1031,12 +1038,21 @@ impl BexHeap {
             // `HostClosure` carries no heap references; see
             // `add_references_to_worklist`.
             Object::HostClosure(_) => {}
+            Object::ImplRule(rule) => {
+                if let Some(&new_ptr) = forwarding.get(&rule.interface_head) {
+                    rule.interface_head = new_ptr;
+                }
+                for method in rule.methods.values_mut() {
+                    if let Some(&new_ptr) = forwarding.get(&method.fqn) {
+                        method.fqn = new_ptr;
+                    }
+                }
+            }
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::TypeAlias(_)
             | Object::Interface(_)
-            | Object::ImplRule(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
@@ -1438,12 +1454,22 @@ impl BexHeap {
             Object::Sentinel(_) => {}
             // `HostClosure` carries no heap references.
             Object::HostClosure(_) => {}
+            Object::ImplRule(rule) => {
+                if self.generation_of(rule.interface_head).is_young() {
+                    worklist.push(rule.interface_head);
+                }
+                worklist.extend(
+                    rule.methods
+                        .values()
+                        .map(|method| method.fqn)
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
+            }
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::TypeAlias(_)
             | Object::Interface(_)
-            | Object::ImplRule(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}

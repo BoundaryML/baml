@@ -13,8 +13,8 @@ use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
     Class, ClassField, GenericFunction, GlobalIndex, Object,
     types::{
-        DynTypeDefs, LocalName, MintId, Package, RuntimePackage, RuntimeTypeProvenance,
-        TypeAliasDef, TypeValue,
+        DynTypeDefs, InterfaceDef, LocalName, MethodImpl, MintId, Package, RuntimeImplRule,
+        RuntimePackage, RuntimeTypeProvenance, TypeAliasDef, TypeValue,
     },
 };
 use indexmap::IndexMap;
@@ -1168,4 +1168,68 @@ fn field_level_type_value_owner_is_traced_and_forwarded() {
         matches!(unsafe { owner.get() }, Object::Package(_)),
         "field-level owner does not point at the package"
     );
+}
+
+/// A runtime-allocated impl rule (a session's `implements` block or an
+/// anonymous class's witness) points at a moving interface and moving method
+/// bodies. The collector must keep both alive through the rule and repoint
+/// them when they move — dispatch reads `methods[].fqn` straight off the rule.
+#[test]
+fn impl_rule_edges_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let iface_name = QualifiedTypeName::local(Name::new("Runtime"));
+    let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
+        name: iface_name.clone(),
+        type_tag: baml_type::typetag::TypeTag::of_head("Runtime"),
+        args: Vec::new(),
+        requires: Vec::new(),
+        assoc: Vec::new(),
+        fields: Vec::new(),
+        methods: Vec::new(),
+    })));
+    // Any heap object serves as the method body's stand-in target.
+    let method_ptr = tlab.alloc_string("method body".to_string());
+    let rule_ptr = tlab.alloc(Object::ImplRule(Box::new(RuntimeImplRule {
+        interface_head: iface_ptr,
+        for_ty_pattern: baml_type::TyTemplate::from(RealizedTy::int()),
+        generic_param_bounds: Vec::new(),
+        interface_args: Vec::new(),
+        interface_assoc: Vec::new(),
+        methods: IndexMap::from([(
+            Name::new("run"),
+            MethodImpl {
+                fqn: method_ptr,
+                frame: Vec::new(),
+            },
+        )]),
+        field_links: Box::default(),
+    })));
+
+    // Root only the rule across two moves and a compaction.
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[rule_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(
+        stats.live_count, 3,
+        "rule, interface and method body must all survive"
+    );
+    let Object::ImplRule(rule) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the impl rule")
+    };
+    assert_ne!(
+        rule.interface_head, iface_ptr,
+        "interface moved; head must be repointed"
+    );
+    let Object::Interface(iface) = (unsafe { rule.interface_head.get() }) else {
+        panic!("interface_head does not point at an interface")
+    };
+    assert_eq!(iface.name, iface_name);
+    let fqn = rule.methods["run"].fqn;
+    assert_ne!(fqn, method_ptr, "method body moved; fqn must be repointed");
+    assert!(matches!(unsafe { fqn.get() }, Object::String(_)));
 }

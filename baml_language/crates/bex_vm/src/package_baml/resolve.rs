@@ -22,13 +22,14 @@ use bex_vm_types::{errors::VmInternalError, types::RuntimeImplRule};
 
 use crate::{BexVm, type_context::StructuralEquivCtx};
 
-/// A resolver candidate borrows immutable package rules and owns only rules
-/// copied out of the lock-protected dynamic side table. Static virtual calls
-/// must not deep-clone their rule metadata on every dispatch.
+/// A resolver candidate borrows an immutable rule from the heap. Every rule —
+/// compiled into the static image, owned by a runtime package, or registered
+/// as an anonymous class's witness — is an `Object::ImplRule`, so no candidate
+/// ever copies rule metadata. The two variants differ only in cacheability:
+/// a `Static` rule lives in the never-moving compile-time region.
 pub(crate) enum RuntimeImplRuleCandidate<'vm> {
     Static(&'vm RuntimeImplRule),
     Borrowed(&'vm RuntimeImplRule),
-    Owned(Box<RuntimeImplRule>),
 }
 
 impl RuntimeImplRuleCandidate<'_> {
@@ -43,7 +44,6 @@ impl std::ops::Deref for RuntimeImplRuleCandidate<'_> {
     fn deref(&self) -> &Self::Target {
         match self {
             Self::Static(rule) | Self::Borrowed(rule) => rule,
-            Self::Owned(rule) => rule,
         }
     }
 }
@@ -135,7 +135,12 @@ impl<'vm> ImplResolver<'vm> {
                 .dynamic_dispatch
                 .rules_of(iface_ptr)
                 .into_iter()
-                .map(|rule| RuntimeImplRuleCandidate::Owned(Box::new(rule))),
+                .filter_map(|rule_ptr| {
+                    self.vm
+                        .get_object(rule_ptr)
+                        .as_impl_rule()
+                        .map(RuntimeImplRuleCandidate::Borrowed)
+                }),
         );
         rules
     }

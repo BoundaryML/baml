@@ -1880,7 +1880,10 @@ impl BexEngine {
         let globals_permit =
             futures::executor::block_on(heap_permit_manager.new_permit(globals.clone()));
         let dynamic_dispatch_permit = futures::executor::block_on(heap_permit_manager.new_permit(
-            bex_vm::package_load::DynDispatchRoot(Arc::clone(&dynamic_dispatch)),
+            bex_vm::package_load::DynDispatchRoot::new(
+                Arc::clone(&dynamic_dispatch),
+                Arc::clone(&heap),
+            ),
         ));
 
         // Build a default RuntimeIo from the SysOps table with an empty context.

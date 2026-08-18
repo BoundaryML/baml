@@ -322,6 +322,15 @@ pub(super) fn validate_class_witnesses(
 
     // All aggregate witness checks happen before allocating the class/type
     // value (C-12, Fail-Before-Type).
+    //
+    // BUG: only intra-batch duplicates are rejected. A witness for `I` on a
+    // class that a static blanket rule (`implement<T extends Bound> I for T`)
+    // already covers is not detected; the resolver tries the static slice first
+    // and returns on the first match, so such a witness is silently shadowed
+    // rather than rejected. Coherence (TYPE_SYSTEM.md, "Interface Coherence")
+    // says at most one implementation per (type, interface) — this should fail
+    // closed at registration by probing `type_implements` for the fresh class
+    // against the static rules before allocating.
     let mut unique_witnesses = std::collections::HashSet::new();
     for witness in &witnesses {
         if !unique_witnesses.insert(witness.interface_ty.clone()) {
@@ -486,27 +495,32 @@ pub(super) fn register_class_witnesses(
                 },
             );
         }
+        // The witness is an ordinary heap `Object::ImplRule` — the resolver
+        // borrows it exactly like a package-owned rule and the collector keeps
+        // its `interface_head`/`methods[].fqn` current — so the side table
+        // holds only a pointer to it, never a copy.
+        let rule = vm.tlab.alloc(Object::ImplRule(Box::new(RuntimeImplRule {
+            interface_head: witness.interface_ptr,
+            for_ty_pattern,
+            generic_param_bounds: Vec::new(),
+            interface_args: witness
+                .interface_args
+                .into_iter()
+                .map(baml_type::TyTemplate::from)
+                .collect(),
+            interface_assoc: witness
+                .interface_assoc
+                .into_iter()
+                .map(|(name, ty)| (name, baml_type::TyTemplate::from(ty)))
+                .collect(),
+            methods,
+            field_links: witness.field_links.into_boxed_slice(),
+        })));
         vm.dynamic_dispatch.register_rule(
             witness.interface_ptr,
             crate::package_load::DynRuleEntry {
                 class: class_ptr,
-                rule: RuntimeImplRule {
-                    interface_head: witness.interface_ptr,
-                    for_ty_pattern,
-                    generic_param_bounds: Vec::new(),
-                    interface_args: witness
-                        .interface_args
-                        .into_iter()
-                        .map(baml_type::TyTemplate::from)
-                        .collect(),
-                    interface_assoc: witness
-                        .interface_assoc
-                        .into_iter()
-                        .map(|(name, ty)| (name, baml_type::TyTemplate::from(ty)))
-                        .collect(),
-                    methods,
-                    field_links: witness.field_links.into_boxed_slice(),
-                },
+                rule,
             },
         );
     }
