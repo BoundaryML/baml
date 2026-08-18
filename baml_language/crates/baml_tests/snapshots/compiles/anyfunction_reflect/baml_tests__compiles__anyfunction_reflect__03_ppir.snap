@@ -45,7 +45,7 @@ function user.signature_access(f: baml.AnyFunction) -> string  [expr] {
   { let sig = reflect.signature(f); let parts = sig.returns.to_string() Add sig.errors.to_string() Add sig.args.length().to_string(); for arg in sig.args { parts = parts Add arg.name Add arg.type.to_string() }; for key in sig.opts.keys() { let opt = sig.opts.get(key) } if (opt Ne null) { parts = parts Add key Add opt.type.to_string() }; return parts }
 }
 function user.typed_dispatch(name: string, args: map<string, unknown>) -> user.Doc[] | string  [expr] {
-  { let tools = heterogeneous_tool_map(); let f = tools.get(name); if (f is null) { return "no-such-tool" }; return reflect.call_any(f, args) catch (e) { user.ToolError => "tool-error:" Add e.message, reflect.InvalidArgumentError => "bad-args" } }
+  { let tools = heterogeneous_tool_map(); let f = tools.get(name); if (f is null) { return "no-such-tool" }; return reflect.call_any(f, args) catch (e) { user.ToolError => "tool-error:" Add e.message, reflect.InvalidArgumentError => "bad-args", reflect.errors.CompilationError => "uncompiled-generic" } }
 }
 function user.web_search(q: string) -> user.Doc[]  [expr] {
   { if (q Eq "boom") { throw user.ToolError { message: "no results" } }; return [user.Doc { title: q }] }

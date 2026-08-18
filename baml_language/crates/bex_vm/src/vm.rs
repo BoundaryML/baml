@@ -2576,6 +2576,43 @@ impl BexVm {
         Some(self.value_concrete_ty(value)?.into())
     }
 
+    /// Name an otherwise callable value whose generic frame is incomplete.
+    /// Reflection uses this to distinguish an unspecialized generic from a
+    /// genuinely non-callable value when signature reconstruction fails.
+    pub(crate) fn unspecialized_generic_callable_name(&self, value: Value) -> Option<String> {
+        fn incomplete(function: &Function, supplied: usize) -> Option<String> {
+            (supplied < function.generic_param_bounds.len()).then(|| {
+                function
+                    .declared_name
+                    .clone()
+                    .unwrap_or_else(|| function.name.clone())
+            })
+        }
+
+        match self.get_object(value.as_object_ptr()?) {
+            Object::Closure(closure) => match unsafe { closure.function.get() } {
+                Object::Function(function) => {
+                    incomplete(function, closure.captured_type_args.len())
+                }
+                _ => None,
+            },
+            Object::GenericFunction(generic) => {
+                let inner = self.load_global_in(generic.runtime_package, generic.function);
+                match inner.as_object_ptr().map(|ptr| self.get_object(ptr)) {
+                    Some(Object::Function(function)) => {
+                        incomplete(function, generic.type_args.len())
+                    }
+                    _ => None,
+                }
+            }
+            Object::BoundMethod(method) => match unsafe { method.function.get() } {
+                Object::Function(function) => incomplete(function, method.type_args.len()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
     /// runtime value's type satisfies (a concrete top with realized arguments, no
     /// type variables) made explicit in the type. `None` for a value kind that

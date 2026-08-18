@@ -262,7 +262,8 @@ fn user.typed_dispatch(name: string, args: map<string, unknown>) -> string | Doc
     let _12: type
     let _13: bool
     let _14: bool
-    let _15: string
+    let _15: bool
+    let _16: string
 
     bb0: {
         _3 = call const fn user.heterogeneous_tool_map() -> [bb1];
@@ -297,40 +298,50 @@ fn user.typed_dispatch(name: string, args: map<string, unknown>) -> string | Doc
         _10 = copy _4;
         _11 = load_type(string | Doc[]);
         _12 = load_type(ToolError);
-        _0 = call const fn baml.reflect.call_any<copy _11, copy _12>(copy _10, copy _2) -> [bb13, unwind: bb8];
+        _0 = call const fn baml.reflect.call_any<copy _11, copy _12>(copy _10, copy _2) -> [bb15, unwind: bb8];
     }
 
     bb7: {
         _0 = const "no-such-tool";
-        goto -> bb13;
+        goto -> bb15;
     }
 
     bb8: {
         _13 = is_type(copy _9, ToolError);
-        branch copy _13 -> [bb12, bb9];
+        branch copy _13 -> [bb14, bb9];
     }
 
     bb9: {
         _14 = is_type(copy _9, baml.reflect.InvalidArgumentError);
-        branch copy _14 -> [bb11, bb10];
+        branch copy _14 -> [bb13, bb10];
     }
 
     bb10: {
-        rethrow copy _9;
+        _15 = is_type(copy _9, baml.reflect.errors.CompilationError);
+        branch copy _15 -> [bb12, bb11];
     }
 
     bb11: {
-        _0 = const "bad-args";
-        goto -> bb13;
+        rethrow copy _9;
     }
 
     bb12: {
-        _15 = copy _9.0;
-        _0 = const "tool-error:" + copy _15;
-        goto -> bb13;
+        _0 = const "uncompiled-generic";
+        goto -> bb15;
     }
 
     bb13: {
+        _0 = const "bad-args";
+        goto -> bb15;
+    }
+
+    bb14: {
+        _16 = copy _9.0;
+        _0 = const "tool-error:" + copy _16;
+        goto -> bb15;
+    }
+
+    bb15: {
         return;
     }
 }
