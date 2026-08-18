@@ -168,6 +168,10 @@ pub struct GeneratorManifest {
     /// union. Larger unions use `any`. Go-only; defaults to 3.
     pub max_typed_union_arity: Option<Spanned<i64>>,
 
+    /// Whether to write a catch-all `.gitignore` into generated output.
+    /// Defaults to true.
+    pub gitignore: Option<Spanned<bool>>,
+
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
 }
@@ -317,6 +321,24 @@ mod tests {
         .unwrap();
         assert!(m.package.as_ref().unwrap().prelude);
         assert_eq!(m.dependencies["util"].path, "../util");
+    }
+
+    #[test]
+    fn parses_generator_gitignore_policy() {
+        let manifest = parse(
+            "[generator.rust]\noutput_type = \"rust\"\nnaming_convention = \"preserve-case\"\ngitignore = false\n",
+        )
+        .unwrap();
+
+        assert_eq!(
+            manifest.generator["rust"]
+                .get_ref()
+                .gitignore
+                .as_ref()
+                .map(Spanned::get_ref),
+            Some(&false)
+        );
+        assert!(unknown_field_warnings(&manifest).is_empty());
     }
 
     #[test]

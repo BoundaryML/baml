@@ -8,3 +8,14 @@ BAML's typed `throws` contracts as `Result<T, baml_bridge::Error<E>>`.
 You normally don't add this crate by hand — the generated `baml_sdk` crate
 pins the matching version. See the BAML documentation for getting started:
 <https://docs.boundaryml.com>.
+
+## Committing the generated crate
+
+Generated SDK directories contain a catch-all `.gitignore` by default because most projects regenerate them during the build. If you commit the generated Rust crate for review or byte-parity checks, set `gitignore = false` in its `baml.toml` generator section so a normal `git add` includes the crate:
+
+```toml
+[generator.rust]
+output_type = "rust"
+naming_convention = "preserve-case"
+gitignore = false
+```
