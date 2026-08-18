@@ -1,7 +1,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
-use crate::HeapPtr;
+use crate::{HeapPtr, ObjectIndex};
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct InterfaceDef {
@@ -50,9 +50,20 @@ pub struct InterfaceMethodDef {
     pub kwargs: Vec<(baml_type::Name, baml_type::RuntimeTy)>,
     pub returns: baml_type::RuntimeTy,
     pub errors: baml_type::RuntimeTy,
-    /// Fully-qualified callable name when the interface supplies a default
-    /// body. Required methods carry `None`.
-    pub default_fqn: Option<String>,
+    /// The default body's pooled function, when the interface supplies one;
+    /// `None` for a required method. This is the wire form: an [`ObjectIndex`]
+    /// into the program's object pool, relocated by the linker like any other
+    /// cross-object operand (see `relink::visit_object_operands`) and bound to
+    /// [`default_fn`](Self::default_fn) at load — exactly as
+    /// [`ProgramMethodImpl::fqn`](super::ProgramMethodImpl::fqn) becomes
+    /// [`MethodImpl::fqn`](MethodImpl::fqn).
+    pub default: Option<ObjectIndex>,
+    /// The loaded default body: null for a required method, or for an
+    /// interface whose pool has not been bound yet. Never serialized —
+    /// pointers are runtime-only. Runtime consumers (a witness synthesizing an
+    /// implementor's rule) read this and never a name.
+    #[borsh(skip)]
+    pub default_fn: HeapPtr,
 }
 
 /// A single interface bound on an impl's generic parameter — `T extends I`, or a

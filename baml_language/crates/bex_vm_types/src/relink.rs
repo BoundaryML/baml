@@ -224,11 +224,20 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
             let mut visit = visit;
             visit(IndexOperand::Global(&mut generic.function));
         }
+        // An interface names each default method's pooled body — a cross-object
+        // operand relocated exactly like a code object's.
+        Object::Interface(interface) => {
+            let mut visit = visit;
+            for method in &mut interface.methods {
+                if let Some(default) = &mut method.default {
+                    visit(IndexOperand::Object(default));
+                }
+            }
+        }
         // Inert at relink time: no cross-function index operands.
         Object::Class(..)
         | Object::Enum(..)
         | Object::TypeAlias(..)
-        | Object::Interface(..)
         | Object::Package(..)
         | Object::ImplRule(..)
         | Object::String(..)

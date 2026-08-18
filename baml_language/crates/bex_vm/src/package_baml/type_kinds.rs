@@ -481,12 +481,19 @@ pub(super) fn register_class_witnesses(
                 .map(|(_, ty)| baml_type::TyTemplate::from(ty.clone())),
         );
         for method in &interface.methods {
-            let Some(default_fqn) = &method.default_fqn else {
+            // A witness supplies fields only; every method comes from the
+            // interface's default body, which the loader bound to a pointer.
+            // (The gate above rejected any interface with a required method.)
+            if method.default.is_none() {
                 continue;
-            };
-            let callee = vm.find_function_by_name(default_fqn).unwrap_or_else(|| {
-                unreachable!("validated interface default `{default_fqn}` must be emitted")
-            });
+            }
+            let callee = method.default_fn;
+            debug_assert!(
+                !callee.is_null(),
+                "interface `{}` default `{}` was pooled but never bound",
+                interface.name,
+                method.name
+            );
             methods.insert(
                 method.name.clone(),
                 MethodImpl {
@@ -948,7 +955,7 @@ impl BamlNamespaceReflectInterface for PackageBamlImpl {
         if let Some(required) = interface
             .methods
             .iter()
-            .find(|method| method.default_fqn.is_none())
+            .find(|method| method.default.is_none())
         {
             let interface_name = interface.name.display_name().to_string();
             let required_name = required.name.to_string();

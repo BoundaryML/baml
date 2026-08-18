@@ -401,7 +401,9 @@ impl BexHeap {
         self.compile_time[index] = object;
     }
 
-    /// Resolve bytecode constants for all Function objects.
+    /// Resolve every pooled `ObjectIndex` operand into a `HeapPtr` before the
+    /// heap is sealed: bytecode constants of every `Function`, and each
+    /// interface's default-method bodies.
     ///
     /// Converts ConstValue (compile-time, with ObjectIndex) to Value (runtime, with HeapPtr).
     /// Must be called before wrapping in Arc since we need mutable access.
@@ -442,6 +444,15 @@ impl BexHeap {
                         other => other.to_value(resolve_idx),
                     })
                     .collect();
+            } else if let Object::Interface(interface) = obj {
+                // The one place a static interface's default body becomes a
+                // pointer: from here on, a witness reads `default_fn` and never
+                // resolves a name.
+                for method in &mut interface.methods {
+                    if let Some(default) = method.default {
+                        method.default_fn = resolve_idx(default);
+                    }
+                }
             }
         }
     }

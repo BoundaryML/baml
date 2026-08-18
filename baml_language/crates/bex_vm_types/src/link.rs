@@ -923,8 +923,50 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
             }
         }
         for &u in *group {
-            for object in &units[u].interfaces {
-                program.objects.push(object.clone());
+            let unit = &units[u];
+            // An interface's only operands are its default methods' pooled
+            // bodies: code-bucket locals or object imports. Relocate them
+            // through the same maps code objects use.
+            let n_local_objects = unit.classes.len()
+                + unit.enums.len()
+                + unit.interfaces.len()
+                + unit.type_alias_objects.len()
+                + unit.code.len();
+            let lay = layout[u];
+            let c = unit.classes.len();
+            let e = unit.enums.len();
+            let i = unit.interfaces.len();
+            let a = unit.type_alias_objects.len();
+            let mut obj_imports = Vec::with_capacity(unit.object_imports.len());
+            for sym in &unit.object_imports {
+                obj_imports.push(resolve_object_import(sym, &obj_by_name, &canonical_pos)?);
+            }
+            for object in &unit.interfaces {
+                let mut object = object.clone();
+                relocate_object_operands(
+                    &mut object,
+                    |raw| {
+                        if raw < n_local_objects {
+                            if raw < c {
+                                Some(lay.class_base + raw)
+                            } else if raw < c + e {
+                                Some(lay.enum_base + (raw - c))
+                            } else if raw < c + e + i {
+                                Some(lay.iface_base + (raw - c - e))
+                            } else if raw < c + e + i + a {
+                                Some(lay.alias_base + (raw - c - e - i))
+                            } else {
+                                code_abs[u].get(raw - c - e - i - a).copied()
+                            }
+                        } else {
+                            obj_imports.get(raw - n_local_objects).copied()
+                        }
+                    },
+                    // An interface holds no global-slot operands.
+                    |_| None,
+                    |space, raw| invalid_index(u, space, raw),
+                )?;
+                program.objects.push(object);
             }
         }
         for &u in *group {

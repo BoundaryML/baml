@@ -177,7 +177,11 @@ fn build_interface_def(
             kwargs,
             returns: return_type.map_or_else(void, |id| lower_rt(ctx, store, id)),
             errors: throws.map_or_else(void, |id| lower_rt(ctx, store, id)),
-            default_fqn: None,
+            // Functions are pooled after interfaces, so the default's object
+            // index is not known yet; `build_packages` back-fills it once the
+            // pool is complete (the same pass that folds defaults into rules).
+            default: None,
+            default_fn: bex_vm_types::HeapPtr::null(),
         }
     };
 
@@ -410,7 +414,7 @@ fn build_packages(
     // make every virtual field access read the wrong slot, silently.
     metadata: &PackageBuildMetadata<'_>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
-) {
+) -> Vec<InterfaceDefaultBackfill> {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
     use baml_compiler2_hir_ty::lower::qualify_def;
     use baml_compiler2_ppir::item_data::{AssociatedTypeBindingData, ImplSubjectData};
@@ -709,6 +713,24 @@ fn build_packages(
             }
         }
     };
+    // The interface objects themselves were pooled before their default bodies
+    // were, so they still carry `default: None`; hand back what to fill in now
+    // that every function has an index. Only interfaces pooled *by this emit*
+    // are addressed — a mounted artifact's interfaces already carry theirs.
+    let interface_default_backfill: Vec<InterfaceDefaultBackfill> = iface_defaults
+        .iter()
+        .filter_map(|(iface_tn, defaults)| {
+            let iface_idx = *interface_indices.get(iface_tn)?;
+            Some(defaults.iter().filter_map(move |(name, fqn)| {
+                Some(InterfaceDefaultBackfill {
+                    interface: ObjectIndex::from_raw(iface_idx),
+                    method: name.clone(),
+                    default: resolve_fqn(fqn)?,
+                })
+            }))
+        })
+        .flatten()
+        .collect();
 
     for file in all_files {
         let pkg_info = file_package(db, *file);
@@ -1166,6 +1188,39 @@ fn build_packages(
         // Sort each package's maps into the byte-reproducible order; shared with
         // the incremental linker so the two paths stay byte-identical.
         pkg.sort_maps();
+    }
+    interface_default_backfill
+}
+
+/// One `InterfaceMethodDef::default` slot `build_packages` could not fill when
+/// the interface was pooled (functions are pooled later), keyed by the pooled
+/// interface and the method's name.
+struct InterfaceDefaultBackfill {
+    interface: ObjectIndex,
+    method: Name,
+    default: ObjectIndex,
+}
+
+/// Write each back-filled default into its pooled `Object::Interface`.
+fn apply_interface_default_backfill(program: &mut Program, backfill: &[InterfaceDefaultBackfill]) {
+    for entry in backfill {
+        let Object::Interface(iface) = &mut program.objects[entry.interface] else {
+            unreachable!(
+                "interface index {} is not an Object::Interface",
+                entry.interface.raw()
+            )
+        };
+        let method = iface
+            .methods
+            .iter_mut()
+            .find(|method| method.name == entry.method)
+            .unwrap_or_else(|| {
+                unreachable!(
+                    "interface `{}` declares no method `{}` for its default",
+                    iface.name, entry.method
+                )
+            });
+        method.default = Some(entry.default);
     }
 }
 
@@ -2160,7 +2215,9 @@ fn decompose_units_after_prefix(
             }
         };
 
-        for object in &mut unit.code {
+        // Interfaces carry cross-object operands too (each default method's
+        // pooled body), so they take the same symbolic rewrite as code objects.
+        for object in unit.interfaces.iter_mut().chain(unit.code.iter_mut()) {
             rewrite_pool_operands(
                 object,
                 |target| {
@@ -2933,7 +2990,7 @@ fn generate_impl(
     // Client values (including sub-clients, retry policies) flow through the $init pipeline.
     // Pass 7 is intentionally empty.
 
-    build_packages(
+    let interface_default_backfill = build_packages(
         db,
         &all_files,
         &alias_caches,
@@ -2945,6 +3002,7 @@ fn generate_impl(
         },
         &mut tables.program_packages,
     );
+    apply_interface_default_backfill(&mut program, &interface_default_backfill);
     // Mounted packages contribute no source files to this database. Preserve
     // their compiled package records from the linked prefix after the ordinary
     // source-backed package pass rebuilds the consumer metadata.

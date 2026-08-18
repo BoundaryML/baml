@@ -795,6 +795,15 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             };
             function.bytecode.resolved_constants = resolved;
         }
+        bind_interface_defaults(
+            vm,
+            objects
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| !external_objects.contains_key(index))
+                .map(|(_, ptr)| *ptr),
+            |index| objects[index.raw()],
+        );
 
         let external_globals: std::collections::HashMap<usize, _> = plan
             .external_globals
@@ -1266,6 +1275,30 @@ impl BamlClassReflectPackage for PackageBamlImpl {
     }
 }
 
+/// Bind each freshly grafted interface's default-method bodies from the pool
+/// index its emit wrote to the heap pointer the object landed at — the
+/// runtime-package twin of the compile-time heap's own resolution pass.
+/// `resolve` maps a plan-local `ObjectIndex` to its live pointer.
+fn bind_interface_defaults(
+    vm: &mut BexVm,
+    candidates: impl Iterator<Item = HeapPtr>,
+    resolve: impl Fn(bex_vm_types::ObjectIndex) -> HeapPtr,
+) {
+    let interfaces = candidates
+        .filter(|ptr| matches!(vm.get_object(*ptr), Object::Interface(_)))
+        .collect::<Vec<_>>();
+    for interface_ptr in interfaces {
+        let Object::Interface(interface) = vm.get_object_mut(interface_ptr) else {
+            unreachable!()
+        };
+        for method in &mut interface.methods {
+            if let Some(default) = method.default {
+                method.default_fn = resolve(default);
+            }
+        }
+    }
+}
+
 fn session_external_object(
     vm: &BexVm,
     session: HeapPtr,
@@ -1572,6 +1605,9 @@ fn graft_session_submission(
         };
         function.bytecode.resolved_constants = resolved;
     }
+    bind_interface_defaults(vm, owned.iter().copied(), |index| {
+        stable_objects[index.raw()]
+    });
 
     let mut appended = vec![Value::NULL; next_global - existing_len];
     for (plan_index, constant) in plan.program.globals.iter().enumerate() {

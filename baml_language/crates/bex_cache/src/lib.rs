@@ -63,8 +63,12 @@ use sha2::{Digest, Sha256};
 /// `TypeTag` newtype, which is wire-identical — that part needed no bump.
 /// Also: type aliases became `Object::TypeAlias` declarations, so `Package` /
 /// `ProgramPackage` replaced the inline `recursive_type_aliases` map with a
-/// `type_aliases` map of references to them.
-pub const FORMAT_VERSION: u32 = 5;
+/// `type_aliases` map of references to them. And `InterfaceMethodDef` replaced
+/// the (never-populated) `default_fqn: Option<String>` with `default:
+/// Option<ObjectIndex>` — a default method's pooled body, relocated by the
+/// linker like any other object operand and bound to a pointer at load, so
+/// runtime implementors inherit defaults without naming anything.
+pub const FORMAT_VERSION: u32 = 6;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
