@@ -2613,6 +2613,73 @@ impl BexVm {
         }
     }
 
+    /// The callable's own `Function` plus the type arguments it already
+    /// carries. Mirrors the value shapes
+    /// [`Self::unspecialized_generic_callable_name`] recognizes.
+    fn callable_function_and_type_args(
+        &self,
+        value: Value,
+    ) -> Option<(&Function, &[baml_type::RealizedTy])> {
+        match self.get_object(value.as_object_ptr()?) {
+            Object::Closure(closure) => match unsafe { closure.function.get() } {
+                Object::Function(function) => Some((function, &closure.captured_type_args)),
+                _ => None,
+            },
+            Object::GenericFunction(generic) => {
+                let inner = self.load_global_in(generic.runtime_package, generic.function);
+                match inner.as_object_ptr().map(|ptr| self.get_object(ptr)) {
+                    Some(Object::Function(function)) => Some((function, &generic.type_args)),
+                    _ => None,
+                }
+            }
+            Object::BoundMethod(method) => match unsafe { method.function.get() } {
+                Object::Function(function) => Some((function, &method.type_args)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Name a callable whose *body* cannot be realized against the type-argument
+    /// frame it carries.
+    ///
+    /// A generic function's declared signature can be free of its own type
+    /// parameters — a companion like `GenericList$build_request` takes the
+    /// parent's value arguments and returns a fixed type — so signature
+    /// reconstruction succeeds and the value looks ordinary. Its body still
+    /// materializes `T` (the output-format schema, for one), and entering it
+    /// with an empty frame would fail deep inside `LoadType` as a VM internal
+    /// error. Reflection asks this question before dispatching so the caller
+    /// gets a diagnostic instead.
+    ///
+    /// The check runs the very substitution the body would run, so detection and
+    /// failure cannot drift apart; it is gated on the callable being a generic
+    /// missing arguments, which keeps it off every ordinary call.
+    pub(crate) fn underspecialized_generic_callable_name(&self, value: Value) -> Option<String> {
+        let (function, type_args) = self.callable_function_and_type_args(value)?;
+        if type_args.len() >= function.generic_param_bounds.len() {
+            return None;
+        }
+        let unrealizable = |template: &baml_type::TyTemplate| {
+            matches!(
+                template.substitute(type_args, self),
+                Err(baml_type::SubstituteError::TypeArgRefOutOfRange { .. })
+            )
+        };
+        let needs_arguments = function.param_types.iter().any(&unrealizable)
+            || unrealizable(&function.return_type)
+            || unrealizable(&function.throws_type)
+            || function.bytecode.constants.iter().any(
+                |constant| matches!(constant, ConstValue::Type(template) if unrealizable(template)),
+            );
+        needs_arguments.then(|| {
+            function
+                .declared_name
+                .clone()
+                .unwrap_or_else(|| function.name.clone())
+        })
+    }
+
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
     /// runtime value's type satisfies (a concrete top with realized arguments, no
     /// type variables) made explicit in the type. `None` for a value kind that

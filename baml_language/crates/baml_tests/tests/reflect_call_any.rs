@@ -780,3 +780,94 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
         "missing streaming firewall diagnostic: {diagnostics:#?}"
     );
 }
+
+/// B-1582 item 3: a generic LLM function's `$render_prompt` companion has a
+/// signature free of `T` (it takes the parent's value arguments and returns an
+/// `ai.Prompt`), so it reconstructs and `Package.get_function` hands it out.
+/// Its *body* still materializes `T` for the output-format schema, and entering
+/// it with an empty frame died as a VM internal error
+/// ("template references frame type-arg slot 0 but the frame has 0 type args").
+/// Until reflection can supply type arguments, that is a normal E0165.
+#[tokio::test]
+async fn call_any_rejects_an_unspecialized_generic_companion() {
+    let output = baml_test!(
+        r#"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        type AnyCallable = baml.AnyFunction<Returns = unknown, Throws = unknown>;
+
+        function GenericList<T>(topic: string) -> T[] {
+            client: TestClient
+            prompt: `
+                Return an empty list of ${topic}.
+                ${ctx.output_format}
+            `
+        }
+
+        function main() -> string throws never {
+            let package = reflect.Package.current()
+            let callable: AnyCallable = package.get_function<AnyCallable>(
+                "GenericList$render_prompt",
+            ) catch (e) {
+                _ => return "get_function threw",
+            } else {
+                return "get_function returned null"
+            }
+            reflect.call_any<unknown, unknown>(callable, { "topic": "items" }) catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    return e.diagnostics[0].code + "|" + e.diagnostics[0].message
+                },
+                _ => return "wrong error",
+            }
+            "call_any did not throw"
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
+             reflection until it is specialized: its body needs type arguments and reflection \
+             cannot supply them yet"
+                .into()
+        ))
+    );
+}
+
+/// The floor is gated on the callable actually being an under-supplied generic:
+/// a non-generic companion of an ordinary LLM function still invokes.
+#[tokio::test]
+async fn call_any_still_invokes_a_non_generic_companion() {
+    let output = baml_test!(
+        r#"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        type AnyCallable = baml.AnyFunction<Returns = unknown, Throws = unknown>;
+
+        function Plain(topic: string) -> string {
+            client: TestClient
+            prompt: `
+                Say ${topic}.
+                ${ctx.output_format}
+            `
+        }
+
+        function main() -> bool throws unknown {
+            let package = reflect.Package.current()
+            let callable = package.get_function<AnyCallable>("Plain$render_prompt")
+                ?? throw "expected the companion"
+            let rendered = reflect.call_any<unknown, unknown>(callable, { "topic": "hello" })
+            rendered is ai.Prompt
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}

@@ -2145,6 +2145,17 @@ fn call_any_impl(
         }
         return non_callable_error("reflect.call_any").into();
     };
+    // A generic whose signature happens to be free of its own type parameters
+    // reconstructs above and would otherwise be entered with an empty frame,
+    // failing inside its body as a VM internal error.
+    if let Some(name) = vm.underspecialized_generic_callable_name(f_val) {
+        let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
+        return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+            vm,
+            &[diagnostic],
+        ))
+        .into();
+    }
 
     // Walk the parameters in declaration order, resolving each from the map
     // by its addressable name and assembling the callee's frame as we go.
