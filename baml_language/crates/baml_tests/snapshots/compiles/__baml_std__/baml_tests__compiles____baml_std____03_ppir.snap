@@ -1783,9 +1783,10 @@ function baml.reflect.class.build(self: ?, implementations: baml.reflect.interfa
   {  } self._build(implementations)
 }
 function baml.reflect.class.builder(name: string) -> baml.reflect.class.Builder  [builtin]
-function baml.reflect.class.field(self: ?, name: string, ty: type | baml.reflect.WithMeta<type> | baml.reflect.class.PendingType) -> baml.reflect.class.Builder  [builtin]
+function baml.reflect.class.field(self: ?, name: string, ty: type | baml.reflect.WithMeta<type> | baml.reflect.class.PendingType | baml.reflect.WithMeta<baml.reflect.class.PendingType>) -> baml.reflect.class.Builder  [builtin]
 function baml.reflect.class.fields(self: ?) -> baml.reflect.class.Field[]  [builtin]
 function baml.reflect.class.get_field(value: unknown, name: string) -> T  [builtin]
+function baml.reflect.class.meta(self: ?, alias: string? = null, description: string? = null, docstring: string? = null, other: map<string, string>? = null) -> baml.reflect.WithMeta<baml.reflect.class.PendingType>  [builtin]
 function baml.reflect.class.meta(self: ?) -> baml.reflect.Meta  [builtin]
 function baml.reflect.class.metadata(self: ?) -> baml.reflect.Meta  [expr] {
   {  } self.meta
