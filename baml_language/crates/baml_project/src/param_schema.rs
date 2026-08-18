@@ -890,7 +890,12 @@ function Plain(x: int) -> int { x }
             )
         });
         let golden: serde_json::Value =
-            serde_json::from_str(&golden_source).expect("golden fixture should contain valid JSON");
+            serde_json::from_str(&golden_source).unwrap_or_else(|error| {
+                panic!(
+                    "parse the golden fixture at {}: {error}",
+                    golden_path.display()
+                )
+            });
         assert_eq!(
             actual,
             golden,
