@@ -26,6 +26,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Fixes
 
+- Added read-only `baml.AnyClass` narrowing and reflection for static and runtime-minted class values, with value-bound field handles and catchable typed reads. - Antonio Sarosi
 - Rejected non-data LLM output schemas with catchable E0164 diagnostics instead of aborting or silently omitting the schema; this intentionally makes previously degraded renders for fields such as `uint8array`, `type`, and mixed non-data unions fail loudly. ([#4470](https://github.com/BoundaryML/baml/pull/4470)) - Antonio Sarosi
 - Fixed a silent miscompile where a map, list, or class instance allocated before a loop and mutated by a callee called inside that loop was re-allocated on every iteration. ([#4467](https://github.com/BoundaryML/baml/pull/4467)) - Antonio Sarosi
 - Restored E0007 diagnostics for method calls on `unknown` receivers, preventing unresolved calls from reaching an internal VM error. ([#4466](https://github.com/BoundaryML/baml/pull/4466)) - Antonio Sarosi

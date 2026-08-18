@@ -1558,7 +1558,13 @@ impl BamlClassReflectClassType for PackageBamlImpl {
                     field.docstring.as_deref(),
                     &field.other,
                 );
-                copy::reflect::class::Field { name, r#type, meta }.to_value(vm)
+                copy::reflect::class::Field {
+                    name,
+                    r#type,
+                    meta,
+                    _owner: Value::NULL,
+                }
+                .to_value(vm)
             })
             .collect()
     }
