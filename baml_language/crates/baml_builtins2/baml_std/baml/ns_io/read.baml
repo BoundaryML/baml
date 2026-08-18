@@ -8,9 +8,13 @@ interface Read {
     function read(self, limit: int) -> uint8array? throws root.errors.Io
 
     /// Reads all remaining bytes from the source until EOF is reached.
+    ///
+    /// Drains in fixed-size chunks rather than asking for everything at once:
+    /// an implementor is free to size a buffer from `limit`, so a limit of
+    /// `int.max_value()` is a request to allocate more memory than exists.
     function read_to_end(self) -> uint8array throws root.errors.Io {
         let buf = b"";
-        while let chunk: uint8array = self.read(int.max_value()) {
+        while let chunk: uint8array = self.read(65536) {
             buf = buf.concat(chunk);
         }
         buf

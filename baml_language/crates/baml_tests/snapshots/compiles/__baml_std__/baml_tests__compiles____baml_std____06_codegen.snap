@@ -2639,6 +2639,112 @@ function baml.future.race(futures: future<#0, #1>[]) -> future<#0, #1> {
     return
 }
 
+function baml.future.with_timeout(limit: baml.time.Duration, body: () -> #0 throws #1) -> #0 {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    call baml.spawn.CancelToken.new
+    store_deref ?3
+    load_type #0
+    load_type #1
+    load_var body
+    make_closure .<lambda(with_timeout, 0)>, captures=1, ntypeargs=2
+    store_var _5
+    load_type #0
+    load_type #1
+    load_const <omitted>
+    load_deref ?3
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _7
+    load_var _5
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _7
+    call_indirect
+    store_var _11
+    load_var _5
+    load_const null
+    load_var _11
+    load_type #0
+    load_type #1
+    spawn
+    store_var _12
+    load_type #0
+    load_type #1
+    load_var2 1 3
+    make_closure .<lambda(with_timeout, 1)>, captures=2, ntypeargs=2
+    load_const null
+    load_const null
+    load_type int
+    load_type baml.errors.Io
+    spawn
+    store_var _15
+    load_var _12
+    await
+    store_var out
+    jump L5
+    load_var e
+    is_type baml.panics.Cancelled
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_deref ?1
+    call baml.time.Duration.to_milliseconds
+    store_var limit_ms
+    load_var limit_ms
+    call baml.Bigint.to_int
+    store_var reported
+    jump L4
+    load_var conversion
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var conversion
+    rethrow
+
+  L3:
+    load_const null
+    store_var reported
+
+  L4:
+    load_type bigint
+    load_var limit_ms
+    call baml.String.from
+    store_var _27
+    load_const "operation timed out after "
+    load_var _27
+    bin_op +
+    load_const "ms"
+    bin_op +
+    load_var reported
+    init_instance baml.errors.Timeout .message, .duration_ms
+    throw
+
+  L5:
+    load_var _15
+    call baml.future.Future.cancel
+    pop 1
+    load_var out
+    return
+}
+
 function baml.glob.Glob.matches(self: baml.glob.Glob, path: string) -> bool {
 }
 
@@ -2865,17 +2971,16 @@ function baml.io.Read.read_to_end(self: baml.io.Read) -> uint8array {
     store_var buf
 
   L0:
-    call baml.Int.max_value
-    store_var _4
-    load_var2 1 4
+    load_var self
+    load_const 65536
     load_type baml.io.Read
     load_const "read"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
     load_var _3
-    store_var _5
-    load_var _5
-    narrow_bind uint8array, slot=5
+    store_var _4
+    load_var _4
+    narrow_bind uint8array, slot=4
     pop_jump_if_false L1
     jump L2
 
@@ -2884,7 +2989,7 @@ function baml.io.Read.read_to_end(self: baml.io.Read) -> uint8array {
     return
 
   L2:
-    load_var2 2 5
+    load_var2 2 4
     call baml.Uint8Array.concat
     store_var buf
     jump L0

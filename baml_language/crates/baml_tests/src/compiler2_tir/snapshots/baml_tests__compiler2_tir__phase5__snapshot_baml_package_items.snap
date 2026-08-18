@@ -143,6 +143,7 @@ namespace baml.future:
   function all_complete<T, E>
   function any<T, Err>
   function race<T, E>
+  function with_timeout<T, E>
 namespace baml.glob:
   class Glob { methods: [scan, matches] }
   class ScanOptions { methods: [] }
@@ -343,6 +344,7 @@ namespace baml.sys:
   class ReadPipe { methods: [close, lines, read] }
   class ReadPipeLines { methods: [iter, next] }
   class ShellOutput { methods: [ok] }
+  enum StderrMode
   class WritePipe { methods: [close, write, flush] }
   function _strip_carriage_return
   function argv

@@ -238,3 +238,44 @@ function any<T, Err>(
         winners[0]
     }
 }
+
+/// Runs `body` under a deadline, throwing `baml.errors.Timeout` if `limit`
+/// elapses first.
+///
+/// The work runs under a cancel token that a sleeping task fires, so a body
+/// parked in a sys-op (a socket read, a child's stdout) is unparked rather
+/// than left running — this is the general form of a deadline in BAML, since
+/// `read` and friends take no timeout of their own.
+function with_timeout<T, E>(
+    limit: baml.time.Duration,
+    body: () -> T throws E,
+) -> T throws E | baml.errors.Timeout {
+    let token = baml.spawn.CancelToken.new();
+    let work = spawn with baml.spawn.options(cancel = token) {
+        body()
+    };
+    let deadline = spawn {
+        baml.sys.sleep(limit);
+        token.cancel()
+    };
+    let out = (await work) catch (e) {
+        // The token fires only from the timer above, so a cancelled body is
+        // an expired deadline — anything the body itself threw is `E` and
+        // propagates untouched.
+        baml.panics.Cancelled => {
+            let limit_ms = limit.to_milliseconds();
+            // `duration_ms` is an `int`, so a limit too large to fit is
+            // reported by message alone rather than failing the throw itself.
+            let reported = limit_ms.to_int() catch (conversion) {
+                baml.errors.InvalidArgument => null,
+            };
+            throw baml.errors.Timeout {
+                message: `operation timed out after ${limit_ms}ms`,
+                duration_ms: reported,
+            }
+        }
+    };
+    // The body won; stop the timer rather than leaving it to fire later.
+    deadline.cancel();
+    out
+}

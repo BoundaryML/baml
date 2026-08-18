@@ -11,6 +11,13 @@ use sys_ops::io::{
     self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError, owned,
 };
 
+/// Ceiling on the buffer one `read` allocates, whatever limit the caller
+/// names. `baml.io.Read.read` promises *at most* `limit` bytes, so answering a
+/// larger request with a short read is within contract — and it keeps a limit
+/// that is really "everything" (`read_to_end` asks for a big number by
+/// design) from becoming an allocation nothing can satisfy.
+const MAX_READ_CHUNK: usize = 64 * 1024;
+
 // Process-level shared BufReader for stdin, preventing data loss when
 // BufReader over-reads into its internal buffer across multiple io.input() calls.
 static STDIN_READER: OnceLock<tokio::sync::Mutex<tokio::io::BufReader<tokio::io::Stdin>>> =
@@ -1241,6 +1248,9 @@ struct LiveProcessHandle {
     label: String,
 }
 
+/// The engine-owned read end of a pipe (`baml.sys.ReadPipe._pipe`). Boxed
+/// rather than typed as `ChildStdout` so one handle serves every reader a
+/// child exposes (stdout and stderr today).
 struct ReadPipeHandle {
     reader: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>,
     label: String,
@@ -1250,6 +1260,35 @@ struct ReadPipeHandle {
 struct WritePipeHandle {
     writer: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>,
     label: String,
+}
+
+/// `ProcessOptions.stderr` as a `Stdio`, plus whether the caller wants the
+/// pipe handed back. Enum variants cross the sys-op boundary as
+/// `BexExternalValue::Variant`, and an absent option means `Inherit` — the
+/// default that cannot wedge a child on an unread pipe.
+fn stderr_stdio(
+    mode: Option<&BexExternalValue>,
+) -> Result<(std::process::Stdio, bool), VmBamlError> {
+    use std::process::Stdio;
+
+    let Some(mode) = mode else {
+        return Ok((Stdio::inherit(), false));
+    };
+    let BexExternalValue::Variant { variant_name, .. } = mode else {
+        return Err(VmBamlError::InvalidArgument {
+            message: format!("Invalid stderr mode: {}", mode.type_name()),
+        });
+    };
+    match variant_name.as_str() {
+        "Inherit" => Ok((Stdio::inherit(), false)),
+        "Pipe" => Ok((Stdio::piped(), true)),
+        "Discard" => Ok((Stdio::null(), false)),
+        other => Err(VmBamlError::InvalidArgument {
+            message: format!(
+                "Unsupported stderr mode '{other}': expected Inherit, Pipe, or Discard"
+            ),
+        }),
+    }
 }
 
 fn downcast_read_pipe(pipe: &owned::sys::ReadPipe) -> Result<Arc<ReadPipeHandle>, VmBamlError> {
@@ -1282,9 +1321,7 @@ fn read_pipe(
     }
 }
 
-/// Frame a reader's bytes into the line stream `ReadPipe.lines()` returns. The
-/// reader is moved onto a task that owns it for the rest of its life, which is
-/// why `lines()` consumes the pipe.
+/// Wrap the engine-owned write end of a pipe as a `baml.sys.WritePipe`.
 fn write_pipe(
     writer: impl tokio::io::AsyncWrite + Send + Unpin + 'static,
     label: String,
@@ -1360,7 +1397,7 @@ impl io::IoClassSysReadPipe for NativeSysOps {
         // requested, so a request for none is an empty chunk (as in `fs::File`).
         let limit = match usize::try_from(limit) {
             Err(_) | Ok(0) => return SysOpOutput::ok(Some(Vec::new())),
-            Ok(limit) => limit,
+            Ok(limit) => limit.min(MAX_READ_CHUNK),
         };
 
         SysOpOutput::async_op(async move {
@@ -1548,7 +1585,10 @@ impl io::IoClassSysProcess for NativeSysOps {
             if let Ok(handle) = downcast_write_pipe(&process.stdin) {
                 handle.writer.lock().await.take();
             }
-            for pipe in [&process.stdout, &process.stderr] {
+            for pipe in [Some(&process.stdout), process.stderr.as_ref()]
+                .into_iter()
+                .flatten()
+            {
                 if let Ok(handle) = downcast_read_pipe(pipe) {
                     handle.reader.lock().await.take();
                 }
@@ -1704,13 +1744,14 @@ impl io::IoNamespaceSys for NativeSysOps {
                 }
             }
 
-            // `Process` exposes all three streams as pipes, so all three are
-            // piped unconditionally. Stderr is no longer inherited: the caller
-            // owns it and must drain it, or the child blocks once the pipe
-            // buffer fills.
+            // stdin/stdout are always pipes — `Process` exposes both. stderr
+            // follows `ProcessOptions.stderr`, defaulting to inherit so an
+            // undrained pipe cannot stop the child.
+            let (stderr_stdio, stderr_piped) =
+                stderr_stdio(options.as_ref().and_then(|options| options.stderr.as_ref()))?;
             cmd.stdin(Stdio::piped())
                 .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
+                .stderr(stderr_stdio)
                 .kill_on_drop(true);
 
             let mut child = cmd.spawn().map_err(|error| VmBamlError::Io {
@@ -1721,7 +1762,10 @@ impl io::IoNamespaceSys for NativeSysOps {
             };
             let child_stdin = child.stdin.take().ok_or_else(|| missing_pipe("stdin"))?;
             let child_stdout = child.stdout.take().ok_or_else(|| missing_pipe("stdout"))?;
-            let child_stderr = child.stderr.take().ok_or_else(|| missing_pipe("stderr"))?;
+            let child_stderr = match stderr_piped {
+                true => Some(child.stderr.take().ok_or_else(|| missing_pipe("stderr"))?),
+                false => None,
+            };
 
             let timeout_ms = options
                 .as_ref()
@@ -1735,26 +1779,13 @@ impl io::IoNamespaceSys for NativeSysOps {
 
             let stdin = write_pipe(child_stdin, format!("{program} stdin"));
             let stdout = read_pipe(child_stdout, format!("{program} stdout"));
-            let stderr = read_pipe(child_stderr, format!("{program} stderr"));
+            let stderr = child_stderr
+                .map(|child_stderr| read_pipe(child_stderr, format!("{program} stderr")));
 
-            // `options.stdin` supplies the child's COMPLETE input, so the pipe
-            // is closed after it lands — a child that reads to EOF would
-            // otherwise hang. Incremental writers leave it unset and drive
-            // `process.stdin` themselves.
-            if let Some(stdin_data) = options.as_ref().and_then(|options| options.stdin.as_ref()) {
-                let handle = downcast_write_pipe(&stdin)?;
-                let mut writer = handle.writer.lock().await;
-                if let Some(writer) = writer.as_mut() {
-                    writer
-                        .write_all(stdin_data.as_bytes())
-                        .await
-                        .map_err(|error| VmBamlError::Io {
-                            message: format!("Failed to write stdin to '{program}': {error}"),
-                        })?;
-                }
-                writer.take();
-            }
-
+            // The monitor comes up before anything can block, so the stdin
+            // write below has a kill path: without it, a child that never
+            // drains its stdin would strand `start_process` with no way to
+            // reach the process it just spawned.
             let (kill_tx, mut kill_rx) = tokio::sync::watch::channel(false);
             let (exit_tx, exit_rx) = tokio::sync::watch::channel(None);
             let monitor_label = program.clone();
@@ -1771,6 +1802,37 @@ impl io::IoNamespaceSys for NativeSysOps {
                 .map_err(|error| format!("Failed to wait on '{monitor_label}': {error}"));
                 let _ = exit_tx.send(Some(exit));
             });
+
+            // `options.stdin` supplies the child's COMPLETE input, so the pipe
+            // is closed after it lands — a child that reads to EOF would
+            // otherwise hang. Incremental writers leave it unset and drive
+            // `process.stdin` themselves.
+            //
+            // Input larger than the OS pipe buffer only completes as the child
+            // reads it, so this waits on the child. `timeout_ms` bounds that
+            // wait exactly as it bounds `wait()`; with no timeout the caller
+            // asked to block indefinitely.
+            if let Some(stdin_data) = options.as_ref().and_then(|options| options.stdin.as_ref()) {
+                let handle = downcast_write_pipe(&stdin)?;
+                let mut writer = handle.writer.lock().await;
+                if let Some(writer) = writer.as_mut() {
+                    let write = writer.write_all(stdin_data.as_bytes());
+                    let written =
+                        match deadline {
+                            Some(deadline) => tokio::time::timeout_at(deadline, write)
+                                .await
+                                .map_err(|_elapsed| {
+                                    let _ = kill_tx.send(true);
+                                    process_timeout_error(&program, timeout_ms)
+                                })?,
+                            None => write.await,
+                        };
+                    written.map_err(|error| VmBamlError::Io {
+                        message: format!("Failed to write stdin to '{program}': {error}"),
+                    })?;
+                }
+                writer.take();
+            }
 
             Ok(owned::sys::Process {
                 stdin,
@@ -1979,7 +2041,9 @@ impl io::IoClassNetTcpStream for NativeSysOps {
             Err(_) | Ok(0) => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
             Ok(amount) => amount,
         };
-        let amount = usize::try_from(amount).unwrap_or(usize::MAX); // does nothing on 64bit+
+        let amount = usize::try_from(amount)
+            .unwrap_or(usize::MAX) // does nothing on 64bit+
+            .min(MAX_READ_CHUNK);
 
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;

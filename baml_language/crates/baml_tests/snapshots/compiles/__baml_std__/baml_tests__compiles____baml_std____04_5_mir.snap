@@ -3907,6 +3907,170 @@ fn .<lambda(<lambda(any, 0)>, 1)>(g: future<T, Err>) -> bool {
     }
 }
 
+fn baml.future.with_timeout(limit: baml.time.Duration, body: () -> T throws E) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: baml.time.Duration // limit // param [captured]
+    let _2: () -> T throws E // body // param [captured]
+    let _3: baml.spawn.CancelToken // token [captured]
+    let _4: future<T, E> // work
+    let _5: null
+    let _6: null
+    let _7: (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> throws never
+    let _8: baml.spawn.CancelToken
+    let _9: type
+    let _10: type
+    let _11: null
+    let _12: future<T, E>
+    let _13: future<int, baml.errors.Io> // deadline
+    let _14: null
+    let _15: future<int, baml.errors.Io>
+    let _16: T // out
+    let _17: unknown // e
+    let _18: null
+    let _19: bool
+    let _20: bigint // limit_ms
+    let _21: int | null // reported
+    let _22: unknown // conversion
+    let _23: bool
+    let _24: baml.errors.Timeout
+    let _25: string
+    let _26: string
+    let _27: string
+    let _28: bigint
+    let _29: type
+    let _30: int | null
+    let _31: bool
+
+    bb0: {
+        _3 = call const fn baml.spawn.CancelToken.new() -> [bb1];
+    }
+
+    bb1: {
+        _5 = make_closure lambda[0]<2 type_args>(copy _2);
+        _6 = baml.spawn.SpawnParams { copy _5, const null, const null, const null, const false };
+        _8 = copy _3;
+        _9 = load_type(#0);
+        _10 = load_type(#1);
+        _7 = call const fn baml.spawn.options<copy _9, copy _10>(const <omitted>, copy _8, const <omitted>) -> [bb2];
+    }
+
+    bb2: {
+        _11 = call copy _7(copy _6) -> [bb3];
+    }
+
+    bb3: {
+        _12 = spawn<#0, #1> copy _5 name=const null config=copy _11 -> bb4;
+    }
+
+    bb4: {
+        _4 = copy _12;
+        _14 = make_closure lambda[1]<2 type_args>(copy _1, copy _3);
+        _15 = spawn<int, baml.errors.Io> copy _14 name=const null -> bb5;
+    }
+
+    bb5: {
+        _13 = copy _15;
+        _18 = copy _4;
+        _16 = await _18 -> [bb6, unwind: bb9];
+    }
+
+    bb6: {
+        _31 = call const fn baml.future.Future.cancel(copy _13) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _16;
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+
+    bb9: {
+        _19 = is_type(copy _17, baml.panics.Cancelled);
+        branch copy _19 -> [bb11, bb10];
+    }
+
+    bb10: {
+        rethrow copy _17;
+    }
+
+    bb11: {
+        _20 = call const fn baml.time.Duration.to_milliseconds(copy _1) -> [bb12];
+    }
+
+    bb12: {
+        _21 = call const fn baml.Bigint.to_int(copy _20) -> [bb16, unwind: bb13];
+    }
+
+    bb13: {
+        _23 = is_type(copy _22, baml.errors.InvalidArgument);
+        branch copy _23 -> [bb15, bb14];
+    }
+
+    bb14: {
+        rethrow copy _22;
+    }
+
+    bb15: {
+        _21 = const null;
+        goto -> bb16;
+    }
+
+    bb16: {
+        _28 = copy _20;
+        _29 = load_type(bigint);
+        _27 = call const fn baml.String.from<copy _29>(copy _28) -> [bb17];
+    }
+
+    bb17: {
+        _26 = const "operation timed out after " + copy _27;
+        _25 = copy _26 + const "ms";
+        _30 = copy _21;
+        _24 = baml.errors.Timeout { copy _25, copy _30 };
+        throw copy _24;
+    }
+}
+
+// lambda[0]
+fn .<lambda(with_timeout, 0)>() -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: () -> T throws E
+
+    bb0: {
+        _1 = copy capture[0];
+        _0 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[1]
+fn .<lambda(with_timeout, 1)>() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: null
+    let _2: baml.time.Duration
+
+    bb0: {
+        _2 = copy capture[0];
+        _1 = sys_op const fn baml.sys.sleep(copy _2) -> bb1;
+    }
+
+    bb1: {
+        _0 = call const fn baml.spawn.CancelToken.cancel(copy capture[1]) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.glob.Glob.scan = builtin(io)
 
 fn baml.glob.Glob.matches = builtin(io)
@@ -4224,10 +4388,9 @@ fn baml.io.Read.read_to_end(self: baml.io.Read) -> uint8array {
     let _1: baml.io.Read // self // param
     let _2: uint8array // buf
     let _3: null | uint8array
-    let _4: int
-    let _5: null | uint8array
-    let _6: uint8array // chunk
-    let _7: uint8array
+    let _4: null | uint8array
+    let _5: uint8array // chunk
+    let _6: uint8array
 
     bb0: {
         _2 = b"<0 bytes>";
@@ -4235,32 +4398,28 @@ fn baml.io.Read.read_to_end(self: baml.io.Read) -> uint8array {
     }
 
     bb1: {
-        _4 = call const fn baml.Int.max_value() -> [bb2];
+        _3 = virtual_call read as baml.io.Read(copy _1, const 65536_i64) -> [bb2];
     }
 
     bb2: {
-        _3 = virtual_call read as baml.io.Read(copy _1, copy _4) -> [bb3];
+        _4 = copy _3;
+        _4 = narrow_bind copy _4 as Uint8Array { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb5, bb3];
     }
 
     bb3: {
-        _5 = copy _3;
-        _5 = narrow_bind copy _5 as Uint8Array { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb6, bb4];
+        _0 = copy _2;
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = copy _2;
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 
-    bb6: {
-        fresh_cell(_6);
+    bb5: {
+        fresh_cell(_5);
+        _5 = copy _4;
         _6 = copy _5;
-        _7 = copy _6;
-        _2 = call const fn baml.Uint8Array.concat(copy _2, copy _7) -> [bb1];
+        _2 = call const fn baml.Uint8Array.concat(copy _2, copy _6) -> [bb1];
     }
 }
 

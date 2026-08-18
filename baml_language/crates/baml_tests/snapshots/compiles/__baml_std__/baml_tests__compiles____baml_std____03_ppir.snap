@@ -864,6 +864,9 @@ function baml.future.race(futures: baml.future.Future<T, E>[]) -> baml.future.Fu
   {  } spawn { () -> { { let i = baml.future.__await_any(futures); futures.map((f) -> { {  } f.cancel() }) } await futures[i] } }
 }
 function baml.future.state(self: ?) -> baml.future.FutureState  [builtin]
+function baml.future.with_timeout(limit: baml.time.Duration, body: () -> T throws E) -> T  [expr] {
+  { let token = baml.spawn.CancelToken.new(); let work = spawn { () -> { {  } body() } }; let deadline = spawn { () -> { { baml.sys.sleep(limit) } token.cancel() } }; let out = await work catch (e) { baml.panics.Cancelled => { let limit_ms = limit.to_milliseconds(); let reported = limit_ms.to_int() catch (conversion) { baml.errors.InvalidArgument => null }; throw baml.errors.Timeout { message: `...`, duration_ms: reported } } }; deadline.cancel() } out
+}
 
 --- captures ---
 lambda () in all_complete: captures [futures]
@@ -871,6 +874,8 @@ lambda () in all: captures [futures]
 lambda (f) in ?: captures [futures]
 lambda () in race: captures [futures]
 lambda () in any: captures [futures]
+lambda () in with_timeout: captures [body]
+lambda () in with_timeout: captures [limit, token]
 
 --- <builtin>/baml/ns_glob/glob.baml ---
 class baml.glob.Glob {
@@ -1009,7 +1014,7 @@ function baml.io.println(s: string) -> null  [builtin]
 --- <builtin>/baml/ns_io/read.baml ---
 function baml.io.read(self: ?, limit: int) -> uint8array?  [missing]
 function baml.io.read_to_end(self: ?) -> uint8array  [expr] {
-  { let buf = b"<0 bytes>"; while let chunk: uint8array = self.read(int.max_value()) { buf = buf.concat(chunk) } } buf
+  { let buf = b"<0 bytes>"; while let chunk: uint8array = self.read(65536) { buf = buf.concat(chunk) } } buf
 }
 function baml.io.read_to_string(self: ?) -> string  [expr] {
   { let buf = self.read_to_end() } string.from_utf8(buf) catch (_) { _ => throw root.errors.ParseError { message: "invalid utf-8" } }
@@ -2102,7 +2107,7 @@ class baml.sys.Process {
   _handle: $rust_type
   stdin: baml.sys.WritePipe
   stdout: baml.sys.ReadPipe
-  stderr: baml.sys.ReadPipe
+  stderr: baml.sys.ReadPipe?
 }
 class baml.sys.Process$stream {
   _handle: $rust_type
@@ -2124,6 +2129,7 @@ class baml.sys.ProcessOptions {
   timeout_ms: int?
   stdin: string?
   keep_stdin_open: bool?
+  stderr: baml.sys.StderrMode?
 }
 class baml.sys.ProcessOptions$stream {
   cwd: string | null
@@ -2131,6 +2137,7 @@ class baml.sys.ProcessOptions$stream {
   timeout_ms: int | null
   stdin: string | null
   keep_stdin_open: bool | null
+  stderr: baml.sys.StderrMode | null
 }
 class baml.sys.ReadPipe {
   _pipe: $rust_type
@@ -2162,6 +2169,7 @@ class baml.sys.WritePipe {
 class baml.sys.WritePipe$stream {
   _pipe: $rust_type
 }
+enum baml.sys.StderrMode {Inherit, Pipe, Discard}
 function baml.sys._strip_carriage_return(line: uint8array) -> uint8array  [expr] {
   {  } match (line.at(line.length() Sub 1)) { 13 => line.slice(0, line.length() Sub 1), _ => line }
 }

@@ -1,0 +1,102 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function with_timeout.$init_test_ns_with_timeout_with_timeout(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.with_timeout"
+    load_const "with_timeout_returns_the_value"
+    make_closure .<lambda($init_test_ns_with_timeout_with_timeout, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.with_timeout"
+    load_const "with_timeout_throws_on_expiry"
+    make_closure .<lambda($init_test_ns_with_timeout_with_timeout, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.with_timeout"
+    load_const "with_timeout_propagates_body_errors"
+    make_closure .<lambda($init_test_ns_with_timeout_with_timeout, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function with_timeout.with_timeout_propagates_body_errors_fn() -> string {
+    load_const 30
+    call baml.time.Duration.from_seconds
+    store_var _2
+    load_type never
+    load_type baml.errors.Io
+    load_var _2
+    make_closure .<lambda(with_timeout_propagates_body_errors_fn, 0)>, 0
+    call baml.future.with_timeout
+    jump L4
+    load_var e
+    is_type baml.errors.Timeout
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    rethrow
+
+  L2:
+    load_const "io"
+    jump L4
+
+  L3:
+    load_const "timed out"
+
+  L4:
+    return
+}
+
+function with_timeout.with_timeout_returns_the_value_fn() -> int {
+    load_const 30
+    call baml.time.Duration.from_seconds
+    store_var _1
+    load_type int
+    load_type never
+    load_var _1
+    make_closure .<lambda(with_timeout_returns_the_value_fn, 0)>, 0
+    call baml.future.with_timeout
+    return
+}
+
+function with_timeout.with_timeout_throws_on_expiry_fn() -> string {
+    load_const 25
+    call baml.time.Duration.from_milliseconds
+    store_var _2
+    load_type string
+    load_type baml.errors.Io
+    load_var _2
+    make_closure .<lambda(with_timeout_throws_on_expiry_fn, 0)>, 0
+    call baml.future.with_timeout
+    jump L2
+    load_var e
+    is_type baml.errors.Timeout
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const "timed out"
+
+  L2:
+    return
+}

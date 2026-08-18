@@ -465,7 +465,7 @@ async fn collect_tests_sequential_runs_children_in_source_order() {
             baml.fs.write(path, "");
             test "one" {
                 let f = baml.fs.open(path, "a");
-                f.write("1");
+                f.write("1".to_utf8());
                 f.close();
             }
             test "two" {

@@ -289,7 +289,14 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
     // is projected at all. The one `Write` that survives is the class's own
     // `write(string | uint8array)`; a second one would mean the interface method
     // was projected under the same name.
-    for absent in [" Read(", " ReadAsync(", " Flush(", " FlushAsync("] {
+    for absent in [
+        " Read(",
+        " ReadAsync(",
+        " ReadBytes(",
+        " ReadBytesAsync(",
+        " Flush(",
+        " FlushAsync(",
+    ] {
         assert!(
             !file.contains(absent),
             "generated File resource surface exposed interface-block member `{absent}`"
@@ -300,6 +307,26 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
         1,
         "expected exactly one File.Write (the class method, not baml.io.Write's)"
     );
+
+    // `TcpStream` keeps its ENTIRE byte surface in `implements` blocks, so
+    // unlike `File` it should project no read/write member at all. Dropping
+    // these names from the expected-members list below only stops asserting
+    // they exist; this is what catches them coming back.
+    let tcp_stream = fs::read_to_string(generated.join("Net").join("TcpStream.g.cs"))
+        .expect("failed to read generated typed TcpStream resource surface");
+    for absent in [
+        " Read(",
+        " ReadAsync(",
+        " Write(",
+        " WriteAsync(",
+        " Flush(",
+        " FlushAsync(",
+    ] {
+        assert!(
+            !tcp_stream.contains(absent),
+            "generated TcpStream resource surface exposed interface-block member `{absent}`"
+        );
+    }
 
     let resource_surfaces = [
         (

@@ -4353,7 +4353,7 @@ fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], t
     }
 
     bb2: {
-        _8 = baml.sys.ProcessOptions { const null, const null, copy _4, const null, const null };
+        _8 = baml.sys.ProcessOptions { const null, const null, copy _4, const null, const null, const null };
         _6 = sys_op const fn baml.sys.start_process(copy _2, copy _3, copy _8) -> bb3 unwind bb9;
     }
 

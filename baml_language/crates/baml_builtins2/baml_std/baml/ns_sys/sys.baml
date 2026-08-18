@@ -13,6 +13,24 @@ class ProcessOptions {
     /// No longer has any effect: `start_process` always hands back a writable
     /// `Process.stdin`, and EOF is delivered by closing that pipe.
     keep_stdin_open: bool?,
+    /// Where the child's stderr goes. `null` means `StderrMode.Inherit`, and
+    /// only `StderrMode.Pipe` populates `Process.stderr`.
+    stderr: StderrMode?,
+}
+
+/// Where a child process's standard error goes.
+enum StderrMode {
+    /// The child writes to this process's own stderr. Nothing can block on an
+    /// unread pipe, and the child's diagnostics stay visible — which is why
+    /// this is the default.
+    Inherit,
+    /// The child's stderr becomes `Process.stderr`, a pipe the caller owns.
+    /// The OS buffer holds only a few tens of kilobytes, and the child blocks
+    /// once it fills, so a caller that asks for the pipe must drain it —
+    /// concurrently with stdout, not after it.
+    Pipe,
+    /// The child's stderr is discarded.
+    Discard,
 }
 
 /// The result of running an external process with `exec` or `shell`.
@@ -119,14 +137,16 @@ function _strip_carriage_return(line: uint8array) -> uint8array throws never {
 
 /// A live child process created with `start_process`.
 ///
-/// All three streams are pipes the caller owns and consumes incrementally.
-/// Stderr is no longer inherited from the parent, so a child that writes more
-/// than the pipe buffer holds blocks until `stderr` is drained.
+/// `stdin` and `stdout` are always pipes the caller owns and consumes
+/// incrementally. `stderr` is one only when `ProcessOptions.stderr` asked for
+/// it; by default the child writes straight to this process's stderr.
 class Process {
     _handle: $rust_type,
     stdin: WritePipe,
     stdout: ReadPipe,
-    stderr: ReadPipe,
+    /// The child's stderr, present only under `StderrMode.Pipe`. Draining it
+    /// is then the caller's job: an ignored pipe stops the child.
+    stderr: ReadPipe?,
 
     /// Wait for the child to exit.
     function wait(self) -> ProcessExit throws root.errors.Io | root.errors.Timeout {

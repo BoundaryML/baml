@@ -367,10 +367,17 @@ async fn start_process_stdout_read_is_cancellable() {
                     baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
                     tok.cancel()
                 };
-                (await read) catch (e) {
+                // The cancel arm and a real line are both strings, so the
+                // assertion below only holds if the read was actually
+                // cancelled: a line would return itself, and a completed
+                // stream returns "eof".
+                let outcome = (await read) catch (e) {
                     baml.panics.Cancelled => "cancelled"
                 };
-                "cancelled"
+                match (outcome) {
+                    let line: string => line,
+                    baml.iter.Done => "eof",
+                }
             }
         "#
     );
@@ -459,4 +466,116 @@ async fn shell_stderr_bytes() {
     } else {
         panic!("expected Uint8Array, got {:?}", output.result);
     }
+}
+
+// === StderrMode ===
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_stderr_pipe_is_readable() {
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'boom\n' >&2"],
+                    baml.sys.ProcessOptions { stderr: baml.sys.StderrMode.Pipe },
+                );
+                defer { process.close() }
+
+                match (process.stderr) {
+                    null => "no pipe",
+                    let err: baml.sys.ReadPipe => {
+                        match (err.lines().next()) {
+                            let line: string => line,
+                            baml.iter.Done => "eof",
+                        }
+                    },
+                }
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("boom".to_string().into()))
+    );
+}
+
+// Inherit is the default, so a caller that never asks for the pipe cannot
+// wedge a child on an unread stderr — `Process.stderr` is simply absent.
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_stderr_defaults_to_inherit() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process("sh", ["-c", "printf 'x' >&2"], null);
+                defer { process.close() }
+
+                let exit = process.wait();
+                process.stderr == null && exit.ok()
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_stderr_discard_leaves_no_pipe() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'x' >&2"],
+                    baml.sys.ProcessOptions { stderr: baml.sys.StderrMode.Discard },
+                );
+                defer { process.close() }
+
+                let exit = process.wait();
+                process.stderr == null && exit.ok()
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+// A child that floods stderr past the OS pipe buffer must still finish when
+// the caller drains the pipe concurrently with stdout — the deadlock this
+// mode is designed to make possible.
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_stderr_pipe_survives_a_flood_when_drained() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "i=0; while [ $i -lt 4000 ]; do printf 'noise-noise-noise-noise\n' >&2; i=$((i+1)); done; printf 'done\n'"],
+                    baml.sys.ProcessOptions { stderr: baml.sys.StderrMode.Pipe },
+                );
+                defer { process.close() }
+
+                let drain = spawn {
+                    match (process.stderr) {
+                        null => 0,
+                        let err: baml.sys.ReadPipe => err.lines().collect().length(),
+                    }
+                };
+                let out = match (process.stdout.lines().next()) {
+                    let line: string => line,
+                    baml.iter.Done => "eof",
+                };
+                let noise = await drain;
+                let exit = process.wait();
+                out == "done" && noise == 4000 && exit.ok()
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

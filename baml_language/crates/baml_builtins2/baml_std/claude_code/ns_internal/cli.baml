@@ -303,7 +303,24 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     };
     // events stream LIVE: each JSONL line logs as it arrives, and the last
     // relevant line is the result. Stderr inherits the parent process.
-    let result = _read_result(p);
+    //
+    // `ProcessOptions.timeout_ms` bounds `wait()` only — reading stdout goes
+    // through `baml.io.Read`, which carries no deadline — so the drain runs
+    // under its own, or a silent CLI parks this call forever.
+    let result = baml.future.with_timeout(
+        baml.time.Duration.from_milliseconds(c.timeout_ms),
+        () -> {
+            _read_result(p)
+        },
+    ) catch (e) {
+        baml.errors.Timeout => {
+            throw ai.errors.NetworkFailure {
+                provider: "claude-code",
+                detail: `the Claude Code CLI produced no result within ${c.timeout_ms}ms`,
+                raw_body: null,
+            }
+        },
+    };
     let exit = p.wait() catch_all (e) {
         _ => {
             throw ai.errors.NetworkFailure {
