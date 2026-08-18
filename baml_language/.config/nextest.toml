@@ -130,13 +130,22 @@ command = './crates/baml_cli/tests/build-pack-host.sh'
 [scripts.setup.baml_pack_host_win]
 command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './crates/baml_cli/tests/build-pack-host.ps1']
 
+# package+kind, not `binary(=pack_e2e)`: the L2 exports' trimmed cargo
+# metadata declares only lib targets, and nextest validates binary() names
+# against target declarations - the exact name hard-errors there even with
+# the binary itself present in binaries-metadata (proven live, run
+# 32090446461). Every current lane that selects any baml_cli integration
+# test selects pack_e2e among them, so this fires in exactly the same runs;
+# the delta is only a hand-crafted local selection of another baml_cli
+# integration test, which now pays one extra pack-host build. Restore the
+# exact binary filter once the unit-graph metadata carries test targets.
 [[profile.default.scripts]]
-filter = 'binary(=pack_e2e)'
+filter = 'package(=baml_cli) and kind(=test)'
 platform = { host = 'cfg(unix)' }
 setup = 'baml_pack_host_unix'
 
 [[profile.default.scripts]]
-filter = 'binary(=pack_e2e)'
+filter = 'package(=baml_cli) and kind(=test)'
 platform = { host = 'cfg(windows)' }
 setup = 'baml_pack_host_win'
 
