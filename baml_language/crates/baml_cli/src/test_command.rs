@@ -54,6 +54,9 @@ PROFILES:
   --project, --directory, --from, --features, or --help. With no default profile,
   all tests are selected.
 
+ENVIRONMENT:
+  BAML does not load .env files. Export variables in the invoking process or use an environment-loading tool.
+
 Examples:
   List available tests:
     baml test --list

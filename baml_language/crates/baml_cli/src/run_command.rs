@@ -144,6 +144,9 @@ fn parse_script_body(tokens: &[String]) -> Result<ScriptExpansion> {
 #[command(after_long_help = "\
 Use `baml run <target> -- --help` to display the target's generated arguments.
 
+Environment:
+  BAML does not load .env files. Export variables in the invoking process or use an environment-loading tool.
+
 Examples:
   Run a function:
     baml run main -- --name Ada

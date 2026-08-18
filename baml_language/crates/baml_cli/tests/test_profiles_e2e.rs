@@ -281,6 +281,15 @@ fn double_colon_is_reserved_inside_declared_test_names() {
     )
     .unwrap();
 
+    let checked = run(tmp.path(), &["check"]);
+    assert!(!checked.status.success());
+    let check_error = String::from_utf8_lossy(&checked.stderr);
+    assert!(
+        check_error.contains("reserved separator `::`"),
+        "{check_error}"
+    );
+    assert!(check_error.contains("testset"), "{check_error}");
+
     let output = run(tmp.path(), &["test", "--list", "--no-profile"]);
     assert!(!output.status.success());
     let error = String::from_utf8_lossy(&output.stderr);
@@ -300,6 +309,14 @@ testset "outer" {
 "#,
     )
     .unwrap();
+
+    let checked = run(tmp.path(), &["check"]);
+    assert!(!checked.status.success());
+    let check_error = String::from_utf8_lossy(&checked.stderr);
+    assert!(
+        check_error.contains("reserved separator `::`"),
+        "{check_error}"
+    );
 
     let output = run(tmp.path(), &["test", "--list", "--no-profile"]);
     assert!(!output.status.success());

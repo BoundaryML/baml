@@ -112,3 +112,7 @@ Global options:
           Display concise help for this command
 
 Use `baml run <target> -- --help` to display the target's generated arguments.
+
+Environment:
+  BAML does not load .env files. Export variables in the invoking process or use an
+  environment-loading tool.

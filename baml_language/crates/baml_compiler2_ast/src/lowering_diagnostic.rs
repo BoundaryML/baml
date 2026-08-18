@@ -99,6 +99,12 @@ pub enum LoweringDiagnostic {
     /// A byte string literal contains an invalid escape sequence.
     InvalidByteStringEscape { message: String, span: TextRange },
 
+    /// A statically known test or testset name contains the canonical-ID separator.
+    InvalidTestName {
+        item_kind: &'static str,
+        span: TextRange,
+    },
+
     /// The `instanceof` operator was used; it has been removed. Use `match` instead.
     InstanceofRemoved { span: TextRange },
 
@@ -433,6 +439,15 @@ impl LoweringDiagnostic {
                 format!("invalid byte string literal: {message}"),
                 *span,
                 "invalid escape",
+            ),
+            LoweringDiagnostic::InvalidTestName { item_kind, span } => (
+                DiagnosticId::InvalidTestName,
+                Severity::Error,
+                format!(
+                    "{item_kind} name may not contain reserved separator `::`; use nested `testset` blocks to group tests"
+                ),
+                *span,
+                "`::` is reserved for canonical test IDs",
             ),
             LoweringDiagnostic::InstanceofRemoved { span } => (
                 DiagnosticId::RemovedFeature,

@@ -382,6 +382,11 @@ pub enum DiagnosticId {
     /// A condition whose static type decides the branch (always truthy /
     /// always falsy) - B-1563 truthiness.
     ConditionAlwaysConstant,
+
+    // Test registration names (E0168)
+    /// A statically known test or testset name contains `::`, which is reserved
+    /// for separating components in canonical test IDs.
+    InvalidTestName,
 }
 
 impl DiagnosticId {
@@ -588,6 +593,7 @@ impl DiagnosticId {
             // E0164 is owned by the non-data output-format diagnostic in #4470.
             DiagnosticId::UnspecializedReflectedGeneric => "E0165",
             DiagnosticId::CannotConstructBuiltinCompanion => "E0166",
+            DiagnosticId::InvalidTestName => "E0168",
         }
     }
 }

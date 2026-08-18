@@ -13,6 +13,9 @@ use crate::reporter::Reporter;
 /// source file in that project, and prints compiler errors and warnings.
 #[derive(Args, Debug)]
 #[command(after_long_help = "\
+Environment:
+  BAML does not load .env files. Export variables in the invoking process or use an environment-loading tool.
+
 Examples:
   Check the nearest project:
     baml check

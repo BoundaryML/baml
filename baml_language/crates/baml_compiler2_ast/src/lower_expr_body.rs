@@ -266,6 +266,19 @@ impl InitTestContext {
         self.inner.alloc_stmt(stmt, span)
     }
 
+    /// Lower a top-level test/testset name and diagnose a literal `::` before
+    /// runtime discovery. Computed names keep the runtime registry check.
+    pub(crate) fn lower_test_name_element(
+        &mut self,
+        element: &baml_compiler_syntax::SyntaxElement,
+        item_kind: &'static str,
+    ) -> ExprId {
+        let expr = lower_runner_element(self, element);
+        self.inner
+            .validate_literal_test_name(expr, item_kind, element.text_range());
+        expr
+    }
+
     /// Lower a top-level `test`'s body into the `$init_test` arena, as the body
     /// of the lambda that gets registered.
     ///
@@ -5836,14 +5849,37 @@ impl LoweringContext {
                     | SyntaxKind::LINE_COMMENT
             )
         });
+        let name_span = name_element
+            .as_ref()
+            .map_or(span, baml_compiler_syntax::SyntaxElement::text_range);
 
-        match name_element {
+        let expr = match name_element {
             Some(rowan::NodeOrToken::Node(ref name_node)) => self.lower_expr(name_node),
             Some(rowan::NodeOrToken::Token(ref token)) => {
                 let expr = lower_bare_token_expr(self, token);
                 self.alloc_expr(expr, token.text_range())
             }
             None => self.alloc_expr(Expr::Literal(Literal::String(String::new())), span),
+        };
+        let item_kind = if node.kind() == SyntaxKind::TESTSET_DEF {
+            "testset"
+        } else {
+            "test"
+        };
+        self.validate_literal_test_name(expr, item_kind, name_span);
+        expr
+    }
+
+    fn validate_literal_test_name(
+        &mut self,
+        expr: ExprId,
+        item_kind: &'static str,
+        span: TextRange,
+    ) {
+        if matches!(&self.exprs[expr], Expr::Literal(Literal::String(name)) if name.contains("::"))
+        {
+            self.diags
+                .push(LoweringDiagnostic::InvalidTestName { item_kind, span });
         }
     }
 
