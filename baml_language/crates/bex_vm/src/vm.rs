@@ -1586,6 +1586,24 @@ impl BexVm {
         self.alloc_static_type_with_defs(ty, DynTypeDefs::default())
     }
 
+    /// Allocate a reflected function descriptor: a `type` value that also
+    /// remembers the callable it describes, so `specialize`/`get` can act on
+    /// it without a second lookup by name. Identity is the ordinary static
+    /// mint — the callable is provenance, not part of the type.
+    pub(crate) fn alloc_function_descriptor(
+        &mut self,
+        ty: baml_type::RealizedTy,
+        defs: DynTypeDefs,
+        callable: HeapPtr,
+    ) -> HeapPtr {
+        let ptr = self.alloc_static_type_with_defs(ty, defs);
+        let Object::Type(type_value) = self.get_object_mut(ptr) else {
+            unreachable!("alloc_static_type_with_defs allocates an Object::Type")
+        };
+        type_value.callable = callable;
+        ptr
+    }
+
     pub fn alloc_static_type_with_defs(
         &mut self,
         ty: baml_type::RealizedTy,
@@ -2605,7 +2623,7 @@ impl BexVm {
     /// A callable value is one of three shapes, each currying its arguments in
     /// its own field; the two questions below both need the same pair, so they
     /// ask it here rather than each re-matching the three.
-    fn callable_function_and_type_args(
+    pub(crate) fn callable_function_and_type_args(
         &self,
         value: Value,
     ) -> Option<(&Function, &[baml_type::RealizedTy])> {
@@ -2645,6 +2663,14 @@ impl BexVm {
     }
 
     /// The declared name of a callable, for a diagnostic.
+    /// The name a callable value reports in a diagnostic that has no package
+    /// context — the specialization surface names callables the way
+    /// `reflect.call_any` does, by their bare declared name.
+    pub(crate) fn callable_diagnostic_name(&self, value: Value) -> Option<String> {
+        let (function, _) = self.callable_function_and_type_args(value)?;
+        Some(Self::callable_display_name(function))
+    }
+
     fn callable_display_name(function: &Function) -> String {
         function
             .declared_name
@@ -5483,6 +5509,15 @@ impl BexVm {
             Object::GenericFunction(gf) => gf.type_args.clone(),
             _ => Box::new([]),
         };
+        // A callable specialized through reflection carries the exact `type`
+        // values behind those args. They are what `LoadType` needs to hand a
+        // body's `type.of<T>()` back the caller's own minted value, overlay and
+        // all; an ordinary `foo<int>` has none and stays on the cheap path.
+        let gf_exact_type_values: Option<Box<[Option<TypeValue>]>> =
+            match self.get_object(callee_ptr) {
+                Object::GenericFunction(gf) => gf.exact_type_values.clone(),
+                _ => None,
+            };
 
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod
         // wrapping one. `callee_fn_ptr` is the heap pointer of the resolved
@@ -5813,12 +5848,24 @@ impl BexVm {
                     arg_count,
                     capture_mask,
                 );
+                let type_metadata = gf_exact_type_values.and_then(|values| {
+                    let mut defs = DynTypeDefs::default();
+                    for value in values.iter().flatten() {
+                        defs.merge_from(value.defs());
+                    }
+                    (!defs.is_empty() || values.iter().any(Option::is_some)).then(|| {
+                        Box::new(FrameTypeMetadata {
+                            defs,
+                            values: values.into_vec(),
+                        })
+                    })
+                });
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: callee_ptr,
                     instruction_ptr: 0,
                     locals_offset,
                     type_args: initial_type_args.into_vec(),
-                    type_metadata: None,
+                    type_metadata,
                     faulting_pc: 0,
                     call_id,
                     parent_call_id,
@@ -8426,6 +8473,7 @@ impl BexVm {
                         function: function_global,
                         type_args: type_args.tys.into_boxed_slice(),
                         runtime_package: function.runtime_package,
+                        exact_type_values: None,
                     });
                     let ptr = self.tlab.alloc(gf);
                     self.stack.push(Value::object(ptr));

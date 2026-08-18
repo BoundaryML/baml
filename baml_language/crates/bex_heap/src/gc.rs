@@ -705,10 +705,20 @@ impl BexHeap {
                 if !function.runtime_package.as_ptr().is_null() {
                     worklist.push(function.runtime_package);
                 }
+                for value in function.exact_type_values.iter().flatten().flatten() {
+                    if !value.owner.as_ptr().is_null() {
+                        worklist.push(value.owner);
+                    }
+                    worklist.extend(value.defs().classes.values().copied());
+                    worklist.extend(value.defs().enums.values().copied());
+                }
             }
             Object::Type(value) => {
                 if !value.owner.as_ptr().is_null() {
                     worklist.push(value.owner);
+                }
+                if !value.callable.as_ptr().is_null() {
+                    worklist.push(value.callable);
                 }
                 worklist.extend(value.defs().classes.values().copied());
                 worklist.extend(value.defs().enums.values().copied());
@@ -964,10 +974,22 @@ impl BexHeap {
                 if let Some(&new_ptr) = forwarding.get(&function.runtime_package) {
                     function.runtime_package = new_ptr;
                 }
+                for value in function.exact_type_values.iter_mut().flatten().flatten() {
+                    value.owner = forwarding.get(&value.owner).copied().unwrap_or(value.owner);
+                    for ptr in value.defs_mut().classes.values_mut() {
+                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                    }
+                    for ptr in value.defs_mut().enums.values_mut() {
+                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                    }
+                }
             }
             Object::Type(value) => {
                 if let Some(&new_ptr) = forwarding.get(&value.owner) {
                     value.owner = new_ptr;
+                }
+                if let Some(&new_ptr) = forwarding.get(&value.callable) {
+                    value.callable = new_ptr;
                 }
                 for ptr in value.defs_mut().classes.values_mut() {
                     *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
@@ -1352,10 +1374,30 @@ impl BexHeap {
                 {
                     worklist.push(function.runtime_package);
                 }
+                for value in function.exact_type_values.iter().flatten().flatten() {
+                    if !value.owner.as_ptr().is_null() && self.generation_of(value.owner).is_young()
+                    {
+                        worklist.push(value.owner);
+                    }
+                    worklist.extend(
+                        value
+                            .defs()
+                            .classes
+                            .values()
+                            .chain(value.defs().enums.values())
+                            .copied()
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
+                }
             }
             Object::Type(value) => {
                 if !value.owner.as_ptr().is_null() && self.generation_of(value.owner).is_young() {
                     worklist.push(value.owner);
+                }
+                if !value.callable.as_ptr().is_null()
+                    && self.generation_of(value.callable).is_young()
+                {
+                    worklist.push(value.callable);
                 }
                 worklist.extend(
                     value

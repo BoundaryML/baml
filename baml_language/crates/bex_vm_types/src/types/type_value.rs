@@ -177,6 +177,16 @@ pub struct TypeValue {
     /// Runtime package whose definitions give this type meaning. Static type
     /// values use a null pointer. This is a GC edge, not serialized identity.
     pub owner: HeapPtr,
+    /// The callable a reflected *function descriptor* was built from — an
+    /// `Object::GenericFunction` — or null for every other type value.
+    ///
+    /// A `baml.reflect.function.Type` handed out by `Package.functions()` is
+    /// this same `Object::Type`, so `specialize`/`get` need the callable to
+    /// travel with it: a specialized descriptor is anonymous and cannot be
+    /// looked up again by name. Provenance only — it is deliberately outside
+    /// the identity tuple (`==`/`Hash` stay mint-only), so two descriptors of
+    /// equal type remain equal type values. This is a GC edge, like `owner`.
+    pub callable: HeapPtr,
 }
 
 impl TypeValue {
@@ -195,6 +205,7 @@ impl TypeValue {
             mint: MintId::Static(digest),
             defs: DynTypeDefs::default(),
             owner: HeapPtr::null(),
+            callable: HeapPtr::null(),
         }
     }
 
@@ -211,6 +222,7 @@ impl TypeValue {
             mint,
             defs: DynTypeDefs::default(),
             owner: HeapPtr::null(),
+            callable: HeapPtr::null(),
         }
     }
 
@@ -220,6 +232,7 @@ impl TypeValue {
             mint,
             defs,
             owner: HeapPtr::null(),
+            callable: HeapPtr::null(),
         }
     }
 
@@ -237,6 +250,7 @@ impl TypeValue {
             mint,
             defs,
             owner,
+            callable: HeapPtr::null(),
         }
     }
 
@@ -249,7 +263,16 @@ impl TypeValue {
             mint,
             defs: DynTypeDefs::default(),
             owner,
+            callable: HeapPtr::null(),
         }
+    }
+
+    /// Attach the callable this type value describes, making it a reflected
+    /// function descriptor. Identity is untouched.
+    #[must_use]
+    pub fn with_callable(mut self, callable: HeapPtr) -> Self {
+        self.callable = callable;
+        self
     }
 
     /// This value's identity token.
