@@ -74,7 +74,7 @@ defaults:
 
 jobs:
   # The cffi build matrix is generated from the repository's platform contract
-  # (`release/platforms.json`) so the target set + per-target build config live
+  # (`baml_language/crates/baml_release/platforms.json`) so the target set + per-target build config live
   # in one machine-readable place, not a hand-copied YAML list. Any future
   # experimental target carries that tier in the contract, which drives
   # `continue-on-error` on the build job below.
@@ -103,7 +103,7 @@ jobs:
             | .artifacts.cffi as $c
             | {target: .triple, os: $c.runner}
               + ({use_cross: $c.use_cross, smoke: $c.smoke, experimental: $c.experimental}
-                 | with_entries(select(.value == true)))]' release/platforms.json)"
+                 | with_entries(select(.value == true)))]' baml_language/crates/baml_release/platforms.json)"
           echo "include=$include" >> "$GITHUB_OUTPUT"
           jq . <<<"$include"
 

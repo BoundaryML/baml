@@ -106,7 +106,7 @@ jobs:
             .targets[]
             | select(.artifacts.csharp.rid == "linux-x64")
             | "staging/runtimes/\(.artifacts.csharp.rid)/native/\(.artifacts.csharp.native_asset)"
-          ' release/platforms.json)"
+          ' baml_language/crates/baml_release/platforms.json)"
           test -f "$native"
           dotnet run --project \
             baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.AbiLifetimeProbe/Baml.Bridge.AbiLifetimeProbe.csproj \
