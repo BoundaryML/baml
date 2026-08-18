@@ -394,7 +394,8 @@ fn collect_effect_params(
     let mut effect_params: Vec<String> = Vec::new();
     for arg in &function.arguments {
         if arg.default.is_none()
-            && let baml_codegen_types::Ty::Function { throws, .. } = &arg.ty
+            && let Some(baml_codegen_types::Ty::Function { throws, .. }) =
+                crate::effect_rename::callback_root(&arg.ty)
             && let baml_codegen_types::Ty::TypeVar(name, _) = throws.as_ref()
         {
             let name = name.as_str();
