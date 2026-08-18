@@ -100,6 +100,19 @@ fn create_project_with_go_generator(dir: &Path, source: &str) {
     .unwrap();
 }
 
+fn create_project_with_rust_generator(dir: &Path, source: &str) {
+    create_project(dir, source);
+    std::fs::write(
+        dir.join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.rust_client]\n\
+         output_type = \"rust\"\n\
+         output_dir = \".\"\n\
+         naming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
+}
+
 // ============================================================================
 // Tests for `baml check` exit codes
 // ============================================================================
@@ -286,6 +299,49 @@ fn generate_valid_project_returns_zero_exit_code() {
     assert!(
         stderr.contains("Compiling 1 file(s)"),
         "`baml generate` should keep compile progress, got: {stderr}",
+    );
+}
+
+#[test]
+fn generate_rust_skipped_user_symbol_returns_nonzero_without_overwriting_output() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project_with_rust_generator(
+        tmp.path(),
+        "function inspect(image: image) -> string { \"ok\" }\n",
+    );
+    let generated_dir = tmp.path().join("baml_sdk");
+    std::fs::create_dir(&generated_dir).unwrap();
+    std::fs::write(generated_dir.join("keep.txt"), "pre-existing output").unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--project", "."]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(4),
+        "Rust generation unexpectedly succeeded\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr
+            .contains("skipped `user.inspect`: argument `image`: unsupported type: media (image)"),
+        "missing per-symbol diagnostic: {stderr}",
+    );
+    assert!(
+        stderr.contains(
+            "Rust generator `rust_client` skipped 1 required symbol(s); refusing to write a partial client"
+        ),
+        "missing fatal summary: {stderr}",
+    );
+    assert_eq!(
+        std::fs::read_to_string(generated_dir.join("keep.txt")).unwrap(),
+        "pre-existing output"
+    );
+    assert!(
+        !generated_dir.join("Cargo.toml").exists(),
+        "partial Rust client was written despite the blocking skip"
     );
 }
 

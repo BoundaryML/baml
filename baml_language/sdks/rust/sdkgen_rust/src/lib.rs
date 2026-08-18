@@ -20,9 +20,12 @@
 //! are never flattened into a parent.
 //!
 //! Symbols that reference BAML types the Rust SDK cannot represent yet are
-//! skipped rather than failing codegen: each skip is reported through
-//! [`Generated::warnings`] so callers can surface them, and the rest of the
-//! SDK still compiles.
+//! skipped rather than failing this low-level codegen API: each skip is
+//! reported through [`Generated::warnings`] so callers can choose their
+//! policy. [`SkipWarning::blocks_generation`] distinguishes skipped local
+//! symbols and generator invariant failures from advisory dependency and
+//! companion skips. The CLI refuses to install a partial SDK when a blocking
+//! warning is present.
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -74,6 +77,47 @@ pub struct SkipWarning {
     pub fqn: String,
     /// Human-readable reason, e.g. `unsupported type: media`.
     pub reason: String,
+    blocks_generation: bool,
+}
+
+impl SkipWarning {
+    /// Whether installing the generated files would silently omit part of the
+    /// user's requested SDK surface or conceal a generator invariant failure.
+    pub fn blocks_generation(&self) -> bool {
+        self.blocks_generation
+    }
+
+    fn for_symbol(name: &baml_codegen_types::Name, reason: impl Into<String>) -> Self {
+        Self {
+            fqn: name.to_string(),
+            reason: reason.into(),
+            blocks_generation: name.is_local(),
+        }
+    }
+
+    fn companion(fqn: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self {
+            fqn: fqn.into(),
+            reason: reason.into(),
+            blocks_generation: false,
+        }
+    }
+
+    fn for_callable(fqn: impl Into<String>, reason: impl Into<String>, is_local: bool) -> Self {
+        Self {
+            fqn: fqn.into(),
+            reason: reason.into(),
+            blocks_generation: is_local,
+        }
+    }
+
+    fn generator_bug(fqn: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self {
+            fqn: fqn.into(),
+            reason: reason.into(),
+            blocks_generation: true,
+        }
+    }
 }
 
 /// Contents of one generated file. Nearly everything is text; the
@@ -1624,6 +1668,48 @@ mod tests {
         assert_eq!(generated.warnings.len(), 1);
         assert_eq!(generated.warnings[0].fqn, "user.needs_media");
         assert!(generated.warnings[0].reason.contains("media"));
+        assert!(generated.warnings[0].blocks_generation());
+    }
+
+    #[test]
+    fn unknown_throws_arm_blocks_installing_a_partial_user_client() {
+        let n = name("user", &[], "extract");
+        let mut f = nullary_string_fn(&n);
+        f.throws = Some(Ty::Union(
+            vec![
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                Ty::BuiltinUnknown {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        ));
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+
+        assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
+        assert_eq!(generated.warnings[0].fqn, "user.extract");
+        assert_eq!(
+            generated.warnings[0].reason,
+            "throws contract: unsupported union arm: unknown"
+        );
+        assert!(generated.warnings[0].blocks_generation());
+    }
+
+    #[test]
+    fn unsupported_dependency_symbols_remain_advisory() {
+        let n = name("baml", &["internal"], "needs_media");
+        let mut f = nullary_string_fn(&n);
+        f.return_type = Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY);
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+
+        assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
+        assert!(!generated.warnings[0].blocks_generation());
     }
 
     #[test]

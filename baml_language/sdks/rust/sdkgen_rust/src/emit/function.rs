@@ -31,11 +31,10 @@ pub(crate) fn emit(
 ) -> Result<TokenStream, SkipWarning> {
     let fqn = name.to_string();
     if name.name().as_str().contains('$') {
-        return Err(SkipWarning {
+        return Err(SkipWarning::companion(
             fqn,
-            reason: "companion functions ($stream, $build_request, …) are not emitted yet"
-                .to_string(),
-        });
+            "companion functions ($stream, $build_request, …) are not emitted yet",
+        ));
     }
     // Generic free functions ARE emitted: their `<...>` params become Rust
     // generics bound by `BamlValue`. TypeVars that appear in positions the
@@ -47,6 +46,7 @@ pub(crate) fn emit(
         function,
         Receiver::None,
         &[],
+        name.is_local(),
         ctx,
     )
 }
@@ -73,13 +73,20 @@ pub(crate) fn emit_method(
     let method_name = method.name.as_str();
     let fqn = format!("{class_name}.{method_name}");
     if method_name.contains('$') {
-        return Err(SkipWarning {
+        return Err(SkipWarning::companion(
             fqn,
-            reason: "companion methods ($stream, $build_request, …) are not emitted yet"
-                .to_string(),
-        });
+            "companion methods ($stream, $build_request, …) are not emitted yet",
+        ));
     }
-    emit_binding(&fqn, method_name, method, receiver, class_params, ctx)
+    emit_binding(
+        &fqn,
+        method_name,
+        method,
+        receiver,
+        class_params,
+        class_name.is_local(),
+        ctx,
+    )
 }
 
 /// Shared body of [`emit`] / [`emit_method`]: translate the signature and
@@ -90,12 +97,11 @@ fn emit_binding(
     function: &Function,
     receiver: Receiver,
     class_params: &[String],
+    blocks_generation: bool,
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, SkipWarning> {
-    let skip = |reason: String| SkipWarning {
-        fqn: fqn.to_string(),
-        reason,
-    };
+    let skip =
+        |reason: String| SkipWarning::for_callable(fqn.to_string(), reason, blocks_generation);
 
     // The class's params (for instance methods) and the callee's own
     // `<...>` params come into scope for translating this binding's

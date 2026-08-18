@@ -25,12 +25,14 @@ pub(crate) fn emit(
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, SkipWarning> {
     let ident = idents::ident(name.name().as_str());
-    let rhs = translate_ty::translate(&alias.resolves_to, ctx).map_err(|u| SkipWarning {
-        fqn: name.to_string(),
-        reason: format!(
-            "generator bug: analysis accepted this alias but translation failed: {}",
-            u.reason
-        ),
+    let rhs = translate_ty::translate(&alias.resolves_to, ctx).map_err(|u| {
+        SkipWarning::generator_bug(
+            name.to_string(),
+            format!(
+                "generator bug: analysis accepted this alias but translation failed: {}",
+                u.reason
+            ),
+        )
     })?;
     Ok(quote! {
         pub type #ident = #rhs;

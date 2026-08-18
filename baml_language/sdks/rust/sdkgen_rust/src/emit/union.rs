@@ -56,12 +56,14 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
         let variant = idents::ident(&arm.variant);
         match &arm.kind {
             UnionArmKind::Payload(ty) => {
-                let payload = translate_ty::translate(ty, ctx).map_err(|u| SkipWarning {
-                    fqn: union_enum.rust_name.clone(),
-                    reason: format!(
-                        "generator bug: registered union arm failed to translate: {}",
-                        u.reason
-                    ),
+                let payload = translate_ty::translate(ty, ctx).map_err(|u| {
+                    SkipWarning::generator_bug(
+                        union_enum.rust_name.clone(),
+                        format!(
+                            "generator bug: registered union arm failed to translate: {}",
+                            u.reason
+                        ),
+                    )
                 })?;
                 baml_ty_options.push(quote! {
                     <#payload as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty()

@@ -435,6 +435,19 @@ impl GenerateArgs {
                     for warning in &generated.warnings {
                         reporter.warning(format!("skipped `{}`: {}", warning.fqn, warning.reason));
                     }
+                    let blocking_skips = generated
+                        .warnings
+                        .iter()
+                        .filter(|warning| warning.blocks_generation())
+                        .count();
+                    if blocking_skips > 0 {
+                        reporter.abandon();
+                        crate::reporter::print_error(format_args!(
+                            "Rust generator `{}` skipped {blocking_skips} required symbol(s); refusing to write a partial client",
+                            generator.name
+                        ));
+                        return Ok(crate::ExitCode::Other);
+                    }
                     generated
                         .files
                         .into_iter()

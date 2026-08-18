@@ -74,10 +74,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             Symbol::Class(class) => classes.push((name, class)),
             Symbol::Enum(_) => {
                 if name.name().as_str().contains('$') {
-                    warnings.push(SkipWarning {
-                        fqn: name.to_string(),
-                        reason: "companion types ($stream, …) are not emitted yet".to_string(),
-                    });
+                    warnings.push(SkipWarning::companion(
+                        name.to_string(),
+                        "companion types ($stream, …) are not emitted yet",
+                    ));
                 } else {
                     enums.insert(name.clone());
                 }
@@ -99,10 +99,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         // representable as Rust identifiers and are not emitted yet —
         // same filter the function emitter applies.
         if name.name().as_str().contains('$') {
-            warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason: "companion types ($stream, …) are not emitted yet".to_string(),
-            });
+            warnings.push(SkipWarning::companion(
+                name.to_string(),
+                "companion types ($stream, …) are not emitted yet",
+            ));
             continue;
         }
         // A generic class emits as a `<T: BamlValue>` struct: its own type
@@ -120,10 +120,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 .map(|reason| (prop.name.as_str(), reason))
         });
         match unsupported {
-            Some((field, reason)) => warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason: format!("field `{field}`: {reason}"),
-            }),
+            Some((field, reason)) => warnings.push(SkipWarning::for_symbol(
+                name,
+                format!("field `{field}`: {reason}"),
+            )),
             None => {
                 // Every type parameter must appear in some field in a
                 // *non-recursive* position. An entirely unused param is an
@@ -138,13 +138,13 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                     collect_non_recursive_type_vars(&prop.ty, name, &mut used);
                 }
                 if let Some(unused) = class_params.iter().find(|param| !used.contains(**param)) {
-                    warnings.push(SkipWarning {
-                        fqn: name.to_string(),
-                        reason: format!(
+                    warnings.push(SkipWarning::for_symbol(
+                        name,
+                        format!(
                             "generic type parameter `{unused}` is not used in a non-recursive \
                              field position (not representable as a Rust struct)"
                         ),
-                    });
+                    ));
                     continue;
                 }
                 deps.insert(name, class_deps);
@@ -160,28 +160,24 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     // `type`) and structurally unsupported right-hand sides skip.
     for (name, alias) in &aliases {
         if name.name().as_str().contains('$') {
-            warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason: "companion types ($stream, …) are not emitted yet".to_string(),
-            });
+            warnings.push(SkipWarning::companion(
+                name.to_string(),
+                "companion types ($stream, …) are not emitted yet",
+            ));
             continue;
         }
         if alias.recursive {
-            warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason: "recursive type aliases are not representable as a plain Rust `type` yet"
-                    .to_string(),
-            });
+            warnings.push(SkipWarning::for_symbol(
+                name,
+                "recursive type aliases are not representable as a plain Rust `type` yet",
+            ));
             continue;
         }
         let mut alias_deps = Vec::new();
         // Aliases carry no type parameters of their own in the current
         // scope, so no TypeVar is ever in scope for their right-hand side.
         match field_deps(&alias.resolves_to, &[], &mut alias_deps) {
-            Err(reason) => warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason,
-            }),
+            Err(reason) => warnings.push(SkipWarning::for_symbol(name, reason)),
             Ok(()) => {
                 deps.insert(name, alias_deps);
                 alive.insert((*name).clone());
@@ -202,10 +198,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 .iter()
                 .find(|dep| !alive.contains(dep) && !enums.contains(dep))
             {
-                warnings.push(SkipWarning {
-                    fqn: name.to_string(),
-                    reason: format!("references skipped or unknown type `{dead}`"),
-                });
+                warnings.push(SkipWarning::for_symbol(
+                    name,
+                    format!("references skipped or unknown type `{dead}`"),
+                ));
                 removed.push((*name).clone());
             }
         }
