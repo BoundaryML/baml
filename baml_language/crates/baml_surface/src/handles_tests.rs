@@ -16,13 +16,24 @@ use crate::{Db, FunctionOwner, Package, Symbol};
 /// prebuilt test binary later runs on a runner - insta then reads every
 /// assertion as "+new results" and fails. `BAML_SURFACE_SNAPSHOT_DIR` lets
 /// such a runner point insta at the real checkout's `src/snapshots`; unset
-/// (every local and cargo-arm run), behavior is byte-identical to a bare
-/// `assert_snapshot!`. Same pattern as `BAML_PARAM_SCHEMA_GOLDEN` in
-/// `baml_project`, which exists for the same relocated-build reason.
+/// or empty (every local and cargo-arm run), behavior is byte-identical to a
+/// bare `assert_snapshot!`. The override must be an ABSOLUTE path: insta
+/// resolves a relative one against the assertion's source file, silently
+/// selecting a wrong directory. Same pattern as `BAML_PARAM_SCHEMA_GOLDEN`
+/// in `baml_project`, which exists for the same relocated-build reason.
 pub(crate) fn with_snapshot_dir(assertion: impl FnOnce()) {
     let mut settings = insta::Settings::clone_current();
-    if let Some(dir) = std::env::var_os("BAML_SURFACE_SNAPSHOT_DIR") {
-        settings.set_snapshot_path(std::path::PathBuf::from(dir));
+    if let Some(dir) = std::env::var_os("BAML_SURFACE_SNAPSHOT_DIR")
+        && !dir.is_empty()
+    {
+        let dir = std::path::PathBuf::from(dir);
+        assert!(
+            dir.is_absolute(),
+            "BAML_SURFACE_SNAPSHOT_DIR must be an absolute path (insta resolves \
+             a relative one against the assertion source file), got {}",
+            dir.display()
+        );
+        settings.set_snapshot_path(dir);
     }
     settings.bind(assertion);
 }
