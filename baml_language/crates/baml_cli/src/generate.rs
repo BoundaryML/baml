@@ -449,7 +449,9 @@ impl GenerateArgs {
                     if skipped_user_callables > 0 {
                         reporter.abandon();
                         crate::reporter::print_error(format!(
-                            "Rust SDK generation skipped {skipped_user_callables} user callable(s); no partial client was written"
+                            "Rust SDK generator `{}` skipped {skipped_user_callables} user callable(s); output `{}` was not written",
+                            generator.name,
+                            output_dir.display(),
                         ));
                         return Ok(crate::ExitCode::Other);
                     }

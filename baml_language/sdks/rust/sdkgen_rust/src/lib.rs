@@ -1064,6 +1064,28 @@ mod tests {
     }
 
     #[test]
+    fn unclosed_non_union_interface_throws_remains_a_callable_skip() {
+        let failure = name("vendor", &["errors"], "OpenFailure");
+        let call = name("user", &[], "call");
+        let mut function = nullary_string_fn(&call);
+        function.throws = Some(Ty::Interface(
+            failure,
+            Vec::new(),
+            Vec::new(),
+            baml_base::TyAttr::EMPTY,
+        ));
+        let pool = SymbolPool::from([(call, Symbol::Function(function))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.iter().any(|warning| {
+            warning.kind == SkipKind::Callable
+                && warning.fqn == "user.call"
+                && warning.reason.contains("interface")
+        }));
+        assert!(!text(&generated, "src/lib.rs").contains("pub fn call("));
+    }
+
+    #[test]
     fn unrepresentable_nominal_throws_arms_use_runtime_fallback() {
         let typed = name("user", &[], "TypedError");
         let opaque = name("baml", &["errors"], "UnknownError");

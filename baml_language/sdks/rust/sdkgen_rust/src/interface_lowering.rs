@@ -7,7 +7,7 @@
 //! Open/generic interfaces remain untouched and fail closed in the normal type
 //! translator.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_codegen_types::{CallableParam, Class, Function, Name, Symbol, SymbolPool, Ty};
 
@@ -65,18 +65,29 @@ fn lower_function(function: &Function, implementors: &HashMap<Name, Vec<Ty>>) ->
 }
 
 fn lower_ty(ty: &Ty, implementors: &HashMap<Name, Vec<Ty>>) -> Ty {
+    lower_ty_on_path(ty, implementors, &mut HashSet::new())
+}
+
+fn lower_ty_on_path(
+    ty: &Ty,
+    implementors: &HashMap<Name, Vec<Ty>>,
+    active_interfaces: &mut HashSet<Name>,
+) -> Ty {
     let lowered = match ty {
         Ty::Interface(name, generics, associated, attr)
             if generics.is_empty() && associated.is_empty() =>
         {
             match implementors.get(name) {
-                Some(concrete) if !concrete.is_empty() => Ty::Union(
-                    concrete
+                Some(concrete)
+                    if !concrete.is_empty() && active_interfaces.insert(name.clone()) =>
+                {
+                    let members = concrete
                         .iter()
-                        .map(|ty| lower_ty(ty, implementors))
-                        .collect(),
-                    attr.clone(),
-                ),
+                        .map(|ty| lower_ty_on_path(ty, implementors, active_interfaces))
+                        .collect();
+                    active_interfaces.remove(name);
+                    Ty::Union(members, attr.clone())
+                }
                 _ => ty.clone(),
             }
         }
@@ -84,7 +95,7 @@ fn lower_ty(ty: &Ty, implementors: &HashMap<Name, Vec<Ty>>) -> Ty {
             name.clone(),
             arguments
                 .iter()
-                .map(|ty| lower_ty(ty, implementors))
+                .map(|ty| lower_ty_on_path(ty, implementors, active_interfaces))
                 .collect(),
             attr.clone(),
         ),
@@ -92,24 +103,32 @@ fn lower_ty(ty: &Ty, implementors: &HashMap<Name, Vec<Ty>>) -> Ty {
             name.clone(),
             generics
                 .iter()
-                .map(|ty| lower_ty(ty, implementors))
+                .map(|ty| lower_ty_on_path(ty, implementors, active_interfaces))
                 .collect(),
             associated
                 .iter()
-                .map(|(name, ty)| (name.clone(), lower_ty(ty, implementors)))
+                .map(|(name, ty)| {
+                    (
+                        name.clone(),
+                        lower_ty_on_path(ty, implementors, active_interfaces),
+                    )
+                })
                 .collect(),
             attr.clone(),
         ),
-        Ty::List(inner, attr) => Ty::List(Box::new(lower_ty(inner, implementors)), attr.clone()),
+        Ty::List(inner, attr) => Ty::List(
+            Box::new(lower_ty_on_path(inner, implementors, active_interfaces)),
+            attr.clone(),
+        ),
         Ty::Map { key, value, attr } => Ty::Map {
-            key: Box::new(lower_ty(key, implementors)),
-            value: Box::new(lower_ty(value, implementors)),
+            key: Box::new(lower_ty_on_path(key, implementors, active_interfaces)),
+            value: Box::new(lower_ty_on_path(value, implementors, active_interfaces)),
             attr: attr.clone(),
         },
         Ty::Union(members, attr) => Ty::Union(
             members
                 .iter()
-                .map(|ty| lower_ty(ty, implementors))
+                .map(|ty| lower_ty_on_path(ty, implementors, active_interfaces))
                 .collect(),
             attr.clone(),
         ),
@@ -123,20 +142,59 @@ fn lower_ty(ty: &Ty, implementors: &HashMap<Name, Vec<Ty>>) -> Ty {
                 .iter()
                 .map(|param| CallableParam {
                     name: param.name.clone(),
-                    ty: lower_ty(&param.ty, implementors),
+                    ty: lower_ty_on_path(&param.ty, implementors, active_interfaces),
                     mode: param.mode,
                 })
                 .collect(),
-            ret: Box::new(lower_ty(ret, implementors)),
-            throws: Box::new(lower_ty(throws, implementors)),
+            ret: Box::new(lower_ty_on_path(ret, implementors, active_interfaces)),
+            throws: Box::new(lower_ty_on_path(throws, implementors, active_interfaces)),
             attr: attr.clone(),
         },
         Ty::Future(value, error, attr) => Ty::Future(
-            Box::new(lower_ty(value, implementors)),
-            Box::new(lower_ty(error, implementors)),
+            Box::new(lower_ty_on_path(value, implementors, active_interfaces)),
+            Box::new(lower_ty_on_path(error, implementors, active_interfaces)),
             attr.clone(),
         ),
         _ => ty.clone(),
     };
     lowered.canonicalize()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recursive_implementor_arguments_do_not_reexpand_an_active_interface() {
+        let failure = Name::new(
+            baml_base::Name::new("ai"),
+            vec![baml_base::Name::new("errors")],
+            baml_base::Name::new("Failure"),
+        );
+        let wrapper = Name::new(
+            baml_base::Name::new("user"),
+            Vec::new(),
+            baml_base::Name::new("Wrapper"),
+        );
+        let interface = Ty::Interface(
+            failure.clone(),
+            Vec::new(),
+            Vec::new(),
+            baml_base::TyAttr::EMPTY,
+        );
+        let implementors = HashMap::from([(
+            failure,
+            vec![Ty::Class(
+                wrapper,
+                vec![interface.clone()],
+                baml_base::TyAttr::EMPTY,
+            )],
+        )]);
+
+        let lowered = lower_ty(&interface, &implementors);
+        let Ty::Class(_, arguments, _) = lowered else {
+            panic!("expected the outer interface to expand to its sole implementor")
+        };
+        assert_eq!(arguments, &[interface]);
+    }
 }

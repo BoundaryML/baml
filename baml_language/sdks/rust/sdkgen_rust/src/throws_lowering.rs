@@ -61,8 +61,12 @@ fn lower_contract(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
                 _ => Some(Ty::Union(retained, attr.clone()).canonicalize()),
             }
         }
-        nominal if nominal_is_emitted(nominal, analysis) => Some(nominal.clone()),
-        _ => None,
+        nominal @ (Ty::Class(..) | Ty::Enum(..) | Ty::EnumVariant(..) | Ty::TypeAlias(..))
+            if !nominal_is_emitted(nominal, analysis) =>
+        {
+            None
+        }
+        _ => Some(ty.clone()),
     }
 }
 

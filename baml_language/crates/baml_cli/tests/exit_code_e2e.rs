@@ -358,8 +358,17 @@ fn generate_rust_fails_before_writing_a_partial_client() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let expected_output = tmp
+        .path()
+        .canonicalize()
+        .unwrap()
+        .join("generated/baml_sdk");
     assert!(
-        stderr.contains("Rust SDK generation skipped 1 user callable(s)"),
+        stderr.contains("Rust SDK generator `rust_client` skipped 1 user callable(s)")
+            && stderr.contains(&format!(
+                "output `{}` was not written",
+                expected_output.display()
+            )),
         "stderr: {stderr}"
     );
     assert!(
@@ -393,9 +402,18 @@ class Unsupported {
         String::from_utf8_lossy(&output.stderr)
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let expected_output = tmp
+        .path()
+        .canonicalize()
+        .unwrap()
+        .join("generated/baml_sdk");
     assert!(
         stderr.contains("skipped `user.Unsupported.ping`")
-            && stderr.contains("Rust SDK generation skipped 1 user callable(s)"),
+            && stderr.contains("Rust SDK generator `rust_client` skipped 1 user callable(s)")
+            && stderr.contains(&format!(
+                "output `{}` was not written",
+                expected_output.display()
+            )),
         "stderr: {stderr}"
     );
     assert!(
