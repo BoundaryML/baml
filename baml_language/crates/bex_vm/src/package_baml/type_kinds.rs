@@ -7,6 +7,7 @@ use baml_compiler_diagnostics::{
     runtime_type::{self, DuplicateMemberKind, InvalidIdentifierKind, SerializedKeyContainer},
 };
 use bex_heap::TlabHolder;
+use bex_vm_types::HeapPtr;
 use bex_vm_types::types::{
     Class, ClassField, DynTypeDefs, DynWitnessDef, Enum, EnumVariant, InterfaceDef, MethodImpl,
     MintId, Object, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
@@ -1017,9 +1018,23 @@ impl BamlNamespaceReflectUnion for PackageBamlImpl {
     }
 }
 
-fn reflected_ty(vm: &BexVm, value: Value) -> baml_type::RealizedTy {
-    super::type_class::type_value_ty(vm, value)
-        .unwrap_or_else(|| unreachable!("kind method receiver must be Object::Type"))
+/// Hand back a type nested inside `parent`, keeping `parent`'s runtime
+/// definition overlay.
+///
+/// A minted `type` value gives its nominal names meaning through the
+/// [`DynTypeDefs`] it carries (BEP-066): `user.$dyn.2.Choice` is only a name
+/// until the overlay maps it to a definition. Every decomposing view accessor
+/// (`element_type`, `key_type`, `value_type`, `member_types`, `params`,
+/// `return_type`, and a class field's type) hands back a type that was written
+/// *inside* that overlay, so allocating it as a plain static value strands the
+/// definitions it names and the next `values()`/`fields()` call cannot find
+/// them. Carrying the overlay forward is the same thing `LoadType` does for a
+/// type materialized inside a frame that has one.
+fn nested_type_value(vm: &mut BexVm, inner: baml_type::RealizedTy, parent: &TypeValue) -> HeapPtr {
+    if parent.defs().is_empty() {
+        return vm.alloc_static_type(inner);
+    }
+    vm.alloc_static_type_with_defs(inner, parent.defs().clone())
 }
 
 /// Realize an interface field declaration against the exact interface
@@ -1534,6 +1549,7 @@ impl BamlClassReflectClassType for PackageBamlImpl {
     impl_as_type!(BamlClassReflectClassType);
 
     fn fields(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
+        let parent = reflected_type_value(vm, *r#type);
         let (class, args) = reflected_class(vm, *r#type);
         class
             .fields
@@ -1549,7 +1565,7 @@ impl BamlClassReflectClassType for PackageBamlImpl {
                         .unwrap_or_else(|err| {
                             unreachable!("emitted class field template must realize: {err}")
                         });
-                    Value::object(vm.alloc_static_type(ty))
+                    Value::object(nested_type_value(vm, ty, &parent))
                 };
                 let meta = alloc_meta(
                     vm,
@@ -1618,12 +1634,13 @@ impl BamlClassReflectUnionType for PackageBamlImpl {
     impl_as_type!(BamlClassReflectUnionType);
 
     fn member_types(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
-        let baml_type::RealizedTy::Union(members, _) = reflected_ty(vm, *r#type) else {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::Union(members, _) = parent.ty.clone() else {
             unreachable!("union.Type receiver must wrap a union type")
         };
         members
             .into_iter()
-            .map(|ty| Value::object(vm.alloc_static_type(ty)))
+            .map(|ty| Value::object(nested_type_value(vm, ty, &parent)))
             .collect()
     }
 }
@@ -1632,10 +1649,11 @@ impl BamlClassReflectArrayType for PackageBamlImpl {
     impl_as_type!(BamlClassReflectArrayType);
 
     fn element_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let baml_type::RealizedTy::List(element, _) = reflected_ty(vm, *r#type) else {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::List(element, _) = parent.ty.clone() else {
             unreachable!("array.Type receiver must wrap an array type")
         };
-        Value::object(vm.alloc_static_type(*element))
+        Value::object(nested_type_value(vm, *element, &parent))
     }
 }
 
@@ -1643,17 +1661,19 @@ impl BamlClassReflectMapType for PackageBamlImpl {
     impl_as_type!(BamlClassReflectMapType);
 
     fn key_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let baml_type::RealizedTy::Map { key, .. } = reflected_ty(vm, *r#type) else {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::Map { key, .. } = parent.ty.clone() else {
             unreachable!("map.Type receiver must wrap a map type")
         };
-        Value::object(vm.alloc_static_type(*key))
+        Value::object(nested_type_value(vm, *key, &parent))
     }
 
     fn value_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let baml_type::RealizedTy::Map { value, .. } = reflected_ty(vm, *r#type) else {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::Map { value, .. } = parent.ty.clone() else {
             unreachable!("map.Type receiver must wrap a map type")
         };
-        Value::object(vm.alloc_static_type(*value))
+        Value::object(nested_type_value(vm, *value, &parent))
     }
 }
 
@@ -1661,7 +1681,8 @@ impl BamlClassReflectFunctionType for PackageBamlImpl {
     impl_as_type!(BamlClassReflectFunctionType);
 
     fn params(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
-        let baml_type::RealizedTy::Function { params, .. } = reflected_ty(vm, *r#type) else {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::Function { params, .. } = parent.ty.clone() else {
             unreachable!("function.Type receiver must wrap a function type")
         };
         params
@@ -1669,7 +1690,7 @@ impl BamlClassReflectFunctionType for PackageBamlImpl {
             .map(|param| {
                 let name = opt_string(vm, param.name.as_ref().map(baml_type::Name::as_str));
                 let optional = param.is_optional();
-                let r#type = Value::object(vm.alloc_static_type(param.ty));
+                let r#type = Value::object(nested_type_value(vm, param.ty, &parent));
                 copy::reflect::function::Parameter {
                     name,
                     r#type,
@@ -1681,10 +1702,11 @@ impl BamlClassReflectFunctionType for PackageBamlImpl {
     }
 
     fn return_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let baml_type::RealizedTy::Function { ret, .. } = reflected_ty(vm, *r#type) else {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::Function { ret, .. } = parent.ty.clone() else {
             unreachable!("function.Type receiver must wrap a function type")
         };
-        Value::object(vm.alloc_static_type(*ret))
+        Value::object(nested_type_value(vm, *ret, &parent))
     }
 }
 

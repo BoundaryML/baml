@@ -259,3 +259,67 @@ async fn nested_type_walker_and_kind_specific_readback_work_end_to_end() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
+
+/// B-1582 item 2: decomposing a runtime type's view must keep the definition
+/// overlay the enclosing value carries. Reading the nested enum's rows used to
+/// hit `unreachable!("reflected enum … must be loaded")` in the VM.
+#[tokio::test]
+async fn nested_views_of_a_runtime_type_keep_its_definitions() {
+    let output = baml_test!(
+        r#"
+        function main() -> string throws unknown {
+            let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type();
+
+            // Through a class field's array element.
+            let root = reflect.class.new("Root", {
+                "choices": choice.array().as_type(),
+            }).as_type();
+            let root_class = root.as_class() ?? throw "expected class";
+            let field = root_class.fields().at(0) ?? throw "expected field";
+            let field_type = field.type ?? throw "expected field type";
+            let array = field_type.as_array() ?? throw "expected array";
+            let from_array = array.element_type().as_enum() ?? throw "expected array enum";
+
+            // Through a map value.
+            let map_view = reflect.map.new(type.of<string>(), choice).as_type().as_map()
+                ?? throw "expected map";
+            let from_map_value = map_view.value_type().as_enum() ?? throw "expected map enum";
+
+            // Through a union member.
+            let union_view = reflect.union.new([choice, type.of<int>()]).as_type().as_union()
+                ?? throw "expected union";
+            let member = union_view.member_types().at(0) ?? throw "expected member";
+            let from_union = member.as_enum() ?? throw "expected union enum";
+
+            [
+                (from_array.values().at(0) ?? throw "array rows").name,
+                (from_map_value.values().at(1) ?? throw "map rows").name,
+                (from_union.values().at(0) ?? throw "union rows").name,
+            ].join("|")
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("FIRST|SECOND|FIRST".into()))
+    );
+}
+
+/// The map *key* and the function views decompose through the same helper, so
+/// pin them too — a runtime enum used as a map key or a parameter type stays
+/// introspectable.
+#[tokio::test]
+async fn map_key_and_function_views_keep_runtime_definitions() {
+    let output = baml_test!(
+        r#"
+        function main() -> string throws unknown {
+            let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type();
+            let map_view = reflect.map.new(choice, type.of<int>()).as_type().as_map()
+                ?? throw "expected map";
+            let key_enum = map_view.key_type().as_enum() ?? throw "expected key enum";
+            (key_enum.values().at(1) ?? throw "key rows").name
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("SECOND".into())));
+}

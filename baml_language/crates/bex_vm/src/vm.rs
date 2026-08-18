@@ -7358,6 +7358,23 @@ impl BexVm {
                     let method_value = self.stack.ensure_pop();
                     let iface_value = self.stack.ensure_pop();
 
+                    // A parameterized interface operand carries the runtime
+                    // definitions of its arguments (BEP-066). Resolution reads
+                    // only the realized `ty` off it, so without carrying the
+                    // overlay into the callee the impl body would see
+                    // `user.$dyn.N.Out` as a name nothing defines — reflection,
+                    // rendering and SAP inside an interface method would fail on
+                    // a type the caller can use fine.
+                    let iface_defs =
+                        iface_value
+                            .as_object_ptr()
+                            .and_then(|ptr| match self.get_object(ptr) {
+                                Object::Type(type_value) if !type_value.defs().is_empty() => {
+                                    Some(type_value.defs().clone())
+                                }
+                                _ => None,
+                            });
+
                     let method_type_args = if ntypeargs == 0 {
                         None
                     } else {
@@ -7492,6 +7509,7 @@ impl BexVm {
 
                     let result = if type_args.is_empty()
                         && method_type_args.is_none()
+                        && iface_defs.is_none()
                         && self.pending_call_type_args.is_empty()
                         && self.pending_call_type_values.is_empty()
                     {
@@ -7505,10 +7523,11 @@ impl BexVm {
                             function,
                         )
                     } else {
-                        let empty_defs = DynTypeDefs::default();
-                        let type_defs = method_type_args
-                            .as_ref()
-                            .map_or(&empty_defs, |args| &args.defs);
+                        let mut type_defs = iface_defs.unwrap_or_default();
+                        if let Some(method) = method_type_args.as_ref() {
+                            type_defs.merge_from(&method.defs);
+                        }
+                        let type_defs = &type_defs;
                         self.execute_call_from_locals_offset_with_type_args(
                             callee_ptr,
                             locals_offset,
