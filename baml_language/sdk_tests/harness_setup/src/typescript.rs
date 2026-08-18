@@ -150,6 +150,14 @@ pub(crate) fn copy_customizable(source: &Path, destination: &Path) {
                 .unwrap_or_else(|error| panic!("stat {}: {error}", destination_path.display()))
                 .permissions();
             if permissions.readonly() {
+                // Owner-write only: `set_readonly(false)` on unix would also
+                // set the group/other write bits.
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    permissions.set_mode(permissions.mode() | 0o200);
+                }
+                #[cfg(not(unix))]
                 #[allow(clippy::permissions_set_readonly_false)]
                 permissions.set_readonly(false);
                 fs::set_permissions(&destination_path, permissions).unwrap_or_else(|error| {
