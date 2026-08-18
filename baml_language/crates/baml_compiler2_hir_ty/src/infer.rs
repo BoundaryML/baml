@@ -6740,61 +6740,43 @@ impl<'db> InferenceContext<'db> {
         {
             return None;
         }
-        if let Some(Definition::Class(class)) = self.lower.resolve_type_definition(prefix) {
-            return Some((class, None));
+        // ONE chain answers "what does this name denote", so the
+        // builtin-versus-declaration precedence is `ShadowMode`'s and is the
+        // same here as in an annotation. Declaring `class int` no longer
+        // steals `int.max_value()` from the primitive.
+        match self.lower.resolve_type(prefix) {
+            Some(crate::lower::ResolvedTypeDefinition::Source(Definition::Class(class))) => {
+                return Some((class, None));
+            }
+            Some(crate::lower::ResolvedTypeDefinition::Builtin(builtin)) => {
+                let ty = self.lower.lower_builtin(
+                    builtin,
+                    Vec::new(),
+                    Vec::new(),
+                    crate::lower::TypePosition::Existential,
+                );
+                return crate::method_resolution::receiver_class(&self.facts, &ty, 8)
+                    .map(|(class, args)| (class, Some(args)));
+            }
+            _ => {}
         }
         let ty = self.static_qualifier_ty(prefix)?;
         crate::method_resolution::receiver_class(&self.facts, &ty, 8)
             .map(|(class, args)| (class, Some(args)))
     }
 
-    /// Anything else a static qualifier can denote: a primitive or media
-    /// KEYWORD (annotation-grammar tokens, not paths), or an ALIAS (chains
-    /// included). It becomes the TYPE it names, and the S11 receiver-class
-    /// correspondence maps type to class, the same table instance receivers
-    /// use. rust-analyzer expands aliases at lowering so every consumer sees
-    /// the target; our lazy-alias design expands at the demand point.
+    /// What is left for a static qualifier once the resolution chain has had
+    /// its say: an ALIAS (chains included). It becomes the TYPE it names, and
+    /// the S11 receiver-class correspondence maps type to class, the same
+    /// table instance receivers use. rust-analyzer expands aliases at lowering
+    /// so every consumer sees the target; our lazy-alias design expands at the
+    /// demand point.
+    ///
+    /// Primitive and media names are NOT handled here: they resolve in the
+    /// builtin scope like any other name (`LowerCtx::resolve_type`), so this
+    /// road no longer keeps a second copy of the primitive-name list.
     fn static_qualifier_ty(&self, prefix: &[baml_type::Name]) -> Option<Ty> {
-        let ty = match prefix {
-            [single] => match single.as_str() {
-                "int" => Ty::intern(TyKind::Int {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "bigint" => Ty::intern(TyKind::Bigint {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "float" => Ty::intern(TyKind::Float {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "string" => Ty::intern(TyKind::String {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "bool" => Ty::intern(TyKind::Bool {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "uint8array" => Ty::intern(TyKind::Uint8Array {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "image" => Ty::intern(TyKind::Media(
-                    baml_type::MediaKind::Image,
-                    baml_type::TyAttr::default(),
-                )),
-                "audio" => Ty::intern(TyKind::Media(
-                    baml_type::MediaKind::Audio,
-                    baml_type::TyAttr::default(),
-                )),
-                "video" => Ty::intern(TyKind::Media(
-                    baml_type::MediaKind::Video,
-                    baml_type::TyAttr::default(),
-                )),
-                "pdf" => Ty::intern(TyKind::Media(
-                    baml_type::MediaKind::Pdf,
-                    baml_type::TyAttr::default(),
-                )),
-                _ => self.lower_scoped_type_path(prefix),
-            },
-            _ => self.lower_scoped_type_path(prefix),
-        };
+        let ty = self.lower_scoped_type_path(prefix);
         if ty.has_error() {
             return None;
         }

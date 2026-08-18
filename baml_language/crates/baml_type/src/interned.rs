@@ -838,6 +838,27 @@ impl Ty {
 // -- Leaf helpers -------------------------------------------------------------
 
 impl Ty {
+    /// The interned type a builtin primitive name denotes. The single
+    /// primitive-to-type mapping: resolution and the static-qualifier road
+    /// both come here instead of each re-matching the name.
+    pub fn from_primitive(primitive: crate::PrimitiveType) -> Ty {
+        use crate::PrimitiveType as P;
+        let attr = TyAttr::default();
+        match primitive {
+            P::Int => Ty::intern(TyKind::Int { attr }),
+            P::Bigint => Ty::intern(TyKind::Bigint { attr }),
+            P::Float => Ty::intern(TyKind::Float { attr }),
+            P::String => Ty::intern(TyKind::String { attr }),
+            P::Bool => Ty::intern(TyKind::Bool { attr }),
+            P::Null => Ty::intern(TyKind::Null { attr }),
+            P::Uint8Array => Ty::intern(TyKind::Uint8Array { attr }),
+            P::Image => Ty::intern(TyKind::Media(crate::MediaKind::Image, attr)),
+            P::Audio => Ty::intern(TyKind::Media(crate::MediaKind::Audio, attr)),
+            P::Video => Ty::intern(TyKind::Media(crate::MediaKind::Video, attr)),
+            P::Pdf => Ty::intern(TyKind::Media(crate::MediaKind::Pdf, attr)),
+        }
+    }
+
     pub fn int() -> Ty {
         Ty::intern(TyKind::Int {
             attr: TyAttr::default(),

@@ -494,6 +494,23 @@ pub(crate) fn lower_associated_type_binding(
     })
 }
 
+/// Map a written type name to its syntax node.
+///
+/// KNOWN DUPLICATE of the builtin scope in
+/// `baml_compiler2_hir_ty::lower::builtin_type_scope`, which is the
+/// AUTHORITATIVE answer for what a builtin name denotes. This list exists
+/// because the layers between here and resolution - `PpirTy` in particular -
+/// are semantic: `expand_partial` and the SAP/streaming rules in
+/// `baml_compiler2_ppir::expand` branch on primitive-versus-class, and they run
+/// before any scope exists, so they cannot be handed a bare `Path`. Retiring
+/// this list means teaching `PpirTy` to consume RESOLVED types; until then the
+/// two must agree, which
+/// `baml_compiler2_hir_ty::lower::tests::builtin_scope_covers_every_registry_alias`
+/// enforces.
+///
+/// `never` / `void` / `unknown` / `type` / `_` / `$rust_type` are deliberately
+/// NOT in the builtin scope: they are compiler intrinsics with no addressable
+/// definition, validated as syntax (`check_void_type`) before resolution runs.
 fn lower_from_type_name_with_generic_args(
     name: &str,
     generic_args: Vec<TypeExpr>,
