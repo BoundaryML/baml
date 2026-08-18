@@ -92,7 +92,12 @@ pub fn ensure_built() -> &'static BuiltPaths {
             .expect("CARGO_BIN_EXE_baml-cli should have a parent directory")
             .to_path_buf();
 
-        let baml_pack_host = bin_dir.join(bin_name("baml-pack-host"));
+        // BAML_PACK_HOST: published by the nextest setup script alongside
+        // BAML_PACK_HOST_PREBUILT; authoritative when set (see the script
+        // and pack_command::read_host_binary, which honors the same var).
+        let baml_pack_host = std::env::var_os("BAML_PACK_HOST")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| bin_dir.join(bin_name("baml-pack-host")));
         let setup_prebuilt = std::env::var("BAML_PACK_HOST_PREBUILT").is_ok_and(|v| v == "1");
         if !setup_prebuilt {
             // Plain `cargo test` does not run nextest setup scripts. Build the

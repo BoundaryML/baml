@@ -566,6 +566,21 @@ fn read_host_binary(target_triple: &str, reporter: &Reporter) -> Result<Vec<u8>>
     let host_name = host_binary_name(target_triple);
     let host_path = dir.join(&host_name);
     let is_native = target_triple == release_host_target_triple()?;
+    // BAML_PACK_HOST: an explicit native host binary, published by the
+    // nextest setup script (crates/baml_cli/tests/build-pack-host.sh) for
+    // test runs where the CLI executes from a location whose directory
+    // cannot hold a sibling host - e.g. prebuilt test binaries running out
+    // of a read-only store in CI. Same trust and same native-only scope as
+    // the sibling branch below; unset, resolution is unchanged.
+    if is_native {
+        if let Some(explicit) = std::env::var_os("BAML_PACK_HOST") {
+            let explicit = std::path::PathBuf::from(explicit);
+            if explicit.exists() {
+                return std::fs::read(&explicit)
+                    .with_context(|| format!("failed to read {}", explicit.display()));
+            }
+        }
+    }
     if is_native && host_path.exists() {
         return std::fs::read(&host_path)
             .with_context(|| format!("failed to read {}", host_path.display()));
