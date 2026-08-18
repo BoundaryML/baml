@@ -8044,6 +8044,8 @@ fn baml.reflect.class.PendingType.union = builtin(vm)
 
 fn baml.reflect.class.PendingType.resolved = builtin(vm)
 
+fn baml.reflect.class.PendingType.meta = builtin(vm)
+
 fn baml.reflect.class.get_field = builtin(vm)
 
 fn baml.reflect.class.Type.baml.reflect.TypeView.as_type = builtin(vm)

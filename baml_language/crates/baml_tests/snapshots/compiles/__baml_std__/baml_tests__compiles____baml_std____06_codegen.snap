@@ -5557,7 +5557,7 @@ function baml.reflect.class.Builder.build(self: baml.reflect.class.Builder, impl
     return
 }
 
-function baml.reflect.class.Builder.field(self: baml.reflect.class.Builder, name: string, ty: type | baml.reflect.WithMeta<type> | baml.reflect.class.PendingType) -> baml.reflect.class.Builder {
+function baml.reflect.class.Builder.field(self: baml.reflect.class.Builder, name: string, ty: type | baml.reflect.WithMeta<type> | baml.reflect.class.PendingType | baml.reflect.WithMeta<baml.reflect.class.PendingType>) -> baml.reflect.class.Builder {
 }
 
 function baml.reflect.class.Builder.type(self: baml.reflect.class.Builder) -> baml.reflect.class.PendingType {
@@ -5608,6 +5608,9 @@ function baml.reflect.class.Field.value(self: baml.reflect.class.Field) -> #0 | 
 }
 
 function baml.reflect.class.PendingType.array(self: baml.reflect.class.PendingType) -> baml.reflect.class.PendingType {
+}
+
+function baml.reflect.class.PendingType.meta(self: baml.reflect.class.PendingType, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> baml.reflect.WithMeta<baml.reflect.class.PendingType> {
 }
 
 function baml.reflect.class.PendingType.optional(self: baml.reflect.class.PendingType) -> baml.reflect.class.PendingType {

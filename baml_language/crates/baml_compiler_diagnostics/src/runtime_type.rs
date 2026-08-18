@@ -103,6 +103,23 @@ pub fn unspecialized_reflected_generic(name: &str) -> Diagnostic {
     )
 }
 
+/// E0165 — a reflected generic callable was invoked without specialization.
+///
+/// The sibling above covers *extraction*: a callable whose signature still
+/// mentions its own type parameters cannot even be handed out. This one covers
+/// the callables that get past that edge — a companion whose signature is free
+/// of `T` but whose body still materializes it. Invoking one would fail inside
+/// the body as an internal error, so reflection refuses it up front.
+pub fn unspecialized_reflected_generic_call(name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::UnspecializedReflectedGeneric,
+        format!(
+            "generic function `{name}` cannot be invoked through reflection until it is \
+             specialized: its body needs type arguments and reflection cannot supply them yet"
+        ),
+    )
+}
+
 /// E0002 — a value-shaped generic argument omitted the required marker.
 pub fn computed_generic_argument_requires_unreflect(name: &str) -> Diagnostic {
     Diagnostic::error(
@@ -231,6 +248,11 @@ mod tests {
                 unspecialized_reflected_generic("root.Extract"),
                 "E0165",
                 "generic function `root.Extract` cannot be extracted through reflection: reflected packages cannot supply type arguments yet",
+            ),
+            (
+                unspecialized_reflected_generic_call("GenericList$render_prompt"),
+                "E0165",
+                "generic function `GenericList$render_prompt` cannot be invoked through reflection until it is specialized: its body needs type arguments and reflection cannot supply them yet",
             ),
             (
                 computed_generic_argument_requires_unreflect("runtime_t"),

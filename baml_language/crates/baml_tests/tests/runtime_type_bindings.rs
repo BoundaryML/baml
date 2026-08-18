@@ -238,3 +238,119 @@ function main() -> string throws unknown {
     );
     assert_eq!(output.result, Ok(BexExternalValue::String("E0010".into())));
 }
+
+/// A scripted `ai.Client` that answers with a fixed payload, so the Agent loop
+/// runs end to end without a network or an API key.
+const PROBE_CLIENT: &str = r##"
+client DefaultClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+class ProbeClient {
+    reply: string,
+
+    implements ai.Client {
+        function id(self) -> string {
+            "probe"
+        }
+
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            let _ = input;
+            ai.ModelTurn {
+                content: [ai.content.Text { text: self.reply }],
+                stop_reason: ai.content.StopReason.Complete,
+                usage: null,
+            }
+        }
+    }
+}
+"##;
+
+/// B-1582 item 1: an interface-impl method reads its owner's type argument out
+/// of the resolved impl frame, which carries realized types but no runtime
+/// definition overlay. Anything that needs the *definition* — SAP, rendering,
+/// reflection — used to fail on a type the caller could use fine.
+#[tokio::test]
+async fn interface_impl_methods_keep_runtime_type_definitions() {
+    let output = baml_test!(
+        r##"
+        interface Parser<Out> {
+            function parse_it(self, text: string) -> Out throws unknown
+            function describe(self) -> string throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Parser<T> {
+                function parse_it(self, text: string) -> T throws unknown {
+                    baml.sap.parse<T>(text)
+                }
+
+                function describe(self) -> string throws never {
+                    type.of<T>().to_string()
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let output_type = reflect.class.new("RuntimeOutput", {
+                "name": type.of<string>(),
+            }).as_type()
+            type Out = unreflect(output_type)
+
+            let holder = Holder<Out>.new()
+            let parsed = holder.parse_it(#"{"name":"Pixel"}"#)
+            `${holder.describe()}|${reflect.class.get_field<string>(parsed, "name")}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("RuntimeOutput|Pixel".into()))
+    );
+}
+
+/// The ticket's Agent repro: `ai.Agent<Out>.run` is `implements Runner<Out>`, so
+/// it took the same hole — a payload `baml.sap.parse<unreflect(t)>` handled fine
+/// came back as `ai.errors.ParseFailed` through the runner.
+#[tokio::test]
+async fn agent_run_parses_a_reflected_output_type() {
+    let source = format!(
+        r##"
+        {PROBE_CLIENT}
+
+        function DynamicOutput<T>() -> T {{
+            client: DefaultClient
+            prompt: `${{ctx.output_format}}`
+        }}
+
+        function main() -> string throws unknown {{
+            let output_type = reflect.class.new("RuntimeOutput", {{
+                "name": type.of<string>(),
+            }}).as_type()
+            type Out = unreflect(output_type)
+
+            // Control: the direct SAP call has always worked.
+            let direct = baml.sap.parse<Out>(#"{{"name":"Pixel"}}"#)
+
+            let run = ai.Agent<Out>.new(
+                client = ProbeClient {{ reply: #"{{"name":"Pixel"}}"# }},
+            ).run(DynamicOutput@spec<Out>())
+
+            let direct_name = reflect.class.get_field<string>(direct, "name")
+            let agent_name = reflect.class.get_field<string>(run.value, "name")
+            `${{direct_name}}|${{agent_name}}`
+        }}
+        "##
+    );
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Pixel|Pixel".into()))
+    );
+}

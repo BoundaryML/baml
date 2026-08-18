@@ -309,3 +309,39 @@ async fn generic_class_output_fails_before_provider_io() {
         "E0164|non-data type `Wrapper<Item>` cannot be rendered as an LLM output schema"
     );
 }
+
+/// B-1582 item 4, verification: `never[]` reached through a generic companion is
+/// the ticket's exact shape. #4470 already rejects it with a catchable E0164
+/// rather than panicking in `output_format`; this pins the nested-in-a-container
+/// case, which is the one that could have escaped `first_non_data_type`'s walk.
+#[tokio::test]
+async fn never_nested_in_a_runtime_class_field_is_rejected_not_panicked() {
+    let source = format!(
+        r#"
+            {GENERIC_VALUE}
+
+            function main() -> string throws never {{
+                let outer = reflect.class.new("RuntimeOuter", {{
+                    "items": type.of<never>().array().as_type(),
+                }}) catch (e) {{
+                    _ => return "class.new threw",
+                }}
+                let rendered = GenericValue$render_prompt<unreflect(outer.as_type())>("runtime")
+                    catch (e) {{
+                        baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+                        _ => "wrong error",
+                    }}
+                if rendered is string {{
+                    return rendered
+                }}
+                "render did not throw"
+            }}
+            "#
+    );
+    let output = baml_test!(&source);
+
+    assert_eq!(
+        result_string(output),
+        "E0164|field `RuntimeOuter.items` has non-data type `never`, which cannot be rendered as an LLM output schema"
+    );
+}
