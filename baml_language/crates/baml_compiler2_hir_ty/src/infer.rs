@@ -10134,6 +10134,7 @@ impl<'db> InferenceContext<'db> {
             at,
             not_concrete_rejects: false,
         });
+        let existential = iterable.existential();
         let projection = Ty::intern(TyKind::AssociatedTypeProjection {
             base: collection.clone(),
             interface: iterable,
@@ -10142,9 +10143,22 @@ impl<'db> InferenceContext<'db> {
         });
         let reduced = self.structurally_resolve(&projection);
         if reduced.has_projection() && !reduced.has_infer() {
-            // Ground and irreducible: genuinely not iterable (the
-            // failed selection reports at the collection).
-            return Ty::error();
+            // Ground and irreducible. Two legitimate outcomes, split by
+            // the SAME verdict the finalize filter applies to the
+            // obligation's mismatch (one spelling, one verdict - B-1576):
+            // a collection that fails `Iterable` reports E0006, so its
+            // element is the DIAGNOSED error sentinel and consumers
+            // suppress cascades (rustc's guaranteed-error discipline). A
+            // collection that satisfies the bound keeps the projection AS
+            // the element - rustc's rigid `<T as IntoIterator>::Item`,
+            // which `lower_to_runtime` carries for per-receiver dispatch;
+            // erasing it to an error rejected legal generic and union
+            // collections without any diagnostic (the shipped abort).
+            let collection = self.table.resolve_completely(collection);
+            let collection = self.canonicalize_unions(&collection);
+            if !collection.has_infer() && !self.cached_subtype(&collection, &existential) {
+                return Ty::error();
+            }
         }
         reduced
     }
@@ -10464,6 +10478,13 @@ impl<'db> InferenceContext<'db> {
         // stay (the oracle's plain conversion erases inference vars);
         // they relate lazily through the deferred residue instead.
         if resolved.has_projection() && !resolved.has_infer() {
+            // One spelling, one verdict: reduce over the canonical form.
+            // Forcing can ground a syntactic union `union_of` deferred
+            // while a member carried a variable, and the oracle reads the
+            // spelling it is given - a member-identical union like
+            // `list<int> | list<int>` must collapse before a projection
+            // over it can reduce (B-1576).
+            let resolved = self.canonicalize_unions(&resolved);
             let reduced = self.reduce_projections(&resolved, PROJECTION_FINALIZE_FUEL);
             return self.expand_alias_ty(&reduced);
         }

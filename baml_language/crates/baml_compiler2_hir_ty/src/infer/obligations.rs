@@ -103,6 +103,12 @@ impl<'db> InferenceContext<'db> {
                     return Attempt::Done;
                 }
                 if !ty.has_infer() && !interface_has_infer(&interface) {
+                    // One spelling, one verdict (B-1576): resolution can
+                    // ground a syntactic union after this obligation
+                    // registered. Judge the canonical form - the same
+                    // spelling finalize's mismatch filter re-judges - so
+                    // verdict and report cannot diverge.
+                    let ty = self.canonicalize_unions(&ty);
                     if *not_concrete_rejects
                         && matches!(ty.kind(), TyKind::Interface(..) | TyKind::Union(..))
                     {

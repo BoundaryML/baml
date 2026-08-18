@@ -3,7 +3,7 @@ source: crates/baml_tests/src/type_spec/sweep.rs
 expression: report
 ---
 files: 144
-typed nodes: 85615
+typed nodes: 85783
 hir_ty error-channel entries: 0
 panics: 0
 
