@@ -782,17 +782,16 @@ function chat_lower_journal(j: ai.Journal) -> ChatMessage[] {
                             null
                         },
                         let use: ai.content.ToolUse => {
-                            calls
-                                .push(
-                                    ChatToolCall {
-                                        id: use.id,
-                                        type: "function",
-                                        fn: ChatToolCallFunction {
-                                            name: use.name,
-                                            arguments: baml.json.stringify(baml.json.to_json(use.args)),
-                                        },
+                            calls.push(
+                                ChatToolCall {
+                                    id: use.id,
+                                    type: "function",
+                                    fn: ChatToolCallFunction {
+                                        name: use.name,
+                                        arguments: baml.json.stringify(baml.json.to_json(use.args)),
                                     },
-                                );
+                                },
+                            );
                             null
                         },
                         // Reasoning has no replayable wire form here, and a
@@ -1035,17 +1034,16 @@ function _chat_tools(toolbox: ai.tools.Toolbox) -> ChatTool[]? {
     }
     let tools: ChatTool[] = [];
     for (let tool in toolbox.list()) {
-        tools
-            .push(
-                ChatTool {
-                    type: "function",
-                    fn: ChatToolFunction {
-                        name: tool.name,
-                        description: tool.description,
-                        parameters: baml.json.to_json(tool.input_schema),
-                    },
+        tools.push(
+            ChatTool {
+                type: "function",
+                fn: ChatToolFunction {
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: baml.json.to_json(tool.input_schema),
                 },
-            );
+            },
+        );
     }
     tools
 }
@@ -1188,18 +1186,12 @@ function chat_stop_reason(reason: string) -> ai.content.StopReason {
 function _chat_media_block(url: string) -> ai.content.Media {
     if (url.starts_with("data:")) {
         if let separator: int = url.index_of(";base64,") {
-            return ai
-                .content
-                .Media
-                .new(
-                    value = baml
-                        .media
-                        .Image
-                        .from_base64(
-                            url.slice(separator + 8, url.length()),
-                            url.slice(5, separator),
-                        ),
-                );
+            return ai.content.Media.new(
+                value = baml.media.Image.from_base64(
+                    url.slice(separator + 8, url.length()),
+                    url.slice(5, separator),
+                ),
+            );
         }
     }
     ai.content.Media.new(value = baml.media.Image.from_url(url, null))
@@ -1233,8 +1225,9 @@ function _chat_push_tool_uses(
             },
             null => empty,
         };
-        content
-            .push(ai.content.ToolUse { id: call.id ?? "", name: call.fn?.name ?? "", args: args });
+        content.push(
+            ai.content.ToolUse { id: call.id ?? "", name: call.fn?.name ?? "", args: args },
+        );
     }
 }
 
@@ -1310,15 +1303,12 @@ function chat_parse(
         }
         if let data: string = audio.data {
             if (data != "") {
-                content
-                    .push(
-                        ai.content
-                            .Media
-                            .new(
-                                value = baml.media.Audio.from_base64(data, audio_mime),
-                                provider_id = audio.id,
-                            ),
-                    );
+                content.push(
+                    ai.content.Media.new(
+                        value = baml.media.Audio.from_base64(data, audio_mime),
+                        provider_id = audio.id,
+                    ),
+                );
             }
         }
     }
@@ -1363,10 +1353,7 @@ function _chat_send(
     audio_mime: string = "audio/wav",
     request_timeout_ms: int? = null,
 ) -> ai.ModelTurn {
-    let response = baml.http.send(
-        request,
-        timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
-    ) catch_all (e) {
+    let response = baml.http.send(request, timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0)) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw ai.errors.NetworkFailure {
@@ -1638,13 +1625,13 @@ function chat_invoke_stream(
     // the stream throw `ai.errors.NetworkFailure` there instead of reporting the
     // partial text as a completed turn, which is what silently fed truncated
     // answers to `require_done` / `Retry`.
-    ai.stream
-        .TurnStream
-        .from_sse(
-            sse,
-            (batch) -> {
-                decoder.decode(batch)
-            },
-            require_terminal = compat.provider,
-        )
+    ai.stream.TurnStream.from_sse(
+        sse,
+        (batch) -> {
+            decoder.decode(batch) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        },
+        require_terminal = compat.provider,
+    )
 }

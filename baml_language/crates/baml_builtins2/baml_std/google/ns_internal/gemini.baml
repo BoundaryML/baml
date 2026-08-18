@@ -300,8 +300,7 @@ function _gm_strip_nulls(value: baml.json.json, opaque: bool) -> baml.json.json 
 // the ones that are simply illegal in a query. Values that need more than this
 // (raw UTF-8, control characters) should be encoded by the caller.
 function _gm_encode_query(value: string) -> string {
-    value
-        .replace_all("%", "%25")
+    value.replace_all("%", "%25")
         .replace_all(" ", "%20")
         .replace_all("\"", "%22")
         .replace_all("#", "%23")
@@ -451,15 +450,13 @@ function _gm_media_part(media: ai.MediaPart, fetch_url: bool, preview: bool = fa
         }
     }
     if let url: string = resolved.url {
-        GmPart
-            .of_file_data(
-                GmFileData { mimeType: _gm_mime_for_uri(url, resolved.mime_type), fileUri: url },
-            )
+        GmPart.of_file_data(
+            GmFileData { mimeType: _gm_mime_for_uri(url, resolved.mime_type), fileUri: url },
+        )
     } else {
-        GmPart
-            .of_inline_data(
-                GmInlineData { mimeType: resolved.mime_type, data: resolved.base64 ?? "" },
-            )
+        GmPart.of_inline_data(
+            GmInlineData { mimeType: resolved.mime_type, data: resolved.base64 ?? "" },
+        )
     }
 }
 
@@ -646,14 +643,12 @@ function google_lower_journal(j: ai.Journal) -> GmContent[] {
                             // The `thoughtSignature` Gemini 3 issued with this
                             // call rides its id; replaying the call without it
                             // is a hard 400.
-                            parts
-                                .push(
-                                    GmPart
-                                        .of_function_call(
-                                            GmFunctionCall { name: use.name, args: use.args },
-                                            _gm_call_id_signature(use.id),
-                                        ),
-                                );
+                            parts.push(
+                                GmPart.of_function_call(
+                                    GmFunctionCall { name: use.name, args: use.args },
+                                    _gm_call_id_signature(use.id),
+                                ),
+                            );
                             null
                         },
                         // Reasoning replay needs the `thoughtSignature` Gemini
@@ -674,31 +669,21 @@ function google_lower_journal(j: ai.Journal) -> GmContent[] {
             let c: ai.events.ToolCompleted => {
                 let response: map<string, unknown> = {};
                 let _ = response.set("result", c.output);
-                pending
-                    .push(
-                        GmPart
-                            .of_function_response(
-                                GmFunctionResponse {
-                                    name: _gm_tool_name_for(j, c.id),
-                                    response: response,
-                                },
-                            ),
-                    );
+                pending.push(
+                    GmPart.of_function_response(
+                        GmFunctionResponse { name: _gm_tool_name_for(j, c.id), response: response },
+                    ),
+                );
                 null
             },
             let f: ai.events.ToolFailed => {
                 let response: map<string, unknown> = {};
                 let _ = response.set("error", f.message);
-                pending
-                    .push(
-                        GmPart
-                            .of_function_response(
-                                GmFunctionResponse {
-                                    name: _gm_tool_name_for(j, f.id),
-                                    response: response,
-                                },
-                            ),
-                    );
+                pending.push(
+                    GmPart.of_function_response(
+                        GmFunctionResponse { name: _gm_tool_name_for(j, f.id), response: response },
+                    ),
+                );
                 null
             },
             _ => null,
@@ -774,14 +759,13 @@ function gemini_build_body(
     if (!input.toolbox.is_empty()) {
         let declarations: GmFunctionDeclaration[] = [];
         for (let t in input.toolbox.list()) {
-            declarations
-                .push(
-                    GmFunctionDeclaration {
-                        name: t.name,
-                        description: t.description,
-                        parametersJsonSchema: t.input_schema,
-                    },
-                );
+            declarations.push(
+                GmFunctionDeclaration {
+                    name: t.name,
+                    description: t.description,
+                    parametersJsonSchema: t.input_schema,
+                },
+            );
         }
         tools = [GmTool { functionDeclarations: declarations }];
         tool_config
@@ -892,14 +876,13 @@ function google_parse(resp: GmResponse, seq: int, provider: string = "google") -
             if let a: map<string, unknown> = fc.args {
                 args = a;
             }
-            content
-                .push(
-                    ai.content.ToolUse {
-                        id: _gm_encode_call_id(`call_${seq}_${call_index}`, p.thoughtSignature),
-                        name: fc.name,
-                        args: args,
-                    },
-                );
+            content.push(
+                ai.content.ToolUse {
+                    id: _gm_encode_call_id(`call_${seq}_${call_index}`, p.thoughtSignature),
+                    name: fc.name,
+                    args: args,
+                },
+            );
             call_index += 1;
             has_call = true;
             null
@@ -957,14 +940,12 @@ function _gm_sse_failure(provider: string, error: unknown) -> ai.errors.Failure 
     // `baml.errors.Io.message` is the raw text; anything else is rendered.
     // Redacted because Vertex express mode signs the request with `?key=…` in
     // the URL, and the rendered transport error can carry the URL.
-    let text = ai
-        .wire
-        .redact_url_secrets(
-            match (error) {
-                let io: baml.errors.Io => io.message,
-                _ => error.to_string(),
-            },
-        );
+    let text = ai.wire.redact_url_secrets(
+        match (error) {
+            let io: baml.errors.Io => io.message,
+            _ => error.to_string(),
+        },
+    );
     let marker = "failed with status ";
     if let start: int = text.index_of(marker) {
         let rest = text.slice(start + marker.length(), text.length());
@@ -1182,7 +1163,13 @@ function gemini_invoke_stream(
     let req = _google_request(c, input, true);
     // Strict termination: the `finishReason` fragment decodes as TurnDone, so
     // a connection that closes before it is a truncated turn, not an answer.
-    ai.stream
-        .TurnStream
-        .from_sse(_gm_open_sse(req, "google"), _google_decode_batch, require_terminal = "google")
+    ai.stream.TurnStream.from_sse(
+        _gm_open_sse(req, "google"),
+        (batch: string) -> {
+            _google_decode_batch(batch) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        },
+        require_terminal = "google",
+    )
 }

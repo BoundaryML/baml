@@ -123,11 +123,9 @@ class Retry {
                         && self.retry_if(f)
                 ) {
                     let attempt = self.max_attempts - remaining + 1;
-                    let _ = baml
-                        .sys
-                        .sleep(
-                            baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f)),
-                        ) catch_all (se) {
+                    let _ = baml.sys.sleep(
+                        baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f)),
+                    ) catch_all (se) {
                         _ => null,
                     };
                     self._attempt(input, remaining - 1)
@@ -219,7 +217,12 @@ class RoundRobin {
 
     function new(members: root.Client[]) -> RoundRobin {
         if (members.length() == 0) {
-            throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
+            throw root.errors.InvalidRequest {
+                provider: "roundrobin",
+                status_code: null,
+                detail: "RoundRobin needs at least one member",
+                raw_body: null,
+            }
         }
         RoundRobin { members: members, counter: 0 }
     }
@@ -239,7 +242,12 @@ class RoundRobin {
             match (self.members.at(0)) {
                 let c: root.Client => c.render(input),
                 null => {
-                    throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
+                    throw root.errors.InvalidRequest {
+                        provider: "roundrobin",
+                        status_code: null,
+                        detail: "RoundRobin needs at least one member",
+                        raw_body: null,
+                    }
                 },
             } catch_all (e) {
                 _ => throw root.errors.normalize(e),
@@ -248,12 +256,27 @@ class RoundRobin {
 
         function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
             {
+                // Guard before the modulo: an empty rotation would otherwise
+                // panic with DivisionByZero, which bypasses every catch.
+                if (self.members.length() == 0) {
+                    throw root.errors.InvalidRequest {
+                        provider: "roundrobin",
+                        status_code: null,
+                        detail: "RoundRobin needs at least one member",
+                        raw_body: null,
+                    }
+                }
                 let index = self.counter % self.members.length();
                 self.counter = self.counter + 1;
                 match (self.members.at(index)) {
                     let c: root.Client => c.invoke(input),
                     null => {
-                        throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
+                        throw root.errors.InvalidRequest {
+                            provider: "roundrobin",
+                            status_code: null,
+                            detail: "RoundRobin needs at least one member",
+                            raw_body: null,
+                        }
                     },
                 }
             } catch_all (e) {
@@ -266,7 +289,12 @@ class RoundRobin {
         function invoke_stream(self, input: root.ModelTurnInput) -> root.stream.TurnStream {
             {
                 if (self.members.length() == 0) {
-                    throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
+                    throw root.errors.InvalidRequest {
+                        provider: "roundrobin",
+                        status_code: null,
+                        detail: "RoundRobin needs at least one member",
+                        raw_body: null,
+                    }
                 }
                 let index = self.counter % self.members.length();
                 self.counter += 1;
@@ -276,7 +304,12 @@ class RoundRobin {
                         throw root.errors.StreamingUnsupported { client_id: member.id() }
                     },
                     null => {
-                        throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
+                        throw root.errors.InvalidRequest {
+                            provider: "roundrobin",
+                            status_code: null,
+                            detail: "RoundRobin needs at least one member",
+                            raw_body: null,
+                        }
                     },
                 }
             } catch_all (e) {
@@ -309,7 +342,12 @@ class Fallback {
                 }
             },
             null => {
-                throw baml.errors.InvalidArgument { message: "Fallback needs at least one member" }
+                throw root.errors.InvalidRequest {
+                    provider: "fallback",
+                    status_code: null,
+                    detail: "Fallback needs at least one member",
+                    raw_body: null,
+                }
             },
         }
     }
@@ -331,7 +369,12 @@ class Fallback {
             match (self.members.at(0)) {
                 let c: root.Client => c.render(input),
                 null => {
-                    throw baml.errors.InvalidArgument { message: "Fallback needs at least one member" }
+                    throw root.errors.InvalidRequest {
+                        provider: "fallback",
+                        status_code: null,
+                        detail: "Fallback needs at least one member",
+                        raw_body: null,
+                    }
                 },
             } catch_all (e) {
                 _ => throw root.errors.normalize(e),
@@ -355,7 +398,12 @@ class Fallback {
                         throw root.errors.StreamingUnsupported { client_id: member.id() }
                     },
                     null => {
-                        throw baml.errors.InvalidArgument { message: "Fallback needs at least one member" }
+                        throw root.errors.InvalidRequest {
+                            provider: "fallback",
+                            status_code: null,
+                            detail: "Fallback needs at least one member",
+                            raw_body: null,
+                        }
                     },
                 }
             };
@@ -404,7 +452,7 @@ class StreamRelay {
         }
     }
 
-    function recover(self, error: root.errors.InvokeError) -> void {
+    function recover(self, error: root.errors.RaisedInClient) -> void {
         match (root.errors.normalize_invoke(error)) {
             let timeout: baml.errors.Timeout => {
                 self.close_current();
@@ -426,6 +474,10 @@ class StreamRelay {
             let unknown_error: baml.errors.UnknownError => {
                 self.close_current();
                 throw unknown_error
+            },
+            let compilation: baml.reflect.errors.CompilationError => {
+                self.close_current();
+                throw compilation
             },
         }
     }
@@ -494,5 +546,5 @@ class StreamRelay {
 }
 
 class StreamRelayError {
-    error: root.errors.InvokeError,
+    error: root.errors.RaisedInClient,
 }

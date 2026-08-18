@@ -666,7 +666,7 @@ function anthropic_messages_request(
                 blocks: [AnthTextBlock { type: "text", text: "(continue)", cache_control: null }],
             },
         ]
-        .concat(lowered)
+            .concat(lowered)
     } else {
         lowered
     };
@@ -758,10 +758,7 @@ function _anthropic_query_suffix(query_params: map<string, string>?) -> string {
 // `anthropic-beta` (and `anthropic-dangerous-direct-browser-access`, which the
 // WASM playground needs) are reachable and `anthropic-version` is overridable;
 // `x-api-key` is applied last so a stray header cannot break authentication.
-function _anthropic_headers(
-    c: root.AnthropicClient,
-    preview: bool = false,
-) -> map<string, string> {
+function _anthropic_headers(c: root.AnthropicClient, preview: bool = false) -> map<string, string> {
     let headers: map<string, string> = { "anthropic-version": "2023-06-01", "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
         for (let key in extra.keys()) {
@@ -834,14 +831,13 @@ function anthropic_parse(resp: AnthropicResponse) -> ai.ModelTurn {
             },
             "tool_use" => {
                 let empty_args: map<string, unknown> = {};
-                content
-                    .push(
-                        ai.content.ToolUse {
-                            id: b.id ?? "",
-                            name: b.name ?? "",
-                            args: b.input ?? empty_args,
-                        },
-                    );
+                content.push(
+                    ai.content.ToolUse {
+                        id: b.id ?? "",
+                        name: b.name ?? "",
+                        args: b.input ?? empty_args,
+                    },
+                );
                 null
             },
             // redacted_thinking and server-tool blocks: nothing canonical to
@@ -878,11 +874,7 @@ function anthropic_parse(resp: AnthropicResponse) -> ai.ModelTurn {
 // The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = _anthropic_request(c, input, false, preview = false);
-    let resp = ai.wire.send_as<AnthropicResponse>(
-        req,
-        "anthropic",
-        request_timeout_ms = c.request_timeout_ms,
-    );
+    let resp = ai.wire.send_as<AnthropicResponse>(req, "anthropic", request_timeout_ms = c.request_timeout_ms);
     anthropic_parse(resp)
 }
 
@@ -1095,16 +1087,14 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
                             let kind = block.type ?? "";
                             match (kind) {
                                 "tool_use" => {
-                                    state
-                                        .tool_calls
-                                        .push(
-                                            AnthStreamToolCall {
-                                                index: event.index ?? state.tool_calls.length(),
-                                                id: block.id ?? "",
-                                                name: block.name ?? "",
-                                                args_json: "",
-                                            },
-                                        );
+                                    state.tool_calls.push(
+                                        AnthStreamToolCall {
+                                            index: event.index ?? state.tool_calls.length(),
+                                            id: block.id ?? "",
+                                            name: block.name ?? "",
+                                            args_json: "",
+                                        },
+                                    );
                                     null
                                 },
                                 "thinking" => {
@@ -1221,13 +1211,11 @@ function _anthropic_sse_failure(message: string) -> ai.errors.Failure {
                 _ => 0,
             };
             if (status > 0) {
-                return ai
-                    .errors
-                    .classify_http(
-                        "anthropic",
-                        status,
-                        rest.slice(separator + 1, rest.length()).trim(),
-                    );
+                return ai.errors.classify_http(
+                    "anthropic",
+                    status,
+                    rest.slice(separator + 1, rest.length()).trim(),
+                );
             }
         }
     }
@@ -1238,9 +1226,7 @@ function _anthropic_sse_failure(message: string) -> ai.errors.Failure {
     }
 }
 
-function _anthropic_stream_open_failure(
-    error: baml.errors.Io | baml.errors.Timeout,
-) -> never {
+function _anthropic_stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> never {
     match (error) {
         let timeout: baml.errors.Timeout => throw timeout,
         let io: baml.errors.Io => throw _anthropic_sse_failure(io.message),
@@ -1265,13 +1251,13 @@ function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.
     // closes before it (proxy timeout, dropped socket, provider killing the
     // response mid-generation) is a TRUNCATED turn, and without this opt-in the
     // stream would report the partial text as a successful, complete answer.
-    ai.stream
-        .TurnStream
-        .from_sse(
-            sse,
-            (batch: string) -> {
-                anthropic_decode_batch(batch, state)
-            },
-            require_terminal = "anthropic",
-        )
+    ai.stream.TurnStream.from_sse(
+        sse,
+        (batch: string) -> {
+            anthropic_decode_batch(batch, state) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        },
+        require_terminal = "anthropic",
+    )
 }

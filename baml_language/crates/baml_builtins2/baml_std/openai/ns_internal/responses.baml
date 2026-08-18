@@ -377,15 +377,14 @@ function _openai_prompt_content(
                     ai.wire.resolve_media(image, false)
                 };
                 let image_url = resolved.url ?? `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`;
-                content
-                    .push(
-                        OaInputImage {
-                            type: "input_image",
-                            image_url: image_url,
-                            file_id: null,
-                            detail: "auto",
-                        },
-                    );
+                content.push(
+                    OaInputImage {
+                        type: "input_image",
+                        image_url: image_url,
+                        file_id: null,
+                        detail: "auto",
+                    },
+                );
                 null
             },
             let audio: baml.media.Audio => {
@@ -404,16 +403,15 @@ function _openai_prompt_content(
                         detail: "OpenAI Responses audio input requires downloaded bytes during request preview",
                     }
                 }
-                content
-                    .push(
-                        OaInputAudio {
-                            type: "input_audio",
-                            input_audio: OaAudioPayload {
-                                data: resolved.base64 ?? "",
-                                format: _openai_audio_format(resolved.mime_type),
-                            },
+                content.push(
+                    OaInputAudio {
+                        type: "input_audio",
+                        input_audio: OaAudioPayload {
+                            data: resolved.base64 ?? "",
+                            format: _openai_audio_format(resolved.mime_type),
                         },
-                    );
+                    },
+                );
                 null
             },
             let pdf: baml.media.Pdf => {
@@ -427,28 +425,26 @@ function _openai_prompt_content(
                 };
                 let name = _openai_file_name(pdf.file() ?? pdf.url());
                 if let url: string = resolved.url {
-                    content
-                        .push(
-                            OaInputFile {
-                                type: "input_file",
-                                filename: name,
-                                file_data: null,
-                                file_url: url,
-                                file_id: null,
-                            },
-                        );
+                    content.push(
+                        OaInputFile {
+                            type: "input_file",
+                            filename: name,
+                            file_data: null,
+                            file_url: url,
+                            file_id: null,
+                        },
+                    );
                     null
                 } else {
-                    content
-                        .push(
-                            OaInputFile {
-                                type: "input_file",
-                                filename: name,
-                                file_data: `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`,
-                                file_url: null,
-                                file_id: null,
-                            },
-                        );
+                    content.push(
+                        OaInputFile {
+                            type: "input_file",
+                            filename: name,
+                            file_data: `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`,
+                            file_url: null,
+                            file_id: null,
+                        },
+                    );
                     null
                 };
                 null
@@ -476,13 +472,12 @@ function openai_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> OaInpu
             "" | "tool" => "user",
             _ => message.role,
         };
-        items
-            .push(
-                OaMessageItem {
-                    role: role,
-                    content: _openai_prompt_content(message, role, preview = preview),
-                },
-            );
+        items.push(
+            OaMessageItem {
+                role: role,
+                content: _openai_prompt_content(message, role, preview = preview),
+            },
+        );
     }
     items
 }
@@ -565,38 +560,35 @@ function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
     for (let e in j.entries()) {
         match (e) {
             let u: ai.events.UserMessage => {
-                items
-                    .push(
-                        OaMessageItem {
-                            role: "user",
-                            content: [OaInputText { type: "input_text", text: u.content }],
-                        },
-                    );
+                items.push(
+                    OaMessageItem {
+                        role: "user",
+                        content: [OaInputText { type: "input_text", text: u.content }],
+                    },
+                );
                 null
             },
             let a: ai.events.AssistantMessage => {
                 for (let b in a.content) {
                     match (b) {
                         let t: ai.content.Text => {
-                            items
-                                .push(
-                                    OaMessageItem {
-                                        role: "assistant",
-                                        content: [OaOutputText { type: "output_text", text: t.text }],
-                                    },
-                                );
+                            items.push(
+                                OaMessageItem {
+                                    role: "assistant",
+                                    content: [OaOutputText { type: "output_text", text: t.text }],
+                                },
+                            );
                             null
                         },
                         let use: ai.content.ToolUse => {
-                            items
-                                .push(
-                                    OaFunctionCallItem {
-                                        type: "function_call",
-                                        call_id: use.id,
-                                        name: use.name,
-                                        arguments: baml.json.stringify(baml.json.to_json(use.args)),
-                                    },
-                                );
+                            items.push(
+                                OaFunctionCallItem {
+                                    type: "function_call",
+                                    call_id: use.id,
+                                    name: use.name,
+                                    arguments: baml.json.stringify(baml.json.to_json(use.args)),
+                                },
+                            );
                             null
                         },
                         // ai.Reasoning does not round-trip yet (the API wants
@@ -609,27 +601,25 @@ function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
                 null
             },
             let c: ai.events.ToolCompleted => {
-                items
-                    .push(
-                        OaFunctionCallOutputItem {
-                            type: "function_call_output",
-                            call_id: c.id,
-                            output: c.output,
-                        },
-                    );
+                items.push(
+                    OaFunctionCallOutputItem {
+                        type: "function_call_output",
+                        call_id: c.id,
+                        output: c.output,
+                    },
+                );
                 null
             },
             let f: ai.events.ToolFailed => {
                 let err: map<string, unknown> = {};
                 let _ = err.set("error", f.message);
-                items
-                    .push(
-                        OaFunctionCallOutputItem {
-                            type: "function_call_output",
-                            call_id: f.id,
-                            output: baml.json.stringify(baml.json.to_json(err)),
-                        },
-                    );
+                items.push(
+                    OaFunctionCallOutputItem {
+                        type: "function_call_output",
+                        call_id: f.id,
+                        output: baml.json.stringify(baml.json.to_json(err)),
+                    },
+                );
                 null
             },
             _ => null,
@@ -653,16 +643,15 @@ function _openai_wants_image(output_type: type) -> bool {
 function _openai_tools(toolbox: ai.tools.Toolbox, wants_image: bool) -> OaTool[]? {
     let tools: OaTool[] = [];
     for (let t in toolbox.list()) {
-        tools
-            .push(
-                OaFunctionTool {
-                    type: "function",
-                    name: t.name,
-                    description: t.description,
-                    parameters: baml.json.to_json(t.input_schema),
-                    strict: false,
-                },
-            );
+        tools.push(
+            OaFunctionTool {
+                type: "function",
+                name: t.name,
+                description: t.description,
+                parameters: baml.json.to_json(t.input_schema),
+                strict: false,
+            },
+        );
     }
     if (wants_image) {
         tools.push(OaBuiltinTool { type: "image_generation" });
@@ -705,10 +694,7 @@ function _openai_text(c: root.ResponsesClient) -> OaTextParams? {
 
 // content-type, then the caller's headers (lowercased), then authorization —
 // credentials are the client's own business and always win.
-function _openai_headers(
-    c: root.ResponsesClient,
-    preview: bool = false,
-) -> map<string, string> {
+function _openai_headers(c: root.ResponsesClient, preview: bool = false) -> map<string, string> {
     let headers: map<string, string> = { "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
         for (let name in extra.keys()) {
@@ -732,10 +718,9 @@ function _openai_url(c: root.ResponsesClient) -> string {
     if let params: map<string, string> = c.query_params {
         let pairs: string[] = [];
         for (let key in params.keys()) {
-            pairs
-                .push(
-                    `${_openai_percent_encode(key)}=${_openai_percent_encode(params.get(key) ?? "")}`,
-                );
+            pairs.push(
+                `${_openai_percent_encode(key)}=${_openai_percent_encode(params.get(key) ?? "")}`,
+            );
         }
         if (pairs.length() > 0) {
             return `${url}?${pairs.join("&")}`;
@@ -795,12 +780,10 @@ function _openai_request(
     // open-ended JSON back (tool schemas, then the per-message directives that
     // ride on a content part) -> user passthrough LAST.
     let pruned = _openai_restore_tool_schemas(_openai_prune_nulls(baml.json.to_json(request)), tools);
-    let body = ai
-        .wire
-        .merge_request_body(
-            _openai_apply_message_metadata(pruned, openai_prompt_metadata(prompt)),
-            c.request_body,
-        );
+    let body = ai.wire.merge_request_body(
+        _openai_apply_message_metadata(pruned, openai_prompt_metadata(prompt)),
+        c.request_body,
+    );
     baml.http.Request {
         method: "POST",
         url: _openai_url(c),
@@ -904,14 +887,9 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
                             _ => throw ai.errors.ParseFailed { provider: "openai", raw_output: s },
                         };
                 };
-                content
-                    .push(
-                        ai.content.ToolUse {
-                            id: item.call_id ?? "",
-                            name: item.name ?? "",
-                            args: args,
-                        },
-                    );
+                content.push(
+                    ai.content.ToolUse { id: item.call_id ?? "", name: item.name ?? "", args: args },
+                );
                 null
             },
             "message" => {
@@ -950,16 +928,13 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
                 // content, NOT a tool call the runner has to execute.
                 if let encoded: string = item.result {
                     let mime = _openai_image_mime(item.output_format);
-                    content
-                        .push(
-                            ai.content
-                                .Media
-                                .new(
-                                    baml.media.Image.from_base64(encoded, mime),
-                                    provider_id = item.id,
-                                    revised_prompt = item.revised_prompt,
-                                ),
-                        );
+                    content.push(
+                        ai.content.Media.new(
+                            baml.media.Image.from_base64(encoded, mime),
+                            provider_id = item.id,
+                            revised_prompt = item.revised_prompt,
+                        ),
+                    );
                     null
                 } else {
                     null
@@ -998,11 +973,7 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
 // The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = openai_render(c, input);
-    let resp = ai.wire.send_as<OaResponse>(
-        req,
-        "openai",
-        request_timeout_ms = c.request_timeout_ms,
-    );
+    let resp = ai.wire.send_as<OaResponse>(req, "openai", request_timeout_ms = c.request_timeout_ms);
     openai_parse(resp)
 }
 
@@ -1201,9 +1172,11 @@ function _openai_sse_failure(error: unknown) -> ai.errors.Failure {
                 _ => 0,
             };
             if (code > 0) {
-                return ai
-                    .errors
-                    .classify_http("openai", code, rest.slice(separator + 1, rest.length()).trim());
+                return ai.errors.classify_http(
+                    "openai",
+                    code,
+                    rest.slice(separator + 1, rest.length()).trim(),
+                );
             };
         };
     };
@@ -1240,13 +1213,13 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
     // complete one — opt into ai.stream's strict termination contract so the
     // partial text is reported as ai.errors.NetworkFailure instead of being
     // handed back as a successful answer.
-    ai.stream
-        .TurnStream
-        .from_sse(
-            sse,
-            (batch: string) -> {
-                _openai_decode_batch(batch, state)
-            },
-            require_terminal = "openai",
-        )
+    ai.stream.TurnStream.from_sse(
+        sse,
+        (batch: string) -> {
+            _openai_decode_batch(batch, state) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        },
+        require_terminal = "openai",
+    )
 }

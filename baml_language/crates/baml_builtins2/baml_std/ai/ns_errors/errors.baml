@@ -11,23 +11,105 @@ interface Failure {
     function retry_safety(self) -> RetrySafety throws never
 }
 
-// The closed error channel of a model invocation: every typed failure the
-// client stack can produce, plus the two host signals (deadline, cancel)
-// that must survive each boundary untouched. `throws unknown` is not used
-// on this surface; stored callback positions declare this alias explicitly
-// (TYPE_SYSTEM.md rule 5) and parameter positions infer per call site.
-type InvokeError = Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled;
+// The closed error channel of the client surface: every typed failure the
+// stack can produce, the two host signals (deadline, cancel) that must
+// survive each boundary untouched, and schema-compilation failures from
+// output-format rendering. `throws unknown` is not used on this surface;
+// stored callback positions declare this alias explicitly (TYPE_SYSTEM.md
+// rule 5) and parameter positions infer per call site.
+type InvokeError = Failure
+    | baml.errors.Timeout
+    | baml.errors.UnknownError
+    | baml.panics.Cancelled
+    | baml.reflect.errors.CompilationError;
 
-// A typed identity gate. Accepting only the closed union means any call
-// site whose catch_all binder still carries an unclassified type is a
-// compile error AT THAT SITE, instead of a silent UnknownError at runtime.
-function normalize(error: Failure | baml.errors.UnknownError) -> Failure | baml.errors.UnknownError throws never {
-    error
+// Every raw type the client stack is known to raise before classification.
+// This union is deliberately CLOSED: when a new throw appears anywhere in
+// the provider stack, the call into `normalize` stops compiling and the new
+// type must be added here with an explicit classification below.
+type RaisedInClient = InvokeError
+    | baml.errors.InvalidArgument
+    | baml.errors.Io
+    | baml.errors.ParseError
+    | baml.json.JsonSerializationError
+    | baml.json.JsonParseError
+    | baml.json.JsonDecodeError
+    | baml.errors.AccessError
+    | baml.errors.Unsupported;
+
+// The classifying gate at every client boundary. Nothing is wrapped in
+// UnknownError here: each raw infrastructure type maps to a typed Failure,
+// and UnknownError only passes through when a host boundary already
+// produced one. Classifications:
+//   InvalidArgument / ParseError / JsonSerializationError / AccessError /
+//   Unsupported -> InvalidRequest
+//     (request construction or client configuration bug; not retryable)
+//   Io -> NetworkFailure (transport-adjacent; safely retryable)
+//   JsonParseError / JsonDecodeError -> NetworkFailure
+//     (malformed provider wire payload; safely retryable)
+//   Timeout / Cancelled / CompilationError / Failure / UnknownError -> as-is
+function normalize(error: RaisedInClient) -> InvokeError throws never {
+    match (error) {
+        let failure: Failure => failure,
+        let unknown_error: baml.errors.UnknownError => unknown_error,
+        let timeout: baml.errors.Timeout => timeout,
+        let cancelled: baml.panics.Cancelled => cancelled,
+        let compilation: baml.reflect.errors.CompilationError => compilation,
+        let invalid: baml.errors.InvalidArgument => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: invalid.message,
+                raw_body: null,
+            }
+        },
+        let parse: baml.errors.ParseError => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: parse.message,
+                raw_body: null,
+            }
+        },
+        let serialize: baml.json.JsonSerializationError => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: serialize.message,
+                raw_body: null,
+            }
+        },
+        let access: baml.errors.AccessError => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: access.message,
+                raw_body: null,
+            }
+        },
+        let unsupported: baml.errors.Unsupported => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: unsupported.message,
+                raw_body: null,
+            }
+        },
+        let io: baml.errors.Io => {
+            NetworkFailure { provider: "client", detail: io.message, raw_body: null }
+        },
+        let json_parse: baml.json.JsonParseError => {
+            NetworkFailure { provider: "client", detail: json_parse.message, raw_body: null }
+        },
+        let json_decode: baml.json.JsonDecodeError => {
+            NetworkFailure { provider: "client", detail: json_decode.message, raw_body: null }
+        },
+    }
 }
 
-// The invocation-boundary gate: same contract, widened to the host signals.
-function normalize_invoke(error: InvokeError) -> InvokeError throws never {
-    error
+// Kept as a named boundary for the invoke-path call sites; identical gate.
+function normalize_invoke(error: RaisedInClient) -> InvokeError throws never {
+    normalize(error)
 }
 
 class RateLimited {

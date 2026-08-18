@@ -263,10 +263,7 @@ function _vertex_anthropic_body(
     stream: bool,
     preview: bool = false,
 ) -> string {
-    let vertex_fields: baml.json.json = {
-        "anthropic_version": "vertex-2023-10-16",
-        "model": null,
-    };
+    let vertex_fields: baml.json.json = { "anthropic_version": "vertex-2023-10-16", "model": null };
     let params = anthropic.internal.AnthropicBodyParams {
         model: c.model,
         max_tokens: c.max_output_tokens ?? 8192,
@@ -413,10 +410,20 @@ function vertex_invoke_stream(
         return ai.stream.TurnStream.from_sse(
             sse,
             (batch: string) -> {
-                anthropic.internal.anthropic_decode_batch(batch, state)
+                anthropic.internal.anthropic_decode_batch(batch, state) catch_all (e) {
+                    _ => throw ai.errors.normalize(e),
+                }
             },
             require_terminal = "vertex",
         );
     }
-    ai.stream.TurnStream.from_sse(sse, _vertex_decode_batch, require_terminal = "vertex")
+    ai.stream.TurnStream.from_sse(
+        sse,
+        (batch: string) -> {
+            _vertex_decode_batch(batch) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        },
+        require_terminal = "vertex",
+    )
 }

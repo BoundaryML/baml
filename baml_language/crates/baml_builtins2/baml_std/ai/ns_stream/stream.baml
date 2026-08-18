@@ -481,6 +481,8 @@ function from_spec<TStream, TFinal>(
             match (turns.next()) {
                 let d: Done => null,
                 let s: string => s,
+            } catch_all (e) {
+                _ => throw root.errors.normalize(e),
             }
         },
         _cache: baml.sap.__new_parse_cache<TStream, TFinal>(),
