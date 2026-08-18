@@ -7,12 +7,14 @@ use baml_compiler_diagnostics::{
     runtime_type::{self, DuplicateMemberKind, InvalidIdentifierKind, SerializedKeyContainer},
 };
 use bex_heap::TlabHolder;
-use bex_vm_types::HeapPtr;
-use bex_vm_types::types::{
-    Class, ClassField, DynTypeDefs, DynWitnessDef, Enum, EnumVariant, InterfaceDef, MethodImpl,
-    MintId, Object, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
-    PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeImplRule,
-    RuntimeTypeProvenance, TypeValue, Value,
+use bex_vm_types::{
+    HeapPtr,
+    types::{
+        Class, ClassField, DynTypeDefs, DynWitnessDef, Enum, EnumVariant, InterfaceDef, MethodImpl,
+        MintId, Object, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
+        PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeImplRule,
+        RuntimeTypeProvenance, TypeValue, Value,
+    },
 };
 use indexmap::IndexMap;
 
