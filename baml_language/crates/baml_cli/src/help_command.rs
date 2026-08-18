@@ -200,16 +200,16 @@ mod tests {
     #[test]
     fn concise_and_detailed_help_are_snapshot_tested() {
         let concise = normalize_snapshot(&render_for_test(&[]));
-        insta::assert_snapshot!("root_concise_help", concise);
-        insta::assert_snapshot!(
+        crate::file_snapshot!("root_concise_help", concise);
+        crate::file_snapshot!(
             "describe_detailed_help",
             normalize_snapshot(&render_for_test(&["describe"]))
         );
-        insta::assert_snapshot!(
+        crate::file_snapshot!(
             "run_detailed_help",
             normalize_snapshot(&render_for_test(&["run"]))
         );
-        insta::assert_snapshot!(
+        crate::file_snapshot!(
             "test_detailed_help",
             normalize_snapshot(&render_for_test(&["test"]))
         );

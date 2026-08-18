@@ -40,6 +40,30 @@
 //! - `fixes_at(db, file, range) -> Vec<Fix>` — quick-fixes at a range.
 //!   Initially minimal: "Open in Playground" unconditionally.
 
+/// A file-snapshot assertion whose snapshot dir honors `BAML_LSP2_SNAPSHOT_DIR`.
+///
+/// File snapshots resolve against the compile-time `CARGO_MANIFEST_DIR`,
+/// which for the CI nix unit graph is a build sandbox that does not exist
+/// when the prebuilt test binary runs; the L2 snapshot lane sets the env
+/// var to the real checkout's `src/snapshots`. Unset (every local and
+/// cargo-arm run), this expands to a bare `insta::assert_snapshot!` -
+/// byte-identical behavior. Same pattern as `BAML_SURFACE_SNAPSHOT_DIR`
+/// in `baml_surface`, which exists for the same relocated-build reason.
+#[cfg(test)]
+macro_rules! file_snapshot {
+    ($($arg:tt)*) => {{
+        let mut settings = insta::Settings::clone_current();
+        if let Some(dir) = std::env::var_os("BAML_LSP2_SNAPSHOT_DIR") {
+            settings.set_snapshot_path(std::path::PathBuf::from(dir));
+        }
+        settings.bind(|| {
+            insta::assert_snapshot!($($arg)*);
+        })
+    }};
+}
+#[cfg(test)]
+pub(crate) use file_snapshot;
+
 pub mod actions;
 pub mod annotations;
 pub mod check;

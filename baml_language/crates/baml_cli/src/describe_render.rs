@@ -563,13 +563,13 @@ mod tests {
     #[test]
     fn renders_builtin_interface() {
         let db = make_db();
-        insta::assert_snapshot!(render(&db, "baml.Sortable"));
+        crate::file_snapshot!(render(&db, "baml.Sortable"));
     }
 
     #[test]
     fn renders_builtin_class_with_impls() {
         let db = make_db();
-        insta::assert_snapshot!(render(&db, "baml.time.Duration"));
+        crate::file_snapshot!(render(&db, "baml.time.Duration"));
         assert!(render(&db, "baml.reflect.class.Type").contains("baml.AnyClass"));
         assert!(!render(&db, "baml.reflect.enum.Type").contains("baml.AnyClass"));
     }
@@ -577,7 +577,7 @@ mod tests {
     #[test]
     fn renders_member_drill() {
         let db = make_db();
-        insta::assert_snapshot!(render(&db, "baml.Comparable.compare"));
+        crate::file_snapshot!(render(&db, "baml.Comparable.compare"));
     }
 
     #[test]
@@ -607,6 +607,6 @@ function greet(name: string) -> string throws baml.errors.Io {
             let _ = writeln!(out, "════ {path} ════");
             out.push_str(&render(&db, path));
         }
-        insta::assert_snapshot!(out);
+        crate::file_snapshot!(out);
     }
 }

@@ -51,7 +51,7 @@ fn list_package_items_multi_namespace() {
         .map(|e| project.format_listing_entry(e))
         .collect::<Vec<_>>()
         .join("\n");
-    insta::assert_snapshot!(listing);
+    crate::file_snapshot!(listing);
 }
 
 #[test]
@@ -209,7 +209,7 @@ fn list_namespace_items_llm() {
         .map(|e| project.format_listing_entry(e))
         .collect::<Vec<_>>()
         .join("\n");
-    insta::assert_snapshot!(listing);
+    crate::file_snapshot!(listing);
 }
 
 #[test]

@@ -269,7 +269,7 @@ fn render_project_listing() {
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
     let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
     let output = capture_listing(&entries);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 // ── Namespace listing tests ─────────────────────────────────────────────────
@@ -281,7 +281,7 @@ fn render_namespace_listing_llm() {
     let ns_path = vec![baml_db::Name::new("llm")];
     let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     let output = capture_listing(&entries);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 // ── Item detail tests ───────────────────────────────────────────────────────
@@ -293,7 +293,7 @@ fn render_describe_class() {
     let descs = baml_lsp2_actions::describe(&db, &files, "Point");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
@@ -303,7 +303,7 @@ fn render_describe_enum() {
     let descs = baml_lsp2_actions::describe(&db, &files, "Color");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
@@ -330,7 +330,7 @@ class Person {
     let descs = baml_lsp2_actions::describe(&db, &files, "Named");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
@@ -361,7 +361,7 @@ class IntDecoder {
         output.contains("type Output = int"),
         "expected class describe to include associated type bindings, got:\n{output}"
     );
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
@@ -371,7 +371,7 @@ fn render_describe_function_with_docstring() {
     let descs = baml_lsp2_actions::describe(&db, &files, "ExtractPoint");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 // ── Dot-notation describe_by_definition tests ───────────────────────────────
@@ -389,7 +389,7 @@ fn render_describe_ns_item() {
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let desc = baml_lsp2_actions::describe_by_definition(&db, &files, def).unwrap();
     let output = capture_description(&db, &desc, 30);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 // ── Builtin / standard library listing tests ────────────────────────────────
@@ -414,7 +414,7 @@ fn render_builtin_package_listing() {
         !listed_names.contains(&"iter.Range"),
         "builtin listing should not emit unqualified names that cannot be described directly, got:\n{output}"
     );
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// `baml describe baml.env` — list items in the `env` sub-namespace.
@@ -426,7 +426,7 @@ fn render_builtin_namespace_env() {
     let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// `baml describe ai.internal` — list items in the `ai.internal` namespace,
@@ -440,7 +440,7 @@ fn render_builtin_namespace_ai_internal() {
     let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// `baml describe testing` — list items in the `testing` package.
@@ -451,7 +451,7 @@ fn render_testing_package_listing() {
     let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// `baml describe assert` — list items in the `assert` package.
@@ -462,7 +462,7 @@ fn render_assert_package_listing() {
     let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// Describe a builtin type (String) via `describe()` with compiler2 visible files.
@@ -473,7 +473,7 @@ fn render_describe_builtin_string() {
     let descs = baml_lsp2_actions::describe(&db, &files, "String");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// Describe a builtin function (deep_copy) via `describe()` with compiler2 visible files.
@@ -484,14 +484,14 @@ fn render_describe_builtin_deep_copy() {
     let descs = baml_lsp2_actions::describe(&db, &files, "deep_copy");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_describe_log_info_builtin() {
     let db = simple_project();
     let output = describe_via_dispatch(&db, "log.info");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// Describe a builtin item via describe_by_definition (baml.String).
@@ -508,7 +508,7 @@ fn render_describe_builtin_item_by_definition() {
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let desc = baml_lsp2_actions::describe_by_definition(&db, &files, def).unwrap();
     let output = capture_description(&db, &desc, 30);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// `non_user_package_names()` should return the builtin packages.
@@ -537,7 +537,7 @@ fn render_describe_member_field() {
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let desc = baml_lsp2_actions::describe_item_member(&db, &files, def, "x").unwrap();
     let output = capture_description(&db, &desc, 30);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
@@ -553,7 +553,7 @@ fn render_describe_ns_member() {
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let desc = baml_lsp2_actions::describe_item_member(&db, &files, def, "model").unwrap();
     let output = capture_description(&db, &desc, 30);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 // ── Deep namespace tests (fixed) ────────────────────────────────────────────
@@ -570,7 +570,7 @@ fn deep_namespace_listing_produces_dotted_fqn() {
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
     let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
     let output = capture_listing(&entries);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// The primitives DO support deep namespaces.
@@ -600,7 +600,7 @@ fn deep_namespace_primitive_lookup_works() {
 fn fixed_describe_deep_namespace_listing() {
     let db = deep_ns_project();
     let output = describe_via_dispatch(&db, "foo.bar");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// FIXED: `baml describe foo.bar.Baz` — now resolves the item correctly.
@@ -608,7 +608,7 @@ fn fixed_describe_deep_namespace_listing() {
 fn fixed_describe_deep_namespace_item() {
     let db = deep_ns_project();
     let output = describe_via_dispatch(&db, "foo.bar.Baz");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// FIXED: `baml describe foo.bar.Baz.field` — now resolves the member correctly.
@@ -616,7 +616,7 @@ fn fixed_describe_deep_namespace_item() {
 fn fixed_describe_deep_namespace_member() {
     let db = deep_ns_project();
     let output = describe_via_dispatch(&db, "foo.bar.Baz.field");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// CONTROL: 1-deep namespaces still work.
@@ -624,7 +624,7 @@ fn fixed_describe_deep_namespace_member() {
 fn control_describe_shallow_namespace_item_works() {
     let db = multi_ns_project();
     let output = describe_via_dispatch(&db, "llm.Config");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 // ── "Did you mean?" suggestion tests ────────────────────────────────────────
@@ -766,7 +766,7 @@ fn render_describe_class_with_methods() {
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let descs = baml_lsp2_actions::describe(&db, &files, "User");
     assert_eq!(descs.len(), 1);
-    insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
+    crate::file_snapshot!(capture_description(&db, &descs[0], 30));
 }
 
 /// A class with both an instance method (`increment`) and a static method
@@ -780,7 +780,7 @@ fn render_describe_class_with_static_methods() {
     let output = capture_description(&db, &descs[0], 30);
     assert!(output.contains("methods:"));
     assert!(output.contains("static_methods:"));
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// A generic class renders `class Wrapper<T>` in the body, type-variable return
@@ -791,7 +791,7 @@ fn render_describe_generic_class_with_methods() {
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let descs = baml_lsp2_actions::describe(&db, &files, "Wrapper");
     assert_eq!(descs.len(), 1);
-    insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
+    crate::file_snapshot!(capture_description(&db, &descs[0], 30));
 }
 
 /// `baml describe string` resolves the builtin `baml.String` class via its
@@ -799,7 +799,7 @@ fn render_describe_generic_class_with_methods() {
 #[test]
 fn render_describe_alias_string() {
     let db = simple_project();
-    insta::assert_snapshot!(describe_via_dispatch(&db, "string"));
+    crate::file_snapshot!(describe_via_dispatch(&db, "string"));
 }
 
 /// Lowercase primitive/keyword aliases route to their builtin `baml` class.
@@ -864,7 +864,7 @@ fn describe_user_method_drill_in_shows_body() {
         output.contains("container:") && output.contains("User"),
         "owning class should be the container:\n{output}"
     );
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// Drilling into a builtin method (`string.length`, via the alias) resolves and
@@ -1142,79 +1142,79 @@ fn suggest_respects_limit() {
 #[test]
 fn render_keyword_class() {
     let output = capture_keyword("class");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_generator() {
     let output = capture_keyword("generator");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_if() {
     let output = capture_keyword("if");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_test() {
     let output = capture_keyword("test");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_testset() {
     let output = capture_keyword("testset");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_spawn() {
     let output = capture_keyword("spawn");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_defer() {
     let output = capture_keyword("defer");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_cleanup() {
     let output = capture_keyword("cleanup");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_playground() {
     let output = capture_keyword("playground");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_baml_sdk() {
     let output = capture_keyword("baml_sdk");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_python() {
     let output = capture_keyword("python");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_typescript() {
     let output = capture_keyword("typescript");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_patterns() {
     let output = capture_keyword("patterns");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// `defer` and `cleanup` (BEP-042) resolve to keyword topics rather than
@@ -1272,127 +1272,127 @@ fn render_schema_attribute_topic() {
 #[test]
 fn render_keyword_interface() {
     let output = capture_keyword("interface");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_interfaces() {
     let output = capture_keyword("interfaces");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_implements() {
     let output = capture_keyword("implements");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_method() {
     let output = capture_keyword("method");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_field() {
     let output = capture_keyword("field");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_blanket() {
     let output = capture_keyword("blanket");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_check() {
     let output = capture_keyword("check");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_impl() {
     let output = capture_keyword("impl");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_requires() {
     let output = capture_keyword("requires");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_associated() {
     let output = capture_keyword("associated");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_type() {
     let output = capture_keyword("type");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_types() {
     let output = capture_keyword("types");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_generic() {
     let output = capture_keyword("generic");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_generics() {
     let output = capture_keyword("generics");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_bounds() {
     let output = capture_keyword("bounds");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_extends() {
     let output = capture_keyword("extends");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_as() {
     let output = capture_keyword("as");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_projection() {
     let output = capture_keyword("projection");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_self() {
     let output = capture_keyword("self");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_ts_instanceof() {
     let output = capture_keyword("instanceof");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
 fn render_keyword_ts_new() {
     let output = capture_keyword("new");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// Keywords via dispatch should resolve to `ResolvedTarget::Keyword`.
@@ -1400,7 +1400,7 @@ fn render_keyword_ts_new() {
 fn dispatch_keyword_class() {
     let db = simple_project();
     let output = describe_via_dispatch(&db, "class");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
@@ -1417,7 +1417,7 @@ fn dispatch_keyword_method_prefers_topic_over_builtin_member() {
 fn dispatch_keyword_interfaces() {
     let db = simple_project();
     let output = describe_via_dispatch(&db, "interfaces");
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 #[test]
@@ -1470,7 +1470,7 @@ fn dispatch_root_prefix_resolves_user_item() {
         output.contains("class Point"),
         "expected user Point class, got: {output}"
     );
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!(output);
 }
 
 /// `root.` with a nonexistent item returns NOT FOUND.

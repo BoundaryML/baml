@@ -131,7 +131,7 @@ fn describe_class() {
     let project = make_project();
     let descs = project.describe("Point");
     assert_eq!(descs.len(), 1);
-    insta::assert_snapshot!(project.format_description(&descs[0]));
+    crate::file_snapshot!(project.format_description(&descs[0]));
 }
 
 #[test]
@@ -139,7 +139,7 @@ fn describe_class_with_refs() {
     let project = make_project();
     let descs = project.describe("Person");
     assert_eq!(descs.len(), 1);
-    insta::assert_snapshot!(project.format_description(&descs[0]));
+    crate::file_snapshot!(project.format_description(&descs[0]));
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn describe_enum() {
     let project = make_project();
     let descs = project.describe("Color");
     assert_eq!(descs.len(), 1);
-    insta::assert_snapshot!(project.format_description(&descs[0]));
+    crate::file_snapshot!(project.format_description(&descs[0]));
 }
 
 #[test]
@@ -175,7 +175,7 @@ class Person {
 
     let descs = project.describe("Named");
     assert_eq!(descs.len(), 1);
-    insta::assert_snapshot!(project.format_description(&descs[0]));
+    crate::file_snapshot!(project.format_description(&descs[0]));
 }
 
 #[test]
@@ -183,7 +183,7 @@ fn describe_function() {
     let project = make_project();
     let descs = project.describe("ExtractPoint");
     assert_eq!(descs.len(), 1);
-    insta::assert_snapshot!(project.format_description(&descs[0]));
+    crate::file_snapshot!(project.format_description(&descs[0]));
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn describe_function_with_enum_param() {
     let project = make_project();
     let descs = project.describe("UseColor");
     assert_eq!(descs.len(), 1);
-    insta::assert_snapshot!(project.format_description(&descs[0]));
+    crate::file_snapshot!(project.format_description(&descs[0]));
 }
 
 #[test]
@@ -208,7 +208,7 @@ fn describe_builtin_string_with_compiler2_visible_files() {
 
     assert_eq!(descs.len(), 1);
     assert_eq!(descs[0].name, "String");
-    insta::assert_snapshot!(project.format_description(&descs[0]));
+    crate::file_snapshot!(project.format_description(&descs[0]));
 }
 
 #[test]
@@ -218,7 +218,7 @@ fn describe_builtin_deep_copy_with_compiler2_visible_files() {
 
     assert_eq!(descs.len(), 1);
     assert_eq!(descs[0].name, "deep_copy");
-    insta::assert_snapshot!(project.format_description(&descs[0]));
+    crate::file_snapshot!(project.format_description(&descs[0]));
 }
 
 #[test]
