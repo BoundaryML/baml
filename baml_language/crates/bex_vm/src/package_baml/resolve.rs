@@ -15,8 +15,9 @@
 use std::borrow::Cow;
 
 use baml_type::{
-    Literal, Name, RealizedTy, TyTemplate, TypeName, normalize::TypeContext,
-    type_kind::is_type_kind_class,
+    Literal, Name, RealizedTy, TyTemplate, TypeName,
+    normalize::TypeContext,
+    type_kind::{class_inhabits_any_class, is_type_kind_class},
 };
 use bex_vm_types::{errors::VmInternalError, types::RuntimeImplRule};
 
@@ -321,6 +322,18 @@ impl<'vm> ImplResolver<'vm> {
         requested_assoc: &[(Name, RealizedTy)],
         stack: &mut Vec<Obligation>,
     ) -> bool {
+        // The blanket stdlib impl exists to supply AnyClass's default-method
+        // dispatch. Membership is narrower: class values only, and among the
+        // sealed reflection-kind views only `reflect.class.Type`. Keep the
+        // carve-out at the recursive proof seam so nested bounds cannot observe
+        // the blanket rule's broader receiver.
+        if iface.is_builtin_root_type("AnyClass") {
+            return matches!(
+                concrete_ty,
+                RealizedTy::Class(name, _, _) if class_inhabits_any_class(name)
+            );
+        }
+
         // Key on the normalized (literal/enum-variant → base) type so `1` and `int`
         // are the same goal for cycle purposes.
         let goal: Obligation = (

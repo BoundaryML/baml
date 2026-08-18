@@ -12,6 +12,7 @@ fields:
   _cache string
 
 blanket implementations:
+  baml.AnyClass   (<builtin>/baml/core.baml:117)
   baml.Concrete   (<builtin>/baml/core.baml:13)
 ════ Mode ════
 enum Mode   app.baml:8

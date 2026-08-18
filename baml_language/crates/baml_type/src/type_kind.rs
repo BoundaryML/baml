@@ -83,6 +83,13 @@ pub fn is_type_kind_class(name: &QualifiedTypeName) -> bool {
         && name.name().as_str() == "Type"
 }
 
+/// Whether a nominal class inhabits the compiler-derived `baml.AnyClass`
+/// interface. Ordinary classes do. Within the sealed reflection-kind family,
+/// only the class-kind value view is intentionally admitted.
+pub fn class_inhabits_any_class(name: &QualifiedTypeName) -> bool {
+    !is_type_kind_class(name) || name == &TypeKind::Class.class_name()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,5 +102,19 @@ mod tests {
         assert!(!is_type_kind_class(&QualifiedTypeName::from_dotted_path(
             "baml.reflect.Type"
         )));
+    }
+
+    #[test]
+    fn any_class_admits_ordinary_classes_and_only_the_class_kind_view() {
+        assert!(class_inhabits_any_class(
+            &QualifiedTypeName::from_dotted_path("user.Record")
+        ));
+        for kind in TypeKind::ALL {
+            assert_eq!(
+                class_inhabits_any_class(&kind.class_name()),
+                kind == TypeKind::Class,
+                "unexpected AnyClass membership for {kind:?}"
+            );
+        }
     }
 }

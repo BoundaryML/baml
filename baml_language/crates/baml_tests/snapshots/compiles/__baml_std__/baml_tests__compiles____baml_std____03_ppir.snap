@@ -158,7 +158,28 @@ class baml.TaggedString$stream {
   parts: string[]
   values: unknown[]
 }
+function baml.attributes(self: ?) -> baml.reflect.Meta  [expr] {
+  { let class_type: baml.reflect.class.Type = type.of_value(self).as_class() } class_type.meta()
+}
 function baml.deep_copy(value: T) -> T  [builtin]
+function baml.get(self: ?, name: string) -> T?  [expr] {
+  { if (Not self.has_field(name)) { return null } } reflect.class.get_field(self, name) catch (e) { baml.reflect.errors.CompilationError { message: message } => { throw baml.errors.TypeMismatch { message: message } } }
+}
+function baml.get_field(self: ?, name: string) -> baml.reflect.class.Field?  [expr] {
+  { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return baml.reflect.class.Field { name: field.name, type: field.type, meta: field.meta, _owner: self } } } null
+}
+function baml.has_field(self: ?, name: string) -> bool  [expr] {
+  { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return true } } false
+}
+function baml.list_fields(self: ?) -> baml.reflect.class.Field[]  [expr] {
+  { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); let fields: baml.reflect.class.Field[] = []; for field in class_type.fields() {  } fields.push(baml.reflect.class.Field { name: field.name, type: field.type, meta: field.meta, _owner: self }) } fields
+}
+function baml.name(self: ?) -> string  [expr] {
+  {  } type.of_value(self).to_string()
+}
+function baml.type(self: ?) -> type  [expr] {
+  {  } type.of_value(self)
+}
 
 --- <builtin>/baml/float.baml ---
 class baml.Float {
@@ -1732,11 +1753,13 @@ class baml.reflect.class.Field {
   name: string
   type: type?
   meta: baml.reflect.Meta
+  _owner: unknown?
 }
 class baml.reflect.class.Field$stream {
   name: string | null
   type: unknown | null
   meta: baml.reflect.Meta$stream | null
+  _owner: unknown | null
 }
 class baml.reflect.class.PendingType {
   _handle: $rust_type
@@ -1764,10 +1787,16 @@ function baml.reflect.class.field(self: ?, name: string, ty: type | baml.reflect
 function baml.reflect.class.fields(self: ?) -> baml.reflect.class.Field[]  [builtin]
 function baml.reflect.class.get_field(value: unknown, name: string) -> T  [builtin]
 function baml.reflect.class.meta(self: ?) -> baml.reflect.Meta  [builtin]
+function baml.reflect.class.metadata(self: ?) -> baml.reflect.Meta  [expr] {
+  {  } self.meta
+}
 function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[] = ...) -> baml.reflect.class.Type  [expr] {
   {  } _new(name, fields, implementations)
 }
 function baml.reflect.class.optional(self: ?) -> baml.reflect.class.PendingType  [builtin]
+function baml.reflect.class.read(self: ?) -> T?  [expr] {
+  { let owner: baml.AnyClass = self._owner } reflect.class.get_field(owner, self.name) catch (e) { baml.reflect.errors.CompilationError { message: message } => { throw baml.errors.TypeMismatch { message: message } } }
+}
 function baml.reflect.class.resolved(self: ?) -> type?  [builtin]
 function baml.reflect.class.type(self: ?) -> baml.reflect.class.PendingType  [builtin]
 function baml.reflect.class.union(self: ?, others: type | baml.reflect.class.PendingType[]) -> baml.reflect.class.PendingType  [builtin]

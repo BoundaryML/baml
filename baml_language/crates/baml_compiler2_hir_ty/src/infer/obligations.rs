@@ -442,6 +442,9 @@ impl<'db> InferenceContext<'db> {
         }
         let mut applicable = None;
         for facts in crate::impls::all_impl_facts(self.db) {
+            if !crate::impls::provides_concrete_members(&facts.interface.name) {
+                continue;
+            }
             let snapshot = self.table.snapshot();
             let applies = self.probe_candidate(receiver, name, facts).is_some();
             self.table.rollback_to(snapshot);

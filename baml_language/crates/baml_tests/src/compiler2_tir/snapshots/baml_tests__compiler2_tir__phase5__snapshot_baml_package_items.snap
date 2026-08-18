@@ -3,6 +3,7 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
+  type AnyClass
   type AnyFunction
   class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
   class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, to_int, parse, random] }
@@ -286,7 +287,7 @@ namespace baml.reflect.array:
   class Type { methods: [element_type, as_type] }
 namespace baml.reflect.class:
   class Builder { methods: [field, type, build, _build] }
-  class Field { methods: [] }
+  class Field { methods: [metadata, read] }
   class PendingType { methods: [array, optional, union, resolved] }
   class Type { methods: [fields, meta, as_type] }
   function _new
