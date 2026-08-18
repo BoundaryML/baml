@@ -124,24 +124,6 @@ source: crates/baml_tests/src/generated_tests.rs
      ·              ───────────────
      ╰────
 
-  [type] E0001
-
-  × mismatched types
-     ╭─[null_handling.baml:239:15]
- 239 │     let d10 = user?.profile?.name || "Anonymous";
-     ·               ─────────┬─────────
-     ·                        ╰── expected `bool`, found `string | null`
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[null_handling.baml:239:38]
- 239 │     let d10 = user?.profile?.name || "Anonymous";
-     ·                                      ─────┬─────
-     ·                                           ╰── expected `bool`, found `"Anonymous"`
-     ╰────
-
   [type] E0004
 
   × did you mean `node?.labels?.["name"].value`? `node?.labels?.["name"]?.value` is unnecessary, because `node?.labels?.["name"]` cannot be null

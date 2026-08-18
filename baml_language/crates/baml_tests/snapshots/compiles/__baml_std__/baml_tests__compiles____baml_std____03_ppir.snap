@@ -2688,6 +2688,9 @@ function baml.is_ascii_numeric(self: ?) -> bool  [builtin]
 function baml.is_ascii_uppercase(self: ?) -> bool  [builtin]
 function baml.is_ascii_whitespace(self: ?) -> bool  [builtin]
 function baml.is_control(self: ?) -> bool  [builtin]
+function baml.is_empty(self: ?) -> bool  [expr] {
+  {  } self.byte_length() Eq 0
+}
 function baml.is_graphic(self: ?) -> bool  [builtin]
 function baml.is_lowercase(self: ?) -> bool  [builtin]
 function baml.is_numeric(self: ?) -> bool  [builtin]
