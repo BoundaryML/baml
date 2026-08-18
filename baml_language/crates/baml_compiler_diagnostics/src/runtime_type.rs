@@ -250,6 +250,11 @@ mod tests {
                 "generic function `root.Extract` cannot be extracted through reflection: reflected packages cannot supply type arguments yet",
             ),
             (
+                unspecialized_reflected_generic_call("GenericList$render_prompt"),
+                "E0165",
+                "generic function `GenericList$render_prompt` cannot be invoked through reflection until it is specialized: its body needs type arguments and reflection cannot supply them yet",
+            ),
+            (
                 computed_generic_argument_requires_unreflect("runtime_t"),
                 "E0002",
                 "computed type argument `runtime_t` must be written as `unreflect(runtime_t)`",

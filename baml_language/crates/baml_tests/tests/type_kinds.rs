@@ -305,11 +305,10 @@ async fn nested_views_of_a_runtime_type_keep_its_definitions() {
     );
 }
 
-/// The map *key* and the function views decompose through the same helper, so
-/// pin them too — a runtime enum used as a map key or a parameter type stays
-/// introspectable.
+/// The map *key* decomposes through the same helper as the value, so pin it too
+/// — a runtime enum used as a map key stays introspectable.
 #[tokio::test]
-async fn map_key_and_function_views_keep_runtime_definitions() {
+async fn map_key_type_view_keeps_runtime_definitions() {
     let output = baml_test!(
         r#"
         function main() -> string throws unknown {
@@ -345,4 +344,53 @@ async fn nested_class_of_a_runtime_package_type_reads_back() {
         "#
     );
     assert_eq!(output.result, Ok(BexExternalValue::String("name".into())));
+}
+
+/// A function view's own types are *produced* by reflection rather than
+/// decomposed out of a value the caller already holds, so carrying the overlay
+/// forward on the consumer side does not reach them: `package.functions()` and
+/// `reflect.signature` built their `type` values with no definitions attached,
+/// and reading a runtime package's enum back out of a parameter or a return
+/// type hit `unreachable!("reflected enum … must be loaded")`. Both producers
+/// now attach the owning package's declarations.
+#[tokio::test]
+async fn function_views_of_a_runtime_package_keep_its_definitions() {
+    let output = baml_test!(
+        r#"
+        function main() -> string throws unknown {
+            let pkg = reflect.Package.compile({
+                "schema.baml": "enum Choice { FIRST SECOND } function pick(c: Choice) -> Choice { c }",
+            })
+
+            let view = pkg.functions().get("root.pick") ?? throw "missing pick"
+            let returned = view.return_type().as_enum() ?? throw "expected a return enum"
+            let returned_row = returned.values().at(0) ?? throw "no return rows"
+            let param = view.params().at(0) ?? throw "expected a param"
+            let param_enum = param.type.as_enum() ?? throw "expected a param enum"
+            let param_row = param_enum.values().at(1) ?? throw "no param rows"
+
+            let callable = pkg.get_function<baml.AnyFunction<Returns = unknown, Throws = unknown>>(
+                "root.pick",
+            ) ?? throw "missing callable"
+            let sig = reflect.signature(callable)
+            let sig_returns = sig.returns.as_enum() ?? throw "expected a signature return enum"
+            let sig_return_row = sig_returns.values().at(0) ?? throw "no signature return rows"
+            let arg = sig.args.at(0) ?? throw "expected a signature arg"
+            let sig_arg = arg.type.as_enum() ?? throw "expected a signature arg enum"
+            let sig_arg_row = sig_arg.values().at(1) ?? throw "no signature arg rows"
+
+            let parts = [
+                returned_row.name,
+                param_row.name,
+                sig_return_row.name,
+                sig_arg_row.name,
+            ]
+            parts.join("|")
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("FIRST|SECOND|FIRST|SECOND".into()))
+    );
 }

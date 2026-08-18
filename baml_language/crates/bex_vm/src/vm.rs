@@ -2576,46 +2576,11 @@ impl BexVm {
         Some(self.value_concrete_ty(value)?.into())
     }
 
-    /// Name an otherwise callable value whose generic frame is incomplete.
-    /// Reflection uses this to distinguish an unspecialized generic from a
-    /// genuinely non-callable value when signature reconstruction fails.
-    pub(crate) fn unspecialized_generic_callable_name(&self, value: Value) -> Option<String> {
-        fn incomplete(function: &Function, supplied: usize) -> Option<String> {
-            (supplied < function.generic_param_bounds.len()).then(|| {
-                function
-                    .declared_name
-                    .clone()
-                    .unwrap_or_else(|| function.name.clone())
-            })
-        }
-
-        match self.get_object(value.as_object_ptr()?) {
-            Object::Closure(closure) => match unsafe { closure.function.get() } {
-                Object::Function(function) => {
-                    incomplete(function, closure.captured_type_args.len())
-                }
-                _ => None,
-            },
-            Object::GenericFunction(generic) => {
-                let inner = self.load_global_in(generic.runtime_package, generic.function);
-                match inner.as_object_ptr().map(|ptr| self.get_object(ptr)) {
-                    Some(Object::Function(function)) => {
-                        incomplete(function, generic.type_args.len())
-                    }
-                    _ => None,
-                }
-            }
-            Object::BoundMethod(method) => match unsafe { method.function.get() } {
-                Object::Function(function) => incomplete(function, method.type_args.len()),
-                _ => None,
-            },
-            _ => None,
-        }
-    }
-
-    /// The callable's own `Function` plus the type arguments it already
-    /// carries. Mirrors the value shapes
-    /// [`Self::unspecialized_generic_callable_name`] recognizes.
+    /// The callable's own `Function` plus the type arguments it already carries.
+    ///
+    /// A callable value is one of three shapes, each currying its arguments in
+    /// its own field; the two questions below both need the same pair, so they
+    /// ask it here rather than each re-matching the three.
     fn callable_function_and_type_args(
         &self,
         value: Value,
@@ -2640,22 +2605,54 @@ impl BexVm {
         }
     }
 
+    /// The runtime package whose declarations give a callable's types meaning.
+    ///
+    /// Null for a statically compiled callable: its declarations live in the
+    /// engine image and resolve by name, so reflection needs no overlay for it.
+    pub(crate) fn callable_runtime_package(&self, value: Value) -> HeapPtr {
+        if let Some(ptr) = value.as_object_ptr()
+            && let Object::GenericFunction(generic) = self.get_object(ptr)
+            && !generic.runtime_package.is_null()
+        {
+            return generic.runtime_package;
+        }
+        self.callable_function_and_type_args(value)
+            .map_or_else(HeapPtr::null, |(function, _)| function.runtime_package)
+    }
+
+    /// The declared name of a callable, for a diagnostic.
+    fn callable_display_name(function: &Function) -> String {
+        function
+            .declared_name
+            .clone()
+            .unwrap_or_else(|| function.name.clone())
+    }
+
+    /// Name an otherwise callable value whose generic frame is incomplete.
+    /// Reflection uses this to distinguish an unspecialized generic from a
+    /// genuinely non-callable value when signature reconstruction fails.
+    pub(crate) fn unspecialized_generic_callable_name(&self, value: Value) -> Option<String> {
+        let (function, type_args) = self.callable_function_and_type_args(value)?;
+        (type_args.len() < function.generic_param_bounds.len())
+            .then(|| Self::callable_display_name(function))
+    }
+
     /// Name a callable whose *body* cannot be realized against the type-argument
     /// frame it carries.
     ///
     /// A generic function's declared signature can be free of its own type
-    /// parameters — a companion like `GenericList$build_request` takes the
-    /// parent's value arguments and returns a fixed type — so signature
+    /// parameters — a companion like `GenericList$render_prompt` takes the
+    /// parent's value arguments and returns an `ai.Prompt` — so signature
     /// reconstruction succeeds and the value looks ordinary. Its body still
     /// materializes `T` (the output-format schema, for one), and entering it
-    /// with an empty frame would fail deep inside `LoadType` as a VM internal
-    /// error. Reflection asks this question before dispatching so the caller
-    /// gets a diagnostic instead.
+    /// with an empty frame fails deep inside `LoadType` as a VM internal error
+    /// that no `catch` can see. Reflection asks this question before handing
+    /// such a value out or dispatching it, so the caller gets a diagnostic.
     ///
     /// The check runs the very substitution the body would run, so detection and
     /// failure cannot drift apart; it is gated on the callable being a generic
     /// missing arguments, which keeps it off every ordinary call.
-    pub(crate) fn underspecialized_generic_callable_name(&self, value: Value) -> Option<String> {
+    pub(crate) fn generic_callable_body_needs_type_args(&self, value: Value) -> Option<String> {
         let (function, type_args) = self.callable_function_and_type_args(value)?;
         if type_args.len() >= function.generic_param_bounds.len() {
             return None;
@@ -2672,12 +2669,7 @@ impl BexVm {
             || function.bytecode.constants.iter().any(
                 |constant| matches!(constant, ConstValue::Type(template) if unrealizable(template)),
             );
-        needs_arguments.then(|| {
-            function
-                .declared_name
-                .clone()
-                .unwrap_or_else(|| function.name.clone())
-        })
+        needs_arguments.then(|| Self::callable_display_name(function))
     }
 
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
@@ -6009,7 +6001,13 @@ impl BexVm {
         );
         self.pending_call_type_args = previous_type_args;
         self.pending_call_type_values = previous_type_values;
-        if !options.type_args.is_empty()
+        // A definition overlay can arrive without any type-argument slots of its
+        // own — interface dispatch hands one down for a method that declares no
+        // generics — so the metadata lane is written whenever any of the three
+        // has something to say, not only when the frame widens.
+        if (!options.type_args.is_empty()
+            || !options.type_defs.is_empty()
+            || !options.type_values.is_empty())
             && self.frames.len() == frames_before + 1
             && *frame_idx == frames_before
             && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frames_before)

@@ -218,7 +218,7 @@ function Present(value: string) -> string { value }
   functions.get("root.identity") == null && functions.get("root.Present") != null
 }
 
-function generic_function_companion_is_extractable() -> bool throws unknown {
+function generic_function_companion_extraction_is_refused() -> string throws unknown {
   let pkg = reflect.Package.compile({
     "main.baml": #"
 client Dummy = openai.ResponsesClient.new(
@@ -232,7 +232,16 @@ function Extract<T>(document: string) -> T {
 }
 "#
   })
-  pkg.get_function<(string) -> ai.Prompt>("root.Extract$render_prompt") != null
+  let extracted = pkg.get_function<(string) -> ai.Prompt>("root.Extract$render_prompt") catch (e) {
+    baml.reflect.errors.CompilationError => {
+      return e.diagnostics[0].code
+    },
+    _ => return "wrong error",
+  } else {
+    return "returned null"
+  }
+  let _ = extracted
+  "did not throw"
 }
 
 function generic_function_companion_is_listed() -> bool throws unknown {
@@ -552,13 +561,19 @@ async fn function_listing_omits_unspecialized_generics() {
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
+/// #4473 let a generic function's companion through `get_function` because its
+/// declared surface mentions no `T`. B-1582 showed what that value is worth: its
+/// body still materializes `T`, so calling it dies inside `LoadType` as an
+/// internal error no `catch` can see. The companion is still *listed* — see the
+/// test below — but extracting it now reports the same reflection limit its
+/// parent does.
 #[tokio::test]
-async fn generic_function_companion_remains_extractable() {
+async fn generic_function_companion_extraction_reports_reflection_limit() {
     let output = baml_test!(
         baml: SCENARIO_6_SOURCE,
-        entry: "generic_function_companion_is_extractable"
+        entry: "generic_function_companion_extraction_is_refused"
     );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    assert_eq!(output.result, Ok(BexExternalValue::String("E0165".into())));
 }
 
 #[tokio::test]
