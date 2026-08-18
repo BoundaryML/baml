@@ -48,7 +48,7 @@ jobs:
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
-          sparse-checkout: release
+          sparse-checkout: baml_language/crates/baml_release
       - id: derive
         run: |
           set -euo pipefail
