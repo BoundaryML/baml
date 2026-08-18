@@ -839,7 +839,9 @@ fn build_group(
             alias: None,
             docstring: None,
             other: IndexMap::new(),
-            type_tag: baml_type::typetag::TypeTag::of_head(&identity.name.to_string()),
+            // Counter tag: runtime-created, so identity comes from the mint and
+            // the tag; the synthesized `$dyn` name is display data only.
+            type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,

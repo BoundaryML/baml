@@ -121,11 +121,19 @@ impl TypeHead {
 
     /// The unresolved head a fully-qualified name denotes.
     ///
-    /// Tags for declared heads are content-addressed from the name, so this is a
-    /// pure function — no registry, no heap, nothing to look up. It is the one
-    /// place a name becomes a head, so the rendering that feeds the hash cannot
-    /// drift between the emitter that mints a declaration's `type_tag` and the
-    /// references pointing at it. Both use `render_dotted(false)`.
+    /// Tags for *compiled* declarations are content-addressed from the name, so
+    /// this is a pure function — no registry, no heap, nothing to look up. It
+    /// is the one place a name becomes a head, so the rendering that feeds the
+    /// hash cannot drift between the emitter that mints a declaration's
+    /// `type_tag` and the references pointing at it. Both use
+    /// `render_dotted(false)`.
+    ///
+    /// **Compiled declarations only.** A runtime-created declaration's tag
+    /// comes from [`TypeTag::fresh_dynamic`], never from its (synthesized,
+    /// display-only) name — so a head for one must be built as
+    /// `TypeHead::new(just_allocated_ptr, object.type_tag)`, reading the tag
+    /// off the declaration. Calling `of_name` with a runtime declaration's
+    /// name yields a head that matches nothing.
     #[must_use]
     pub fn of_name(name: &baml_type::TypeName) -> Self {
         Self::unresolved(TypeTag::of_head(&name.render_dotted(false)))
@@ -455,7 +463,7 @@ mod tests {
             description: None,
             alias: None,
             docstring: None,
-            other: Default::default(),
+            other: indexmap::IndexMap::default(),
             type_tag: TypeTag::of_head(&name.render_dotted(false)),
             ty_attr: TyAttr::default(),
             has_cleanup: false,

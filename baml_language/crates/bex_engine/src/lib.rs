@@ -6604,4 +6604,86 @@ mod mint_identity_tests {
         assert_eq!(first, second);
         assert!(matches!(first, MintId::Static(_)));
     }
+
+    /// A host payload may name its classes anything — including a compiled
+    /// declaration's exact FQN. The materialized doppelganger must mint a
+    /// fresh dynamic tag, never the compiled class's content-addressed one:
+    /// sharing the tag would let its instances take the compiled class's
+    /// tag-keyed dispatch arms (jump tables, virtual-field switches) while
+    /// carrying a different mint and layout.
+    #[tokio::test]
+    async fn materialized_doppelganger_never_mints_a_compiled_tag() {
+        let program = compile_source("class Foo { value int }\nfunction main() -> null { null }");
+        let engine = Arc::new(
+            BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+                .expect("engine construction should succeed"),
+        );
+        let compiled_tag = {
+            let ptr = *engine
+                .resolved_class_names
+                .get("user.Foo")
+                .expect("compiled class Foo is indexed");
+            // SAFETY: compile-time object, never moved.
+            let Object::Class(class) = (unsafe { ptr.get() }) else {
+                panic!("resolved class name does not point at a class")
+            };
+            class.type_tag
+        };
+
+        let mut thread = engine
+            .new_root_thread(CancellationToken::new(), false)
+            .await;
+        let definition = bex_vm_types::types::PortableTypeDef {
+            root: baml_type::RuntimeTy::Class(
+                baml_type::QualifiedTypeName::from_dotted_path("user.Foo"),
+                Vec::new(),
+                baml_type::TyAttr::default(),
+            ),
+            classes: vec![bex_vm_types::types::PortableClassDef {
+                name: baml_type::QualifiedTypeName::from_dotted_path("user.Foo"),
+                fields: vec![bex_vm_types::types::PortableClassFieldDef {
+                    name: "value".to_string(),
+                    ty: baml_type::RuntimeTy::Int {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                    metadata: bex_vm_types::types::PortableMetadata {
+                        description: None,
+                        alias: None,
+                        docstring: None,
+                        other: indexmap::IndexMap::new(),
+                    },
+                    skip: false,
+                }],
+                metadata: bex_vm_types::types::PortableMetadata {
+                    description: None,
+                    alias: None,
+                    docstring: None,
+                    other: indexmap::IndexMap::new(),
+                },
+                generic_param_count: 0,
+            }],
+            enums: Vec::new(),
+            witnesses: Vec::new(),
+        };
+        let type_value = thread
+            .vm
+            .materialize_portable_type_def(definition)
+            .expect("doppelganger definition materializes");
+        let class_ptr = *type_value
+            .defs()
+            .classes
+            .get(&baml_type::QualifiedTypeName::from_dotted_path("user.Foo"))
+            .expect("materialized class registered in defs");
+        let Object::Class(runtime_class) = thread.vm.get_object(class_ptr) else {
+            panic!("materialized definition is not a class")
+        };
+        assert_ne!(
+            runtime_class.type_tag, compiled_tag,
+            "a wire-named doppelganger must not mint the compiled class's tag"
+        );
+        assert!(
+            runtime_class.type_tag.is_dynamic(),
+            "runtime-created declarations mint counter tags"
+        );
+    }
 }
