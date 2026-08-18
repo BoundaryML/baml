@@ -590,9 +590,11 @@ impl OutputFormatContent {
             | RuntimeTy::TypeVar(..)
             | RuntimeTy::AssociatedTypeProjection { .. }
             | RuntimeTy::Never { .. }
-            | RuntimeTy::RustType { .. } => {
-                unreachable!("non-data type {:?} should not reach output_format", ty)
-            }
+            // Checked LLM execution and render-companion paths reject these at
+            // `validate_output_type`. Throws-never low-level output-format
+            // helpers may still degrade this error to an empty string, so keep
+            // the formatter fallible rather than aborting the process.
+            | RuntimeTy::RustType { .. } => Err(RenderError::UnsupportedType(ty.to_string())),
         }
     }
 
@@ -1674,6 +1676,15 @@ mod tests {
         let content = OutputFormatContent::new(RuntimeTy::type_type());
         let err = content.render(&RenderOptions::default()).unwrap_err();
         assert!(matches!(err, RenderError::UnsupportedType(s) if s == "type"));
+    }
+
+    #[test]
+    fn test_render_non_data_type_returns_error_instead_of_panicking() {
+        let content = OutputFormatContent::new(RuntimeTy::Never {
+            attr: TyAttr::default(),
+        });
+        let err = content.render(&RenderOptions::default()).unwrap_err();
+        assert!(matches!(err, RenderError::UnsupportedType(s) if s == "never"));
     }
 
     // ========================================================================
