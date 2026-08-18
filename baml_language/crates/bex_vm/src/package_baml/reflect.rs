@@ -771,7 +771,8 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             for constant in constants {
                 let value = match constant {
                     bex_vm_types::ConstValue::Type(_)
-                    | bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => Value::NULL,
+                    | bex_vm_types::ConstValue::ClassWithTypeArgs { .. }
+                    | bex_vm_types::ConstValue::Literal(_) => Value::NULL,
                     bex_vm_types::ConstValue::Float(value) => {
                         let ptr = vm.alloc_float(value);
                         objects.push(ptr);
@@ -1548,7 +1549,8 @@ fn graft_session_submission(
         for constant in constants {
             let value = match constant {
                 bex_vm_types::ConstValue::Type(_)
-                | bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => Value::NULL,
+                | bex_vm_types::ConstValue::ClassWithTypeArgs { .. }
+                | bex_vm_types::ConstValue::Literal(_) => Value::NULL,
                 bex_vm_types::ConstValue::Float(value) => {
                     let pointer = vm.alloc_float(value);
                     extra_owned.push(pointer);

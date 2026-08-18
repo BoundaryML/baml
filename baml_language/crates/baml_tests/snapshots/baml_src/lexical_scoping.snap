@@ -253,8 +253,7 @@ function lexical_scoping.catch_base_uses_outer_lambda() -> int {
 
   L2:
     load_var caught
-    load_const "base"
-    cmp_op ==
+    is_type "base"
     pop_jump_if_false L3
     jump L4
 
@@ -420,8 +419,9 @@ function lexical_scoping.match_and_catch_main() -> int {
 
 function lexical_scoping.match_later_arm_uses_outer() -> int {
     load_const "value"
-    load_const "specific"
-    cmp_op ==
+    store_var _3
+    load_var _3
+    narrow_bind "specific", slot=1
     pop_jump_if_false L0
     jump L1
 
