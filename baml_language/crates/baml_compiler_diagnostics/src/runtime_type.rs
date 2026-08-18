@@ -129,6 +129,29 @@ pub fn cannot_construct_reflection_kind(class_name: &str) -> Diagnostic {
     )
 }
 
+/// E0166 — builtin companion carriers stand in for a builtin type; they hold
+/// no fields and are never instantiated. `carries_methods` is false for the
+/// empty-bodied companions (`baml.Bool`, `baml.Null`), which would otherwise
+/// be described as carrying methods they do not have.
+pub fn cannot_construct_builtin_companion(
+    class_name: &str,
+    builtin: &str,
+    origin: &str,
+    carries_methods: bool,
+) -> Diagnostic {
+    let role = if carries_methods {
+        format!("it only carries the methods of `{builtin}`")
+    } else {
+        format!("it is only the companion of `{builtin}`")
+    };
+    Diagnostic::error(
+        DiagnosticId::CannotConstructBuiltinCompanion,
+        format!(
+            "companion class `{class_name}` cannot be constructed; {role}, whose values come from {origin}"
+        ),
+    )
+}
+
 /// E0158 — the mounted callable has no location-free bytecode link contract.
 pub fn mounted_package_call_unsupported(path: &str) -> Diagnostic {
     Diagnostic::error(
@@ -228,6 +251,16 @@ mod tests {
                 cannot_construct_reflection_kind("baml.reflect.class.Type"),
                 "E0001",
                 "reflection kind `baml.reflect.class.Type` cannot be constructed; obtain it from a type value",
+            ),
+            (
+                cannot_construct_builtin_companion("baml.Int", "int", "literals", true),
+                "E0166",
+                "companion class `baml.Int` cannot be constructed; it only carries the methods of `int`, whose values come from literals",
+            ),
+            (
+                cannot_construct_builtin_companion("baml.Bool", "bool", "literals", false),
+                "E0166",
+                "companion class `baml.Bool` cannot be constructed; it is only the companion of `bool`, whose values come from literals",
             ),
             (
                 mounted_package_call_unsupported("dep.tool"),

@@ -13,7 +13,7 @@ class Field {
 
   /// Read this field from its bound owner. An ownerless type-side descriptor
   /// returns `null`.
-  function read<T>(self) -> T? throws baml.errors.TypeMismatch {
+  function value<T>(self) -> T? throws baml.errors.TypeMismatch {
     let owner: baml.AnyClass = self._owner else {
       return null
     }

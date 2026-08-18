@@ -31,7 +31,7 @@ function         baml.deep_copy                   <builtin>/baml/core.baml:3
 interface        baml.Concrete                    <builtin>/baml/core.baml:9
 interface        baml.AnyFunction                 <builtin>/baml/core.baml:24
 interface        baml.AnyClass                    <builtin>/baml/core.baml:35
-class            baml.TaggedString                <builtin>/baml/core.baml:126
+class            baml.TaggedString                <builtin>/baml/core.baml:127
 class            baml.Float                       <builtin>/baml/float.baml:8
 function         baml._trunc_to_int               <builtin>/baml/float.baml:461
 class            baml.Int                         <builtin>/baml/int.baml:14

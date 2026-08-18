@@ -155,7 +155,7 @@ async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {
                 && first_field.name == "first"
                 && first_field.type == optional_string
                 && first_field.metadata().alias == null
-                && first_field.read<string?>() == "one"
+                && first_field.value<string?>() == "one"
                 && mismatch_is_catchable(record)
         }
         "##
@@ -248,8 +248,8 @@ async fn reflected_membership_and_static_field_handles_agree_with_narrowing() {
                 && field.type == type.of<int>()
                 && field.meta.description == "x coordinate"
                 && field.metadata().description == "x coordinate"
-                && field.read<int>() == 7
-                && type_side_field.read<int>() == null
+                && field.value<int>() == 7
+                && type_side_field.value<int>() == null
         }
         "#
     );

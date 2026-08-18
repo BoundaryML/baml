@@ -163,7 +163,7 @@ function baml.attributes(self: ?) -> baml.reflect.Meta  [expr] {
 }
 function baml.deep_copy(value: T) -> T  [builtin]
 function baml.get(self: ?, name: string) -> T?  [expr] {
-  { if (Not self.has_field(name)) { return null } } reflect.class.get_field(self, name) catch (e) { baml.reflect.errors.CompilationError { message: message } => { throw baml.errors.TypeMismatch { message: message } } }
+  { if (Not self.has_field(name)) { return null }; let field: baml.reflect.class.Field = self.get_field(name) } field.value()
 }
 function baml.get_field(self: ?, name: string) -> baml.reflect.class.Field?  [expr] {
   { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return baml.reflect.class.Field { name: field.name, type: field.type, meta: field.meta, _owner: self } } } null
@@ -1794,12 +1794,12 @@ function baml.reflect.class.new(name: string, fields: map<string, type | baml.re
   {  } _new(name, fields, implementations)
 }
 function baml.reflect.class.optional(self: ?) -> baml.reflect.class.PendingType  [builtin]
-function baml.reflect.class.read(self: ?) -> T?  [expr] {
-  { let owner: baml.AnyClass = self._owner } reflect.class.get_field(owner, self.name) catch (e) { baml.reflect.errors.CompilationError { message: message } => { throw baml.errors.TypeMismatch { message: message } } }
-}
 function baml.reflect.class.resolved(self: ?) -> type?  [builtin]
 function baml.reflect.class.type(self: ?) -> baml.reflect.class.PendingType  [builtin]
 function baml.reflect.class.union(self: ?, others: type | baml.reflect.class.PendingType[]) -> baml.reflect.class.PendingType  [builtin]
+function baml.reflect.class.value(self: ?) -> T?  [expr] {
+  { let owner: baml.AnyClass = self._owner } reflect.class.get_field(owner, self.name) catch (e) { baml.reflect.errors.CompilationError { message: message } => { throw baml.errors.TypeMismatch { message: message } } }
+}
 
 --- <builtin>/baml/ns_reflect/ns_enum/enum.baml ---
 class baml.reflect.enum.Type {

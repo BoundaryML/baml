@@ -39,11 +39,12 @@ interface AnyClass {
     if (!self.has_field(name)) {
       return null
     }
-    reflect.class.get_field<T>(self, name) catch (e) {
-      baml.reflect.errors.CompilationError { message } => {
-        throw baml.errors.TypeMismatch { message: message }
-      }
+    // NOTE: spelled with `let … else` rather than `self.get_field(name)?.value<T>()`
+    // because an optional-chained call does not thread `T` to the callee.
+    let field: baml.reflect.class.Field = self.get_field(name) else {
+      return null
     }
+    field.value<T>()
   }
 
   /// Return a value-bound field handle, or `null` when no such field exists.
@@ -76,7 +77,7 @@ interface AnyClass {
     false
   }
 
-  /// Reflected fields bound to this value for `Field.read<T>()`.
+  /// Reflected fields bound to this value for `Field.value<T>()`.
   function list_fields(self) -> baml.reflect.class.Field[] throws never {
     let class_type: baml.reflect.class.Type = type.of_value(self).as_class() else {
       return []

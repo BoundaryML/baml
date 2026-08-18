@@ -41,24 +41,27 @@ function baml.AnyClass.get(self: baml.AnyClass, name: string) -> #1 | null {
     jump L3
 
   L0:
-    load_type #1
     load_var2 1 2
-    call baml.reflect.class.get_field
-    jump L4
-    load_var e
-    is_type baml.reflect.errors.CompilationError
+    load_type baml.AnyClass
+    load_const "get_field"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _5
+    load_var _5
+    store_var _6
+    load_var _6
+    narrow_bind baml.reflect.class.Field, slot=5
     pop_jump_if_false L1
     jump L2
 
   L1:
-    load_var e
-    rethrow
+    load_const null
+    jump L4
 
   L2:
-    load_var e
-    load_field .0
-    init_instance baml.errors.TypeMismatch .message
-    throw
+    load_type #1
+    load_var _6
+    call baml.reflect.class.Field.value
+    jump L4
 
   L3:
     load_const null
@@ -5566,7 +5569,7 @@ function baml.reflect.class.Field.metadata(self: baml.reflect.class.Field) -> ba
     return
 }
 
-function baml.reflect.class.Field.read(self: baml.reflect.class.Field) -> #0 | null {
+function baml.reflect.class.Field.value(self: baml.reflect.class.Field) -> #0 | null {
     load_var self
     load_field ._owner
     store_var _3
