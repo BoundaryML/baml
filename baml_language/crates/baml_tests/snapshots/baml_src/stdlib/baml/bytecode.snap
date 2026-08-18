@@ -4267,15 +4267,9 @@ function baml.iter.Skip.Iterator.next(self: baml.iter.Skip<#0, #1>) -> #0 | baml
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
-    jump L3
+    jump L5
 
   L2:
-    load_var self
-    copy 0
-    load_field .remaining
-    load_const 1
-    bin_op -
-    store_field .remaining
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #1, Item = #0>
@@ -4284,11 +4278,26 @@ function baml.iter.Skip.Iterator.next(self: baml.iter.Skip<#0, #1>) -> #0 | baml
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L0
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var self
+    copy 0
+    load_field .remaining
+    load_const 1
+    bin_op -
+    store_field .remaining
+    jump L0
+
+  L4:
+    load_var self
+    load_const 0
+    store_field .remaining
     alloc_instance baml.iter.Done
     store_var _0
 
-  L3:
+  L5:
     load_var _0
     return
 }
@@ -4437,29 +4446,41 @@ function baml.iter.Take.Iterator.next(self: baml.iter.Take<#0, #1>) -> #0 | baml
     load_const 0
     cmp_int_op <=
     pop_jump_if_false L0
-    jump L1
+    jump L3
 
   L0:
+    load_var self
+    load_field .source
+    load_type baml.iter.Iterator<Error = #1, Item = #0>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_var self
     copy 0
     load_field .remaining
     load_const 1
     bin_op -
     store_field .remaining
-    load_var self
-    load_field .source
-    load_type baml.iter.Iterator<Error = #1, Item = #0>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    jump L2
-
-  L1:
-    alloc_instance baml.iter.Done
-    store_var _0
+    load_var _4
+    jump L4
 
   L2:
-    load_var _0
+    load_var self
+    load_const 0
+    store_field .remaining
+    alloc_instance baml.iter.Done
+    jump L4
+
+  L3:
+    alloc_instance baml.iter.Done
+
+  L4:
     return
 }
 

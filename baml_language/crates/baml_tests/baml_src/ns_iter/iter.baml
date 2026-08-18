@@ -702,3 +702,174 @@ function iter_skip_while_none_match() -> int[] throws unknown {
 test "iter_skip_while_none_match" {
   assert.equal(iter_skip_while_none_match(), [5, 1, 2])
 }
+
+// --- quota accounting on non-item results (see PR #4510 review) ---
+//
+// `take(n)`/`skip(n)` must only spend quota when the source actually yields an
+// item. Two ways a source can return without yielding: it throws, or it reports
+// Done. Both used to consume a slot.
+
+// Throws once at `fail_at`, then behaves normally when retried. The throw
+// happens before `pos` advances, so a retry re-reads the same position.
+class FlakyIterator {
+  values: int[],
+  pos: int,
+  fail_at: int,
+
+  function new(values: int[], fail_at: int) -> FlakyIterator throws never {
+    FlakyIterator { values: values, pos: 0, fail_at: fail_at }
+  }
+
+  implements baml.iter.Iterable {
+    type Item = int
+    type Error = baml.errors.InvalidArgument
+
+    function iter(self) -> baml.iter.Iterator<Item = int, Error = baml.errors.InvalidArgument> throws never {
+      self
+    }
+  }
+
+  implements baml.iter.Iterator {
+    type Item = int
+    type Error = baml.errors.InvalidArgument
+
+    function next(self) -> int | baml.iter.Done throws baml.errors.InvalidArgument {
+      if (self.pos == self.fail_at) {
+        self.fail_at = -1;
+        throw baml.errors.InvalidArgument { message: "flaky" }
+      }
+      if (self.pos >= self.values.length()) {
+        return baml.iter.Done {  };
+      }
+      let item = self.values[self.pos];
+      self.pos += 1;
+      return item;
+    }
+  }
+}
+
+// Reports Done once at `done_at`, then keeps yielding if pulled again — a
+// deliberately non-fused source, to check the adapters stop on their own.
+class ResumableIterator {
+  values: int[],
+  pos: int,
+  done_at: int,
+
+  function new(values: int[], done_at: int) -> ResumableIterator throws never {
+    ResumableIterator { values: values, pos: 0, done_at: done_at }
+  }
+
+  implements baml.iter.Iterable {
+    type Item = int
+    type Error = never
+
+    function iter(self) -> baml.iter.Iterator<Item = int, Error = never> throws never {
+      self
+    }
+  }
+
+  implements baml.iter.Iterator {
+    type Item = int
+    type Error = never
+
+    function next(self) -> int | baml.iter.Done throws never {
+      if (self.pos == self.done_at) {
+        self.done_at = -1;
+        return baml.iter.Done {  };
+      }
+      if (self.pos >= self.values.length()) {
+        return baml.iter.Done {  };
+      }
+      let item = self.values[self.pos];
+      self.pos += 1;
+      return item;
+    }
+  }
+}
+
+// take(3) over a source that throws after the first item. Retrying must still
+// deliver three items — the failed pull must not have spent a slot.
+function iter_take_quota_survives_source_error() -> int[] throws unknown {
+  let t = FlakyIterator.new([1, 2, 3, 4, 5], 1).take(3);
+  let out: int[] = [];
+  match (t.next()) {
+    baml.iter.Done => {},
+    let x: int => out.push(x),
+  }
+  {
+    t.next();
+    null
+  } catch (e) {
+    baml.errors.InvalidArgument => null
+  }
+  while (true) {
+    match (t.next()) {
+      baml.iter.Done => { break; },
+      let x: int => out.push(x),
+    }
+  }
+  out
+}
+
+test "iter_take_quota_survives_source_error" {
+  assert.equal(iter_take_quota_survives_source_error(), [1, 2, 3])
+}
+
+// skip(3) over a source that throws during the skipping phase. The failed pull
+// must not count as a skipped element.
+function iter_skip_quota_survives_source_error() -> int[] throws unknown {
+  let s = FlakyIterator.new([1, 2, 3, 4, 5], 1).skip(3);
+  let out: int[] = [];
+  {
+    s.next();
+    null
+  } catch (e) {
+    baml.errors.InvalidArgument => null
+  }
+  while (true) {
+    match (s.next()) {
+      baml.iter.Done => { break; },
+      let x: int => out.push(x),
+    }
+  }
+  out
+}
+
+test "iter_skip_quota_survives_source_error" {
+  assert.equal(iter_skip_quota_survives_source_error(), [4, 5])
+}
+
+// Once the source reports Done, take() must stay Done rather than pulling
+// again. -1 marks a Done result.
+function iter_take_stays_done_after_source_done() -> int[] throws unknown {
+  let t = ResumableIterator.new([1, 2, 3, 4, 5], 1).take(3);
+  let out: int[] = [];
+  for (let i in baml.iter.Range.new(0, 3)) {
+    match (t.next()) {
+      baml.iter.Done => out.push(-1),
+      let x: int => out.push(x),
+    }
+  }
+  out
+}
+
+test "iter_take_stays_done_after_source_done" {
+  assert.equal(iter_take_stays_done_after_source_done(), [1, -1, -1])
+}
+
+// skip() must not re-enter its skipping phase after the source reported Done.
+function iter_skip_does_not_respend_quota_after_done() -> int[] throws unknown {
+  let s = ResumableIterator.new([1, 2, 3, 4, 5], 1).skip(3);
+  let out: int[] = [];
+  for (let i in baml.iter.Range.new(0, 2)) {
+    match (s.next()) {
+      baml.iter.Done => out.push(-1),
+      let x: int => out.push(x),
+    }
+  }
+  out
+}
+
+test "iter_skip_does_not_respend_quota_after_done" {
+  assert.equal(iter_skip_does_not_respend_quota_after_done(), [-1, 2])
+}

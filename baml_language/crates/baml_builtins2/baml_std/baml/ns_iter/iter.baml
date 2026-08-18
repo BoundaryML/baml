@@ -714,8 +714,20 @@ class Take<T, E> {
             if (self.remaining <= 0) {
                 return Done {  };
             }
-            self.remaining -= 1;
-            self.source.next()
+            // Spend a slot only once the source has actually yielded an item.
+            // Decrementing first would lose a slot when `next` throws and the
+            // caller retries, and would leave the count live after `Done` so a
+            // later call advanced an already-finished source.
+            match (self.source.next()) {
+                Done => {
+                    self.remaining = 0;
+                },
+                let x: T => {
+                    self.remaining -= 1;
+                    return x;
+                },
+            }
+            Done {  }
         }
     }
 }
@@ -739,12 +751,18 @@ class Skip<T, E> {
 
         function next(self) -> T | Done throws E {
             while (self.remaining > 0) {
-                self.remaining -= 1;
+                // Count a skip only once the source has actually yielded an
+                // item, for the same reason as `Take`: a throw the caller
+                // retries must not consume part of the skip count, and `Done`
+                // must end the skipping phase rather than leaving it live.
                 match (self.source.next()) {
                     Done => {
+                        self.remaining = 0;
                         return Done {  };
                     },
-                    let x: T => {},
+                    let x: T => {
+                        self.remaining -= 1;
+                    },
                 }
             }
             self.source.next()

@@ -6385,26 +6385,50 @@ fn baml.iter.Take.Iterator.next(self: baml.iter.Take) -> baml.iter.Done | T {
     let _1: baml.iter.Take // self // param
     let _2: bool
     let _3: int
-    let _4: baml.iter.Iterator<Error = E, Item = T>
+    let _4: baml.iter.Done | T
+    let _5: baml.iter.Iterator<Error = E, Item = T>
+    let _6: bool
+    let _7: T // x
 
     bb0: {
         _3 = copy _1.1;
         _2 = copy _3 <= const 0_i64;
-        branch copy _2 -> [bb2, bb1];
+        branch copy _2 -> [bb6, bb1];
     }
 
     bb1: {
-        _1.1 = copy _1.1 - const 1_i64;
-        _4 = copy _1.0;
-        _0 = virtual_call next as baml.iter.Iterator<Error = #1, Item = #0>(copy _4) -> [bb3];
+        _5 = copy _1.0;
+        _4 = virtual_call next as baml.iter.Iterator<Error = #1, Item = #0>(copy _5) -> [bb2];
     }
 
     bb2: {
-        _0 = baml.iter.Done {  };
-        goto -> bb3;
+        _6 = is_type(copy _4, baml.iter.Done);
+        branch copy _6 -> [bb4, bb3];
     }
 
     bb3: {
+        _7 = copy _4;
+        _1.1 = copy _1.1 - const 1_i64;
+        _0 = copy _7;
+        goto -> bb7;
+    }
+
+    bb4: {
+        _1.1 = const 0_i64;
+        goto -> bb5;
+    }
+
+    bb5: {
+        _0 = baml.iter.Done {  };
+        goto -> bb7;
+    }
+
+    bb6: {
+        _0 = baml.iter.Done {  };
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }
@@ -6447,26 +6471,31 @@ fn baml.iter.Skip.Iterator.next(self: baml.iter.Skip) -> baml.iter.Done | T {
 
     bb2: {
         _7 = copy _1.0;
-        _0 = virtual_call next as baml.iter.Iterator<Error = #1, Item = #0>(copy _7) -> [bb6];
+        _0 = virtual_call next as baml.iter.Iterator<Error = #1, Item = #0>(copy _7) -> [bb7];
     }
 
     bb3: {
-        _1.1 = copy _1.1 - const 1_i64;
         _5 = copy _1.0;
         _4 = virtual_call next as baml.iter.Iterator<Error = #1, Item = #0>(copy _5) -> [bb4];
     }
 
     bb4: {
         _6 = is_type(copy _4, baml.iter.Done);
-        branch copy _6 -> [bb5, bb1];
+        branch copy _6 -> [bb6, bb5];
     }
 
     bb5: {
-        _0 = baml.iter.Done {  };
-        goto -> bb6;
+        _1.1 = copy _1.1 - const 1_i64;
+        goto -> bb1;
     }
 
     bb6: {
+        _1.1 = const 0_i64;
+        _0 = baml.iter.Done {  };
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }

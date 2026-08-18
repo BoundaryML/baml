@@ -1300,10 +1300,10 @@ function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
   { if (Not self.first_done) {  } match (self.first.next()) { baml.iter.Done => { self.first_done = true }, x: T => { return x } } } self.other.next()
 }
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
-  { if (self.remaining Le 0) { return baml.iter.Done {  } }; self.remaining Sub= 1 } self.source.next()
+  { if (self.remaining Le 0) { return baml.iter.Done {  } }; match (self.source.next()) { baml.iter.Done => { self.remaining = 0 }, x: T => { self.remaining Sub= 1; return x } } } baml.iter.Done {  }
 }
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
-  { while self.remaining Gt 0 { self.remaining Sub= 1 } match (self.source.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => {  } } } self.source.next()
+  { while self.remaining Gt 0 {  } match (self.source.next()) { baml.iter.Done => { self.remaining = 0; return baml.iter.Done {  } }, x: T => { self.remaining Sub= 1 } } } self.source.next()
 }
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
   { if (self.done) { return baml.iter.Done {  } }; match (self.source.next()) { baml.iter.Done => { self.done = true }, x: T => { if (self.predicate(x)) { return x }; self.done = true } } } baml.iter.Done {  }

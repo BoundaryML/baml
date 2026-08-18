@@ -415,12 +415,171 @@ function iter.$init_test_ns_iter_iter(registry: testing.TestCollector) -> null {
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_take_quota_survives_source_error"
+    make_closure .<lambda($init_test_ns_iter_iter, 59)>, 0
     load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_skip_quota_survives_source_error"
+    make_closure .<lambda($init_test_ns_iter_iter, 60)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_take_stays_done_after_source_done"
+    make_closure .<lambda($init_test_ns_iter_iter, 61)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_skip_does_not_respend_quota_after_done"
+    make_closure .<lambda($init_test_ns_iter_iter, 62)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function iter.FlakyIterator.baml.iter.Iterable.iter(self: iter.FlakyIterator) -> baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int> {
+    load_var self
+    return
+}
+
+function iter.FlakyIterator.baml.iter.Iterator.next(self: iter.FlakyIterator) -> int | baml.iter.Done {
+    load_var self
+    load_field .pos
+    load_var self
+    load_field .fail_at
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_var self
+    load_field .pos
+    store_var _7
+    load_var self
+    load_field .values
+    container_len
+    store_var _8
+    load_var2 2 3
+    cmp_int_op >=
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var self
+    load_field .values
+    load_var self
+    load_field .pos
+    load_array_element
+    store_var item
+    load_var self
+    copy 0
+    load_field .pos
+    load_const 1
+    bin_op +
+    store_field .pos
+    load_var item
+    jump L3
+
+  L2:
+    alloc_instance baml.iter.Done
+
+  L3:
+    return
+
+  L4:
+    load_var self
+    load_const -1
+    store_field .fail_at
+    load_const "flaky"
+    init_instance baml.errors.InvalidArgument .message
+    throw
+}
+
+function iter.FlakyIterator.new(values: int[], fail_at: int) -> iter.FlakyIterator {
+    load_var values
+    load_const 0
+    load_var fail_at
+    init_instance user.iter.FlakyIterator .values, .pos, .fail_at
     return
 }
 
 function iter.IterShadow.iter(self: iter.IterShadow) -> string {
     load_const "shadow"
+    return
+}
+
+function iter.ResumableIterator.baml.iter.Iterable.iter(self: iter.ResumableIterator) -> baml.iter.Iterator<Error = never, Item = int> {
+    load_var self
+    return
+}
+
+function iter.ResumableIterator.baml.iter.Iterator.next(self: iter.ResumableIterator) -> int | baml.iter.Done {
+    load_var self
+    load_field .pos
+    load_var self
+    load_field .done_at
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var self
+    load_field .pos
+    store_var _6
+    load_var self
+    load_field .values
+    container_len
+    store_var _7
+    load_var2 2 3
+    cmp_int_op >=
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var self
+    load_field .values
+    load_var self
+    load_field .pos
+    load_array_element
+    store_var item
+    load_var self
+    copy 0
+    load_field .pos
+    load_const 1
+    bin_op +
+    store_field .pos
+    load_var item
+    jump L4
+
+  L2:
+    alloc_instance baml.iter.Done
+    jump L4
+
+  L3:
+    load_var self
+    load_const -1
+    store_field .done_at
+    alloc_instance baml.iter.Done
+
+  L4:
+    return
+}
+
+function iter.ResumableIterator.new(values: int[], done_at: int) -> iter.ResumableIterator {
+    load_var values
+    load_const 0
+    load_var done_at
+    init_instance user.iter.ResumableIterator .values, .pos, .done_at
     return
 }
 
@@ -1999,6 +2158,77 @@ function iter.iter_skip() -> int[] {
     return
 }
 
+function iter.iter_skip_does_not_respend_quota_after_done() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    load_const 5
+    load_type int
+    alloc_array 5
+    load_const 1
+    call user.iter.ResumableIterator.new
+    load_const 3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "skip"
+    virtual_call nargs=2 ntypeargs=0
+    store_var s
+    load_type int
+    alloc_array 0
+    store_var out
+    load_const 0
+    load_const 2
+    load_const <omitted>
+    call baml.iter.Range.new
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _7
+    store_var i
+    load_var s
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _12
+    load_var _12
+    is_type baml.iter.Done
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_type int
+    load_var2 2 6
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L3:
+    load_type int
+    load_var out
+    load_const -1
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L4:
+    load_var out
+    return
+}
+
 function iter.iter_skip_past_end() -> int[] {
     load_type int
     load_const 1
@@ -2017,6 +2247,64 @@ function iter.iter_skip_past_end() -> int[] {
     virtual_call nargs=1 ntypeargs=0
     store_var _0
     load_var _0
+    return
+}
+
+function iter.iter_skip_quota_survives_source_error() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    load_const 5
+    load_type int
+    alloc_array 5
+    load_const 1
+    call user.iter.FlakyIterator.new
+    load_const 3
+    load_type baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int>
+    load_const "skip"
+    virtual_call nargs=2 ntypeargs=0
+    store_var s
+    load_type int
+    alloc_array 0
+    store_var out
+    load_var s
+    load_type baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    pop 1
+    jump L1
+    load_var e
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    pop_jump_if_false L3
+    load_var s
+    load_type baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+    load_var _9
+    is_type baml.iter.Done
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_type int
+    load_var2 2 4
+    call baml.Array.push
+    pop 1
+    jump L1
+
+  L3:
+    load_var out
     return
 }
 
@@ -2259,6 +2547,152 @@ function iter.iter_take_more_than_available() -> int[] {
     virtual_call nargs=1 ntypeargs=0
     store_var _0
     load_var _0
+    return
+}
+
+function iter.iter_take_quota_survives_source_error() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    load_const 5
+    load_type int
+    alloc_array 5
+    load_const 1
+    call user.iter.FlakyIterator.new
+    load_const 3
+    load_type baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int>
+    load_const "take"
+    virtual_call nargs=2 ntypeargs=0
+    store_var t
+    load_type int
+    alloc_array 0
+    store_var out
+    load_var t
+    load_type baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type int
+    load_var2 2 3
+    call baml.Array.push
+    pop 1
+
+  L1:
+    load_var t
+    load_type baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    pop 1
+    jump L3
+    load_var e
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var e
+    rethrow
+
+  L3:
+    load_const true
+    pop_jump_if_false L5
+    load_var t
+    load_type baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _15
+    load_var _15
+    is_type baml.iter.Done
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_var2 2 5
+    call baml.Array.push
+    pop 1
+    jump L3
+
+  L5:
+    load_var out
+    return
+}
+
+function iter.iter_take_stays_done_after_source_done() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    load_const 5
+    load_type int
+    alloc_array 5
+    load_const 1
+    call user.iter.ResumableIterator.new
+    load_const 3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "take"
+    virtual_call nargs=2 ntypeargs=0
+    store_var t
+    load_type int
+    alloc_array 0
+    store_var out
+    load_const 0
+    load_const 3
+    load_const <omitted>
+    call baml.iter.Range.new
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _7
+    store_var i
+    load_var t
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _12
+    load_var _12
+    is_type baml.iter.Done
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_type int
+    load_var2 2 6
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L3:
+    load_type int
+    load_var out
+    load_const -1
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L4:
+    load_var out
     return
 }
 
