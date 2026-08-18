@@ -333,7 +333,7 @@ impl<'a> BexValue<'a> {
                 Ok(ty.clone())
             }
             BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::TypeDef(definition))) => {
-                Ok(definition.root.clone())
+                Ok(definition.def().root.clone())
             }
             BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
                 let ptr = heap

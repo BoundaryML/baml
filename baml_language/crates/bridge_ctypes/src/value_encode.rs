@@ -168,9 +168,13 @@ pub fn external_to_outbound(
         BexExternalValue::Adt(BexExternalAdt::Type(rt)) => Some(BamlValueVariant::TyValue(
             crate::ty_encode::runtime_ty_to_proto_ty(rt),
         )),
-        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => Some(
-            BamlValueVariant::TyDefValue(crate::ty_encode::portable_type_def_to_proto(definition)),
-        ),
+        // A live handle is an engine capability, not data: only the portable
+        // definitions cross a process (BEP-066 H-4).
+        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
+            Some(BamlValueVariant::TyDefValue(
+                crate::ty_encode::portable_type_def_to_proto(definition.def()),
+            ))
+        }
 
         // All opaque types → insert into handle table, encode as BamlOutboundHandle.
         BexExternalValue::Handle(_)
@@ -317,9 +321,13 @@ pub(crate) fn artifact_safe_external_to_outbound(
         BexExternalValue::Adt(BexExternalAdt::Type(rt)) => Some(BamlValueVariant::TyValue(
             crate::ty_encode::runtime_ty_to_proto_ty(rt),
         )),
-        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => Some(
-            BamlValueVariant::TyDefValue(crate::ty_encode::portable_type_def_to_proto(definition)),
-        ),
+        // A live handle is an engine capability, not data: only the portable
+        // definitions cross a process (BEP-066 H-4).
+        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
+            Some(BamlValueVariant::TyDefValue(
+                crate::ty_encode::portable_type_def_to_proto(definition.def()),
+            ))
+        }
         BexExternalValue::HostValue(arc) => Some(artifact_safe_omission(
             "hostOwnedValue",
             match arc.kind {

@@ -496,10 +496,16 @@ impl BexEngine {
             }),
             Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-            // Identity never crosses the host boundary (BEP-066 H-4), but the
-            // portable definition graph does.
+            // Identity never crosses as *data* (BEP-066 H-4): no mint, digest
+            // or pointer is serialized. It may cross as a rooted reference —
+            // the handle resolves back to this same `Object::Type` in this
+            // engine and is dropped by any wire encoder — so a value echoed
+            // through a sys-op comes back as itself rather than a copy.
             Object::Type(type_value) => Ok(BexExternalValue::Adt(BexExternalAdt::TypeDef(
-                portable_type_def(type_value),
+                bex_external_types::TypeDefRef::Live {
+                    handle: self.heap.create_handle(ptr),
+                    def: portable_type_def(type_value),
+                },
             ))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
             Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
@@ -1260,11 +1266,26 @@ impl BexEngine {
                 Value::object(holder.holder_mut().vm.alloc_static_type(ty))
             }
             BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
-                let vm = &mut holder.holder_mut().vm;
-                let type_value = vm
-                    .materialize_portable_type_def(definition)
-                    .map_err(|message| EngineError::TypeMismatch { message })?;
-                Value::object(vm.alloc_type(type_value))
+                // A live reference from *this* engine lands as the original
+                // object. `resolve_handle` rejects a foreign engine's handle,
+                // so a cross-engine value falls through to materialization and
+                // gets fresh identity, exactly as a wire payload does.
+                let live = match &definition {
+                    bex_external_types::TypeDefRef::Live { handle, .. } => {
+                        self.resolve_handle(holder.proof(), handle)
+                    }
+                    bex_external_types::TypeDefRef::Portable(_) => None,
+                };
+                match live {
+                    Some(ptr) => Value::object(ptr),
+                    None => {
+                        let vm = &mut holder.holder_mut().vm;
+                        let type_value = vm
+                            .materialize_portable_type_def(definition.into_def())
+                            .map_err(|message| EngineError::TypeMismatch { message })?;
+                        Value::object(vm.alloc_type(type_value))
+                    }
+                }
             }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 return Err(EngineError::CannotConvert {

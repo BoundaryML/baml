@@ -1106,6 +1106,16 @@ impl BexHeap {
         Handle::new(handle_key, Arc::clone(self) as Arc<dyn WeakHeapRef>)
     }
 
+    /// Whether `handle` was issued by this heap.
+    ///
+    /// A slab key indexes one heap's handle table, so a handle from another
+    /// engine must be rejected rather than resolved — see
+    /// [`Handle::is_of_heap`].
+    #[must_use]
+    pub fn owns_handle(self: &Arc<Self>, handle: &Handle) -> bool {
+        handle.is_of_heap(&(Arc::clone(self) as Arc<dyn WeakHeapRef>))
+    }
+
     /// Mint a fresh `MintId::Runtime` identity (BEP-066 I-1): the next value
     /// of the engine-wide monotonic counter. Every VM sharing this heap —
     /// including spawned children — draws from the same counter, so two

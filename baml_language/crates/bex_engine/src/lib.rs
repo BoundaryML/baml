@@ -2617,13 +2617,20 @@ impl BexEngine {
     /// returned pointer — holding any `ActiveHeapPermit<T>` keeps one of the
     /// manager's semaphore tokens in scope, so `request_park` cannot proceed.
     ///
-    /// Returns `None` if the handle has been invalidated.
+    /// Returns `None` if the handle has been invalidated, or if it belongs to
+    /// a different engine: a slab key is meaningful only against the heap that
+    /// issued it, so resolving a foreign handle would return an arbitrary live
+    /// object instead of failing. Every inbound handle landing goes through
+    /// here, so the provenance check lives here rather than at each call site.
     pub fn resolve_handle(
         &self,
         _permit: bex_heap::PermitProof<'_>,
         handle: &bex_external_types::Handle,
     ) -> Option<HeapPtr> {
         use bex_external_types::WeakHeapRef;
+        if !self.heap.owns_handle(handle) {
+            return None;
+        }
         self.heap.resolve_handle_ptr(handle.slab_key())
     }
 
@@ -6557,6 +6564,7 @@ mod mint_identity_tests {
     use std::sync::Arc;
 
     use baml_project::testing::compile_source;
+    use bex_heap::HeapPermit;
     use bex_vm_types::{Object, types::MintId};
     use sys_native::SysOpsExt;
     use tokio_util::sync::CancellationToken;
@@ -6684,6 +6692,113 @@ mod mint_identity_tests {
         assert!(
             runtime_class.type_tag.is_dynamic(),
             "runtime-created declarations mint counter tags"
+        );
+    }
+
+    /// A `type` value that leaves this engine and comes straight back is the
+    /// *same object*: the exported `TypeDefRef::Live` handle resolves in the
+    /// engine that issued it, so nothing is re-materialized.
+    #[tokio::test]
+    async fn same_engine_type_round_trip_lands_on_the_same_object() {
+        let engine = engine();
+        let mut thread = engine
+            .new_root_thread(CancellationToken::new(), false)
+            .await;
+        let original = thread.vm.alloc_static_type(baml_type::RealizedTy::int());
+
+        let exported = engine
+            .convert_vm_value_to_external_with_type(
+                bex_vm_types::Value::object(original),
+                &baml_type::RuntimeTy::Type {
+                    attr: baml_type::TyAttr::default(),
+                },
+                thread.proof(),
+            )
+            .expect("a type value converts outward");
+        let bex_external_types::BexExternalValue::Adt(bex_external_types::BexExternalAdt::TypeDef(
+            ref def,
+        )) = exported
+        else {
+            panic!("a type value should export as a TypeDef")
+        };
+        assert!(
+            matches!(def, bex_external_types::TypeDefRef::Live { .. }),
+            "an in-engine export carries a live reference"
+        );
+
+        let landed = engine
+            .convert_external_to_vm_value(&mut thread, exported)
+            .expect("the same engine accepts its own live reference");
+        assert_eq!(
+            landed.as_object_ptr(),
+            Some(original),
+            "a same-engine round trip must land on the original object"
+        );
+    }
+
+    /// The same value arriving at a *different* engine cannot resolve a foreign
+    /// handle, so it lands as a fresh materialization rather than an arbitrary
+    /// object that happens to occupy the same slab slot.
+    #[tokio::test]
+    async fn foreign_engine_rejects_a_live_handle_and_materializes() {
+        let source = engine();
+        let mut source_thread = source
+            .new_root_thread(CancellationToken::new(), false)
+            .await;
+        let original = source_thread
+            .vm
+            .alloc_static_type(baml_type::RealizedTy::int());
+        let exported = source
+            .convert_vm_value_to_external_with_type(
+                bex_vm_types::Value::object(original),
+                &baml_type::RuntimeTy::Type {
+                    attr: baml_type::TyAttr::default(),
+                },
+                source_thread.proof(),
+            )
+            .expect("a type value converts outward");
+
+        let other = engine();
+        let mut other_thread = other.new_root_thread(CancellationToken::new(), false).await;
+        // Root an object in the receiving engine so the foreign slab key is
+        // occupied there too — the exact aliasing the guard must prevent.
+        let decoy = other_thread
+            .vm
+            .alloc_static_type(baml_type::RealizedTy::string());
+        let _decoy_handle = other.heap.create_handle(decoy);
+
+        // The guard's premise: the foreign key IS live in this engine, so
+        // resolving it unguarded would return the decoy rather than fail.
+        let bex_external_types::BexExternalValue::Adt(bex_external_types::BexExternalAdt::TypeDef(
+            bex_external_types::TypeDefRef::Live { ref handle, .. },
+        )) = exported
+        else {
+            panic!("expected a live reference from the source engine")
+        };
+        assert!(
+            !other.heap.owns_handle(handle),
+            "the receiving engine must not claim a foreign handle"
+        );
+        {
+            use bex_external_types::WeakHeapRef;
+            assert!(
+                other.heap.resolve_handle_ptr(handle.slab_key()).is_some(),
+                "precondition: the foreign slab key is occupied here, so only \
+                 provenance — not liveness — can reject it"
+            );
+        }
+
+        let landed = other
+            .convert_external_to_vm_value(&mut other_thread, exported)
+            .expect("a foreign live reference degrades to its definitions");
+        let landed_ptr = landed.as_object_ptr().expect("landed on a heap object");
+        assert_ne!(
+            landed_ptr, decoy,
+            "a foreign handle must not alias a local object"
+        );
+        assert!(
+            matches!(other_thread.vm.get_object(landed_ptr), Object::Type(_)),
+            "the definitions materialize into a fresh type value"
         );
     }
 }

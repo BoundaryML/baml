@@ -83,9 +83,21 @@ impl UnionMetadata {
 pub enum BexExternalAdt {
     Collector(bex_vm_types::CollectorRef),
     Type(baml_type::RuntimeTy),
-    /// A reflected type plus portable runtime definitions. Unlike `Type`, this
-    /// is reminted on every inbound materialization.
-    TypeDef(bex_vm_types::types::PortableTypeDef),
+    /// A reflected type carrying runtime definitions.
+    ///
+    /// The two arms are the two things a `type` value can be at a boundary,
+    /// made explicit rather than inferred:
+    ///
+    /// * [`Live`](TypeDefRef::Live) — a rooted reference back to the very
+    ///   `Object::Type` that produced it. Valid only in the engine that issued
+    ///   the handle, which is why it also carries the portable definitions:
+    ///   anywhere else (another engine, another process) it degrades to them.
+    /// * [`Portable`](TypeDefRef::Portable) — definitions alone, reconstructed
+    ///   into fresh heap objects on arrival.
+    ///
+    /// Wire encoders serialize the portable form in both cases: a handle is a
+    /// live capability, not data, so it cannot cross a process (BEP-066 H-4).
+    TypeDef(TypeDefRef),
     /// The Rust-backed payload inside a rendered `ai.Prompt`.
     PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
@@ -105,6 +117,45 @@ pub enum BexExternalAdt {
         ty: baml_type::RuntimeTy,
         heap_handle: crate::Handle,
     },
+}
+
+/// How a `type` value crosses a boundary: as a live reference into the issuing
+/// engine, or as portable definitions.
+///
+/// Both arms carry `def`, so every consumer can read the type's shape without
+/// caring which arm it got; only identity differs.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypeDefRef {
+    /// Same-engine: `handle` resolves to the originating `Object::Type`, so a
+    /// value that leaves and returns is the *same* object — its identity,
+    /// definitions and provenance are untouched. The handle also keeps that
+    /// object rooted for as long as this value lives.
+    Live {
+        handle: crate::Handle,
+        def: bex_vm_types::types::PortableTypeDef,
+    },
+    /// Definitions only: the receiving engine reconstructs heap objects and
+    /// assigns fresh identity. The form every cross-process payload takes.
+    Portable(bex_vm_types::types::PortableTypeDef),
+}
+
+impl TypeDefRef {
+    /// The portable definitions, whichever arm this is.
+    #[must_use]
+    pub fn def(&self) -> &bex_vm_types::types::PortableTypeDef {
+        match self {
+            Self::Live { def, .. } | Self::Portable(def) => def,
+        }
+    }
+
+    /// Consume into the portable definitions, dropping any live reference.
+    /// This is what a wire encoder does.
+    #[must_use]
+    pub fn into_def(self) -> bex_vm_types::types::PortableTypeDef {
+        match self {
+            Self::Live { def, .. } | Self::Portable(def) => def,
+        }
+    }
 }
 
 /// A deep-copied value tree with no heap references.

@@ -14,7 +14,7 @@ use baml_type::{
     Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, RuntimeFunctionParamTy,
     RuntimeInterface, RuntimeTy, TyAttr, TypeName,
 };
-use bex_project::{BexExternalAdt, BexExternalValue};
+use bex_project::{BexExternalAdt, BexExternalValue, TypeDefRef};
 use indexmap::IndexMap;
 
 use crate::{
@@ -317,7 +317,7 @@ pub fn proto_ty_to_external(ty: &BamlTy) -> Result<BexExternalValue, CtypesError
 
 pub fn proto_ty_def_to_external(ty: &BamlTyDef) -> Result<BexExternalValue, CtypesError> {
     Ok(BexExternalValue::Adt(BexExternalAdt::TypeDef(
-        proto_ty_def_to_portable(ty)?,
+        TypeDefRef::Portable(proto_ty_def_to_portable(ty)?),
     )))
 }
 

@@ -472,7 +472,9 @@ fn external_to_typed_expr(
         BamlType::Named(name) if name == "type" => quote! {
             match #val_expr {
                 BexExternalValue::Adt(bex_external_types::BexExternalAdt::Type(v)) => Ok(v),
-                BexExternalValue::Adt(bex_external_types::BexExternalAdt::TypeDef(v)) => Ok(v.root),
+                BexExternalValue::Adt(bex_external_types::BexExternalAdt::TypeDef(v)) => {
+                    Ok(v.into_def().root)
+                }
                 other => Err(AccessError::TypeMismatch {
                     expected: "type",
                     actual: other.type_name().to_string(),
