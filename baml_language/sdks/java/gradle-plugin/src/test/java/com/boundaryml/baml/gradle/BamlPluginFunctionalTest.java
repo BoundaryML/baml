@@ -510,7 +510,7 @@ class BamlPluginFunctionalTest {
 
     /**
      * A minimal stand-in for the real CLI: answers {@code --version} and, for
-     * {@code generate ... -o <dir>}, writes a self-contained {@code baml_sdk}
+     * {@code bridge generate ... -o <dir>}, writes a self-contained {@code baml_sdk}
      * tree (one {@code Baml.java} in package {@code baml_sdk} + an
      * {@code inlinedbaml.b64}) — deliberately free of any {@code baml_bridge}
      * dependency so the compile test stays hermetic.
@@ -524,7 +524,14 @@ class BamlPluginFunctionalTest {
         + "  exit 0\n"
         + "fi\n"
         + "\n"
-        + "# Expected: generate --from <dir> -o <outdir> [...]\n"
+        + "# Expected: bridge generate --project <dir> -o <outdir> [...]\n"
+        + "if [ \"$#\" -ne 6 ] || [ \"${1:-}\" != \"bridge\" ]"
+        + " || [ \"${2:-}\" != \"generate\" ] || [ \"${3:-}\" != \"--project\" ]"
+        + " || [ \"${5:-}\" != \"-o\" ]; then\n"
+        + "  echo \"fake baml: unexpected arguments: $*\" >&2\n"
+        + "  exit 1\n"
+        + "fi\n"
+        + "\n"
         + "OUT=\"\"\n"
         + "while [ \"$#\" -gt 0 ]; do\n"
         + "  case \"$1\" in\n"
