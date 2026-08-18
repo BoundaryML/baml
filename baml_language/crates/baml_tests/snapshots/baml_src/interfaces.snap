@@ -2499,8 +2499,7 @@ function interfaces.b1180_optional_get(value: interfaces.B1180Getter<int> | null
     load_var value
     load_type interfaces.B1180Getter<int>
     load_const "get"
-    make_virtual_bound_method ntypeargs=0
-    call_indirect
+    virtual_call nargs=1 ntypeargs=0
     store_var _3
     jump L2
 
@@ -2534,8 +2533,7 @@ function interfaces.b1180_optional_name(value: interfaces.B1180Named | null) -> 
     load_var value
     load_type interfaces.B1180Named
     load_const "name"
-    make_virtual_bound_method ntypeargs=0
-    call_indirect
+    virtual_call nargs=1 ntypeargs=0
     store_var _3
     jump L2
 
