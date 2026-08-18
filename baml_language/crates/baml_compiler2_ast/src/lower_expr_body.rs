@@ -1533,6 +1533,7 @@ impl LoweringContext {
             SyntaxKind::PATH_EXPR => self.lower_path_expr(node),
             SyntaxKind::FIELD_ACCESS_EXPR => self.lower_field_access_expr(node),
             SyntaxKind::UPCAST_EXPR => self.lower_upcast_expr(node),
+            SyntaxKind::QUALIFIED_PATH_EXPR => self.lower_qualified_path_expr(node),
             SyntaxKind::SPEC_EXPR => self.lower_spec_expr(node),
             SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => self.lower_optional_field_access_expr(node),
             SyntaxKind::ENV_ACCESS_EXPR => self.lower_env_access_expr(node),
@@ -3075,6 +3076,7 @@ impl LoweringContext {
                     | SyntaxKind::PATH_EXPR
                     | SyntaxKind::FIELD_ACCESS_EXPR
                     | SyntaxKind::UPCAST_EXPR
+                    | SyntaxKind::QUALIFIED_PATH_EXPR
                     | SyntaxKind::ENV_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::IF_EXPR
@@ -3613,6 +3615,55 @@ impl LoweringContext {
             self.needs_chain_wrap.insert(id);
         }
         id
+    }
+
+    /// Lower `(Base as Interface).item` — the CST children are two
+    /// `TYPE_EXPR`s and a trailing member token, the same shape
+    /// `lower_type_expr`'s qualified projection reads, since the two
+    /// spellings share a parse.
+    ///
+    /// A missing half stays `TypeExprKind::Unknown` rather than collapsing
+    /// the node to `Missing`: the parser only builds this node when it saw
+    /// the full token shape, so a hole here means a malformed type inside
+    /// the parens, which the type lowerer reports precisely.
+    fn lower_qualified_path_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let span = node.span_range();
+        let mut types = node
+            .children()
+            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te, &mut self.diags));
+        let unknown = || TypeExprKind::Unknown { attrs: Vec::new() }.at(span);
+        let qself = types.next().unwrap_or_else(unknown);
+        let interface = types.next().unwrap_or_else(unknown);
+
+        // The member is the WORD after the last `.` — the projection's own
+        // separator, which the parser guarantees is the final one.
+        let tokens: Vec<_> = node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| !token.kind().is_trivia())
+            .collect();
+        let member = tokens
+            .iter()
+            .rposition(|token| token.kind() == SyntaxKind::DOT)
+            .and_then(|dot| tokens.get(dot + 1))
+            // The full member-name set, not just `WORD`: an interface method
+            // may be named with a contextual keyword (`implements`, `extends`),
+            // and the parser accepts those here.
+            .filter(|token| is_ident_token(token.kind()))
+            .map(|token| Name::new(token.text()));
+        let Some(member) = member else {
+            return self.alloc_expr(Expr::Missing, span);
+        };
+
+        self.alloc_expr(
+            Expr::QualifiedPath {
+                qself,
+                interface,
+                member,
+            },
+            span,
+        )
     }
 
     fn lower_env_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -5400,6 +5451,7 @@ impl LoweringContext {
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
                         | SyntaxKind::UPCAST_EXPR
+                        | SyntaxKind::QUALIFIED_PATH_EXPR
                         | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR

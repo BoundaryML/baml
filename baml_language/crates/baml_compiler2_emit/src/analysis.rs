@@ -727,6 +727,11 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
         | Rvalue::VirtualFieldAccess { receiver, .. } => {
             walk_operand_locals(receiver, f);
         }
+        Rvalue::MakeVirtualFunction { type_args, .. } => {
+            for arg in type_args {
+                walk_operand_locals(arg, f);
+            }
+        }
         Rvalue::LoadType(_) | Rvalue::CurrentPackage(_) | Rvalue::MakeGenericFunction { .. } => {
             // No local operands — the templates are compile-time data.
         }
@@ -1547,7 +1552,8 @@ fn rvalue_allocates_with_identity(rvalue: &Rvalue) -> bool {
         | Rvalue::Aggregate { .. }
         | Rvalue::MakeClosure { .. }
         | Rvalue::MakeBoundMethod { .. }
-        | Rvalue::MakeVirtualBoundMethod { .. } => true,
+        | Rvalue::MakeVirtualBoundMethod { .. }
+        | Rvalue::MakeVirtualFunction { .. } => true,
         Rvalue::Use(_)
         | Rvalue::BinaryOp { .. }
         | Rvalue::UnaryOp { .. }
@@ -1649,6 +1655,9 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         Rvalue::MakeBoundMethod { receiver, .. }
         | Rvalue::MakeVirtualBoundMethod { receiver, .. }
         | Rvalue::VirtualFieldAccess { receiver, .. } => operand_has_projection(receiver),
+        Rvalue::MakeVirtualFunction { type_args, .. } => {
+            type_args.iter().any(operand_has_projection)
+        }
         Rvalue::LoadType(_) | Rvalue::CurrentPackage(_) | Rvalue::MakeGenericFunction { .. } => {
             false
         }
@@ -1837,6 +1846,7 @@ fn rvalue_can_panic(body: &MirFunctionBody, rvalue: &Rvalue) -> bool {
         | Rvalue::VirtualFieldAccess { .. }
         | Rvalue::MakeGenericFunction { .. }
         | Rvalue::MakeGenericFunctionFromValue { .. }
+        | Rvalue::MakeVirtualFunction { .. }
         | Rvalue::LoadType(_)
         | Rvalue::CurrentPackage(_) => false,
     }

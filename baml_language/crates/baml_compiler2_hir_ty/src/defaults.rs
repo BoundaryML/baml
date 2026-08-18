@@ -421,7 +421,13 @@ fn collect_default_expr_forward_references(
         Expr::GenericApply { base, .. } => {
             collect_default_expr_forward_references(*base, body, later_params, shadowed, refs);
         }
-        Expr::Literal(_) | Expr::ByteStringLiteral(_) | Expr::Null | Expr::Missing => {}
+        // A qualified item reference is built from two TYPES, so it can never
+        // forward-reference a later parameter's default.
+        Expr::Literal(_)
+        | Expr::ByteStringLiteral(_)
+        | Expr::Null
+        | Expr::QualifiedPath { .. }
+        | Expr::Missing => {}
     }
 }
 

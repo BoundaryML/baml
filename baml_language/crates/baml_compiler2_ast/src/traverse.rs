@@ -43,6 +43,9 @@ impl ExprBody {
             | Expr::ByteStringLiteral(_)
             | Expr::Null
             | Expr::Path(_)
+            // Both halves of a qualified item reference are TYPES, so the
+            // node has no expression children to walk.
+            | Expr::QualifiedPath { .. }
             | Expr::Lambda(_)
             | Expr::Missing => {}
             Expr::GenericApply { base, .. }

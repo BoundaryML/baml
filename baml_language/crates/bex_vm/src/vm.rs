@@ -3006,6 +3006,70 @@ impl BexVm {
         needs_arguments.then(|| Self::callable_display_name(function))
     }
 
+    /// Resolve `method_name` of the interface `iface_value` names for the
+    /// `Self` type `self_ty` — the shared tail of `MakeVirtualBoundMethod`
+    /// (which DERIVES `self_ty` from the receiver value) and
+    /// `MakeVirtualFunction` (which takes it as a PASSED type operand). Either
+    /// way the resolution key is `(Self type, interface, method)`; coherence
+    /// guarantees at most one matching rule. Returns the resolved impl
+    /// method's function pointer and the callee's complete frame: the impl's
+    /// realized frame followed by `method_type_args`.
+    ///
+    /// `world_anchor` selects the dynamic world the resolution runs in: the
+    /// receiver value or the `Self` type value, whichever the caller popped —
+    /// both carry their owning runtime package.
+    fn resolve_virtual_method(
+        &self,
+        world_anchor: Value,
+        self_ty: &baml_type::RealizedTy,
+        iface_value: Value,
+        method_name: &str,
+        method_type_args: TakenTypeArgs,
+    ) -> Result<(HeapPtr, Vec<baml_type::RealizedTy>), VmError> {
+        let (iface_qtn, iface_args) = {
+            let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
+            match self.get_object(iface_ptr) {
+                Object::Type(type_value) => match &type_value.ty {
+                    baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
+                        (qtn.clone(), args.clone())
+                    }
+                    other => unreachable!(
+                        "virtual-method interface operand must be an Interface type, \
+                         found {other:?}"
+                    ),
+                },
+                other => unreachable!(
+                    "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                    ObjectType::of(other)
+                ),
+            }
+        };
+        let resolver = crate::package_baml::ImplResolver::for_value(self, world_anchor);
+        let (rule, bound_args) = resolver
+            .resolve_implements_rule(self_ty, &iface_qtn, &iface_args)
+            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
+                method: method_name.to_string(),
+            })?;
+        let method = rule.methods.get(method_name).ok_or_else(|| {
+            VmInternalError::UnresolvedVirtualCall {
+                method: method_name.to_string(),
+            }
+        })?;
+        let mut frame = resolver.realize_frame(&method.frame, &bound_args)?;
+        // BUG: only `.tys` survives — `method_type_args.values`/`.defs` (the
+        // exact `TypeValue`s and their `DynTypeDefs`) are dropped, so a
+        // runtime-defined type argument reaching a virtual callable loses the
+        // metadata that resolves names like `user.$dyn.N.Out`. Both carriers
+        // (`Closure` for `MakeVirtualFunction`, `BoundMethod` for
+        // `MakeVirtualBoundMethod`) hold only `RealizedTy`, so preserving it
+        // means widening them and threading the metadata into the callee
+        // frame — a call-convention change affecting both opcodes, not a
+        // regression of either. `VirtualCall` keeps it via
+        // `append_virtual_method_type_args`; these value forms do not.
+        frame.extend(method_type_args.tys);
+        Ok((method.fqn, frame))
+    }
+
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
     /// runtime value's type satisfies (a concrete top with realized arguments, no
     /// type variables) made explicit in the type. `None` for a value kind that
@@ -8765,30 +8829,14 @@ impl BexVm {
                     let method_value = self.stack.ensure_pop();
                     let method_name = self.as_string(&method_value)?.to_string();
                     let iface_value = self.stack.ensure_pop();
-                    let (iface_qtn, iface_args) = {
-                        let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
-                        match self.get_object(iface_ptr) {
-                            Object::Type(type_value) => match &type_value.ty {
-                                baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
-                                    (qtn.clone(), args.clone())
-                                }
-                                other => unreachable!(
-                                    "MakeVirtualBoundMethod interface operand must be an \
-                                     Interface type, found {other:?}"
-                                ),
-                            },
-                            other => unreachable!(
-                                "as_object_ptr(Type) guarantees a Type object, found {:?}",
-                                ObjectType::of(other)
-                            ),
-                        }
-                    };
                     // The method-level type args (a generic interface method's own
                     // generics, specialized at the reference site) sit below the
                     // interface type; they append to the resolved impl frame.
                     let method_type_args = self.pop_type_args(ntypeargs)?;
                     let receiver = self.stack.ensure_pop();
-                    // `Self` is the receiver value's realized concrete type.
+                    // `Self` is DERIVED: the receiver value's realized concrete
+                    // type — the one dispatch source that works when the static
+                    // type was an interface-existential.
                     let self_ty = baml_type::RealizedTy::from(
                         self.value_concrete_ty(receiver).unwrap_or_else(|| {
                             unreachable!(
@@ -8797,28 +8845,61 @@ impl BexVm {
                             )
                         }),
                     );
-                    let (function_ptr, type_args) = {
-                        let resolver = crate::package_baml::ImplResolver::for_value(self, receiver);
-                        let (rule, bound_args) = resolver
-                            .resolve_implements_rule(&self_ty, &iface_qtn, &iface_args)
-                            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
-                                method: method_name.clone(),
-                            })?;
-                        let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
-                            VmInternalError::UnresolvedVirtualCall {
-                                method: method_name.clone(),
-                            }
-                        })?;
-                        let mut frame = resolver.realize_frame(&method.frame, &bound_args)?;
-                        frame.extend(method_type_args.tys);
-                        (method.fqn, frame)
-                    };
+                    let (function_ptr, type_args) = self.resolve_virtual_method(
+                        receiver,
+                        &self_ty,
+                        iface_value,
+                        &method_name,
+                        method_type_args,
+                    )?;
                     let bound = Object::BoundMethod(BoundMethod {
                         function: function_ptr,
                         receiver,
                         type_args: type_args.into_boxed_slice(),
                     });
                     let ptr = self.tlab.alloc(bound);
+                    self.stack.push(Value::object(ptr));
+                }
+
+                // ── MakeVirtualFunction ───────────────────────────────────────
+                OpCode::MakeVirtualFunction => {
+                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
+                    let method_value = self.stack.ensure_pop();
+                    let method_name = self.as_string(&method_value)?.to_string();
+                    let iface_value = self.stack.ensure_pop();
+                    let method_type_args = self.pop_type_args(ntypeargs)?;
+                    let self_type_value = self.stack.ensure_pop();
+                    // `Self` is PASSED: a written (or frame-realized) type
+                    // operand — the only dispatch source for a method with no
+                    // `self` receiver. The compiler guarantees it is a
+                    // dispatchable concrete type by the time it gets here.
+                    let self_ty = {
+                        let self_ptr = self.as_object_ptr(self_type_value, ObjectType::Type)?;
+                        match self.get_object(self_ptr) {
+                            Object::Type(type_value) => type_value.ty.clone(),
+                            other => unreachable!(
+                                "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                                ObjectType::of(other)
+                            ),
+                        }
+                    };
+                    let (function_ptr, type_args) = self.resolve_virtual_method(
+                        self_type_value,
+                        &self_ty,
+                        iface_value,
+                        &method_name,
+                        method_type_args,
+                    )?;
+                    // A capture-less closure is the unbound-callable carrier:
+                    // calling it seeds `frame.type_args` from
+                    // `captured_type_args`, exactly like the pooled
+                    // `GenericFunction` path (`MakeGenericFunctionFromValue`).
+                    let closure = Object::Closure(bex_vm_types::types::Closure {
+                        function: function_ptr,
+                        captures: Box::new([]),
+                        captured_type_args: type_args.into_boxed_slice(),
+                    });
+                    let ptr = self.tlab.alloc(closure);
                     self.stack.push(Value::object(ptr));
                 }
 

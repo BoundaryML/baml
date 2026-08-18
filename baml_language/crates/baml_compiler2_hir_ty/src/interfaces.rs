@@ -1737,7 +1737,7 @@ fn check_head_args(
     }
 }
 
-// ── Associated-type projection determination (lowering) ────────────────────
+// ── Item projection determination (lowering) ───────────────────────────────
 //
 // TIR's `builder::associated_projection`, on hir_ty's substrate: lowering a
 // written `base.member` / `(base as I).member` determines the declaring
@@ -1749,6 +1749,40 @@ fn check_head_args(
 // must be proven; when the determined interface already pins `member`, the
 // projection collapses to the pin (opportunistic - realization is the
 // oracle's job).
+//
+// Determination is NAMESPACE-BLIND: which interface declares a member is
+// fixed by the base, never by what the member is. [`MemberNamespace`]
+// therefore parameterizes only the declaration oracle and the result the
+// caller builds - rustc's shape, where `(Self type, trait ref, item)` is one
+// concept and the item's namespace picks between a `ProjectionTy` and an
+// associated-fn `DefId`.
+
+/// Which namespace an item projection resolves its member in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemberNamespace {
+    /// Associated types - `(T as I).Assoc`, written in type position.
+    Type,
+    /// Fields and methods, `self`-less interface statics included -
+    /// `(T as I).item`, written in value position.
+    Value,
+}
+
+/// What an interface declares under a name in [`MemberNamespace::Value`].
+/// The two kinds share the namespace but not the access shape (a field read
+/// dispatches virtually on a receiver; a method may be called with `Self`
+/// written instead), so the kind rides along with the determination.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValueMemberKind {
+    Field,
+    Method,
+}
+
+/// What an interface declares under a name, across both namespaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InterfaceMemberKind {
+    AssociatedType,
+    Value(ValueMemberKind),
+}
 
 /// The result of lowering a projection: the resolved plain [`Ty`] - the
 /// canonical triple when the interface is determined, otherwise `Ty::Error`
@@ -1759,7 +1793,13 @@ pub struct ProjectionLowering {
 }
 
 /// The outcome of resolving which interface declares a projection's member.
-enum Determination {
+///
+/// Public because both namespaces consume it: the type namespace maps it to
+/// a `Ty` in [`lower_projection`], the value namespace to a resolved item.
+/// The variants carry no namespace-specific wording - each caller phrases
+/// its own diagnostics, since "no associated type `X`" and "no method `x`"
+/// are the same determination reported two ways.
+pub enum Determination {
     Determined(baml_type::Interface),
     Undeclared {
         container: crate::diagnostics::AssocContainer,
@@ -1782,10 +1822,70 @@ fn projection_poisoned(ty: &Ty) -> bool {
     )
 }
 
+/// Determine which interface declares `member` for `base`, in `ns` - the
+/// namespace-blind core both item-projection roads share. `scope_bounds` is
+/// the enclosing scope's PLAIN param env (a type variable base resolves
+/// through it).
+///
+/// A written `explicit_interface` that is not an interface at all is rejected
+/// here, so callers never have to re-check the qualifier: the returned
+/// [`Determination::Poisoned`] carries the diagnostic (or none, when the
+/// qualifier was already an error type and must not double-report).
+pub fn determine_member_interface(
+    db: &dyn baml_compiler2_ppir::Db,
+    scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
+    base: &Ty,
+    explicit_interface: Option<Ty>,
+    member: &Name,
+    ns: MemberNamespace,
+) -> (Determination, Vec<TirTypeError>) {
+    let facts = crate::facts::Facts::with_bounds(db, scope_bounds.clone());
+    determine_member_interface_with_facts(db, &facts, base, explicit_interface, member, ns)
+}
+
+/// [`determine_member_interface`] against an ALREADY-BUILT fact oracle. A
+/// caller that holds one (inference does) reuses it rather than rebuilding
+/// the param env per projection.
+pub fn determine_member_interface_with_facts(
+    db: &dyn baml_compiler2_ppir::Db,
+    facts: &crate::facts::Facts<'_>,
+    base: &Ty,
+    explicit_interface: Option<Ty>,
+    member: &Name,
+    ns: MemberNamespace,
+) -> (Determination, Vec<TirTypeError>) {
+    let explicit = match explicit_interface {
+        None => None,
+        Some(iface_ty) => {
+            let iface_ty = projection_expand_aliases(facts, iface_ty);
+            match iface_ty.as_interface() {
+                Some(interface) => Some(interface),
+                None if projection_poisoned(&iface_ty) => {
+                    return (Determination::Poisoned, Vec::new());
+                }
+                None => {
+                    return (
+                        Determination::Poisoned,
+                        vec![TirTypeError::NonInterfaceProjectionQualifier],
+                    );
+                }
+            }
+        }
+    };
+    (
+        determine_interface(db, facts, base, explicit, member, ns),
+        Vec::new(),
+    )
+}
+
 /// Lower `base.member` or `(base as explicit).member` to its canonical
 /// projection, determining the declaring interface. `scope_bounds` is the
 /// enclosing scope's PLAIN param env (a type variable base resolves through
 /// it); `pkg` scopes equivalence and alias expansion.
+///
+/// The [`MemberNamespace::Type`] half of [`determine_member_interface`]: the
+/// determination is shared, and only the product - a canonical projection
+/// triple, or the interface's own pin for `member` - is namespace-specific.
 pub fn lower_projection(
     db: &dyn baml_compiler2_ppir::Db,
     scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
@@ -1793,35 +1893,15 @@ pub fn lower_projection(
     explicit_interface: Option<Ty>,
     member: Name,
 ) -> ProjectionLowering {
-    let facts = crate::facts::Facts::with_bounds(db, scope_bounds.clone());
-    let mut diagnostics = Vec::new();
-    let explicit = match explicit_interface {
-        None => None,
-        Some(iface_ty) => {
-            let iface_ty = projection_expand_aliases(&facts, iface_ty);
-            match iface_ty.as_interface() {
-                Some(interface) => Some(interface),
-                None if projection_poisoned(&iface_ty) => {
-                    return ProjectionLowering {
-                        ty: Ty::Error {
-                            attr: TyAttr::default(),
-                        },
-                        diagnostics,
-                    };
-                }
-                None => {
-                    diagnostics.push(TirTypeError::NonInterfaceProjectionQualifier);
-                    return ProjectionLowering {
-                        ty: Ty::Error {
-                            attr: TyAttr::default(),
-                        },
-                        diagnostics,
-                    };
-                }
-            }
-        }
-    };
-    let ty = match determine_interface(db, &facts, &base, explicit, &member) {
+    let (determination, mut diagnostics) = determine_member_interface(
+        db,
+        scope_bounds,
+        &base,
+        explicit_interface,
+        &member,
+        MemberNamespace::Type,
+    );
+    let ty = match determination {
         Determination::Determined(interface) => {
             if let Some((_, pinned)) = interface
                 .associated_types
@@ -1875,12 +1955,13 @@ fn determine_interface<'db>(
     base: &Ty,
     explicit: Option<baml_type::Interface>,
     member: &Name,
+    ns: MemberNamespace,
 ) -> Determination {
     use crate::diagnostics::AssocContainer;
     // An explicit qualifier must declare `member` DIRECTLY: `requires` is a
     // bound, not inheritance.
     if let Some(qualifier) = &explicit
-        && !interface_declares_member(db, &qualifier.name, member)
+        && !interface_declares_member(db, &qualifier.name, member, ns)
     {
         return Determination::Undeclared {
             container: AssocContainer::Interface(qualifier.name.clone()),
@@ -1900,6 +1981,7 @@ fn determine_interface<'db>(
                 undeclared,
                 &base,
                 true,
+                ns,
             )
         }
         Ty::TypeVar(param, _) => {
@@ -1918,7 +2000,7 @@ fn determine_interface<'db>(
             } else {
                 let undeclared = AssocContainer::Interface(bounds[0].name.clone());
                 resolve_via_roots(
-                    db, facts, bounds, explicit, member, undeclared, &base, false,
+                    db, facts, bounds, explicit, member, undeclared, &base, false, ns,
                 )
             }
         }
@@ -1931,12 +2013,13 @@ fn determine_interface<'db>(
         | Ty::Float { .. }
         | Ty::String { .. }
         | Ty::Bool { .. }
+        | Ty::Null { .. }
         | Ty::Uint8Array { .. }
         | Ty::Media(..)
         | Ty::Literal(..)
         | Ty::EnumVariant(..) => match explicit {
-            None => determine_concrete(db, facts, &base, member),
-            Some(qualifier) => match concrete_realized_interface(db, facts, &base, &qualifier) {
+            None => determine_concrete(db, facts, &base, member, ns),
+            Some(qualifier) => match concrete_realized_interface(db, &base, &qualifier) {
                 Some(realized) => Determination::Determined(realized),
                 None => Determination::SubjectDoesNotImplementQualifier {
                     subject: base.clone(),
@@ -1971,6 +2054,7 @@ fn determine_interface<'db>(
                         container,
                         &base,
                         false,
+                        ns,
                     )
                 }
                 None => match explicit {
@@ -2012,9 +2096,10 @@ fn resolve_via_roots<'db>(
     // chained projection's declared bound) leaves them unpinned - the
     // implementor may override.
     fill_defaults: bool,
+    ns: MemberNamespace,
 ) -> Determination {
     match explicit {
-        None => resolve_through_roots(db, roots, member, undeclared, fill_defaults),
+        None => resolve_through_roots(db, roots, member, undeclared, fill_defaults, ns),
         Some(qualifier) => {
             match realize_qualifier_through_roots(db, facts, &roots, &qualifier, fill_defaults) {
                 Some(realized) => Determination::Determined(realized),
@@ -2049,9 +2134,16 @@ fn realize_qualifier_through_roots<'db>(
             if let Some(qtn) = interface_loc_qtn(db, loc)
                 && qtn == qualifier.name
             {
-                let realized = baml_type::Interface::new(qtn, args, assoc);
-                if qualifier_compatible_with_realization(facts, qualifier, &realized) {
-                    return Some(realized);
+                let candidate = baml_type::Interface::new(qtn, args, assoc);
+                if written_qualifier_proven_by(facts, qualifier, &candidate) {
+                    // The WRITTEN generics ride (they are equivalent to the
+                    // candidate's, rigid vars included); the candidate
+                    // supplies what the qualifier left unwritten.
+                    return Some(baml_type::Interface {
+                        name: candidate.name,
+                        generics: qualifier.generics.clone(),
+                        associated_types: candidate.associated_types,
+                    });
                 }
             }
         }
@@ -2061,42 +2153,34 @@ fn realize_qualifier_through_roots<'db>(
 
 /// Every written qualifier constraint must be consistent with the
 /// realization the roots prove; symbolic positions fail open.
-fn qualifier_compatible_with_realization(
+/// Whether a bound-closure `candidate` PROVES the written qualifier: every
+/// written position must be equivalent — a rigid type variable is equivalent
+/// to itself and to nothing else — and written associated pins must match.
+/// Nothing fails open: a symbolic position either proves rigidly or the
+/// qualifier is unproven and the caller reports it.
+fn written_qualifier_proven_by(
     facts: &crate::facts::Facts<'_>,
-    qualifier: &baml_type::Interface,
-    realized: &baml_type::Interface,
+    written: &baml_type::Interface,
+    candidate: &baml_type::Interface,
 ) -> bool {
     let equivalent = |a: &Ty, b: &Ty| baml_type::normalize::equivalent(a, b, facts);
-    let symbolic = |ty: &Ty| baml_type_runtime::contains_typevar(ty);
-    if !qualifier.generics.is_empty() {
-        if qualifier.generics.len() != realized.generics.len() {
-            return false;
-        }
-        for (written, real) in qualifier.generics.iter().zip(realized.generics.iter()) {
-            if symbolic(written) || symbolic(real) {
-                continue;
-            }
-            if !equivalent(written, real) {
-                return false;
-            }
-        }
+    if written.generics.len() != candidate.generics.len() {
+        return false;
     }
-    for (name, written) in &qualifier.associated_types {
-        let Some((_, real)) = realized
+    if !written
+        .generics
+        .iter()
+        .zip(&candidate.generics)
+        .all(|(written, real)| equivalent(written, real))
+    {
+        return false;
+    }
+    written.associated_types.iter().all(|(name, written_ty)| {
+        candidate
             .associated_types
             .iter()
-            .find(|(real_name, _)| real_name == name)
-        else {
-            return false;
-        };
-        if symbolic(written) || symbolic(real) {
-            continue;
-        }
-        if !equivalent(written, real) {
-            return false;
-        }
-    }
-    true
+            .any(|(real_name, real_ty)| real_name == name && equivalent(written_ty, real_ty))
+    })
 }
 
 /// Unqualified: search every root - a root that declares `member` directly
@@ -2109,6 +2193,7 @@ fn resolve_through_roots(
     member: &Name,
     undeclared: crate::diagnostics::AssocContainer,
     fill_defaults: bool,
+    ns: MemberNamespace,
 ) -> Determination {
     let mut declarers: Vec<baml_type::Interface> = Vec::new();
     let push = |declarers: &mut Vec<baml_type::Interface>, interface: baml_type::Interface| {
@@ -2117,7 +2202,7 @@ fn resolve_through_roots(
         }
     };
     for root in roots {
-        if interface_declares_member(db, &root.name, member) {
+        if interface_declares_member(db, &root.name, member, ns) {
             push(&mut declarers, root);
             continue;
         }
@@ -2125,7 +2210,7 @@ fn resolve_through_roots(
         let subject = root_ref.existential();
         if crate::package_interface::mounted_type_row(db, &root.name).is_some() {
             for inherited in crate::impls::direct_requires_closure(db, &root_ref, &subject, 64) {
-                if interface_declares_member(db, &inherited.name, member) {
+                if interface_declares_member(db, &inherited.name, member, ns) {
                     push(
                         &mut declarers,
                         baml_type::Interface {
@@ -2156,7 +2241,7 @@ fn resolve_through_roots(
             &root.associated_types,
             fill_defaults,
         ) {
-            if !interface_declares_member_at(db, loc, member) {
+            if !interface_declares_member_at(db, loc, member, ns) {
                 continue;
             }
             let Some(qtn) = interface_loc_qtn(db, loc) else {
@@ -2182,6 +2267,7 @@ fn determine_concrete<'db>(
     facts: &crate::facts::Facts<'db>,
     base: &Ty,
     member: &Name,
+    ns: MemberNamespace,
 ) -> Determination {
     use crate::diagnostics::AssocContainer;
     let Some(interned) = crate::impls::try_interned_ty(base) else {
@@ -2203,7 +2289,8 @@ fn determine_concrete<'db>(
                 .map(|(name, ty)| (name.clone(), ty.to_plain()))
                 .collect(),
         };
-        if interface_declares_member(db, &interface.name, member) && !declarers.contains(&interface)
+        if interface_declares_member(db, &interface.name, member, ns)
+            && !declarers.contains(&interface)
         {
             declarers.push(interface);
         }
@@ -2252,38 +2339,39 @@ fn determine_concrete<'db>(
     }
 }
 
-/// A concrete base's realized view of the WRITTEN qualifier - the impl of
-/// that interface, when the base has one.
-fn concrete_realized_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    facts: &crate::facts::Facts<'db>,
+/// A concrete base's view of the WRITTEN qualifier, proven — not selected.
+///
+/// The qualifier is a GOAL for the impl oracle: `resolve_impl` matches it
+/// with rustc's placeholder discipline, so a rigid type variable in a written
+/// argument unifies only with an impl's own parameter (a blanket
+/// `implements<U> Conv<U> for Multi` proves `(Multi as Conv<T>)`), never with
+/// ground structure (`implements Conv<int> for Multi` does NOT prove it — the
+/// claim must hold for every possible `T`). Written associated-type pins are
+/// enforced by the same match, fail-closed.
+///
+/// The returned interface carries the WRITTEN generics — symbolic arguments
+/// stay symbolic, ride the instantiation frame as their `TypeArgRef` slots,
+/// and resolve per realized argument at runtime, exactly as a typevar `Self`
+/// does — plus the impl's realization of the associated types the qualifier
+/// left unwritten.
+fn concrete_realized_interface(
+    db: &dyn baml_compiler2_ppir::Db,
     base: &Ty,
     qualifier: &baml_type::Interface,
 ) -> Option<baml_type::Interface> {
     let interned = crate::impls::try_interned_ty(base)?;
-    for resolved in crate::impls::impls_for_type(db, &interned) {
-        let view = resolved.implemented_view(db, &interned);
-        if view.name != qualifier.name {
-            continue;
-        }
-        let realized = baml_type::Interface {
-            name: view.name.clone(),
-            generics: view
-                .generics
-                .iter()
-                .map(baml_type::interned::Ty::to_plain)
-                .collect(),
-            associated_types: view
-                .associated_types
-                .iter()
-                .map(|(name, ty)| (name.clone(), ty.to_plain()))
-                .collect(),
-        };
-        if qualifier_compatible_with_realization(facts, qualifier, &realized) {
-            return Some(realized);
-        }
-    }
-    None
+    let goal = baml_type::interned::InterfaceRef::from_constraint(qualifier);
+    let resolved = crate::impls::resolve_impl(db, &interned, &goal)?;
+    let view = resolved.implemented_view(db, &interned);
+    Some(baml_type::Interface {
+        name: view.name.clone(),
+        generics: qualifier.generics.clone(),
+        associated_types: view
+            .associated_types
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty.to_plain()))
+            .collect(),
+    })
 }
 
 /// Expand a top-level alias chain, bounded against cycles.
@@ -2301,30 +2389,131 @@ fn projection_expand_aliases(facts: &crate::facts::Facts<'_>, mut ty: Ty) -> Ty 
     ty
 }
 
-pub(crate) fn interface_declares_member(
+/// Whether `qtn` declares `member` in `ns` — [`interface_declared_kind`]
+/// collapsed to a `bool`, for callers that only need existence.
+pub fn interface_declares_member(
     db: &dyn baml_compiler2_ppir::Db,
     qtn: &QualifiedTypeName,
     member: &Name,
+    ns: MemberNamespace,
 ) -> bool {
-    if let Some(crate::package_interface::ExportedType::Interface {
-        associated_types, ..
-    }) = crate::package_interface::mounted_type_row(db, qtn)
+    if let Some(row @ crate::package_interface::ExportedType::Interface { .. }) =
+        crate::package_interface::mounted_type_row(db, qtn)
     {
-        return associated_types.iter().any(|assoc| assoc.name == *member);
+        return mounted_declares_member(row, member, ns);
     }
     projection_interface_loc(db, qtn)
-        .is_some_and(|loc| interface_declares_member_at(db, loc, member))
+        .is_some_and(|loc| interface_declares_member_at(db, loc, member, ns))
 }
 
 fn interface_declares_member_at(
     db: &dyn baml_compiler2_ppir::Db,
     loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
     member: &Name,
+    ns: MemberNamespace,
 ) -> bool {
-    baml_compiler2_ppir::item_data::interface_data(db, loc)
-        .associated_types
+    let data = baml_compiler2_ppir::item_data::interface_data(db, loc);
+    match ns {
+        MemberNamespace::Type => data
+            .associated_types
+            .iter()
+            .any(|assoc| &assoc.name == member),
+        MemberNamespace::Value => source_declared_value_kind(db, data, member).is_some(),
+    }
+}
+
+/// The value-namespace kind an interface declares `name` as, reading a
+/// SOURCE interface's span-free data. Fields win the tie because a field and
+/// a method cannot share a name (the HIR rejects that at declaration), so the
+/// order is a formality that keeps the scan single-pass.
+fn source_declared_value_kind(
+    db: &dyn baml_compiler2_ppir::Db,
+    data: &baml_compiler2_ppir::item_data::InterfaceData<'_>,
+    name: &Name,
+) -> Option<ValueMemberKind> {
+    if data.fields.iter().any(|field| field.name == *name) {
+        return Some(ValueMemberKind::Field);
+    }
+    data.methods
         .iter()
-        .any(|assoc| &assoc.name == member)
+        .any(|&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)
+        .then_some(ValueMemberKind::Method)
+}
+
+/// The same question against a MOUNTED package row, which splits what source
+/// keeps in one `methods` list into required and defaulted halves.
+fn mounted_declares_member(
+    row: &crate::package_interface::ExportedType,
+    member: &Name,
+    ns: MemberNamespace,
+) -> bool {
+    mounted_declared_kind(row, member, ns).is_some()
+}
+
+/// The mounted-row twin of [`source_declared_value_kind`], generalized over
+/// both namespaces so [`interface_declared_kind`] can answer either from one
+/// row lookup. Returns `None` for a non-interface row.
+fn mounted_declared_kind(
+    row: &crate::package_interface::ExportedType,
+    member: &Name,
+    ns: MemberNamespace,
+) -> Option<InterfaceMemberKind> {
+    let crate::package_interface::ExportedType::Interface {
+        associated_types,
+        fields,
+        required_methods,
+        default_methods,
+        ..
+    } = row
+    else {
+        return None;
+    };
+    match ns {
+        MemberNamespace::Type => associated_types
+            .iter()
+            .any(|assoc| assoc.name == *member)
+            .then_some(InterfaceMemberKind::AssociatedType),
+        MemberNamespace::Value => {
+            if fields.iter().any(|(field, ..)| field == member) {
+                return Some(InterfaceMemberKind::Value(ValueMemberKind::Field));
+            }
+            required_methods
+                .iter()
+                .chain(default_methods)
+                .any(|method| method.name == *member)
+                .then_some(InterfaceMemberKind::Value(ValueMemberKind::Method))
+        }
+    }
+}
+
+/// What `qtn` declares under `name` in `ns`, mounted rows and source alike -
+/// the one declaration oracle both namespaces read. [`interface_declares_member`]
+/// is this collapsed to a `bool`; callers that must tell a field from a method
+/// (a virtual field read dispatches differently from a call, and the ambiguity
+/// diagnostics word themselves differently) ask here instead.
+pub fn interface_declared_kind(
+    db: &dyn baml_compiler2_ppir::Db,
+    qtn: &QualifiedTypeName,
+    name: &Name,
+    ns: MemberNamespace,
+) -> Option<InterfaceMemberKind> {
+    if let Some(row @ crate::package_interface::ExportedType::Interface { .. }) =
+        crate::package_interface::mounted_type_row(db, qtn)
+    {
+        return mounted_declared_kind(row, name, ns);
+    }
+    let loc = projection_interface_loc(db, qtn)?;
+    let data = baml_compiler2_ppir::item_data::interface_data(db, loc);
+    match ns {
+        MemberNamespace::Type => data
+            .associated_types
+            .iter()
+            .any(|assoc| &assoc.name == name)
+            .then_some(InterfaceMemberKind::AssociatedType),
+        MemberNamespace::Value => {
+            source_declared_value_kind(db, data, name).map(InterfaceMemberKind::Value)
+        }
+    }
 }
 
 fn projection_interface_loc<'db>(

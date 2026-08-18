@@ -540,6 +540,11 @@ impl ExprBody {
             Expr::Upcast { base, target } => {
                 format!("{}.as<{target}>", self.display_expr_inner(*base, depth + 1))
             }
+            Expr::QualifiedPath {
+                qself,
+                interface,
+                member,
+            } => format!("({qself} as {interface}).{member}"),
             Expr::Index { base, index } => {
                 format!(
                     "{}[{}]",
@@ -996,6 +1001,21 @@ pub enum Expr {
     Upcast {
         base: ExprId,
         target: TypeExpr,
+    },
+    /// Fully-qualified item reference: `(Base as Interface).item`.
+    ///
+    /// The one spelling that pins BOTH halves of the `(Self type, interface,
+    /// item)` triple. `Base.item` and `Interface.item` denote the same triple
+    /// with one half left to inference and stay ordinary [`Expr::Path`]s —
+    /// the three forms unify in resolution, not in syntax, exactly as
+    /// rustc's `<T as Trait>::item` / `T::item` / `Trait::item` do.
+    ///
+    /// Neither half is an expression: `qself` is a type and `interface` names
+    /// an interface, so there is no base [`ExprId`] to traverse.
+    QualifiedPath {
+        qself: TypeExpr,
+        interface: TypeExpr,
+        member: Name,
     },
     /// Optional member access: `obj?.member` — short-circuits to null if base is null.
     OptionalMemberAccess {

@@ -1016,6 +1016,10 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
         | ast::Expr::ByteStringLiteral(_)
         | ast::Expr::Null
         | ast::Expr::Path(_)
+        // A qualified item reference names a callee but holds no callee
+        // EXPRESSION — the enclosing `Call` records the name, exactly as it
+        // does for the `Path` spellings of the same reference.
+        | ast::Expr::QualifiedPath { .. }
         | ast::Expr::Lambda(_)
         | ast::Expr::Missing => {}
     }
@@ -1227,6 +1231,14 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 "[...]".to_string()
             }
         }
+        // Rendered in full, as the `Path` spelling of the same reference is:
+        // this is a callee name, and eliding it to `...` would leave the CFG
+        // node blank for the one call form that must be written out.
+        ast::Expr::QualifiedPath {
+            qself,
+            interface,
+            member,
+        } => format!("({qself} as {interface}).{member}"),
         _ => "...".to_string(),
     }
 }
