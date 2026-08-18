@@ -505,6 +505,7 @@ class BamlPluginFunctionalTest {
         Map<String, String> env = new HashMap<>(System.getenv());
         String existingPath = env.getOrDefault("PATH", "");
         env.put("PATH", binDir.toAbsolutePath() + File.pathSeparator + existingPath);
+        env.put("EXPECTED_BAML_PROJECT", projectDir.toFile().getCanonicalPath());
         return env;
     }
 
@@ -527,6 +528,7 @@ class BamlPluginFunctionalTest {
         + "# Expected: bridge generate --project <dir> -o <outdir> [...]\n"
         + "if [ \"$#\" -ne 6 ] || [ \"${1:-}\" != \"bridge\" ]"
         + " || [ \"${2:-}\" != \"generate\" ] || [ \"${3:-}\" != \"--project\" ]"
+        + " || [ \"${4:-}\" != \"${EXPECTED_BAML_PROJECT:-}\" ]"
         + " || [ \"${5:-}\" != \"-o\" ]; then\n"
         + "  echo \"fake baml: unexpected arguments: $*\" >&2\n"
         + "  exit 1\n"
