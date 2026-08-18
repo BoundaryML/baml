@@ -369,6 +369,42 @@ fn generate_rust_fails_before_writing_a_partial_client() {
 }
 
 #[test]
+fn generate_rust_fails_when_a_skipped_class_hides_user_methods() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project_with_rust_generator(
+        tmp.path(),
+        r#"
+class Unsupported {
+  picture image
+
+  function ping(self) -> string {
+    "pong"
+  }
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert_eq!(
+        output.status.code(),
+        Some(4),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("skipped `user.Unsupported.ping`")
+            && stderr.contains("Rust SDK generation skipped 1 user callable(s)"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        !tmp.path().join("generated").exists(),
+        "a failed generation must not write a partial SDK"
+    );
+}
+
+#[test]
 fn generate_go_writes_sdk_through_cli() {
     if !gofmt_is_available() {
         return;

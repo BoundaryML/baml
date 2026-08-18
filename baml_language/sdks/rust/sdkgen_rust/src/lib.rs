@@ -1723,6 +1723,39 @@ mod tests {
     }
 
     #[test]
+    fn skipped_classes_report_their_methods_as_skipped_callables() {
+        let widget = name("user", &[], "Widget");
+        let ping = nullary_string_fn(&name("user", &[], "ping"));
+        let pool = SymbolPool::from([(
+            widget.clone(),
+            class_symbol(
+                &widget,
+                vec![baml_codegen_types::ClassProperty {
+                    name: baml_base::Name::new("picture"),
+                    docstring: None,
+                    ty: Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY),
+                }],
+                Vec::new(),
+                vec![ping],
+            ),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|warning| { warning.kind == SkipKind::Type && warning.fqn == "user.Widget" })
+        );
+        assert!(generated.warnings.iter().any(|warning| {
+            warning.kind == SkipKind::Callable
+                && warning.fqn == "user.Widget.ping"
+                && warning.reason.contains("owning class")
+        }));
+        assert!(!text(&generated, "src/lib.rs").contains("pub struct Widget"));
+    }
+
+    #[test]
     fn method_signatures_do_not_box_recursive_class_references() {
         let node = name("user", &[], "Node");
         let next_field = Ty::Union(
