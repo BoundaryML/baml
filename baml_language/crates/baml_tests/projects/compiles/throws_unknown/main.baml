@@ -1,14 +1,23 @@
 type OpenErrors = unknown
 
-function direct() -> null throws unknown {
+function direct(flag: bool) -> null throws unknown {
+    if (flag) {
+        throw "boom"
+    }
     null
 }
 
-function union_member() -> null throws string | unknown {
+function union_member(flag: bool) -> null throws string | unknown {
+    if (flag) {
+        throw "boom"
+    }
     null
 }
 
-function aliased() -> null throws OpenErrors {
+function aliased(flag: bool) -> null throws OpenErrors {
+    if (flag) {
+        throw 42
+    }
     null
 }
 

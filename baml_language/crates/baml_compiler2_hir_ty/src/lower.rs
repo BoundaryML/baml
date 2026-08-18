@@ -1744,6 +1744,10 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
     }
 }
 
+/// Whether a declared throws clause is an open contract: it names `unknown`
+/// directly, through a union member, or through a type alias. An open
+/// contract deliberately admits any thrown value, so throws-coverage
+/// analysis (E0097 extraneous-declaration warnings) does not apply to it.
 pub(crate) fn is_open_throws_contract(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> bool {
     fn visit(
         facts: &crate::facts::Facts<'_>,
@@ -1808,7 +1812,6 @@ pub fn signature_lowering_diagnostics<'db>(
         {
             wf.push((elaborated_map.type_refs.span(type_ref), error));
         }
-        lowered
     };
     for param in &data.params {
         // The unannotated-`self` slot lowers as Unknown by elaboration;
@@ -1818,19 +1821,13 @@ pub fn signature_lowering_diagnostics<'db>(
         {
             continue;
         }
-        let _ = lower_and_judge(param.type_ref);
+        lower_and_judge(param.type_ref);
     }
     if let Some(ret) = data.return_type {
-        let _ = lower_and_judge(ret);
+        lower_and_judge(ret);
     }
     if let Some(throws) = data.throws {
-        let lowered = lower_and_judge(throws);
-        if is_open_throws_contract(db, &lowered) {
-            wf.push((
-                elaborated_map.type_refs.span(throws),
-                TirTypeError::ThrowsUnknownNotAllowed,
-            ));
-        }
+        lower_and_judge(throws);
     }
     let mut out: Vec<(text_size::TextRange, TirTypeError)> = ctx
         .take_diagnostics()
@@ -2099,18 +2096,6 @@ pub fn interface_lowering_diagnostics<'db>(
             for error in crate::interfaces::type_generic_bound_errors(db, &env, &method.function_ty)
             {
                 out.push((span, error));
-            }
-            if let (Some(throws_ref), baml_type::Ty::Function { throws, .. }) = (
-                data.required_methods
-                    .get(index)
-                    .and_then(|signature| signature.throws),
-                &method.function_ty,
-            ) && is_open_throws_contract(db, &Ty::from_plain(throws))
-            {
-                out.push((
-                    source_map.type_refs.span(throws_ref),
-                    TirTypeError::ThrowsUnknownNotAllowed,
-                ));
             }
         }
     }

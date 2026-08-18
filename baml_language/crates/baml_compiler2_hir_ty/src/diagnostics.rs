@@ -796,8 +796,6 @@ pub enum TirTypeError {
     /// parameters have no generic binder to open an effect parameter on, so they must declare it
     /// explicitly.
     FunctionTypeMissingThrows,
-    /// A function or method declaration exposes the open top error type.
-    ThrowsUnknownNotAllowed,
 }
 
 impl fmt::Display for TirTypeError {
@@ -1874,11 +1872,6 @@ impl fmt::Display for TirTypeError {
                      if calling it cannot throw"
                 )
             }
-            TirTypeError::ThrowsUnknownNotAllowed => write!(
-                f,
-                "open `throws unknown` contracts are not allowed; catch untyped errors and throw \
-                 `baml.errors.UnknownError` instead"
-            ),
         }
     }
 }
