@@ -134,7 +134,11 @@ impl<'db> InferenceContext<'db> {
             // fixpoint): defer the decision to `finish`, where the FINAL
             // type is known - bailing here would pass the raw value to
             // the strict-bool branch.
-            self.pending_truthy_conditions.push((condition, is_literal));
+            self.pending_truthy_conditions.push(PendingCondition {
+                expr: condition,
+                is_literal,
+                coerce: true,
+            });
             return ty;
         }
         if let Some(decision) = Self::decide_condition(&resolved) {
@@ -150,10 +154,21 @@ impl<'db> InferenceContext<'db> {
     pub(super) fn check_not_operand(&mut self, body: &ExprBody, operand: ExprId) -> Ty {
         let ty = self.infer_expr(body, operand, &Expectation::None);
         let resolved = self.table.resolve_completely(&ty);
-        if resolved.has_error() || resolved.has_infer() {
+        if resolved.has_error() {
             return ty;
         }
         let is_literal = matches!(body.exprs[operand], Expr::Literal(_) | Expr::Null);
+        if resolved.has_infer() {
+            // Same deferral as `check_condition`, minus the coercion: the
+            // finalized type still owes the void mismatch or the
+            // always-constant warning.
+            self.pending_truthy_conditions.push(PendingCondition {
+                expr: operand,
+                is_literal,
+                coerce: false,
+            });
+            return ty;
+        }
         match Self::decide_condition(&resolved) {
             Some(ConditionDecision::Mismatch) => {
                 self.result
@@ -175,7 +190,12 @@ impl<'db> InferenceContext<'db> {
     /// tables the eager path writes (`result` is already taken from
     /// `self.result` at this point in `finish`).
     pub(super) fn decide_deferred_conditions(&mut self, result: &mut InferenceResult<'db>) {
-        for (condition, is_literal) in std::mem::take(&mut self.pending_truthy_conditions) {
+        for pending in std::mem::take(&mut self.pending_truthy_conditions) {
+            let PendingCondition {
+                expr: condition,
+                is_literal,
+                coerce,
+            } = pending;
             let Some(resolved) = result.type_of_expr.get(&condition).cloned() else {
                 continue;
             };
@@ -190,13 +210,18 @@ impl<'db> InferenceContext<'db> {
                         .or_insert((Ty::bool(), resolved));
                 }
                 Some(ConditionDecision::Coerce) => {
-                    result.expr_adjustments.insert(
-                        condition,
-                        Box::new([Adjustment {
-                            kind: Adjust::Truthy,
-                            target: Ty::bool(),
-                        }]),
-                    );
+                    // A `!` operand (`coerce: false`) records nothing:
+                    // `OpCode::Not` coerces itself. It still owes the
+                    // warning.
+                    if coerce {
+                        result.expr_adjustments.insert(
+                            condition,
+                            Box::new([Adjustment {
+                                kind: Adjust::Truthy,
+                                target: Ty::bool(),
+                            }]),
+                        );
+                    }
                     self.push_always_const_warning(condition, resolved, is_literal);
                 }
                 None => {}
@@ -264,6 +289,18 @@ impl<'db> InferenceContext<'db> {
                 always_true,
             });
     }
+}
+
+/// A condition or `!` operand whose truthiness decision waits for the
+/// inference fixpoint.
+pub(crate) struct PendingCondition {
+    pub(crate) expr: ExprId,
+    /// Written-literal conditions are exempt from the always-constant
+    /// warning.
+    pub(crate) is_literal: bool,
+    /// Branch conditions record `Adjust::Truthy`; `!` operands do not
+    /// (`OpCode::Not` coerces itself).
+    pub(crate) coerce: bool,
 }
 
 /// What a condition position does with its (closed) type.

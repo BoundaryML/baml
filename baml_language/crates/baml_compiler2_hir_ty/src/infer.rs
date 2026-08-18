@@ -1627,11 +1627,10 @@ struct InferenceContext<'db> {
     /// Ground values that checked against then-open expectations by
     /// depositing bounds; re-judged once the vars solve.
     provisional_checks: Vec<(ExprId, Ty, Ty)>,
-    /// Conditions whose type still carried an inference variable at
-    /// check time (B-1563 truthiness); decided at finish on the final
-    /// type. The bool records whether the condition was a written
-    /// literal (warning exemption).
-    pending_truthy_conditions: Vec<(ExprId, bool)>,
+    /// Conditions and `!` operands whose type still carried an inference
+    /// variable at check time (B-1563 truthiness); decided at finish on
+    /// the final type.
+    pending_truthy_conditions: Vec<crate::infer::truthy::PendingCondition>,
     diverges: Diverges,
     /// The body's file, for package-scoped lookups (the overlap oracle's
     /// alias map enumerates the owning package plus its dependency closure).
