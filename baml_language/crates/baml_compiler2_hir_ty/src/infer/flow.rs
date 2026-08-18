@@ -23,7 +23,7 @@
 //!   consumes_matched`]: only a pattern refutable by type alone may be
 //!   subtracted (B-1069).
 
-use baml_compiler2_ast::{Expr, ExprBody, ExprId};
+use baml_compiler2_ast::{Expr, ExprBody, ExprId, StmtId};
 use baml_compiler2_hir::semantic_index::BindingId;
 use baml_type::interned::{Ty, TyKind};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -299,7 +299,12 @@ impl InferenceContext<'_> {
         out
     }
 
-    /// Whether a loop body contains a `break` that binds to THAT loop.
+    /// Whether a loop contains a `break` that binds to THAT loop.
+    ///
+    /// `root` is the loop body and `after` its C-style update slot. Both are
+    /// searched: `for (let i = 0; 1 == 1; i = break) {}` puts a real exit edge
+    /// in the update slot, so missing it would call an escapable loop
+    /// divergent.
     ///
     /// TIR keeps no break-target machinery — `loop_depth` is a bare counter
     /// and the `Stmt::Break` arm only sets `Diverges::Always`, which the
@@ -314,12 +319,13 @@ impl InferenceContext<'_> {
     /// A `break` under `defer` or `spawn` is counted even though both are
     /// rejected elsewhere; counting keeps the answer on the conservative
     /// side, where the loop simply does not diverge.
-    pub(super) fn loop_body_breaks(body: &ExprBody, root: ExprId) -> bool {
+    pub(super) fn loop_body_breaks(body: &ExprBody, root: ExprId, after: Option<StmtId>) -> bool {
         use baml_compiler2_ast::{Stmt, traverse::BodyNode};
         // The arena is a DAG (templates share `ExprId`s between their
         // segments and desugared payload), so the walk must dedupe.
         let mut seen: FxHashSet<BodyNode> = FxHashSet::default();
         let mut stack = vec![BodyNode::Expr(root)];
+        stack.extend(after.map(BodyNode::Stmt));
         while let Some(node) = stack.pop() {
             if !seen.insert(node) {
                 continue;

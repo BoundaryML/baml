@@ -387,10 +387,10 @@ async fn runtime_class_readback_preserves_exact_type_and_all_metadata() {
             let field = schema.fields()[0]
             field.name == "tag"
                 && field.type == literal.as_type()
-                && field.meta().alias == "wire_tag"
-                && field.meta().description == "dispatch key"
-                && field.meta().docstring == "source docs"
-                && field.meta().other.get("owner") == "slice3"
+                && field.meta.alias == "wire_tag"
+                && field.meta.description == "dispatch key"
+                && field.meta.docstring == "source docs"
+                && field.meta.other.get("owner") == "slice3"
         }
         "#
     );

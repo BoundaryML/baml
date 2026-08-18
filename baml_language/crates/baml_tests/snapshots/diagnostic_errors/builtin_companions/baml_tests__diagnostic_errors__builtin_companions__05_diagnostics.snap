@@ -36,7 +36,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0166
 
-  × companion class `baml.Bool` cannot be constructed; it only carries the methods of `bool`, whose values come from literals
+  × companion class `baml.Bool` cannot be constructed; it is only the companion of `bool`, whose values come from literals
     ╭─[main.baml:10:11]
  10 │   let t = baml.Bool {};
     ·           ────────────
@@ -44,7 +44,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0166
 
-  × companion class `baml.Null` cannot be constructed; it only carries the methods of `null`, whose values come from the `null` literal
+  × companion class `baml.Null` cannot be constructed; it is only the companion of `null`, whose values come from the `null` literal
     ╭─[main.baml:11:11]
  11 │   let n = baml.Null {};
     ·           ────────────

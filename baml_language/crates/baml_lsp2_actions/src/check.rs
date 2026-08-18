@@ -1226,6 +1226,7 @@ fn new_tir_diagnostic(
             &class_name.render_user_facing(),
             companion.builtin,
             companion.origin,
+            companion.carries_methods,
         )
         .with_primary_span(span)
         .with_phase(DiagnosticPhase::Type);

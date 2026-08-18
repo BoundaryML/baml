@@ -166,13 +166,13 @@ function baml.get(self: ?, name: string) -> T?  [expr] {
   { if (Not self.has_field(name)) { return null }; let field: baml.reflect.class.Field = self.get_field(name) } field.value()
 }
 function baml.get_field(self: ?, name: string) -> baml.reflect.class.Field?  [expr] {
-  { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return baml.reflect.class.Field { name: field.name, type: field.type, _meta: field.meta(), _owner: self } } } null
+  { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return baml.reflect.class.Field { name: field.name, type: field.type, meta: field.meta, _owner: self } } } null
 }
 function baml.has_field(self: ?, name: string) -> bool  [expr] {
   { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return true } } false
 }
 function baml.list_fields(self: ?) -> baml.reflect.class.Field[]  [expr] {
-  { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); let fields: baml.reflect.class.Field[] = []; for field in class_type.fields() {  } fields.push(baml.reflect.class.Field { name: field.name, type: field.type, _meta: field.meta(), _owner: self }) } fields
+  { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); let fields: baml.reflect.class.Field[] = []; for field in class_type.fields() {  } fields.push(baml.reflect.class.Field { name: field.name, type: field.type, meta: field.meta, _owner: self }) } fields
 }
 function baml.name(self: ?) -> string  [expr] {
   {  } type.of_value(self).to_string()
@@ -1752,13 +1752,13 @@ class baml.reflect.class.Builder$stream {
 class baml.reflect.class.Field {
   name: string
   type: type?
-  _meta: baml.reflect.Meta
+  meta: baml.reflect.Meta
   _owner: unknown?
 }
 class baml.reflect.class.Field$stream {
   name: string | null
   type: unknown | null
-  _meta: baml.reflect.Meta$stream | null
+  meta: baml.reflect.Meta$stream | null
   _owner: unknown | null
 }
 class baml.reflect.class.PendingType {
@@ -1786,10 +1786,10 @@ function baml.reflect.class.builder(name: string) -> baml.reflect.class.Builder 
 function baml.reflect.class.field(self: ?, name: string, ty: type | baml.reflect.WithMeta<type> | baml.reflect.class.PendingType) -> baml.reflect.class.Builder  [builtin]
 function baml.reflect.class.fields(self: ?) -> baml.reflect.class.Field[]  [builtin]
 function baml.reflect.class.get_field(value: unknown, name: string) -> T  [builtin]
-function baml.reflect.class.meta(self: ?) -> baml.reflect.Meta  [expr] {
-  {  } self._meta
-}
 function baml.reflect.class.meta(self: ?) -> baml.reflect.Meta  [builtin]
+function baml.reflect.class.metadata(self: ?) -> baml.reflect.Meta  [expr] {
+  {  } self.meta
+}
 function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[] = ...) -> baml.reflect.class.Type  [expr] {
   {  } _new(name, fields, implementations)
 }

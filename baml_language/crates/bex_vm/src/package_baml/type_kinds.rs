@@ -1561,7 +1561,7 @@ impl BamlClassReflectClassType for PackageBamlImpl {
                 copy::reflect::class::Field {
                     name,
                     r#type,
-                    _meta: meta,
+                    meta,
                     _owner: Value::NULL,
                 }
                 .to_value(vm)

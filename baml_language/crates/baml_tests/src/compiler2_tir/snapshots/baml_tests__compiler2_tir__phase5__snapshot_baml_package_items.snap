@@ -287,7 +287,7 @@ namespace baml.reflect.array:
   class Type { methods: [element_type, as_type] }
 namespace baml.reflect.class:
   class Builder { methods: [field, type, build, _build] }
-  class Field { methods: [meta, value] }
+  class Field { methods: [metadata, value] }
   class PendingType { methods: [array, optional, union, resolved] }
   class Type { methods: [fields, meta, as_type] }
   function _new

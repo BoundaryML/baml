@@ -2621,7 +2621,7 @@ impl<'db> InferenceContext<'db> {
                 // after it is unreachable - no false facts to apply.
                 let never_exits =
                     self.condition_is_statically_true(body, *condition, &condition_ty)
-                        && !Self::loop_body_breaks(body, *loop_body);
+                        && !Self::loop_body_breaks(body, *loop_body, *after);
                 self.diverges = saved.or(if never_exits {
                     Diverges::Always
                 } else {
@@ -2707,12 +2707,25 @@ impl<'db> InferenceContext<'db> {
 
     /// Whether a loop condition is `true` on every iteration.
     ///
-    /// Two spellings answer yes: the literal `while (true)`, and anything the
-    /// interned layer already folded to the literal type `true` (comparisons
-    /// over literal operands close under `const_fold_binary`). A condition
+    /// The oracle is the condition's INFERRED TYPE, not its syntax, so its
+    /// reach is wider than the literal `while (true)`. Anything that lands on
+    /// the literal type `true` answers yes:
+    ///
+    /// - the literal itself, which is also matched syntactically so the
+    ///   answer never depends on inference succeeding;
+    /// - a constant fold — comparisons over literal operands close under
+    ///   `const_fold_binary`, so `while (1 == 1)` qualifies;
+    /// - a flow-narrowed binding — after `if (c is true)`, `while (c)` sees
+    ///   the narrowed `true`;
+    /// - a call whose return type is declared `-> true`.
+    ///
+    /// All of those are genuinely true on every iteration, which is what
+    /// divergence needs. Narrowed bindings stay sound because a loop havocs
+    /// every binding its body assigns before the condition is checked, so a
+    /// binding the loop can falsify is no longer narrowed here. A condition
     /// that merely happens to be true at runtime is not, and must not be,
-    /// recognized here. `for (;;)` is out of scope: its empty condition
-    /// lowers to `Expr::Missing`, not to a literal.
+    /// recognized. `for (;;)` is out of scope: its empty condition lowers to
+    /// `Expr::Missing`, not to a literal.
     fn condition_is_statically_true(
         &mut self,
         body: &ExprBody,

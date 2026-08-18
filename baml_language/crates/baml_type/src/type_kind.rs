@@ -84,17 +84,22 @@ pub fn is_type_kind_class(name: &QualifiedTypeName) -> bool {
 }
 
 /// A builtin type and where its values actually come from, for the
-/// companion carrier class that hangs its methods on it.
+/// companion carrier class that stands in for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuiltinCompanion {
-    /// The builtin type this class carries the methods of.
+    /// The builtin type this class is the companion of.
     pub builtin: &'static str,
     /// How a value of that builtin is produced instead.
     pub origin: &'static str,
+    /// Whether the class actually declares methods. `baml.Bool` and
+    /// `baml.Null` have entirely empty bodies — they exist only to give
+    /// their builtin a nominal companion — so a diagnostic must not tell
+    /// the user they carry methods.
+    pub carries_methods: bool,
 }
 
-/// The builtin a companion carrier class hangs its methods on, or `None`
-/// when the class is not a carrier.
+/// The builtin a companion carrier class stands in for, or `None` when the
+/// class is not a carrier.
 ///
 /// These classes hold no fields; they exist so `5.abs()` and `"x".len()`
 /// have somewhere to resolve. Constructing one yields a nonsense empty
@@ -108,20 +113,24 @@ pub fn builtin_companion_of(name: &QualifiedTypeName) -> Option<BuiltinCompanion
     if name.package().as_str() != "baml" || !name.namespace().is_empty() {
         return None;
     }
-    let (builtin, origin) = match name.name().as_str() {
-        "Int" => ("int", "literals"),
-        "Bigint" => ("bigint", "literals"),
-        "Float" => ("float", "literals"),
-        "String" => ("string", "literals"),
-        "Bool" => ("bool", "literals"),
-        "Null" => ("null", "the `null` literal"),
-        "Uint8Array" => ("uint8array", "byte-string literals"),
-        "Array" => ("array", "array literals"),
-        "Map" => ("map", "map literals"),
-        "TypeValue" => ("type", "`type.of<T>()` and reflection"),
+    let (builtin, origin, carries_methods) = match name.name().as_str() {
+        "Int" => ("int", "literals", true),
+        "Bigint" => ("bigint", "literals", true),
+        "Float" => ("float", "literals", true),
+        "String" => ("string", "literals", true),
+        "Bool" => ("bool", "literals", false),
+        "Null" => ("null", "the `null` literal", false),
+        "Uint8Array" => ("uint8array", "byte-string literals", true),
+        "Array" => ("array", "array literals", true),
+        "Map" => ("map", "map literals", true),
+        "TypeValue" => ("type", "`type.of<T>()` and reflection", true),
         _ => return None,
     };
-    Some(BuiltinCompanion { builtin, origin })
+    Some(BuiltinCompanion {
+        builtin,
+        origin,
+        carries_methods,
+    })
 }
 
 /// Whether a nominal class inhabits the compiler-derived `baml.AnyClass`

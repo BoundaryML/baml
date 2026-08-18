@@ -57,7 +57,7 @@ interface AnyClass {
         return baml.reflect.class.Field {
           name: field.name,
           type: field.type,
-          _meta: field.meta(),
+          meta: field.meta,
           _owner: self,
         }
       }
@@ -87,7 +87,7 @@ interface AnyClass {
       fields.push(baml.reflect.class.Field {
         name: field.name,
         type: field.type,
-        _meta: field.meta(),
+        meta: field.meta,
         _owner: self,
       })
     }

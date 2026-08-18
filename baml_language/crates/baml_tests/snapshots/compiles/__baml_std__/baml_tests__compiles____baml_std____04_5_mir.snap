@@ -1130,7 +1130,7 @@ fn baml.AnyClass.get_field(self: baml.AnyClass, name: string) -> null | baml.ref
 
     bb3: {
         _0 = const null;
-        goto -> bb12;
+        goto -> bb11;
     }
 
     bb4: {
@@ -1148,7 +1148,7 @@ fn baml.AnyClass.get_field(self: baml.AnyClass, name: string) -> null | baml.ref
 
     bb7: {
         _10 = is_type(copy _9, baml.iter.Done);
-        branch copy _10 -> [bb11, bb8];
+        branch copy _10 -> [bb10, bb8];
     }
 
     bb8: {
@@ -1163,20 +1163,17 @@ fn baml.AnyClass.get_field(self: baml.AnyClass, name: string) -> null | baml.ref
     bb9: {
         _15 = copy _12.0;
         _16 = copy _12.1;
-        _17 = call const fn baml.reflect.class.Field.meta(copy _12) -> [bb10];
+        _17 = copy _12.2;
+        _0 = baml.reflect.class.Field { copy _15, copy _16, copy _17, copy _1 };
+        goto -> bb11;
     }
 
     bb10: {
-        _0 = baml.reflect.class.Field { copy _15, copy _16, copy _17, copy _1 };
-        goto -> bb12;
+        _0 = const null;
+        goto -> bb11;
     }
 
     bb11: {
-        _0 = const null;
-        goto -> bb12;
-    }
-
-    bb12: {
         return;
     }
 }
@@ -1296,7 +1293,7 @@ fn baml.AnyClass.list_fields(self: baml.AnyClass) -> baml.reflect.class.Field[] 
 
     bb3: {
         _0 = []: baml.reflect.class.Field[];
-        goto -> bb11;
+        goto -> bb10;
     }
 
     bb4: {
@@ -1315,7 +1312,7 @@ fn baml.AnyClass.list_fields(self: baml.AnyClass) -> baml.reflect.class.Field[] 
 
     bb7: {
         _10 = is_type(copy _9, baml.iter.Done);
-        branch copy _10 -> [bb10, bb8];
+        branch copy _10 -> [bb9, bb8];
     }
 
     bb8: {
@@ -1324,21 +1321,18 @@ fn baml.AnyClass.list_fields(self: baml.AnyClass) -> baml.reflect.class.Field[] 
         _12 = copy _11;
         _15 = copy _12.0;
         _16 = copy _12.1;
-        _17 = call const fn baml.reflect.class.Field.meta(copy _12) -> [bb9];
-    }
-
-    bb9: {
+        _17 = copy _12.2;
         _14 = baml.reflect.class.Field { copy _15, copy _16, copy _17, copy _1 };
         _18 = load_type(baml.reflect.class.Field);
         _13 = call const fn baml.Array.push<copy _18>(copy _6, copy _14) -> [bb6];
     }
 
-    bb10: {
+    bb9: {
         _0 = copy _6;
-        goto -> bb11;
+        goto -> bb10;
     }
 
-    bb11: {
+    bb10: {
         return;
     }
 }
@@ -7906,7 +7900,7 @@ fn baml.reflect.array.Type.baml.reflect.TypeView.as_type = builtin(vm)
 
 fn baml.reflect.array.Type.element_type = builtin(vm)
 
-fn baml.reflect.class.Field.meta(self: baml.reflect.class.Field) -> baml.reflect.Meta {
+fn baml.reflect.class.Field.metadata(self: baml.reflect.class.Field) -> baml.reflect.Meta {
     // Locals:
     let _0: baml.reflect.Meta // _0 // return
     let _1: baml.reflect.class.Field // self // param

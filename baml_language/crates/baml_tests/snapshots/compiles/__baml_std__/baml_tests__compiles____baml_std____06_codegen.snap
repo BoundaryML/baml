@@ -112,16 +112,12 @@ function baml.AnyClass.get_field(self: baml.AnyClass, name: string) -> baml.refl
     pop_jump_if_false L2
     load_var field
     load_field .name
-    store_var _15
     load_var field
     load_field .type
-    store_var _16
     load_var field
-    call baml.reflect.class.Field.meta
-    store_var _17
-    load_var2 7 8
-    load_var2 9 1
-    init_instance baml.reflect.class.Field .name, .type, ._meta, ._owner
+    load_field .meta
+    load_var self
+    init_instance baml.reflect.class.Field .name, .type, .meta, ._owner
     jump L5
 
   L4:
@@ -220,20 +216,15 @@ function baml.AnyClass.list_fields(self: baml.AnyClass) -> baml.reflect.class.Fi
   L3:
     load_var _9
     store_var field
-    load_var field
+    load_type baml.reflect.class.Field
+    load_var2 3 6
     load_field .name
-    store_var _15
     load_var field
     load_field .type
-    store_var _16
     load_var field
-    call baml.reflect.class.Field.meta
-    store_var _17
-    load_type baml.reflect.class.Field
-    load_var2 3 7
-    load_var2 8 9
+    load_field .meta
     load_var self
-    init_instance baml.reflect.class.Field .name, .type, ._meta, ._owner
+    init_instance baml.reflect.class.Field .name, .type, .meta, ._owner
     call baml.Array.push
     pop 1
     jump L2
@@ -5572,9 +5563,9 @@ function baml.reflect.class.Builder.field(self: baml.reflect.class.Builder, name
 function baml.reflect.class.Builder.type(self: baml.reflect.class.Builder) -> baml.reflect.class.PendingType {
 }
 
-function baml.reflect.class.Field.meta(self: baml.reflect.class.Field) -> baml.reflect.Meta {
+function baml.reflect.class.Field.metadata(self: baml.reflect.class.Field) -> baml.reflect.Meta {
     load_var self
-    load_field ._meta
+    load_field .meta
     return
 }
 

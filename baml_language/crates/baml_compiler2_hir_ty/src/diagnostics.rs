@@ -956,6 +956,7 @@ impl fmt::Display for TirTypeError {
                         &class_name.render_user_facing(),
                         companion.builtin,
                         companion.origin,
+                        companion.carries_methods,
                     );
                 f.write_str(diagnostic.message.as_str())
             }

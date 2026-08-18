@@ -32,6 +32,23 @@ function FoldedTrueDiverges(r: Ok | Err) -> string {
   o.value
 }
 
+function NarrowedBindingDiverges(r: Ok | Err, c: bool) -> string {
+  // The oracle is the condition's inferred type, so a binding flow-narrowed
+  // to `true` counts. This stays sound because a loop havocs every binding
+  // its body assigns before the condition is checked — a binding the loop
+  // could falsify would no longer be narrowed here.
+  // The `if` diverges only when BOTH arms do, so the `while` is what this
+  // case actually proves: swap it for `while (keep)` and E0113 returns.
+  let o: Ok = r else {
+    if (c is true) {
+      while (c) {}
+    } else {
+      throw "not narrowed"
+    }
+  };
+  o.value
+}
+
 //----
 //- diagnostics
 // <no-diagnostics-expected>
