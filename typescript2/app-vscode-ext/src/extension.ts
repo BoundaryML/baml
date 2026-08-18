@@ -16,11 +16,7 @@ import {
   isProtocolCompatible,
 } from './compat';
 import { WebviewPanel } from './panels/WebviewPanel';
-import {
-  playgroundCommandForPath,
-  shellForDefaultWindowsProfile,
-  type WindowsTerminalProfile,
-} from './playground-command';
+import { playgroundCommandForPath } from './playground-command';
 import {
   type BamlProjectRoots,
   type CanonicalPath,
@@ -196,34 +192,18 @@ function projectKeyForPath(projectPath: string): string | undefined {
   }
 }
 
-function defaultTerminalShell(): string {
-  if (process.platform !== 'win32') {
-    return process.platform;
-  }
-  const terminalConfig = vscode.workspace.getConfiguration(
-    'terminal.integrated',
-  );
-  return shellForDefaultWindowsProfile(
-    terminalConfig.get<string | null>('defaultProfile.windows'),
-    terminalConfig.get<Record<string, WindowsTerminalProfile | null>>(
-      'profiles.windows',
-    ),
-  );
-}
-
 function openPlaygroundInBrowserTerminal(projectPath?: string): void {
-  const { command, cwd } = playgroundCommandForPath({
-    platform: process.platform,
+  const { args, cwd, executable } = playgroundCommandForPath({
     projectPath,
-    shell: defaultTerminalShell(),
     wrapperPath,
   });
   const terminal = vscode.window.createTerminal({
     name: 'BAML Playground',
     ...(cwd ? { cwd } : {}),
+    shellArgs: args,
+    shellPath: executable,
   });
   terminal.show(false);
-  terminal.sendText(command);
 }
 
 async function ensureClient(
