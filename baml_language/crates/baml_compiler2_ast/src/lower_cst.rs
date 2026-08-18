@@ -2105,7 +2105,7 @@ fn synthesize_register_call(
             );
 
             // Args: (name_expr, lambda, runner_or_null)
-            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            let name_arg = ctx.lower_test_name_element(name_element, "test");
             let owner_arg = ctx.alloc_expr(
                 Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
                 span,
@@ -2180,7 +2180,7 @@ fn synthesize_register_call(
             );
 
             // Args: (name_expr, collector_lambda, runner_or_null)
-            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            let name_arg = ctx.lower_test_name_element(name_element, "testset");
             let owner_arg = ctx.alloc_expr(
                 Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
                 span,

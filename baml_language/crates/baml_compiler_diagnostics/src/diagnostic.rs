@@ -406,6 +406,11 @@ pub enum DiagnosticId {
     /// thrown type a published clause would carry, or a type still being
     /// inferred that would be decided as one.
     ScopedTypeEscapesBlock,
+
+    // Test registration names (E0173)
+    /// A statically known test or testset name contains `::`, which is reserved
+    /// for separating components in canonical test IDs.
+    InvalidTestName,
 }
 
 impl DiagnosticId {
@@ -619,6 +624,7 @@ impl DiagnosticId {
             DiagnosticId::TypeMustBeKnown => "E0155",
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",
+            DiagnosticId::InvalidTestName => "E0173",
         }
     }
 }
