@@ -390,8 +390,8 @@ class Fallback {
 // terminal: replaying would duplicate a prefix and there is no resumable-stream
 // contract at the client boundary.
 class StreamRelay {
-    open: () -> root.stream.TurnStream throws unknown,
-    retry: (root.errors.Failure) -> bool throws unknown,
+    open: () -> root.stream.TurnStream throws root.errors.InvokeError,
+    retry: (root.errors.Failure) -> bool throws root.errors.InvokeError,
     current: root.stream.TurnStream?,
     emitted: bool,
     terminal: root.stream.StreamEvent[],
@@ -404,7 +404,7 @@ class StreamRelay {
         }
     }
 
-    function recover(self, error: unknown) -> void {
+    function recover(self, error: root.errors.InvokeError) -> void {
         match (root.errors.normalize_invoke(error)) {
             let timeout: baml.errors.Timeout => {
                 self.close_current();
@@ -494,5 +494,5 @@ class StreamRelay {
 }
 
 class StreamRelayError {
-    error: unknown,
+    error: root.errors.InvokeError,
 }

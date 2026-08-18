@@ -46,7 +46,7 @@
 // A client that can render the same request as `invoke` but streamed.
 // Implementors must also implement Client (`requires`).
 interface StreamingClient requires root.Client {
-    function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream throws unknown
+    function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream throws root.errors.InvokeError
 }
 
 // One decoded raw SSE event, as produced by `baml.http.SseStream.next()`:
@@ -100,7 +100,7 @@ type StreamEvent = TextDelta | TurnMeta | TurnDone;
 class Done {
 }
 
-type EventSource = () -> StreamEvent | Done throws unknown;
+type EventSource = () -> StreamEvent | Done throws root.errors.InvokeError;
 
 // The raw text-delta stream of ONE model turn. Pull-based: nothing is read
 // from the wire until `next()` or `final_turn()` is called.
@@ -117,7 +117,7 @@ class TurnStream {
     // wire-backed streams: the SSE connection plus a per-provider decoder
     // that turns one `SseStream.next()` batch into StreamEvents.
     _sse: baml.http.SseStream?,
-    _decode: ((string) -> StreamEvent[] throws unknown)?,
+    _decode: ((string) -> StreamEvent[] throws root.errors.InvokeError)?,
     // scripted streams (tests): literal delta chunks, no network.
     _chunks: string[],
     _cursor: int,
@@ -150,7 +150,7 @@ class TurnStream {
     // sole end-of-turn signal IS the socket closing.
     function from_sse(
         sse: baml.http.SseStream,
-        decode: (string) -> StreamEvent[] throws unknown,
+        decode: (string) -> StreamEvent[] throws root.errors.InvokeError,
         require_terminal: string? = null,
     ) -> TurnStream {
         TurnStream {
@@ -308,7 +308,7 @@ class TurnStream {
                             return Done {  };
                         },
                         let batch: string => {
-                            if let decode: (string) -> StreamEvent[] throws unknown = self._decode {
+                            if let decode: (string) -> StreamEvent[] throws root.errors.InvokeError = self._decode {
                                 for (let e in decode(batch)) {
                                     self._pending.push(e);
                                 }
@@ -382,7 +382,7 @@ class TurnStream {
 // companion. This is the one canonical host-stream class; tagged handles carry
 // its FQN across FFI so host bridges do not need to hardcode a namespace.
 class Stream<TStream, TFinal> {
-    _next_text: () -> string? throws unknown,
+    _next_text: () -> string? throws root.errors.InvokeError,
     _cache: baml.sap.ParseCache<TStream, TFinal>,
     _text: string,
     _finished: bool,

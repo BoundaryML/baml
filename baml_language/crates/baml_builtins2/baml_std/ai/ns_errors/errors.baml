@@ -11,29 +11,23 @@ interface Failure {
     function retry_safety(self) -> RetrySafety throws never
 }
 
-// Close an untyped error channel at an ai boundary. Classified failures and
-// already-normalized unknown errors retain their identity; everything else is
-// captured in the standard untyped wrapper.
-function normalize(error: unknown) -> Failure | baml.errors.UnknownError throws never {
-    match (error) {
-        let failure: Failure => failure,
-        let unknown_error: baml.errors.UnknownError => unknown_error,
-        _ => baml.errors.UnknownError { data: error, message: [error.to_string()] },
-    }
+// The closed error channel of a model invocation: every typed failure the
+// client stack can produce, plus the two host signals (deadline, cancel)
+// that must survive each boundary untouched. `throws unknown` is not used
+// on this surface; stored callback positions declare this alias explicitly
+// (TYPE_SYSTEM.md rule 5) and parameter positions infer per call site.
+type InvokeError = Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled;
+
+// A typed identity gate. Accepting only the closed union means any call
+// site whose catch_all binder still carries an unclassified type is a
+// compile error AT THAT SITE, instead of a silent UnknownError at runtime.
+function normalize(error: Failure | baml.errors.UnknownError) -> Failure | baml.errors.UnknownError throws never {
+    error
 }
 
-// Invocation boundaries preserve Timeout and Cancelled values that reach
-// BAML's error channel as first-class signals. Classified failures and
-// already-normalized unknown errors retain their identity; only untyped values
-// enter UnknownError.
-function normalize_invoke(
-    error: unknown,
-) -> Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled throws never {
-    match (error) {
-        let timeout: baml.errors.Timeout => timeout,
-        let cancelled: baml.panics.Cancelled => cancelled,
-        _ => normalize(error),
-    }
+// The invocation-boundary gate: same contract, widened to the host signals.
+function normalize_invoke(error: InvokeError) -> InvokeError throws never {
+    error
 }
 
 class RateLimited {
