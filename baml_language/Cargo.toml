@@ -398,7 +398,9 @@ lto = "fat"
 codegen-units = 1
 opt-level = "s"   # smallest; try "s" if perf matters
 strip = "symbols" # still keep your strip -x in packaging
-panic = "abort"
+# `unwind` for every artifact — see the "Why panic = unwind" note below the
+# profile overrides.
+panic = "unwind"
 
 # Some crates don't change as much but benefit more from
 # more expensive optimization passes, so we selectively
@@ -448,62 +450,32 @@ lto = "fat"
 [profile.dist]
 inherits = "release"
 
-# Embedded-SDK profiles: identical to `release`, but `panic = "unwind"`.
+# Why `panic = "unwind"` everywhere (release profile above)
 #
-# The Python and Node SDKs load the engine as a native library *inside the
-# user's own process* (`baml_py.abi3.so` via PyO3, the `.node` addon via napi).
-# Under `panic = "abort"` (our `release` default, chosen for binary size) a raw
-# Rust panic anywhere in the engine — e.g. a stdlib slice bounds check — calls
-# `process::abort()` and SIGABRTs the *user's* interpreter: their whole server
-# dies, uncatchable even by `except BaseException`.
+# `panic` is a whole-artifact setting: it cannot be overridden per crate and one
+# binary cannot mix strategies. `release` used to be `abort` (chosen for binary
+# size) with a family of `release-bridge-*` profiles that re-enabled `unwind`
+# for the artifacts loaded into a user's process (PyO3 `baml_py.abi3.so`, the
+# napi `.node` addon, the Swift/Java cdylibs, the standalone `bridge_cffi`
+# cdylib that dylib-loader SDKs dlopen). Those need `unwind` because their
+# `catch_unwind` -> `baml.panics.SdkPanic` boundary in `bridge_cffi` (and
+# tokio's per-task isolation in the in-engine HTTP server) only fires when the
+# stack can unwind; under `abort` a stdlib slice bounds check anywhere in the
+# engine `process::abort()`s the user's interpreter/JVM/server, uncatchable.
 #
-# The bridges already have the machinery to contain such a panic — a
-# `catch_unwind` -> `baml.panics.SdkPanic` boundary in `bridge_cffi`, and
-# tokio's per-task isolation in the in-engine HTTP server — but all of it only
-# runs when the stack can *unwind*, which `abort` forbids. Building just these
-# two artifacts with `unwind` turns an engine panic into a catchable
-# `BamlPanic` / JS error instead of killing the host process.
+# The CLI now needs `unwind` for the same structural reason: the language
+# server runs reads on Salsa snapshots and relies on Salsa's unwind-based
+# cancellation (`salsa::Cancelled`) to abandon in-flight queries when sources
+# change, and on `catch_unwind` at request dispatch to survive a query panic.
+# Neither exists under `abort`. Making `release` itself `unwind` also gives
+# `baml run`/`baml test` the same panic containment the SDKs have (previously
+# the CLI SIGABRT'd where an SDK reported a catchable panic).
 #
-# `bridge_cffi` also ships as a standalone prebuilt cdylib (built once per
-# target, language-neutral) that dylib-loader SDKs — the Rust `baml_bridge`
-# crate today, the Go bridge when it migrates — dlopen at runtime, again
-# *inside the user's process*. It needs `unwind` for the same reason:
-# `bridge_cffi`'s `catch_unwind` -> `SdkPanic` boundary only fires when the
-# stack can unwind. Host-process safety over the ~+5 MB of unwind tables (the
-# contract mandates `panic = "unwind"` for a library loaded into a user's
-# server).
-#
-# `bridge_java` is the JVM analog: a cdylib `System.load`ed into the user's JVM
-# process. Its `catch_unwind` boundary turns an engine panic into a catchable
-# `BamlPanic` instead of `SIGABRT`ing the JVM (which no `try`/`catch` could
-# recover), so it needs `panic = "unwind"` for exactly the same reason as
-# `bridge_cffi` — the 8-target Java native matrix selects
-# `--profile release-bridge-java`.
-#
-# `panic` is a whole-artifact setting (it can't be overridden per-crate, and one
-# binary can't mix strategies), so these artifacts need their own profile rather
-# than a package override. maturin (`--profile release-bridge-python`), napi
-# (`--profile release-bridge-node`), the standalone cdylib matrix
-# (`--profile release-bridge-cffi`), and the Java native matrix
-# (`--profile release-bridge-java`) select these at build time. The CLI and wasm
-# stay on `release`/`abort`: each owns its own process and is size-gated, so an
-# abort there is acceptable and the ~+5 MB of unwind tables isn't worth paying.
-[profile.release-bridge-python]
-inherits = "release"
-panic = "unwind"
-
-[profile.release-bridge-node]
-inherits = "release"
-panic = "unwind"
-
-[profile.release-bridge-swift]
-inherits = "release"
-panic = "unwind"
-
-[profile.release-bridge-cffi]
-inherits = "release"
-panic = "unwind"
-
-[profile.release-bridge-java]
-inherits = "release"
-panic = "unwind"
+# Measured cost on `baml-cli`, aarch64-apple-darwin, identical release settings
+# except `panic` (2026-08-18): 24.65 MiB (abort) -> 30.87 MiB (unwind),
+# +6.23 MiB / +25%: `__text` +2.63 MB (landing pads), `__eh_frame` +2.32 MB,
+# `__gcc_except_tab` +1.19 MB, `__unwind_info` +0.32 MB. Nothing else in the
+# profile can shave this — LTO, opt-level and strip are already at their
+# size-minimizing settings — so the size-gate ceilings carry it explicitly
+# (`.cargo/size-gate.toml`). wasm32 is unaffected: it has no unwinding and
+# behaves as `abort` regardless of this setting.

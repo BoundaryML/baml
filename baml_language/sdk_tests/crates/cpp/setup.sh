@@ -8,7 +8,7 @@
 # Builds the dev-profile bridge_cffi cdylib that every fixture's test.sh
 # dlopens at run time (target/debug/libbridge_cffi.*), then runs the bridge_cpp
 # core consumer smoke against that same library. The dev profile has
-# panic=unwind by default, matching the release-bridge-cffi shipping profile's
+# panic=unwind by default, matching the release shipping profile's
 # unwind requirement. Features mirror the workspace test convention
 # (ring-crypto instead of the default aws-crypto).
 #

@@ -342,6 +342,6 @@ mod tests {
         config.validate().unwrap();
 
         let macos = &config.artifacts["baml-cli"].platform["aarch64-apple-darwin"];
-        assert_eq!(macos.max_file_bytes, Some(26_214_400));
+        assert_eq!(macos.max_file_bytes, Some(33_554_432));
     }
 }
