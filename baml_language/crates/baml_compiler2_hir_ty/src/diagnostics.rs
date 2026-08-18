@@ -158,6 +158,12 @@ pub enum TirTypeError {
     CannotConstructReflectionKind {
         class_name: baml_type::QualifiedTypeName,
     },
+    /// Builtin companion carriers (`baml.Int`, `baml.Map`, …) hold no fields
+    /// and cannot be constructed with an object literal.
+    CannotConstructBuiltinCompanion {
+        class_name: baml_type::QualifiedTypeName,
+        companion: baml_type::type_kind::BuiltinCompanion,
+    },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
         after: StmtId,
@@ -938,6 +944,18 @@ impl fmt::Display for TirTypeError {
                 let diagnostic =
                     baml_compiler_diagnostics::runtime_type::cannot_construct_reflection_kind(
                         &class_name.render_user_facing(),
+                    );
+                f.write_str(diagnostic.message.as_str())
+            }
+            TirTypeError::CannotConstructBuiltinCompanion {
+                class_name,
+                companion,
+            } => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::cannot_construct_builtin_companion(
+                        &class_name.render_user_facing(),
+                        companion.builtin,
+                        companion.origin,
                     );
                 f.write_str(diagnostic.message.as_str())
             }

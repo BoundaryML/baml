@@ -1,0 +1,83 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0166
+
+  × companion class `baml.Int` cannot be constructed; it only carries the methods of `int`, whose values come from literals
+   ╭─[main.baml:6:11]
+ 6 │   let i = baml.Int {};
+   ·           ───────────
+   ╰────
+
+  [type] E0166
+
+  × companion class `baml.Float` cannot be constructed; it only carries the methods of `float`, whose values come from literals
+   ╭─[main.baml:7:11]
+ 7 │   let f = baml.Float {};
+   ·           ─────────────
+   ╰────
+
+  [type] E0166
+
+  × companion class `baml.Bigint` cannot be constructed; it only carries the methods of `bigint`, whose values come from literals
+   ╭─[main.baml:8:11]
+ 8 │   let b = baml.Bigint {};
+   ·           ──────────────
+   ╰────
+
+  [type] E0166
+
+  × companion class `baml.String` cannot be constructed; it only carries the methods of `string`, whose values come from literals
+   ╭─[main.baml:9:11]
+ 9 │   let s = baml.String {};
+   ·           ──────────────
+   ╰────
+
+  [type] E0166
+
+  × companion class `baml.Bool` cannot be constructed; it only carries the methods of `bool`, whose values come from literals
+    ╭─[main.baml:10:11]
+ 10 │   let t = baml.Bool {};
+    ·           ────────────
+    ╰────
+
+  [type] E0166
+
+  × companion class `baml.Null` cannot be constructed; it only carries the methods of `null`, whose values come from the `null` literal
+    ╭─[main.baml:11:11]
+ 11 │   let n = baml.Null {};
+    ·           ────────────
+    ╰────
+
+  [type] E0166
+
+  × companion class `baml.Uint8Array` cannot be constructed; it only carries the methods of `uint8array`, whose values come from byte-string literals
+    ╭─[main.baml:12:11]
+ 12 │   let u = baml.Uint8Array {};
+    ·           ──────────────────
+    ╰────
+
+  [type] E0166
+
+  × companion class `baml.Map` cannot be constructed; it only carries the methods of `map`, whose values come from map literals
+    ╭─[main.baml:20:11]
+ 20 │   let m = baml.Map {};
+    ·           ───────────
+    ╰────
+
+  [type] E0166
+
+  × companion class `baml.Array` cannot be constructed; it only carries the methods of `array`, whose values come from array literals
+    ╭─[main.baml:21:11]
+ 21 │   let a = baml.Array {};
+    ·           ─────────────
+    ╰────
+
+  [type] E0166
+
+  × companion class `baml.TypeValue` cannot be constructed; it only carries the methods of `type`, whose values come from `type.of<T>()` and reflection
+    ╭─[main.baml:26:11]
+ 26 │   let t = baml.TypeValue {};
+    ·           ─────────────────
+    ╰────

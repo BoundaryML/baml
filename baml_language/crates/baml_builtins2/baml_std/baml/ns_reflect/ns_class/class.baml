@@ -1,19 +1,21 @@
 class Field {
   name string
   type type?
-  meta baml.reflect.Meta
+  /// Backing storage for `meta()`. A class shares one name space across
+  /// fields and methods, so the accessor owns the public `meta` name.
+  _meta baml.reflect.Meta
   /// Present only for handles returned from `baml.AnyClass.list_fields` or
   /// `get_field`. Type-side descriptors returned by `Type.fields()` are
   /// intentionally ownerless.
   _owner unknown?
 
-  function metadata(self) -> baml.reflect.Meta throws never {
-    self.meta
+  function meta(self) -> baml.reflect.Meta throws never {
+    self._meta
   }
 
   /// Read this field from its bound owner. An ownerless type-side descriptor
   /// returns `null`.
-  function read<T>(self) -> T? throws baml.errors.TypeMismatch {
+  function value<T>(self) -> T? throws baml.errors.TypeMismatch {
     let owner: baml.AnyClass = self._owner else {
       return null
     }

@@ -83,6 +83,47 @@ pub fn is_type_kind_class(name: &QualifiedTypeName) -> bool {
         && name.name().as_str() == "Type"
 }
 
+/// A builtin type and where its values actually come from, for the
+/// companion carrier class that hangs its methods on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuiltinCompanion {
+    /// The builtin type this class carries the methods of.
+    pub builtin: &'static str,
+    /// How a value of that builtin is produced instead.
+    pub origin: &'static str,
+}
+
+/// The builtin a companion carrier class hangs its methods on, or `None`
+/// when the class is not a carrier.
+///
+/// These classes hold no fields; they exist so `5.abs()` and `"x".len()`
+/// have somewhere to resolve. Constructing one yields a nonsense empty
+/// instance (and, for the generic carriers, an error-recovery type that
+/// reaches MIR lowering), so the two class-literal sites reject them.
+///
+/// Same discipline as [`QualifiedTypeName::is_builtin_root_type`]: the
+/// `baml` package plus an EMPTY namespace, so a user's own `Int` class and
+/// the field-carrying `baml.reflect.class.Field` are both untouched.
+pub fn builtin_companion_of(name: &QualifiedTypeName) -> Option<BuiltinCompanion> {
+    if name.package().as_str() != "baml" || !name.namespace().is_empty() {
+        return None;
+    }
+    let (builtin, origin) = match name.name().as_str() {
+        "Int" => ("int", "literals"),
+        "Bigint" => ("bigint", "literals"),
+        "Float" => ("float", "literals"),
+        "String" => ("string", "literals"),
+        "Bool" => ("bool", "literals"),
+        "Null" => ("null", "the `null` literal"),
+        "Uint8Array" => ("uint8array", "byte-string literals"),
+        "Array" => ("array", "array literals"),
+        "Map" => ("map", "map literals"),
+        "TypeValue" => ("type", "`type.of<T>()` and reflection"),
+        _ => return None,
+    };
+    Some(BuiltinCompanion { builtin, origin })
+}
+
 /// Whether a nominal class inhabits the compiler-derived `baml.AnyClass`
 /// interface. Ordinary classes do. Within the sealed reflection-kind family,
 /// only the class-kind value view is intentionally admitted.
@@ -102,6 +143,48 @@ mod tests {
         assert!(!is_type_kind_class(&QualifiedTypeName::from_dotted_path(
             "baml.reflect.Type"
         )));
+    }
+
+    #[test]
+    fn companion_carriers_need_the_baml_package_and_an_empty_namespace() {
+        for (path, builtin) in [
+            ("baml.Int", "int"),
+            ("baml.Bigint", "bigint"),
+            ("baml.Float", "float"),
+            ("baml.String", "string"),
+            ("baml.Bool", "bool"),
+            ("baml.Null", "null"),
+            ("baml.Uint8Array", "uint8array"),
+            ("baml.Array", "array"),
+            ("baml.Map", "map"),
+            ("baml.TypeValue", "type"),
+        ] {
+            assert_eq!(
+                builtin_companion_of(&QualifiedTypeName::from_dotted_path(path))
+                    .map(|companion| companion.builtin),
+                Some(builtin),
+                "{path} should be a companion carrier"
+            );
+        }
+        for path in [
+            // A user package may name a class whatever it likes.
+            "user.Int",
+            "user.Map",
+            // Namespaced `baml` classes are out of scope, including the
+            // field-carrying reflect classes the stdlib itself constructs.
+            "baml.reflect.class.Field",
+            "baml.reflect.class.Type",
+            "baml.media.Image",
+            "baml.iter.Done",
+            // A root-namespace `baml` class that really does hold fields.
+            "baml.TaggedString",
+        ] {
+            assert_eq!(
+                builtin_companion_of(&QualifiedTypeName::from_dotted_path(path)),
+                None,
+                "{path} should not be a companion carrier"
+            );
+        }
     }
 
     #[test]

@@ -375,6 +375,10 @@ pub enum DiagnosticId {
     /// Reflection attempted to extract or dynamically invoke a generic
     /// callable without a complete runtime type-argument frame.
     UnspecializedReflectedGeneric,
+    /// A class literal named one of the builtin companion carriers
+    /// (`baml.Int`, `baml.Map`, …). They exist to hang methods on a builtin
+    /// type, never to be instantiated.
+    CannotConstructBuiltinCompanion,
 }
 
 impl DiagnosticId {
@@ -579,6 +583,7 @@ impl DiagnosticId {
             DiagnosticId::EmptyEnumAtRender => "E0159",
             // E0164 is owned by the non-data output-format diagnostic in #4470.
             DiagnosticId::UnspecializedReflectedGeneric => "E0165",
+            DiagnosticId::CannotConstructBuiltinCompanion => "E0166",
         }
     }
 }

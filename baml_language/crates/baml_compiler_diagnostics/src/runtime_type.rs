@@ -129,6 +129,21 @@ pub fn cannot_construct_reflection_kind(class_name: &str) -> Diagnostic {
     )
 }
 
+/// E0166 — builtin companion carriers hang methods on a builtin type; they
+/// hold no fields and are never instantiated.
+pub fn cannot_construct_builtin_companion(
+    class_name: &str,
+    builtin: &str,
+    origin: &str,
+) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::CannotConstructBuiltinCompanion,
+        format!(
+            "companion class `{class_name}` cannot be constructed; it only carries the methods of `{builtin}`, whose values come from {origin}"
+        ),
+    )
+}
+
 /// E0158 — the mounted callable has no location-free bytecode link contract.
 pub fn mounted_package_call_unsupported(path: &str) -> Diagnostic {
     Diagnostic::error(
@@ -228,6 +243,11 @@ mod tests {
                 cannot_construct_reflection_kind("baml.reflect.class.Type"),
                 "E0001",
                 "reflection kind `baml.reflect.class.Type` cannot be constructed; obtain it from a type value",
+            ),
+            (
+                cannot_construct_builtin_companion("baml.Int", "int", "literals"),
+                "E0166",
+                "companion class `baml.Int` cannot be constructed; it only carries the methods of `int`, whose values come from literals",
             ),
             (
                 mounted_package_call_unsupported("dep.tool"),

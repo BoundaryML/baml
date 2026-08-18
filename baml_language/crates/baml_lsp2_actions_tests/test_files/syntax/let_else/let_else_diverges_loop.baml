@@ -1,11 +1,6 @@
-// Known limitation: BAML's TIR doesn't infer `while (true) { … }` as
-// `Ty::Never` (it sees it as a regular `while` with type `void`), so
-// using an infinite loop as a divergence form in let-else is rejected.
-// This is a TIR-wide gap, not specific to let-else — same applies to
-// `if` chains in tail position. Tracked as a follow-up.
-//
-// In Rust the equivalent `let X = e else { loop {} };` is accepted
-// because `loop {}` has type `!`.
+// A `while (true)` whose body holds no `break` bound to it never reaches
+// the code after it, so it is a divergence form for `let … else` — the
+// same role `loop {}` plays in Rust, where its type is `!`.
 class Ok { value string }
 class Err { message string }
 
@@ -14,12 +9,29 @@ function LoopDiverges(r: Ok | Err) -> string {
   o.value
 }
 
+function ContinueIsNotAnExit(r: Ok | Err) -> string {
+  // `continue` re-enters the loop; only `break` leaves it.
+  let o: Ok = r else { while (true) { continue; } };
+  o.value
+}
+
+function NestedLoopBreakStillDiverges(r: Ok | Err) -> string {
+  // The `break` binds to the INNER loop, so the outer loop still has no
+  // exit edge and the else branch still diverges.
+  let o: Ok = r else {
+    while (true) {
+      while (true) { break; }
+    }
+  };
+  o.value
+}
+
+function FoldedTrueDiverges(r: Ok | Err) -> string {
+  // The condition folds to the literal type `true` at the interned layer.
+  let o: Ok = r else { while (1 == 1) {} };
+  o.value
+}
+
 //----
 //- diagnostics
-// E0113
-//
-//   × `let … else` requires a diverging else block (`return`, `throw`, `break`, or `continue`); got `void`
-//     ╭─[let_else_let_else_diverges_loop.baml:13:22]
-//  13 │   let o: Ok = r else { while (true) {} };
-//     ·                      ───────────────────
-//     ╰────
+// <no-diagnostics-expected>

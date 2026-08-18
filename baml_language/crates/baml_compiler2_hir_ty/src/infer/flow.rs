@@ -298,4 +298,54 @@ impl InferenceContext<'_> {
         }
         out
     }
+
+    /// Whether a loop body contains a `break` that binds to THAT loop.
+    ///
+    /// TIR keeps no break-target machinery — `loop_depth` is a bare counter
+    /// and the `Stmt::Break` arm only sets `Diverges::Always`, which the
+    /// enclosing loop then discards — so the binding is recovered
+    /// syntactically here: descend everything except the BODIES of nested
+    /// loops, whose `break`s bind to the inner loop. A nested loop's
+    /// condition and C-style update slot still belong to this loop, so they
+    /// are still descended. Lambda bodies are already excluded by
+    /// `expr_children`, which is right: a `break` cannot leave a lambda.
+    /// `continue` is deliberately not counted — it re-enters the loop.
+    ///
+    /// A `break` under `defer` or `spawn` is counted even though both are
+    /// rejected elsewhere; counting keeps the answer on the conservative
+    /// side, where the loop simply does not diverge.
+    pub(super) fn loop_body_breaks(body: &ExprBody, root: ExprId) -> bool {
+        use baml_compiler2_ast::{Stmt, traverse::BodyNode};
+        // The arena is a DAG (templates share `ExprId`s between their
+        // segments and desugared payload), so the walk must dedupe.
+        let mut seen: FxHashSet<BodyNode> = FxHashSet::default();
+        let mut stack = vec![BodyNode::Expr(root)];
+        while let Some(node) = stack.pop() {
+            if !seen.insert(node) {
+                continue;
+            }
+            let mut children = Vec::new();
+            match node {
+                BodyNode::Expr(expr) => body.expr_children(expr, &mut children),
+                BodyNode::Stmt(stmt) => match &body.stmts[stmt] {
+                    Stmt::Break => return true,
+                    Stmt::While {
+                        condition, after, ..
+                    } => {
+                        children.push(BodyNode::Expr(*condition));
+                        children.extend(after.map(BodyNode::Stmt));
+                    }
+                    Stmt::WhileLet { scrutinee, .. } => {
+                        children.push(BodyNode::Expr(*scrutinee));
+                    }
+                    Stmt::For { collection, .. } => {
+                        children.push(BodyNode::Expr(*collection));
+                    }
+                    _ => body.stmt_children(stmt, &mut children),
+                },
+            }
+            stack.extend(children);
+        }
+        false
+    }
 }

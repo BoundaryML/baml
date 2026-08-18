@@ -202,7 +202,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         169   load_type 1                                
         170   load_var2 1 2                              
         171   load_var 5                                 (j)
-        172   make_closure 2277 captures=3 ntypeargs=1   
+        172   make_closure 2278 captures=3 ntypeargs=1   
         173   call 16 ntypeargs=3                        (baml.Array.map)
         174   store_var 14                               (futures)
 
@@ -251,7 +251,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         211   load_var 11                                (calls)
         212   load_type 1                                
         213   load_var 20                                (f)
-        214   make_closure 2278 captures=1 ntypeargs=1   
+        214   make_closure 2279 captures=1 ntypeargs=1   
         215   call 19 ntypeargs=2                        (baml.Array.find)
 
   327   216   store_var 21                               (_59)
@@ -1314,7 +1314,7 @@ function ai.Agent.new(max_steps: int, client: ai.Client | null, tool_errors: ai.
        29   pop_jump_if_false +4                       (to 33)
 
   41   30   load_type 4                                
-       31   make_closure 2226 captures=0 ntypeargs=1   
+       31   make_closure 2227 captures=0 ntypeargs=1   
        32   store_var 5                                (_10)
 
   35   33   load_var2 1 2                              
@@ -3737,7 +3737,7 @@ function ai.internal._proxy(conn: ai.mcp.McpConnection, name: string) -> (map<st
        5    store_var 2           
 
   12   6    load_var2 1 2         
-       7    make_closure 4215 2   
+       7    make_closure 4216 2   
        8    store_var 3           (_0)
        9    load_var 3            (_0)
        10   return                
@@ -5133,7 +5133,7 @@ function ai.prompt(body: ((string) -> ai.Role throws never, ai.Context) -> baml.
        2   store_var 1           
 
   84   3   load_var 1            (body)
-       4   make_closure 2126 1   
+       4   make_closure 2127 1   
        5   store_var 3           (render)
 
   88   6   load_var 3            (render)
@@ -5830,7 +5830,7 @@ function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.Stream
   436   81    load_type 8                                
         82    load_type 2                                
         83    load_var 14                                (turns)
-        84    make_closure 2304 captures=1 ntypeargs=2   
+        84    make_closure 2305 captures=1 ntypeargs=2   
         85    load_var 19                                (_36)
         86    load_const 9                               ("")
         87    load_const 10                              (false)
@@ -5955,7 +5955,7 @@ function ai.tools.Toolbox.get(self: ai.tools.Toolbox, name: string) -> ai.tools.
         5    load_var 1            (self)
         6    load_field 0          (entries)
         7    load_var 2            (name)
-        8    make_closure 2152 1   
+        8    make_closure 2153 1   
         9    call 19 ntypeargs=2   (baml.Array.find)
         10   return                
 }
@@ -10002,7 +10002,7 @@ function anthropic.internal.invoke_stream(c: anthropic.AnthropicClient, input: a
 
   1238   40   load_var2 3 7           
 
-  1239   41   make_closure 3290 1     
+  1239   41   make_closure 3291 1     
          42   load_const 8            ("anthropic")
 
   1237   43   call 968 ntypeargs=0    (ai.stream.TurnStream.from_sse)
@@ -14233,7 +14233,7 @@ function claude_code.internal.allowed_mcp_tools(c: claude_code.ClaudeCodeClient)
         8    load_type 2           
         9    load_var 3            (_3)
 
-  224   10   make_closure 4085 0   
+  224   10   make_closure 4086 0   
 
   223   11   call 16 ntypeargs=3   (baml.Array.map)
         12   store_var 2           (_2)
@@ -17217,7 +17217,7 @@ function google.internal._gm_strip_nulls(value: baml.json.json, opaque: bool) ->
         20   load_type 2                        
         21   load_type 3                        
         22   load_var 13                        (items)
-        23   make_closure 3325 0                
+        23   make_closure 3326 0                
         24   call 16 ntypeargs=3                (baml.Array.map)
         25   jump +52                           (to 77)
 
@@ -19213,7 +19213,7 @@ function google.internal.vertex_invoke_stream(c: google.VertexClient, input: ai.
 
   362   22   load_var2 3 4           
 
-  363   23   make_closure 3564 1     
+  363   23   make_closure 3565 1     
         24   load_const 5            ("vertex")
 
   361   25   call 968 ntypeargs=0    (ai.stream.TurnStream.from_sse)
@@ -21460,7 +21460,7 @@ function openai.internal.ChatStreamDecoder._absorb_call(self: openai.internal.Ch
          16    load_field 1            (calls)
 
   1398   17    load_var 4              (index)
-         18    make_closure 2983 1     
+         18    make_closure 2984 1     
 
   1397   19    call 19 ntypeargs=2     (baml.Array.find)
 
@@ -22084,7 +22084,7 @@ function openai.internal._chat_apply_directives(j: baml.json.json) -> baml.json.
         17    load_type 2                        
         18    load_type 3                        
         19    load_var 18                        (items)
-        20    make_closure 2898 0                
+        20    make_closure 2899 0                
         21    call 16 ntypeargs=3                (baml.Array.map)
         22    jump +88                           (to 110)
 
@@ -23068,7 +23068,7 @@ function openai.internal._chat_prune_nulls(j: baml.json.json) -> baml.json.json 
         17   load_type 2                        
         18   load_type 3                        
         19   load_var 11                        (items)
-        20   make_closure 2904 0                
+        20   make_closure 2905 0                
         21   call 16 ntypeargs=3                (baml.Array.map)
         22   jump +58                           (to 80)
 
@@ -27227,7 +27227,7 @@ function openai.internal.chat_invoke_stream(compat: openai.internal.ChatCompat, 
          26   throw                   
 
   1551   27   load_var 5              (decoder)
-         28   make_closure 3005 1     
+         28   make_closure 3006 1     
 
   1552   29   load_var 1              (compat)
          30   load_field 0            (provider)
@@ -28540,7 +28540,7 @@ function openai.internal.invoke_stream(c: openai.ResponsesClient, input: ai.Mode
 
   1163   16   load_var2 3 5           
 
-  1164   17   make_closure 2725 1     
+  1164   17   make_closure 2726 1     
          18   load_const 1            ("openai")
 
   1162   19   call 968 ntypeargs=0    (ai.stream.TurnStream.from_sse)
@@ -29319,7 +29319,7 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
 }
 
 function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  104   0   make_closure 2077 0   
+  104   0   make_closure 2078 0   
         1   store_var 1           (_0)
         2   load_var 1            (_0)
         3   return                
@@ -29346,7 +29346,7 @@ function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testi
        15   pop 1                  
 
   76   16   load_var 1             (threshold)
-       17   make_closure 2072 1    
+       17   make_closure 2073 1    
        18   store_var 2            (_0)
        19   load_var 2             (_0)
        20   return                 
@@ -29387,7 +29387,7 @@ function testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws neve
        27   pop 1                  
 
   10   28   load_var2 1 2          
-       29   make_closure 2056 2    
+       29   make_closure 2057 2    
        30   store_var 3            (_0)
        31   load_var 3             (_0)
        32   return                 
@@ -29408,14 +29408,14 @@ function testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws ne
        9    pop 1                  
 
   42   10   load_var 1             (max_attempts)
-       11   make_closure 2066 1    
+       11   make_closure 2067 1    
        12   store_var 2            (_0)
        13   load_var 2             (_0)
        14   return                 
 }
 
 function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  98   0   make_closure 2075 0   
+  98   0   make_closure 2076 0   
        1   store_var 1           (_0)
        2   load_var 1            (_0)
        3   return                
@@ -32012,7 +32012,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
         24   store_deref 5                      
 
   486   25   load_var 5                         (child)
-        26   make_closure 1957 1                
+        26   make_closure 1958 1                
         27   load_const 6                       (null)
         28   load_const 6                       (null)
         29   load_type 7                        
@@ -32114,7 +32114,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   496   3    load_var 1             (body)
-        4    make_closure 1969 1    
+        4    make_closure 1970 1    
         5    store_var 3            (base_run)
 
   527   6    load_var 2             (runner)
@@ -32388,7 +32388,7 @@ function testing.test_child(name: string, body: () -> void throws unknown, runne
   364   6    load_var2 1 2         
 
   366   7    load_var 3            (runner)
-        8    make_closure 1934 2   
+        8    make_closure 1935 2   
         9    init_instance 0       (testing.TestSetChild .name, .run)
         10   store_var 4           (_0)
         11   load_var 4            (_0)
@@ -32407,7 +32407,7 @@ function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestS
         7    load_field 0          (name)
 
   375   8    load_var2 1 2         
-        9    make_closure 1936 2   
+        9    make_closure 1937 2   
         10   init_instance 0       (testing.TestSetChild .name, .run)
         11   store_var 3           (_0)
         12   load_var 3            (_0)
@@ -32430,7 +32430,7 @@ function testing.testset_child_selected(registry: testing.TestRegistry, ts: test
 
   391   11   load_var2 1 2         
         12   load_var 3            (names)
-        13   make_closure 1938 3   
+        13   make_closure 1939 3   
         14   init_instance 0       (testing.TestSetChild .name, .run)
         15   store_var 4           (_0)
         16   load_var 4            (_0)
