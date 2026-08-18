@@ -16629,11 +16629,11 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
     jump L9
 
   L8:
-    load_const 0
+    load_type google.internal.GmCandidate
     load_var resp
     load_field .candidates
-    make_bound_method baml.Array.at
-    call_indirect
+    load_const 0
+    call baml.Array.at
     store_var cand
     jump L10
 
@@ -18186,11 +18186,12 @@ function google.internal._vertex_key_in_query(c: google.VertexClient) -> bool {
     jump L1
 
   L0:
-    load_const "key"
+    load_type string
+    load_type string
     load_var c
     load_field .query_params
-    make_bound_method baml.Map.get
-    call_indirect
+    load_const "key"
+    call baml.Map.get
     store_var _2
     jump L2
 
@@ -19252,11 +19253,11 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
     jump L3
 
   L2:
-    load_const 0
+    load_type google.internal.GmCandidate
     load_var resp
     load_field .candidates
-    make_bound_method baml.Array.at
-    call_indirect
+    load_const 0
+    call baml.Array.at
     store_var cand
     jump L4
 
