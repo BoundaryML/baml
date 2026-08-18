@@ -10,6 +10,7 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::baml_compiler_diagnostics::Severity;
+use baml_exec::{LogLevel as TestLogLevel, LogOutput};
 use baml_type::RuntimeTy;
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
@@ -20,7 +21,6 @@ use sys_native::{CallId, SysOpsExt};
 
 use crate::{
     bytecode_cache::CacheContext,
-    log_output::{LogLevel as TestLogLevel, LogOutput},
     reporter::Reporter,
     test_filter::TestFilter,
 };
