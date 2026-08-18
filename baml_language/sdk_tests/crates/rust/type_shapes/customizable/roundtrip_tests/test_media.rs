@@ -1,17 +1,15 @@
 //! Roundtrip coverage for `baml_sdk::media`.
 //!
-//! Media values can't be hand-built as plain structs, so each value is
-//! sourced from the matching `return_*` function (which builds it
-//! engine-side via `image.from_url(...)` etc.). The *decode* path yields a
-//! handle-backed media value; the *encode* path passes that value back into
-//! a `round_trip_*` function.
-
-// PROVISIONAL: media types have no Rust SDK design yet. This port assumes
-// opaque handle-backed values that decode from `return_*` and encode back
-// through `round_trip_*` with no host-side construction.
+//! Values exercise both outbound descriptors returned by BAML and Rust-side
+//! media constructors encoded through the bridge's native handle ABI.
+use baml_bridge::{
+    DecodeError, Error,
+    media::{Audio, Image},
+};
 use baml_sdk::media::{
-    Media, return_audio, return_image, return_pdf, return_video, round_trip_audio,
-    round_trip_image, round_trip_media, round_trip_pdf, round_trip_video,
+    ImageOrAudio, Media, return_audio, return_image, return_pdf, return_video, round_trip_audio,
+    round_trip_image, round_trip_image_or_audio, round_trip_media, round_trip_pdf,
+    round_trip_video,
 };
 
 const URL: &str = "https://example.com/asset";
@@ -45,8 +43,12 @@ fn test_media_return_pdf() {
 
 #[test]
 fn test_media_round_trip_image() {
-    let img = return_image(URL.to_string(), None).unwrap();
-    round_trip_image(img).unwrap();
+    let path = std::env::temp_dir().join("baml-rust-sdk-media-example.png");
+    let path = path.to_string_lossy().into_owned();
+    let img = Image::from_file(path.clone(), Some("image/png".to_string())).unwrap();
+    let returned = round_trip_image(img).unwrap();
+    assert_eq!(returned.file(), Some(path.as_str()));
+    assert_eq!(returned.mime_type(), Some("image/png"));
 }
 
 #[test]
@@ -76,4 +78,26 @@ fn test_media_round_trip_media() {
         pdf_field: return_pdf(URL.to_string(), None).unwrap(),
     };
     round_trip_media(m).unwrap();
+}
+
+// SDK_PARITY_LINT(skip): validates Rust-specific generated media-union encode/decode
+#[test]
+fn test_media_round_trip_union() {
+    let img = Image::from_url(URL, Some("image/png".to_string())).unwrap();
+    let returned = round_trip_image_or_audio(ImageOrAudio::Image(img)).unwrap();
+    assert!(matches!(returned, ImageOrAudio::Image(_)));
+
+    let audio = Audio::from_url(URL, Some("audio/mpeg".to_string())).unwrap();
+    let returned = round_trip_image_or_audio(ImageOrAudio::Audio(audio)).unwrap();
+    assert!(matches!(returned, ImageOrAudio::Audio(_)));
+}
+
+// SDK_PARITY_LINT(skip): validates Rust bridge rejection of C-incompatible media descriptors
+#[test]
+fn test_media_return_rejects_interior_nul() {
+    let error = return_image("bad\0url".to_string(), None).unwrap_err();
+    assert!(matches!(
+        error,
+        Error::Decode(DecodeError::InvalidMedia { field: "source" })
+    ));
 }

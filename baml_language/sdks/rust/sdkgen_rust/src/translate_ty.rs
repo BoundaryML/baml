@@ -208,7 +208,13 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             }
             Ok(type_path(name, ctx.analysis))
         }
-        Ty::Media(kind, _) => Err(unsupported(&format!("media ({kind})"))),
+        Ty::Media(kind, _) => Ok(match kind {
+            baml_base::MediaKind::Image => quote! { ::baml_bridge::media::Image },
+            baml_base::MediaKind::Audio => quote! { ::baml_bridge::media::Audio },
+            baml_base::MediaKind::Video => quote! { ::baml_bridge::media::Video },
+            baml_base::MediaKind::Pdf => quote! { ::baml_bridge::media::Pdf },
+            baml_base::MediaKind::Generic => quote! { ::baml_bridge::media::Media },
+        }),
         // Opaque alias references (in-package non-recursive aliases are
         // inlined upstream, so these are recursive or cross-package ones).
         // A Rust `type` alias is transparent, so the reference resolves to
@@ -556,7 +562,7 @@ mod tests {
 
     #[test]
     fn references_to_skipped_types_fail_closed() {
-        // `Bad` has a media field, so it is skipped; a reference to it
+        // `Bad` has a prompt-AST field, so it is skipped; a reference to it
         // must not translate.
         let bad = name("user", &[], "Bad");
         let pool = SymbolPool::from([(
@@ -565,7 +571,9 @@ mod tests {
                 &bad,
                 vec![(
                     "m",
-                    Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY),
+                    Ty::PromptAst {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                 )],
             ),
         )]);
@@ -698,7 +706,7 @@ mod tests {
 
     #[test]
     fn transitively_poisoned_classes_skip_with_a_warning() {
-        // Bad (media field) poisons Holder, which references it.
+        // Bad (prompt-AST field) poisons Holder, which references it.
         let bad = name("user", &[], "Bad");
         let holder = name("user", &[], "Holder");
         let pool = SymbolPool::from([
@@ -708,7 +716,9 @@ mod tests {
                     &bad,
                     vec![(
                         "m",
-                        Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY),
+                        Ty::PromptAst {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
                     )],
                 ),
             ),

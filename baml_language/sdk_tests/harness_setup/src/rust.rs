@@ -174,11 +174,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         Gate::Later("needs literal types"),
     ),
     ("type_shapes", "roundtrip_tests/test_maps.rs", Gate::Now),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_media.rs",
-        Gate::Later("needs media types"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_media.rs", Gate::Now),
     ("type_shapes", "roundtrip_tests/test_optional.rs", Gate::Now),
     (
         "type_shapes",

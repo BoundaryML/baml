@@ -12,9 +12,10 @@
 //! Decode is a trial of the arms in declared order, which is sound only
 //! when the arms are pairwise discriminable on the wire (distinct wire
 //! kinds, FQN-verified nominals, distinct literal values). Shapes that
-//! are not — a `string` arm alongside a string-literal arm — and arms the
-//! SDK cannot represent (non-string literals) make the whole shape
-//! unsupported, fail-closed.
+//! are not — a `string` arm alongside a string-literal arm, or generic
+//! `media` alongside a concrete media kind — and arms the SDK cannot
+//! represent (non-string literals) make the whole shape unsupported,
+//! fail-closed.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -200,6 +201,8 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
 pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
     let mut has_bare_string_arm = false;
     let mut has_string_literal_arm = false;
+    let mut has_generic_media_arm = false;
+    let mut has_concrete_media_arm = false;
     let mut seen = HashSet::new();
     for arm in arms {
         match arm {
@@ -211,6 +214,8 @@ pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
                 ));
             }
             Ty::String { .. } => has_bare_string_arm = true,
+            Ty::Media(baml_base::MediaKind::Generic, _) => has_generic_media_arm = true,
+            Ty::Media(..) => has_concrete_media_arm = true,
             _ => {}
         }
         let Some(variant) = variant_name(arm) else {
@@ -229,6 +234,15 @@ pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
     if has_bare_string_arm && has_string_literal_arm {
         return Some(
             "union mixes a `string` arm with string-literal arms, which are \
+             indistinguishable on the wire"
+                .to_string(),
+        );
+    }
+    // Generic media accepts every concrete media kind, so trial decoding
+    // would always select whichever overlapping arm appeared first.
+    if has_generic_media_arm && has_concrete_media_arm {
+        return Some(
+            "union mixes a generic `media` arm with concrete media arms, which are \
              indistinguishable on the wire"
                 .to_string(),
         );
@@ -315,7 +329,8 @@ fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
         | Ty::Float { .. }
         | Ty::String { .. }
         | Ty::Bool { .. }
-        | Ty::Uint8Array { .. } => true,
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..) => true,
         // A `TypeVar` arm makes the enum generic over that param: the
         // variant holds a bare `T`. Whether `T` is actually in scope at the
         // use site is enforced when the reference is translated.
@@ -338,7 +353,6 @@ fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
         Ty::Null { .. }
         | Ty::Void { .. }
         | Ty::Literal(..)
-        | Ty::Media(..)
         | Ty::BuiltinUnknown { .. }
         | Ty::Function { .. }
         | Ty::Future(..)
@@ -361,6 +375,16 @@ fn variant_name(arm: &Ty) -> Option<String> {
         Ty::String { .. } => Some("String".to_string()),
         Ty::Bool { .. } => Some("Bool".to_string()),
         Ty::Uint8Array { .. } => Some("Uint8Array".to_string()),
+        Ty::Media(kind, _) => Some(
+            match kind {
+                baml_base::MediaKind::Image => "Image",
+                baml_base::MediaKind::Audio => "Audio",
+                baml_base::MediaKind::Video => "Video",
+                baml_base::MediaKind::Pdf => "Pdf",
+                baml_base::MediaKind::Generic => "Media",
+            }
+            .to_string(),
+        ),
         Ty::Class(name, _, _)
         | Ty::Enum(name, _)
         | Ty::EnumVariant(name, _, _)
@@ -393,7 +417,6 @@ fn variant_name(arm: &Ty) -> Option<String> {
         Ty::Null { .. }
         | Ty::Void { .. }
         | Ty::Literal(..)
-        | Ty::Media(..)
         | Ty::BuiltinUnknown { .. }
         | Ty::Function { .. }
         | Ty::Future(..)
@@ -403,5 +426,30 @@ fn variant_name(arm: &Ty) -> Option<String> {
         | Ty::PromptAst { .. }
         | Ty::Never { .. }
         | Ty::RustType { .. } => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_base::{MediaKind, TyAttr};
+
+    use super::*;
+
+    fn media(kind: MediaKind) -> Ty {
+        Ty::Media(kind, TyAttr::EMPTY)
+    }
+
+    #[test]
+    fn generic_media_cannot_overlap_concrete_media_in_a_union() {
+        for kind in [
+            MediaKind::Image,
+            MediaKind::Audio,
+            MediaKind::Video,
+            MediaKind::Pdf,
+        ] {
+            let error = shape_error(&[media(MediaKind::Generic), media(kind)]).unwrap();
+            assert!(error.contains("generic `media`"));
+        }
+        assert!(shape_error(&[media(MediaKind::Image), media(MediaKind::Audio)]).is_none());
     }
 }

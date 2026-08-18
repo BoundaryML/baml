@@ -67,12 +67,12 @@ pub struct RustGenOptions {
 }
 
 /// A symbol the emitter skipped because it references a BAML type the Rust
-/// SDK cannot represent yet (media, non-null unions, generics, …).
+/// SDK cannot represent yet (prompt ASTs, resource handles, …).
 #[derive(Debug)]
 pub struct SkipWarning {
     /// Fully qualified BAML name of the skipped symbol.
     pub fqn: String,
-    /// Human-readable reason, e.g. `unsupported type: media`.
+    /// Human-readable reason, e.g. `unsupported type: prompt AST`.
     pub reason: String,
 }
 
@@ -1497,7 +1497,9 @@ mod tests {
         let w = name("user", &[], "Widget");
         let ok = nullary_string_fn(&name("user", &[], "ok"));
         let mut snap = nullary_string_fn(&name("user", &[], "snap"));
-        snap.return_type = Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY);
+        snap.return_type = Ty::PromptAst {
+            attr: baml_base::TyAttr::EMPTY,
+        };
         // A generic method on a non-generic class emits (its own `<T>`),
         // proving `snap`'s skip is per-method, not per-vec.
         let mut pick = nullary_string_fn(&name("user", &[], "pick"));
@@ -1520,7 +1522,7 @@ mod tests {
         assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
         assert_eq!(generated.warnings[0].fqn, "user.Widget.snap");
         assert!(
-            generated.warnings[0].reason.contains("media"),
+            generated.warnings[0].reason.contains("prompt AST"),
             "{}",
             generated.warnings[0].reason
         );
@@ -1616,14 +1618,101 @@ mod tests {
 
     #[test]
     fn unsupported_symbols_skip_with_a_warning() {
-        let n = name("user", &[], "needs_media");
+        let n = name("user", &[], "needs_prompt_ast");
         let mut f = nullary_string_fn(&n);
-        f.return_type = Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY);
+        f.return_type = Ty::PromptAst {
+            attr: baml_base::TyAttr::EMPTY,
+        };
         let pool = SymbolPool::from([(n, Symbol::Function(f))]);
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
         assert_eq!(generated.warnings.len(), 1);
-        assert_eq!(generated.warnings[0].fqn, "user.needs_media");
-        assert!(generated.warnings[0].reason.contains("media"));
+        assert_eq!(generated.warnings[0].fqn, "user.needs_prompt_ast");
+        assert!(generated.warnings[0].reason.contains("prompt AST"));
+    }
+
+    #[test]
+    fn media_functions_and_containing_classes_are_emitted() {
+        let media = name("user", &[], "MediaInput");
+        let classify = name("user", &[], "classify");
+        let image = Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY);
+        let pool = SymbolPool::from([
+            (
+                media.clone(),
+                class_symbol(
+                    &media,
+                    vec![baml_codegen_types::ClassProperty {
+                        name: baml_base::Name::new("page_image"),
+                        docstring: None,
+                        ty: image.clone(),
+                    }],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                classify.clone(),
+                Symbol::Function(Function {
+                    name: classify.name().clone(),
+                    generic_params: Vec::new(),
+                    arguments: vec![baml_codegen_types::FunctionArgument {
+                        name: baml_base::Name::new("page_image"),
+                        docstring: None,
+                        ty: image,
+                        default: None,
+                    }],
+                    return_type: Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    throws: None,
+                    watchers: Vec::new(),
+                    docstring: None,
+                    origin: Origin {
+                        source_file_path: "main.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            ),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            lib.contains("pub page_image: ::baml_bridge::media::Image"),
+            "{lib}"
+        );
+        assert!(
+            flat(lib).contains("pubfnclassify(page_image:::baml_bridge::media::Image"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn every_media_kind_maps_to_its_bridge_type() {
+        for (kind, expected) in [
+            (baml_base::MediaKind::Image, "::baml_bridge::media::Image"),
+            (baml_base::MediaKind::Audio, "::baml_bridge::media::Audio"),
+            (baml_base::MediaKind::Video, "::baml_bridge::media::Video"),
+            (baml_base::MediaKind::Pdf, "::baml_bridge::media::Pdf"),
+            (baml_base::MediaKind::Generic, "::baml_bridge::media::Media"),
+        ] {
+            let function_name = name("user", &[], "take");
+            let function = unary_fn(
+                &function_name,
+                Ty::Media(kind, baml_base::TyAttr::EMPTY),
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            );
+            let pool = SymbolPool::from([(function_name, Symbol::Function(function))]);
+            let generated = to_source_code_with_bytecode(&pool, &[], &options());
+            assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+            let lib = flat(text(&generated, "src/lib.rs"));
+            assert!(
+                lib.contains(&format!("pubfntake(u:{expected},)")),
+                "{kind:?} did not map to {expected}\n{lib}"
+            );
+        }
     }
 
     #[test]

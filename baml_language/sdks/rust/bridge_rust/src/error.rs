@@ -165,6 +165,11 @@ pub enum DecodeError {
         /// Length of the offending wire string.
         len: usize,
     },
+    /// A decoded media descriptor cannot be safely passed back through the C ABI.
+    InvalidMedia {
+        /// The invalid descriptor field (`source` or `MIME type`).
+        field: &'static str,
+    },
     /// A union envelope selected an arm outside the generated union's range.
     InvalidUnionOptionIndex {
         /// Generated union type being decoded.
@@ -193,6 +198,9 @@ impl fmt::Display for DecodeError {
             }
             DecodeError::InvalidBigint { len } => {
                 write!(f, "invalid bigint wire string ({len} bytes)")
+            }
+            DecodeError::InvalidMedia { field } => {
+                write!(f, "media {field} contains an interior NUL byte")
             }
             DecodeError::InvalidUnionOptionIndex {
                 union,

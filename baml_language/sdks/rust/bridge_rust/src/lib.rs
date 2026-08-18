@@ -20,6 +20,7 @@ pub mod error;
 mod function;
 pub mod host_value;
 pub mod loader;
+pub mod media;
 pub mod runtime;
 #[cfg(test)]
 pub(crate) mod test_support;
