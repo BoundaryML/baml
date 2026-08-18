@@ -134,6 +134,104 @@ mod format_options_tests {
 }
 
 #[cfg(test)]
+mod redundant_paren_tests {
+    use super::*;
+
+    fn fmt(source: &str) -> String {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("source should format");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+        formatted
+    }
+
+    /// B-1562: a left-nested fully parenthesized `&&` chain used to print as
+    /// a staircase, one indent level per redundant paren. The parens peel and
+    /// the chain flattens like an unparenthesized one; the mixed-precedence
+    /// `(x != null)` clause keeps its clarity parens.
+    #[test]
+    fn test_left_nested_logical_parens_flatten() {
+        let source = concat!(
+            "test \"doc\" {\n",
+            "    let output_document: string? = \"doc\";\n",
+            "    assert.is_true(((((output_document != null) && (output_document ?? \"\").includes(\"Shadow\")) && (output_document ?? \"\").includes(\"Amlodipine\")) && (output_document ?? \"\").includes(\"Semintra\")) && (output_document ?? \"\").includes(\"11/04/2025\"))\n",
+            "}\n",
+        );
+        let formatted = fmt(source);
+        assert!(
+            formatted.contains(concat!(
+                "    assert.is_true(\n",
+                "        (output_document != null)\n",
+                "            && (output_document ?? \"\").includes(\"Shadow\")\n",
+                "            && (output_document ?? \"\").includes(\"Amlodipine\")\n",
+                "            && (output_document ?? \"\").includes(\"Semintra\")\n",
+                "            && (output_document ?? \"\").includes(\"11/04/2025\"),\n",
+                "    )",
+            )),
+            "chain flattens to one indent level: {formatted}"
+        );
+        assert!(
+            !formatted.contains("(("),
+            "no nested paren staircase remains: {formatted}"
+        );
+    }
+
+    #[test]
+    fn test_same_row_left_parens_strip_single_line() {
+        let formatted = fmt("function f(a: int, b: int, c: int) -> int {\n    ((a + b)) - c\n}\n");
+        assert!(formatted.contains("    a + b - c\n"), "{formatted}");
+        let formatted =
+            fmt("function f(a: bool, b: bool, c: bool) -> bool {\n    (a && b) && c\n}\n");
+        assert!(formatted.contains("    a && b && c\n"), "{formatted}");
+    }
+
+    /// Mixed-precedence parens are redundant to the parser but carry clarity
+    /// for the reader; they stay.
+    #[test]
+    fn test_clarity_parens_are_kept() {
+        for expr in ["(a * b) + c", "(a && b) || c", "(a != null) && b"] {
+            let source =
+                std::format!("function f(a: bool, b: bool, c: bool) -> bool {{\n    {expr}\n}}\n");
+            let formatted = fmt(&source);
+            assert!(formatted.contains(expr), "kept `{expr}`: {formatted}");
+        }
+    }
+
+    /// Right-operand parens re-associate if removed; they always stay.
+    #[test]
+    fn test_right_operand_parens_are_kept() {
+        for expr in ["a - (b - c)", "a && (b && c)"] {
+            let source =
+                std::format!("function f(a: int, b: int, c: int) -> int {{\n    {expr}\n}}\n");
+            let formatted = fmt(&source);
+            assert!(formatted.contains(expr), "kept `{expr}`: {formatted}");
+        }
+    }
+
+    /// A transparent paren wrapping a whole call argument carries nothing:
+    /// the call's own parens already delimit it.
+    #[test]
+    fn test_call_argument_parens_strip() {
+        let formatted =
+            fmt("function f(x: bool) -> null {\n    assert.is_true((x));\n    null\n}\n");
+        assert!(formatted.contains("assert.is_true(x);"), "{formatted}");
+        let formatted =
+            fmt("function f(x: bool) -> null {\n    assert.is_true(((x && x)));\n    null\n}\n");
+        assert!(formatted.contains("assert.is_true(x && x);"), "{formatted}");
+    }
+
+    /// Parens with a comment on their boundary are not transparent; peeling
+    /// them would drop or move the comment, so they stay.
+    #[test]
+    fn test_comment_bearing_parens_are_kept() {
+        let formatted = fmt(
+            "function f(a: bool, b: bool, c: bool) -> bool {\n    (a && b /* keep */) && c\n}\n",
+        );
+        assert!(formatted.contains("(a && b/* keep */) && c"), "{formatted}");
+    }
+}
+
+#[cfg(test)]
 mod llm_tools_field_tests {
     use super::*;
 
