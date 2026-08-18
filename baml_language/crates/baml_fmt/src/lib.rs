@@ -176,6 +176,63 @@ mod redundant_paren_tests {
         );
     }
 
+    /// The verbatim staircase from the B-1562 screenshot: the old formatter's
+    /// own output for a generated medical-document test, six nested parens
+    /// deep with backtick strings and a `reflect.class.get_field` binding.
+    /// Feeding it back in must collapse to the flat chain.
+    #[test]
+    fn test_b1562_original_example() {
+        let source = concat!(
+            "class MedicalDoc {\n",
+            "    document: string?,\n",
+            "    follow_up: string?,\n",
+            "}\n",
+            "\n",
+            "test \"medical_doc\" {\n",
+            "    let result = MedicalDoc { document: `Shadow`, follow_up: null };\n",
+            "    let output_document = reflect.class.get_field<string?>(result, \"document\");\n",
+            "    let output_follow_up = reflect.class.get_field<string?>(result, \"follow_up\");\n",
+            "\n",
+            "    assert.is_true(\n",
+            "        (\n",
+            "            (\n",
+            "                (\n",
+            "                    (\n",
+            "                        (\n",
+            "                            (\n",
+            "                                (output_document != null)\n",
+            "                                    && (output_document ?? \"\").includes(`Shadow`)\n",
+            "                            )\n",
+            "                                && (output_document ?? \"\").includes(`Amlodipine`)\n",
+            "                        )\n",
+            "                            && (output_document ?? \"\").includes(`Semintra`)\n",
+            "                    )\n",
+            "                        && (output_document ?? \"\").includes(`BUN`)\n",
+            "                )\n",
+            "                    && (output_document ?? \"\").includes(`42 mg/dL`)\n",
+            "            )\n",
+            "                && (output_document ?? \"\").includes(`11/04/2025`)\n",
+            "        ),\n",
+            "    )\n",
+            "}\n",
+        );
+        let formatted = fmt(source);
+        assert!(
+            formatted.contains(concat!(
+                "    assert.is_true(\n",
+                "        (output_document != null)\n",
+                "            && (output_document ?? \"\").includes(`Shadow`)\n",
+                "            && (output_document ?? \"\").includes(`Amlodipine`)\n",
+                "            && (output_document ?? \"\").includes(`Semintra`)\n",
+                "            && (output_document ?? \"\").includes(`BUN`)\n",
+                "            && (output_document ?? \"\").includes(`42 mg/dL`)\n",
+                "            && (output_document ?? \"\").includes(`11/04/2025`),\n",
+                "    )",
+            )),
+            "ticket staircase collapses to a flat chain: {formatted}"
+        );
+    }
+
     #[test]
     fn test_same_row_left_parens_strip_single_line() {
         let formatted = fmt("function f(a: int, b: int, c: int) -> int {\n    ((a + b)) - c\n}\n");
