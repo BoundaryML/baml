@@ -29,6 +29,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Fixes
 
+- Fixed optional-chained method calls dropping their type arguments: `x?.m<T>()` — along with inferred, class-generic, and interface-dispatched forms — now seeds the callee's type-argument frame exactly like `x.m<T>()` instead of failing at runtime with an internal frame type-arg error. ([#4495](https://github.com/BoundaryML/baml/pull/4495)) - Antonio Sarosi
 - Rejected class-literal construction of the builtin companion carriers (`baml.Int`, `baml.Map`, `baml.String`, and the other zero-field method carriers) with E0166 instead of building a meaningless empty instance; `baml.Map {}` and `baml.Array {}` had reached MIR lowering with unsolved phantom type arguments and panicked. ([#4493](https://github.com/BoundaryML/baml/pull/4493)) - Antonio Sarosi
 - Rejected non-data LLM output schemas with catchable E0164 diagnostics instead of aborting or silently omitting the schema; this intentionally makes previously degraded renders for fields such as `uint8array`, `type`, and mixed non-data unions fail loudly. ([#4470](https://github.com/BoundaryML/baml/pull/4470)) - Antonio Sarosi
 - Fixed a silent miscompile where a map, list, or class instance allocated before a loop and mutated by a callee called inside that loop was re-allocated on every iteration. ([#4467](https://github.com/BoundaryML/baml/pull/4467)) - Antonio Sarosi
