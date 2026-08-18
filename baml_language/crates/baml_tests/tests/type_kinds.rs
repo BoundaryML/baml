@@ -323,3 +323,26 @@ async fn map_key_and_function_views_keep_runtime_definitions() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::String("SECOND".into())));
 }
+
+/// A class nested inside a runtime-*package* type is reached the same way, and
+/// its definition lives in the owning package rather than in a per-value
+/// overlay. Reading it back must not fall through to the static type table.
+#[tokio::test]
+async fn nested_class_of_a_runtime_package_type_reads_back() {
+    let output = baml_test!(
+        r#"
+        function main() -> string throws unknown {
+            let pkg = reflect.Package.compile({
+                "schema.baml": "class Leaf { name string } class Root { leaf Leaf }",
+            })
+            let root = pkg.get_class("root.Root") ?? throw "missing Root"
+            let field = root.fields().at(0) ?? throw "missing field"
+            let field_type = field.type ?? throw "missing field type"
+            let leaf = field_type.as_class() ?? throw "expected a class view"
+            let leaf_field = leaf.fields().at(0) ?? throw "expected a leaf field"
+            leaf_field.name
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("name".into())));
+}
