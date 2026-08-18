@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.test_expr_with_runner.$init_test_ns_fixtures_ns_test_expr_with_runner_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_at("root.fixtures.tes...", "with quorum", () -> void { { let result = "hello" } assert.not_null(result) }, testing.Quorum(5, 3)) } null
+}

@@ -1,0 +1,74 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.arm_header_comments._thrower() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = call const fn baml.Int.parse(const "nope") -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.arm_header_comments.catch_with_headers() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: unknown // e
+    let _2: unknown
+
+    bb0: {
+        _0 = call const fn user.fixtures.arm_header_comments._thrower() -> [bb5, unwind: bb1];
+    }
+
+    bb1: {
+        _2 = copy _1;
+        _2 = narrow_bind copy _2 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["errors"], name: "ParseError" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb2];
+    }
+
+    bb2: {
+        throw_if_panic copy _1 -> bb3;
+    }
+
+    bb3: {
+        _0 = const 0_i64;
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const 1_i64;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.arm_header_comments.match_with_headers(x: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        switch copy _1 [0: bb2, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const 2_i64;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = const 1_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}

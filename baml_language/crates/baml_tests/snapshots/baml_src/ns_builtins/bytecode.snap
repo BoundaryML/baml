@@ -1,0 +1,111 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function builtins.$init_test_ns_builtins_builtins(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.builtins"
+    load_const "builtin_method_call"
+    make_closure .<lambda($init_test_ns_builtins_builtins, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.builtins"
+    load_const "bind_method_call"
+    make_closure .<lambda($init_test_ns_builtins_builtins, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.builtins"
+    load_const "any_value_to_string"
+    make_closure .<lambda($init_test_ns_builtins_builtins, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.builtins"
+    load_const "float_to_string_preserves_decimal"
+    make_closure .<lambda($init_test_ns_builtins_builtins, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function builtins.builtins_any_value_to_string() -> string {
+    load_type builtins.BuiltinsPerson
+    load_const "Alice"
+    load_const 25
+    load_const 10
+    load_const 20
+    init_instance user.builtins.BuiltinsPoint .x, .y
+    load_const "reading"
+    load_const "coding"
+    load_type string
+    alloc_array 2
+    load_const 95
+    load_const 88
+    load_const "math"
+    load_const "english"
+    load_type string
+    load_type int
+    alloc_map 2
+    init_instance user.builtins.BuiltinsPerson .name, .age, .location, .hobbies, .scores
+    call baml.String.from
+    return
+}
+
+function builtins.builtins_bind_method_call() -> int {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    container_len
+    store_var v
+    load_var v
+    return
+}
+
+function builtins.builtins_float_to_string_concat() -> string {
+    load_type float
+    load_const 1.0
+    call baml.String.from
+    store_var a
+    load_type float
+    load_const 0.0
+    call baml.String.from
+    store_var b
+    load_type float
+    load_const -1.0
+    call baml.String.from
+    store_var c
+    load_type float
+    load_const 3.14
+    call baml.String.from
+    store_var d
+    load_type int
+    load_const 2
+    call baml.String.from
+    store_var e
+    load_var a
+    load_const " "
+    bin_op +
+    load_var b
+    bin_op +
+    load_const " "
+    bin_op +
+    load_var c
+    bin_op +
+    load_const " "
+    bin_op +
+    load_var d
+    bin_op +
+    load_const " "
+    bin_op +
+    load_var e
+    bin_op +
+    return
+}

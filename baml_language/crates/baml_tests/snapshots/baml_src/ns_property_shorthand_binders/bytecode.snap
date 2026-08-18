@@ -1,0 +1,551 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function property_shorthand_binders.$init_test_ns_property_shorthand_binders_property_shorthand_binders(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "quoted_key_sees_if_let_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "quoted_key_sees_match_arm_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "quoted_key_sees_for_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "quoted_key_sees_catch_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "quoted_key_sees_class_destructure_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "quoted_key_sees_nested_block_let"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "shorthand_sees_if_let_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "shorthand_sees_match_arm_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "shorthand_sees_for_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "shorthand_sees_catch_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "shorthand_sees_class_destructure_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "shorthand_sees_nested_block_let"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "shorthand_sees_param_and_body_let"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "shorthand_sees_closure_param"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "shorthand_uses_innermost_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand_binders"
+    load_const "quoted_key_differs_from_binder"
+    make_closure .<lambda($init_test_ns_property_shorthand_binders_property_shorthand_binders, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function property_shorthand_binders.psb_lookup(m: map<string, string>) -> string {
+    load_type string
+    load_type string
+    load_var m
+    load_const "key"
+    call baml.Map.get
+    store_var_load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "MISSING"
+    store_var _2
+
+  L0:
+    load_var _2
+    return
+}
+
+function property_shorthand_binders.psb_quoted_catch_binder(s: string) -> string {
+    load_var s
+    call baml.Int.parse
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.String.from
+    jump L2
+    load_var key
+    is_type baml.errors.ParseError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var key
+    rethrow
+
+  L1:
+    load_type string
+    load_type baml.errors.ParseError
+    load_var key
+    load_const "key"
+    load_type string
+    load_type baml.errors.ParseError
+    alloc_map 1
+    load_const "key"
+    call baml.Map.get
+    load_const null
+    call baml.ops.equals_equals
+    store_var _12
+    load_type bool
+    load_var _12
+    unary_op !
+    call baml.String.from
+
+  L2:
+    return
+}
+
+function property_shorthand_binders.psb_quoted_destructure(b: property_shorthand_binders.PsbBox) -> string {
+    load_var b
+    load_field .key
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+    return
+}
+
+function property_shorthand_binders.psb_quoted_for_binder(xs: string[]) -> string {
+    load_const ""
+    store_var out
+    load_var xs
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _4
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+    store_var _10
+    load_var2 2 5
+    bin_op +
+    store_var out
+    jump L0
+
+  L2:
+    load_var out
+    return
+}
+
+function property_shorthand_binders.psb_quoted_if_let(v: string | null) -> string {
+    load_var v
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "NONE"
+    jump L2
+
+  L1:
+    load_var _2
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+
+  L2:
+    return
+}
+
+function property_shorthand_binders.psb_quoted_key_differs_from_binder(v: string | null) -> string {
+    load_var v
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "NONE"
+    jump L3
+
+  L1:
+    load_type string
+    load_type string
+    load_var _2
+    load_const "other"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_const "other"
+    call baml.Map.get
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const "MISSING"
+    store_var _6
+
+  L2:
+    load_var _6
+
+  L3:
+    return
+}
+
+function property_shorthand_binders.psb_quoted_match_arm(v: string | int) -> string {
+    load_var v
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "NONE"
+    jump L2
+
+  L1:
+    load_var _2
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+
+  L2:
+    return
+}
+
+function property_shorthand_binders.psb_quoted_nested_block_let() -> string {
+    load_const true
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "NONE"
+    jump L2
+
+  L1:
+    load_const "n"
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+
+  L2:
+    return
+}
+
+function property_shorthand_binders.psb_shorthand_body_let() -> string {
+    load_const "l"
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+    return
+}
+
+function property_shorthand_binders.psb_shorthand_catch_binder(s: string) -> string {
+    load_var s
+    call baml.Int.parse
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.String.from
+    jump L2
+    load_var key
+    is_type baml.errors.ParseError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var key
+    rethrow
+
+  L1:
+    load_type string
+    load_type baml.errors.ParseError
+    load_var key
+    load_const "key"
+    load_type string
+    load_type baml.errors.ParseError
+    alloc_map 1
+    load_const "key"
+    call baml.Map.get
+    load_const null
+    call baml.ops.equals_equals
+    store_var _12
+    load_type bool
+    load_var _12
+    unary_op !
+    call baml.String.from
+
+  L2:
+    return
+}
+
+function property_shorthand_binders.psb_shorthand_closure_param(xs: string[]) -> string {
+    load_type string
+    load_type string
+    load_type never
+    load_var xs
+    make_closure .<lambda(psb_shorthand_closure_param, 0)>, 0
+    call baml.Array.map
+    store_var _2
+    load_type string
+    load_var _2
+    load_const ""
+    call baml.Array.join
+    return
+}
+
+function property_shorthand_binders.psb_shorthand_destructure(b: property_shorthand_binders.PsbBox) -> string {
+    load_var b
+    load_field .key
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+    return
+}
+
+function property_shorthand_binders.psb_shorthand_for_binder(xs: string[]) -> string {
+    load_const ""
+    store_var out
+    load_var xs
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _4
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+    store_var _10
+    load_var2 2 5
+    bin_op +
+    store_var out
+    jump L0
+
+  L2:
+    load_var out
+    return
+}
+
+function property_shorthand_binders.psb_shorthand_if_let(v: string | null) -> string {
+    load_var v
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "NONE"
+    jump L2
+
+  L1:
+    load_var _2
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+
+  L2:
+    return
+}
+
+function property_shorthand_binders.psb_shorthand_match_arm(v: string | int) -> string {
+    load_var v
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "NONE"
+    jump L2
+
+  L1:
+    load_var _2
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+
+  L2:
+    return
+}
+
+function property_shorthand_binders.psb_shorthand_nested_block_let() -> string {
+    load_const true
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "NONE"
+    jump L2
+
+  L1:
+    load_const "n"
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+
+  L2:
+    return
+}
+
+function property_shorthand_binders.psb_shorthand_param(key: string) -> string {
+    load_var key
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+    return
+}
+
+function property_shorthand_binders.psb_shorthand_uses_innermost_binder(v: string | null) -> string {
+    load_var v
+    store_var _3
+    load_var _3
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "outer"
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+    jump L2
+
+  L1:
+    load_var _3
+    load_const "key"
+    load_type string
+    load_type string
+    alloc_map 1
+    call user.property_shorthand_binders.psb_lookup
+
+  L2:
+    return
+}

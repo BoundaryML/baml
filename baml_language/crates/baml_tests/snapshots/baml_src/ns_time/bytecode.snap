@@ -1,0 +1,540 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function time.$init_test_ns_time_datetime(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.time"
+    load_const "plain_date_parse_round_trip"
+    make_closure .<lambda($init_test_ns_time_datetime, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_date_from_components_matches_parse"
+    make_closure .<lambda($init_test_ns_time_datetime, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_date_components"
+    make_closure .<lambda($init_test_ns_time_datetime, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_date_rejects_invalid"
+    make_closure .<lambda($init_test_ns_time_datetime, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_date_to_plain_datetime"
+    make_closure .<lambda($init_test_ns_time_datetime, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_time_parse_round_trip_subseconds"
+    make_closure .<lambda($init_test_ns_time_datetime, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_time_from_components_matches_parse"
+    make_closure .<lambda($init_test_ns_time_datetime, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_time_components"
+    make_closure .<lambda($init_test_ns_time_datetime, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_time_rejects_out_of_range"
+    make_closure .<lambda($init_test_ns_time_datetime, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_datetime_parse_round_trip"
+    make_closure .<lambda($init_test_ns_time_datetime, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_datetime_components_and_projections"
+    make_closure .<lambda($init_test_ns_time_datetime, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_datetime_pre_epoch"
+    make_closure .<lambda($init_test_ns_time_datetime, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_datetime_rejects_offset_string"
+    make_closure .<lambda($init_test_ns_time_datetime, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_parse_fixed_offset_round_trip"
+    make_closure .<lambda($init_test_ns_time_datetime, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_zero_offset_prints_z"
+    make_closure .<lambda($init_test_ns_time_datetime, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_rejects_zoneless_string"
+    make_closure .<lambda($init_test_ns_time_datetime, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_to_plain_and_with_timezone"
+    make_closure .<lambda($init_test_ns_time_datetime, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_to_zoned_fixed_offset"
+    make_closure .<lambda($init_test_ns_time_datetime, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_from_components_fixed_offset"
+    make_closure .<lambda($init_test_ns_time_datetime, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "timezone_offset_rejects_mixed_signs"
+    make_closure .<lambda($init_test_ns_time_datetime, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_parse_iana_annotation_resolves_offset"
+    make_closure .<lambda($init_test_ns_time_datetime, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_iana_offset_is_dst_aware"
+    make_closure .<lambda($init_test_ns_time_datetime, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "unknown_timezone_throws"
+    make_closure .<lambda($init_test_ns_time_datetime, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "to_zoned_dst_gap_disambiguation"
+    make_closure .<lambda($init_test_ns_time_datetime, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "to_zoned_dst_overlap_disambiguation"
+    make_closure .<lambda($init_test_ns_time_datetime, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "to_zoned_reject_throws_on_ambiguity"
+    make_closure .<lambda($init_test_ns_time_datetime, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "to_zoned_reject_accepts_unambiguous"
+    make_closure .<lambda($init_test_ns_time_datetime, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function time.$init_test_ns_time_time(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.time"
+    load_const "instant_parse_epoch"
+    make_closure .<lambda($init_test_ns_time_time, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_parse_one_second"
+    make_closure .<lambda($init_test_ns_time_time, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_parse_fractional_seconds"
+    make_closure .<lambda($init_test_ns_time_time, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_parse_honors_timezone_offset"
+    make_closure .<lambda($init_test_ns_time_time, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_parse_iso8601_basic_no_separators"
+    make_closure .<lambda($init_test_ns_time_time, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_parse_rfc2822_epoch"
+    make_closure .<lambda($init_test_ns_time_time, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_parse_rfc2822_honors_offset"
+    make_closure .<lambda($init_test_ns_time_time, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_parse_invalid_throws_parse_error"
+    make_closure .<lambda($init_test_ns_time_time, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_now_returns_recent_wall_clock"
+    make_closure .<lambda($init_test_ns_time_time, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_from_seconds_to_milliseconds"
+    make_closure .<lambda($init_test_ns_time_time, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_constructors_accept_int_and_bigint"
+    make_closure .<lambda($init_test_ns_time_time, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_since_is_nonnegative_for_past_instant"
+    make_closure .<lambda($init_test_ns_time_time, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_add"
+    make_closure .<lambda($init_test_ns_time_time, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_sub"
+    make_closure .<lambda($init_test_ns_time_time, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_sub_goes_negative"
+    make_closure .<lambda($init_test_ns_time_time, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_mul_by_int_and_bigint"
+    make_closure .<lambda($init_test_ns_time_time, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_mul_by_zero_is_zero"
+    make_closure .<lambda($init_test_ns_time_time, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_div_by_int_and_bigint"
+    make_closure .<lambda($init_test_ns_time_time, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_div_truncates"
+    make_closure .<lambda($init_test_ns_time_time, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_rem"
+    make_closure .<lambda($init_test_ns_time_time, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_rem_across_units"
+    make_closure .<lambda($init_test_ns_time_time, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_rem_divides_evenly_is_zero"
+    make_closure .<lambda($init_test_ns_time_time, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_rem_keeps_the_sign_of_the_left_operand"
+    make_closure .<lambda($init_test_ns_time_time, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_negate"
+    make_closure .<lambda($init_test_ns_time_time, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "duration_negate_is_an_involution"
+    make_closure .<lambda($init_test_ns_time_time, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_add_duration"
+    make_closure .<lambda($init_test_ns_time_time, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_sub_duration"
+    make_closure .<lambda($init_test_ns_time_time, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_sub_instant_is_a_duration"
+    make_closure .<lambda($init_test_ns_time_time, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_sub_later_instant_is_negative"
+    make_closure .<lambda($init_test_ns_time_time, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "instant_add_then_sub_roundtrips"
+    make_closure .<lambda($init_test_ns_time_time, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_datetime_add_duration"
+    make_closure .<lambda($init_test_ns_time_time, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_datetime_sub_duration"
+    make_closure .<lambda($init_test_ns_time_time, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_datetime_add_crosses_into_the_next_day"
+    make_closure .<lambda($init_test_ns_time_time, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_datetime_sub_plain_datetime_is_a_duration"
+    make_closure .<lambda($init_test_ns_time_time, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_time_add_duration"
+    make_closure .<lambda($init_test_ns_time_time, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_time_add_wraps_past_midnight"
+    make_closure .<lambda($init_test_ns_time_time, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_time_add_reduces_durations_longer_than_a_day"
+    make_closure .<lambda($init_test_ns_time_time, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_time_sub_wraps_back_past_midnight"
+    make_closure .<lambda($init_test_ns_time_time, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_time_sub_to_exact_midnight"
+    make_closure .<lambda($init_test_ns_time_time, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_time_sub_plain_time_is_a_duration"
+    make_closure .<lambda($init_test_ns_time_time, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "plain_time_sub_plain_time_is_signed"
+    make_closure .<lambda($init_test_ns_time_time, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_add_duration"
+    make_closure .<lambda($init_test_ns_time_time, 41)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_sub_duration"
+    make_closure .<lambda($init_test_ns_time_time, 42)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_arithmetic_preserves_the_timezone"
+    make_closure .<lambda($init_test_ns_time_time, 43)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_sub_zoned_is_a_duration"
+    make_closure .<lambda($init_test_ns_time_time, 44)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.time"
+    load_const "zoned_sub_across_timezones_measures_absolute_time"
+    make_closure .<lambda($init_test_ns_time_time, 45)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function time.plain_date_to_plain_datetime_with_time() -> string {
+    load_const "1979-05-27"
+    call baml.time.PlainDate.parse
+    store_var d
+    load_const "07:32:00"
+    call baml.time.PlainTime.parse
+    store_var t
+    load_var2 2 3
+    call baml.time.PlainDate.to_plain_datetime
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}

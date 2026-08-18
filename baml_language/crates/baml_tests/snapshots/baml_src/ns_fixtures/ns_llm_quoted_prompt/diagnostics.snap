@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  ⚠ `${...}` in a quoted prompt is sent to the model as literal text — `"..."` strings do not interpolate. Use a backtick prompt to interpolate, or write `\${...}` in a backtick prompt to keep the
+  │ literal `${`.
+    ╭─[ns_llm_quoted_prompt/main.baml:17:86]
+ 17 │   prompt: "Write one sentence. Escapes decode:\n\tdone. Interpolation stays literal: ${topic}"
+    ·                                                                                      ─┬
+    ·                                                                                       ╰── literal text here, not an interpolation
+    ╰────

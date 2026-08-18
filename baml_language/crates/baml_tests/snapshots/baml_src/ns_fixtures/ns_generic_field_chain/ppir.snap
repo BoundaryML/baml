@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.generic_field_chain.Box {
+  value: T
+}
+class user.fixtures.generic_field_chain.Box$stream {
+  value: T | null
+}
+class user.fixtures.generic_field_chain.User {
+  name: string
+  age: int
+}
+class user.fixtures.generic_field_chain.User$stream {
+  name: string | null
+  age: int | null
+}
+function user.fixtures.generic_field_chain.test_generic_capture(box: user.fixtures.generic_field_chain.Box<user.fixtures.generic_field_chain.User>) -> string  [expr] {
+  { let get_name = () -> string { {  } box.value.name } } get_name()
+}
+function user.fixtures.generic_field_chain.test_generic_chain(box: user.fixtures.generic_field_chain.Box<user.fixtures.generic_field_chain.User>) -> string  [expr] {
+  {  } box.value.name
+}
+function user.fixtures.generic_field_chain.test_nested_generic_chain(box: user.fixtures.generic_field_chain.Box<user.fixtures.generic_field_chain.Box<user.fixtures.generic_field_chain.User>>) -> string  [expr] {
+  {  } box.value.value.name
+}
+
+--- captures ---
+lambda () in test_generic_capture: captures [box]

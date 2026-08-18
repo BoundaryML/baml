@@ -1,0 +1,52 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.paren_union_test.Union {
+  u: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union
+  u_arr: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[]
+  u_arr_arr: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[][]
+  u_arr_arr_arr: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[][][]
+  u_opt_arr: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union?[]
+  u_arr_opt: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[]?
+  u_arr_opt_arr: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[]?[]
+  u_opt_arr_opt: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union?[]?
+  u_opt_arr_arr_opt_arr_arr: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union?[][]?[][]
+  u_arr_opt_opt_arr_opt_opt: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[]??[]??
+  u_arr_arr_arr_opt_arr_arr_opt_opt_opt: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[][][]?[][]???
+  u_opt_opt_opt_arr_opt_opt_arr_arr_arr: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union???[]??[][][]
+  arr_opt_arr_u_arr_arr_arr_opt_opt_arr: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[]?[] | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[][][]??[]
+  opt_arr_opt_u_arr_arr_arr_opt_opt_arr: user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union?[]? | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[][][]??[]
+  fun: (user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union) -> user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union throws never
+  fun_arr: (user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union) -> user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union throws never[]
+  fun_arr_opt: (user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union) -> user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union throws never[]?
+  fun_opt: (user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union) -> user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union throws never?
+  fun_opt_arr: (user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union) -> user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union throws never?[]
+  fun_opt_opt_opt_arr_arr_opt_arr: (user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union) -> user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union throws never???[][]?[]
+  arr_opt_arr_fun_opt_opt_opt_arr_arr_opt_arr: (user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[]?[] | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union) -> user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union[]?[] | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union throws never???[][]?[]
+  opt_arr_opt_fun_opt_opt_opt_arr_arr_opt_arr: (user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union?[]? | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union) -> user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union?[]? | user.fixtures.paren_union_test.Union | user.fixtures.paren_union_test.Union throws never???[][]?[]
+}
+class user.fixtures.paren_union_test.Union$stream {
+  u: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | null
+  u_arr: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream[]
+  u_arr_arr: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream[][]
+  u_arr_arr_arr: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream[][][]
+  u_opt_arr: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | null[]
+  u_arr_opt: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream[] | null
+  u_arr_opt_arr: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream[] | null[]
+  u_opt_arr_opt: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | null[] | null
+  u_opt_arr_arr_opt_arr_arr: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | null[][] | null[][]
+  u_arr_opt_opt_arr_opt_opt: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream[] | null | null[] | null | null
+  u_arr_arr_arr_opt_arr_arr_opt_opt_opt: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream[][][] | null[][] | null | null | null
+  u_opt_opt_opt_arr_opt_opt_arr_arr_arr: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | null | null | null[] | null | null[][][]
+  arr_opt_arr_u_arr_arr_arr_opt_opt_arr: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream[] | null[] | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream[][][] | null | null[]
+  opt_arr_opt_u_arr_arr_arr_opt_opt_arr: user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream | null[] | null | user.fixtures.paren_union_test.Union$stream | user.fixtures.paren_union_test.Union$stream[][][] | null | null[]
+  fun: unknown
+  fun_arr: unknown[]
+  fun_arr_opt: unknown[] | null
+  fun_opt: unknown | null
+  fun_opt_arr: unknown | null[]
+  fun_opt_opt_opt_arr_arr_opt_arr: unknown | null | null | null[][] | null[]
+  arr_opt_arr_fun_opt_opt_opt_arr_arr_opt_arr: unknown | null | null | null[][] | null[]
+  opt_arr_opt_fun_opt_opt_opt_arr_arr_opt_arr: unknown | null | null | null[][] | null[]
+}

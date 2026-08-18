@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.lambda_fat_arrow.test_annotated() -> int  [expr] {
+  { let double = (x: int) -> int { {  } x Mul 2 } } double(21)
+}
+function user.fixtures.lambda_fat_arrow.test_in_match(x: int) -> int  [expr] {
+  {  } match (x) { 0 => { let inc = (y: int) -> int { {  } y Add 1 } } inc(10), _ => 0 }
+}
+function user.fixtures.lambda_fat_arrow.test_inferred() -> int  [expr] {
+  { let double = (x: int) -> { {  } x Mul 2 } } double(21)
+}
+function user.fixtures.lambda_fat_arrow.test_mixed() -> int  [expr] {
+  { let a = (x: int) -> int { {  } x Add 1 }; let b = (x: int) -> int { {  } x Add 2 } } a(0) Add b(0)
+}
+function user.fixtures.lambda_fat_arrow.test_multi_param() -> int  [expr] {
+  { let add = (a: int, b: int) -> int { {  } a Add b } } add(20, 22)
+}
+function user.fixtures.lambda_fat_arrow.test_top_level_fat_arrow(x: int) -> int  [expr] {
+  {  } x Add 1
+}
+function user.fixtures.lambda_fat_arrow.test_zero_param() -> int  [expr] {
+  { let constant = () -> int { {  } 42 } } constant()
+}

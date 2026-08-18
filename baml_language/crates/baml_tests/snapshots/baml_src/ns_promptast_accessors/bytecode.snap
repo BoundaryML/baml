@@ -1,0 +1,138 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function promptast_accessors.$init_test_ns_promptast_accessors_promptast_accessors(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.promptast_accessors"
+    load_const "text_renders_role_headed_prompt"
+    make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.promptast_accessors"
+    load_const "to_string_is_readable_not_rust_debug"
+    make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.promptast_accessors"
+    load_const "messages_expose_role_and_content"
+    make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.promptast_accessors"
+    load_const "messages_yields_promptmessage_instances"
+    make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function promptast_accessors.paa_fold_messages_fn() -> string {
+    load_const ""
+    store_var out
+    call user.promptast_accessors.paa_render_ast
+    call ai.Prompt.messages
+    load_type baml.iter.Iterable<Error = never, Item = ai.PromptMessage>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = ai.PromptMessage>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _5
+    store_var m
+    load_var2 1 4
+    load_field .role
+    load_const "="
+    bin_op +
+    load_var m
+    load_field .content
+    bin_op +
+    load_const ";"
+    bin_op +
+    bin_op +
+    store_var out
+    jump L0
+
+  L2:
+    load_var out
+    return
+}
+
+function promptast_accessors.paa_render_ast() -> ai.Prompt {
+    make_closure .<tagged(paa_render_ast, 0)>, 0
+    call ai.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "system"
+    load_const "system"
+    load_const "user"
+    load_type string
+    alloc_array 2
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    return
+}
+
+function promptast_accessors.paa_single_message_fn() -> ai.PromptMessage[] {
+    make_closure .<tagged(paa_single_message_fn, 0)>, 0
+    call ai.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "system"
+    load_const "system"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    call ai.Prompt.messages
+    return
+}
+
+function promptast_accessors.paa_text_fn() -> string {
+    call user.promptast_accessors.paa_render_ast
+    call ai.Prompt.text
+    return
+}
+
+function promptast_accessors.paa_to_string_fn() -> string {
+    call user.promptast_accessors.paa_render_ast
+    store_var _1
+    load_type ai.Prompt
+    load_var _1
+    call baml.String.from
+    return
+}

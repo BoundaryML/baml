@@ -1,0 +1,100 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.json_parse_stringify_intrinsics.match_parsed(s: string) -> string {
+    load_var s
+    call baml.json.parse
+    store_var j
+    load_var j
+    store_var _3
+    load_var _3
+    narrow_bind baml.json.json[], slot=3
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var j
+    store_var _6
+    load_var _6
+    narrow_bind map<string, baml.json.json>, slot=4
+    pop_jump_if_false L1
+    jump L10
+
+  L1:
+    load_var j
+    store_var _9
+    load_var _9
+    narrow_bind int, slot=5
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var j
+    store_var _10
+    load_var _10
+    narrow_bind float, slot=6
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var j
+    store_var _11
+    load_var _11
+    narrow_bind bool, slot=7
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var j
+    store_var _12
+    load_var _12
+    narrow_bind string, slot=8
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_const "null"
+    jump L12
+
+  L6:
+    load_var _12
+    jump L12
+
+  L7:
+    load_const "bool"
+    jump L12
+
+  L8:
+    load_const "float"
+    jump L12
+
+  L9:
+    load_const "int"
+    jump L12
+
+  L10:
+    load_var _6
+    call baml.json.stringify
+    jump L12
+
+  L11:
+    load_var _3
+    call baml.json.stringify
+
+  L12:
+    return
+}
+
+function fixtures.json_parse_stringify_intrinsics.parse_and_roundtrip(s: string) -> string {
+    load_var s
+    call baml.json.parse
+    call baml.json.stringify
+    return
+}
+
+function fixtures.json_parse_stringify_intrinsics.parse_and_roundtrip_pretty(s: string) -> string {
+    load_var s
+    call baml.json.parse
+    call baml.json.stringify_pretty
+    return
+}
