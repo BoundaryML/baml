@@ -523,7 +523,25 @@ fn resolve_mise_tool(tool: &str) -> io::Result<PathBuf> {
         ));
     }
 
-    Ok(PathBuf::from(path))
+    // `mise which` answers from its registry, not the filesystem: on a
+    // persistent CI runner whose toolchains came from a different
+    // provisioning arm (or whose mise tool dir was pruned), it happily
+    // returns a path that no longer exists, and the spawn dies ENOENT
+    // (proven live, run 32099729318: `failed to spawn go ... No such file
+    // or directory` on exactly the members with stale mise state). Treat a
+    // dangling answer as not-resolved so callers fall back to PATH.
+    let path = PathBuf::from(path);
+    if !path.is_file() {
+        return Err(io::Error::new(
+            ErrorKind::NotFound,
+            format!(
+                "`mise which {tool}` returned {}, which does not exist (stale mise state)",
+                path.display()
+            ),
+        ));
+    }
+
+    Ok(path)
 }
 
 /// Check the contents of `$OUT_DIR/build_diagnostics.txt` (the file
