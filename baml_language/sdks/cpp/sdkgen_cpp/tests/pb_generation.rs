@@ -23,6 +23,17 @@ const PROTO_FILES: &[&str] = &[
 fn workspace_root() -> PathBuf {
     // No canonicalize: on Windows it yields a \\?\ extended-length path,
     // which protoc cannot relate its proto files to.
+    //
+    // BAML_WORKSPACE_ROOT binds the root when set: the compile-time
+    // CARGO_MANIFEST_DIR is baked, and for the CI nix unit graph it is a
+    // standalone store copy of this crate whose ../../.. holds no sibling
+    // crates - protoc then dies "Could not make proto path relative"
+    // (proven live, run 32106655757, both pb_generation tests, every
+    // gnu/musl probe hit). Unset, byte-identical. Same pattern as
+    // BAML_BRIDGE_CFFI_DIR one fix over.
+    if let Some(root) = std::env::var_os("BAML_WORKSPACE_ROOT") {
+        return PathBuf::from(root);
+    }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
