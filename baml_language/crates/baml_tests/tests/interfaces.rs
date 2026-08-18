@@ -3005,7 +3005,7 @@ async fn same_generic_interface_different_type_params_disambiguated_with_as_proj
 /// canonicalizes `Animal | Dog` to `Animal` because `Dog implements Animal`,
 /// but impl selection deliberately compares interface arguments under the
 /// fact-poor structural context. The dispatch cache must therefore retain the
-/// realized interface arguments in addition to the static type-value mint.
+/// realized interface arguments alongside the interface's nominal identity.
 #[tokio::test]
 async fn virtual_dispatch_cache_distinguishes_generic_interface_instantiations() {
     let output = baml_test!(

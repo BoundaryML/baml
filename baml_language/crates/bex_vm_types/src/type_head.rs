@@ -169,6 +169,20 @@ impl TypeHead {
         }
     }
 
+    /// This head's declaration name, or the head itself when it has none.
+    ///
+    /// The mapper form of [`declared_name`](Self::declared_name), for pairing
+    /// with `try_map_heads` to carry a whole type out of the VM:
+    /// `ty.try_map_heads(&mut |head| head.to_name())`.
+    ///
+    /// # Errors
+    ///
+    /// [`UnnameableHead`](crate::UnnameableHead) when the head is unresolved or
+    /// its declaration has no name a host could look up.
+    pub fn to_name(&self) -> Result<baml_type::TypeName, crate::UnnameableHead> {
+        self.declared_name().ok_or(crate::UnnameableHead(self.tag))
+    }
+
     /// Whether the pointer cache has been filled — false for a head straight out
     /// of emit or a decoder, true once the loader has bound it.
     #[must_use]

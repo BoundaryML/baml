@@ -358,49 +358,29 @@ fn allocate_runtime_declaration_types(
 
     let mut type_values = IndexMap::new();
     for (name, class_ptr, ty) in class_rows {
-        let mint = vm.heap.mint_runtime_id();
-        let type_ptr = vm.alloc_type(TypeValue::runtime_with_defs(
-            ty,
-            mint,
-            source_defs.clone(),
-            package_ptr,
-        ));
+        let type_ptr = vm.alloc_type(TypeValue::owned(ty, source_defs.clone(), package_ptr));
         let Object::Class(class) = vm.get_object_mut(class_ptr) else {
             unreachable!("runtime package class pointer changed kind")
         };
         class.runtime_type = Some(RuntimeTypeProvenance {
-            mint,
             defs: source_defs.clone(),
             owner: package_ptr,
         });
         type_values.insert(name, type_ptr);
     }
     for (name, enum_ptr, ty) in enum_rows {
-        let mint = vm.heap.mint_runtime_id();
-        let type_ptr = vm.alloc_type(TypeValue::runtime_with_defs(
-            ty,
-            mint,
-            source_defs.clone(),
-            package_ptr,
-        ));
+        let type_ptr = vm.alloc_type(TypeValue::owned(ty, source_defs.clone(), package_ptr));
         let Object::Enum(enm) = vm.get_object_mut(enum_ptr) else {
             unreachable!("runtime package enum pointer changed kind")
         };
         enm.runtime_type = Some(RuntimeTypeProvenance {
-            mint,
             defs: source_defs.clone(),
             owner: package_ptr,
         });
         type_values.insert(name, type_ptr);
     }
     for (name, ty) in interface_rows {
-        let mint = vm.heap.mint_runtime_id();
-        let type_ptr = vm.alloc_type(TypeValue::runtime_with_defs(
-            ty,
-            mint,
-            source_defs.clone(),
-            package_ptr,
-        ));
+        let type_ptr = vm.alloc_type(TypeValue::owned(ty, source_defs.clone(), package_ptr));
         type_values.insert(name, type_ptr);
     }
     type_values
@@ -1833,10 +1813,10 @@ fn graft_session_submission(
     runtime.object_names.extend(object_name_updates);
     runtime.global_names.extend(cached_import_names);
     runtime.global_names.extend(global_name_updates);
-    // Every declaration submission is generative: its created-once Type value
-    // carries a fresh mint and points back to the Session package that owns its
-    // definitions. Overwriting a visible name updates only the newest lookup;
-    // values and functions from older submissions retain their original mint.
+    // Every declaration submission is generative: it creates fresh declarations
+    // owned by the Session package. Overwriting a visible name updates only the
+    // newest lookup; values and functions from older submissions keep pointing
+    // at the declarations they were built against.
     runtime.type_values.extend(new_type_values);
     runtime.diagnostics.clone_from(&artifact.diagnostics);
     // The maps above now hold fresh young pointers inside a package object that

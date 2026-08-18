@@ -264,7 +264,7 @@ function runtime_type_binding_persists() -> bool throws unknown {
   first && later && rebound
 }
 
-function session_declaration_mints_are_generative() -> bool throws unknown {
+function session_declarations_are_generative() -> bool throws unknown {
   let left = reflect.Session.new()
   let right = reflect.Session.new()
   left.eval(#"class SameName { value string }"#)
@@ -390,10 +390,10 @@ async fn scoped_runtime_type_bindings_persist_and_rebind_between_submissions() {
 }
 
 #[tokio::test]
-async fn identical_declarations_in_two_sessions_have_distinct_mints() {
+async fn identical_declarations_in_two_sessions_are_distinct_types() {
     let output = baml_test!(
         baml: SCENARIO_7,
-        entry: "session_declaration_mints_are_generative"
+        entry: "session_declarations_are_generative"
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

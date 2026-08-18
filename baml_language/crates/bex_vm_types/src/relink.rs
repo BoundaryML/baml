@@ -322,7 +322,7 @@ mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
-            return_type: baml_type::TyTemplate::BuiltinUnknown {
+            return_type: crate::TyTemplate::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),
@@ -332,7 +332,7 @@ mod tests {
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
-            throws_type: baml_type::TyTemplate::Never {
+            throws_type: crate::TyTemplate::Never {
                 attr: baml_type::TyAttr::default(),
             },
             origin: FunctionOrigin::Internal,

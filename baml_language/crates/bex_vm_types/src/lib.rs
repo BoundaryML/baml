@@ -69,6 +69,37 @@ pub type TyTemplate = baml_type::TyTemplate<TypeHead>;
 /// [`baml_type::RuntimeInterface`] at the runtime's head.
 pub type RuntimeInterface = baml_type::RuntimeInterface<TypeHead>;
 
+// ── Crossing between the two heads ───────────────────────────────────────────
+//
+// Emit is the one legitimate producer of runtime types without a heap: it mints
+// each head's *identity* from the declaration's name and leaves the pointer
+// unfilled, for the loader to bind. The reverse direction is
+// [`TypeHead::to_name`], which needs a live heap and so can fail.
+
+/// Mint unresolved runtime heads for a compiled signature type.
+#[must_use]
+pub fn anchor_template(ty: &baml_type::TyTemplate) -> TyTemplate {
+    ty.map_heads(&mut TypeHead::of_name)
+}
+
+/// Mint unresolved runtime heads for a compiled declaration-facing type.
+#[must_use]
+pub fn anchor_runtime_ty(ty: &baml_type::RuntimeTy) -> RuntimeTy {
+    ty.map_heads(&mut TypeHead::of_name)
+}
+
+/// Mint unresolved runtime heads for a compiled value-facing type.
+#[must_use]
+pub fn anchor_realized(ty: &baml_type::RealizedTy) -> RealizedTy {
+    ty.map_heads(&mut TypeHead::of_name)
+}
+
+/// Mint unresolved runtime heads for a compiled interface bound.
+#[must_use]
+pub fn anchor_interface(interface: &baml_type::RuntimeInterface) -> RuntimeInterface {
+    interface.map_heads(&mut TypeHead::of_name)
+}
+
 /// A head that could not be named when converting a type out of the VM.
 ///
 /// Carries the tag rather than a stand-in name: a boundary that cannot say what

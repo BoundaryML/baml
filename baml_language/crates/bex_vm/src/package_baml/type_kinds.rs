@@ -1,4 +1,4 @@
-//! BEP-066 reflection kind views over the existing minted `Object::Type`.
+//! BEP-066 reflection kind views over `Object::Type`.
 
 use std::sync::Arc;
 
@@ -9,9 +9,8 @@ use baml_compiler_diagnostics::{
 use bex_heap::TlabHolder;
 use bex_vm_types::types::{
     Class, ClassField, DynTypeDefs, DynWitnessDef, Enum, EnumVariant, InterfaceDef, MethodImpl,
-    MintId, Object, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
-    PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeImplRule,
-    RuntimeTypeProvenance, TypeValue, Value,
+    Object, PortableClassDef, PortableClassFieldDef, PortableEnumDef, PortableEnumVariantDef,
+    PortableMetadata, PortableTypeDef, RuntimeImplRule, RuntimeTypeProvenance, TypeValue, Value,
 };
 use indexmap::IndexMap;
 
@@ -28,8 +27,8 @@ use super::{
 use crate::BexVm;
 
 impl BexVm {
-    /// Copy a minted type's reachable nominal schemas into a pointer-free host
-    /// carrier. The mint and package owner are deliberately not represented.
+    /// Copy a type's reachable nominal schemas into a pointer-free host
+    /// carrier. The package owner is deliberately not represented.
     pub fn export_portable_type_def(&self, type_value: &TypeValue) -> PortableTypeDef {
         let mut class_ptrs = type_value
             .defs()
@@ -135,9 +134,9 @@ impl BexVm {
         }
     }
 
-    /// Materialize an inbound portable definition with fresh heap objects and
-    /// fresh runtime identity. Names remain definition keys; identity is the
-    /// new mint, never the wire spelling.
+    /// Materialize an inbound portable definition as fresh declarations.
+    /// Names remain definition keys; the declarations are new, so they are
+    /// distinct from any same-named declaration the program already has.
     pub fn materialize_portable_type_def(
         &mut self,
         definition: PortableTypeDef,
@@ -154,27 +153,6 @@ impl BexVm {
                 })?;
             }
         }
-        let root_mint = self.tlab.heap().mint_runtime_id();
-        let mut named_mints = IndexMap::new();
-        for class in &definition.classes {
-            let mint = if matches!(&root, baml_type::RealizedTy::Class(name, _, _) if name == &class.name)
-            {
-                root_mint
-            } else {
-                self.tlab.heap().mint_runtime_id()
-            };
-            named_mints.insert(class.name.clone(), mint);
-        }
-        for enm in &definition.enums {
-            let mint = if matches!(&root, baml_type::RealizedTy::Enum(name, _) if name == &enm.name)
-            {
-                root_mint
-            } else {
-                self.tlab.heap().mint_runtime_id()
-            };
-            named_mints.insert(enm.name.clone(), mint);
-        }
-
         let mut defs = DynTypeDefs {
             classes: IndexMap::new(),
             enums: IndexMap::new(),
@@ -206,10 +184,9 @@ impl BexVm {
                 docstring: class.metadata.docstring.clone(),
                 other: class.metadata.other.clone(),
                 // A counter tag, never content-addressed from the wire name: a
-                // payload naming a compiled FQN must not mint the compiled
-                // class's identity (it would take that class's jump-table and
-                // virtual-field switch arms). Identity is the mint; the name is
-                // display data.
+                // payload naming a compiled FQN must not take the compiled
+                // class's identity (it would land on that class's jump-table
+                // and virtual-field switch arms). The name is display data.
                 type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
                 ty_attr: baml_type::TyAttr::default(),
                 has_cleanup: false,
@@ -246,29 +223,25 @@ impl BexVm {
             defs.enums.insert(enm.name.clone(), ptr);
         }
 
-        for (name, ptr) in defs.classes.clone() {
-            let mint = named_mints[&name];
+        for (_, ptr) in defs.classes.clone() {
             let Object::Class(class) = self.get_object_mut(ptr) else {
                 unreachable!()
             };
             class.runtime_type = Some(RuntimeTypeProvenance {
-                mint,
                 defs: defs.clone(),
                 owner: bex_vm_types::HeapPtr::null(),
             });
         }
-        for (name, ptr) in defs.enums.clone() {
-            let mint = named_mints[&name];
+        for (_, ptr) in defs.enums.clone() {
             let Object::Enum(enm) = self.get_object_mut(ptr) else {
                 unreachable!()
             };
             enm.runtime_type = Some(RuntimeTypeProvenance {
-                mint,
                 defs: defs.clone(),
                 owner: bex_vm_types::HeapPtr::null(),
             });
         }
-        Ok(TypeValue::from_parts_with_defs(root, root_mint, defs))
+        Ok(TypeValue::with_defs(root, defs))
     }
 }
 
@@ -611,13 +584,9 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             ));
         }
 
-        let mint = vm.tlab.heap().mint_runtime_id();
-        let MintId::Runtime(mint_number) = mint else {
-            unreachable!("BexHeap::mint_runtime_id always returns a runtime mint")
-        };
         let type_name = baml_type::QualifiedTypeName::runtime_local(
             baml_type::Name::new(class_name),
-            mint_number,
+            vm.tlab.heap().next_synthetic_name_id(),
         );
         child_defs.witnesses = witnesses
             .iter()
@@ -635,7 +604,6 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             has_cleanup: false,
             generic_param_count: 0,
             runtime_type: Some(RuntimeTypeProvenance {
-                mint,
                 defs: child_defs.clone(),
                 owner: bex_vm_types::HeapPtr::null(),
             }),
@@ -648,9 +616,9 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
         child_defs.classes.insert(type_name.clone(), class_ptr);
         vm.dynamic_dispatch.register_class(type_name, class_ptr);
         register_class_witnesses(vm, class_ptr, &ty, witnesses);
-        Ok(Value::object(vm.tlab.alloc_type(
-            TypeValue::from_parts_with_defs(ty, mint, child_defs),
-        )))
+        Ok(Value::object(
+            vm.tlab.alloc_type(TypeValue::with_defs(ty, child_defs)),
+        ))
     }
 
     fn builder(vm: &mut BexVm, name: &bex_str::BexStr) -> Value {
@@ -821,13 +789,9 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
             ));
         }
 
-        let mint = vm.tlab.heap().mint_runtime_id();
-        let MintId::Runtime(mint_number) = mint else {
-            unreachable!("BexHeap::mint_runtime_id always returns a runtime mint")
-        };
         let type_name = baml_type::QualifiedTypeName::runtime_local(
             baml_type::Name::new(enum_name),
-            mint_number,
+            vm.tlab.heap().next_synthetic_name_id(),
         );
         let enum_ptr = vm.tlab.alloc(Object::Enum(Box::new(Enum {
             name: type_name.clone(),
@@ -839,16 +803,13 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
             type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
             ty_attr: baml_type::TyAttr::default(),
             runtime_type: Some(RuntimeTypeProvenance {
-                mint,
                 defs: DynTypeDefs::default(),
                 owner: bex_vm_types::HeapPtr::null(),
             }),
         })));
         let ty = baml_type::RealizedTy::Enum(type_name.clone(), baml_type::TyAttr::default());
         let defs = DynTypeDefs::with_enum(type_name, enum_ptr);
-        let type_ptr = vm
-            .tlab
-            .alloc_type(TypeValue::from_parts_with_defs(ty, mint, defs));
+        let type_ptr = vm.tlab.alloc_type(TypeValue::with_defs(ty, defs));
         Ok(Value::object(type_ptr))
     }
 
@@ -1234,11 +1195,7 @@ fn reflected_type_value(vm: &BexVm, value: Value) -> TypeValue {
 }
 
 fn alloc_runtime_composite(vm: &mut BexVm, ty: baml_type::RealizedTy, defs: DynTypeDefs) -> Value {
-    let mint = vm.tlab.heap().mint_runtime_id();
-    Value::object(
-        vm.tlab
-            .alloc_type(TypeValue::from_parts_with_defs(ty, mint, defs)),
-    )
+    Value::object(vm.tlab.alloc_type(TypeValue::with_defs(ty, defs)))
 }
 
 pub(super) struct ReflectedTypeRow {

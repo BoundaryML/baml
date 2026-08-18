@@ -79,7 +79,7 @@ pub struct RuntimeSessionCompileRequest {
     /// The newest source-visible binding for every flat-scope name.
     pub visible: IndexMap<String, SessionVisibleSymbol>,
     /// Runtime contract supplied by `eval<T>` (unknown for uncontracted eval).
-    pub expected: baml_type::RuntimeTy,
+    pub expected: crate::RuntimeTy,
     /// Keeps the one-eval permit live across compile and execution.
     pub lease: SessionEvalLease,
 }

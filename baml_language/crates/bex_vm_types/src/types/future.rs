@@ -8,7 +8,7 @@ use std::{
     },
 };
 
-use baml_type::RealizedTy;
+use crate::RealizedTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 use tokio_util::sync::CancellationToken;
 

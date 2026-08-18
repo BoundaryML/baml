@@ -127,12 +127,10 @@ pub enum Object {
     /// Collector object (opaque handle to `bex_events::Collector`).
     Collector(CollectorRef),
 
-    /// A type descriptor value — wraps a [`crate::types::TypeValue`]: the
-    /// described `baml_type::RealizedTy` plus the minted identity that
-    /// `==`/hash compare (BEP-066). The mint is inline plain data, so a GC
-    /// copy or `baml.deep_copy` preserves identity; the wire form
-    /// (`ObjectWire::Type`) carries only the type — identity never crosses a
-    /// boundary (H-4) and is re-derived on decode.
+    /// A type descriptor value — wraps a [`crate::types::TypeValue`]. The
+    /// described type is the whole of it: `==` is type equivalence, so a GC
+    /// copy, a `baml.deep_copy`, and a wire round trip all denote the same
+    /// type by construction.
     Type(Box<crate::types::TypeValue>),
 
     #[cfg(feature = "heap_debug")]
@@ -203,10 +201,10 @@ enum ObjectWire {
         num_bigint::BigInt,
     ),
     Uint8Array(Vec<u8>),
-    Array(Box<baml_type::RealizedTy>, Vec<Value>),
+    Array(Box<crate::RealizedTy>, Vec<Value>),
     Map(
-        Box<baml_type::RealizedTy>,
-        Box<baml_type::RealizedTy>,
+        Box<crate::RealizedTy>,
+        Box<crate::RealizedTy>,
         IndexMap<String, Value>,
     ),
     Float(f64),
@@ -217,13 +215,13 @@ enum ObjectWire {
     // enum's size. Borsh treats `Box<T>` transparently, so the wire form is
     // unchanged.
     UnscheduledFuture(Box<UnscheduledFuture>),
-    /// Carries only the described type — never the mint (BEP-066 H-4:
-    /// identity does not cross a serialization boundary). Decode re-derives a
-    /// `Static` mint. No compiled `Program` bakes an `Object::Type` into its
-    /// object pool today (`ConstValue::Type` templates materialize through
-    /// the VM's `LoadType`), so this round trip is exercised only by
-    /// unit/link tooling.
-    Type(Box<baml_type::RealizedTy>),
+    /// Carries the described type, which is the whole of a `type` value: two
+    /// `type` values are the same type exactly when their payloads are
+    /// equivalent, so a round trip through this form is lossless. No compiled
+    /// `Program` bakes an `Object::Type` into its object pool today
+    /// (`ConstValue::Type` templates materialize through the VM's `LoadType`),
+    /// so this round trip is exercised only by unit/link tooling.
+    Type(Box<crate::RealizedTy>),
 }
 
 impl BorshSerialize for Object {
@@ -257,7 +255,6 @@ impl BorshSerialize for Object {
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
-            // The mint stays behind (H-4) — only the described type crosses.
             Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
             Self::RustData(_) => {
                 return Err(std::io::Error::new(
@@ -286,71 +283,6 @@ impl BorshSerialize for Object {
             }
         };
         proxy.serialize(writer)
-    }
-}
-
-/// Whether deriving a static mint for this wire type may consult program facts
-/// that generic Borsh decoding cannot provide.
-///
-/// A named alias always needs its definition. A union also becomes
-/// fact-dependent when interface absorption or enum completeness can change its
-/// canonical form. The remaining shapes are fact-free exactly when their
-/// children are.
-fn type_wire_requires_facts(ty: &baml_type::RealizedTy) -> bool {
-    use baml_type::RealizedTy;
-
-    match ty {
-        RealizedTy::TypeAlias(..) => true,
-        RealizedTy::Union(members, _) => {
-            members.iter().any(type_wire_requires_facts)
-                || members.iter().any(|member| {
-                    matches!(
-                        member,
-                        RealizedTy::Interface(..) | RealizedTy::EnumVariant(..)
-                    )
-                })
-        }
-        RealizedTy::Class(_, args, _) => args.iter().any(type_wire_requires_facts),
-        RealizedTy::Interface(_, args, bindings, _) => {
-            args.iter().any(type_wire_requires_facts)
-                || bindings
-                    .iter()
-                    .any(|(_, binding)| type_wire_requires_facts(binding))
-        }
-        RealizedTy::List(inner, _) => type_wire_requires_facts(inner),
-        RealizedTy::Map { key, value, .. } | RealizedTy::Future(key, value, _) => {
-            type_wire_requires_facts(key) || type_wire_requires_facts(value)
-        }
-        RealizedTy::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params
-                .iter()
-                .any(|param| type_wire_requires_facts(&param.ty))
-                || type_wire_requires_facts(ret)
-                || type_wire_requires_facts(throws)
-        }
-        RealizedTy::Int { .. }
-        | RealizedTy::Bigint { .. }
-        | RealizedTy::Float { .. }
-        | RealizedTy::String { .. }
-        | RealizedTy::Bool { .. }
-        | RealizedTy::Null { .. }
-        | RealizedTy::Uint8Array { .. }
-        | RealizedTy::Media(..)
-        | RealizedTy::Literal(..)
-        | RealizedTy::Enum(..)
-        | RealizedTy::EnumVariant(..)
-        | RealizedTy::RustType { .. }
-        | RealizedTy::Type { .. }
-        | RealizedTy::Resource { .. }
-        | RealizedTy::PromptAst { .. }
-        | RealizedTy::Void { .. }
-        | RealizedTy::BuiltinUnknown { .. }
-        | RealizedTy::Never { .. } => false,
     }
 }
 
@@ -391,27 +323,7 @@ impl BorshDeserialize for Object {
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
-            ObjectWire::Type(v) => {
-                if type_wire_requires_facts(&v) {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "fact-dependent type values require context-aware decoding",
-                    ));
-                }
-                // Re-derive the static mint (H-4: identity never rides the
-                // wire). Borsh decode has no fact source to consult, so the
-                // generic wire path accepts only types whose canonical form is
-                // fact-free. Context-dependent payloads are rejected above.
-                // No compiled `Program` pools an `Object::Type` today — see
-                // the `ObjectWire::Type` doc.
-                #[expect(
-                    deprecated,
-                    reason = "borsh decode is a boundary with no fact context to supply; \
-                              see the fact-free digest note above"
-                )]
-                let ctx = baml_type::normalize::NoFacts;
-                Self::Type(Box::new(crate::types::TypeValue::static_new(*v, &ctx)))
-            }
+            ObjectWire::Type(v) => Self::Type(Box::new(crate::types::TypeValue::new(*v))),
         })
     }
 }
@@ -579,22 +491,19 @@ mod type_wire_tests {
     use borsh::BorshDeserialize;
 
     use super::*;
-    use crate::types::{MintId, TypeValue};
+    use crate::types::TypeValue;
 
     #[test]
-    fn type_wire_omits_identity_and_keeps_the_existing_payload_format() {
-        let ty = baml_type::RealizedTy::list(baml_type::RealizedTy::string());
-        let object = Object::Type(Box::new(TypeValue::from_parts(
-            ty.clone(),
-            MintId::Runtime(91),
-        )));
+    fn type_wire_round_trips_the_described_type() {
+        let ty = crate::RealizedTy::list(crate::RealizedTy::string());
+        let object = Object::Type(Box::new(TypeValue::new(ty.clone())));
 
         let encoded_object = borsh::to_vec(&object).expect("type object serializes");
         let encoded_legacy_shape =
             borsh::to_vec(&ObjectWire::Type(Box::new(ty.clone()))).expect("wire proxy serializes");
         assert_eq!(
             encoded_object, encoded_legacy_shape,
-            "adding a mint must not change the ObjectWire::Type bytes"
+            "an Object::Type encodes exactly as its described type"
         );
 
         let decoded = Object::try_from_slice(&encoded_object).expect("type object deserializes");
@@ -602,21 +511,5 @@ mod type_wire_tests {
             panic!("decoded object should be a type")
         };
         assert_eq!(type_value.ty, ty);
-        assert!(matches!(type_value.mint(), MintId::Static(_)));
-        assert_ne!(type_value.mint(), MintId::Runtime(91));
-    }
-
-    #[test]
-    fn type_wire_rejects_a_type_whose_mint_needs_program_facts() {
-        let alias = baml_type::RealizedTy::TypeAlias(
-            baml_type::QualifiedTypeName::local(baml_base::Name::new("Recursive")),
-            baml_type::TyAttr::default(),
-        );
-        let encoded =
-            borsh::to_vec(&ObjectWire::Type(Box::new(alias))).expect("wire proxy serializes");
-
-        let error = Object::try_from_slice(&encoded).expect_err("fact-dependent type is rejected");
-        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
-        assert!(error.to_string().contains("context-aware decoding"));
     }
 }

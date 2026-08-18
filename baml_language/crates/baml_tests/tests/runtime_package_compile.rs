@@ -42,7 +42,7 @@ function rendered_schema() -> string throws unknown {
   Extract$render_prompt<unreflect(record_t.as_type())>("sample document").text()
 }
 
-function mint_properties() -> bool throws unknown {
+function declaration_identity_properties() -> bool throws unknown {
   let files = { "schema.baml": "class ExtractedRecord { account string amount int }" }
   let first = reflect.Package.compile(files)
   let second = reflect.Package.compile(files)
@@ -335,13 +335,13 @@ async fn render_prompt_uses_runtime_package_schema() {
 }
 
 #[tokio::test]
-async fn package_mints_are_created_once_and_compiles_are_generative() {
-    let output = baml_test!(baml: SCENARIO_SOURCE, entry: "mint_properties");
+async fn package_declarations_are_created_once_and_compiles_are_generative() {
+    let output = baml_test!(baml: SCENARIO_SOURCE, entry: "declaration_identity_properties");
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
 #[tokio::test]
-async fn runtime_package_and_mint_survive_major_collection() {
+async fn runtime_package_and_declarations_survive_major_collection() {
     let output = baml_test!(baml: SCENARIO_SOURCE, entry: "package_survives_gc");
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

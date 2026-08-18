@@ -20,9 +20,7 @@ use baml_compiler_diagnostics::{
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr,
-    types::{
-        Class, ClassField, DynTypeDefs, MintId, Object, RuntimeTypeProvenance, TypeValue, Value,
-    },
+    types::{Class, ClassField, DynTypeDefs, Object, RuntimeTypeProvenance, TypeValue, Value},
 };
 use indexmap::IndexMap;
 
@@ -84,13 +82,11 @@ struct BuilderNode {
 struct ClassPlan {
     name: baml_type::QualifiedTypeName,
     ptr: HeapPtr,
-    mint: MintId,
     ty: baml_type::RealizedTy,
 }
 
 struct ClassIdentityPlan {
     name: baml_type::QualifiedTypeName,
-    mint: MintId,
     ty: baml_type::RealizedTy,
 }
 
@@ -796,17 +792,13 @@ fn build_group(
 
     let mut identities = IndexMap::new();
     for node in group.values() {
-        let mint = vm.tlab.heap().mint_runtime_id();
-        let MintId::Runtime(mint_number) = mint else {
-            unreachable!("BexHeap::mint_runtime_id always returns a runtime mint")
-        };
         let name = baml_type::QualifiedTypeName::runtime_local(
             baml_type::Name::new(node.name.as_str()),
-            mint_number,
+            vm.tlab.heap().next_synthetic_name_id(),
         );
         let ty =
             baml_type::RealizedTy::Class(name.clone(), Vec::new(), baml_type::TyAttr::default());
-        identities.insert(node.id, ClassIdentityPlan { name, mint, ty });
+        identities.insert(node.id, ClassIdentityPlan { name, ty });
     }
 
     let witness_fields = planned_witness_fields(vm, &prepared[&start_id], &identities)
@@ -839,8 +831,9 @@ fn build_group(
             alias: None,
             docstring: None,
             other: IndexMap::new(),
-            // Counter tag: runtime-created, so identity comes from the mint and
-            // the tag; the synthesized `$dyn` name is display data only.
+            // Counter tag: runtime-created declarations are identified by their
+            // heap object, and by this tag across a serialization boundary; the
+            // synthesized `$dyn` name is display data only.
             type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
@@ -853,7 +846,6 @@ fn build_group(
             ClassPlan {
                 name: identity.name.clone(),
                 ptr,
-                mint: identity.mint,
                 ty: identity.ty.clone(),
             },
         );
@@ -861,11 +853,10 @@ fn build_group(
 
     for node in group.values() {
         let plan = &plans[&node.id];
-        let value = Value::object(vm.tlab.alloc_type(TypeValue::from_parts_with_defs(
-            plan.ty.clone(),
-            plan.mint,
-            defs.clone(),
-        )));
+        let value = Value::object(
+            vm.tlab
+                .alloc_type(TypeValue::with_defs(plan.ty.clone(), defs.clone())),
+        );
         store_instance_field(vm, node.value, 3, value)
             .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
     }
@@ -908,7 +899,6 @@ fn build_group(
         let mut provenance_defs = defs.clone();
         provenance_defs.classes.shift_remove(&plan.name);
         class.runtime_type = Some(RuntimeTypeProvenance {
-            mint: plan.mint,
             // A definition cannot own itself through provenance. `type.of_value`
             // adds this class pointer back while the other recursively-linked
             // group members remain available as dependencies.
@@ -1008,11 +998,7 @@ fn resolve_pending_if_ready(vm: &mut BexVm, pending: Value) -> Result<Option<Val
                 }
                 PendingOp::Direct => unreachable!(),
             };
-            let mint = vm.tlab.heap().mint_runtime_id();
-            Value::object(
-                vm.tlab
-                    .alloc_type(TypeValue::from_parts_with_defs(ty, mint, defs)),
-            )
+            Value::object(vm.tlab.alloc_type(TypeValue::with_defs(ty, defs)))
         }
     };
     store_instance_field(vm, pending, 2, resolved)?;

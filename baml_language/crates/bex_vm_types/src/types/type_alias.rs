@@ -32,12 +32,12 @@ pub struct TypeAliasDef {
 
     /// The aliased type.
     ///
-    /// [`RealizedTy`](baml_type::RealizedTy) rather than
-    /// [`RuntimeTy`](baml_type::RuntimeTy) because aliases cannot be generic —
+    /// [`RealizedTy`](crate::RealizedTy) rather than
+    /// [`RuntimeTy`](crate::RuntimeTy) because aliases cannot be generic —
     /// the declaration has no type-parameter list, so nothing is in scope for
     /// the right-hand side to reference. That rules out the `typevar` and
     /// `projection` axes structurally instead of by convention.
-    pub definition: baml_type::RealizedTy,
+    pub definition: crate::RealizedTy,
 
     /// Runtime package that declared this alias; null for a static (or
     /// standalone) declaration. A member back-edge: reaching the alias keeps

@@ -34,9 +34,9 @@ impl BamlNamespaceType for PackageBamlImpl {
                                 baml_type::TyAttr::default(),
                             );
                             if runtime.owner.is_null() {
-                                TypeValue::from_parts_with_defs(ty, runtime.mint, defs)
+                                TypeValue::with_defs(ty, defs)
                             } else {
-                                TypeValue::runtime_with_defs(ty, runtime.mint, defs, runtime.owner)
+                                TypeValue::owned(ty, defs, runtime.owner)
                             }
                         })
                     }
@@ -48,9 +48,9 @@ impl BamlNamespaceType for PackageBamlImpl {
                             baml_type::TyAttr::default(),
                         );
                         if runtime.owner.is_null() {
-                            TypeValue::from_parts_with_defs(ty, runtime.mint, defs)
+                            TypeValue::with_defs(ty, defs)
                         } else {
-                            TypeValue::runtime_with_defs(ty, runtime.mint, defs, runtime.owner)
+                            TypeValue::owned(ty, defs, runtime.owner)
                         }
                     }),
                     _ => None,
@@ -806,11 +806,10 @@ fn alloc_runtime_type(
     defs: bex_vm_types::types::DynTypeDefs,
     owner: bex_vm_types::HeapPtr,
 ) -> Value {
-    let mint = vm.tlab.heap().mint_runtime_id();
     let value = if owner.is_null() {
-        TypeValue::from_parts_with_defs(ty, mint, defs)
+        TypeValue::with_defs(ty, defs)
     } else {
-        TypeValue::runtime_with_defs(ty, mint, defs, owner)
+        TypeValue::owned(ty, defs, owner)
     };
     Value::object(vm.tlab.alloc_type(value))
 }

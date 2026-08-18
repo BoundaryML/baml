@@ -1,7 +1,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
+use crate::TyTemplate;
 use baml_base::Name;
-use baml_type::TyTemplate;
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 

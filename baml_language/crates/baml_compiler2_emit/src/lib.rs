@@ -108,11 +108,12 @@ fn build_interface_def(
     let lower_rt = |ctx: &baml_compiler2_hir_ty::lower::LowerCtx<'_>,
                     store: &TypeRefStore,
                     id: TypeRefId|
-     -> RuntimeTy {
+     -> bex_vm_types::RuntimeTy {
         let ty = ctx.lower_type_ref(store, id).to_plain();
-        baml_type::lower_to_runtime(&ty, resolved).unwrap_or_else(|e| {
+        let runtime = baml_type::lower_to_runtime(&ty, resolved).unwrap_or_else(|e| {
             unreachable!("interface `{iface_tn}` declares a non-runtime type: {e:?}")
-        })
+        });
+        bex_vm_types::anchor_runtime_ty(&runtime)
     };
     // Lower an interface bound / `requires` target / associated-type bound.
     // These are constraint heads: hir keeps written pins only (no eager
@@ -121,7 +122,7 @@ fn build_interface_def(
     let lower_iface = |ctx: &baml_compiler2_hir_ty::lower::LowerCtx<'_>,
                        store: &TypeRefStore,
                        id: TypeRefId|
-     -> Option<RuntimeInterface> {
+     -> Option<bex_vm_types::RuntimeInterface> {
         let lowered = ctx.lower_type_ref(store, id).to_plain();
         let baml_type::Ty::Interface(qtn, args, assoc, _) = lowered else {
             return None;
@@ -136,7 +137,11 @@ fn build_interface_def(
             .iter()
             .map(|(n, t)| (n.clone(), to_runtime(t)))
             .collect();
-        Some(RuntimeInterface::new(qtn, generics, associated_types))
+        Some(bex_vm_types::anchor_interface(&RuntimeInterface::new(
+            qtn,
+            generics,
+            associated_types,
+        )))
     };
     // A method's runtime signature: Required params -> positional `args`,
     // optional (defaulted) params -> `kwargs`; the `self` receiver is
@@ -150,10 +155,10 @@ fn build_interface_def(
      -> InterfaceMethodDef {
         // An untyped parameter is a syntax-level error, so it cannot reach
         // emit; the top type keeps the positional layout intact if one did.
-        let unannotated = || RuntimeTy::BuiltinUnknown {
+        let unannotated = || bex_vm_types::RuntimeTy::BuiltinUnknown {
             attr: TyAttr::default(),
         };
-        let void = || RuntimeTy::Void {
+        let void = || bex_vm_types::RuntimeTy::Void {
             attr: TyAttr::default(),
         };
         let mut args = Vec::new();
@@ -430,8 +435,8 @@ fn build_packages(
 
     type IfaceParts = (
         baml_type::TypeName,
-        Vec<baml_type::TyTemplate>,
-        Vec<(Name, baml_type::TyTemplate)>,
+        Vec<bex_vm_types::TyTemplate>,
+        Vec<(Name, bex_vm_types::TyTemplate)>,
     );
     // Split a lowered interface type into its base `TypeName` plus its args /
     // associated bindings as `TyTemplate`s (generic params → `TypeArgRef`).
@@ -445,14 +450,20 @@ fn build_packages(
         };
         let arg_templates = args
             .iter()
-            .map(|a| baml_compiler2_mir::tir2_to_template(a, resolved, generics))
+            .map(|a| {
+                bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
+                    a, resolved, generics,
+                ))
+            })
             .collect();
         let assoc_templates = assoc
             .iter()
             .map(|(n, t)| {
                 (
                     n.clone(),
-                    baml_compiler2_mir::tir2_to_template(t, resolved, generics),
+                    bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
+                        t, resolved, generics,
+                    )),
                 )
             })
             .collect();
@@ -627,11 +638,11 @@ fn build_packages(
     // realizes to exactly that concrete type. A non-generic interface with no
     // associated types (`Equals`/`Compare`) yields just the `Self` slot.
     let interface_frame = |iface_tn: &baml_type::TypeName,
-                           for_ty_pattern: &baml_type::TyTemplate,
-                           interface_args: &[baml_type::TyTemplate],
-                           interface_assoc: &[(Name, baml_type::TyTemplate)]|
-     -> Vec<baml_type::TyTemplate> {
-        let mut frame: Vec<baml_type::TyTemplate> = Vec::with_capacity(1 + interface_args.len());
+                           for_ty_pattern: &bex_vm_types::TyTemplate,
+                           interface_args: &[bex_vm_types::TyTemplate],
+                           interface_assoc: &[(Name, bex_vm_types::TyTemplate)]|
+     -> Vec<bex_vm_types::TyTemplate> {
+        let mut frame: Vec<bex_vm_types::TyTemplate> = Vec::with_capacity(1 + interface_args.len());
         frame.push(for_ty_pattern.clone());
         frame.extend(interface_args.iter().cloned());
         if let Some((_, _, decls)) = iface_assoc_decls.get(iface_tn) {
@@ -649,7 +660,7 @@ fn build_packages(
                     .find(|(an, _)| an == name)
                     .map(|(_, t)| t.clone())
                     .unwrap_or_else(|| {
-                        baml_type::TyTemplate::from(baml_type::RealizedTy::BuiltinUnknown {
+                        bex_vm_types::TyTemplate::from(baml_type::RealizedTy::BuiltinUnknown {
                             attr: TyAttr::default(),
                         })
                     });
@@ -667,7 +678,7 @@ fn build_packages(
     // the baked template; the runtime reduces them back through this same
     // rule at realization time (fuel-bounded against cycles). A member with
     // neither pin nor default is a diagnosed incomplete impl and stays absent.
-    let complete_interface_assoc = |interface_assoc: &mut Vec<(Name, baml_type::TyTemplate)>,
+    let complete_interface_assoc = |interface_assoc: &mut Vec<(Name, bex_vm_types::TyTemplate)>,
                                     iface_tn: &baml_type::TypeName,
                                     iface_arg_tys: &[ty::Ty],
                                     for_ty: &ty::Ty,
@@ -692,7 +703,9 @@ fn build_packages(
             let completed = baml_type::unify::substitute_ty(default, &bindings);
             interface_assoc.push((
                 name.clone(),
-                baml_compiler2_mir::tir2_to_template(&completed, resolved, generics),
+                bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
+                    &completed, resolved, generics,
+                )),
             ));
         }
     };
@@ -700,7 +713,7 @@ fn build_packages(
     // each carrying the interface frame it is invoked with.
     let merge_defaults = |methods: &mut indexmap::IndexMap<Name, ProgramMethodImpl>,
                           iface_tn: &baml_type::TypeName,
-                          interface_frame: &[baml_type::TyTemplate]| {
+                          interface_frame: &[bex_vm_types::TyTemplate]| {
         if let Some(defaults) = iface_defaults.get(iface_tn) {
             for (name, fqn) in defaults {
                 let Some(fqn_idx) = resolve_fqn(fqn) else {
@@ -815,18 +828,18 @@ fn build_packages(
                            bindings: &[AssociatedTypeBindingData],
                            generics: &[ParamTy],
                            bounds: &BoundsMap|
-         -> Vec<(Name, baml_type::TyTemplate)> {
+         -> Vec<(Name, bex_vm_types::TyTemplate)> {
             bindings
                 .iter()
                 .filter_map(|b| {
                     let id = b.type_ref?;
                     Some((
                         b.name.clone(),
-                        baml_compiler2_mir::tir2_to_template(
+                        bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
                             &lower(store, id, generics, bounds),
                             resolved,
                             generics,
-                        ),
+                        )),
                     ))
                 })
                 .collect()
@@ -876,17 +889,18 @@ fn build_packages(
                 &impl_params,
                 resolved,
             );
-            let for_ty_pattern =
-                baml_compiler2_mir::tir2_to_template(&for_ty, resolved, &impl_params);
+            let for_ty_pattern = bex_vm_types::anchor_template(
+                &baml_compiler2_mir::tir2_to_template(&for_ty, resolved, &impl_params),
+            );
             let Some(generic_param_bounds) =
                 bound_sets(store, generics, &impl_params, &impl_bounds)
             else {
                 continue;
             };
             // An impl's own method is compiled against the impl's own generics.
-            let impl_frame: Vec<baml_type::TyTemplate> = (0..u32::try_from(impl_params.len())
+            let impl_frame: Vec<bex_vm_types::TyTemplate> = (0..u32::try_from(impl_params.len())
                 .expect("generic arity fits u32"))
-                .map(baml_type::TyTemplate::TypeArgRef)
+                .map(bex_vm_types::TyTemplate::TypeArgRef)
                 .collect();
             let Some(interface_head) = interface_indices
                 .get(&iface_tn)
@@ -966,7 +980,7 @@ fn build_packages(
             // their block by the full instantiation below.
             let class_method_impls: Vec<(
                 baml_type::TypeName,
-                Vec<baml_type::TyTemplate>,
+                Vec<bex_vm_types::TyTemplate>,
                 Name,
                 String,
             )> = class
@@ -998,17 +1012,18 @@ fn build_packages(
             // The implementor pattern is the class at its own parameters; bounds
             // come from the class's generic parameters. Shared by all its blocks.
             let for_ty_pattern = if generics.is_empty() {
-                baml_type::TyTemplate::from(baml_type::RealizedTy::Class(
-                    class_tn.clone(),
+                bex_vm_types::TyTemplate::from(bex_vm_types::RealizedTy::Class(
+                    bex_vm_types::TypeHead::of_name(&class_tn),
                     Vec::new(),
                     TyAttr::default(),
                 ))
             } else {
-                baml_type::TyTemplate::class(
-                    class_tn.clone(),
+                bex_vm_types::TyTemplate::Class(
+                    bex_vm_types::TypeHead::of_name(&class_tn),
                     (0..u32::try_from(generics.len()).expect("generic arity fits u32"))
-                        .map(baml_type::TyTemplate::TypeArgRef)
+                        .map(bex_vm_types::TyTemplate::TypeArgRef)
                         .collect(),
+                    TyAttr::default(),
                 )
             };
             let Some(generic_param_bounds) =
@@ -1017,9 +1032,9 @@ fn build_packages(
                 continue;
             };
             // An impl block's own methods are compiled against the class's generics.
-            let impl_frame: Vec<baml_type::TyTemplate> = (0..u32::try_from(generics.len())
+            let impl_frame: Vec<bex_vm_types::TyTemplate> = (0..u32::try_from(generics.len())
                 .expect("generic arity fits u32"))
-                .map(baml_type::TyTemplate::TypeArgRef)
+                .map(bex_vm_types::TyTemplate::TypeArgRef)
                 .collect();
 
             // The receiver type `Self` denotes for this class's blocks, in
@@ -1277,12 +1292,16 @@ fn emitted_function_origin(
 }
 
 /// Read-only snapshot of pooled class field metadata: every name registered in
-/// `class_object_indices` → the class's fields (name + type, in field order).
+/// A class's fields (name + type, in field order), keyed by the class's own
+/// [`TypeTag`](baml_type::typetag::TypeTag) — the identity its `TypeHead`
+/// carries, so a lookup is an integer compare and needs no name spelling.
+///
 /// Built once from the `Object::Class` entries before function bodies are
 /// compiled, so codegen resolves field names/types without reading the object
 /// pool (a hard requirement for parallel emit, whose workers compile against
 /// fragment pools that don't contain the pre-existing objects).
-pub(crate) type ClassFieldSnapshot = HashMap<String, Vec<(String, RuntimeTy)>>;
+pub(crate) type ClassFieldSnapshot =
+    HashMap<baml_type::typetag::TypeTag, Vec<(String, bex_vm_types::RuntimeTy)>>;
 
 /// Context for MIR codegen.
 pub(crate) struct MirCodegenContext<'ctx, 'obj> {
@@ -1756,7 +1775,7 @@ pub fn reuse_throws_mismatches(
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> HashMap<String, String> {
-    let previous: HashMap<&str, &baml_type::TyTemplate> = prev_units
+    let previous: HashMap<&str, &bex_vm_types::TyTemplate> = prev_units
         .iter()
         .flat_map(|unit| &unit.code)
         .filter_map(|object| match object {
@@ -2507,7 +2526,7 @@ fn tail_generic_dupes_clean(
 ) -> bool {
     // (base fn fq name, type args) of every generic value clean files own.
     // `GenericFunction::type_args` is `RealizedTy` (runtime narrowing, #3998).
-    let mut clean_keys: Vec<(String, Vec<baml_type::RealizedTy>)> = Vec::new();
+    let mut clean_keys: Vec<(String, Vec<bex_vm_types::RealizedTy>)> = Vec::new();
     for unit in prev_units {
         if !effective_clean.contains(&unit.source_file) {
             continue;
@@ -3178,7 +3197,7 @@ impl EmitTables {
 fn spliced_throws_match(
     db: &dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
-    previous: &HashMap<&str, &baml_type::TyTemplate>,
+    previous: &HashMap<&str, &bex_vm_types::TyTemplate>,
     cache: &ResolvedAliases,
 ) -> Result<(), String> {
     for &func_loc in file_functions(db, file) {
@@ -3207,7 +3226,7 @@ fn spliced_throws_match(
             cache,
             &baml_compiler2_hir_ty::lower::function_generic_frame(db, func_loc),
         );
-        if **previous_throws != current_throws {
+        if **previous_throws != bex_vm_types::anchor_template(&current_throws) {
             return Err(format!(
                 "function `{fq}` changed from {:?} to {current_throws:?}",
                 **previous_throws
@@ -3381,18 +3400,19 @@ fn emit_file_group(
                             .lower_type_ref(store, *id)
                             .to_plain();
                         let resolved_ty = cache.convert(&tir_ty);
-                        let template = baml_compiler2_mir::tir2_to_template(
-                            &tir_ty,
-                            cache,
-                            &class_generic_params,
-                        );
+                        let template =
+                            bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
+                                &tir_ty,
+                                cache,
+                                &class_generic_params,
+                            ));
                         (resolved_ty, template)
                     }
                 };
                 let meta = extract_schema_attrs(attrs.as_slice(), docstring.as_deref());
                 fields.push(ClassField {
                     name: name.clone(),
-                    field_type,
+                    field_type: bex_vm_types::anchor_runtime_ty(&field_type),
                     field_template,
                     description: meta.description,
                     alias: meta.alias,
@@ -3622,9 +3642,9 @@ fn emit_file_group(
     // groups). See [`ClassFieldSnapshot`].
     let class_fields: ClassFieldSnapshot = class_object_indices
         .iter()
-        .filter_map(|(name, &idx)| match program.objects.get(idx) {
+        .filter_map(|(_, &idx)| match program.objects.get(idx) {
             Some(Object::Class(class)) => Some((
-                name.clone(),
+                class.type_tag,
                 class
                     .fields
                     .iter()
@@ -3678,7 +3698,7 @@ fn emit_file_group(
                 bex_vm_types::types::TypeAliasDef {
                     name: qtn.clone(),
                     type_tag: claim_type_tag(type_tags, &fq_name)?,
-                    definition,
+                    definition: bex_vm_types::anchor_realized(&definition),
                     owner: bex_vm_types::HeapPtr::null(),
                 },
             )));
@@ -3924,11 +3944,11 @@ fn emit_file_group(
                 local_names: vec![String::new(), "registry".to_string()],
                 debug_locals: Vec::new(),
                 span: Span::fake(),
-                return_type: baml_type::TyTemplate::Null {
+                return_type: bex_vm_types::TyTemplate::Null {
                     attr: baml_type::TyAttr::default(),
                 },
                 param_names: vec!["registry".to_string()],
-                param_types: vec![baml_type::TyTemplate::BuiltinUnknown {
+                param_types: vec![bex_vm_types::TyTemplate::BuiltinUnknown {
                     attr: baml_type::TyAttr::default(),
                 }], // type not needed for chainer dispatch
                 param_has_default: vec![false],
@@ -3936,7 +3956,7 @@ fn emit_file_group(
                 generic_param_bounds: Vec::new(),
                 display_param_types: vec!["unknown".to_string()],
                 display_return_type: "null".to_string(),
-                throws_type: baml_type::TyTemplate::Never {
+                throws_type: bex_vm_types::TyTemplate::Never {
                     attr: baml_type::TyAttr::default(),
                 },
                 origin: FunctionOrigin::Internal,
@@ -4060,10 +4080,14 @@ fn compute_throws_type(
 /// by MIR's `lower_lambda` on `MirFunction::signature`).
 fn apply_signature_metadata(f: &mut Function, sig: &baml_compiler2_mir::RuntimeSignature) {
     f.param_names.clone_from(&sig.param_names);
-    f.param_types.clone_from(&sig.param_types);
+    f.param_types = sig
+        .param_types
+        .iter()
+        .map(bex_vm_types::anchor_template)
+        .collect();
     f.param_has_default.clone_from(&sig.param_has_default);
-    f.return_type = sig.return_type.clone();
-    f.throws_type.clone_from(&sig.throws_type);
+    f.return_type = bex_vm_types::anchor_template(&sig.return_type);
+    f.throws_type = bex_vm_types::anchor_template(&sig.throws_type);
     f.docstring.clone_from(&sig.docstring);
     f.declared_name.clone_from(&sig.name);
     f.display_type_params.clone_from(&sig.display_type_params);
@@ -4075,8 +4099,16 @@ fn apply_signature_metadata(f: &mut Function, sig: &baml_compiler2_mir::RuntimeS
                 .iter()
                 .map(|bound| bex_vm_types::types::InterfaceBound {
                     interface: bound.interface.clone(),
-                    args: bound.args.clone(),
-                    assoc: bound.assoc.clone(),
+                    args: bound
+                        .args
+                        .iter()
+                        .map(bex_vm_types::anchor_template)
+                        .collect(),
+                    assoc: bound
+                        .assoc
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), bex_vm_types::anchor_template(ty)))
+                        .collect(),
                 })
                 .collect()
         })
@@ -5388,7 +5420,7 @@ struct GenericFunctionInterner {
 }
 
 /// One interned instantiation: its type arguments and its final pool index.
-type InternedGenericFunction = (Box<[baml_type::RealizedTy]>, usize);
+type InternedGenericFunction = (Box<[bex_vm_types::RealizedTy]>, usize);
 
 impl GenericFunctionInterner {
     fn get(&self, gf: &bex_vm_types::GenericFunction) -> Option<usize> {
@@ -5505,7 +5537,7 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: Span::fake(),
-        return_type: baml_type::TyTemplate::Null {
+        return_type: bex_vm_types::TyTemplate::Null {
             attr: baml_type::TyAttr::default(),
         },
         param_names: Vec::new(),
@@ -5515,7 +5547,7 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
-        throws_type: baml_type::TyTemplate::Never {
+        throws_type: bex_vm_types::TyTemplate::Never {
             attr: baml_type::TyAttr::default(),
         },
         origin: FunctionOrigin::Builtin,
@@ -5806,7 +5838,7 @@ fn compile_init_function<'db>(
                     local_names: Vec::new(),
                     debug_locals: Vec::new(),
                     span: baml_base::Span::fake(),
-                    return_type: baml_type::TyTemplate::Null {
+                    return_type: bex_vm_types::TyTemplate::Null {
                         attr: baml_type::TyAttr::default(),
                     },
                     param_names: Vec::new(),
@@ -5816,7 +5848,7 @@ fn compile_init_function<'db>(
                     generic_param_bounds: Vec::new(),
                     display_param_types: Vec::new(),
                     display_return_type: "null".to_string(),
-                    throws_type: baml_type::TyTemplate::Never {
+                    throws_type: bex_vm_types::TyTemplate::Never {
                         attr: baml_type::TyAttr::default(),
                     },
                     origin: FunctionOrigin::Internal,
@@ -5885,7 +5917,7 @@ fn compile_init_function<'db>(
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
-        return_type: baml_type::TyTemplate::Null {
+        return_type: bex_vm_types::TyTemplate::Null {
             attr: baml_type::TyAttr::default(),
         },
         param_names: Vec::new(),
@@ -5895,7 +5927,7 @@ fn compile_init_function<'db>(
         generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
-        throws_type: baml_type::TyTemplate::Never {
+        throws_type: bex_vm_types::TyTemplate::Never {
             attr: baml_type::TyAttr::default(),
         },
         origin: FunctionOrigin::Internal,

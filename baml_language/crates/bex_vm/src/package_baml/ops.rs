@@ -17,7 +17,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_type::{Name, RealizedTy, TyAttr, TypeName};
+use baml_type::{Name, RealizedTy, TyAttr, TypeName, normalize::TypeContext};
 use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, ValueKind,
@@ -560,10 +560,11 @@ impl EqualsDriver {
             (Object::Collector(x), Object::Collector(y)) => step(Arc::ptr_eq(&x.0, &y.0)),
             (Object::Collector(_), _) => Cmp::NotEqual,
 
-            // BEP-066: all `type` equality paths compare the minted identity.
-            // Canonically equivalent static spellings received the same digest
-            // when materialized; runtime constructions receive unique counters.
-            (Object::Type(x), Object::Type(y)) => step(x.mint() == y.mint()),
+            // A `type` value denotes a type and nothing more: two are equal
+            // exactly when they are mutual subtypes, decided against the
+            // program's facts (TYPE_SYSTEM.md, "Equivalence and canonical
+            // forms") — the same relation `==` on `type` uses.
+            (Object::Type(x), Object::Type(y)) => step(vm.equivalent(x.ty.as_ty(), y.ty.as_ty())),
             (Object::Type(_), _) => Cmp::NotEqual,
 
             // `Sentinel` (heap_debug builds only) is an internal freed/uninit

@@ -901,8 +901,8 @@ fn deep_copy_value_recursive(
                 Object::Future(_) => unreachable!("Future short-circuited above"),
                 Object::UnscheduledFuture(f) => vm.tlab.alloc(Object::UnscheduledFuture(f)),
                 Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
-                // A deep copy denotes the same type value: clone the complete
-                // `TypeValue`, including its mint (BEP-066 I-1/I-4).
+                // A deep copy denotes the same type: clone the `TypeValue`
+                // whole, definition overlay and owner edge included.
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),
                 // Closures, bound methods, and cells are shallow-copied: the captured
                 // state is shared by design (mutation semantics).

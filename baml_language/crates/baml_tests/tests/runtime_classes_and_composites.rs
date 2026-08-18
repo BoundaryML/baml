@@ -1,6 +1,6 @@
 //! BEP-066 Scenarios 2 and 3: runtime classes and composites flow
-//! through offline LLM companions, retain mint identity, and remain usable
-//! through the dynamic access/JSON surfaces.
+//! through offline LLM companions, keep pointing at their declarations, and
+//! remain usable through the dynamic access/JSON surfaces.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -120,7 +120,7 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
 }
 
 #[tokio::test]
-async fn scenario_3_tool_union_dispatches_by_runtime_class_mint() {
+async fn scenario_3_tool_union_dispatches_by_runtime_class() {
     let output = baml_test!(
         r##"
         client TestClient = openai.ResponsesClient.new(

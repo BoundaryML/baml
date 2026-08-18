@@ -2833,19 +2833,15 @@ mod tests {
     fn test_gc_leaf_type_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let minted = bex_vm_types::types::TypeValue::from_parts(
-            baml_type::RealizedTy::int(),
-            bex_vm_types::types::MintId::Static(0xC0FFEE),
-        );
-        let ptr = tlab.alloc(Object::Type(Box::new(minted.clone())));
+        let value = bex_vm_types::types::TypeValue::new(baml_type::RealizedTy::int());
+        let ptr = tlab.alloc(Object::Type(Box::new(value.clone())));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
         let Object::Type(tv) = (unsafe { new_roots[0].get() }) else {
             panic!("not type")
         };
-        assert!(matches!(tv.ty, baml_type::RealizedTy::Int { .. }));
-        // The mint is inline data, so a GC copy preserves identity (I-4).
-        assert_eq!(**tv, minted);
+        // The described type is inline data, so a GC copy preserves it verbatim.
+        assert_eq!(tv.ty, value.ty);
     }
 
     #[test]
@@ -2853,7 +2849,7 @@ mod tests {
         use baml_type::{Name, QualifiedTypeName, TyAttr};
         use bex_vm_types::{
             Enum, EnumVariant,
-            types::{DynTypeDefs, MintId, TypeValue},
+            types::{DynTypeDefs, TypeValue},
         };
 
         let heap = BexHeap::new(vec![]);
@@ -2877,9 +2873,8 @@ mod tests {
             ty_attr: TyAttr::default(),
             runtime_type: None,
         })));
-        let type_ptr = tlab.alloc_type(TypeValue::from_parts_with_defs(
+        let type_ptr = tlab.alloc_type(TypeValue::with_defs(
             RealizedTy::Enum(type_name.clone(), TyAttr::default()),
-            MintId::Runtime(41),
             DynTypeDefs::with_enum(type_name.clone(), enum_ptr),
         ));
 
@@ -2897,7 +2892,10 @@ mod tests {
         let Object::Type(type_value) = (unsafe { roots[0].get() }) else {
             panic!("root was not the runtime type value")
         };
-        assert_eq!(type_value.mint(), MintId::Runtime(41));
+        assert_eq!(
+            type_value.ty,
+            RealizedTy::Enum(type_name.clone(), TyAttr::default())
+        );
         let enum_ptr = *type_value
             .defs()
             .enums
@@ -2916,7 +2914,7 @@ mod tests {
         use baml_type::{Name, QualifiedTypeName, TyAttr};
         use bex_vm_types::{
             Class, ClassField,
-            types::{DynTypeDefs, MintId, RuntimeTypeProvenance, TypeValue},
+            types::{DynTypeDefs, RuntimeTypeProvenance, TypeValue},
         };
 
         let heap = BexHeap::new(vec![]);
@@ -2946,14 +2944,12 @@ mod tests {
             has_cleanup: false,
             generic_param_count: 0,
             runtime_type: Some(RuntimeTypeProvenance {
-                mint: MintId::Runtime(42),
                 defs: DynTypeDefs::default(),
                 owner: bex_vm_types::HeapPtr::null(),
             }),
         })));
-        let type_ptr = tlab.alloc_type(TypeValue::from_parts_with_defs(
+        let type_ptr = tlab.alloc_type(TypeValue::with_defs(
             RealizedTy::Class(type_name.clone(), vec![], TyAttr::default()),
-            MintId::Runtime(42),
             DynTypeDefs::with_class(type_name.clone(), class_ptr),
         ));
 

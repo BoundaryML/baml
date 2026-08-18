@@ -15,8 +15,8 @@
 //! folds units into a runnable `Program` by resolving imports and rebasing
 //! local operands through the existing `relink` operand walkers.
 //!
+use crate::{RealizedTy, TyTemplate};
 use baml_base::Name;
-use baml_type::{RealizedTy, TyTemplate};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{

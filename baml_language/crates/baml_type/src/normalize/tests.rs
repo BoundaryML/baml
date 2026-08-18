@@ -4,9 +4,7 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::{
-    Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr, TyAttrValue,
-};
+use crate::{Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr};
 
 // ── stub context ───────────────────────────────────────────────────────────
 
@@ -225,29 +223,6 @@ fn reflection_kind_classes_are_sealed_type_subtypes_in_both_entries() {
         &interned::Ty::from_plain(&carrier),
         &ctx,
     ));
-}
-
-#[test]
-fn canonical_digest_is_stable_and_uses_canonical_plain_types() {
-    let ctx = Ctx::default();
-    let int = Ty::int();
-    let int_with_attr = Ty::Int {
-        attr: TyAttr {
-            sap_parse_without_null: TyAttrValue::Set,
-            ..TyAttr::default()
-        },
-    };
-    let ordered = union(vec![Ty::int(), Ty::string()]);
-    let permuted = union(vec![Ty::string(), Ty::int()]);
-
-    let int_digest = canonical_digest(&int, &ctx);
-    let union_digest = canonical_digest(&ordered, &ctx);
-    assert_eq!(int_digest, canonical_digest(&int, &ctx));
-    assert_eq!(int_digest, canonical_digest(&int_with_attr, &ctx));
-    assert_eq!(union_digest, canonical_digest(&permuted, &ctx));
-    assert_ne!(int_digest, union_digest);
-    assert_eq!(int_digest, 0xa8c7_f832_281a_39c5);
-    assert_eq!(union_digest, 0x9886_dba9_b789_ac56);
 }
 
 #[test]

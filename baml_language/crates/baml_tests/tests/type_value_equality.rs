@@ -1,6 +1,7 @@
-//! Function-context pins for BEP-066 minted equality on `type` values.
+//! Function-context pins for equality on `type` values.
 //!
-//! Equivalent static spellings receive the same canonical mint.
+//! A `type` value denotes a type and nothing more, so `==` is equivalence:
+//! spellings that denote the same type are equal.
 //! Matching test-block pins live in
 //! `baml_src/ns_type_reflection/type_reflection.baml`.
 
@@ -23,7 +24,7 @@ async fn permuted_union_double_equals_is_canonical() {
 }
 
 #[tokio::test]
-async fn permuted_union_equality_operators_use_the_canonical_mint() {
+async fn permuted_union_equality_operators_agree() {
     let output = baml_test!(
         r#"
         function main() -> bool {
@@ -33,7 +34,7 @@ async fn permuted_union_equality_operators_use_the_canonical_mint() {
         }
         "#
     );
-    // Both equality operators compare the same canonical static mint.
+    // Both equality operators decide the same equivalence.
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 

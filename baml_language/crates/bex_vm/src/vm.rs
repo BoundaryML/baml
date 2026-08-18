@@ -17,7 +17,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use baml_compiler_diagnostics::runtime_type;
-use baml_type::Name;
+use baml_type::{Name, normalize::TypeContext};
 use smallvec::SmallVec;
 
 /// Lower named host `TypeVar` bindings to the positional De Bruijn `type_args`
@@ -104,7 +104,7 @@ use bex_vm_types::{
     bytecode::{self, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, DynTypeDefs, Function, FunctionOrigin, FunctionType,
-        Instance, MintId, Type, TypeValue, UnscheduledFuture,
+        Instance, Type, TypeValue, UnscheduledFuture,
     },
 };
 use indexmap::IndexMap;
@@ -155,13 +155,17 @@ struct StaticVirtualCallKey {
     caller_function_addr: usize,
     call_pc: usize,
     receiver: StaticVirtualReceiverKey,
-    interface_mint: u64,
-    /// Impl selection compares these under `StructuralEquivCtx`, which is
-    /// deliberately fact-poor. The static mint is canonicalized under the full
-    /// VM context and can therefore equate interface instantiations that the
-    /// resolver distinguishes (for example `I<Animal>` and `I<Animal | Dog>`).
-    /// Empty for the overwhelmingly common non-generic interface case.
-    interface_args: Box<[baml_type::RealizedTy]>,
+    /// The interface's nominal identity — which interface, independent of how
+    /// it was instantiated. Hashes and compares as its tag, so this costs an
+    /// integer rather than a name clone on every dispatch.
+    interface_head: bex_vm_types::TypeHead,
+    /// The instantiation. Impl selection compares these under
+    /// `StructuralEquivCtx`, which is deliberately fact-poor, so they are
+    /// keyed as spelled rather than canonicalized: two spellings the resolver
+    /// distinguishes (for example `I<Animal>` and `I<Animal | Dog>`) must not
+    /// share a cache entry. Empty for the overwhelmingly common non-generic
+    /// interface case.
+    interface_args: Box<[bex_vm_types::RealizedTy]>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -171,11 +175,11 @@ enum StaticVirtualReceiverKey {
     /// non-generic case clones an empty box without allocating.
     Class {
         type_tag: i64,
-        type_args: Box<[baml_type::RealizedTy]>,
+        type_args: Box<[bex_vm_types::RealizedTy]>,
     },
     /// Primitive/container receivers do not have a static class object to key
     /// through, so retain their realized type as the uncommon fallback.
-    Other(baml_type::RealizedTy),
+    Other(bex_vm_types::RealizedTy),
 }
 
 #[derive(Clone, Debug)]
@@ -422,8 +426,7 @@ pub(crate) mod tests {
         ObjectIndex, RootHaver, Value, ValueKind, VmGlobals,
         bytecode::Bytecode,
         types::{
-            BoundMethod, Closure, DynTypeDefs, Function, FunctionOrigin, MintId, TypeValue,
-            type_tags,
+            BoundMethod, Closure, DynTypeDefs, Function, FunctionOrigin, TypeValue, type_tags,
         },
     };
 
@@ -477,7 +480,6 @@ pub(crate) mod tests {
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
-            static_mint_cache: HashMap::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
             packages: Arc::new(crate::package_load::PackageIndex::default()),
@@ -720,7 +722,7 @@ pub(crate) mod tests {
 
     #[test]
     fn virtual_method_exact_type_values_follow_owner_slots() {
-        let exact = TypeValue::from_parts(baml_type::RealizedTy::string(), MintId::Runtime(7));
+        let exact = TypeValue::new(baml_type::RealizedTy::string());
         let method = TakenTypeArgs {
             tys: vec![baml_type::RealizedTy::string()],
             values: vec![Some(exact.clone())],
@@ -739,7 +741,11 @@ pub(crate) mod tests {
         );
         assert_eq!(values.len(), 2);
         assert!(values[0].is_none(), "owner slot must remain reconstructed");
-        assert_eq!(values[1].as_ref().map(TypeValue::mint), Some(exact.mint()));
+        assert_eq!(
+            values[1].as_ref().map(|value| &value.ty),
+            Some(&exact.ty),
+            "the method slot carries the exact type value it was given"
+        );
     }
 }
 
@@ -1020,15 +1026,6 @@ pub struct BexVm {
     pending_call_type_args: Vec<baml_type::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
 
-    /// Memo for `MintId::Static` digests (BEP-066), keyed by the *spelled*
-    /// `RealizedTy`. `LoadType` runs on every generic call, and the digest is
-    /// a canonicalization walk (`baml_type::normalize::canonical_digest` with
-    /// this VM as the fact context) — this cache skips re-walking repeated
-    /// spellings. Pure memoization: the digest is a deterministic function of
-    /// the spelling under this VM's immutable program facts, so a per-VM cache
-    /// (spawned VMs start empty) can never produce a divergent mint. Distinct
-    /// spellings of equivalent types get separate entries with equal digests.
-    static_mint_cache: HashMap<baml_type::RealizedTy, u64>,
     /// Created-once immutable type objects for fully realized `LoadType`
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
@@ -1392,6 +1389,48 @@ fn function_callable_signature<C: baml_type::normalize::TypeContext>(
 ///
 /// This is a free function to avoid borrow checker issues when called
 /// from within the instruction dispatch loop.
+/// The declaration a type names, together with its instantiation — `None` for
+/// types that name no declaration.
+///
+/// Nominal identity is the qualified name: program-unique for compiled
+/// declarations, creation-unique for runtime ones (`user.$dyn.<n>.<Name>`).
+fn nominal_identity(
+    ty: &baml_type::RealizedTy,
+) -> Option<(&baml_type::QualifiedTypeName, &[baml_type::RealizedTy])> {
+    use baml_type::RealizedTy as T;
+    match ty {
+        T::Class(name, args, _) => Some((name, args.as_slice())),
+        T::Enum(name, _) => Some((name, &[])),
+        // Structural, abstract, and literal types name no declaration. An
+        // enum *variant* names one but is a proper subset of it, so it is not
+        // that declaration's identity.
+        T::BuiltinUnknown { .. }
+        | T::Never { .. }
+        | T::Null { .. }
+        | T::Bool { .. }
+        | T::Int { .. }
+        | T::Bigint { .. }
+        | T::Float { .. }
+        | T::String { .. }
+        | T::Uint8Array { .. }
+        | T::Media(..)
+        | T::Literal(..)
+        | T::Interface(..)
+        | T::EnumVariant(..)
+        | T::List(..)
+        | T::Map { .. }
+        | T::Union(..)
+        | T::Function { .. }
+        | T::Future(..)
+        | T::RustType { .. }
+        | T::Type { .. }
+        | T::Resource { .. }
+        | T::PromptAst { .. }
+        | T::Void { .. }
+        | T::TypeAlias(..) => None,
+    }
+}
+
 fn value_type_tag(value: Value) -> i64 {
     use bex_vm_types::{ValueKind, types::type_tags};
 
@@ -1556,7 +1595,6 @@ impl BexVm {
             argv,
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
-            static_mint_cache: HashMap::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
             packages,
@@ -1579,12 +1617,9 @@ impl BexVm {
 
     /// Materialize a statically described runtime `type` value.
     ///
-    /// The mint is the deterministic digest of the type's canonical form with
-    /// this VM as the complete program-fact context. Digests are memoized by
-    /// spelling because `LoadType` can materialize the same template many times;
-    /// equivalent spellings may occupy separate cache entries, but derive the
-    /// same digest. All VM-side static type producers route through this method
-    /// so an `Object::Type` cannot be allocated without its identity.
+    /// "Static" means the type refers only to declarations the program already
+    /// knows, so the value needs no runtime-definition overlay and no owning
+    /// package. All VM-side static type producers route through this method.
     pub fn alloc_static_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
         self.alloc_static_type_with_defs(ty, DynTypeDefs::default())
     }
@@ -1594,19 +1629,7 @@ impl BexVm {
         ty: baml_type::RealizedTy,
         defs: DynTypeDefs,
     ) -> HeapPtr {
-        let type_value = if let Some(&digest) = self.static_mint_cache.get(&ty) {
-            TypeValue::from_parts_with_defs(ty, MintId::Static(digest), defs)
-        } else {
-            let static_value = TypeValue::static_new(ty, self);
-            let mint = static_value.mint();
-            let type_value = TypeValue::from_parts_with_defs(static_value.ty, mint, defs);
-            let MintId::Static(digest) = type_value.mint() else {
-                unreachable!("TypeValue::static_new always creates a static mint")
-            };
-            self.static_mint_cache.insert(type_value.ty.clone(), digest);
-            type_value
-        };
-        self.tlab.alloc_type(type_value)
+        self.tlab.alloc_type(TypeValue::with_defs(ty, defs))
     }
 
     fn take_type_args(&mut self, start: usize, count: usize) -> Result<TakenTypeArgs, VmError> {
@@ -1621,9 +1644,7 @@ impl BexVm {
             let value = self.stack[StackIndex::from_raw(slot)];
             value.as_object_ptr().is_some_and(|ptr| {
                 matches!(self.get_object(ptr), Object::Type(type_value)
-                    if matches!(type_value.mint(), MintId::Static(_))
-                        && type_value.defs().is_empty()
-                        && type_value.owner.is_null())
+                    if type_value.defs().is_empty() && type_value.owner.is_null())
             })
         });
         if all_plain_static {
@@ -2160,11 +2181,11 @@ impl BexVm {
     /// Return the created-once type value for a declaration owned by the
     /// currently executing runtime package.
     ///
-    /// Runtime-compiled declarations use per-package runtime mints, so a
+    /// A runtime-compiled declaration is not in the program image, so a
     /// concrete `LoadType` in that package must reuse the value allocated at
-    /// package load instead of deriving the ordinary static digest. Imported
-    /// and composite types deliberately miss this lookup and retain the static
-    /// materialization path.
+    /// package load — that value carries the definition overlay and owner edge
+    /// the type needs to stay meaningful. Imported and composite types
+    /// deliberately miss this lookup and retain the static path.
     fn current_runtime_declaration_type(&self, ty: &baml_type::RealizedTy) -> Option<HeapPtr> {
         let (baml_type::RealizedTy::Class(name, ..)
         | baml_type::RealizedTy::Enum(name, ..)
@@ -2738,25 +2759,23 @@ impl BexVm {
         let Object::Type(type_value) = self.get_object(iface_ptr) else {
             unreachable!("as_object_ptr(Type) guarantees a Type object")
         };
-        let interface_args = match &type_value.ty {
-            baml_type::RealizedTy::Interface(_, args, _, _) => args.clone().into_boxed_slice(),
+        let (interface_head, interface_args) = match &type_value.ty {
+            bex_vm_types::RealizedTy::Interface(head, args, _, _) => {
+                (*head, args.clone().into_boxed_slice())
+            }
             other => unreachable!(
                 "VirtualCall interface operand must be an Interface type, found {other:?}"
             ),
         };
-        Ok(match type_value.mint() {
-            MintId::Static(interface_mint) => {
-                self.static_virtual_receiver_key(receiver)
-                    .map(|receiver| StaticVirtualCallKey {
-                        caller_function_addr,
-                        call_pc: self.cur_pc,
-                        receiver,
-                        interface_mint,
-                        interface_args,
-                    })
-            }
-            MintId::Runtime(_) => None,
-        })
+        Ok(self
+            .static_virtual_receiver_key(receiver)
+            .map(|receiver| StaticVirtualCallKey {
+                caller_function_addr,
+                call_pc: self.cur_pc,
+                receiver,
+                interface_head,
+                interface_args,
+            }))
     }
 
     #[inline(never)]
@@ -6224,10 +6243,12 @@ impl BexVm {
                     }
                 }),
                 (Object::Type(lt), Object::Type(rt)) => Value::bool(match op {
-                    // BEP-066: compare the stable identity token. Static
-                    // canonicalization and runtime freshness happen at minting.
-                    CmpOp::Eq => lt.mint() == rt.mint(),
-                    CmpOp::NotEq => lt.mint() != rt.mint(),
+                    // A `type` value has no identity beyond the type it
+                    // denotes: two are equal exactly when they are mutual
+                    // subtypes (TYPE_SYSTEM.md, "Equivalence and canonical
+                    // forms"), decided against this VM's program facts.
+                    CmpOp::Eq => self.equivalent(lt.ty.as_ty(), rt.ty.as_ty()),
+                    CmpOp::NotEq => !self.equivalent(lt.ty.as_ty(), rt.ty.as_ty()),
                     _ => {
                         return Err(VmInternalError::CannotApplyCmpOp {
                             left: bex_vm_types::types::Type::Object(ObjectType::Type),
@@ -7271,26 +7292,23 @@ impl BexVm {
                         let Object::Type(type_value) = self.get_object(iface_ptr) else {
                             unreachable!("as_object_ptr(Type) guarantees a Type object")
                         };
-                        let interface_args = match &type_value.ty {
-                            baml_type::RealizedTy::Interface(_, args, _, _) => {
-                                args.clone().into_boxed_slice()
+                        let (interface_head, interface_args) = match &type_value.ty {
+                            bex_vm_types::RealizedTy::Interface(head, args, _, _) => {
+                                (*head, args.clone().into_boxed_slice())
                             }
                             other => unreachable!(
                                 "VirtualCall interface operand must be an Interface type, found {other:?}"
                             ),
                         };
-                        match type_value.mint() {
-                            MintId::Static(interface_mint) => self
-                                .static_virtual_receiver_key(receiver)
-                                .map(|receiver| StaticVirtualCallKey {
-                                    caller_function_addr: std::ptr::from_ref(*function) as usize,
-                                    call_pc: self.cur_pc,
-                                    receiver,
-                                    interface_mint,
-                                    interface_args,
-                                }),
-                            MintId::Runtime(_) => None,
-                        }
+                        self.static_virtual_receiver_key(receiver).map(|receiver| {
+                            StaticVirtualCallKey {
+                                caller_function_addr: std::ptr::from_ref(*function) as usize,
+                                call_pc: self.cur_pc,
+                                receiver,
+                                interface_head,
+                                interface_args,
+                            }
+                        })
                     } else {
                         self.runtime_virtual_call_cache_key(
                             self.frames[*frame_idx].function(),
@@ -7806,34 +7824,28 @@ impl BexVm {
                 OpCode::RuntimeIsType => {
                     let expected_value = self.stack.ensure_pop();
                     let value = self.stack.ensure_pop();
-                    let expected_mint =
-                        expected_value
-                            .as_object_ptr()
-                            .and_then(|ptr| match self.get_object(ptr) {
-                                Object::Type(type_value) => Some(type_value.mint()),
-                                _ => None,
-                            });
-                    let nominal_ptr =
-                        value
-                            .as_object_ptr()
-                            .and_then(|ptr| match self.get_object(ptr) {
-                                Object::Instance(instance) => Some((instance.class, true)),
-                                Object::Variant(variant) => Some((variant.enm, false)),
-                                _ => None,
-                            });
-                    let actual_mint =
-                        nominal_ptr.and_then(|(ptr, is_class)| match self.get_object(ptr) {
-                            Object::Class(class) if is_class => {
-                                class.runtime_type.as_ref().map(|runtime| runtime.mint)
-                            }
-                            Object::Enum(enm) if !is_class => {
-                                enm.runtime_type.as_ref().map(|runtime| runtime.mint)
-                            }
+                    // `is unreflect(t)` filters on *nominal* identity: the
+                    // scrutinee's declaration must be the one `t` denotes, at
+                    // the same instantiation. Declaration identity is the
+                    // qualified name — program-unique for compiled
+                    // declarations, creation-unique for runtime ones.
+                    //
+                    // BUG: a `t` denoting a non-nominal type (`string`,
+                    // `int | null`, a list) can never match, so the pattern
+                    // silently fails instead of testing membership.
+                    let expected_nominal = expected_value
+                        .as_object_ptr()
+                        .and_then(|ptr| match self.get_object(ptr) {
+                            Object::Type(type_value) => Some(&type_value.ty),
                             _ => None,
-                        });
-                    self.stack.push(Value::bool(
-                        expected_mint.is_some() && expected_mint == actual_mint,
-                    ));
+                        })
+                        .and_then(nominal_identity);
+                    let actual_nominal = self
+                        .value_concrete_ty(value)
+                        .map(baml_type::RealizedTy::from);
+                    let matched = expected_nominal.is_some()
+                        && expected_nominal == actual_nominal.as_ref().and_then(nominal_identity);
+                    self.stack.push(Value::bool(matched));
                 }
 
                 // ── IsType ────────────────────────────────────────────────────

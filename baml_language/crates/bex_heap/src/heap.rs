@@ -181,14 +181,12 @@ pub struct BexHeap {
     /// Next handle key to allocate.
     next_handle_key: AtomicUsize,
 
-    /// Next `MintId::Runtime` counter value (BEP-066 I-1): one per structured
-    /// type construction, engine-wide. Lives on the heap — next to the handle
-    /// counter — because the heap is the one object every allocation path
-    /// already shares, including spawned VMs (each `Tlab` holds an
-    /// `Arc<BexHeap>`), so two threads can never mint the same runtime
-    /// identity. Monotonic and never reused; runtime type constructors allocate
-    /// identities through `bex_vm_types::types::MintId`.
-    next_runtime_mint: AtomicU64,
+    /// Next disambiguating suffix for a *synthesized display name*. Lives on
+    /// the heap — next to the handle counter — because the heap is the one
+    /// object every allocation path already shares, including spawned VMs
+    /// (each `Tlab` holds an `Arc<BexHeap>`), so two threads can never draw the
+    /// same suffix. Monotonic and never reused.
+    next_synthetic_name_id: AtomicU64,
 
     /// BEP-042: instances whose `cleanup` finalizer must run after the current
     /// collection. Populated during a collection (`copy_collection` /
@@ -356,7 +354,7 @@ impl BexHeap {
             gen2_cards: UnsafeCell::new(CardTable::new()),
             handles: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
-            next_runtime_mint: AtomicU64::new(0),
+            next_synthetic_name_id: AtomicU64::new(0),
             pending_finalizers: Mutex::new(Vec::new()),
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes,
@@ -1116,14 +1114,18 @@ impl BexHeap {
         handle.is_of_heap(&(Arc::clone(self) as Arc<dyn WeakHeapRef>))
     }
 
-    /// Mint a fresh `MintId::Runtime` identity (BEP-066 I-1): the next value
-    /// of the engine-wide monotonic counter. Every VM sharing this heap —
-    /// including spawned children — draws from the same counter, so two
-    /// constructor evaluations can never mint the same identity. `Relaxed`
-    /// suffices: uniqueness needs only the atomicity of `fetch_add`, no
-    /// ordering with other memory.
-    pub fn mint_runtime_id(&self) -> bex_vm_types::types::MintId {
-        bex_vm_types::types::MintId::Runtime(self.next_runtime_mint.fetch_add(1, Ordering::Relaxed))
+    /// Draw the next disambiguating suffix for a synthesized declaration name
+    /// (`user.$dyn.<n>.<Name>`).
+    ///
+    /// This is **not** an identity token: a runtime declaration is identified
+    /// by its heap object, and at serialization boundaries by its `TypeTag`.
+    /// The counter exists only so two runtime declarations that a user spelled
+    /// with the same name render distinguishably. Every VM sharing this heap —
+    /// including spawned children — draws from the same counter, so no two
+    /// declarations synthesize the same name. `Relaxed` suffices: uniqueness
+    /// needs only the atomicity of `fetch_add`, no ordering with other memory.
+    pub fn next_synthetic_name_id(&self) -> u64 {
+        self.next_synthetic_name_id.fetch_add(1, Ordering::Relaxed)
     }
 
     /// Collect all handle roots for garbage collection.
@@ -1256,18 +1258,12 @@ mod tests {
     }
 
     #[test]
-    fn runtime_mints_are_heap_wide_and_disjoint_from_static_mints() {
-        use bex_vm_types::types::MintId;
-
+    fn synthetic_name_ids_are_heap_wide_and_monotonic() {
         let heap = BexHeap::new(vec![]);
         let shared = Arc::clone(&heap);
 
-        let first = heap.mint_runtime_id();
-        let second = shared.mint_runtime_id();
-        assert_eq!(first, MintId::Runtime(0));
-        assert_eq!(second, MintId::Runtime(1));
-        assert_ne!(first, second);
-        assert_ne!(first, MintId::Static(0));
+        assert_eq!(heap.next_synthetic_name_id(), 0);
+        assert_eq!(shared.next_synthetic_name_id(), 1);
     }
 
     // Note: Handle tests removed as they require HeapPtr creation which depends

@@ -3036,9 +3036,9 @@ impl BexEngine {
         let mut type_args = type_args;
 
         // Materialize definition-carrying host type bindings once per call.
-        // Every call receives fresh mints, while the exact `TypeValue`s remain
-        // attached to the entry frame so `LoadType<T>` preserves that arrival's
-        // identity and definition overlay.
+        // Every call materializes fresh declarations, and the exact
+        // `TypeValue`s stay attached to the entry frame so `LoadType<T>`
+        // preserves that arrival's definition overlay.
         let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
         let mut type_values = IndexMap::new();
         for (name, definition) in type_defs {
@@ -6020,17 +6020,13 @@ impl BexEngine {
                 baml_type::RealizedTy::Class(qtn, _, _) | baml_type::RealizedTy::Enum(qtn, _) => {
                     qtn.clone()
                 }
-                _ => {
-                    let suffix = match value.mint() {
-                        bex_vm_types::types::MintId::Runtime(n) => format!("r-{n}"),
-                        bex_vm_types::types::MintId::Static(n) => format!("s-{n}"),
-                    };
-                    baml_type::QualifiedTypeName::new(
-                        baml_type::Name::new("user"),
-                        vec![baml_type::Name::new("$dyn"), baml_type::Name::new(suffix)],
-                        baml_type::Name::new(export_name),
-                    )
-                }
+                // A structural type names no declaration, so the mount
+                // synthesizes one. The counter keeps two anonymous mounts of
+                // the same export name in different packages distinguishable.
+                _ => baml_type::QualifiedTypeName::runtime_local(
+                    baml_type::Name::new(export_name),
+                    vm.heap.next_synthetic_name_id(),
+                ),
             };
             let classes = value
                 .defs()
@@ -6560,12 +6556,12 @@ mod concurrent_tests {
 }
 
 #[cfg(test)]
-mod mint_identity_tests {
+mod type_identity_tests {
     use std::sync::Arc;
 
     use baml_project::testing::compile_source;
     use bex_heap::HeapPermit;
-    use bex_vm_types::{Object, types::MintId};
+    use bex_vm_types::Object;
     use sys_native::SysOpsExt;
     use tokio_util::sync::CancellationToken;
 
@@ -6577,40 +6573,6 @@ mod mint_identity_tests {
             BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
                 .expect("engine construction should succeed"),
         )
-    }
-
-    async fn mint_in_engine(engine: &Arc<BexEngine>, ty: baml_type::RealizedTy) -> MintId {
-        let mut thread = engine
-            .new_root_thread(CancellationToken::new(), false)
-            .await;
-        let ptr = thread.vm.alloc_static_type(ty);
-        let Object::Type(type_value) = thread.vm.get_object(ptr) else {
-            panic!("alloc_static_type must allocate Object::Type")
-        };
-        type_value.mint()
-    }
-
-    #[tokio::test]
-    async fn static_digest_is_canonical_and_deterministic_across_engines() {
-        let left = baml_type::RealizedTy::Union(
-            vec![
-                baml_type::RealizedTy::int(),
-                baml_type::RealizedTy::string(),
-            ],
-            baml_type::TyAttr::default(),
-        );
-        let right = baml_type::RealizedTy::Union(
-            vec![
-                baml_type::RealizedTy::string(),
-                baml_type::RealizedTy::int(),
-            ],
-            baml_type::TyAttr::default(),
-        );
-
-        let first = mint_in_engine(&engine(), left).await;
-        let second = mint_in_engine(&engine(), right).await;
-        assert_eq!(first, second);
-        assert!(matches!(first, MintId::Static(_)));
     }
 
     /// A host payload may name its classes anything — including a compiled

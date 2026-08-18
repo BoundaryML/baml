@@ -26,7 +26,7 @@ function main() -> string throws unknown {
   let app = reflect.Package.current().with_types({ "AcmePerson": person_t })
   let exported = app.get_class("root.AcmePerson") ?? throw "missing mounted class"
   if (exported.as_type() != person_t.as_type()) {
-    throw "with_types changed the mint"
+    throw "with_types changed the exported type"
   }
 
   let pkg = reflect.Package.compile({ "tenant.baml": #"
@@ -43,7 +43,7 @@ function Run(document: string) -> app.AcmePerson {
     ?? throw "missing root.Run"
   let person = extract(#"{"name":"Ada","email":"ada@example.com","favorite_editor":"vim"}"#)
   if (type.of_value(person) != person_t.as_type()) {
-    throw "compiled wrapper did not return the mounted mint"
+    throw "compiled wrapper did not return the mounted type"
   }
   person.name + "|" + person.email
 }

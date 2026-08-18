@@ -323,9 +323,16 @@ impl<'a> BexValue<'a> {
                     actual: obj.to_string(),
                 });
             };
-            // `Object::Type` stores a realized type; widen it into `RuntimeTy`.
-            // The mint stays behind (BEP-066 H-4: identity never crosses).
-            Ok(tv.ty.clone().into())
+            // `Object::Type` stores a realized type at the runtime's head;
+            // recover the names a host can look up, then widen into `RuntimeTy`.
+            Ok(baml_type::RuntimeTy::from(
+                tv.ty
+                    .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+                    .map_err(|head| AccessError::TypeMismatch {
+                        expected: "a nameable type",
+                        actual: head.to_string(),
+                    })?,
+            ))
         }
 
         match self {
@@ -612,8 +619,15 @@ fn convert_object(
                 type_args: instance
                     .class_type_args
                     .iter()
-                    .map(baml_type::RuntimeTy::from)
-                    .collect(),
+                    .map(|arg| {
+                        arg.try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+                            .map(|named| baml_type::RuntimeTy::from(&named))
+                            .map_err(|head| AccessError::TypeMismatch {
+                                expected: "a nameable type argument",
+                                actual: head.to_string(),
+                            })
+                    })
+                    .collect::<Result<_, _>>()?,
                 fields,
             })
         }
@@ -640,7 +654,14 @@ fn convert_object(
         Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
         // Only the described type crosses the boundary (BEP-066 H-4).
         Object::Type(tv) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
-            tv.ty.clone().into(),
+            baml_type::RuntimeTy::from(
+                tv.ty
+                    .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+                    .map_err(|head| AccessError::TypeMismatch {
+                        expected: "a nameable type",
+                        actual: head.to_string(),
+                    })?,
+            ),
         ))),
         Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
         Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),

@@ -13,8 +13,8 @@ use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
     Class, ClassField, GenericFunction, GlobalIndex, Object,
     types::{
-        DynTypeDefs, InterfaceDef, LocalName, MethodImpl, MintId, Package, RuntimeImplRule,
-        RuntimePackage, RuntimeTypeProvenance, TypeAliasDef, TypeValue,
+        DynTypeDefs, InterfaceDef, LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage,
+        RuntimeTypeProvenance, TypeAliasDef, TypeValue,
     },
 };
 use indexmap::IndexMap;
@@ -138,7 +138,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             Vec::new(),
             TyAttr::default(),
         );
-        let type_ptr = tlab.alloc_type(TypeValue::runtime(ty, MintId::Runtime(1), package_ptr));
+        let type_ptr = tlab.alloc_type(TypeValue::owned(ty, DynTypeDefs::default(), package_ptr));
         let class_name = QualifiedTypeName::local(Name::new("RuntimeClass"));
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             name: class_name.clone(),
@@ -152,7 +152,6 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             has_cleanup: false,
             generic_param_count: 0,
             runtime_type: Some(RuntimeTypeProvenance {
-                mint: MintId::Runtime(1),
                 defs: DynTypeDefs::default(),
                 owner: package_ptr,
             }),
@@ -1123,9 +1122,9 @@ fn field_level_type_value_owner_is_traced_and_forwarded() {
             docstring: None,
             other: IndexMap::new(),
             skip: false,
-            runtime_type: Some(TypeValue::runtime(
+            runtime_type: Some(TypeValue::owned(
                 RealizedTy::int(),
-                MintId::Runtime(7),
+                DynTypeDefs::default(),
                 package_ptr,
             )),
         }],

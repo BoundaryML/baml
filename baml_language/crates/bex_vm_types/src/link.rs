@@ -579,7 +579,7 @@ fn generic_base_name(
 fn resolve_object_import(
     sym: &Symbol,
     obj_by_name: &HashMap<String, usize>,
-    canonical_pos: &HashMap<String, HashMap<Vec<baml_type::RealizedTy>, usize>>,
+    canonical_pos: &HashMap<String, HashMap<Vec<crate::RealizedTy>, usize>>,
 ) -> Result<usize, LinkError> {
     match sym.kind {
         SymbolKind::GenericFn => {
@@ -697,8 +697,7 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
         .map(|unit| vec![false; unit.code.len()])
         .collect();
     let mut code_abs: Vec<Vec<usize>> = units.iter().map(|u| vec![0usize; u.code.len()]).collect();
-    let mut canonical_pos: HashMap<String, HashMap<Vec<baml_type::RealizedTy>, usize>> =
-        HashMap::new();
+    let mut canonical_pos: HashMap<String, HashMap<Vec<crate::RealizedTy>, usize>> = HashMap::new();
 
     // ---- Object bucket bases (pass-major, group-major) ----------------------
     let mut layout = vec![UnitLayout::default(); units.len()];
@@ -1268,7 +1267,7 @@ mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
-            return_type: baml_type::TyTemplate::BuiltinUnknown {
+            return_type: crate::TyTemplate::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),
@@ -1278,7 +1277,7 @@ mod tests {
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
-            throws_type: baml_type::TyTemplate::Never {
+            throws_type: crate::TyTemplate::Never {
                 attr: baml_type::TyAttr::default(),
             },
             origin: FunctionOrigin::UserDefined,
