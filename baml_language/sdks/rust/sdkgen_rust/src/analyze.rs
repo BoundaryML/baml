@@ -8,7 +8,9 @@ use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
 
 use crate::{SkipWarning, routing};
 
-const RESERVED_ROOT_TYPE_NAMES: &[&str] = &["baml_bridge"];
+pub(crate) const RESERVED_ROOT_TYPE_NAMES: &[&str] =
+    &["_inlinedbaml", "_runtime", "baml", "baml_bridge"];
+pub(crate) const RESERVED_ROOT_MODULE_NAMES: &[&str] = &["_inlinedbaml", "_runtime", "baml_bridge"];
 
 /// Results of [`analyze`]. Emitters treat this as read-only context.
 pub(crate) struct Analysis {
@@ -616,7 +618,7 @@ fn compute_renames(
         }
     }
     types_in.entry(Vec::new()).or_default().extend(
-        RESERVED_ROOT_TYPE_NAMES
+        RESERVED_ROOT_MODULE_NAMES
             .iter()
             .map(|name| (*name).to_string()),
     );

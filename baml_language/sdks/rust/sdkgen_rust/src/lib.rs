@@ -839,25 +839,48 @@ mod tests {
     }
 
     #[test]
-    fn baml_bridge_reexport_reserves_the_root_nominal_name() {
-        let n = name("user", &[], "baml_bridge");
-        for (symbol, expected) in [
-            (
-                class_symbol(&n, Vec::new(), Vec::new(), Vec::new()),
-                "pub struct baml_bridge_",
-            ),
-            (enum_symbol(&n), "pub enum baml_bridge_"),
-            (alias_symbol(&n), "pub type baml_bridge_"),
-        ] {
+    fn generated_root_items_reserve_root_nominal_names() {
+        for reserved in analyze::RESERVED_ROOT_TYPE_NAMES {
+            let n = name("user", &[], reserved);
+            for (symbol, item_kind) in [
+                (
+                    class_symbol(&n, Vec::new(), Vec::new(), Vec::new()),
+                    "struct",
+                ),
+                (enum_symbol(&n), "enum"),
+                (alias_symbol(&n), "type"),
+            ] {
+                let generated = to_source_code_with_bytecode(
+                    &SymbolPool::from([(n.clone(), symbol)]),
+                    &[],
+                    &options(),
+                );
+                assert!(generated.warnings.is_empty());
+                let lib = text(&generated, "src/lib.rs");
+                let expected = format!("pub {item_kind} {reserved}_");
+                assert!(lib.contains("pub use baml_bridge;"), "{lib}");
+                assert!(lib.contains(&expected), "expected `{expected}` in:\n{lib}");
+            }
+        }
+    }
+
+    #[test]
+    fn generated_internal_modules_reserve_root_namespace_names() {
+        for reserved in analyze::RESERVED_ROOT_MODULE_NAMES {
+            let in_reserved_namespace = name("user", &[*reserved], "call");
             let generated = to_source_code_with_bytecode(
-                &SymbolPool::from([(n.clone(), symbol)]),
+                &SymbolPool::from([(
+                    in_reserved_namespace.clone(),
+                    Symbol::Function(nullary_string_fn(&in_reserved_namespace)),
+                )]),
                 &[],
                 &options(),
             );
             assert!(generated.warnings.is_empty());
+            let renamed = format!("{reserved}_");
             let lib = text(&generated, "src/lib.rs");
-            assert!(lib.contains("pub use baml_bridge;"), "{lib}");
-            assert!(lib.contains(expected), "expected `{expected}` in:\n{lib}");
+            assert!(lib.contains(&format!("pub mod {renamed};")), "{lib}");
+            assert!(text(&generated, &format!("src/{renamed}/mod.rs")).contains("pub fn call()"));
         }
     }
 
