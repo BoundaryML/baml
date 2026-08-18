@@ -655,6 +655,22 @@ fn realized_leaf_template(ty: &RuntimeTy) -> TyTemplate {
     )
 }
 
+/// Whether every value of `ty` is a raw `int` — the precondition an integer
+/// `Switch` reads its discriminant under.
+///
+/// Int literals count: they are singleton subsets of `int`, so a switch over
+/// `1 | 2 | 3` needs no guard. A `bigint` or `float` does not, however close
+/// its values look in source — they are disjoint concrete types with their own
+/// runtime representations (`TYPE_SYSTEM.md` "Concrete Types").
+fn runtime_ty_is_int_only(ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::Int { .. } => true,
+        RuntimeTy::Literal(baml_type::Literal::Int(_), _, _) => true,
+        RuntimeTy::Union(members, _) => members.iter().all(runtime_ty_is_int_only),
+        _ => false,
+    }
+}
+
 /// Convert a TIR pattern type into a complete [`TyTemplate`], failing closed
 /// when a type variable has no runtime frame slot.
 fn tir2_to_pattern_template(
@@ -12842,6 +12858,25 @@ impl LoweringContext<'_> {
 
         // Emit the switch terminator in the entry block
         self.builder.set_current_block(bb_entry);
+        // An integer switch reads the scrutinee as a raw `int`. When the
+        // static type admits anything else — `int | float`, a union with a
+        // class — a non-int value reaching the switch is a *match failure*,
+        // not a broken invariant: it belongs to no arm, so it belongs to
+        // `otherwise`. Without the guard the VM raises a type error and the
+        // match aborts instead of falling through (B-1073). Provably int-only
+        // scrutinees, the overwhelmingly common case, keep the bare switch.
+        if matches!(switch_kind, Some(SwitchKind::Integer))
+            && !runtime_ty_is_int_only(&self.builder.local_ty(scrutinee))
+        {
+            let bb_switch = self.builder.create_block();
+            self.emit_is_type_tag_branch(
+                scrutinee,
+                baml_type::typetag::INT,
+                bb_switch,
+                bb_otherwise,
+            );
+            self.builder.set_current_block(bb_switch);
+        }
         self.builder.switch(
             switch_operand,
             switch_arms,
@@ -13727,18 +13762,27 @@ impl LoweringContext<'_> {
             // TypeExpr to recover OLD's per-kind codegen.
             AstPattern::Type(ty_expr) => match &ty_expr.kind {
                 AstTypeExprKind::Literal { value: lit, .. } => {
-                    let constant = Self::lower_literal(lit);
-                    let test = Rvalue::BinaryOp {
-                        op: BinOp::Eq,
-                        left: Operand::Copy(Place::Local(scrutinee)),
-                        right: Operand::Constant(constant),
-                    };
-                    let test_local = self.builder.temp(RuntimeTy::Bool {
-                        attr: TyAttr::default(),
-                    });
-                    self.builder.assign(Place::local(test_local), test);
-                    self.builder
-                        .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+                    // A literal pattern is a membership test against a
+                    // singleton type, not an arithmetic equality: it asks
+                    // whether the value inhabits `{1}`, and `1`, `1.0` and `1n`
+                    // are disjoint types (TYPE_SYSTEM.md "Concrete Types").
+                    // Lowering it to
+                    // `BinOp::Eq` answered a different question — the `==`
+                    // operator widens across the numeric tower on purpose, so
+                    // the arm fired for `1.0` and every opcode downstream of the
+                    // narrowing then trusted an `int` it did not have (B-1073).
+                    // Routing through the same `IsType` relation every other
+                    // pattern kind uses keeps one definition of "matches".
+                    self.emit_is_type_branch(
+                        scrutinee,
+                        RuntimeTy::Literal(
+                            lit.clone(),
+                            baml_type::Freshness::Regular,
+                            TyAttr::default(),
+                        ),
+                        success,
+                        failure,
+                    );
                 }
                 AstTypeExprKind::Null { .. } => {
                     let test = Rvalue::BinaryOp {

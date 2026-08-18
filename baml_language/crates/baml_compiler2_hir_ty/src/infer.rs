@@ -733,6 +733,11 @@ enum PendingDiag<'db> {
         expr: ExprId,
         class_name: baml_type::QualifiedTypeName,
     },
+    CannotConstructBuiltinCompanion {
+        expr: ExprId,
+        class_name: baml_type::QualifiedTypeName,
+        companion: baml_type::type_kind::BuiltinCompanion,
+    },
     NotCallable {
         expr: ExprId,
         ty: Ty,
@@ -749,6 +754,10 @@ enum PendingDiag<'db> {
     RefutableLet {
         pat: PatId,
         context: crate::diagnostics::IrrefutableContextKind,
+    },
+    LetElseMustDiverge {
+        expr: ExprId,
+        got: Ty,
     },
     /// A NAMED call leaving a required parameter unfilled - reported by
     /// name, not count.
@@ -1618,6 +1627,11 @@ struct InferenceContext<'db> {
     /// Ground values that checked against then-open expectations by
     /// depositing bounds; re-judged once the vars solve.
     provisional_checks: Vec<(ExprId, Ty, Ty)>,
+    /// Conditions whose type still carried an inference variable at
+    /// check time (B-1563 truthiness); decided at finish on the final
+    /// type. The bool records whether the condition was a written
+    /// literal (warning exemption).
+    pending_truthy_conditions: Vec<(ExprId, bool)>,
     diverges: Diverges,
     /// The body's file, for package-scoped lookups (the overlap oracle's
     /// alias map enumerates the owning package plus its dependency closure).
@@ -1690,6 +1704,7 @@ impl<'db> InferenceContext<'db> {
             loop_depth: 0,
             body_root: None,
             provisional_checks: Vec::new(),
+            pending_truthy_conditions: Vec::new(),
             diverges: Diverges::Maybe,
             owner_file: None,
             overlap_aliases: std::cell::OnceCell::new(),
@@ -2608,7 +2623,7 @@ impl<'db> InferenceContext<'db> {
                 for binding in self.assigned_bindings(body, *loop_body) {
                     self.flow.remove(&binding);
                 }
-                self.check_condition(body, *condition);
+                let condition_ty = self.check_condition(body, *condition);
                 let facts = self.condition_facts(body, *condition);
                 let entry_flow = self.flow.clone();
                 self.apply_facts(&facts.when_true);
@@ -2619,9 +2634,22 @@ impl<'db> InferenceContext<'db> {
                 if let Some(after) = after {
                     self.infer_stmt(body, *after);
                 }
-                self.diverges = saved;
+                // ...except when the condition is statically `true` and no
+                // `break` binds to this loop: then there is no zero-iteration
+                // path and no exit edge, so the loop DIVERGES and everything
+                // after it is unreachable - no false facts to apply.
+                let never_exits =
+                    self.condition_is_statically_true(body, *condition, &condition_ty)
+                        && !Self::loop_body_breaks(body, *loop_body, *after);
+                self.diverges = saved.or(if never_exits {
+                    Diverges::Always
+                } else {
+                    Diverges::Maybe
+                });
                 self.flow = entry_flow;
-                self.apply_facts(&facts.when_false);
+                if !never_exits {
+                    self.apply_facts(&facts.when_false);
+                }
             }
             Stmt::WhileLet {
                 pattern,
@@ -2694,6 +2722,48 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
+    }
+
+    /// Whether a loop condition is `true` on every iteration.
+    ///
+    /// The oracle is the condition's INFERRED TYPE, not its syntax, so its
+    /// reach is wider than the literal `while (true)`. Anything that lands on
+    /// the literal type `true` answers yes:
+    ///
+    /// - the literal itself, which is also matched syntactically so the
+    ///   answer never depends on inference succeeding;
+    /// - a constant fold — comparisons over literal operands close under
+    ///   `const_fold_binary`, so `while (1 == 1)` qualifies;
+    /// - a flow-narrowed binding — after `if (c is true)`, `while (c)` sees
+    ///   the narrowed `true`;
+    /// - a call whose return type is declared `-> true`.
+    ///
+    /// All of those are genuinely true on every iteration, which is what
+    /// divergence needs. Narrowed bindings stay sound because a loop havocs
+    /// every binding its body assigns before the condition is checked, so a
+    /// binding the loop can falsify is no longer narrowed here. A condition
+    /// that merely happens to be true at runtime is not, and must not be,
+    /// recognized. `for (;;)` is out of scope: its empty condition lowers to
+    /// `Expr::Missing`, not to a literal.
+    fn condition_is_statically_true(
+        &mut self,
+        body: &ExprBody,
+        condition: ExprId,
+        condition_ty: &Ty,
+    ) -> bool {
+        if matches!(
+            &body.exprs[condition],
+            Expr::Literal(baml_type::Literal::Bool(true))
+        ) {
+            return true;
+        }
+        // Truthiness (B-1563) widens "statically true" beyond the literal
+        // `true` type: any always-truthy condition (`while ("x")`, an
+        // instance, a closure) has no exit edge either.
+        matches!(
+            crate::infer::truthy::truthiness(&self.table.resolve_completely(condition_ty)),
+            crate::infer::truthy::Truthiness::AlwaysTruthy
+        )
     }
 
     fn bind_scoped_runtime_type(
@@ -3004,9 +3074,22 @@ impl<'db> InferenceContext<'db> {
     /// diagnostic. Its divergence does not leak past the let.
     fn finish_let_else(&mut self, body: &ExprBody, else_branch: Option<ExprId>) {
         if let Some(else_expr) = else_branch {
-            let saved = self.diverges;
-            self.infer_expr(body, else_expr, &Expectation::None);
+            let saved_flow = self.flow.clone();
+            let saved = std::mem::replace(&mut self.diverges, Diverges::Maybe);
+            let got = self.infer_expr(body, else_expr, &Expectation::None);
+            let branch_diverges = self.diverges;
             self.diverges = saved;
+            self.flow = saved_flow;
+            let resolved = self.table.resolve_completely(&got);
+            if branch_diverges != Diverges::Always
+                && !resolved.has_error()
+                && !matches!(resolved.kind(), TyKind::Never { .. })
+            {
+                self.pending_diags.push(PendingDiag::LetElseMustDiverge {
+                    expr: else_expr,
+                    got,
+                });
+            }
         }
     }
 
@@ -4022,7 +4105,7 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         match op {
             baml_compiler2_ast::UnaryOp::Not => {
-                let ty = self.check_condition(body, operand);
+                let ty = self.check_not_operand(body, operand);
                 // `!` on a LITERAL constant-FOLDS through its truthiness
                 // (TIR's `try_fold_unary`, extended to the non-bool
                 // literals truthiness admits), freshness preserved.
@@ -5505,7 +5588,6 @@ impl<'db> InferenceContext<'db> {
                 && self.member_probe_depth == 0
                 && !resolved.has_error()
                 && !resolved.has_infer()
-                && !matches!(resolved.kind(), TyKind::Unknown { .. })
             {
                 if matches!(resolved.kind(), TyKind::Union(..)) {
                     self.pending_diags
@@ -7394,6 +7476,21 @@ impl<'db> InferenceContext<'db> {
                 });
             return Ty::error();
         }
+        if let Some(companion) = baml_type::type_kind::builtin_companion_of(&class_name) {
+            for field in fields {
+                self.infer_expr(body, field.value, &Expectation::None);
+            }
+            for spread in spreads {
+                self.infer_expr(body, spread.expr, &Expectation::None);
+            }
+            self.pending_diags
+                .push(PendingDiag::CannotConstructBuiltinCompanion {
+                    expr: object,
+                    class_name,
+                    companion,
+                });
+            return Ty::error();
+        }
         let generic_count = baml_compiler2_ppir::item_data::class_data(db, class)
             .generic_params
             .len();
@@ -7522,6 +7619,21 @@ impl<'db> InferenceContext<'db> {
                 .push(PendingDiag::CannotConstructReflectionKind {
                     expr: object,
                     class_name,
+                });
+            return Ty::error();
+        }
+        if let Some(companion) = baml_type::type_kind::builtin_companion_of(&class_name) {
+            for field in fields {
+                self.infer_expr(body, field.value, &Expectation::None);
+            }
+            for spread in spreads {
+                self.infer_expr(body, spread.expr, &Expectation::None);
+            }
+            self.pending_diags
+                .push(PendingDiag::CannotConstructBuiltinCompanion {
+                    expr: object,
+                    class_name,
+                    companion,
                 });
             return Ty::error();
         }
@@ -8984,6 +9096,11 @@ impl<'db> InferenceContext<'db> {
         {
             *ty = self.finalize_ty(ty);
         }
+        // Truthiness decisions deferred past the fixpoint (B-1563): a
+        // condition still carrying an inference variable at check time
+        // decides here, on its FINAL type, so `if (identity(0))` records
+        // the same coercion `if (0)` does.
+        self.decide_deferred_conditions(&mut result);
         // Provisional checks re-judge now that their expectations solved:
         // a definite failure joins the mismatch table (first writer per
         // expr wins - a direct mismatch is the better message).
@@ -9357,6 +9474,17 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::CannotConstructReflectionKind { expr, class_name } => (
                         TirTypeError::CannotConstructReflectionKind { class_name },
+                        expr,
+                    ),
+                    PendingDiag::CannotConstructBuiltinCompanion {
+                        expr,
+                        class_name,
+                        companion,
+                    } => (
+                        TirTypeError::CannotConstructBuiltinCompanion {
+                            class_name,
+                            companion,
+                        },
                         expr,
                     ),
                     PendingDiag::NotCallable { expr, ty } => (
@@ -9813,6 +9941,12 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
+                    PendingDiag::LetElseMustDiverge { expr, got } => (
+                        TirTypeError::LetElseMustDiverge {
+                            got: self.finalize_ty(&got).to_plain(),
+                        },
+                        expr,
+                    ),
                 };
                 let severity =
                     if matches!(error, TirTypeError::UnreachableArm) && unreachable_is_warning {
@@ -10049,6 +10183,7 @@ impl<'db> InferenceContext<'db> {
             at,
             not_concrete_rejects: false,
         });
+        let existential = iterable.existential();
         let projection = Ty::intern(TyKind::AssociatedTypeProjection {
             base: collection.clone(),
             interface: iterable,
@@ -10057,9 +10192,22 @@ impl<'db> InferenceContext<'db> {
         });
         let reduced = self.structurally_resolve(&projection);
         if reduced.has_projection() && !reduced.has_infer() {
-            // Ground and irreducible: genuinely not iterable (the
-            // failed selection reports at the collection).
-            return Ty::error();
+            // Ground and irreducible. Two legitimate outcomes, split by
+            // the SAME verdict the finalize filter applies to the
+            // obligation's mismatch (one spelling, one verdict - B-1576):
+            // a collection that fails `Iterable` reports E0006, so its
+            // element is the DIAGNOSED error sentinel and consumers
+            // suppress cascades (rustc's guaranteed-error discipline). A
+            // collection that satisfies the bound keeps the projection AS
+            // the element - rustc's rigid `<T as IntoIterator>::Item`,
+            // which `lower_to_runtime` carries for per-receiver dispatch;
+            // erasing it to an error rejected legal generic and union
+            // collections without any diagnostic (the shipped abort).
+            let collection = self.table.resolve_completely(collection);
+            let collection = self.canonicalize_unions(&collection);
+            if !collection.has_infer() && !self.cached_subtype(&collection, &existential) {
+                return Ty::error();
+            }
         }
         reduced
     }
@@ -10379,6 +10527,13 @@ impl<'db> InferenceContext<'db> {
         // stay (the oracle's plain conversion erases inference vars);
         // they relate lazily through the deferred residue instead.
         if resolved.has_projection() && !resolved.has_infer() {
+            // One spelling, one verdict: reduce over the canonical form.
+            // Forcing can ground a syntactic union `union_of` deferred
+            // while a member carried a variable, and the oracle reads the
+            // spelling it is given - a member-identical union like
+            // `list<int> | list<int>` must collapse before a projection
+            // over it can reduce (B-1576).
+            let resolved = self.canonicalize_unions(&resolved);
             let reduced = self.reduce_projections(&resolved, PROJECTION_FINALIZE_FUEL);
             return self.expand_alias_ty(&reduced);
         }

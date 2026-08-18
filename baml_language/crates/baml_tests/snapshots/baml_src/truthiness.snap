@@ -317,6 +317,34 @@ function truthiness.$init_test_ns_truthiness_truthiness(registry: testing.TestCo
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "generic_call_conditions_coerce"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 45)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "literal_union_truthy_member"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 46)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "literal_union_empty_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 47)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "literal_union_null_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 48)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -496,6 +524,97 @@ function truthiness.tr_frag_not(instructions: string | null) -> string {
     return
 }
 
+function truthiness.tr_generic_conditions() -> string {
+    load_const ""
+    store_var r
+    load_type int
+    load_const 0
+    call user.truthiness.tr_id
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var r
+    load_const "i0-F;"
+    bin_op +
+    store_var r
+    jump L2
+
+  L1:
+    load_var r
+    load_const "i0-T;"
+    bin_op +
+    store_var r
+
+  L2:
+    load_type string
+    load_const ""
+    call user.truthiness.tr_id
+    unary_op truthy
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var r
+    load_const "s-F;"
+    bin_op +
+    store_var r
+    jump L5
+
+  L4:
+    load_var r
+    load_const "s-T;"
+    bin_op +
+    store_var r
+
+  L5:
+    load_type string
+    load_const "x"
+    call user.truthiness.tr_id
+    unary_op truthy
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var r
+    load_const "x-F;"
+    bin_op +
+    store_var r
+    jump L8
+
+  L7:
+    load_var r
+    load_const "x-T;"
+    bin_op +
+    store_var r
+
+  L8:
+    load_type int
+    load_const 0
+    call user.truthiness.tr_id
+    unary_op !
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var r
+    load_const "n0-F;"
+    bin_op +
+    store_var r
+    jump L11
+
+  L10:
+    load_var r
+    load_const "n0-T;"
+    bin_op +
+    store_var r
+
+  L11:
+    load_var r
+    return
+}
+
 function truthiness.tr_guard(v: int, label: string | null) -> string {
     load_var label
     unary_op truthy
@@ -518,6 +637,11 @@ function truthiness.tr_guard(v: int, label: string | null) -> string {
     bin_op +
 
   L2:
+    return
+}
+
+function truthiness.tr_id(v: #0) -> #0 {
+    load_var v
     return
 }
 
@@ -567,6 +691,31 @@ function truthiness.tr_list(v: int[]) -> string {
 
   L1:
     load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_literal_union(v: "" | "x" | null) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "none"
+    jump L2
+
+  L1:
+    load_type "x"
+    load_var v
+    call baml.String.from
+    store_var _4
+    load_const "<"
+    load_var _4
+    bin_op +
+    load_const ">"
+    bin_op +
 
   L2:
     return

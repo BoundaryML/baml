@@ -887,6 +887,21 @@ fn describe_builtin_method_drill_in_via_alias() {
     );
 }
 
+/// The CLI describe surface carries the same omission contract as runtime
+/// reflection, so users do not mistake a generic function's absence for a
+/// missing export.
+#[test]
+fn describe_package_functions_documents_unspecialized_generic_omission() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "baml.reflect.Package.functions");
+    assert!(
+        output.contains("Unspecialized generic functions are omitted")
+            && output.contains("cannot supply type arguments yet."),
+        "expected generic-listing contract in builtin method docs:\n{output}",
+    );
+    insta::assert_snapshot!(output);
+}
+
 /// Drilling into builtin methods by their class name (`Array.reduce`,
 /// `String.split`, `Map.get`) resolves the unqualified class against the stdlib.
 #[test]

@@ -771,7 +771,8 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             for constant in constants {
                 let value = match constant {
                     bex_vm_types::ConstValue::Type(_)
-                    | bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => Value::NULL,
+                    | bex_vm_types::ConstValue::ClassWithTypeArgs { .. }
+                    | bex_vm_types::ConstValue::Literal(_) => Value::NULL,
                     bex_vm_types::ConstValue::Float(value) => {
                         let ptr = vm.alloc_float(value);
                         objects.push(ptr);
@@ -1095,6 +1096,16 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             return Ok(None);
         };
         let Some(signature) = vm.callable_signature(function_value) else {
+            if vm
+                .unspecialized_generic_callable_name(function_value)
+                .is_some()
+            {
+                let diagnostic =
+                    runtime_type::unspecialized_reflected_generic(&display_local_name(&local));
+                return Err(VmRustFnError::Thrown(
+                    super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+                ));
+            }
             return Ok(None);
         };
         let actual = callee_fn_ty(&signature);
@@ -1548,7 +1559,8 @@ fn graft_session_submission(
         for constant in constants {
             let value = match constant {
                 bex_vm_types::ConstValue::Type(_)
-                | bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => Value::NULL,
+                | bex_vm_types::ConstValue::ClassWithTypeArgs { .. }
+                | bex_vm_types::ConstValue::Literal(_) => Value::NULL,
                 bex_vm_types::ConstValue::Float(value) => {
                     let pointer = vm.alloc_float(value);
                     extra_owned.push(pointer);
@@ -2102,7 +2114,7 @@ fn prepare_call_any_argument(vm: &mut BexVm, value: Value, expected: &RealizedTy
     value_fits(vm, value, expected).then_some(value)
 }
 
-/// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError`.
+/// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError | CompilationError`.
 ///
 /// Every argument is keyed by parameter name; a nameless positional is
 /// addressed by the same `$argN` placeholder `reflect.signature` reports, so
@@ -2123,6 +2135,14 @@ fn call_any_impl(
         return non_callable_error("reflect.call_any").into();
     };
     let Some(sig) = vm.callable_signature(f_val) else {
+        if let Some(name) = vm.unspecialized_generic_callable_name(f_val) {
+            let diagnostic = runtime_type::unspecialized_reflected_generic(&name);
+            return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+                vm,
+                &[diagnostic],
+            ))
+            .into();
+        }
         return non_callable_error("reflect.call_any").into();
     };
 

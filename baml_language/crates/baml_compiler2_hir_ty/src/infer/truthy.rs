@@ -22,7 +22,7 @@ use baml_type::{
     interned::{Ty, TyKind},
 };
 
-use super::{Adjust, Adjustment, Expectation, InferenceContext};
+use super::{Adjust, Adjustment, Expectation, InferenceContext, InferenceResult};
 
 /// What a value's static type says about its runtime truthiness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,7 +113,7 @@ fn literal_truthiness(lit: &Literal) -> Truthiness {
     }
 }
 
-impl InferenceContext<'_> {
+impl<'db> InferenceContext<'db> {
     /// Type a condition position (`if`/`while`/guard, and `&&`/`||`
     /// operands): any type is accepted, a non-`bool` records the Truthy
     /// adjustment for MIR, `void` is a mismatch (there is no value to
@@ -125,23 +125,114 @@ impl InferenceContext<'_> {
     pub(super) fn check_condition(&mut self, body: &ExprBody, condition: ExprId) -> Ty {
         let ty = self.infer_expr(body, condition, &Expectation::None);
         let resolved = self.table.resolve_completely(&ty);
+        if resolved.has_error() {
+            return ty;
+        }
+        let is_literal = matches!(body.exprs[condition], Expr::Literal(_) | Expr::Null);
+        if resolved.has_infer() {
+            // The type is still open (a generic call's var solves at the
+            // fixpoint): defer the decision to `finish`, where the FINAL
+            // type is known - bailing here would pass the raw value to
+            // the strict-bool branch.
+            self.pending_truthy_conditions.push((condition, is_literal));
+            return ty;
+        }
+        if let Some(decision) = Self::decide_condition(&resolved) {
+            self.apply_condition_decision(condition, resolved, is_literal, decision);
+        }
+        ty
+    }
+
+    /// Types the operand of `!` (B-1563): same acceptance and warnings as
+    /// a condition position, but NO `Adjust::Truthy` is recorded -
+    /// `OpCode::Not` performs the truthiness coercion itself, so a
+    /// recorded adjustment would be dead metadata with no MIR consumer.
+    pub(super) fn check_not_operand(&mut self, body: &ExprBody, operand: ExprId) -> Ty {
+        let ty = self.infer_expr(body, operand, &Expectation::None);
+        let resolved = self.table.resolve_completely(&ty);
         if resolved.has_error() || resolved.has_infer() {
             return ty;
         }
+        let is_literal = matches!(body.exprs[operand], Expr::Literal(_) | Expr::Null);
+        match Self::decide_condition(&resolved) {
+            Some(ConditionDecision::Mismatch) => {
+                self.result
+                    .type_mismatches
+                    .insert(operand, (Ty::bool(), resolved));
+            }
+            Some(ConditionDecision::Coerce) => {
+                self.push_always_const_warning(operand, resolved, is_literal);
+            }
+            None => {}
+        }
+        ty
+    }
+
+    /// Deferred half of `check_condition` (B-1563): conditions whose type
+    /// was still open at check time decide here on the finalized
+    /// `type_of_expr` entry. Runs in `finish` after type finalization and
+    /// before the S17 diagnostic materialization, writing into the SAME
+    /// tables the eager path writes (`result` is already taken from
+    /// `self.result` at this point in `finish`).
+    pub(super) fn decide_deferred_conditions(&mut self, result: &mut InferenceResult<'db>) {
+        for (condition, is_literal) in std::mem::take(&mut self.pending_truthy_conditions) {
+            let Some(resolved) = result.type_of_expr.get(&condition).cloned() else {
+                continue;
+            };
+            if resolved.has_error() || resolved.has_infer() {
+                continue;
+            }
+            match Self::decide_condition(&resolved) {
+                Some(ConditionDecision::Mismatch) => {
+                    result
+                        .type_mismatches
+                        .entry(condition)
+                        .or_insert((Ty::bool(), resolved));
+                }
+                Some(ConditionDecision::Coerce) => {
+                    result.expr_adjustments.insert(
+                        condition,
+                        Box::new([Adjustment {
+                            kind: Adjust::Truthy,
+                            target: Ty::bool(),
+                        }]),
+                    );
+                    self.push_always_const_warning(condition, resolved, is_literal);
+                }
+                None => {}
+            }
+        }
+    }
+
+    /// The shared judgment: `None` for an already-boolean condition
+    /// (including `never`, which produces no value to coerce),
+    /// `Mismatch` for `void` (no value exists to test), `Coerce`
+    /// otherwise.
+    fn decide_condition(resolved: &Ty) -> Option<ConditionDecision> {
         match resolved.kind() {
-            // Already boolean (including literal bools and `never`, which
-            // produces no value to coerce): today's exact lowering.
             TyKind::Bool { .. }
             | TyKind::Literal(Literal::Bool(_), _, _)
-            | TyKind::Never { .. } => {}
-            // No value exists to test.
-            TyKind::Void { .. } => {
+            | TyKind::Never { .. } => None,
+            TyKind::Void { .. } => Some(ConditionDecision::Mismatch),
+            _ => Some(ConditionDecision::Coerce),
+        }
+    }
+
+    /// Eager-path application of a decision, writing through `self.result`.
+    fn apply_condition_decision(
+        &mut self,
+        condition: ExprId,
+        resolved: Ty,
+        is_literal: bool,
+        decision: ConditionDecision,
+    ) {
+        match decision {
+            ConditionDecision::Mismatch => {
                 self.result
                     .type_mismatches
                     .insert(condition, (Ty::bool(), resolved));
-                return ty;
             }
-            _ => {
+            ConditionDecision::Coerce => {
                 self.result.expr_adjustments.insert(
                     condition,
                     Box::new([Adjustment {
@@ -149,32 +240,37 @@ impl InferenceContext<'_> {
                         target: Ty::bool(),
                     }]),
                 );
-                // A statically-decided NON-literal condition is a likely
-                // bug (`if (some_fn)`, `if (instance)`); a written
-                // literal is the author's deliberate constant.
-                if !matches!(body.exprs[condition], Expr::Literal(_) | Expr::Null) {
-                    match truthiness(&resolved) {
-                        Truthiness::AlwaysTruthy => {
-                            self.pending_diags
-                                .push(super::PendingDiag::ConditionAlwaysConst {
-                                    expr: condition,
-                                    ty: resolved,
-                                    always_true: true,
-                                });
-                        }
-                        Truthiness::AlwaysFalsy => {
-                            self.pending_diags
-                                .push(super::PendingDiag::ConditionAlwaysConst {
-                                    expr: condition,
-                                    ty: resolved,
-                                    always_true: false,
-                                });
-                        }
-                        Truthiness::Runtime => {}
-                    }
-                }
+                self.push_always_const_warning(condition, resolved, is_literal);
             }
         }
-        ty
     }
+
+    /// A statically-decided NON-literal condition is a likely bug
+    /// (`if (some_fn)`, `if (instance)`); a written literal is the
+    /// author's deliberate constant.
+    fn push_always_const_warning(&mut self, condition: ExprId, resolved: Ty, is_literal: bool) {
+        if is_literal {
+            return;
+        }
+        let always_true = match truthiness(&resolved) {
+            Truthiness::AlwaysTruthy => true,
+            Truthiness::AlwaysFalsy => false,
+            Truthiness::Runtime => return,
+        };
+        self.pending_diags
+            .push(super::PendingDiag::ConditionAlwaysConst {
+                expr: condition,
+                ty: resolved,
+                always_true,
+            });
+    }
+}
+
+/// What a condition position does with its (closed) type.
+#[derive(Clone, Copy)]
+enum ConditionDecision {
+    /// `void`: no value exists to test.
+    Mismatch,
+    /// Any non-boolean value: record the truthiness coercion.
+    Coerce,
 }

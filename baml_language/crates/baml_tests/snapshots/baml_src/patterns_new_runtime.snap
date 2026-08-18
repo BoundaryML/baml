@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
-assertion_line: 152
 ---
 function patterns_new_runtime.$init_test_ns_patterns_new_runtime_patterns_new_runtime(registry: testing.TestCollector) -> null {
     load_var registry
@@ -1085,8 +1084,7 @@ function patterns_new_runtime.match_coord_user() -> int {
     pop_jump_if_false L0
     load_var _10
     load_field .zip
-    load_const 11111
-    cmp_int_op ==
+    is_type 11111
     pop_jump_if_false L0
     jump L1
 
@@ -1111,8 +1109,7 @@ function patterns_new_runtime.match_person_as(p: patterns_new_runtime.PersonAS) 
     pop_jump_if_false L0
     load_var p
     load_field .age
-    load_const 7
-    cmp_int_op ==
+    is_type 7
     pop_jump_if_false L0
     jump L1
 
@@ -1155,8 +1152,7 @@ function patterns_new_runtime.or_deep_class() -> int {
     pop_jump_if_false L0
     load_var _7
     load_field .plus4
-    load_const 1
-    cmp_int_op ==
+    is_type 1
     pop_jump_if_false L0
     jump L3
 
@@ -1182,8 +1178,7 @@ function patterns_new_runtime.or_deep_class() -> int {
     pop_jump_if_false L1
     load_var _19
     load_field .plus4
-    load_const 2
-    cmp_int_op ==
+    is_type 2
     pop_jump_if_false L1
     jump L2
 
@@ -1867,8 +1862,7 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
     load_var xs
     load_const 0
     load_array_element
-    load_const true
-    cmp_op ==
+    is_type true
     pop_jump_if_false L0
     jump L5
 
@@ -1889,8 +1883,7 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
     load_const 1
     sub_int
     load_array_element
-    load_const false
-    cmp_op ==
+    is_type false
     pop_jump_if_false L1
     jump L4
 
@@ -2039,8 +2032,7 @@ function patterns_new_runtime.score_foo3(f: patterns_new_runtime.Foo3) -> int {
     pop_jump_if_false L0
     load_var f
     load_field .first
-    load_const true
-    cmp_op ==
+    is_type true
     pop_jump_if_false L0
     load_var f
     load_field .second
@@ -2055,8 +2047,7 @@ function patterns_new_runtime.score_foo3(f: patterns_new_runtime.Foo3) -> int {
     pop_jump_if_false L1
     load_var f
     load_field .first
-    load_const true
-    cmp_op ==
+    is_type true
     pop_jump_if_false L1
     load_var f
     load_field .second
@@ -2070,8 +2061,7 @@ function patterns_new_runtime.score_foo3(f: patterns_new_runtime.Foo3) -> int {
     pop_jump_if_false L2
     load_var f
     load_field .first
-    load_const false
-    cmp_op ==
+    is_type false
     pop_jump_if_false L2
     load_var f
     load_field .second
@@ -2143,15 +2133,13 @@ function patterns_new_runtime.score_int_optional(x: int | null) -> int {
 
   L0:
     load_var x
-    load_const 0
-    cmp_op ==
+    is_type 0
     pop_jump_if_false L1
     jump L4
 
   L1:
     load_var x
-    load_const 1
-    cmp_op ==
+    is_type 1
     pop_jump_if_false L2
     jump L3
 
@@ -2221,14 +2209,12 @@ function patterns_new_runtime.score_ints(xs: int[]) -> int {
     load_var xs
     load_const 0
     load_array_element
-    load_const 1
-    cmp_int_op ==
+    is_type 1
     pop_jump_if_false L0
     load_var xs
     load_const 1
     load_array_element
-    load_const 2
-    cmp_int_op ==
+    is_type 2
     pop_jump_if_false L0
     jump L3
 
@@ -2245,8 +2231,7 @@ function patterns_new_runtime.score_ints(xs: int[]) -> int {
     load_var xs
     load_const 0
     load_array_element
-    load_const 1
-    cmp_int_op ==
+    is_type 1
     pop_jump_if_false L1
     jump L2
 
@@ -2550,30 +2535,26 @@ function patterns_new_runtime.score_pair_or(p: patterns_new_runtime.PairAB) -> i
     load_var p
     load_field .a
     store_var_load_var _3
-    load_const 0
-    cmp_int_op ==
+    is_type 0
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var _3
-    load_const 1
-    cmp_int_op ==
+    is_type 1
     pop_jump_if_false L3
 
   L1:
     load_var p
     load_field .b
     store_var_load_var _6
-    load_const 2
-    cmp_int_op ==
+    is_type 2
     pop_jump_if_false L2
     jump L4
 
   L2:
     load_var _6
-    load_const 3
-    cmp_int_op ==
+    is_type 3
     pop_jump_if_false L3
     jump L4
 
@@ -4471,8 +4452,7 @@ function patterns_new_runtime.test_match_class_binds_inner_zip() -> int {
     pop_jump_if_false L0
     load_var _7
     load_field .zip
-    load_const 1
-    cmp_int_op ==
+    is_type 1
     pop_jump_if_false L0
     jump L1
 

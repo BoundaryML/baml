@@ -188,7 +188,7 @@ fn user.is_zero(n: int) -> bool {
     let _2: bool
 
     bb0: {
-        _2 = copy _1 == const 0_i64;
+        _2 = is_type(copy _1, 0);
         branch copy _2 -> [bb2, bb1];
     }
 

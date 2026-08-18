@@ -597,8 +597,7 @@ function is_operator.is_bare_binding_pattern_matches_fn() -> bool {
 
 function is_operator.is_bool_literal_pattern_false_fn() -> bool {
     load_const true
-    load_const false
-    cmp_op ==
+    is_type false
     pop_jump_if_false L0
     jump L1
 
@@ -615,8 +614,7 @@ function is_operator.is_bool_literal_pattern_false_fn() -> bool {
 
 function is_operator.is_bool_literal_pattern_true_fn() -> bool {
     load_const true
-    load_const true
-    cmp_op ==
+    is_type true
     pop_jump_if_false L0
     jump L1
 
@@ -1141,8 +1139,7 @@ function is_operator.is_inside_while_condition_fn() -> int {
 
 function is_operator.is_int_literal_pattern_mismatch_fn() -> bool {
     load_const 5
-    load_const 0
-    cmp_int_op ==
+    is_type 0
     pop_jump_if_false L0
     jump L1
 
@@ -1159,8 +1156,7 @@ function is_operator.is_int_literal_pattern_mismatch_fn() -> bool {
 
 function is_operator.is_int_literal_pattern_zero_fn() -> bool {
     load_const 0
-    load_const 0
-    cmp_int_op ==
+    is_type 0
     pop_jump_if_false L0
     jump L1
 
@@ -1322,22 +1318,19 @@ function is_operator.is_or_pattern_parenthesised_alternatives_fn() -> bool {
 
 function is_operator.is_or_pattern_with_literals_fn() -> bool {
     load_const 2
-    load_const 1
-    cmp_int_op ==
+    is_type 1
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_const 2
-    load_const 2
-    cmp_int_op ==
+    is_type 2
     pop_jump_if_false L1
     jump L3
 
   L1:
     load_const 2
-    load_const 3
-    cmp_int_op ==
+    is_type 3
     pop_jump_if_false L2
     jump L3
 
@@ -1371,8 +1364,7 @@ function is_operator.is_pattern_disjoint_from_scrutinee_type_returns_false_fn() 
 
 function is_operator.is_string_literal_pattern_match_fn() -> bool {
     load_const "hello"
-    load_const "hello"
-    cmp_op ==
+    is_type "hello"
     pop_jump_if_false L0
     jump L1
 
@@ -1389,8 +1381,7 @@ function is_operator.is_string_literal_pattern_match_fn() -> bool {
 
 function is_operator.is_string_literal_pattern_mismatch_fn() -> bool {
     load_const "world"
-    load_const "hello"
-    cmp_op ==
+    is_type "hello"
     pop_jump_if_false L0
     jump L1
 
@@ -1693,8 +1684,7 @@ function is_operator.narrowing_else_branch_with_class_types_fn() -> string {
 
 function is_operator.narrowing_else_branch_with_literal_pattern_keeps_original_fn() -> int {
     load_const 5
-    load_const 0
-    cmp_int_op ==
+    is_type 0
     pop_jump_if_false L0
     jump L1
 

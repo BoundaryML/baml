@@ -1217,6 +1217,20 @@ fn new_tir_diagnostic(
             .with_primary_span(span)
             .with_phase(DiagnosticPhase::Type);
     }
+    if let TirTypeError::CannotConstructBuiltinCompanion {
+        class_name,
+        companion,
+    } = error
+    {
+        return runtime_type::cannot_construct_builtin_companion(
+            &class_name.render_user_facing(),
+            companion.builtin,
+            companion.origin,
+            companion.carries_methods,
+        )
+        .with_primary_span(span)
+        .with_phase(DiagnosticPhase::Type);
+    }
     if matches!(error, TirTypeError::TypeMismatch { .. }) {
         let base = runtime_type::mismatched_types();
         let diagnostic = if warning {
@@ -1466,6 +1480,9 @@ fn tir_type_error_to_diagnostic_id(
             runtime_type::mounted_package_call_unsupported(path.as_str()).id
         }
         TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::CannotConstructBuiltinCompanion { .. } => {
+            DiagnosticId::CannotConstructBuiltinCompanion
+        }
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
         TirTypeError::ConditionAlwaysConstant { .. } => DiagnosticId::ConditionAlwaysConstant,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,

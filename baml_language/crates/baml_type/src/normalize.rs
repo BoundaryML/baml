@@ -1990,6 +1990,24 @@ impl NormalTy {
                 })
             }
 
+            // `baml.AnyClass` is compiler-derived for class values. The stdlib
+            // blanket impl supplies default-method dispatch, but cannot define
+            // membership by itself without also admitting primitives and
+            // containers. Keep this before the general impl-registry arm so
+            // static coercion and the VM's shared runtime type matcher agree.
+            // Of the nine sealed reflection-kind classes, only the class-kind
+            // view is admitted by the ratified surface.
+            (sub, NormalTy::Interface(qn, _, _))
+                if qn.is_builtin_root_type("AnyClass")
+                    && !matches!(sub, NormalTy::Interface(..)) =>
+            {
+                matches!(
+                    sub,
+                    NormalTy::Class(name, _)
+                        if crate::type_kind::class_inhabits_any_class(name)
+                )
+            }
+
             // BEP-062: `baml.AnyFunction` is a compiler builtin implemented by
             // every function type, with the parameter list erased. Conformance
             // is derived right here rather than from an `implements` block

@@ -81,6 +81,28 @@ pub fn mismatched_types() -> Diagnostic {
     Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
 }
 
+/// E0001 — a reflection class operation received a non-instance value.
+pub fn expected_class_instance(callee: &str, got: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::TypeMismatch,
+        format!("{callee} expected a class instance, got {got}"),
+    )
+}
+
+/// E0165 — reflection cannot construct a complete generic frame.
+///
+/// Package extraction supplies a package-qualified display name; dynamic
+/// `call_any` has no package context and supplies the callable's bare declared
+/// name. The difference is intentional and keeps both diagnostics actionable.
+pub fn unspecialized_reflected_generic(name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::UnspecializedReflectedGeneric,
+        format!(
+            "generic function `{name}` cannot be extracted through reflection: reflected packages cannot supply type arguments yet"
+        ),
+    )
+}
+
 /// E0002 — a value-shaped generic argument omitted the required marker.
 pub fn computed_generic_argument_requires_unreflect(name: &str) -> Diagnostic {
     Diagnostic::error(
@@ -103,6 +125,29 @@ pub fn cannot_construct_reflection_kind(class_name: &str) -> Diagnostic {
         DiagnosticId::TypeMismatch,
         format!(
             "reflection kind `{class_name}` cannot be constructed; obtain it from a type value"
+        ),
+    )
+}
+
+/// E0166 — builtin companion carriers stand in for a builtin type; they hold
+/// no fields and are never instantiated. `carries_methods` is false for the
+/// empty-bodied companions (`baml.Bool`, `baml.Null`), which would otherwise
+/// be described as carrying methods they do not have.
+pub fn cannot_construct_builtin_companion(
+    class_name: &str,
+    builtin: &str,
+    origin: &str,
+    carries_methods: bool,
+) -> Diagnostic {
+    let role = if carries_methods {
+        format!("it only carries the methods of `{builtin}`")
+    } else {
+        format!("it is only the companion of `{builtin}`")
+    };
+    Diagnostic::error(
+        DiagnosticId::CannotConstructBuiltinCompanion,
+        format!(
+            "companion class `{class_name}` cannot be constructed; {role}, whose values come from {origin}"
         ),
     )
 }
@@ -151,6 +196,24 @@ pub fn open_interface_at_render(field: &str, open_type: &str) -> Diagnostic {
     )
 }
 
+/// E0164 — a non-data type reached an LLM schema render.
+pub fn non_data_type_at_render(ty: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::NonDataTypeAtRender,
+        format!("non-data type `{ty}` cannot be rendered as an LLM output schema"),
+    )
+}
+
+/// E0164 — a class field contains a non-data type at the LLM schema boundary.
+pub fn non_data_field_at_render(field: &str, ty: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::NonDataTypeAtRender,
+        format!(
+            "field `{field}` has non-data type `{ty}`, which cannot be rendered as an LLM output schema"
+        ),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,6 +222,16 @@ mod tests {
     fn constructors_own_code_and_complete_message() {
         let cases = [
             (mismatched_types(), "E0001", "mismatched types"),
+            (
+                expected_class_instance("reflect.class.get_field", "int"),
+                "E0001",
+                "reflect.class.get_field expected a class instance, got int",
+            ),
+            (
+                unspecialized_reflected_generic("root.Extract"),
+                "E0165",
+                "generic function `root.Extract` cannot be extracted through reflection: reflected packages cannot supply type arguments yet",
+            ),
             (
                 computed_generic_argument_requires_unreflect("runtime_t"),
                 "E0002",
@@ -178,6 +251,16 @@ mod tests {
                 cannot_construct_reflection_kind("baml.reflect.class.Type"),
                 "E0001",
                 "reflection kind `baml.reflect.class.Type` cannot be constructed; obtain it from a type value",
+            ),
+            (
+                cannot_construct_builtin_companion("baml.Int", "int", "literals", true),
+                "E0166",
+                "companion class `baml.Int` cannot be constructed; it only carries the methods of `int`, whose values come from literals",
+            ),
+            (
+                cannot_construct_builtin_companion("baml.Bool", "bool", "literals", false),
+                "E0166",
+                "companion class `baml.Bool` cannot be constructed; it is only the companion of `bool`, whose values come from literals",
             ),
             (
                 mounted_package_call_unsupported("dep.tool"),
@@ -208,6 +291,16 @@ mod tests {
                 open_interface_at_render("payload", "user.Open"),
                 "E0161",
                 "field `payload` has open interface type `user.Open`, which cannot be rendered as an LLM output schema",
+            ),
+            (
+                non_data_type_at_render("never"),
+                "E0164",
+                "non-data type `never` cannot be rendered as an LLM output schema",
+            ),
+            (
+                non_data_field_at_render("Envelope.payload", "unknown"),
+                "E0164",
+                "field `Envelope.payload` has non-data type `unknown`, which cannot be rendered as an LLM output schema",
             ),
         ];
 

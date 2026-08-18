@@ -1,14 +1,11 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::{
-    future::Future,
-    io::Write as _,
     path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow};
@@ -16,14 +13,18 @@ use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
 use baml_type::RuntimeTy;
 use bex_engine::{
-    BexCallArg, BexEngine, BexExternalValue, CancellationToken, CaptureDefaults,
-    FunctionCallContext, FunctionCallContextBuilder, test_arg_to_external,
-    value_capture::{TraceCaptureConfig, TraceCaptureProducer},
+    BexCallArg, BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
+    FunctionCallContextBuilder, test_arg_to_external, value_capture::TraceCaptureProducer,
 };
-use clap::{Args, FromArgMatches, ValueEnum};
+use clap::{Args, FromArgMatches};
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{bytecode_cache::CacheContext, reporter::Reporter, test_filter::TestFilter};
+use crate::{
+    bytecode_cache::CacheContext,
+    log_output::{LogLevel as TestLogLevel, LogOutput},
+    reporter::Reporter,
+    test_filter::TestFilter,
+};
 
 /// Run BAML tests.
 ///
@@ -110,22 +111,24 @@ pub struct TestArgs {
     pub(crate) cli_output: TestOutputOverrides,
 
     #[arg(
-        long,
+        long = "log",
+        env = "BAML_LOG",
         value_enum,
         default_value_t = TestLogLevel::Off,
         ignore_case = true,
         value_name = "LEVEL",
-        help = "Set the BAML log level [default: off] [possible values: off, error, warn, info, debug]",
+        help = "Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error, warn, info, debug, trace]",
         hide_default_value = true,
+        hide_env = true,
         hide_possible_values = true,
         help_heading = "Test output options"
     )]
-    pub logs: TestLogLevel,
+    pub log: TestLogLevel,
 
     /// Explicit command-line log level, injected by the top-level parser so a
     /// direct scalar value can override the selected profile's value.
     #[arg(skip)]
-    pub(crate) cli_logs: Option<TestLogLevel>,
+    pub(crate) cli_log: Option<TestLogLevel>,
 }
 
 #[derive(Debug, Default)]
@@ -227,36 +230,6 @@ impl TestInvocation {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
-pub enum TestLogLevel {
-    #[default]
-    Off,
-    Error,
-    Warn,
-    Info,
-    Debug,
-}
-
-impl TestLogLevel {
-    fn allows(self, event_level: Option<&str>) -> bool {
-        let threshold = match self {
-            Self::Off => return false,
-            Self::Error => 1,
-            Self::Warn => 2,
-            Self::Info => 3,
-            Self::Debug => 4,
-        };
-        let event = match event_level.unwrap_or("info").to_ascii_lowercase().as_str() {
-            "error" => 1,
-            "warn" | "warning" => 2,
-            "info" => 3,
-            "debug" => 4,
-            _ => 3,
-        };
-        event <= threshold
-    }
-}
-
 /// A legacy `test "name" { functions [Foo] args {…} }` attached to an LLM
 /// function, discovered from HIR. Executed by calling the function directly
 /// with the test args. New-style `testset`/`test` blocks are discovered and run
@@ -335,72 +308,15 @@ impl RunCtx<'_> {
     fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
         let builder =
             FunctionCallContextBuilder::new(call_id).with_cancel_token(self.cancel.clone());
-        if self.logs == TestLogLevel::Off {
-            return (builder.build(), None);
-        }
-
-        // Only log bodies are needed here. Periodic draining keeps this queue
-        // bounded in practice while leaving enough headroom for bursty tests.
-        let producer = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(100_000));
-        let context = builder
-            .with_capture_defaults(CaptureDefaults {
-                values_enabled: false,
-                logs_enabled: true,
-            })
-            .with_value_capture(producer.clone())
-            .build();
-        (context, Some(producer))
-    }
-
-    fn print_logs(&self, producer: Option<&TraceCaptureProducer>) {
-        let Some(producer) = producer else {
-            return;
-        };
-        let report = producer.drain_rendered_logs();
-        for log in report.logs {
-            if self.logs.allows(log.metadata.level.as_deref()) {
-                let level = log
-                    .metadata
-                    .level
-                    .as_deref()
-                    .unwrap_or("info")
-                    .to_ascii_uppercase();
-                println!("[{level}] {}", log.body);
-            }
-        }
-        for failure in report.failures {
-            eprintln!("WARN test log capture failed: {}", failure.diagnostic);
-        }
-
-        // Redirected stdout is block-buffered. Flush every drained batch so
-        // consumers can observe test logs while the test is still running.
-        let _ = std::io::stdout().flush();
+        LogOutput::new(self.logs, "test").call_context(builder)
     }
 
     fn block_on_with_logs<T>(
         &self,
-        future: impl Future<Output = T>,
+        future: impl std::future::Future<Output = T>,
         producer: Option<&TraceCaptureProducer>,
     ) -> T {
-        let Some(producer) = producer else {
-            return self.rt.block_on(future);
-        };
-        self.rt.block_on(async {
-            tokio::pin!(future);
-            let mut interval = tokio::time::interval(Duration::from_millis(50));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            loop {
-                tokio::select! {
-                    result = &mut future => {
-                        // The future may complete between ticks. Drain once
-                        // more before its PASS/FAIL report is printed.
-                        self.print_logs(Some(producer));
-                        break result;
-                    }
-                    _ = interval.tick() => self.print_logs(Some(producer)),
-                }
-            }
-        })
+        LogOutput::new(self.logs, "test").block_on(self.rt, future, producer)
     }
 }
 
@@ -833,9 +749,9 @@ impl TestArgs {
             cli_exclude: self.exclude.clone(),
             output,
             logs: self
-                .cli_logs
+                .cli_log
                 .or_else(|| profile_args.as_ref().and_then(|p| p.logs))
-                .unwrap_or(self.logs),
+                .unwrap_or(self.log),
         };
         validate_selectors(
             invocation
@@ -886,7 +802,7 @@ impl TestArgs {
             .map_err(|e| anyhow!("invalid args in test profile `{name}`: {e}"))?;
         let logs_is_explicit = matches
             .subcommand_matches("test")
-            .and_then(|matches| matches.value_source("logs"))
+            .and_then(|matches| matches.value_source("log"))
             == Some(clap::parser::ValueSource::CommandLine);
         let parsed = crate::commands::RuntimeCli::from_arg_matches(&matches)
             .map_err(|e| anyhow!("invalid args in test profile `{name}`: {e}"))?;
@@ -895,7 +811,7 @@ impl TestArgs {
             unreachable!("synthetic profile argv always selects the test command")
         };
         Ok(Some(ParsedProfileArgs {
-            logs: logs_is_explicit.then_some(test.logs),
+            logs: logs_is_explicit.then_some(test.log),
             test,
             output,
         }))
@@ -1576,19 +1492,6 @@ mod tests {
     }
 
     #[test]
-    fn test_log_level_filters_at_or_above_threshold() {
-        assert!(!TestLogLevel::Off.allows(Some("error")));
-        assert!(TestLogLevel::Error.allows(Some("error")));
-        assert!(!TestLogLevel::Error.allows(Some("warn")));
-        assert!(TestLogLevel::Info.allows(Some("error")));
-        assert!(TestLogLevel::Info.allows(Some("warning")));
-        assert!(TestLogLevel::Info.allows(Some("info")));
-        assert!(TestLogLevel::Info.allows(None));
-        assert!(!TestLogLevel::Info.allows(Some("debug")));
-        assert!(TestLogLevel::Debug.allows(Some("debug")));
-    }
-
-    #[test]
     fn consume_fail_with_zero_hard_failed_synthesizes_one() {
         // Runner fails the aggregate without marking any child failed.
         let parsed =
@@ -1603,7 +1506,7 @@ mod tests {
             "root::integration::*".to_string(),
             "-x".to_string(),
             "*::flaky::*".to_string(),
-            "--logs".to_string(),
+            "--log".to_string(),
             "info".to_string(),
         ];
         let parsed = TestArgs::parse_profile_args("ci", &tokens)
@@ -1652,7 +1555,7 @@ mod tests {
             "ci".into(),
             "--color".into(),
             "always".into(),
-            "--logs".into(),
+            "--log".into(),
             "debug".into(),
         ]);
         let crate::commands::Commands::Test(args) = cli.command else {
@@ -1663,7 +1566,7 @@ mod tests {
                 Some(
                     r#"
 [test.profiles.ci]
-args = ["--color", "never", "--logs", "warn"]
+args = ["--color", "never", "--log", "warn"]
 "#,
                 ),
                 std::path::Path::new("/project"),

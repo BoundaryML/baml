@@ -3508,6 +3508,20 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // exhaustive final `let v: unknown` arm has its test elided.)
             TyTemplate::BuiltinUnknown { .. } => emit_true(self),
 
+            // ── Singleton (literal) ──────────────────────────────────────────
+            // A literal type is a set of one, so membership is decided against
+            // the value itself, not against a type tag: every tag a literal
+            // could name is its *base* type's, which answers `true` for every
+            // other inhabitant of that base (`x is One` matching every int when
+            // `type One = 1`). `ConstValue::Literal` is the exact test — the
+            // specialization of the `ConstValue::Type(Literal)` structural form
+            // the algebra would otherwise decide, minus the reconstruction.
+            TyTemplate::Literal(literal, _, _) => {
+                let c = self.add_constant(ConstValue::Literal(literal.clone()));
+                let inst = self.emit(Instruction::IsType(c));
+                self.set_operand(inst, OperandMeta::Const(literal.to_string()));
+            }
+
             // Fully realized leaves keep their exact identity/tag fast path,
             // then use structural matching when no exact fast path exists.
             // This list is exhaustive on purpose: a new template variant must
@@ -3519,7 +3533,6 @@ impl PullSink for StackifyCodegen<'_, '_> {
             | TyTemplate::Bool { .. }
             | TyTemplate::Null { .. }
             | TyTemplate::Uint8Array { .. }
-            | TyTemplate::Literal(..)
             | TyTemplate::Enum(..)
             | TyTemplate::EnumVariant(..)
             | TyTemplate::RustType { .. }
@@ -3718,13 +3731,13 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         RealizedTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
         RealizedTy::Type { .. } => Some(baml_type::typetag::TYPE),
         RealizedTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
-        RealizedTy::Literal(lit, _, _) => Some(match lit {
-            baml_base::Literal::Int(_) => baml_type::typetag::INT,
-            baml_base::Literal::Bigint(_) => baml_type::typetag::BIGINT,
-            baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
-            baml_base::Literal::String(_) => baml_type::typetag::STRING,
-            baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,
-        }),
+        // A literal type has no type tag. Tags name base types, and a literal
+        // is a strict subset of its base, so its base's tag over-accepts every
+        // other inhabitant — `1` would admit any int. Literal membership is
+        // decided by `ConstValue::Literal` in `is_type` above, which never
+        // reaches here; returning `None` keeps that the only answer rather than
+        // leaving a wrong one for the next caller to find.
+        RealizedTy::Literal(..) => None,
         RealizedTy::Media(..)
         | RealizedTy::Class(..)
         | RealizedTy::Interface(..)

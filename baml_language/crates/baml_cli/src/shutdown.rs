@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use bex_engine::BexEngine;
 
@@ -9,9 +9,16 @@ pub(crate) fn shutdown_engine(
     engine: &Arc<BexEngine>,
     reporter: &Reporter,
 ) {
-    rt.block_on(engine.shutdown_with_progress(|count| {
+    rt.block_on(shutdown_engine_future(engine, reporter));
+}
+
+pub(crate) fn shutdown_engine_future<'a>(
+    engine: &'a Arc<BexEngine>,
+    reporter: &'a Reporter,
+) -> impl Future<Output = ()> + 'a {
+    engine.shutdown_with_progress(|count| {
         reporter.status("Waiting", wait_message(count));
-    }));
+    })
 }
 
 fn wait_message(count: usize) -> String {

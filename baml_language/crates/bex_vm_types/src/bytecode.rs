@@ -1382,6 +1382,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
             x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
             x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
+            x if x == Self::Truthy as u8 => Ok(Self::Truthy),
             _ => Err(byte),
         }
     }
@@ -2770,6 +2771,7 @@ mod compact_tests {
     #[test]
     fn encoded_size_matches_emitted_bytes_for_every_opcode() {
         for (instruction, expected) in [
+            (Instruction::UnaryOp(UnaryOp::Truthy), OpCode::Truthy),
             (Instruction::VirtualLoadField(1), OpCode::VirtualLoadField),
             (Instruction::VirtualStoreField(1), OpCode::VirtualStoreField),
             (Instruction::LoadField(1), OpCode::LoadField),

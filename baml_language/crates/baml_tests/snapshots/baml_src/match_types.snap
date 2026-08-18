@@ -232,8 +232,7 @@ function match_types.all_guarded_main() -> string {
 
 function match_types.classify_all_guarded(x: int, flag: bool) -> string {
     load_var x
-    load_const 0
-    cmp_int_op ==
+    is_type 0
     pop_jump_if_false L0
     load_var flag
     pop_jump_if_false L0
@@ -241,8 +240,7 @@ function match_types.classify_all_guarded(x: int, flag: bool) -> string {
 
   L0:
     load_var x
-    load_const 1
-    cmp_int_op ==
+    is_type 1
     pop_jump_if_false L1
     load_var flag
     pop_jump_if_false L1
@@ -250,8 +248,7 @@ function match_types.classify_all_guarded(x: int, flag: bool) -> string {
 
   L1:
     load_var x
-    load_const 2
-    cmp_int_op ==
+    is_type 2
     pop_jump_if_false L2
     load_var flag
     pop_jump_if_false L2
@@ -391,8 +388,7 @@ function match_types.classify_guard_on_typed_field(result: match_types.Success |
 
 function match_types.classify_guarded_int(x: int, flag: bool) -> string {
     load_var x
-    load_const 1
-    cmp_int_op ==
+    is_type 1
     pop_jump_if_false L0
     load_var flag
     pop_jump_if_false L0
@@ -400,15 +396,13 @@ function match_types.classify_guarded_int(x: int, flag: bool) -> string {
 
   L0:
     load_var x
-    load_const 1
-    cmp_int_op ==
+    is_type 1
     pop_jump_if_false L1
     jump L4
 
   L1:
     load_var x
-    load_const 2
-    cmp_int_op ==
+    is_type 2
     pop_jump_if_false L2
     jump L3
 
@@ -476,15 +470,13 @@ function match_types.classify_mixed_class_primitive(x: match_types.MyClass | int
 
 function match_types.classify_mixed_lit_typed_guard(x: int, flag: bool) -> string {
     load_var x
-    load_const 0
-    cmp_int_op ==
+    is_type 0
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var x
-    load_const 1
-    cmp_int_op ==
+    is_type 1
     pop_jump_if_false L1
     load_var flag
     pop_jump_if_false L1

@@ -301,6 +301,7 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
             }
         }
         bex_vm_types::ConstValue::Type(template) => format!("<type_template {template}>"),
+        bex_vm_types::ConstValue::Literal(literal) => format!("<literal {literal}>"),
         bex_vm_types::ConstValue::ClassWithTypeArgs {
             class_obj,
             type_args_templates,

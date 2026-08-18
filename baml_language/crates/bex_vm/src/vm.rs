@@ -2332,8 +2332,9 @@ impl BexVm {
         }
     }
 
-    /// Truthiness of a value (B-1563): `false`, `null`, zero (`0`, `0n`,
-    /// `0.0`), and empty string/list/map/bytes are falsy; every other
+    /// Truthiness of a value (B-1563): `false`, `null`, an omitted
+    /// argument, zero (`0`, `0n`, `0.0`), and empty string/list/map/bytes
+    /// are falsy; every other
     /// value - including `NaN`, instances, variants, closures, and
     /// futures - is truthy. The scalar fast path never touches the heap;
     /// only strings, containers, and the boxed numerics dereference.
@@ -2380,6 +2381,15 @@ impl BexVm {
             ConstValue::Type(template) => {
                 crate::type_match::value_matches_template(self, value, template, frame_type_args)
             }
+            // Membership in a singleton type. Decided against the value's own
+            // identity rather than against the type it reconstructs, because
+            // `value_concrete_ty`-style reconstruction is what the general
+            // algebra needs and this is the one type whose inhabitants are
+            // enumerated rather than described. Equality here is *exact* — same
+            // representation, same contents — never the numeric-tower widening
+            // `==` applies (B-1073): `1` and `1.0` are disjoint types, so no
+            // float inhabits the int-literal singleton.
+            ConstValue::Literal(literal) => Ok(self.value_is_literal(value, literal)),
             ConstValue::ClassWithTypeArgs {
                 class_obj,
                 type_args_templates,
@@ -2511,6 +2521,122 @@ impl BexVm {
         }
     }
 
+    /// Whether `value` inhabits the singleton type denoted by `literal`.
+    ///
+    /// The runtime counterpart of `TyTemplate::Literal`: exact representation
+    /// *and* exact contents. A heap `Float` is not the int literal `1` however
+    /// close its magnitude, and a `bigint` is not an `int` — those are disjoint
+    /// types (`TYPE_SYSTEM.md` "Concrete Types": no concrete type is a subtype
+    /// of another), even though the `==` operator deliberately widens across
+    /// all three.
+    ///
+    /// Float equality is exact here by construction, not by oversight: a
+    /// singleton holds one value, so membership is identity and a tolerance
+    /// would admit values the type excludes.
+    #[allow(clippy::float_cmp)]
+    pub(crate) fn value_is_literal(&self, value: Value, literal: &baml_type::Literal) -> bool {
+        match literal {
+            baml_type::Literal::Int(n) => value.as_int() == Some(*n),
+            baml_type::Literal::Bool(b) => value.as_bool() == Some(*b),
+            baml_type::Literal::String(s) => match value.as_object_ptr() {
+                Some(ptr) => matches!(self.get_object(ptr), Object::String(v) if **v == **s),
+                None => false,
+            },
+            baml_type::Literal::Bigint(n) => match value.as_object_ptr() {
+                Some(ptr) => matches!(self.get_object(ptr), Object::Bigint(v) if **v == *n),
+                None => false,
+            },
+            // No surface syntax produces a float literal *type* (the parser
+            // rejects `1.0` in type position), so this arm is unreachable from
+            // BAML source. It is still answered exactly rather than defaulted,
+            // so a future float-literal type cannot inherit a silent `false`.
+            baml_type::Literal::Float(repr) => match value.as_object_ptr() {
+                Some(ptr) => match self.get_object(ptr) {
+                    Object::Float(v) => repr.parse::<f64>().is_ok_and(|expected| *v == expected),
+                    _ => false,
+                },
+                None => false,
+            },
+        }
+    }
+
+    /// The value's type at maximum precision — its *singleton* type where it
+    /// has one, otherwise the same leaf [`Self::value_concrete_ty`] reports.
+    ///
+    /// `TYPE_SYSTEM.md` "Values and membership" defines membership as "`v` is a
+    /// member of `T` iff `v`'s concrete type is a subtype of `T`". That only
+    /// decides literal types if the reconstructed type is the value's *most
+    /// precise* one:
+    /// reporting the int `1` as `int` makes `is_subtype(int, 1)` false and no
+    /// value would ever inhabit a literal type. Precision costs nothing at the
+    /// other end — `Literal(Int, 1) <: int` holds — so every test the coarser
+    /// reconstruction passed still passes.
+    ///
+    /// Deliberately separate from [`Self::value_concrete_ty`] rather than
+    /// replacing it: impl-registry dispatch keys on that one, and `implement I
+    /// for int` must resolve for every int, not for the singleton `1`.
+    pub(crate) fn value_singleton_ty(&self, value: Value) -> Option<baml_type::RealizedTy> {
+        use baml_type::{Freshness, RealizedTy, TyAttr};
+        let literal = |lit| RealizedTy::Literal(lit, Freshness::Regular, TyAttr::default());
+        if let Some(n) = value.as_int() {
+            return Some(literal(baml_type::Literal::Int(n)));
+        }
+        if let Some(b) = value.as_bool() {
+            return Some(literal(baml_type::Literal::Bool(b)));
+        }
+        if let Some(ptr) = value.as_object_ptr() {
+            match self.get_object(ptr) {
+                Object::String(s) => {
+                    return Some(literal(baml_type::Literal::String((**s).to_owned())));
+                }
+                Object::Bigint(n) => {
+                    return Some(literal(baml_type::Literal::Bigint((**n).clone())));
+                }
+                // A float has no literal type to be precise about, and every
+                // other object's precise type is already its concrete one.
+                _ => {}
+            }
+        }
+        Some(self.value_concrete_ty(value)?.into())
+    }
+
+    /// Name an otherwise callable value whose generic frame is incomplete.
+    /// Reflection uses this to distinguish an unspecialized generic from a
+    /// genuinely non-callable value when signature reconstruction fails.
+    pub(crate) fn unspecialized_generic_callable_name(&self, value: Value) -> Option<String> {
+        fn incomplete(function: &Function, supplied: usize) -> Option<String> {
+            (supplied < function.generic_param_bounds.len()).then(|| {
+                function
+                    .declared_name
+                    .clone()
+                    .unwrap_or_else(|| function.name.clone())
+            })
+        }
+
+        match self.get_object(value.as_object_ptr()?) {
+            Object::Closure(closure) => match unsafe { closure.function.get() } {
+                Object::Function(function) => {
+                    incomplete(function, closure.captured_type_args.len())
+                }
+                _ => None,
+            },
+            Object::GenericFunction(generic) => {
+                let inner = self.load_global_in(generic.runtime_package, generic.function);
+                match inner.as_object_ptr().map(|ptr| self.get_object(ptr)) {
+                    Some(Object::Function(function)) => {
+                        incomplete(function, generic.type_args.len())
+                    }
+                    _ => None,
+                }
+            }
+            Object::BoundMethod(method) => match unsafe { method.function.get() } {
+                Object::Function(function) => incomplete(function, method.type_args.len()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
     /// runtime value's type satisfies (a concrete top with realized arguments, no
     /// type variables) made explicit in the type. `None` for a value kind that
@@ -2525,8 +2651,9 @@ impl BexVm {
     /// fails (→ `None`) only if a residual type variable leaked in — a bug.
     ///
     /// The interface resolver wants the loose `RuntimeTy`, so the sole such caller
-    /// widens the result back; the `IsType` value matcher wants the invariant made
-    /// explicit and uses it directly.
+    /// widens the result back. The `IsType` value matcher goes through
+    /// [`Self::value_singleton_ty`] instead — it needs the value's *most precise*
+    /// type, which for a primitive is its singleton, not its base leaf.
     pub(crate) fn value_concrete_ty(&self, value: Value) -> Option<baml_type::ConcreteRealizedTy> {
         use baml_type::{ConcreteRealizedTy, TyAttr};
         if value.as_int().is_some() {

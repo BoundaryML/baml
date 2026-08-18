@@ -207,3 +207,41 @@ function tr_guard(v: int, label: string?) -> string {
 test "guard_truthy" { assert.equal(tr_guard(1, "x"), "1-labeled") }
 test "guard_null_falsy" { assert.equal(tr_guard(2, null), "2-plain") }
 test "guard_empty_falsy" { assert.equal(tr_guard(3, ""), "3-plain") }
+
+// ============================================================================
+// 6. Deferred decisions: conditions typed by an inference variable
+// ============================================================================
+
+function tr_id<T>(v: T) -> T { v }
+
+function tr_generic_conditions() -> string {
+    let r = "";
+    if (tr_id(0)) { r = r + "i0-T;" } else { r = r + "i0-F;" }
+    if (tr_id("")) { r = r + "s-T;" } else { r = r + "s-F;" }
+    if (tr_id("x")) { r = r + "x-T;" } else { r = r + "x-F;" }
+    if (!tr_id(0)) { r = r + "n0-T;" } else { r = r + "n0-F;" }
+    r
+}
+
+test "generic_call_conditions_coerce" {
+    assert.equal(tr_generic_conditions(), "i0-F;s-F;x-T;n0-T;")
+}
+
+// ============================================================================
+// 7. Literal-union narrowing polarity
+// ============================================================================
+
+// The true branch drops the always-falsy literal members ("" and null),
+// so interpolation sees a plain string; the false branch drops the
+// always-truthy member ("x").
+function tr_literal_union(v: "" | "x" | null) -> string {
+    if (v) {
+        `<${v}>`
+    } else {
+        "none"
+    }
+}
+
+test "literal_union_truthy_member" { assert.equal(tr_literal_union("x"), "<x>") }
+test "literal_union_empty_falsy" { assert.equal(tr_literal_union(""), "none") }
+test "literal_union_null_falsy" { assert.equal(tr_literal_union(null), "none") }

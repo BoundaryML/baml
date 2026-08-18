@@ -155,6 +155,7 @@ enum BamlBridgeLanguage
   BAML_BRIDGE_LANGUAGE_JAVA = 7,
   BAML_BRIDGE_LANGUAGE_SWIFT = 8,
   BAML_BRIDGE_LANGUAGE_WEB = 9,
+  BAML_BRIDGE_LANGUAGE_RUBY = 10,
 };
 #ifndef __cplusplus
 typedef uint32_t BamlBridgeLanguage;
