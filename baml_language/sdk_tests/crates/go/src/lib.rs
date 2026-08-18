@@ -5,6 +5,21 @@ sdk_test_harness_runner::go::test_suite!();
 mod generated_formatting_tests {
     use std::{fs, path::Path, process::Command};
 
+    /// This crate's source dir, where setup writes the generated Go trees.
+    /// The compile-time `CARGO_MANIFEST_DIR` is baked into the test binary,
+    /// and for the CI nix unit graph that is a build sandbox
+    /// (`/build/sdk_test_go-<ver>/`) that does not exist when the prebuilt
+    /// binary runs - the gofmt sweep below would then find zero files and
+    /// fail its own `checked > 0` guard. `BAML_SDK_TEST_GO_DIR` binds the
+    /// dir when set; unset, behavior is byte-identical. Same pattern as
+    /// `BAML_SURFACE_SNAPSHOT_DIR` and `BAML_PARAM_SCHEMA_GOLDEN`, which
+    /// exist for the same relocated-build reason.
+    fn crate_dir() -> std::path::PathBuf {
+        std::env::var_os("BAML_SDK_TEST_GO_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+    }
+
     #[test]
     fn every_generator_owned_go_file_is_gofmt_clean() {
         let fixtures = [
@@ -16,7 +31,7 @@ mod generated_formatting_tests {
             "type_shapes",
             "unsupported_only",
         ];
-        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest_dir = crate_dir();
         let mut checked = 0;
 
         for fixture in fixtures {
@@ -76,7 +91,7 @@ mod generated_formatting_tests {
 
     #[test]
     fn missing_generated_sdk_is_an_empty_fixture() {
-        let missing = Path::new(env!("CARGO_MANIFEST_DIR")).join("missing-generated-sdk");
+        let missing = crate_dir().join("missing-generated-sdk");
         assert!(go_files_below(&missing).is_empty());
     }
 }
