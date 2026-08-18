@@ -526,19 +526,24 @@ fn resolve_mise_tool(tool: &str) -> io::Result<PathBuf> {
     Ok(PathBuf::from(path))
 }
 
-/// Read `$OUT_DIR/build_diagnostics.txt` (the file
+/// Check the contents of `$OUT_DIR/build_diagnostics.txt` (the file
 /// [`sdk_test_harness_setup::BuildDiagnostics::finalize`] writes) and panic
 /// with the records if non-empty. Called from inside the
-/// `mod build_diagnostics { #[test] fn no_build_failures }` block
-/// the [`build_diagnostics!`] macro expands to — `out_dir` is
-/// `env!("OUT_DIR")` resolved at the macro's call site, so it
-/// points at the *generator crate's* OUT_DIR (where
-/// `sdk_test_harness_setup` wrote the file).
+/// `mod build_diagnostics { #[test] fn no_build_failures }` block the
+/// [`build_diagnostics!`] macro expands to — the macro embeds the file
+/// with `include_str!` at its call site (the generator crate's test
+/// compilation), so the bytes come from the *generator crate's* OUT_DIR.
+///
+/// Embedded, not read at run time: the CI nix unit graph runs prebuilt
+/// test binaries whose compile-time OUT_DIR was a build sandbox that no
+/// longer exists, so a runtime read of the baked path fails on every
+/// relocated run (proven live, run 32092055174) while the embedded
+/// content is the same bytes the read would have returned. build.rs
+/// always runs before the test target compiles, so a missing file is a
+/// compile error naming the path — the same signal the old
+/// "did build.rs run?" panic carried, one phase earlier.
 #[doc(hidden)]
-pub fn __check_build_diagnostics(out_dir: &str) {
-    let path = format!("{out_dir}/build_diagnostics.txt");
-    let contents = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("{path}: {e} — did build.rs run?"));
+pub fn __check_build_diagnostics(contents: &str) {
     if !contents.trim().is_empty() {
         let count = contents.matches("\n---\n").count() + 1;
         panic!("sdk-test build.rs recorded {count} diagnostic record(s):\n\n{contents}");
@@ -627,14 +632,17 @@ macro_rules! setup_guard {
 ///
 /// `env!("OUT_DIR")` inside the expansion resolves at the macro's
 /// call site (i.e. inside the generator crate's test compilation),
-/// so the path lines up with where `sdk_test_harness_setup` wrote the file.
+/// so the embedded file is the one `sdk_test_harness_setup` wrote there.
 #[macro_export]
 macro_rules! build_diagnostics {
     () => {
         mod build_diagnostics {
             #[test]
             fn no_build_failures() {
-                $crate::__check_build_diagnostics(env!("OUT_DIR"));
+                $crate::__check_build_diagnostics(include_str!(concat!(
+                    env!("OUT_DIR"),
+                    "/build_diagnostics.txt"
+                )));
             }
         }
     };
@@ -643,7 +651,10 @@ macro_rules! build_diagnostics {
             #[test]
             #[ignore = $reason]
             fn no_build_failures() {
-                $crate::__check_build_diagnostics(env!("OUT_DIR"));
+                $crate::__check_build_diagnostics(include_str!(concat!(
+                    env!("OUT_DIR"),
+                    "/build_diagnostics.txt"
+                )));
             }
         }
     };
