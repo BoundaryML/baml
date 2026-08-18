@@ -31,7 +31,6 @@ pub(crate) mod generate;
 pub(crate) mod help_command;
 pub(crate) mod ide_command;
 pub(crate) mod init_command;
-pub(crate) mod log_output;
 pub(crate) mod lsp;
 pub(crate) mod manifest;
 pub(crate) mod output;

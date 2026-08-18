@@ -638,6 +638,62 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
     );
 }
 
+/// `--log-file` is an independent sink: it captures every BAML log level
+/// without adding log lines to stdout when terminal logging is disabled.
+#[test]
+fn run_log_file_writes_baml_logs_without_changing_stdout() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    let log_path = tmp.path().join("run.log");
+
+    create_project(
+        tmp.path(),
+        r#"
+function logged() -> string {
+    log.debug("debug-detail");
+    log.info("info-detail");
+    log.warn("warn-detail");
+    log.error("error-detail");
+    "target-result"
+}
+"#,
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "run",
+            "logged",
+            "--from",
+            ".",
+            "--log-file",
+            log_path.to_str().unwrap(),
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "--log-file run failed; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("target-result"), "stdout: {stdout}");
+    assert!(!stdout.contains("detail"), "stdout: {stdout}");
+
+    let logs = std::fs::read_to_string(&log_path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", log_path.display()));
+    for expected in [
+        "[DEBUG] debug-detail",
+        "[INFO] info-detail",
+        "[WARN] warn-detail",
+        "[ERROR] error-detail",
+    ] {
+        assert!(logs.contains(expected), "missing `{expected}` in:\n{logs}");
+    }
+    assert!(!logs.contains("target-result"), "log file: {logs}");
+}
+
 #[test]
 fn run_expression_serialization_failure_returns_target_error() {
     let built = &common::baml_cli();
