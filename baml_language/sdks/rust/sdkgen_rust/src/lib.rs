@@ -390,6 +390,8 @@ fn to_source_code_with_optional_metadata(
                     mod _inlinedbaml;
                     mod _runtime;
 
+                    /// The runtime crate version matched to this generated SDK.
+                    pub use baml_bridge;
                     pub use _runtime::init;
 
                     #(#mod_decls)*
@@ -780,7 +782,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_pool_emits_crate_skeleton_with_stdlib_module() {
+    fn empty_pool_emits_crate_skeleton_with_runtime_reexports_and_stdlib_module() {
         let generated = to_source_code_with_bytecode(&SymbolPool::default(), &[], &options());
         assert!(generated.warnings.is_empty());
         let mut paths: Vec<_> = generated
@@ -802,6 +804,7 @@ mod tests {
         );
         let lib = text(&generated, "src/lib.rs");
         assert!(lib.contains("pub mod baml;"));
+        assert!(lib.contains("pub use baml_bridge;"));
         assert!(lib.contains("pub use _runtime::init;"));
     }
 
