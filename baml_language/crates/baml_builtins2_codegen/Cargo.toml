@@ -25,6 +25,7 @@ baml_compiler_diagnostics = { workspace = true }
 baml_compiler_lexer = { workspace = true }
 baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
+baml_type = { workspace = true }
 prettyplease = { workspace = true }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }

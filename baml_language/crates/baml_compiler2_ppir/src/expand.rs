@@ -106,17 +106,6 @@ fn resolve_named<'db>(path: &[Name], ctx: &ExpandCtx<'_, 'db>) -> Option<Resolve
         },
     };
     match resolver.resolve_type_path(path)? {
-        // `json` is the stdlib alias `baml.json.json`: canonicalize to its
-        // real definition so the TypeAlias rules (body expansion, block
-        // attrs) apply to it exactly as they do to the written long form.
-        TypePathResolution::Builtin(BuiltinTypeName::Json) => {
-            let json = Name::new("json");
-            let def = ctx
-                .all_package_items
-                .get(&Name::new("baml"))?
-                .lookup_type(std::slice::from_ref(&json), &json)?;
-            Some(ResolvedNamed::Def(SymbolKind::TypeAlias, def))
-        }
         TypePathResolution::Builtin(builtin) => Some(ResolvedNamed::Builtin(builtin)),
         TypePathResolution::Def(def) => {
             let kind = match def {
@@ -163,7 +152,14 @@ fn requalify_for_caller(ty: PpirTy, alias_ns: &[Name], caller_ns: &[Name]) -> Pp
             generic_args,
             associated_type_bindings,
             attrs,
-        } if path.len() == 1 && path[0].as_str() != "root" => {
+        } if path.len() == 1
+            && path[0].as_str() != "root"
+            // A builtin-scope name (`int`, `string`, ...) is namespace-
+            // independent by construction - it resolves identically in the
+            // alias's namespace and the caller's - so requalifying it would
+            // manufacture a nonexistent declaration path (`root.<ns>.int`).
+            && nameres::builtin_type_scope(&path[0]).is_none() =>
+        {
             let mut qualified = Vec::with_capacity(alias_ns.len() + 2);
             qualified.push(SmolStr::from("root"));
             qualified.extend(alias_ns.iter().cloned());

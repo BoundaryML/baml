@@ -14070,19 +14070,6 @@ impl LoweringContext<'_> {
                         failure,
                     );
                 }
-                AstTypeExprKind::Null { .. } => {
-                    let test = Rvalue::BinaryOp {
-                        op: BinOp::Eq,
-                        left: Operand::Copy(Place::Local(scrutinee)),
-                        right: Operand::Constant(Constant::Null),
-                    };
-                    let test_local = self.builder.temp(RuntimeTy::Bool {
-                        attr: TyAttr::default(),
-                    });
-                    self.builder.assign(Place::local(test_local), test);
-                    self.builder
-                        .branch(Operand::Copy(Place::Local(test_local)), success, failure);
-                }
                 AstTypeExprKind::Path { .. }
                     if matches!(
                         self.tir_pat_type(self.pat_metadata_key(pat_id)),
@@ -14121,6 +14108,29 @@ impl LoweringContext<'_> {
                         .tir_pat_type(self.pat_metadata_key(pat_id))
                         .cloned()
                         .unwrap_or_else(|| self.lower_type_annotation_tir(ty_expr));
+                    // A `null` pattern is an identity test against the null
+                    // constant (OLD's Pattern::Null fast path), not an IsType
+                    // dispatch. Keyed off the RESOLVED pattern type rather
+                    // than the written syntax, so `null` reaching here as a
+                    // path (resolution's builtin scope answers for the
+                    // spelling) emits the same test it always has.
+                    if matches!(pat_tir_ty, Tir2Ty::Null { .. }) {
+                        let test = Rvalue::BinaryOp {
+                            op: BinOp::Eq,
+                            left: Operand::Copy(Place::Local(scrutinee)),
+                            right: Operand::Constant(Constant::Null),
+                        };
+                        let test_local = self.builder.temp(RuntimeTy::Bool {
+                            attr: TyAttr::default(),
+                        });
+                        self.builder.assign(Place::local(test_local), test);
+                        self.builder.branch(
+                            Operand::Copy(Place::Local(test_local)),
+                            success,
+                            failure,
+                        );
+                        return;
+                    }
                     // A generic-interface pattern (`Slot<int>`) needs the
                     // TIR-typed test, which preserves the type argument and
                     // tests only the implementors of *that* instantiation —

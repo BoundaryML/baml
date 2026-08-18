@@ -496,21 +496,13 @@ pub(crate) fn lower_associated_type_binding(
 
 /// Map a written type name to its syntax node.
 ///
-/// KNOWN DUPLICATE of the builtin scope in
-/// `baml_compiler2_hir_ty::lower::builtin_type_scope`, which is the
-/// AUTHORITATIVE answer for what a builtin name denotes. This list exists
-/// because the layers between here and resolution - `PpirTy` in particular -
-/// are semantic: `expand_partial` and the SAP/streaming rules in
-/// `baml_compiler2_ppir::expand` branch on primitive-versus-class, and they run
-/// before any scope exists, so they cannot be handed a bare `Path`. Retiring
-/// this list means teaching `PpirTy` to consume RESOLVED types; until then the
-/// two must agree, which
-/// `baml_compiler2_hir_ty::lower::tests::builtin_scope_covers_every_registry_alias`
-/// enforces.
-///
-/// `never` / `void` / `unknown` / `type` / `_` / `$rust_type` are deliberately
-/// NOT in the builtin scope: they are compiler intrinsics with no addressable
-/// definition, validated as syntax (`check_void_type`) before resolution runs.
+/// Nameable types - primitives, `json`, user declarations - all lower as
+/// `Path`: lowering knows no names, and what a path DENOTES is resolution's
+/// job (`baml_compiler2_hir::nameres`, whose builtin scope answers for
+/// `string`/`int`/... in every consumer). The arms kept here are grammar,
+/// not names: `never`/`void`/`unknown`/`type`/`$rust_type`/`_` are compiler
+/// intrinsics with no addressable definition, validated as syntax
+/// (`check_void_type`, `check_wildcard_type`) before resolution runs.
 fn lower_from_type_name_with_generic_args(
     name: &str,
     generic_args: Vec<TypeExpr>,
@@ -518,12 +510,6 @@ fn lower_from_type_name_with_generic_args(
     span: TextRange,
 ) -> TypeExpr {
     let kind = match name {
-        "int" => TypeExprKind::Int { attrs: vec![] },
-        "bigint" => TypeExprKind::Bigint { attrs: vec![] },
-        "float" => TypeExprKind::Float { attrs: vec![] },
-        "string" => TypeExprKind::String { attrs: vec![] },
-        "bool" => TypeExprKind::Bool { attrs: vec![] },
-        "null" => TypeExprKind::Null { attrs: vec![] },
         "never" => TypeExprKind::Never { attrs: vec![] },
         "void" => TypeExprKind::Void { attrs: vec![] },
         "unknown" => TypeExprKind::BuiltinUnknown { attrs: vec![] },
@@ -532,23 +518,13 @@ fn lower_from_type_name_with_generic_args(
         "_" => TypeExprKind::Infer { attrs: vec![] },
         "type" => TypeExprKind::Type { attrs: vec![] },
         "$rust_type" => TypeExprKind::Rust { attrs: vec![] },
-        "image" => TypeExprKind::Media {
-            kind: baml_base::MediaKind::Image,
-            attrs: vec![],
-        },
-        "audio" => TypeExprKind::Media {
-            kind: baml_base::MediaKind::Audio,
-            attrs: vec![],
-        },
-        "video" => TypeExprKind::Media {
-            kind: baml_base::MediaKind::Video,
-            attrs: vec![],
-        },
-        "pdf" => TypeExprKind::Media {
-            kind: baml_base::MediaKind::Pdf,
-            attrs: vec![],
-        },
-        "uint8array" => TypeExprKind::Uint8Array { attrs: vec![] },
+        // `json` is defined SUGAR for the stdlib alias path `baml.json.json`
+        // (BEP-066), and the spelling can never be shadowed - the bare name
+        // resolves in the builtin scope ahead of every declaration layer - so
+        // expanding it here is sugar expansion like `T?`, not name
+        // resolution. Expanding once keeps every downstream consumer of
+        // written text (the mangled `Interface$for$Target` name contract in
+        // particular) on the canonical path.
         "json" => TypeExprKind::Path {
             segments: vec![Name::new("baml"), Name::new("json"), Name::new("json")],
             generic_args: vec![],
