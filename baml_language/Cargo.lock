@@ -944,6 +944,7 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler_parser",
+ "baml_type",
  "baml_workspace",
  "rustc-hash 2.1.2",
  "salsa",

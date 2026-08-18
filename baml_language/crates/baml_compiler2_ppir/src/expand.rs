@@ -2,8 +2,15 @@
 //!
 //! Implements `stream_expand` and `expand_partial` from the spec.
 
+use std::convert::Infallible;
+
 use baml_base::{Name, attr::TyAttrValue};
-use baml_compiler2_hir::{contributions::Definition, package::PackageItems};
+use baml_compiler2_hir::{
+    contributions::Definition,
+    nameres::{self, ForeignLookup, TypePathResolution},
+    package::PackageItems,
+};
+use baml_type::{BuiltinTypeName, PrimitiveType};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
@@ -11,6 +18,9 @@ use crate::ty::{PpirTy, PpirTypeAttrs};
 
 // ── Symbol Classification ────────────────────────────────────────────────────
 
+/// What a `Named` path's stream behavior keys off - derived from ONE
+/// [`nameres`] resolution, the same chain type lowering uses, so expansion
+/// cannot disagree with the type system about what a name denotes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolKind {
     Class,
@@ -18,116 +28,124 @@ pub enum SymbolKind {
     TypeAlias,
 }
 
-pub fn classify_type(package_items: &PackageItems<'_>, path: &[Name]) -> Option<SymbolKind> {
-    if path.is_empty() {
-        return None;
-    }
-    let item = path.last().unwrap();
-    package_items
-        .lookup_type(&path[..path.len() - 1], item)
-        .and_then(|def| match def {
-            Definition::Class(_) => Some(SymbolKind::Class),
-            Definition::Enum(_) => Some(SymbolKind::Enum),
-            Definition::TypeAlias(_) => Some(SymbolKind::TypeAlias),
-            _ => None,
-        })
+/// Expansion's [`ForeignLookup`]: plain PRE-expansion tables for every
+/// package (expansion runs while producing the post-expansion ones), no
+/// interface view. Kind-classification through raw tables agrees with type
+/// lowering's interface-checked view on every program that compiles: the
+/// exported interface is a subset that never changes an item's kind.
+struct ExpandForeign<'x, 'db> {
+    all_package_items: &'x FxHashMap<Name, &'x PackageItems<'db>>,
 }
 
-/// Classify a type, falling back to `root.*` prefix handling, bare-name
-/// namespace lookup, and cross-package lookup.
-fn classify_type_cross_pkg(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<SymbolKind> {
-    // 1. Try current package directly
-    if let Some(kind) = classify_type(ctx.package_items, path) {
-        return Some(kind);
+impl<'db> ForeignLookup<'db> for ExpandForeign<'_, 'db> {
+    type Res = Infallible;
+
+    fn lookup_type(
+        &self,
+        package: &Name,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<TypePathResolution<'db, Infallible>> {
+        self.all_package_items
+            .get(package)?
+            .lookup_type(namespace, item)
+            .map(TypePathResolution::Def)
     }
-    // 2. Handle `root.*` prefix (root namespace of current package)
-    if path.len() >= 2 && path[0].as_str() == "root" {
-        if let Some(kind) = classify_type(ctx.package_items, &path[1..]) {
-            return Some(kind);
-        }
+
+    fn lookup_value(
+        &self,
+        package: &Name,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<Definition<'db>> {
+        self.all_package_items
+            .get(package)?
+            .lookup_value(namespace, item)
     }
-    // 3. Bare name in current (non-root) namespace
-    if path.len() == 1 && !ctx.namespace_path.is_empty() {
-        let mut ns_qualified: Vec<Name> = ctx.namespace_path.to_vec();
-        ns_qualified.push(path[0].clone());
-        if let Some(kind) = classify_type(ctx.package_items, &ns_qualified) {
-            return Some(kind);
-        }
+
+    fn baml_shorthand_type(
+        &self,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<TypePathResolution<'db, Infallible>> {
+        self.all_package_items
+            .get(&Name::new("baml"))?
+            .lookup_type(namespace, item)
+            .map(TypePathResolution::Def)
     }
-    // 4. Try interpreting the first segment as a foreign package name
-    if path.len() >= 2 {
-        let pkg_name = &path[0];
-        let rest = &path[1..];
-        if let Some(foreign_items) = ctx.all_package_items.get(pkg_name) {
-            return classify_type(foreign_items, rest);
-        }
+
+    fn baml_shorthand_value(&self, namespace: &[Name], item: &Name) -> Option<Definition<'db>> {
+        self.all_package_items
+            .get(&Name::new("baml"))?
+            .lookup_value(namespace, item)
     }
-    None
+
+    fn is_stream_base(res: &Infallible) -> bool {
+        match *res {}
+    }
 }
 
-// ── Namespace-aware key resolution ──────────────────────────────────────────
-
-/// Resolve a path within a single package to its qualified key
-/// `[package_name, ...namespace, item_name]`.
-fn resolve_in_package(
-    namespace: &[Name],
-    item: &Name,
-    pkg_name: &Name,
-    pkg_items: &PackageItems<'_>,
-) -> Option<Vec<Name>> {
-    pkg_items.lookup_type(namespace, item).map(|_| {
-        let mut key = vec![pkg_name.clone()];
-        key.extend_from_slice(namespace);
-        key.push(item.clone());
-        key
-    })
+/// One resolution of a `Named` path, shared by every consumer in this module:
+/// the stream rules key off the KIND, and alias-body/block-attr lookups derive
+/// the canonical `[package, namespace.., name]` key from the DEFINITION
+/// itself - the same derivation `collect_alias_bodies`/`collect_block_attrs`
+/// use - instead of re-walking the written path a second time.
+enum ResolvedNamed<'db> {
+    /// A builtin-scope hit (`string`, `int`, media, ...). `json` never
+    /// surfaces here: it canonicalizes to its stdlib alias definition below.
+    Builtin(BuiltinTypeName),
+    Def(SymbolKind, Definition<'db>),
 }
 
-/// Resolve a PPIR type path to its qualified key `[package, ...ns, name]`.
-/// Handles direct lookup, `root.*` prefix, bare names in non-root namespaces,
-/// and cross-package references.
-fn resolve_qualified_key(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<Vec<Name>> {
-    if path.is_empty() {
-        return None;
-    }
-    let item = path.last().unwrap();
-    // 1. Direct lookup in current package
-    let ns = &path[..path.len() - 1];
-    if let Some(key) = resolve_in_package(ns, item, ctx.package_name, ctx.package_items) {
-        return Some(key);
-    }
-    // 2. Handle `root.*` prefix
-    if path.len() >= 2 && path[0].as_str() == "root" {
-        let after_root = &path[1..];
-        let root_item = after_root.last().unwrap();
-        let root_ns = &after_root[..after_root.len() - 1];
-        if let Some(key) =
-            resolve_in_package(root_ns, root_item, ctx.package_name, ctx.package_items)
-        {
-            return Some(key);
+fn resolve_named<'db>(path: &[Name], ctx: &ExpandCtx<'_, 'db>) -> Option<ResolvedNamed<'db>> {
+    let resolver = nameres::Resolver {
+        package_items: ctx.package_items,
+        ns_context: ctx.namespace_path,
+        foreign: ExpandForeign {
+            all_package_items: ctx.all_package_items,
+        },
+    };
+    match resolver.resolve_type_path(path)? {
+        // `json` is the stdlib alias `baml.json.json`: canonicalize to its
+        // real definition so the TypeAlias rules (body expansion, block
+        // attrs) apply to it exactly as they do to the written long form.
+        TypePathResolution::Builtin(BuiltinTypeName::Json) => {
+            let json = Name::new("json");
+            let def = ctx
+                .all_package_items
+                .get(&Name::new("baml"))?
+                .lookup_type(std::slice::from_ref(&json), &json)?;
+            Some(ResolvedNamed::Def(SymbolKind::TypeAlias, def))
         }
-    }
-    // 3. Bare name in current (non-root) namespace
-    if path.len() == 1 && !ctx.namespace_path.is_empty() {
-        if let Some(key) = resolve_in_package(
-            ctx.namespace_path,
-            item,
-            ctx.package_name,
-            ctx.package_items,
-        ) {
-            return Some(key);
+        TypePathResolution::Builtin(builtin) => Some(ResolvedNamed::Builtin(builtin)),
+        TypePathResolution::Def(def) => {
+            let kind = match def {
+                Definition::Class(_) => SymbolKind::Class,
+                Definition::Enum(_) => SymbolKind::Enum,
+                Definition::TypeAlias(_) => SymbolKind::TypeAlias,
+                _ => return None,
+            };
+            Some(ResolvedNamed::Def(kind, def))
         }
+        TypePathResolution::Foreign(never) => match never {},
     }
-    // 4. Cross-package (first segment = package name)
-    if path.len() >= 2 {
-        if let Some(foreign_items) = ctx.all_package_items.get(&path[0]) {
-            let after_pkg = &path[1..];
-            let pkg_item = after_pkg.last().unwrap();
-            let pkg_ns = &after_pkg[..after_pkg.len() - 1];
-            return resolve_in_package(pkg_ns, pkg_item, &path[0], foreign_items);
-        }
+}
+
+/// The canonical `[package, namespace.., name]` key of a resolved definition,
+/// matching the keys `collect_alias_bodies` / `collect_block_attrs` build.
+fn def_key<'db>(def: Definition<'db>, name: &Name, ctx: &ExpandCtx<'_, 'db>) -> Vec<Name> {
+    let info = baml_compiler2_hir::file_package::file_package(ctx.db, def.file(ctx.db));
+    let mut key = vec![info.package.clone()];
+    key.extend(info.namespace_path.iter().cloned());
+    key.push(name.clone());
+    key
+}
+
+fn resolve_qualified_key(path: &[Name], ctx: &ExpandCtx<'_, '_>) -> Option<Vec<Name>> {
+    match resolve_named(path, ctx)? {
+        ResolvedNamed::Def(_, def) => Some(def_key(def, path.last()?, ctx)),
+        ResolvedNamed::Builtin(_) => None,
     }
-    None
 }
 
 /// When a type alias in one namespace resolves to a type in a different
@@ -207,12 +225,13 @@ fn requalify_for_caller(ty: PpirTy, alias_ns: &[Name], caller_ns: &[Name]) -> Pp
 // ── Context ──────────────────────────────────────────────────────────────────
 
 /// Shared context threaded through all stream-expansion functions.
-pub struct ExpandCtx<'ctx> {
+pub struct ExpandCtx<'ctx, 'db> {
+    pub db: &'db dyn crate::Db,
     pub package_name: &'ctx Name,
     pub namespace_path: &'ctx [Name],
-    pub package_items: &'ctx PackageItems<'ctx>,
+    pub package_items: &'ctx PackageItems<'db>,
     /// All packages' items keyed by package name, for cross-package type resolution.
-    pub all_package_items: &'ctx FxHashMap<Name, &'ctx PackageItems<'ctx>>,
+    pub all_package_items: &'ctx FxHashMap<Name, &'ctx PackageItems<'db>>,
     pub block_attrs: &'ctx FxHashMap<Vec<Name>, Vec<Name>>,
     pub alias_bodies: &'ctx FxHashMap<Vec<Name>, PpirTy>,
 }
@@ -237,7 +256,7 @@ enum PendingDefault {
     EmptyMap,
 }
 
-fn pending_default(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> PendingDefault {
+fn pending_default(ty: &PpirTy, ctx: &ExpandCtx<'_, '_>, depth: u32) -> PendingDefault {
     match ty {
         PpirTy::Literal { .. } => PendingDefault::Never,
 
@@ -258,18 +277,18 @@ fn pending_default(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> PendingDefau
                     return PendingDefault::Never;
                 }
             }
-            match classify_type_cross_pkg(path, ctx) {
-                Some(SymbolKind::TypeAlias) => {
+            match resolve_named(path, ctx) {
+                Some(ResolvedNamed::Def(SymbolKind::TypeAlias, def)) => {
                     if depth < MAX_ALIAS_DEPTH {
-                        if let Some(key) = resolve_qualified_key(path, ctx) {
-                            if let Some(body) = ctx.alias_bodies.get(&key) {
-                                return pending_default(body, ctx, depth + 1);
-                            }
+                        let key = def_key(def, path.last().expect("non-empty path"), ctx);
+                        if let Some(body) = ctx.alias_bodies.get(&key) {
+                            return pending_default(body, ctx, depth + 1);
                         }
                     }
                     PendingDefault::Null // fallback if alias body not found or depth exceeded
                 }
-                _ => PendingDefault::Null, // class, enum, unknown
+                // class, enum, builtin, unknown
+                _ => PendingDefault::Null,
             }
         }
 
@@ -278,7 +297,11 @@ fn pending_default(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> PendingDefau
     }
 }
 
-fn union_pending_default(variants: &[PpirTy], ctx: &ExpandCtx<'_>, depth: u32) -> PendingDefault {
+fn union_pending_default(
+    variants: &[PpirTy],
+    ctx: &ExpandCtx<'_, '_>,
+    depth: u32,
+) -> PendingDefault {
     for v in variants {
         let pd = pending_default(v, ctx, depth);
         if pd != PendingDefault::Never {
@@ -292,7 +315,7 @@ fn union_pending_default(variants: &[PpirTy], ctx: &ExpandCtx<'_>, depth: u32) -
 
 /// Recursive type expansion for "inside containers".
 /// Per the BEP-006 v12 `expand_partial` table.
-pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
+pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_, '_>) -> PpirTy {
     let d = PpirTypeAttrs::default();
     match ty {
         // Primitives/literals/never/opaque/enum → unchanged
@@ -317,9 +340,9 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
             if path.last().is_some_and(|n| n.as_str().ends_with("$stream")) {
                 return ty.clone_without_attrs();
             }
-            match classify_type_cross_pkg(path, ctx) {
-                Some(SymbolKind::Enum) => ty.clone_without_attrs(),
-                Some(SymbolKind::Class | SymbolKind::TypeAlias) => {
+            match resolve_named(path, ctx) {
+                Some(ResolvedNamed::Def(SymbolKind::Enum, _)) => ty.clone_without_attrs(),
+                Some(ResolvedNamed::Def(SymbolKind::Class | SymbolKind::TypeAlias, _)) => {
                     let (bare_name, prefix) = path.split_last().expect("non-empty path");
                     PpirTy::Named {
                         path: prefix
@@ -338,7 +361,8 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
                         attrs: d,
                     }
                 }
-                None => ty.clone_without_attrs(),
+                // Builtins (primitives) and unresolved names stay unchanged.
+                Some(ResolvedNamed::Builtin(_)) | None => ty.clone_without_attrs(),
             }
         }
 
@@ -391,14 +415,14 @@ enum InProgress {
 ///
 /// Given `class C { f: T @stream.must_exist? @stream.done? }`, produces the
 /// type and SAP attributes for `class C$stream { f: <type> <attrs> }`.
-pub fn stream_expand(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> (PpirTy, SapAttrs) {
+pub fn stream_expand(ty: &PpirTy, ctx: &ExpandCtx<'_, '_>) -> (PpirTy, SapAttrs) {
     stream_expand_inner(ty, ctx, 0)
 }
 
 /// Max alias resolution depth to prevent infinite loops on cyclic aliases.
 const MAX_ALIAS_DEPTH: u32 = 32;
 
-fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy, SapAttrs) {
+fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_, '_>, depth: u32) -> (PpirTy, SapAttrs) {
     let mut must_exist = ty.attrs().stream_must_exist;
     let mut done = ty.attrs().stream_done;
     let d = PpirTypeAttrs::default();
@@ -468,8 +492,56 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                     InProgress::Allowed,
                 )
             } else {
-                match classify_type_cross_pkg(path, ctx) {
-                    Some(SymbolKind::Enum) => {
+                match resolve_named(path, ctx) {
+                    // Builtins take the same rules the dedicated PpirTy
+                    // variants take above: this arm exists so a builtin
+                    // spelled as a PATH (post-intercept-removal, or via the
+                    // shared chain's shadowing rules) streams identically to
+                    // one lowered as a dedicated node.
+                    Some(ResolvedNamed::Builtin(builtin)) => {
+                        let primitive = match builtin {
+                            BuiltinTypeName::Primitive(primitive) => primitive,
+                            // `json` canonicalizes to its alias definition in
+                            // resolve_named; intrinsics are never in scope.
+                            BuiltinTypeName::Json
+                            | BuiltinTypeName::Void
+                            | BuiltinTypeName::Never
+                            | BuiltinTypeName::Unknown => {
+                                unreachable!("not producible by resolve_named")
+                            }
+                        };
+                        match primitive {
+                            PrimitiveType::Int
+                            | PrimitiveType::Bigint
+                            | PrimitiveType::Float
+                            | PrimitiveType::Bool => (
+                                ty.clone_without_attrs(),
+                                DefaultWhenPending::PrependNull,
+                                InProgress::NotAllowed,
+                            ),
+                            PrimitiveType::String => (
+                                ty.clone_without_attrs(),
+                                DefaultWhenPending::PrependNull,
+                                InProgress::Allowed,
+                            ),
+                            PrimitiveType::Null => (
+                                ty.clone_without_attrs(),
+                                DefaultWhenPending::HasDefault,
+                                InProgress::Allowed,
+                            ),
+                            // Media and byte buffers cannot be streamed.
+                            PrimitiveType::Uint8Array
+                            | PrimitiveType::Image
+                            | PrimitiveType::Audio
+                            | PrimitiveType::Video
+                            | PrimitiveType::Pdf => (
+                                ty.clone_without_attrs(),
+                                DefaultWhenPending::InherentlyNever,
+                                InProgress::NotAllowed,
+                            ),
+                        }
+                    }
+                    Some(ResolvedNamed::Def(SymbolKind::Enum, _)) => {
                         // Merge @@stream.* block attrs
                         merge_block_attrs(path, ctx, &mut must_exist, &mut done);
                         (
@@ -478,7 +550,7 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                             InProgress::NotAllowed,
                         )
                     }
-                    Some(SymbolKind::Class) => {
+                    Some(ResolvedNamed::Def(SymbolKind::Class, _)) => {
                         // Merge @@stream.* block attrs
                         merge_block_attrs(path, ctx, &mut must_exist, &mut done);
                         let (bare_name, prefix) = path.split_last().expect("non-empty path");
@@ -508,17 +580,18 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                             InProgress::Allowed,
                         )
                     }
-                    Some(SymbolKind::TypeAlias) => {
+                    Some(ResolvedNamed::Def(SymbolKind::TypeAlias, def)) => {
                         // Merge @@stream.* block attrs, then resolve alias recursively
                         merge_block_attrs(path, ctx, &mut must_exist, &mut done);
                         if depth < MAX_ALIAS_DEPTH {
-                            if let Some(key) = resolve_qualified_key(path, ctx) {
+                            let key = def_key(def, path.last().expect("non-empty path"), ctx);
+                            {
                                 if let Some(body) = ctx.alias_bodies.get(&key) {
                                     // The alias body's paths are relative to the alias
                                     // definition's namespace (key = [pkg, ...ns, name]).
                                     // Recurse with the alias's namespace so that
-                                    // classify_type / resolve_qualified_key resolve
-                                    // the body's bare names correctly.
+                                    // resolve_named resolves the body's bare
+                                    // names correctly.
                                     let alias_ns = key[1..key.len() - 1].to_vec();
                                     let alias_ctx = ExpandCtx {
                                         namespace_path: &alias_ns,
@@ -677,14 +750,14 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
 }
 
 /// Look up block attributes for a `PpirTy` path, using namespace-aware resolution.
-pub fn lookup_block_attrs<'a>(path: &[Name], ctx: &'a ExpandCtx<'_>) -> Option<&'a Vec<Name>> {
+pub fn lookup_block_attrs<'a>(path: &[Name], ctx: &'a ExpandCtx<'_, '_>) -> Option<&'a Vec<Name>> {
     resolve_qualified_key(path, ctx).and_then(|key| ctx.block_attrs.get(&key))
 }
 
 /// Merge `@@stream.must_exist` / `@@stream.done` block attributes.
 fn merge_block_attrs(
     path: &[Name],
-    ctx: &ExpandCtx<'_>,
+    ctx: &ExpandCtx<'_, '_>,
     must_exist: &mut TyAttrValue,
     done: &mut TyAttrValue,
 ) {

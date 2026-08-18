@@ -350,6 +350,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 stream_class.fields.retain_mut(|field| {
                     let ppir_ty = PpirTy::from_type_expr(&field.type_expr);
                     let ctx = ExpandCtx {
+                        db,
                         package_name: &package_name,
                         namespace_path: &pkg_info.namespace_path,
                         package_items,
@@ -460,6 +461,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 );
 
                 let ctx = ExpandCtx {
+                    db,
                     package_name: &package_name,
                     namespace_path: &pkg_info.namespace_path,
                     package_items,
@@ -509,6 +511,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
             // the toolbox at runtime for the dynamic cases).
             ast::Item::Function(func) => {
                 let ctx = ExpandCtx {
+                    db,
                     package_name: &package_name,
                     namespace_path: &pkg_info.namespace_path,
                     package_items,
