@@ -519,7 +519,7 @@ fn snapshot_builtin_method_calls() {
   return len;
 }"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 // ── Optional call (?.()) type inference ──────────────────────────────────────

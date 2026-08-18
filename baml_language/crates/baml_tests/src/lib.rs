@@ -6,6 +6,43 @@
 
 pub mod engine;
 
+/// This crate's source dir: the root every corpus path (`baml_src/`,
+/// `projects/`, fixtures) and file-snapshot dir resolves against.
+///
+/// The compile-time `CARGO_MANIFEST_DIR` is baked into the test binaries,
+/// and for the CI nix unit graph that is a build sandbox
+/// (`/build/baml_tests-<ver>/`) that does not exist when a prebuilt binary
+/// runs - every corpus read and file snapshot would miss. `BAML_TESTS_DIR`
+/// binds the dir when set; unset (every local and cargo-arm run), behavior
+/// is byte-identical. Same pattern as `BAML_SURFACE_SNAPSHOT_DIR` and
+/// `BAML_PARAM_SCHEMA_GOLDEN`, which exist for the same relocated-build
+/// reason. The L2 snapshot lane sets it; nothing else does.
+pub fn manifest_dir() -> std::path::PathBuf {
+    std::env::var_os("BAML_TESTS_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+}
+
+/// A file-snapshot assertion whose snapshot dir resolves through
+/// [`manifest_dir`]. `$subdir` is the module's snapshot dir relative to the
+/// crate root - the same directory insta would derive by default, so unset
+/// (every local and cargo-arm run) this is byte-identical to a bare
+/// `insta::assert_snapshot!`; in relocated runs the env override points it
+/// at the real checkout instead of the baked build sandbox. Inline
+/// snapshots need none of this and stay bare.
+#[cfg(test)]
+macro_rules! file_snapshot {
+    ($subdir:literal, $($arg:tt)*) => {{
+        let mut settings = insta::Settings::clone_current();
+        settings.set_snapshot_path($crate::manifest_dir().join($subdir));
+        settings.bind(|| {
+            insta::assert_snapshot!($($arg)*);
+        })
+    }};
+}
+#[cfg(test)]
+pub(crate) use file_snapshot;
+
 /// Compile BAML source and run the entry function, returning bytecode display + result.
 ///
 /// # Variants

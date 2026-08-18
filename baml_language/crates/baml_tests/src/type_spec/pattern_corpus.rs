@@ -12,12 +12,12 @@
 //! it reports the honest non-exhaustive verdict; both engines reject the
 //! function either way. S17 decides the suppression policy.
 
-use std::{fmt::Write as _, path::Path};
+use std::fmt::Write as _;
 
 use baml_compiler2_hir::body::BodyOwnerId;
 
 fn corpus_verdicts(relative_path: &str) -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative_path);
+    let path = crate::manifest_dir().join(relative_path);
     let source = std::fs::read_to_string(&path)
         .unwrap_or_else(|err| panic!("cannot read corpus {}: {err}", path.display()));
     let mut db = crate::compiler2_tir::support::make_db();
@@ -46,7 +46,8 @@ fn corpus_verdicts(relative_path: &str) -> String {
 
 #[test]
 fn match_exhaustiveness_corpus() {
-    insta::assert_snapshot!(
+    crate::file_snapshot!(
+        "src/type_spec/snapshots",
         "corpus__match_exhaustiveness",
         corpus_verdicts(
             "projects/diagnostic_errors/match_exhaustiveness/match_exhaustiveness.baml"
@@ -56,7 +57,8 @@ fn match_exhaustiveness_corpus() {
 
 #[test]
 fn generic_rigid_coverage_corpus() {
-    insta::assert_snapshot!(
+    crate::file_snapshot!(
+        "src/type_spec/snapshots",
         "corpus__generic_rigid_coverage",
         corpus_verdicts("projects/diagnostic_errors/generic_rigid_coverage/main.baml")
     );
@@ -64,7 +66,8 @@ fn generic_rigid_coverage_corpus() {
 
 #[test]
 fn patterns_new_corpus() {
-    insta::assert_snapshot!(
+    crate::file_snapshot!(
+        "src/type_spec/snapshots",
         "corpus__patterns_new",
         corpus_verdicts("projects/compiles/patterns_new/patterns_new.baml")
     );
@@ -72,7 +75,8 @@ fn patterns_new_corpus() {
 
 #[test]
 fn generic_match_typevar_arm_corpus() {
-    insta::assert_snapshot!(
+    crate::file_snapshot!(
+        "src/type_spec/snapshots",
         "corpus__generic_match_typevar_arm",
         corpus_verdicts(
             "projects/compiles/generic_match_typevar_arm/generic_match_typevar_arm.baml"

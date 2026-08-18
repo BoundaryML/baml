@@ -7,7 +7,9 @@
 use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
 use baml_project::ProjectDatabase;
 
-const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_emit");
+fn snapshot_path() -> std::path::PathBuf {
+    crate::manifest_dir().join("snapshots/compiler2_emit")
+}
 const OPTIONAL_DEFAULTS_SOURCE: &str = r#"
 function add(base: int, amount: int = base + 2) -> int {
   base + amount
@@ -196,7 +198,7 @@ function virtual(speaker: Speaker, id: boundary.LocalId) -> int {
 
 macro_rules! emit_snapshot {
     ($name:expr, $output:expr) => {
-        assert_compiler2_snapshot!(SNAPSHOT_PATH, $name, $output);
+        assert_compiler2_snapshot!(snapshot_path(), $name, $output);
     };
 }
 

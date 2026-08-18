@@ -789,7 +789,11 @@ function f() -> string {
 "#,
     );
     let tir = render_tir(&db, file);
-    insta::assert_snapshot!("optional_params_accept_omission_and_named_override", tir);
+    crate::file_snapshot!(
+        "src/compiler2_tir/snapshots",
+        "optional_params_accept_omission_and_named_override",
+        tir
+    );
     assert!(
         tir.contains("function user.search(query: string, max: int = 10) -> string"),
         "{tir}"
@@ -911,7 +915,11 @@ function unknown_named() -> string { search(q = "cats") }
 "#,
     );
     let tir = render_tir(&db, file);
-    insta::assert_snapshot!("optional_param_call_binding_diagnostics", tir);
+    crate::file_snapshot!(
+        "src/compiler2_tir/snapshots",
+        "optional_param_call_binding_diagnostics",
+        tir
+    );
     assert!(tir.contains("defaulted parameter `max` must be passed by name"));
     assert!(tir.contains("positional arguments cannot appear after named arguments"));
     assert!(tir.contains("duplicate named argument `max`"));
@@ -932,7 +940,11 @@ function required_after_default(a: int = 1, b: int) -> int { b }
 "#,
     );
     let tir = render_tir(&db, file);
-    insta::assert_snapshot!("optional_param_default_declaration_diagnostics", tir);
+    crate::file_snapshot!(
+        "src/compiler2_tir/snapshots",
+        "optional_param_default_declaration_diagnostics",
+        tir
+    );
     assert!(tir.contains("type mismatch: expected int, got \"bad\""));
     assert!(tir.contains("default for parameter `a` cannot reference later parameter `b`"));
     assert!(tir.contains("function user.forward_ref_in_match"));
@@ -965,7 +977,8 @@ function lambda_capture_later_param(a: int = { let f = () -> int { b }; f() }, b
 "#,
     );
     let tir = render_tir(&db, file);
-    insta::assert_snapshot!(
+    crate::file_snapshot!(
+        "src/compiler2_tir/snapshots",
         "optional_param_default_forward_reference_checks_lambda_bodies",
         tir.as_str()
     );
@@ -1909,7 +1922,7 @@ class User { name string }
 function f(u: User?) -> string? { u?.name }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -1922,7 +1935,7 @@ class User { name string }
 function f(u: User?, fallback: string) -> string { u?.name ?? fallback }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -1936,7 +1949,7 @@ class User { address Address? }
 function f(u: User?) -> string? { u?.address?.street }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -1952,7 +1965,7 @@ class User {
 function f(u: User?) -> string? { u?.getName() }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -1967,7 +1980,7 @@ function f(callback: (() -> User throws never)?) -> string? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -1981,7 +1994,7 @@ type MaybeUser = User?
 function f(u: MaybeUser) -> string? { u?.name }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -1994,7 +2007,7 @@ type MaybeInts = int[]?
 function f(xs: MaybeInts) -> int? { xs?.[0] }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 // ── Void return type ───────────────────────────────────────────────────────

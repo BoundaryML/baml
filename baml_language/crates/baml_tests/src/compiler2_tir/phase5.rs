@@ -424,7 +424,7 @@ fn map_has_expected_methods() {
 fn snapshot_baml_package_items() {
     let db = make_db();
     let output = render_baml_package_items(&db);
-    insta::assert_snapshot!(output);
+    crate::file_snapshot!("src/compiler2_tir/snapshots", output);
 }
 
 // ── 5.5: file_package derivation for builtin paths ───────────────────────────

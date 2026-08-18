@@ -20,7 +20,7 @@ class Primitives {
     score float
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -41,7 +41,7 @@ class WithEnum {
     status Status
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -58,7 +58,7 @@ class Outer {
     inner Inner
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -74,7 +74,7 @@ class WithLiterals {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -93,7 +93,7 @@ class WithLists {
     classes Inner[]
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -111,7 +111,7 @@ class WithMaps {
     complex map<string, Inner>
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -130,7 +130,7 @@ class WithUnions {
     mixed int | Inner
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -148,7 +148,7 @@ class WithOptionals {
     inner Inner?
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -166,7 +166,7 @@ type ClassAlias = Inner
 type UnionAlias = int | Inner
 type OptionalAlias = Inner?",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -180,7 +180,7 @@ class TreeNode {
     children TreeNode[]
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 // ── @stream.done ────────────────────────────────────────────────────────────
@@ -196,7 +196,7 @@ class WithDone {
     age int
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -211,7 +211,7 @@ class AtomicPoint {
     y float
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 // ── @stream.not_null ────────────────────────────────────────────────────────
@@ -227,7 +227,7 @@ class WithNotNull {
     name string
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -247,7 +247,7 @@ class References {
     educations NotNullEducation[]
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 // ── Combined annotations ────────────────────────────────────────────────────
@@ -265,7 +265,7 @@ class Combined {
     score float
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 // ── Cross-file ──────────────────────────────────────────────────────────────
@@ -289,7 +289,7 @@ class Resume {
     education Education[]
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 // ── Bug 1: pending_default alias resolution ─────────────────────────────────
@@ -309,7 +309,7 @@ class WithAliasUnion {
     data Ints | string
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -326,7 +326,7 @@ class WithChainedAlias {
     data MyList | string
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -341,7 +341,7 @@ class WithMapAlias {
     settings Config | int
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 // ── Bug 2: field attributes lost on $stream ─────────────────────────────────
@@ -358,7 +358,7 @@ class WithAlias {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -373,7 +373,7 @@ class WithDesc {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 // ── Bug 3: package-scoped keys ──────────────────────────────────────────────
@@ -404,7 +404,7 @@ class Container {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }
 
 #[test]
@@ -430,5 +430,5 @@ function GetBoxedInt() -> Box<int> {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file));
+    crate::file_snapshot!("src/compiler2_tir/snapshots", render_tir(&db, file));
 }

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use super::harness::{NodeKind, collect_hir_ty_error_channel, collect_hir_ty_nodes};
 
 pub(crate) fn baml_src_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src")
+    crate::manifest_dir().join("baml_src")
 }
 
 pub(crate) fn read_corpus_files(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
@@ -125,7 +125,7 @@ fn s15_sweep_baml_src() {
             let _ = writeln!(report, "{entry}");
         }
     }
-    insta::assert_snapshot!("s15_sweep_baml_src", report);
+    crate::file_snapshot!("src/type_spec/snapshots", "s15_sweep_baml_src", report);
 }
 
 fn snippet(content: &str, start: u32, end: u32) -> String {

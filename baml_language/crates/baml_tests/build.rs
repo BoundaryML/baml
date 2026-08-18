@@ -291,7 +291,7 @@ fn generate_tests(manifest_dir: &str) {
         std::collections::BTreeMap::new();
 
     for project in &projects {
-        let module = generate_project_tests(project, manifest_dir);
+        let module = generate_project_tests(project);
         tier_groups
             .entry(project.tier.dir_name())
             .or_default()
@@ -450,14 +450,13 @@ fn discover_baml_files(dir: &Path) -> Vec<BamlFile> {
     files
 }
 
-fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStream {
+fn generate_project_tests(project: &TestProject) -> TokenStream {
     let module_name = format_ident!("{}", project.name.replace("-", "_"));
-    let snapshot_path = format!(
-        "{}/snapshots/{}/{}",
-        manifest_dir.replace('\\', "/"),
-        project.tier.dir_name(),
-        project.name
-    );
+    // Only the RELATIVE subpath is baked; the generated module resolves it
+    // against crate::manifest_dir() at run time. Baking the absolute build
+    // dir broke prebuilt (relocated) test binaries: under the CI nix unit
+    // graph the build dir is a sandbox that no longer exists at run time.
+    let snapshot_subpath = format!("snapshots/{}/{}", project.tier.dir_name(), project.name);
 
     let is_stdlib = project.name == "__baml_std__";
     let is_testing_std = project.name == "__testing_std__";
@@ -531,7 +530,10 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use std::fmt::Write;
             #[allow(unused_imports)]
             use crate::utils::*;
-            const SNAPSHOT_PATH: &str = #snapshot_path;
+            const SNAPSHOT_SUBPATH: &str = #snapshot_subpath;
+            fn snapshot_path() -> std::path::PathBuf {
+                crate::manifest_dir().join(SNAPSHOT_SUBPATH)
+            }
 
             #hir_test
             #tir_test
@@ -609,7 +611,7 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
 
             #stdlib_section
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+            with_settings!({snapshot_path => snapshot_path(), omit_expression => true}, {
                 assert_snapshot!("03_ppir", output);
             });
         }
@@ -694,7 +696,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
 
             #stdlib_section
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+            with_settings!({snapshot_path => snapshot_path(), omit_expression => true}, {
                 assert_snapshot!("04_5_mir", output);
             });
         }
@@ -884,7 +886,7 @@ fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+            with_settings!({snapshot_path => snapshot_path(), omit_expression => true}, {
                 assert_snapshot!("05_diagnostics", output);
             });
 
@@ -977,7 +979,7 @@ fn generate_codegen_test(
                 bex_vm::debug::BytecodeFormat::Textual,
             );
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+            with_settings!({snapshot_path => snapshot_path(), omit_expression => true}, {
                 assert_snapshot!("06_codegen", output);
             });
         }
@@ -1115,7 +1117,7 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                 }
             };
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+            with_settings!({snapshot_path => snapshot_path(), omit_expression => true}, {
                 assert_snapshot!(#snapshot_name, first);
             });
 
@@ -1131,12 +1133,12 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
             };
 
             if first != second {
-                std::fs::write(format!("{}/{}.new", SNAPSHOT_PATH, #relative_path), second.as_bytes()).unwrap();
+                std::fs::write(snapshot_path().join(concat!(#relative_path, ".new")), second.as_bytes()).unwrap();
                 panic!(
                     "Formatter is not idempotent for {}.\n\
                     Second pass output written to {}/{}.new",
                     #relative_path,
-                    SNAPSHOT_PATH,
+                    snapshot_path().display(),
                     #relative_path
                 );
             }

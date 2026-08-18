@@ -9,8 +9,6 @@
 
 mod common;
 
-use std::path::Path;
-
 use baml_compiler2_emit::{
     CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_opt,
 };
@@ -109,7 +107,7 @@ function shout() -> string {
 fn baml_src_links_byte_identical() {
     use baml_workspace::discover_baml_files;
 
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src");
+    let root = baml_tests::manifest_dir().join("baml_src");
     let sources: Vec<(std::path::PathBuf, String)> = discover_baml_files(&root)
         .into_iter()
         .map(|p| {

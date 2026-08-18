@@ -76,7 +76,7 @@ fn assert_deterministic(root: &Path, emit_test_cases: bool) {
 /// empty-program emit path, and every stdlib-derived table.
 #[test]
 fn empty_project_emit_is_deterministic() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/compiles/__baml_std__");
+    let root = baml_tests::manifest_dir().join("projects/compiles/__baml_std__");
     assert_deterministic(&root, false);
 }
 
@@ -85,7 +85,7 @@ fn empty_project_emit_is_deterministic() {
 /// `emit_test_cases: true` additionally covers the `test_cases` table.
 #[test]
 fn baml_src_project_emit_is_deterministic() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src");
+    let root = baml_tests::manifest_dir().join("baml_src");
     assert_deterministic(&root, true);
 }
 
@@ -98,7 +98,7 @@ fn baml_src_project_emit_is_deterministic() {
 /// single-threaded rayon pool (`RAYON_NUM_THREADS=1`).
 #[test]
 fn parallel_emit_is_byte_identical_to_serial() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src");
+    let root = baml_tests::manifest_dir().join("baml_src");
     let sources = read_project(&root);
     // Both paths are pinned to explicit pools so the test exercises what it
     // claims regardless of the ambient pool's size: 1 thread forces the serial
@@ -152,7 +152,7 @@ fn build_db(root: &Path, sources: &[(PathBuf, String)]) -> ProjectDatabase {
 /// it), not merely reusable within one project.
 #[test]
 fn stdlib_splice_is_byte_identical_to_full_compile() {
-    let empty_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/compiles/__baml_std__");
+    let empty_root = baml_tests::manifest_dir().join("projects/compiles/__baml_std__");
     let empty_sources = read_project(&empty_root);
     let base = generate_stdlib_program(&build_db(&empty_root, &empty_sources), OptLevel::Two)
         .expect("stdlib compile failed");
@@ -160,7 +160,7 @@ fn stdlib_splice_is_byte_identical_to_full_compile() {
 
     for (root, emit_test_cases) in [
         (empty_root.clone(), false),
-        (Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src"), true),
+        (baml_tests::manifest_dir().join("baml_src"), true),
     ] {
         let sources = read_project(&root);
         let full = compile_to_bytes(&root, &sources, emit_test_cases);

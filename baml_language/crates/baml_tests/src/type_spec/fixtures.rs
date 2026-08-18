@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use super::harness::run_differential;
 
 fn fixtures_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("src/type_spec/fixtures")
+    crate::manifest_dir().join("src/type_spec/fixtures")
 }
 
 fn fixture_paths(dir: &Path, allow_empty: bool) -> Vec<PathBuf> {
@@ -68,7 +68,7 @@ fn conforming_fixtures() {
         if let Err(report) = &outcome.hir_ty {
             failures.push(format!("{name}:\n  {report}"));
         }
-        insta::assert_snapshot!(name, outcome.dump);
+        crate::file_snapshot!("src/type_spec/snapshots", name, outcome.dump);
     }
     assert!(
         failures.is_empty(),
@@ -101,7 +101,11 @@ fn pending_fixtures() {
                  Promote it to fixtures/ and drop the `// pending:` directive."
             ));
         }
-        insta::assert_snapshot!(format!("pending__{name}"), outcome.dump);
+        crate::file_snapshot!(
+            "src/type_spec/snapshots",
+            format!("pending__{name}"),
+            outcome.dump
+        );
     }
     assert!(
         failures.is_empty(),

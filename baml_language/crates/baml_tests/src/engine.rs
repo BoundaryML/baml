@@ -34,12 +34,14 @@ use insta::{assert_snapshot, with_settings};
 use sys_native::SysOpsExt;
 
 #[cfg(test)]
-const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/engine");
+fn snapshot_path() -> std::path::PathBuf {
+    crate::manifest_dir().join("snapshots/engine")
+}
 
 #[cfg(test)]
 macro_rules! engine_snapshot {
     ($name:expr, $output:expr) => {
-        with_settings!({ snapshot_path => SNAPSHOT_PATH, omit_expression => true }, {
+        with_settings!({ snapshot_path => snapshot_path(), omit_expression => true }, {
             assert_snapshot!($name, $output);
         });
     };

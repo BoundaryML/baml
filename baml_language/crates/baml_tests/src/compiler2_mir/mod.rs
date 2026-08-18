@@ -14,7 +14,9 @@ use baml_compiler2_mir::{
 use baml_compiler2_ppir::item_data::{file_functions, function_data, function_source_map};
 use baml_project::{ProjectDatabase, testing::assert_no_diagnostic_errors};
 
-const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_mir");
+fn snapshot_path() -> std::path::PathBuf {
+    crate::manifest_dir().join("snapshots/compiler2_mir")
+}
 
 fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
@@ -351,7 +353,7 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
 
 macro_rules! mir_snapshot {
     ($name:expr, $output:expr) => {
-        assert_compiler2_snapshot!(SNAPSHOT_PATH, $name, $output);
+        assert_compiler2_snapshot!(snapshot_path(), $name, $output);
     };
 }
 
