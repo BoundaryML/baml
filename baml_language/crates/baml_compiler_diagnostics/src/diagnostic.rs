@@ -368,6 +368,9 @@ pub enum DiagnosticId {
     ConflictingTypeDefinitionAtRender,
     /// A top-level declaration ($init) can reach a yielding io sysop.
     InitIoNotAllowed,
+    /// A condition whose static type decides the branch (always truthy /
+    /// always falsy) - B-1563 truthiness.
+    ConditionAlwaysConstant,
 }
 
 impl DiagnosticId {
@@ -546,6 +549,7 @@ impl DiagnosticId {
             DiagnosticId::OpenInterfaceAtRender => "E0161",
             DiagnosticId::ConflictingTypeDefinitionAtRender => "E0162",
             DiagnosticId::InitIoNotAllowed => "E0163",
+            DiagnosticId::ConditionAlwaysConstant => "E0164",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 

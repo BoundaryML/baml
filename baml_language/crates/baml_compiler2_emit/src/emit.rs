@@ -3056,6 +3056,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         match op {
             UnaryOp::Not => Instruction::UnaryOp(VmUnaryOp::Not),
             UnaryOp::Neg => Instruction::UnaryOp(VmUnaryOp::Neg),
+            UnaryOp::Truthy => Instruction::UnaryOp(VmUnaryOp::Truthy),
         }
     }
 
