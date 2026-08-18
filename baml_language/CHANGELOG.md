@@ -6,6 +6,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Features
 
+- Added read-only `baml.AnyClass` narrowing and reflection for static and runtime-minted class values, with value-bound field handles and catchable typed reads. ([#4491](https://github.com/BoundaryML/baml/pull/4491)) - Antonio Sarosi
 - Added runtime reflection and type construction, including compiling and mounting packages, invoking reflected callables, and isolating dynamic work in sessions. ([#4325](https://github.com/BoundaryML/baml/pull/4325)) - Antonio Sarosi
 - Added native BAML clients for OpenAI, Anthropic, Google, Vertex AI, AWS Bedrock, Azure, Ollama, OpenRouter, and Vercel AI Gateway, including typed streaming, media outputs, AWS SigV4, and Google Cloud authentication. ([#4430](https://github.com/BoundaryML/baml/pull/4430)) - aaronvg
 - Added `baml.sys.pid()`, `baml.fs.chmod()`, and `baml.fs.symlink()`. ([#4427](https://github.com/BoundaryML/baml/pull/4427)) - 2kai2kai2
@@ -26,7 +27,6 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Fixes
 
-- Added read-only `baml.AnyClass` narrowing and reflection for static and runtime-minted class values, with value-bound field handles and catchable typed reads. - Antonio Sarosi
 - Rejected non-data LLM output schemas with catchable E0164 diagnostics instead of aborting or silently omitting the schema; this intentionally makes previously degraded renders for fields such as `uint8array`, `type`, and mixed non-data unions fail loudly. ([#4470](https://github.com/BoundaryML/baml/pull/4470)) - Antonio Sarosi
 - Fixed a silent miscompile where a map, list, or class instance allocated before a loop and mutated by a callee called inside that loop was re-allocated on every iteration. ([#4467](https://github.com/BoundaryML/baml/pull/4467)) - Antonio Sarosi
 - Restored E0007 diagnostics for method calls on `unknown` receivers, preventing unresolved calls from reaching an internal VM error. ([#4466](https://github.com/BoundaryML/baml/pull/4466)) - Antonio Sarosi

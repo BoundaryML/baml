@@ -1,7 +1,99 @@
 //! End-to-end coverage for the read-only `baml.AnyClass` reflection surface.
 
+use baml_compiler_diagnostics::Severity;
+use baml_project::{collect_diagnostics, testing::setup_test_db};
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
+
+fn compile_error_codes(source: &str) -> Vec<String> {
+    let db = setup_test_db(source);
+    collect_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == Severity::Error)
+        .map(|diagnostic| diagnostic.code().to_string())
+        .collect()
+}
+
+#[test]
+fn requires_any_class_rejects_a_primitive_implementor() {
+    let errors = compile_error_codes(
+        r#"
+        interface Tagged requires baml.AnyClass {
+            function tag(self) -> string throws never
+        }
+
+        implements Tagged for int {
+            function tag(self) -> string { "primitive" }
+        }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|code| code == "E0125"),
+        "expected E0125, got {errors:?}"
+    );
+}
+
+#[test]
+fn any_class_blanket_bound_does_not_expose_members_on_nonclasses() {
+    let errors = compile_error_codes(
+        r#"
+        interface Wrapped {
+            function tag(self) -> string throws never
+        }
+
+        class Box<T> { value T }
+
+        implements<T extends baml.AnyClass> Wrapped for Box<T> {
+            function tag(self) -> string { "wrapped:" + self.value.type().to_string() }
+        }
+
+        function bad(value: Box<int>) -> string {
+            value.tag()
+        }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|code| code == "E0007"),
+        "expected E0007, got {errors:?}"
+    );
+}
+
+#[tokio::test]
+async fn requires_and_bounded_impl_membership_agree_for_real_classes() {
+    let output = baml_test!(
+        r#"
+        class Record { label string }
+        class Box<T> { value T }
+
+        interface Tagged requires baml.AnyClass {
+            function tag(self) -> string throws never
+        }
+
+        implements Tagged for Record {
+            function tag(self) -> string { "record:" + self.label }
+        }
+
+        interface Wrapped {
+            function wrapped(self) -> string throws never
+        }
+
+        implements<T extends baml.AnyClass> Wrapped for Box<T> {
+            function wrapped(self) -> string { "wrapped:" + self.value.name() }
+        }
+
+        function main() -> bool {
+            let record = Record { label: "ok" }
+            let boxed = Box<Record> { value: record }
+            record.tag() == "record:ok"
+                && boxed.wrapped() == "wrapped:Record"
+                && type.of<Record>().implements(type.of<Tagged>())
+                && type.of<Box<Record>>().implements(type.of<Wrapped>())
+                && !type.of<Box<int>>().implements(type.of<Wrapped>())
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
 
 #[tokio::test]
 async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {

@@ -48,16 +48,32 @@ interface AnyClass {
 
   /// Return a value-bound field handle, or `null` when no such field exists.
   function get_field(self, name: string) -> baml.reflect.class.Field? throws never {
-    for (let field in self.list_fields()) {
+    let class_type: baml.reflect.class.Type = type.of_value(self).as_class() else {
+      return null
+    }
+    for (let field in class_type.fields()) {
       if (field.name == name) {
-        return field
+        return baml.reflect.class.Field {
+          name: field.name,
+          type: field.type,
+          meta: field.meta,
+          _owner: self,
+        }
       }
     }
     null
   }
 
   function has_field(self, name: string) -> bool throws never {
-    self.get_field(name) != null
+    let class_type: baml.reflect.class.Type = type.of_value(self).as_class() else {
+      return false
+    }
+    for (let field in class_type.fields()) {
+      if (field.name == name) {
+        return true
+      }
+    }
+    false
   }
 
   /// Reflected fields bound to this value for `Field.read<T>()`.

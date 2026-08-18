@@ -166,10 +166,10 @@ function baml.get(self: ?, name: string) -> T?  [expr] {
   { if (Not self.has_field(name)) { return null } } reflect.class.get_field(self, name) catch (e) { baml.reflect.errors.CompilationError { message: message } => { throw baml.errors.TypeMismatch { message: message } } }
 }
 function baml.get_field(self: ?, name: string) -> baml.reflect.class.Field?  [expr] {
-  { for field in self.list_fields() {  } if (field.name Eq name) { return field } } null
+  { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return baml.reflect.class.Field { name: field.name, type: field.type, meta: field.meta, _owner: self } } } null
 }
 function baml.has_field(self: ?, name: string) -> bool  [expr] {
-  {  } self.get_field(name) Ne null
+  { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return true } } false
 }
 function baml.list_fields(self: ?) -> baml.reflect.class.Field[]  [expr] {
   { let class_type: baml.reflect.class.Type = type.of_value(self).as_class(); let fields: baml.reflect.class.Field[] = []; for field in class_type.fields() {  } fields.push(baml.reflect.class.Field { name: field.name, type: field.type, meta: field.meta, _owner: self }) } fields

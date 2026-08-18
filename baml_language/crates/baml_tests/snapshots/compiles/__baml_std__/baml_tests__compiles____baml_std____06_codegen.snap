@@ -69,54 +69,107 @@ function baml.AnyClass.get(self: baml.AnyClass, name: string) -> #1 | null {
 
 function baml.AnyClass.get_field(self: baml.AnyClass, name: string) -> baml.reflect.class.Field | null {
     load_var self
-    load_type baml.AnyClass
-    load_const "list_fields"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _3
-    load_var _3
-    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.class.Field>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _4
-
-  L0:
-    load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.class.Field>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
+    call baml.type.of_value
+    call baml.TypeValue.as_class
     store_var _5
     load_var _5
-    is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
+    narrow_bind baml.reflect.class.Type, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L5
 
   L1:
     load_var _5
+    call baml.reflect.class.Type.fields
+    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.class.Field>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _8
+
+  L2:
+    load_var _8
+    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.class.Field>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+    load_var _9
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _9
     store_var_load_var field
     load_field .name
     load_var name
     cmp_op ==
-    pop_jump_if_false L0
+    pop_jump_if_false L2
     load_var field
-    jump L3
+    load_field .name
+    load_var field
+    load_field .type
+    load_var field
+    load_field .meta
+    load_var self
+    init_instance baml.reflect.class.Field .name, .type, .meta, ._owner
+    jump L5
 
-  L2:
+  L4:
     load_const null
 
-  L3:
+  L5:
     return
 }
 
 function baml.AnyClass.has_field(self: baml.AnyClass, name: string) -> bool {
-    load_var2 1 2
-    load_type baml.AnyClass
-    load_const "get_field"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
-    load_const null
-    call baml.ops.equals_equals
-    unary_op !
+    load_var self
+    call baml.type.of_value
+    call baml.TypeValue.as_class
+    store_var _5
+    load_var _5
+    narrow_bind baml.reflect.class.Type, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L5
+
+  L1:
+    load_var _5
+    call baml.reflect.class.Type.fields
+    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.class.Field>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _8
+
+  L2:
+    load_var _8
+    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.class.Field>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+    load_var _9
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _9
+    load_field .name
+    load_var name
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const true
+    jump L5
+
+  L4:
+    load_const false
+
+  L5:
     return
 }
 

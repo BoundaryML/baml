@@ -804,7 +804,6 @@ pub fn impls_for_type<'db>(
             // Explicit `baml.AnyClass` receivers dispatch through
             // `resolve_impl`, where the witness remains available.
             provides_concrete_members(&implemented.name)
-                && derived_impl_allows(db, concrete, &implemented.name)
         })
         .collect()
 }
@@ -1130,9 +1129,6 @@ pub fn resolve_impl<'db>(
     if !admissible(concrete) || !interface.generics.iter().all(admissible) {
         return None;
     }
-    if !derived_impl_allows(db, concrete, &interface.name) {
-        return None;
-    }
     // A literal-typed value implements what its base primitive does
     // (the receiver-class rule applied to impl goals): `1` proves
     // `GrptChild<int>` through `implements GrptChild<int> for int`.
@@ -1170,6 +1166,11 @@ fn resolve_within_depth<'db>(
         .iter()
         .any(|(ty, target)| ty == concrete && target == interface)
     {
+        return None;
+    }
+    // Every selection path, including nested blanket-bound discharge, must
+    // apply compiler-derived membership before consulting the blanket rule.
+    if !derived_impl_allows(db, concrete, &interface.name) {
         return None;
     }
     in_progress.push((concrete.clone(), interface.clone()));
