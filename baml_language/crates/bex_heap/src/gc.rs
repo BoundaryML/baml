@@ -757,11 +757,29 @@ impl BexHeap {
                 worklist.push(rule.interface_head);
                 worklist.extend(rule.methods.values().map(|method| method.fqn));
             }
+            // Runtime-declared interfaces/aliases back-reference their owning
+            // package (null for static declarations), and an interface's
+            // default-method bodies are direct pointers.
+            Object::Interface(interface) => {
+                if !interface.owner.as_ptr().is_null() {
+                    worklist.push(interface.owner);
+                }
+                worklist.extend(
+                    interface
+                        .methods
+                        .iter()
+                        .map(|method| method.default_fn)
+                        .filter(|ptr| !ptr.as_ptr().is_null()),
+                );
+            }
+            Object::TypeAlias(alias) => {
+                if !alias.owner.as_ptr().is_null() {
+                    worklist.push(alias.owner);
+                }
+            }
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::TypeAlias(_)
-            | Object::Interface(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
@@ -1048,11 +1066,24 @@ impl BexHeap {
                     }
                 }
             }
+            Object::Interface(interface) => {
+                if let Some(&new_ptr) = forwarding.get(&interface.owner) {
+                    interface.owner = new_ptr;
+                }
+                for method in &mut interface.methods {
+                    if let Some(&new_ptr) = forwarding.get(&method.default_fn) {
+                        method.default_fn = new_ptr;
+                    }
+                }
+            }
+            Object::TypeAlias(alias) => {
+                if let Some(&new_ptr) = forwarding.get(&alias.owner) {
+                    alias.owner = new_ptr;
+                }
+            }
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::TypeAlias(_)
-            | Object::Interface(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
@@ -1465,11 +1496,30 @@ impl BexHeap {
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
             }
+            Object::Interface(interface) => {
+                if !interface.owner.as_ptr().is_null()
+                    && self.generation_of(interface.owner).is_young()
+                {
+                    worklist.push(interface.owner);
+                }
+                worklist.extend(
+                    interface
+                        .methods
+                        .iter()
+                        .map(|method| method.default_fn)
+                        .filter(|ptr| {
+                            !ptr.as_ptr().is_null() && self.generation_of(*ptr).is_young()
+                        }),
+                );
+            }
+            Object::TypeAlias(alias) => {
+                if !alias.owner.as_ptr().is_null() && self.generation_of(alias.owner).is_young() {
+                    worklist.push(alias.owner);
+                }
+            }
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::TypeAlias(_)
-            | Object::Interface(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}

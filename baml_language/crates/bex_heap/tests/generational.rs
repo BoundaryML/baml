@@ -1063,6 +1063,7 @@ fn package_type_aliases_are_traced_and_forwarded() {
         name: alias_name.clone(),
         type_tag: baml_type::typetag::TypeTag::of_head("SessionAlias"),
         definition: RealizedTy::int(),
+        owner: bex_vm_types::HeapPtr::null(),
     })));
     let mut package = empty_package();
     package.type_aliases.insert(
@@ -1187,6 +1188,7 @@ fn impl_rule_edges_are_traced_and_forwarded() {
         assoc: Vec::new(),
         fields: Vec::new(),
         methods: Vec::new(),
+        owner: bex_vm_types::HeapPtr::null(),
     })));
     // Any heap object serves as the method body's stand-in target.
     let method_ptr = tlab.alloc_string("method body".to_string());
@@ -1232,4 +1234,99 @@ fn impl_rule_edges_are_traced_and_forwarded() {
     let fqn = rule.methods["run"].fqn;
     assert_ne!(fqn, method_ptr, "method body moved; fqn must be repointed");
     assert!(matches!(unsafe { fqn.get() }, Object::String(_)));
+}
+
+/// A runtime-declared interface back-references its owning package and points
+/// at its default-method bodies; the collector must keep both alive through
+/// the interface alone and repoint them as they move.
+#[test]
+fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
+    let body_ptr = tlab.alloc_string("default body".to_string());
+    let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
+        name: QualifiedTypeName::local(Name::new("SessionIface")),
+        type_tag: baml_type::typetag::TypeTag::of_head("SessionIface"),
+        args: Vec::new(),
+        requires: Vec::new(),
+        assoc: Vec::new(),
+        fields: Vec::new(),
+        methods: vec![bex_vm_types::types::InterfaceMethodDef {
+            name: Name::new("greet"),
+            args: Vec::new(),
+            kwargs: Vec::new(),
+            returns: baml_type::RuntimeTy::Void {
+                attr: TyAttr::default(),
+            },
+            errors: baml_type::RuntimeTy::Void {
+                attr: TyAttr::default(),
+            },
+            default: Some(bex_vm_types::ObjectIndex::from_raw(0)),
+            default_fn: body_ptr,
+        }],
+        owner: package_ptr,
+    })));
+
+    // Root only the interface across two moves and a compaction.
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[iface_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(
+        stats.live_count, 3,
+        "interface, owner package and default body must all survive"
+    );
+    let Object::Interface(iface) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the interface")
+    };
+    assert_ne!(
+        iface.owner, package_ptr,
+        "package moved; owner must be repointed"
+    );
+    assert!(matches!(unsafe { iface.owner.get() }, Object::Package(_)));
+    let bound = iface.methods[0].default_fn;
+    assert_ne!(
+        bound, body_ptr,
+        "default body moved; default_fn must be repointed"
+    );
+    assert!(matches!(unsafe { bound.get() }, Object::String(_)));
+}
+
+/// A runtime-declared alias back-references its owning package; the collector
+/// must keep the package alive through the alias alone.
+#[test]
+fn type_alias_owner_is_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
+    let alias_ptr = tlab.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
+        name: QualifiedTypeName::local(Name::new("OwnedAlias")),
+        type_tag: baml_type::typetag::TypeTag::of_head("OwnedAlias"),
+        definition: RealizedTy::int(),
+        owner: package_ptr,
+    })));
+
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[alias_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(
+        stats.live_count, 2,
+        "alias and owner package must both survive"
+    );
+    let Object::TypeAlias(alias) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the alias")
+    };
+    assert_ne!(
+        alias.owner, package_ptr,
+        "package moved; owner must be repointed"
+    );
+    assert!(matches!(unsafe { alias.owner.get() }, Object::Package(_)));
 }

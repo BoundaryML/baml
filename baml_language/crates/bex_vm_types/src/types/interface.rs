@@ -28,6 +28,13 @@ pub struct InterfaceDef {
     /// dropped, reordered, or deduplicated.
     pub fields: Vec<InterfaceFieldDef>,
     pub methods: Vec<InterfaceMethodDef>,
+
+    /// Runtime package that declared this interface; null for a static
+    /// declaration. A member back-edge: reaching the interface keeps its
+    /// package alive, the same ownership shape `RuntimeTypeProvenance::owner`
+    /// gives classes and enums. This is a GC edge, never serialized.
+    #[borsh(skip)]
+    pub owner: HeapPtr,
 }
 
 /// One field an interface declares, at its dispatch index (its position in

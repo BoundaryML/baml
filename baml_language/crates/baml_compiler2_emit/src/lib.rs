@@ -268,6 +268,8 @@ fn build_interface_def(
         assoc,
         fields,
         methods,
+        // Static declarations have no owning runtime package.
+        owner: bex_vm_types::HeapPtr::null(),
     }
 }
 
@@ -3677,6 +3679,7 @@ fn emit_file_group(
                     name: qtn.clone(),
                     type_tag: claim_type_tag(type_tags, &fq_name)?,
                     definition,
+                    owner: bex_vm_types::HeapPtr::null(),
                 },
             )));
             program_packages

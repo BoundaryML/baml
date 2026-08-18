@@ -752,6 +752,10 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 Object::GenericFunction(function) => {
                     function.runtime_package = package_ptr;
                 }
+                // Member back-edges: reaching a declaration keeps its package
+                // alive (globals, dependencies, sibling declarations).
+                Object::Interface(interface) => interface.owner = package_ptr,
+                Object::TypeAlias(alias) => alias.owner = package_ptr,
                 _ => {}
             }
             objects.push(vm.alloc(object));
@@ -1571,6 +1575,9 @@ fn graft_session_submission(
                 function.bytecode.compact = Some(function.bytecode.lower_to_compact());
             }
             Object::GenericFunction(function) => function.runtime_package = package_ptr,
+            // Member back-edges, as in `Package.compile` above.
+            Object::Interface(interface) => interface.owner = package_ptr,
+            Object::TypeAlias(alias) => alias.owner = package_ptr,
             _ => {}
         }
     }
