@@ -7967,6 +7967,31 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
+    /// Lower the callee as a *value* when the direct-call paths decline it.
+    /// For `x?.m(...)` the null guard has already run and `callee_expr` is the
+    /// normalized `x.m` view, so lowering the arena node (`x?.m`) here would
+    /// emit a second null test and evaluate the receiver a third time. Lower
+    /// the member access itself instead.
+    fn lower_normalized_callee_operand(
+        &mut self,
+        callee: AstExprId,
+        callee_expr: &AstExpr,
+    ) -> Operand {
+        if let AstExpr::MemberAccess { base, member } = callee_expr
+            && matches!(
+                &self.body.exprs[callee],
+                AstExpr::OptionalMemberAccess { .. }
+            )
+        {
+            let ty = self.expr_ty(callee);
+            let tmp = self.builder.temp(ty);
+            let member = member.clone();
+            self.lower_member_access(callee, *base, &member, Place::local(tmp));
+            return Operand::Copy(Place::local(tmp));
+        }
+        self.lower_to_operand(callee)
+    }
+
     fn lower_call_with_callee(
         &mut self,
         expr_id: AstExprId,
@@ -8479,7 +8504,7 @@ impl<'db> LoweringContext<'db> {
                             .and_then(|r| resolution_to_item_ref(self.db, r))
                         {
                             Some(item) => Operand::Constant(Constant::Function(item)),
-                            None => self.lower_to_operand(callee),
+                            None => self.lower_normalized_callee_operand(callee, callee_expr),
                         }
                     };
                     let mut all_args = vec![receiver_op];
@@ -8500,13 +8525,13 @@ impl<'db> LoweringContext<'db> {
                             .and_then(|r| resolution_to_item_ref(self.db, r))
                         {
                             Some(item) => Operand::Constant(Constant::Function(item)),
-                            None => self.lower_to_operand(callee),
+                            None => self.lower_normalized_callee_operand(callee, callee_expr),
                         }
                     };
                     (callee_op, self.lower_call_arg_operands(expr_id, args))
                 }
             } else {
-                let callee_op = self.lower_to_operand(callee);
+                let callee_op = self.lower_normalized_callee_operand(callee, callee_expr);
                 (callee_op, self.lower_call_arg_operands(expr_id, args))
             }
         } else if let AstExpr::Path(segments) = callee_expr {
@@ -9001,7 +9026,14 @@ impl<'db> LoweringContext<'db> {
         }
 
         // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
-        if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
+        // `f?.read` resolves to the same member — `?.` only decides *whether*
+        // the call happens — so an optional-chained sys-op must be recognized
+        // here too. Missing it left `f?.read()` as a plain `call` of a
+        // body-less builtin, with any omitted defaulted arg still an
+        // `OmittedArg` sentinel by the time it reached the engine.
+        if let AstExpr::MemberAccess { .. } | AstExpr::OptionalMemberAccess { .. } =
+            &self.body.exprs[callee]
+        {
             if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
                 let func_loc = resolution_func_loc(resolution);
                 if let Some(fl) = func_loc {
@@ -9145,7 +9177,11 @@ impl<'db> LoweringContext<'db> {
         }
 
         // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
-        if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
+        // See `sys_op_callee`: `f?.read` names the same member, so the
+        // optional-chained shape has to be recognized as a sys-op too.
+        if let AstExpr::MemberAccess { .. } | AstExpr::OptionalMemberAccess { .. } =
+            &self.body.exprs[callee]
+        {
             if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
                 let func_loc = resolution_func_loc(resolution);
                 if let Some(fl) = func_loc {
