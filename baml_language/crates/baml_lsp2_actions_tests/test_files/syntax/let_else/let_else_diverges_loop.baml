@@ -16,4 +16,10 @@ function LoopDiverges(r: Ok | Err) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0113
+//
+//   × `let … else` requires a diverging else block (`return`, `throw`, `break`, or `continue`); got `void`
+//     ╭─[let_else_let_else_diverges_loop.baml:13:22]
+//  13 │   let o: Ok = r else { while (true) {} };
+//     ·                      ───────────────────
+//     ╰────

@@ -745,6 +745,10 @@ enum PendingDiag<'db> {
         pat: PatId,
         context: crate::diagnostics::IrrefutableContextKind,
     },
+    LetElseMustDiverge {
+        expr: ExprId,
+        got: Ty,
+    },
     /// A NAMED call leaving a required parameter unfilled - reported by
     /// name, not count.
     MissingNamedArg {
@@ -2991,9 +2995,20 @@ impl<'db> InferenceContext<'db> {
     /// diagnostic. Its divergence does not leak past the let.
     fn finish_let_else(&mut self, body: &ExprBody, else_branch: Option<ExprId>) {
         if let Some(else_expr) = else_branch {
-            let saved = self.diverges;
-            self.infer_expr(body, else_expr, &Expectation::None);
+            let saved = std::mem::replace(&mut self.diverges, Diverges::Maybe);
+            let got = self.infer_expr(body, else_expr, &Expectation::None);
+            let branch_diverges = self.diverges;
             self.diverges = saved;
+            let resolved = self.table.resolve_completely(&got);
+            if branch_diverges != Diverges::Always
+                && !resolved.has_error()
+                && !matches!(resolved.kind(), TyKind::Never { .. })
+            {
+                self.pending_diags.push(PendingDiag::LetElseMustDiverge {
+                    expr: else_expr,
+                    got,
+                });
+            }
         }
     }
 
@@ -9777,6 +9792,12 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
+                    PendingDiag::LetElseMustDiverge { expr, got } => (
+                        TirTypeError::LetElseMustDiverge {
+                            got: self.finalize_ty(&got).to_plain(),
+                        },
+                        expr,
+                    ),
                 };
                 let severity =
                     if matches!(error, TirTypeError::UnreachableArm) && unreachable_is_warning {
