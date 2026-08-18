@@ -8,7 +8,8 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_codegen_types::{
-    GeneratedOutputFile, Generator, NamingConvention, OutputType, write_generated_output,
+    GeneratedOutputFile, Generator, NamingConvention, OutputType, OutputWriterOptions,
+    write_generated_output_with_options,
 };
 use baml_db::{
     FileId, Span,
@@ -96,6 +97,8 @@ struct GeneratorDef {
     /// another. Other generators leave this unset.
     sdk_import_path: Option<String>,
     max_typed_union_arity: usize,
+    /// Whether the output writer installs a catch-all `.gitignore`.
+    gitignore: bool,
 }
 
 impl AddGeneratorArgs {
@@ -204,6 +207,9 @@ fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(St
         let max_typed_union_arity = i64::try_from(max_typed_union_arity)
             .context("max_typed_union_arity exceeds TOML's integer range")?;
         table.insert("max_typed_union_arity", value(max_typed_union_arity));
+    }
+    if !generator.gitignore {
+        table.insert("gitignore", value(false));
     }
     generators.insert(&name, Item::Table(table));
 
@@ -358,15 +364,20 @@ impl GenerateArgs {
             };
 
             if generator.output_type == OutputType::CSharp {
-                let report = sdkgen_csharp::generate_into(sdkgen_csharp::CSharpGenerateRequest {
-                    symbols: &pool,
-                    program_bytes: &baml_bytecode,
-                    embedded_baml_toml: &embedded_baml_toml,
-                    cli_version: release_version(),
-                    required_bridge_version: baml_version::CANONICAL_VERSION,
-                    program_identity: &generator.name,
-                    output_directory: output_dir.clone(),
-                })?;
+                let report = sdkgen_csharp::generate_into_with_options(
+                    sdkgen_csharp::CSharpGenerateRequest {
+                        symbols: &pool,
+                        program_bytes: &baml_bytecode,
+                        embedded_baml_toml: &embedded_baml_toml,
+                        cli_version: release_version(),
+                        required_bridge_version: baml_version::CANONICAL_VERSION,
+                        program_identity: &generator.name,
+                        output_directory: output_dir.clone(),
+                    },
+                    OutputWriterOptions {
+                        gitignore: generator.gitignore,
+                    },
+                )?;
                 let count = report.written_files.len();
                 reporter.status(
                     "Generated",
@@ -503,7 +514,14 @@ impl GenerateArgs {
                 .into_iter()
                 .map(|(path, contents)| GeneratedOutputFile::new(path, contents))
                 .collect();
-            let report = write_generated_output(&output_dir, output).with_context(|| {
+            let report = write_generated_output_with_options(
+                &output_dir,
+                output,
+                OutputWriterOptions {
+                    gitignore: generator.gitignore,
+                },
+            )
+            .with_context(|| {
                 format!(
                     "failed to install generated output in {}",
                     output_dir.display()
@@ -669,6 +687,10 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             }
             sdkgen_go::DEFAULT_MAX_TYPED_UNION_ARITY
         };
+        let gitignore = generator
+            .gitignore
+            .as_ref()
+            .is_none_or(|value| *value.get_ref());
 
         // `output_dir` is resolved relative to the project root and defaults
         // to "..", with the target-owned generated directory appended.
@@ -718,6 +740,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             naming_convention,
             sdk_import_path,
             max_typed_union_arity,
+            gitignore,
         });
     }
 
@@ -969,6 +992,25 @@ mod tests {
     }
 
     #[test]
+    fn add_generator_writes_non_default_gitignore_policy() {
+        let mut generator = Generator::from(OutputType::Rust);
+        generator.gitignore = false;
+
+        let (updated, name) =
+            add_generator_to_manifest("[package]\nname = \"test\"\n", &generator).unwrap();
+
+        let manifest = crate::manifest::parse(&updated).unwrap();
+        assert_eq!(
+            manifest.generator[&name]
+                .get_ref()
+                .gitignore
+                .as_ref()
+                .map(|value| value.get_ref()),
+            Some(&false)
+        );
+    }
+
+    #[test]
     fn add_command_updates_project_manifest() {
         let directory = tempfile::tempdir().unwrap();
         fs::write(
@@ -1027,6 +1069,19 @@ mod tests {
         let (disabled, disabled_diags) = discover_with_manifest(&go_manifest(Some(0)));
         assert!(disabled_diags.is_empty(), "{disabled_diags:?}");
         assert_eq!(disabled[0].max_typed_union_arity, 0);
+    }
+
+    #[test]
+    fn generator_gitignore_defaults_true_and_accepts_false() {
+        let default_manifest = "[package]\nname = \"test\"\n\n[generator.rust]\noutput_type = \"rust\"\nnaming_convention = \"preserve-case\"\n";
+        let (defaults, default_diags) = discover_with_manifest(default_manifest);
+        assert!(default_diags.is_empty(), "{default_diags:?}");
+        assert!(defaults[0].gitignore);
+
+        let disabled_manifest = format!("{default_manifest}gitignore = false\n");
+        let (disabled, disabled_diags) = discover_with_manifest(&disabled_manifest);
+        assert!(disabled_diags.is_empty(), "{disabled_diags:?}");
+        assert!(!disabled[0].gitignore);
     }
 
     #[test]

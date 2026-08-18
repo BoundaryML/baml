@@ -98,6 +98,8 @@ pub struct Generator {
     pub sdk_import_path: Option<String>,
     /// Maximum typed union arity for Go output.
     pub max_typed_union_arity: Option<usize>,
+    /// Whether generated output includes a catch-all `.gitignore`.
+    pub gitignore: bool,
 }
 
 impl From<OutputType> for Generator {
@@ -113,6 +115,7 @@ impl From<OutputType> for Generator {
             naming_convention,
             sdk_import_path: None,
             max_typed_union_arity: None,
+            gitignore: true,
         }
     }
 }
@@ -147,5 +150,6 @@ mod tests {
             Generator::from(OutputType::PythonPydantic).naming_convention,
             NamingConvention::PreserveCase
         );
+        assert!(Generator::from(OutputType::Rust).gitignore);
     }
 }

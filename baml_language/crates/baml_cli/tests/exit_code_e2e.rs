@@ -100,6 +100,22 @@ fn create_project_with_go_generator(dir: &Path, source: &str) {
     .unwrap();
 }
 
+fn create_project_with_rust_generator(dir: &Path, source: &str, gitignore: bool) {
+    create_project(dir, source);
+    std::fs::write(
+        dir.join("baml.toml"),
+        format!(
+            "[package]\nname = \"test-project\"\n\n\
+             [generator.rust]\n\
+             output_type = \"rust\"\n\
+             output_dir = \".\"\n\
+             naming_convention = \"preserve-case\"\n\
+             gitignore = {gitignore}\n"
+        ),
+    )
+    .unwrap();
+}
+
 // ============================================================================
 // Tests for `baml check` exit codes
 // ============================================================================
@@ -324,6 +340,31 @@ fn generate_go_writes_sdk_through_cli() {
         std::fs::read_to_string(tmp.path().join("baml_sdk/.gitignore")).unwrap(),
         baml_codegen_types::GENERATED_GITIGNORE
     );
+}
+
+#[test]
+fn generate_rust_can_disable_generated_gitignore() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project_with_rust_generator(
+        tmp.path(),
+        "function echo(value: string) -> string { value }\n",
+        false,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        output.status.success(),
+        "Rust generation failed: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let sdk = tmp.path().join("baml_sdk");
+    assert!(sdk.join("Cargo.toml").is_file());
+    assert!(sdk.join("src/lib.rs").is_file());
+    assert!(!sdk.join(".gitignore").exists());
 }
 
 #[test]
