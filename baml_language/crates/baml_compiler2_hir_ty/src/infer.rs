@@ -2995,10 +2995,12 @@ impl<'db> InferenceContext<'db> {
     /// diagnostic. Its divergence does not leak past the let.
     fn finish_let_else(&mut self, body: &ExprBody, else_branch: Option<ExprId>) {
         if let Some(else_expr) = else_branch {
+            let saved_flow = self.flow.clone();
             let saved = std::mem::replace(&mut self.diverges, Diverges::Maybe);
             let got = self.infer_expr(body, else_expr, &Expectation::None);
             let branch_diverges = self.diverges;
             self.diverges = saved;
+            self.flow = saved_flow;
             let resolved = self.table.resolve_completely(&got);
             if branch_diverges != Diverges::Always
                 && !resolved.has_error()
