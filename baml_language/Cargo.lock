@@ -886,6 +886,7 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
+ "baml_type",
  "baml_workspace",
  "indexmap",
  "la-arena",

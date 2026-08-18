@@ -32,6 +32,7 @@
 use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
+    nameres::{self, ForeignLookup, TypePathResolution},
     package::PackageId,
     type_ref::{TypeRefId, TypeRefKind, TypeRefStore},
 };
@@ -42,9 +43,10 @@ use baml_type::{
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
-/// What the type-namespace chain resolved a path to - rust-analyzer's
-/// `TypeNs`. Public because the static-qualifier road in `infer` consults the
-/// same chain rather than re-deciding builtin-versus-declaration itself.
+/// This crate's view of a resolved type path: [`nameres::TypePathResolution`]
+/// with the foreign-hit representation pinned to the exported-interface view.
+/// Public because the static-qualifier road in `infer` consults the same
+/// chain rather than re-deciding builtin-versus-declaration itself.
 #[derive(Debug, Clone)]
 pub enum ResolvedTypeDefinition<'db> {
     Source(Definition<'db>),
@@ -56,20 +58,125 @@ pub enum ResolvedTypeDefinition<'db> {
     Builtin(BuiltinTypeName),
 }
 
-/// The builtin type scope: BAML's analog of rust-analyzer's `BUILTIN_SCOPE`
-/// (`hir-def/src/item_scope.rs`). Builtin type names are a LAYER of the
-/// resolution chain, not an intercept ahead of it, so a user declaration
-/// spelling the same name is a shadow the resolver can see instead of an
-/// unreachable symbol that nothing is able to collide with.
-///
-/// Only names with an addressable definition are in scope. `void`, `never`,
-/// and `unknown` are compiler intrinsics - `builtin_definition_path` returns
-/// `None` for them - so they have no companion class to be confused with and
-/// keep their syntactic validation (`void` is legal only as a bare return
-/// type, checked before resolution runs).
-fn builtin_type_scope(name: &Name) -> Option<BuiltinTypeName> {
-    BuiltinTypeName::from_alias(name.as_str())
-        .filter(|builtin| builtin.builtin_definition_path().is_some())
+/// This crate's [`ForeignLookup`]: the phase-specific steps of the shared
+/// resolution chain, resolved against POST-expansion tables
+/// (`baml_compiler2_ppir::package_items`) with the package-interface policy -
+/// dependency access control and the mounted-interface exported view for
+/// external packages.
+struct HirTyForeign<'a, 'db> {
+    db: &'db dyn baml_compiler2_ppir::Db,
+    current_package: &'a Name,
+}
+
+impl HirTyForeign<'_, '_> {
+    fn can_access(&self, package: &Name) -> bool {
+        if self.current_package == package {
+            return true;
+        }
+        baml_compiler2_hir::package::package_dependencies(
+            self.db,
+            PackageId::new(self.db, self.current_package.clone()),
+        )
+        .iter()
+        .any(|dep| dep.name(self.db) == *package)
+    }
+}
+
+impl<'db> ForeignLookup<'db> for HirTyForeign<'_, 'db> {
+    type Res = Box<crate::package_interface::ExportedType>;
+
+    fn lookup_type(
+        &self,
+        package: &Name,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<TypePathResolution<'db, Self::Res>> {
+        if baml_compiler2_hir::package::is_external_package(self.db, package) {
+            if !self.can_access(package) {
+                return None;
+            }
+            let interface = crate::package_interface::mounted_interface(self.db, package)?;
+            if let Some(exported) = interface.lookup_type(namespace, item) {
+                return Some(TypePathResolution::Foreign(Box::new(exported.clone())));
+            }
+        }
+        let dep_items =
+            baml_compiler2_ppir::package_items(self.db, PackageId::new(self.db, package.clone()));
+        dep_items
+            .lookup_type(namespace, item)
+            .map(TypePathResolution::Def)
+    }
+
+    fn lookup_value(
+        &self,
+        package: &Name,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<Definition<'db>> {
+        let dep_items =
+            baml_compiler2_ppir::package_items(self.db, PackageId::new(self.db, package.clone()));
+        dep_items.lookup_value(namespace, item)
+    }
+
+    fn baml_shorthand_type(
+        &self,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<TypePathResolution<'db, Self::Res>> {
+        let baml_package = Name::new("baml");
+        if !self.can_access(&baml_package) {
+            return None;
+        }
+        let baml_items = baml_compiler2_ppir::package_items(
+            self.db,
+            PackageId::new(self.db, baml_package.clone()),
+        );
+        let visible = *self.current_package == baml_package
+            || crate::package_interface::package_interface(
+                self.db,
+                PackageId::new(self.db, baml_package),
+            )
+            .lookup_type(namespace, item)
+            .is_some();
+        if visible {
+            baml_items
+                .lookup_type(namespace, item)
+                .map(TypePathResolution::Def)
+        } else {
+            None
+        }
+    }
+
+    fn baml_shorthand_value(&self, namespace: &[Name], item: &Name) -> Option<Definition<'db>> {
+        let baml_package = Name::new("baml");
+        if !self.can_access(&baml_package) {
+            return None;
+        }
+        let baml_items = baml_compiler2_ppir::package_items(
+            self.db,
+            PackageId::new(self.db, baml_package.clone()),
+        );
+        let visible = *self.current_package == baml_package
+            || crate::package_interface::package_interface(
+                self.db,
+                PackageId::new(self.db, baml_package),
+            )
+            .lookup_function(namespace, item)
+            .is_some();
+        if visible {
+            baml_items.lookup_value(namespace, item)
+        } else {
+            None
+        }
+    }
+
+    fn is_stream_base(res: &Self::Res) -> bool {
+        matches!(
+            res.as_ref(),
+            crate::package_interface::ExportedType::Class { .. }
+                | crate::package_interface::ExportedType::TypeAlias { .. }
+        )
+    }
 }
 
 /// Everything needed to lower type syntax appearing in one file, for one
@@ -1264,225 +1371,36 @@ impl<'db> LowerCtx<'db> {
         .any(|dep| dep.name(self.db) == *package)
     }
 
-    /// The type-namespace resolution chain. ONE ordered walk, shared by every
-    /// syntactic position, mirroring rust-analyzer's `resolve_name_in_module`:
-    ///
-    /// ```text
-    /// local scope / builtin scope  ->  qualified (root. / package)
-    ///   ->  baml namespace shorthand  ->  $stream companion
-    /// ```
-    ///
-    /// The scope-versus-builtin order inside the head is `shadow`'s to decide;
-    /// everything after it is unambiguous because it is explicitly qualified.
+    /// The type-namespace resolution chain: [`nameres::Resolver`] - ONE
+    /// ordered walk shared by every consumer (type lowering here, stream
+    /// expansion in ppir) - with this crate's foreign-package policy
+    /// (access control + the mounted-interface exported view) injected.
     pub fn resolve_type(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
-        // Only an UNQUALIFIED name can mean a builtin: `root.string` and
-        // `pkg.string` are explicitly asking for a declaration.
-        let from_builtin = || match segments {
-            [single] => builtin_type_scope(single).map(ResolvedTypeDefinition::Builtin),
-            _ => None,
-        };
-
-        // The builtin scope outranks the local one. rust-analyzer needs a
-        // `BuiltinShadowMode` flag here because Rust really is ambiguous
-        // (a `mod u8` and the primitive `u8` both live in the type namespace);
-        // BAML is not - a builtin name means the builtin in every type
-        // position, and the declaration it shadows stays addressable as
-        // `root.<name>`. Stated once, so no syntactic position can disagree.
-        from_builtin()
-            .or_else(|| self.resolve_type_in_scope(segments))
-            .or_else(|| self.resolve_type_qualified(segments))
-            .or_else(|| self.resolve_type_baml_shorthand(segments))
-            .or_else(|| self.resolve_type_stream_companion(segments))
-    }
-
-    /// Layer 1: the current namespace, then the rest of this package.
-    fn resolve_type_in_scope(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
-        let (item, seg_ns) = segments.split_last().expect("type paths are never empty");
-        let relative_ns: Vec<Name> = if self.ns_context.is_empty() {
-            seg_ns.to_vec()
-        } else {
-            self.ns_context.iter().chain(seg_ns).cloned().collect()
-        };
-        self.package_items
-            .lookup_type(&relative_ns, item)
-            .map(ResolvedTypeDefinition::Source)
-    }
-
-    /// Layer 2: an explicitly qualified path - `root.`-absolute within this
-    /// package, or rooted at another package's name.
-    fn resolve_type_qualified(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
-        let (item, _) = segments.split_last().expect("type paths are never empty");
-        if segments.len() >= 2 {
-            let prefix_ns = &segments[1..segments.len() - 1];
-            if segments[0].as_str() == "root" {
-                if let Some(def) = self.package_items.lookup_type(prefix_ns, item) {
-                    return Some(ResolvedTypeDefinition::Source(def));
-                }
-            } else {
-                if baml_compiler2_hir::package::is_external_package(self.db, &segments[0]) {
-                    if !self.can_access_package(&segments[0]) {
-                        return None;
-                    }
-                    let interface =
-                        crate::package_interface::mounted_interface(self.db, &segments[0])?;
-                    if let Some(exported) = interface.lookup_type(prefix_ns, item) {
-                        return Some(ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
-                    }
-                }
-                let dep_items = baml_compiler2_ppir::package_items(
-                    self.db,
-                    PackageId::new(self.db, segments[0].clone()),
-                );
-                if let Some(def) = dep_items.lookup_type(prefix_ns, item) {
-                    return Some(ResolvedTypeDefinition::Source(def));
-                }
+        match self.resolver().resolve_type_path(segments)? {
+            TypePathResolution::Builtin(builtin) => Some(ResolvedTypeDefinition::Builtin(builtin)),
+            TypePathResolution::Def(def) => Some(ResolvedTypeDefinition::Source(def)),
+            TypePathResolution::Foreign(exported) => {
+                Some(ResolvedTypeDefinition::Exported(exported))
             }
         }
-        None
     }
 
-    /// Layer 3: the BEP-066 namespace shorthand - `reflect.*`, `type.*`, and
-    /// `json.*` reinterpreted under the builtin `baml` package. Ordered after
-    /// the local scope, so a user namespace of the same name shadows it, the
-    /// way a local `mod` shadows an extern crate in Rust; `baml.` is the
-    /// disambiguating qualifier.
-    fn resolve_type_baml_shorthand(
-        &self,
-        segments: &[Name],
-    ) -> Option<ResolvedTypeDefinition<'db>> {
-        let (item, _) = segments.split_last().expect("type paths are never empty");
-        if segments
-            .first()
-            .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
-            && self.can_access_package(&Name::new("baml"))
-        {
-            let baml_package = Name::new("baml");
-            let baml_items = baml_compiler2_ppir::package_items(
-                self.db,
-                PackageId::new(self.db, baml_package.clone()),
-            );
-            let namespace = &segments[..segments.len() - 1];
-            let visible = self.package_items.package == baml_package
-                || crate::package_interface::package_interface(
-                    self.db,
-                    PackageId::new(self.db, baml_package),
-                )
-                .lookup_type(namespace, item)
-                .is_some();
-            if visible && let Some(def) = baml_items.lookup_type(namespace, item) {
-                return Some(ResolvedTypeDefinition::Source(def));
-            }
+    fn resolver(&self) -> nameres::Resolver<'_, 'db, HirTyForeign<'_, 'db>> {
+        nameres::Resolver {
+            package_items: self.package_items,
+            ns_context: &self.ns_context,
+            foreign: HirTyForeign {
+                db: self.db,
+                current_package: &self.package_items.package,
+            },
         }
-        None
     }
 
-    /// Layer 4: `$stream` companions of classes/aliases resolve through their
-    /// base name; the caller re-qualifies under the `$stream` name.
-    fn resolve_type_stream_companion(
-        &self,
-        segments: &[Name],
-    ) -> Option<ResolvedTypeDefinition<'db>> {
-        let (item, _) = segments.split_last().expect("type paths are never empty");
-        if let Some(base) = item.as_str().strip_suffix("$stream") {
-            let mut base_segments = segments.to_vec();
-            *base_segments.last_mut().expect("non-empty") = Name::new(base);
-            return self.resolve_type(&base_segments).filter(|def| match def {
-                ResolvedTypeDefinition::Source(Definition::Class(_) | Definition::TypeAlias(_)) => {
-                    true
-                }
-                ResolvedTypeDefinition::Exported(exported) => matches!(
-                    exported.as_ref(),
-                    crate::package_interface::ExportedType::Class { .. }
-                        | crate::package_interface::ExportedType::TypeAlias { .. }
-                ),
-                ResolvedTypeDefinition::Source(_) | ResolvedTypeDefinition::Builtin(_) => false,
-            });
-        }
-
-        None
-    }
-
-    /// The value-namespace resolution chain, the same ordered walk as
-    /// [`LowerCtx::resolve_type`] over `lookup_value` (functions, clients,
-    /// lets):
-    ///
-    /// ```text
-    /// local scope -> qualified (root. / package) -> baml namespace shorthand
-    /// ```
-    ///
-    /// Two layers fewer than the type chain, both deliberately. There is no
-    /// builtin VALUE scope - no BAML value has a bare name that is not an
-    /// ordinary item; everything callable in the stdlib lives in the `baml`
-    /// package and is reached by path (rust-analyzer's `BUILTIN_SCOPE` is
-    /// likewise types-only, with `Vec`/`drop` coming from the ordinary std
-    /// prelude). And no `$stream` fallback: companions are functions with
-    /// their own names.
+    /// The value-namespace resolution chain: the same [`nameres::Resolver`]
+    /// walk over `lookup_value`. See `nameres` for why it has no builtin
+    /// layer and no `$stream` fallback.
     pub fn resolve_value(&self, segments: &[Name]) -> Option<Definition<'db>> {
-        self.resolve_value_in_scope(segments)
-            .or_else(|| self.resolve_value_qualified(segments))
-            .or_else(|| self.resolve_value_baml_shorthand(segments))
-    }
-
-    /// Layer 1: the current namespace, then the rest of this package.
-    fn resolve_value_in_scope(&self, segments: &[Name]) -> Option<Definition<'db>> {
-        let (item, seg_ns) = segments.split_last()?;
-        let relative_ns: Vec<Name> = if self.ns_context.is_empty() {
-            seg_ns.to_vec()
-        } else {
-            self.ns_context.iter().chain(seg_ns).cloned().collect()
-        };
-        self.package_items.lookup_value(&relative_ns, item)
-    }
-
-    /// Layer 2: an explicitly qualified path - `root.`-absolute within this
-    /// package, or rooted at another package's name.
-    fn resolve_value_qualified(&self, segments: &[Name]) -> Option<Definition<'db>> {
-        if segments.len() < 2 {
-            return None;
-        }
-        let (item, _) = segments.split_last()?;
-        let prefix_ns = &segments[1..segments.len() - 1];
-        if segments[0].as_str() == "root" {
-            self.package_items.lookup_value(prefix_ns, item)
-        } else {
-            let dep_items = baml_compiler2_ppir::package_items(
-                self.db,
-                PackageId::new(self.db, segments[0].clone()),
-            );
-            dep_items.lookup_value(prefix_ns, item)
-        }
-    }
-
-    /// Layer 3: the BEP-066 namespace shorthand - `reflect.*`, `type.*`, and
-    /// `json.*` reinterpreted under the builtin `baml` package, ordered after
-    /// the local scope so a user namespace of the same name shadows it.
-    fn resolve_value_baml_shorthand(&self, segments: &[Name]) -> Option<Definition<'db>> {
-        let (item, _) = segments.split_last()?;
-        if !segments
-            .first()
-            .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
-            || !self.can_access_package(&Name::new("baml"))
-        {
-            return None;
-        }
-        let baml_package = Name::new("baml");
-        let baml_items = baml_compiler2_ppir::package_items(
-            self.db,
-            PackageId::new(self.db, baml_package.clone()),
-        );
-        let namespace = &segments[..segments.len() - 1];
-        let visible = self.package_items.package == baml_package
-            || crate::package_interface::package_interface(
-                self.db,
-                PackageId::new(self.db, baml_package),
-            )
-            .lookup_function(namespace, item)
-            .is_some();
-        if visible {
-            baml_items.lookup_value(namespace, item)
-        } else {
-            None
-        }
+        self.resolver().resolve_value_path(segments)
     }
 
     /// Source-less free-function lookup. Kept separate from
@@ -3013,61 +2931,4 @@ pub fn throws_clause_parts(ty: &Ty) -> (Ty, bool) {
         _ => Ty::intern(TyKind::Union(named.into(), TyAttr::default())),
     };
     (named, open)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The builtin scope must cover the whole registry, minus the intrinsics.
-    /// `PrimitiveType::ALL` drives the loop, so adding a primitive to
-    /// `baml_type` fails here until the scope admits it - and until the
-    /// pre-resolution duplicate in
-    /// `baml_compiler2_ast::lower_type_expr::lower_from_type_name_with_generic_args`
-    /// is updated to match, since these two lists have to agree.
-    #[test]
-    fn builtin_scope_covers_every_registry_alias() {
-        for primitive in baml_type::PrimitiveType::ALL {
-            let alias = Name::new(primitive.alias());
-            assert_eq!(
-                builtin_type_scope(&alias),
-                Some(BuiltinTypeName::Primitive(primitive)),
-                "primitive alias `{}` is missing from the builtin scope",
-                primitive.alias()
-            );
-        }
-        assert_eq!(
-            builtin_type_scope(&Name::new("json")),
-            Some(BuiltinTypeName::Json),
-        );
-    }
-
-    /// Intrinsics stay OUT of the scope: they have no addressable definition,
-    /// so they cannot collide with a declaration, and they are validated as
-    /// syntax before resolution runs.
-    #[test]
-    fn builtin_scope_excludes_definitionless_intrinsics() {
-        for intrinsic in ["void", "never", "unknown"] {
-            assert_eq!(
-                builtin_type_scope(&Name::new(intrinsic)),
-                None,
-                "`{intrinsic}` is an intrinsic and must not be in the builtin scope",
-            );
-            assert!(
-                BuiltinTypeName::from_alias(intrinsic).is_some(),
-                "`{intrinsic}` should still be a registry entry",
-            );
-        }
-    }
-
-    /// An ordinary name is not a builtin, and neither is a capitalized
-    /// companion-class name: `baml.String` is reached as a path, not through
-    /// the builtin scope, so `class String` in user code is an ordinary
-    /// same-package declaration rather than a builtin shadow.
-    #[test]
-    fn builtin_scope_is_alias_spelled_only() {
-        assert_eq!(builtin_type_scope(&Name::new("Dog")), None);
-        assert_eq!(builtin_type_scope(&Name::new("String")), None);
-        assert_eq!(builtin_type_scope(&Name::new("Int")), None);
-    }
 }
