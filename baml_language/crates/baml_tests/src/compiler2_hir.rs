@@ -665,7 +665,7 @@ mod tests {
         let _type_file = db.add_file("types.baml", "type Backend = string");
         let _client_file = db.add_file(
             "clients.baml",
-            r#"client Backend = openai.OpenAiClient.new(model = "gpt-4o-mini");"#,
+            r#"client Backend = openai.ResponsesClient.new(model = "gpt-4o-mini");"#,
         );
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
@@ -956,7 +956,7 @@ mod tests {
 
     /// Two enum variants sharing the same `@alias` value serialize to the same
     /// label — an unsatisfiable schema (B-649). Fires `DuplicateFieldAlias` with
-    /// an `"enum"` container.
+    /// an enum container.
     #[test]
     fn duplicate_variant_alias_value_produces_field_alias_diagnostic() {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
@@ -983,7 +983,10 @@ mod tests {
             panic!("expected DuplicateFieldAlias diagnostic");
         };
         assert_eq!(sites.len(), 2);
-        assert_eq!(*container, "enum");
+        assert_eq!(
+            *container,
+            baml_compiler_diagnostics::runtime_type::SerializedKeyContainer::Enum
+        );
     }
 
     /// A plain variant name colliding with another variant's `@alias` also fires
@@ -2095,7 +2098,7 @@ implements MyIface for MyClass {
 
 function MyTemplate(x: string) -> string { `${x}` }
 
-client MyClient = openai.OpenAiClient.new(model = "gpt-4o-mini");
+client MyClient = openai.ResponsesClient.new(model = "gpt-4o-mini");
 
 function target() -> int { 1 }
 

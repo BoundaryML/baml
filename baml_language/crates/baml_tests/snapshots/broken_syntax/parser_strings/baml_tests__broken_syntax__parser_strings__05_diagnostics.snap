@@ -333,7 +333,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
     ╭─[unicode_strings.baml:26:3]
  26 │   client: GPT4

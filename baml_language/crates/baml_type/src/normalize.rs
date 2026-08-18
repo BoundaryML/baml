@@ -30,7 +30,10 @@
 //! absorb, or equate, so a missing fact can only yield "not *necessarily*
 //! equivalent / subtype", never a false claim of equivalence or membership.
 
-use std::collections::HashSet;
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
 
 use crate::{
     FunctionParamMode, FunctionParamTy, Interface, Literal, MediaKind, Name, ParamTy,
@@ -472,6 +475,113 @@ pub fn is_subtype<C: TypeContext>(sub: &Ty, sup: &Ty, ctx: &C) -> bool {
     ctx.is_subtype(sub, sup)
 }
 
+/// A deterministic 64-bit digest of `ty`'s **canonical form** under `ctx` —
+/// the identity basis for statically-spelled runtime `type` values (BEP-066
+/// `MintId::Static`).
+///
+/// Exact basis: canonicalize `ty` (the same walk [`TypeContext::equivalent`]
+/// performs on each operand — unique representative of the equirecursive
+/// equivalence class, so μ-recursion, union ordering, attr erasure, and every
+/// context fact are already folded in), serialize its derived `Hash` token
+/// stream with every numeric token in big-endian fixed width (`usize`/`isize`
+/// widened to 64 bits), then feed those bytes into fixed-seed FNV-1a-64
+/// (offset basis `0xcbf29ce484222325`, prime `0x100000001b3`). Consequences:
+///
+/// * `equivalent(a, b, ctx)` ⟹ `canonical_digest(a, ctx) ==
+///   canonical_digest(b, ctx)` — equivalent spellings (`string?` vs
+///   `string | null`, permuted unions, renamed recursive aliases) share a
+///   digest. The converse holds up to 64-bit collision odds, which the mint
+///   design accepts (a collision over-equates two *static* types).
+/// * The digest hashes only value data (names as strings, structure, de
+///   Bruijn indices — canonical `NormalTy` equality is α-invariant and its
+///   display metadata is hash-transparent). No pointers, no interner state:
+///   two processes running the same build over the same program facts produce
+///   identical digests.
+/// * The digest is **not** an on-wire format (BEP-066 H-4: identity never
+///   crosses the boundary). It may change across compiler versions — nothing
+///   may persist it; a decoded type value re-derives its mint.
+/// * Determinism requires only that `ctx` answers from immutable program
+///   facts, as the VM's context does; digests minted under *different* fact
+///   sets (e.g. a fact-free boundary context) agree exactly when
+///   canonicalization never consults a fact that differs.
+pub fn canonical_digest<C: TypeContext>(ty: &Ty, ctx: &C) -> u64 {
+    /// FNV-1a, 64-bit. Local on purpose: the digest contract above is this
+    /// exact algorithm; routing through a swappable `Hasher` dependency would
+    /// invite silently changing the basis.
+    struct Fnv1a(u64);
+
+    impl std::hash::Hasher for Fnv1a {
+        fn finish(&self) -> u64 {
+            self.0
+        }
+
+        fn write(&mut self, bytes: &[u8]) {
+            for byte in bytes {
+                self.0 ^= u64::from(*byte);
+                self.0 = self.0.wrapping_mul(0x100_0000_01b3);
+            }
+        }
+
+        // `Hasher`'s default integer methods use native-endian bytes, which
+        // would make the digest architecture-dependent. Override the complete
+        // numeric surface so the derived `Hash` walk becomes a canonical byte
+        // serialization. Lengths and enum discriminants written as pointer-
+        // sized integers are widened, making 32- and 64-bit processes agree.
+        fn write_u8(&mut self, value: u8) {
+            self.write(&value.to_be_bytes());
+        }
+
+        fn write_u16(&mut self, value: u16) {
+            self.write(&value.to_be_bytes());
+        }
+
+        fn write_u32(&mut self, value: u32) {
+            self.write(&value.to_be_bytes());
+        }
+
+        fn write_u64(&mut self, value: u64) {
+            self.write(&value.to_be_bytes());
+        }
+
+        fn write_u128(&mut self, value: u128) {
+            self.write(&value.to_be_bytes());
+        }
+
+        fn write_usize(&mut self, value: usize) {
+            self.write_u64(value as u64);
+        }
+
+        fn write_i8(&mut self, value: i8) {
+            self.write(&value.to_be_bytes());
+        }
+
+        fn write_i16(&mut self, value: i16) {
+            self.write(&value.to_be_bytes());
+        }
+
+        fn write_i32(&mut self, value: i32) {
+            self.write(&value.to_be_bytes());
+        }
+
+        fn write_i64(&mut self, value: i64) {
+            self.write(&value.to_be_bytes());
+        }
+
+        fn write_i128(&mut self, value: i128) {
+            self.write(&value.to_be_bytes());
+        }
+
+        fn write_isize(&mut self, value: isize) {
+            self.write_i64(value as i64);
+        }
+    }
+
+    let canonical = NormalTy::canonical(ty, ctx);
+    let mut hasher = Fnv1a(0xcbf2_9ce4_8422_2325);
+    std::hash::Hash::hash(&canonical, &mut hasher);
+    std::hash::Hasher::finish(&hasher)
+}
+
 /// True only when `a` and `b` provably canonicalize to different forms, judged
 /// from their outermost constructor alone — a cheap reject for [`TypeContext::
 /// equivalent`] that skips the two canonicalization walks on the common
@@ -682,6 +792,9 @@ impl NormalTy {
             NormalTy::Type => Category::Type,
             NormalTy::Resource => Category::Resource,
             NormalTy::PromptAst => Category::PromptAst,
+            NormalTy::Class(name, _) if crate::type_kind::is_type_kind_class(name) => {
+                Category::Type
+            }
             NormalTy::Class(..) => Category::Class,
             NormalTy::List(_) => Category::List,
             NormalTy::Map { .. } => Category::Map,
@@ -1877,6 +1990,24 @@ impl NormalTy {
                 })
             }
 
+            // `baml.AnyClass` is compiler-derived for class values. The stdlib
+            // blanket impl supplies default-method dispatch, but cannot define
+            // membership by itself without also admitting primitives and
+            // containers. Keep this before the general impl-registry arm so
+            // static coercion and the VM's shared runtime type matcher agree.
+            // Of the nine sealed reflection-kind classes, only the class-kind
+            // view is admitted by the ratified surface.
+            (sub, NormalTy::Interface(qn, _, _))
+                if qn.is_builtin_root_type("AnyClass")
+                    && !matches!(sub, NormalTy::Interface(..)) =>
+            {
+                matches!(
+                    sub,
+                    NormalTy::Class(name, _)
+                        if crate::type_kind::class_inhabits_any_class(name)
+                )
+            }
+
             // BEP-062: `baml.AnyFunction` is a compiler builtin implemented by
             // every function type, with the parameter list erased. Conformance
             // is derived right here rather than from an `implements` block
@@ -1955,6 +2086,14 @@ impl NormalTy {
                 a1.iter()
                     .zip(a2.iter())
                     .all(|(a, b)| a.invariant_compatible(b, ctx, assumptions))
+            }
+            // BEP-066: the nine reflection-kind classes form one sealed family
+            // beneath the `type` carrier. Because membership is hard-coded to
+            // builtin qualified names, user classes cannot acquire this edge.
+            (NormalTy::Class(name, _), NormalTy::Type)
+                if crate::type_kind::is_type_kind_class(name) =>
+            {
+                true
             }
             (NormalTy::List(a), NormalTy::List(b)) => a.invariant_compatible(b, ctx, assumptions),
             (NormalTy::Map { key: k1, value: v1 }, NormalTy::Map { key: k2, value: v2 }) => {
@@ -2621,6 +2760,64 @@ mod tests;
 
 use crate::interned;
 
+/// Memoizes canonical forms for a sequence of interned relations evaluated
+/// under one immutable [`TypeContext`]. The cache deliberately takes the
+/// context at each call rather than owning it; callers are responsible for
+/// keeping one cache scoped to one fact set (compiler inference uses one per
+/// body). Inference-bearing types should be resolved before entering because
+/// their meaning is table-relative rather than a property of the handle alone.
+#[derive(Default)]
+pub struct InternedCanonicalCache {
+    canonical: RefCell<HashMap<interned::Ty, NormalTy>>,
+}
+
+impl InternedCanonicalCache {
+    fn canonical<C: TypeContext>(&self, ty: &interned::Ty, ctx: &C) -> NormalTy {
+        debug_assert!(!ty.has_infer());
+        if let Some(canonical) = self.canonical.borrow().get(ty) {
+            return canonical.clone();
+        }
+        let canonical = NormalTy::canonical_interned(ty, ctx);
+        self.canonical
+            .borrow_mut()
+            .insert(ty.clone(), canonical.clone());
+        canonical
+    }
+
+    pub fn equivalent<C: TypeContext>(&self, a: &interned::Ty, b: &interned::Ty, ctx: &C) -> bool {
+        if a == b {
+            return true;
+        }
+        if interned_heads_definitely_differ(a, b) {
+            return false;
+        }
+        self.canonical(a, ctx) == self.canonical(b, ctx)
+    }
+
+    pub fn is_subtype<C: TypeContext>(
+        &self,
+        sub: &interned::Ty,
+        sup: &interned::Ty,
+        ctx: &C,
+    ) -> bool {
+        if sub == sup {
+            return true;
+        }
+        if !matches!(
+            (sub.kind(), sup.kind()),
+            (
+                interned::TyKind::Interface(..),
+                interned::TyKind::Interface(..)
+            )
+        ) && interned_heads_definitely_differ(sub, sup)
+        {
+            return false;
+        }
+        self.canonical(sub, ctx)
+            .is_subtype_of(&self.canonical(sup, ctx), ctx, &mut HashSet::new())
+    }
+}
+
 impl NormalTy {
     /// [`NormalTy::canonical_bottom_up`] for the interned representation: the
     /// same named-intermediate -> binder-resolution -> bottom-up-algebra
@@ -2830,6 +3027,16 @@ pub fn is_subtype_interned<C: TypeContext>(
     if sub == sup {
         return true;
     }
+    if !matches!(
+        (sub.kind(), sup.kind()),
+        (
+            interned::TyKind::Interface(..),
+            interned::TyKind::Interface(..)
+        )
+    ) && interned_heads_definitely_differ(sub, sup)
+    {
+        return false;
+    }
     let sub = NormalTy::canonical_interned(sub, ctx);
     let sup = NormalTy::canonical_interned(sup, ctx);
     sub.is_subtype_of(&sup, ctx, &mut HashSet::new())
@@ -2840,7 +3047,24 @@ pub fn equivalent_interned<C: TypeContext>(a: &interned::Ty, b: &interned::Ty, c
     if a == b {
         return true;
     }
+    if interned_heads_definitely_differ(a, b) {
+        return false;
+    }
     NormalTy::canonical_interned(a, ctx) == NormalTy::canonical_interned(b, ctx)
+}
+
+/// Interned counterpart of [`heads_definitely_differ`]. Hash-consing makes
+/// the identical-head fast path cheaper, but distinct nominal heads are still
+/// common during inference and cannot be changed by canonicalization.
+fn interned_heads_definitely_differ(a: &interned::Ty, b: &interned::Ty) -> bool {
+    use interned::TyKind as K;
+    match (a.kind(), b.kind()) {
+        (K::Class(q1, ..), K::Class(q2, ..))
+        | (K::Interface(q1, ..), K::Interface(q2, ..))
+        | (K::Enum(q1, ..), K::Enum(q2, ..)) => q1 != q2,
+        (K::EnumVariant(q1, v1, ..), K::EnumVariant(q2, v2, ..)) => q1 != q2 || v1 != v2,
+        _ => false,
+    }
 }
 
 /// [`TypeContext::normalize`] for interned types. Materializes once on the

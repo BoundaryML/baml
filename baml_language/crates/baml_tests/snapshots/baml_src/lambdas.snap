@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 169
 ---
 function lambdas.$init_test_ns_lambdas_lambdas(registry: testing.TestCollector) -> null {
     load_var registry
@@ -336,6 +337,9 @@ function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
     store_var ?1
     load_const 0
     store_deref ?1
+    load_var sum
+    make_closure .<lambda(lambdas_captures_loop_variable_accumulation, 0)>, 1
+    store_var add_to_sum
     load_const 1
     load_const 2
     load_const 3
@@ -358,8 +362,7 @@ function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
     jump L2
 
   L1:
-    load_var2 3 1
-    make_closure .<lambda(lambdas_captures_loop_variable_accumulation, 0)>, 1
+    load_var2 4 2
     call_indirect
     pop 1
     jump L0
@@ -426,8 +429,7 @@ function lambdas.lambdas_explicit_throwing_lambda_catches_error() -> int {
     call_indirect
     jump L2
     load_var e
-    load_const "negative"
-    cmp_op ==
+    is_type "negative"
     pop_jump_if_false L0
     jump L1
 
@@ -482,7 +484,7 @@ function lambdas.lambdas_inferred_return_type_lambda() -> int {
 
 function lambdas.lambdas_inferred_signature() -> string {
     make_closure .<lambda(lambdas_inferred_signature, 0)>, 0
-    call reflect.signature
+    call baml.reflect.signature
     store_var sig
     load_var sig
     load_field .returns
@@ -502,7 +504,7 @@ function lambdas.lambdas_inferred_signature() -> string {
 
 function lambdas.lambdas_inferred_throwing_signature() -> string {
     make_closure .<lambda(lambdas_inferred_throwing_signature, 0)>, 0
-    call reflect.signature
+    call baml.reflect.signature
     store_var sig
     load_var sig
     load_field .returns

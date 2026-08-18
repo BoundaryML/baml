@@ -1,4 +1,4 @@
-client Bar = openai.OpenAiClient.new(model = "gpt-4o");
+client Bar = openai.ResponsesClient.new(model = "gpt-4o");
 
 function Foo() -> string {
   `This! ${b}`

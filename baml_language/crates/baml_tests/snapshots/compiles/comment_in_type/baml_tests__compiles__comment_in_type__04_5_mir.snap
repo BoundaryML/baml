@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 8091
 ---
 === MIR2 ===
 fn user.FunctionWithComments(a: string, b: int, client: null | ai.Client) -> string {
@@ -35,7 +34,7 @@ fn user.FunctionWithComments(a: string, b: int, client: null | ai.Client) -> str
     }
 
     bb4: {
-        _5 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _6, copy _8) -> [bb5];
+        _5 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _6, copy _8) -> [bb5];
     }
 
     bb5: {
@@ -106,6 +105,7 @@ fn user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string> 
     let _4: (string) -> ai.Prompt throws never
     let _5: ai.tools.Toolbox
     let _6: ai.tools.Tool[]
+    let _7: ai.Client
 
     bb0: {
         _3 = { const "a": copy _1, const "b": copy _2 }: map<string, unknown>;
@@ -115,11 +115,15 @@ fn user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string> 
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<string> { const "FunctionWithComments", copy _3, copy _4, copy _5, const item user.TestClient };
-        goto -> bb2;
+        _7 = call const fn ai.clients.resolve(const item user.TestClient) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<string> { const "FunctionWithComments", copy _3, copy _4, copy _5, copy _7 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -239,7 +243,7 @@ fn user.CommentAfterArrow(client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _3 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
+        _3 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
     }
 
     bb5: {
@@ -306,6 +310,7 @@ fn user.CommentAfterArrow$spec() -> ai.FunctionSpec<string> {
     let _2: (string) -> ai.Prompt throws never
     let _3: ai.tools.Toolbox
     let _4: ai.tools.Tool[]
+    let _5: ai.Client
 
     bb0: {
         _1 = {  }: map<string, unknown>;
@@ -315,11 +320,15 @@ fn user.CommentAfterArrow$spec() -> ai.FunctionSpec<string> {
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<string> { const "CommentAfterArrow", copy _1, copy _2, copy _3, const item user.TestClient };
-        goto -> bb2;
+        _5 = call const fn ai.clients.resolve(const item user.TestClient) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<string> { const "CommentAfterArrow", copy _1, copy _2, copy _3, copy _5 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

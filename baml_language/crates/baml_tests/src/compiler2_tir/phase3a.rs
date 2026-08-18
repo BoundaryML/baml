@@ -173,7 +173,7 @@ fn backtick_llm_function_compiles_to_agent_loop() {
     let file = db.add_file(
         "test.baml",
         r#"
-client MyClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "k");
+client MyClient = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "k");
 
 function Greet(name: string) -> string {
   client: MyClient
@@ -198,7 +198,7 @@ fn new_mode_failures_have_good_diagnostics() {
     // surface a diagnostic that points at the user's `${…}` source with a
     // user-facing message — never a `0..0` span and never a leaked internal
     // desugaring type. The prompt body is lowered into a synthesized
-    // `(ctx: baml.prompt.Context) -> PromptAst` closure, so the risk is that
+    // `(ctx: ai.Context) -> PromptAst` closure, so the risk is that
     // errors land on compiler-generated nodes. These cases pin that they don't.
     //
     // `expect_substr` is asserted; the span column is checked to be non-`0..0`
@@ -262,7 +262,7 @@ fn new_mode_failures_have_good_diagnostics() {
     for (label, client, body, expect_substr) in cases {
         let mut db = make_db();
         let src = format!(
-            "client C = openai.OpenAiClient.new(model = \"m\", api_key = \"k\");\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
+            "client C = openai.ResponsesClient.new(model = \"m\", api_key = \"k\");\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
         );
         let file = db.add_file("test.baml", &src);
         let tir = render_tir(&db, file);
@@ -439,6 +439,79 @@ function build(option: string) -> map<string, string> {
     assert!(
         !tir.contains("unresolved name: options"),
         "shorthand should not fall back to the generic unresolved-name diagnostic:\n{tir}"
+    );
+}
+
+/// Shorthand-ness is the parser's fact, not key text: a WRITTEN
+/// `{ "key": key }` is an ordinary entry, so an unbound value reports the
+/// generic unresolved-name diagnostic, never the shorthand rewrite hint.
+#[test]
+fn quoted_key_matching_value_name_is_not_property_shorthand() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(v: string?) -> map<string, string> {
+  if let other: string = v { { "key": key } } else { {} }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("unresolved name: key"),
+        "a quoted entry with an unbound value is a plain unresolved name, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "a quoted key is not shorthand and must not draw the shorthand diagnostic:\n{tir}"
+    );
+}
+
+/// The shorthand value is an ordinary path expression, so it is in scope
+/// exactly when a plain use is - including under a pattern binder, which the
+/// body-scope-only binding list could not see.
+#[test]
+fn property_shorthand_resolves_pattern_binders() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(v: string?) -> map<string, string> {
+  if let key: string = v { { key } } else { {} }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("property shorthand"),
+        "an `if let` binder satisfies the shorthand, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("unresolved name"),
+        "an `if let` binder satisfies the shorthand, got:\n{tir}"
+    );
+}
+
+/// Near-match candidates come from the EXPRESSION's scope, so a pattern
+/// binder is offered as the explicit-mapping suggestion.
+#[test]
+fn property_shorthand_suggests_a_pattern_binder() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(v: string?) -> map<string, string> {
+  if let option: string = v { { options } } else { {} }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected the `if let` binder as a near match, got:\n{tir}"
     );
 }
 
@@ -739,8 +812,8 @@ fn llm_client_override_argument_is_callable_on_function() {
     let file = db.add_file(
         "test.baml",
         r##"
-client DefaultClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "default-key");
-client OverrideClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "override-key");
+client DefaultClient = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "default-key");
+client OverrideClient = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "override-key");
 
 function Ask(input: string) -> string {
   client: DefaultClient
@@ -2062,7 +2135,7 @@ fn explicit_unknown_list_annotation_pins_element_type() {
         r#"
 function main() -> int {
   let xs: unknown[] = []
-  let r = baml.prompt.Role { name: "x", metadata: {} }
+  let r = ai.Role { name: "x", metadata: {} }
   xs.push(r)
   xs.push("hello")
   return 0

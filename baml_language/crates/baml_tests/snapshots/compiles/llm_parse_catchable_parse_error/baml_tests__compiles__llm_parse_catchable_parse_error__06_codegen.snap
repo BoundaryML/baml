@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 15604
 ---
 function $init() -> null {
     call $init_let_0
@@ -29,7 +28,7 @@ function user.ExtractInvoice(text: string, client: ai.Client | null) -> Invoice 
     call user.ExtractInvoice$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<Invoice, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Invoice>>
+    load_type ai.Runner<Invoice, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Invoice>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -66,6 +65,9 @@ function user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<Invoice> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.GPT4o
+    call ai.clients.resolve
+    store_var _6
     load_const "ExtractInvoice"
     load_deref ?1
     load_const "text"
@@ -74,8 +76,7 @@ function user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<Invoice> {
     alloc_map 1
     load_var text
     make_closure .<lambda(ExtractInvoice$spec, 0)>, 1
-    load_var _4
-    load_global user.GPT4o
+    load_var2 2 3
     load_type Invoice
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

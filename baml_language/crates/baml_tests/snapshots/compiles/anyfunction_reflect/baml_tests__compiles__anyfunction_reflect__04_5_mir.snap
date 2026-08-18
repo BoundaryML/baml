@@ -79,7 +79,7 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     // Locals:
     let _0: string // _0 // return
     let _1: baml.AnyFunction<Returns = unknown, Throws = unknown> // f // param
-    let _2: reflect.Signature // sig
+    let _2: baml.reflect.Signature // sig
     let _3: string // parts
     let _4: string
     let _5: string
@@ -88,21 +88,21 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     let _8: (baml.TypeValue) -> string throws never
     let _9: string
     let _10: int
-    let _11: (reflect.Arg[]) -> int throws never
+    let _11: (baml.reflect.Arg[]) -> int throws never
     let _12: type
-    let _13: reflect.Arg[]
-    let _14: baml.iter.Iterator<Error = never, Item = reflect.Arg>
+    let _13: baml.reflect.Arg[]
+    let _14: baml.iter.Iterator<Error = never, Item = baml.reflect.Arg>
     let _15: unknown
     let _16: bool
-    let _17: reflect.Arg
-    let _18: reflect.Arg // arg
+    let _17: baml.reflect.Arg
+    let _18: baml.reflect.Arg // arg
     let _19: string
     let _20: string
     let _21: string
     let _22: string
     let _23: (baml.TypeValue) -> string throws never
     let _24: string[]
-    let _25: (map<string, reflect.Arg>) -> string[] throws never
+    let _25: (map<string, baml.reflect.Arg>) -> string[] throws never
     let _26: type
     let _27: type
     let _28: baml.iter.Iterator<Error = never, Item = string>
@@ -110,13 +110,13 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     let _30: bool
     let _31: string
     let _32: string // key
-    let _33: null | reflect.Arg // opt
-    let _34: (map<string, reflect.Arg>, string) -> null | reflect.Arg throws never
+    let _33: null | baml.reflect.Arg // opt
+    let _34: (map<string, baml.reflect.Arg>, string) -> null | baml.reflect.Arg throws never
     let _35: string
     let _36: type
     let _37: type
     let _38: bool
-    let _39: null | reflect.Arg
+    let _39: null | baml.reflect.Arg
     let _40: bool
     let _41: string
     let _42: string
@@ -125,7 +125,7 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     let _45: (baml.TypeValue) -> string throws never
 
     bb0: {
-        _2 = call const fn reflect.signature(copy _1) -> [bb1];
+        _2 = call const fn baml.reflect.signature(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -153,11 +153,11 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     bb5: {
         _3 = copy _4 + copy _9;
         _13 = copy _2.1;
-        _14 = virtual_call iter as baml.iter.Iterable<Error = never, Item = reflect.Arg>(copy _13) -> [bb6];
+        _14 = virtual_call iter as baml.iter.Iterable<Error = never, Item = baml.reflect.Arg>(copy _13) -> [bb6];
     }
 
     bb6: {
-        _15 = virtual_call next as baml.iter.Iterator<Error = never, Item = reflect.Arg>(copy _14) -> [bb7];
+        _15 = virtual_call next as baml.iter.Iterator<Error = never, Item = baml.reflect.Arg>(copy _14) -> [bb7];
     }
 
     bb7: {
@@ -184,7 +184,7 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     bb10: {
         _25 = copy _2.2;
         _26 = load_type(string);
-        _27 = load_type(reflect.Arg);
+        _27 = load_type(baml.reflect.Arg);
         _24 = call const fn baml.Map.keys<copy _26, copy _27>(copy _25) -> [bb11];
     }
 
@@ -208,7 +208,7 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
         _34 = copy _2.2;
         _35 = copy _32;
         _36 = load_type(string);
-        _37 = load_type(reflect.Arg);
+        _37 = load_type(baml.reflect.Arg);
         _33 = call const fn baml.Map.get<copy _36, copy _37>(copy _34, copy _35) -> [bb15];
     }
 
@@ -262,7 +262,8 @@ fn user.typed_dispatch(name: string, args: map<string, unknown>) -> string | Doc
     let _12: type
     let _13: bool
     let _14: bool
-    let _15: string
+    let _15: bool
+    let _16: string
 
     bb0: {
         _3 = call const fn user.heterogeneous_tool_map() -> [bb1];
@@ -297,40 +298,366 @@ fn user.typed_dispatch(name: string, args: map<string, unknown>) -> string | Doc
         _10 = copy _4;
         _11 = load_type(string | Doc[]);
         _12 = load_type(ToolError);
-        _0 = call const fn reflect.call_any<copy _11, copy _12>(copy _10, copy _2) -> [bb13, unwind: bb8];
+        _0 = call const fn baml.reflect.call_any<copy _11, copy _12>(copy _10, copy _2) -> [bb15, unwind: bb8];
     }
 
     bb7: {
         _0 = const "no-such-tool";
-        goto -> bb13;
+        goto -> bb15;
     }
 
     bb8: {
         _13 = is_type(copy _9, ToolError);
-        branch copy _13 -> [bb12, bb9];
+        branch copy _13 -> [bb14, bb9];
     }
 
     bb9: {
-        _14 = is_type(copy _9, reflect.InvalidArgumentError);
-        branch copy _14 -> [bb11, bb10];
+        _14 = is_type(copy _9, baml.reflect.InvalidArgumentError);
+        branch copy _14 -> [bb13, bb10];
     }
 
     bb10: {
-        rethrow copy _9;
+        _15 = is_type(copy _9, baml.reflect.errors.CompilationError);
+        branch copy _15 -> [bb12, bb11];
     }
 
     bb11: {
-        _0 = const "bad-args";
-        goto -> bb13;
+        rethrow copy _9;
     }
 
     bb12: {
-        _15 = copy _9.0;
-        _0 = const "tool-error:" + copy _15;
-        goto -> bb13;
+        _0 = const "uncompiled-generic";
+        goto -> bb15;
     }
 
     bb13: {
+        _0 = const "bad-args";
+        goto -> bb15;
+    }
+
+    bb14: {
+        _16 = copy _9.0;
+        _0 = const "tool-error:" + copy _16;
+        goto -> bb15;
+    }
+
+    bb15: {
+        return;
+    }
+}
+
+fn user.RuntimeClassify(input: string, client: null | ai.Client) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: string // input // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.RunResult<T>
+    let _5: ai.Agent<T>
+    let _6: type
+    let _7: ai.FunctionSpec<T>
+    let _8: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = load_type(#0);
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+    }
+
+    bb3: {
+        _8 = load_type(#0);
+        _7 = call const fn user.RuntimeClassify$spec<copy _8>(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _4 = virtual_call run as ai.Runner<#0, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>(copy _5, copy _7) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _4.0;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.RuntimeClassify$parse(json: string) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: string // json // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(#0);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.RuntimeClassify$render_prompt(input: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // input // param
+    let _2: ai.FunctionSpec<T>
+    let _3: type
+    let _4: string
+    let _5: type
+    let _6: type
+
+    bb0: {
+        _3 = load_type(#0);
+        _2 = call const fn user.RuntimeClassify$spec<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _5 = load_type(#0);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn ai.wire.render_output_format(copy _5) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type(#0);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _6>(copy _2, copy _4) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<T> {
+    // Locals:
+    let _0: ai.FunctionSpec<T> // _0 // return
+    let _1: string // input // param [captured]
+    let _2: map<string, unknown>
+    let _3: (string) -> ai.Prompt throws never
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+    let _6: ai.Client
+
+    bb0: {
+        _2 = { const "input": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0]<1 type_args>(copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+    }
+
+    bb1: {
+        _6 = call const fn ai.clients.resolve(const item user.RuntimeEnumClient) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<#0> { const "RuntimeClassify", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(RuntimeClassify$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: ai.internal.SpecCtx // ctx
+    let _3: baml.TaggedString //  __spec_tagged_prompt
+    let _4: string[] //  __tt_parts
+    let _5: unknown[] //  __tt_values
+    let _6: string //  __tt_cur
+    let _7: string
+    let _8: int
+    let _9: string[]
+    let _10: string
+    let _11: type
+    let _12: int
+    let _13: unknown[]
+    let _14: string
+    let _15: type
+    let _16: int
+    let _17: string[]
+    let _18: ".\n"
+    let _19: type
+    let _20: int
+    let _21: unknown[]
+    let _22: string
+    let _23: type
+    let _24: int
+    let _25: string[]
+    let _26: ""
+    let _27: type
+    let _28: string[]
+    let _29: unknown[]
+    let _30: string[]
+    let _31: baml.TaggedString
+    let _32: unknown[]
+    let _33: baml.TaggedString
+
+    bb0: {
+        _2 = ai.internal.SpecCtx { copy _1 };
+        _4 = []: string[];
+        _5 = []: unknown[];
+        _6 = const "";
+        _7 = copy _6;
+        _6 = copy _7 + const "Choose a category for ";
+        _9 = copy _4;
+        _10 = copy _6;
+        _11 = load_type(string);
+        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1];
+    }
+
+    bb1: {
+        _6 = const "";
+        _13 = copy _5;
+        _14 = copy capture[0];
+        _15 = load_type(unknown);
+        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2];
+    }
+
+    bb2: {
+        _6 = const ".\n";
+        _17 = copy _4;
+        _18 = copy _6;
+        _19 = load_type(string);
+        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3];
+    }
+
+    bb3: {
+        _6 = const "";
+        _21 = copy _5;
+        _22 = copy _2.0;
+        _23 = load_type(unknown);
+        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb4];
+    }
+
+    bb4: {
+        _25 = copy _4;
+        _26 = copy _6;
+        _27 = load_type(string);
+        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb5];
+    }
+
+    bb5: {
+        _28 = copy _4;
+        _29 = copy _5;
+        _3 = baml.TaggedString { copy _28, copy _29 };
+        _31 = copy _3;
+        _30 = copy _31.0;
+        _33 = copy _3;
+        _32 = copy _33.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _30, copy _32) -> [bb6];
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.RuntimeClassify$stream(input: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<null | T, T> {
+    // Locals:
+    let _0: ai.stream.Stream<null | T, T> // _0 // return
+    let _1: string // input // param
+    let _2: null | ai.stream.StreamingClient // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<T>
+    let _5: type
+    let _6: type
+    let _7: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = load_type(#0);
+        _4 = call const fn user.RuntimeClassify$spec<copy _5>(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type(#0 | null);
+        _7 = load_type(#0);
+        _0 = call const fn ai.stream.from_spec<copy _6, copy _7>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.runtime_enum_llm_companions_compile() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.reflect.enum.Type // category
+    let _2: (string | baml.reflect.enum.Value)[]
+    let _3: baml.reflect.enum.Value
+    let _4: string // prompt
+    let _5: ai.Prompt
+    let _6: baml.reflect.enum.Type
+    let _7: unknown // parsed
+    let _8: baml.reflect.enum.Type
+    let _9: string
+    let _10: string
+    let _11: unknown
+
+    bb0: {
+        _3 = call const fn baml.reflect.enum.value(const "RED", const "k7", const "warm", const <omitted>, const <omitted>) -> [bb1];
+    }
+
+    bb1: {
+        _2 = [copy _3, const "BLUE"]: string | baml.reflect.enum.Value[];
+        _1 = call const fn baml.reflect.enum.new(const "Category", copy _2) -> [bb2];
+    }
+
+    bb2: {
+        _6 = copy _1;
+        _5 = call const fn user.RuntimeClassify$render_prompt<copy _6>(const "sample"; runtime_type_check) -> [bb3];
+    }
+
+    bb3: {
+        _4 = call const fn ai.Prompt.text(copy _5) -> [bb4];
+    }
+
+    bb4: {
+        _8 = copy _1;
+        _7 = call const fn user.RuntimeClassify$parse<copy _8>(const "\"k7\""; runtime_type_check) -> [bb5];
+    }
+
+    bb5: {
+        _9 = copy _4;
+        _11 = copy _7;
+        _10 = call const fn baml.reflect.enum.get_value(copy _11) -> [bb6];
+    }
+
+    bb6: {
+        _0 = copy _9 + copy _10;
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }

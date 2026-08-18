@@ -3,6 +3,7 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
+  type AnyClass
   type AnyFunction
   class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
   class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, to_int, parse, random] }
@@ -21,7 +22,7 @@ namespace baml:
   class TaggedString { methods: [] }
   type ToJson
   type ToString
-  class TypeValue { methods: [_to_string_impl, implements, implemented_by, to_string] }
+  class TypeValue { methods: [array, optional, to_baml, kind, as_class, as_enum, as_union, as_literal, as_array, as_map, as_interface, as_primitive, as_function, _validate_renderable, meta, _to_string_impl, implements, implemented_by, to_string] }
   class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, to_string] }
   function _cleanup_begin<T>
   function _compare_shim<T>
@@ -92,9 +93,11 @@ namespace baml.csv:
   function write<T>
   function writer
 namespace baml.env:
+  class Ref { methods: [get, get_or_panic, or] }
   function get
   function get_or_panic
   function get_or_panic_lenient
+  function ref
 namespace baml.errors:
   class AccessError { methods: [] }
   class CompilationError { methods: [] }
@@ -195,6 +198,7 @@ namespace baml.json:
   function _path_field
   function _path_index
   function deserialize<T>
+  function encode<T>
   function field
   function from<T>
   function from_json<T>
@@ -260,27 +264,64 @@ namespace baml.panics:
   class StackOverflow { methods: [] }
   class Unreachable { methods: [] }
   class UserPanic { methods: [] }
-namespace baml.prompt:
-  class AnthropicOptions { methods: [] }
-  class AzureOpenAiOptions { methods: [] }
-  class BedrockOptions { methods: [] }
-  class Context { methods: [output_format_with] }
-  class ContextClient { methods: [] }
-  class GoogleAiOptions { methods: [] }
-  class MediaUrlHandler { methods: [] }
-  class OutputFormat { methods: [] }
-  class PrimitiveClientOptions { methods: [] }
-  class Role { methods: [] }
-  class VertexAiOptions { methods: [] }
-  function build_output_format
-  function get_return_type
-  function make_role
-  function render_output_format
 namespace baml.random:
   class ChaCha20 { methods: [new, _new, random, random_int] }
   type Rng
   class SystemRandom { methods: [get, random, random_int] }
   class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
+namespace baml.reflect:
+  class Arg { methods: [] }
+  class Diagnostic { methods: [] }
+  class InvalidArgumentError { methods: [] }
+  class Meta { methods: [] }
+  class Package { methods: [current, compile, _compile, _finish, get_class, get_enum, get_interface, with_types, get_function, classes, enums, interfaces, functions, tests, diagnostics] }
+  class Session { methods: [new, _new, eval, _compile, _finish, diagnostics] }
+  class Signature { methods: [] }
+  class Span { methods: [] }
+  type TypeKind
+  type TypeView
+  class WithMeta<T> { methods: [] }
+  function call_any<R, E>
+  function signature
+namespace baml.reflect.array:
+  class Type { methods: [element_type, as_type] }
+namespace baml.reflect.class:
+  class Builder { methods: [field, type, build, _build] }
+  class Field { methods: [metadata, value] }
+  class PendingType { methods: [array, optional, union, resolved, meta] }
+  class Type { methods: [fields, meta, as_type] }
+  function _new
+  function builder
+  function get_field<T>
+  function new
+namespace baml.reflect.enum:
+  class Type { methods: [values, meta, as_type] }
+  class Value { methods: [] }
+  function get_value
+  function new
+  function value
+namespace baml.reflect.errors:
+  class CompilationError { methods: [] }
+  class EvaluationError { methods: [] }
+  class SessionBusy { methods: [] }
+namespace baml.reflect.function:
+  class Parameter { methods: [] }
+  class Type { methods: [params, return_type, as_type] }
+namespace baml.reflect.interface:
+  class Implementation { methods: [field] }
+  class Type { methods: [implemented_by, as_type] }
+  function implementation<I>
+namespace baml.reflect.literal:
+  class Type { methods: [as_type] }
+  function new
+namespace baml.reflect.map:
+  class Type { methods: [key_type, value_type, as_type] }
+  function new
+namespace baml.reflect.primitive:
+  class Type { methods: [as_type] }
+namespace baml.reflect.union:
+  class Type { methods: [member_types, as_type] }
+  function new
 namespace baml.sap:
   class NoYield { methods: [] }
   class ParseCache<TStream, TFinal> { methods: [new] }
@@ -332,6 +373,9 @@ namespace baml.toml:
   function item_from_json
   function item_to_json
   function table_from_json
+namespace baml.type:
+  function of<T>
+  function of_value
 namespace baml.ws:
   class WsStream { methods: [send, next, close] }
   function _connect

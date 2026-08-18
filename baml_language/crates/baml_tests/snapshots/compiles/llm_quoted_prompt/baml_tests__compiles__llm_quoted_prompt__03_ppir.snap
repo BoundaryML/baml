@@ -9,10 +9,10 @@ function user.BacktickPrompt$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.BacktickPrompt$render_prompt(topic: string) -> ai.Prompt  [expr] {
-  BacktickPrompt$spec(topic).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  BacktickPrompt$spec(topic).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.BacktickPrompt$spec(topic: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "BacktickPrompt", args: map { "topic": topic }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Write one sentenc...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } topic);  __tt_cur =  __tt_cur Add ".\nAn escaped mark...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: QuotedPromptClient }
+  ai.FunctionSpec { spec_name: "BacktickPrompt", args: map { "topic": topic }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Write one sentenc...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } topic);  __tt_cur =  __tt_cur Add ".\nAn escaped mark...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(QuotedPromptClient) }
 }
 function user.BacktickPrompt$stream(topic: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
   ai.stream.from_spec(BacktickPrompt$spec(topic), client = client)
@@ -24,10 +24,10 @@ function user.QuotedPrompt$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.QuotedPrompt$render_prompt(topic: string) -> ai.Prompt  [expr] {
-  QuotedPrompt$spec(topic).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  QuotedPrompt$spec(topic).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.QuotedPrompt$spec(topic: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "QuotedPrompt", args: map { "topic": topic }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Write one sentenc...";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: QuotedPromptClient }
+  ai.FunctionSpec { spec_name: "QuotedPrompt", args: map { "topic": topic }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Write one sentenc...";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(QuotedPromptClient) }
 }
 function user.QuotedPrompt$stream(topic: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
   ai.stream.from_spec(QuotedPrompt$spec(topic), client = client)

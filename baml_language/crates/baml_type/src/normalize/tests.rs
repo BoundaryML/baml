@@ -4,7 +4,9 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::{Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr};
+use crate::{
+    Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr, TyAttrValue,
+};
 
 // ── stub context ───────────────────────────────────────────────────────────
 
@@ -171,6 +173,75 @@ fn projection_reduces_to_its_binding() {
         &Ty::string(),
         &ctx,
     ));
+}
+
+// ── BEP-066 shared runtime-type algebra ──────────────────────────────────
+
+#[test]
+fn reflection_kind_classes_are_sealed_type_subtypes_in_both_entries() {
+    let ctx = Ctx::default();
+    let carrier = Ty::Type {
+        attr: TyAttr::default(),
+    };
+
+    for kind in crate::type_kind::TypeKind::ALL {
+        let view = Ty::Class(kind.class_name(), Vec::new(), TyAttr::default());
+        assert!(
+            is_subtype(&view, &carrier, &ctx),
+            "plain subtype entry rejected {kind:?}"
+        );
+        assert!(
+            is_subtype_interned(
+                &interned::Ty::from_plain(&view),
+                &interned::Ty::from_plain(&carrier),
+                &ctx,
+            ),
+            "interned subtype entry rejected {kind:?}"
+        );
+        assert!(
+            !definitely_disjoint(&view, &carrier, &ctx),
+            "reflection view and type carrier cannot be head-disjoint"
+        );
+    }
+
+    let user_lookalike = Ty::Class(
+        QualifiedTypeName::new(
+            Name::new("user"),
+            vec![Name::new("reflect"), Name::new("class")],
+            Name::new("Type"),
+        ),
+        Vec::new(),
+        TyAttr::default(),
+    );
+    assert!(!is_subtype(&user_lookalike, &carrier, &ctx));
+    assert!(!is_subtype_interned(
+        &interned::Ty::from_plain(&user_lookalike),
+        &interned::Ty::from_plain(&carrier),
+        &ctx,
+    ));
+}
+
+#[test]
+fn canonical_digest_is_stable_and_uses_canonical_plain_types() {
+    let ctx = Ctx::default();
+    let int = Ty::int();
+    let int_with_attr = Ty::Int {
+        attr: TyAttr {
+            sap_parse_without_null: TyAttrValue::Set,
+            ..TyAttr::default()
+        },
+    };
+    let ordered = union(vec![Ty::int(), Ty::string()]);
+    let permuted = union(vec![Ty::string(), Ty::int()]);
+
+    let int_digest = canonical_digest(&int, &ctx);
+    let union_digest = canonical_digest(&ordered, &ctx);
+    assert_eq!(int_digest, canonical_digest(&int, &ctx));
+    assert_eq!(int_digest, canonical_digest(&int_with_attr, &ctx));
+    assert_eq!(union_digest, canonical_digest(&permuted, &ctx));
+    assert_ne!(int_digest, union_digest);
+    assert_eq!(int_digest, 0xa8c7_f832_281a_39c5);
+    assert_eq!(union_digest, 0x9886_dba9_b789_ac56);
 }
 
 #[test]
@@ -1334,6 +1405,54 @@ fn equal_requires_singleton_with_unoverridable_eq() {
     assert!(!definitely_equal(&class("Dog"), &class("Dog"), &ctx));
 }
 
+// ── baml.AnyClass ──────────────────────────────────────────────────────────
+
+fn any_class() -> Ty {
+    Ty::Interface(
+        QualifiedTypeName::new(Name::new("baml"), vec![], Name::new("AnyClass")),
+        vec![],
+        vec![],
+        TyAttr::default(),
+    )
+}
+
+#[test]
+fn any_class_membership_is_derived_for_classes_only() {
+    let ctx = Ctx::default();
+    let target = any_class();
+    assert!(is_subtype(&class("Record"), &target, &ctx));
+    assert!(!is_subtype(&Ty::int(), &target, &ctx));
+    assert!(!is_subtype(&Ty::string(), &target, &ctx));
+    assert!(!is_subtype(
+        &Ty::List(Box::new(Ty::int()), TyAttr::default()),
+        &target,
+        &ctx
+    ));
+    assert!(!is_subtype(
+        &Ty::Map {
+            key: Box::new(Ty::string()),
+            value: Box::new(Ty::int()),
+            attr: TyAttr::default(),
+        },
+        &target,
+        &ctx
+    ));
+}
+
+#[test]
+fn any_class_admits_only_the_class_reflection_kind_view() {
+    let ctx = Ctx::default();
+    let target = any_class();
+    for kind in crate::type_kind::TypeKind::ALL {
+        let view = Ty::Class(kind.class_name(), vec![], TyAttr::default());
+        assert_eq!(
+            is_subtype(&view, &target, &ctx),
+            kind == crate::type_kind::TypeKind::Class,
+            "unexpected AnyClass membership for {kind:?}"
+        );
+    }
+}
+
 // ── BEP-062: baml.AnyFunction ──────────────────────────────────────────────
 
 /// `baml.AnyFunction<...pins>` with the given associated-type pins. An empty
@@ -1548,6 +1667,54 @@ mod interned_entry {
             &it(&union(vec![Ty::string(), Ty::int()])),
             &ctx,
         ));
+    }
+
+    #[test]
+    fn canonical_cache_matches_reject_free_canonical_relations() {
+        let mut ctx = Ctx::default();
+        ctx.enums
+            .insert(qtn("Side"), vec![Name::new("L"), Name::new("R")]);
+        ctx.requires.push((qtn("Readable"), qtn("Displayable")));
+        int_list_alias(&mut ctx, "JsonA");
+        int_list_alias(&mut ctx, "JsonB");
+
+        let pairs = [
+            (alias("JsonA"), alias("JsonB")),
+            (alias("JsonA"), Ty::int()),
+            (lit_int(1), Ty::int()),
+            (Ty::int(), union(vec![Ty::int(), Ty::string()])),
+            (
+                union(vec![variant("Side", "L"), variant("Side", "R")]),
+                enum_ty("Side"),
+            ),
+            (class("Left"), class("Right")),
+            // Distinct interface heads cannot be rejected: the context makes
+            // this pair a valid subtype through `requires`.
+            (iface("Readable"), iface("Displayable")),
+            (iface("Displayable"), iface("Readable")),
+        ];
+        let pairs = pairs.map(|(a, b)| (it(&a), it(&b)));
+        let cache = InternedCanonicalCache::default();
+
+        // Run twice: the first pass populates canonical forms and the second
+        // proves that the warm path returns the same relation verdicts. The
+        // oracle deliberately bypasses the interned-entry fast rejection.
+        for _ in 0..2 {
+            for (a, b) in &pairs {
+                let canonical_a = NormalTy::canonical_interned(a, &ctx);
+                let canonical_b = NormalTy::canonical_interned(b, &ctx);
+                assert_eq!(
+                    cache.equivalent(a, b, &ctx),
+                    canonical_a == canonical_b,
+                    "cached equivalence diverged for {a:?} == {b:?}"
+                );
+                assert_eq!(
+                    cache.is_subtype(a, b, &ctx),
+                    canonical_a.is_subtype_of(&canonical_b, &ctx, &mut HashSet::new()),
+                    "cached subtyping diverged for {a:?} <: {b:?}"
+                );
+            }
+        }
     }
 
     /// The plain entry gets the same spec rule (TYPE_SYSTEM.md:

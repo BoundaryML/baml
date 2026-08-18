@@ -43,13 +43,13 @@ policy.max_delta_pct = 3.0
 # Reclaiming the `syn` cost would mean dropping prettyplease (raw,
 # unformatted generated SDK output).
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = "20.9 MiB"
+max_file_bytes = "25.0 MiB"
 
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "26.9 MiB"
+max_file_bytes = "31.1 MiB"
 
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "22.5 MiB"
+max_file_bytes = "26.7 MiB"
 
 [artifacts.packed-program]
 kind = "pack"
@@ -58,14 +58,19 @@ policy.max_delta_pct = 3.0
 # Bumped ~3% above the Aug 2026 baselines when the builtin ai/provider
 # stdlib packages landed (PR #4352): the packed program carries their
 # bytecode (~700 KB).
+#
+# Native ceilings bumped again (PR #4430, sys_llm native migration) when the
+# 12 native BAML provider clients replaced the Rust `sys_llm` shim: their
+# bytecode ships in every packed program. Each ceiling is ~3% above the
+# re-recorded baseline in `.ci/size-gate`.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = "14.3 MiB"
+max_file_bytes = "20.2 MiB"
 
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "18.3 MiB"
+max_file_bytes = "24.4 MiB"
 
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "15.3 MiB"
+max_file_bytes = "21.3 MiB"
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
@@ -88,4 +93,4 @@ wasm = true
 policy.max_delta_pct = 3.0
 
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = "4.5 MiB"
+max_gzip_bytes = "5.3 MiB"

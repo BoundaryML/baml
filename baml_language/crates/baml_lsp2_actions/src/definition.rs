@@ -464,6 +464,11 @@ fn resolve_field_access_at(
                 range: *source_map.field_name_spans.get(*field_index as usize)?,
             })
         }
+        // Mounted rows deliberately carry no dependency SourceFile/span.
+        MemberResolution::External(_)
+        | MemberResolution::ExternalField { .. }
+        | MemberResolution::ExternalVariant { .. }
+        | MemberResolution::ExternalInterfaceVirtualField { .. } => None,
     }
 }
 

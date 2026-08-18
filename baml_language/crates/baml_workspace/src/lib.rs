@@ -85,6 +85,22 @@ pub trait Db: salsa::Database {
     fn seeded_callable_throws(&self) -> Option<SeededCallableThrows> {
         None
     }
+
+    /// Source-less dependency packages mounted into this database as serialized
+    /// `PackageInterface` blobs, keyed by the package name (the mount alias).
+    ///
+    /// When present (BEP-066 mounted-package linking), each entry makes its name a *dependency*
+    /// of every user package (`package_dependencies`) whose `package_interface`
+    /// is served straight from the blob — the mounted package has **no source
+    /// files** (`package_items` is empty; that is the point). Cross-package
+    /// resolution for a mounted name goes through the interface rows instead of
+    /// raw items. Names colliding with the reserved package set (the stdlib
+    /// packages, `user`, `root`, `env`) are ignored entirely — see
+    /// `baml_compiler2_hir::package::mounted_package_names`. Defaults to `None`:
+    /// every other database resolves dependencies from source only.
+    fn mounted_packages(&self) -> Option<MountedPackages> {
+        None
+    }
 }
 
 /// Input: per-file `FunctionThrowFacts` from a previous compile, keyed by
@@ -127,6 +143,31 @@ pub struct SeededCallableThrows {
 pub struct SeededStdlibInterface {
     #[returns(ref)]
     pub by_package: std::collections::BTreeMap<String, Vec<u8>>,
+}
+
+/// Input: source-less dependency packages mounted as serialized
+/// `PackageInterface` blobs, keyed by package name (the mount alias); each
+/// value is `borsh(PackageInterface)`.
+///
+/// Opaque bytes for the same reason as [`SeededStdlibInterface`]:
+/// `PackageInterface` lives in `baml_compiler2_tir`, which depends on this
+/// crate. `baml_compiler2_tir` deserializes a package's bytes when its
+/// `package_interface` is queried. A Salsa input, so mounting/unmounting a
+/// package invalidates dependents for free (the B-694 delivery mechanism
+/// generalized to any alias, per BEP-066 mounted-package linking).
+#[salsa::input]
+pub struct MountedPackages {
+    #[returns(ref)]
+    pub by_package: std::collections::BTreeMap<String, Vec<u8>>,
+
+    /// Names whose blobs are compiler-built, image-immutable dependencies.
+    ///
+    /// This is deliberately metadata on the mounted-package transport rather
+    /// than a second interface store: both ordinary runtime mounts and the
+    /// precompiled stdlib use the same `PackageInterface` bytes, while the
+    /// compiler can still keep immutable rows on its fact-free fast path.
+    #[returns(ref)]
+    pub immutable_precompiled: std::collections::BTreeSet<String>,
 }
 
 /// Input: the project root configuration

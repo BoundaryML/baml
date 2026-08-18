@@ -1,7 +1,7 @@
 // Tests for baml.env namespace.
 //
-// BAML has no `baml.env.set` — the stdlib exposes only `baml.env.get` and
-// `baml.env.get_or_panic` (read-only).
+// BAML has no `baml.env.set` — the stdlib exposes only `baml.env.get`,
+// `baml.env.get_or_panic` and `baml.env.ref` (read-only).
 
 // ============================================================================
 // env_get_or_panic_missing_var
@@ -33,15 +33,13 @@ test "env_get_missing_var_returns_null" {
 // ============================================================================
 // env_sugar_missing_var
 //
-// The `env.KEY` sugar desugars to `baml.env.get_or_panic(KEY)` and therefore
-// throws baml.panics.UserPanic for absent keys.
+// The `env.KEY` sugar desugars to `baml.env.ref("KEY")` — a late-bound
+// reference carrying the NAME only. It never reads the environment, so an
+// absent key does not throw; the read happens through the reference.
+// (`.get_or_panic()` is still the throwing read — see ns_env_ref_desugar for
+// the full reference surface.)
 // ============================================================================
 
 test "env_sugar_missing_var" {
-    {
-        env.BAML_TEST_SUGAR_MISSING;
-        baml.sys.panic("expected env.BAML_TEST_SUGAR_MISSING to throw")
-    } catch (e) {
-        baml.panics.UserPanic => null
-    }
+    assert.equal(env.BAML_TEST_SUGAR_MISSING.get(), null)
 }

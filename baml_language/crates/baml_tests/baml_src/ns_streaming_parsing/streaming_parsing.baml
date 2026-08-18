@@ -6,7 +6,7 @@
 
 // Never contacted: the URL points at a dead localhost port. The declaration
 // only supplies provider/model/key metadata for prompt rendering.
-client StreamParseClient = openai.OpenAiClient.new(
+client StreamParseClient = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = "test-key",
     base_url = "http://localhost:1234",

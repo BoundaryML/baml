@@ -28,6 +28,15 @@ fn main() {
         eprintln!("Skipping compiler_benchmark in debug/test profile.");
         return;
     }
+    // Hermetic wall-time: pin BAML profiling OFF unless the caller explicitly
+    // chose a value, so compile timings don't include the default-ON tracing
+    // pipeline. See runtime_benchmark.rs for the full rationale; tracing cost
+    // is measured deliberately in the `profiling_overhead` bench target.
+    if std::env::var_os("BAML_PROFILE").is_none() {
+        // SAFETY: single-threaded at the very top of main, before any engine
+        // or divan code reads the environment.
+        unsafe { std::env::set_var("BAML_PROFILE", "0") };
+    }
     divan::main();
 }
 

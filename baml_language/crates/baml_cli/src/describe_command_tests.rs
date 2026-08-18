@@ -429,12 +429,14 @@ fn render_builtin_namespace_env() {
     insta::assert_snapshot!(output);
 }
 
-/// `baml describe baml.prompt` — list items in the `prompt` sub-namespace.
+/// `baml describe ai.internal` — list items in the `ai.internal` namespace,
+/// the home of the package-private helpers and the prompt-rendering plumbing
+/// (there is deliberately no `baml.prompt` namespace).
 #[test]
-fn render_builtin_namespace_prompt() {
+fn render_builtin_namespace_ai_internal() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
-    let ns_path = vec![baml_db::Name::new("prompt")];
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("ai"));
+    let ns_path = vec![baml_db::Name::new("internal")];
     let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
@@ -883,6 +885,21 @@ fn describe_builtin_method_drill_in_via_alias() {
         !output.starts_with("NOT FOUND") && !output.starts_with("NO DESCRIPTION"),
         "`string.length` should resolve via the alias:\n{output}"
     );
+}
+
+/// The CLI describe surface carries the same omission contract as runtime
+/// reflection, so users do not mistake a generic function's absence for a
+/// missing export.
+#[test]
+fn describe_package_functions_documents_unspecialized_generic_omission() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "baml.reflect.Package.functions");
+    assert!(
+        output.contains("Unspecialized generic functions are omitted")
+            && output.contains("cannot supply type arguments yet."),
+        "expected generic-listing contract in builtin method docs:\n{output}",
+    );
+    insta::assert_snapshot!(output);
 }
 
 /// Drilling into builtin methods by their class name (`Array.reduce`,

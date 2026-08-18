@@ -194,15 +194,20 @@ struct RenderState {
     /// Set when any rendered type expression references the runtime opaque
     /// handle token `_BamlHandle` (`Ty::RustType`).
     uses_baml_handle: bool,
-    /// Set when a generic class emits a `$types` field, which references the
-    /// runtime `BamlType` token type.
+    /// Set when a generic class/call emits `$types`, which accepts both opaque
+    /// reflected definitions and statically-known host tokens.
     uses_baml_type: bool,
+    /// Set when a BAML `type` appears in a public signature.
+    uses_baml_type_handle: bool,
 }
 
 impl RenderState {
     fn merge(&mut self, t: &TranslatedType) {
         for p in &t.imports {
             self.imports.insert(p.clone());
+        }
+        if t.expr.contains("BamlType") {
+            self.uses_baml_type_handle = true;
         }
     }
 }
@@ -365,6 +370,7 @@ fn is_ts_property_identifier(name: &str) -> bool {
 /// vars; a class type var is already in scope on the enclosing class.
 fn fn_type_sig(
     generics: &[String],
+    type_binding_params: &[String],
     names: &[&str],
     tys: &[TranslatedType],
     defaults: &[Option<FunctionArgumentDefault>],
@@ -388,6 +394,14 @@ fn fn_type_sig(
             ));
         }
         fields.push("$ctx?: BamlCallContext | undefined".to_string());
+        if !type_binding_params.is_empty() {
+            let bindings = type_binding_params
+                .iter()
+                .map(|name| format!("{name}?: BamlType | BamlTypeToken"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            fields.push(format!("$types?: {{ {bindings} }} | undefined"));
+        }
         params.push(format!("$opts?: {{ {} }} | undefined", fields.join("; ")));
     }
     let ret = if is_async {
@@ -550,6 +564,9 @@ fn runtime_import_line(state: &RenderState, extra: &[&str], runtime_package: &st
     // value/type-only named import.
     if state.uses_baml_type {
         names.push("type BamlType");
+        names.push("type BamlTypeToken");
+    } else if state.uses_baml_type_handle {
+        names.push("type BamlType");
     }
     if names.is_empty() {
         return String::new();
@@ -576,6 +593,7 @@ fn write_preamble_ts(
             "import type {{ BamlHandle as _BamlHandle }} from \"{runtime_package}\";"
         );
     }
+    let is_reflect = body.leaf.segments == ["baml", "reflect"];
     if is_root {
         out.push_str(&runtime_import_line(
             state,
@@ -594,10 +612,15 @@ fn write_preamble_ts(
             out.push('\n');
             write_child_reexports(out, kids, callable_child_aliases);
         }
+        out.push_str("\nexport { reflect } from \"./baml/index.js\";\n");
     } else {
-        out.push_str(&runtime_import_line(state, &[], runtime_package));
+        let extra: &[&str] = if is_reflect { &["reflectType"] } else { &[] };
+        out.push_str(&runtime_import_line(state, extra, runtime_package));
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         write_child_reexports(out, kids, callable_child_aliases);
+        if is_reflect {
+            out.push_str("const __baml_type = reflectType;\nexport { __baml_type as type };\n");
+        }
     }
 }
 
@@ -696,7 +719,7 @@ fn render_class_ts(
         let fields = c
             .generic_params
             .iter()
-            .map(|p| format!("{p}?: BamlType"))
+            .map(|p| format!("{p}?: BamlType | BamlTypeToken"))
             .collect::<Vec<_>>()
             .join("; ");
         format!("{{ {fields} }}")
@@ -821,7 +844,18 @@ fn render_method_binding_ts(
     let (names, tys, defaults, ret) = binding_surface(m, ctx, state);
     let is_async = m.mode == SyncAsync::Async;
     let sig_generics = method_sig_generics(m, class_generics);
-    let sig = fn_type_sig(&sig_generics, &names, &tys, &defaults, &ret.expr, is_async);
+    if !m.generic_params.is_empty() {
+        state.uses_baml_type = true;
+    }
+    let sig = fn_type_sig(
+        &sig_generics,
+        &m.generic_params,
+        &names,
+        &tys,
+        &defaults,
+        &ret.expr,
+        is_async,
+    );
     let required_params = m.runtime_required_names();
     let optional_params = m.optional_names();
     let required_params_lit = param_names_literal(&required_params);
@@ -881,7 +915,11 @@ fn render_function_ts(
     state.merge(&ret);
     let names: Vec<&str> = f.param_names.iter().map(String::as_str).collect();
     let is_async = f.mode == SyncAsync::Async;
+    if !f.generic_params.is_empty() {
+        state.uses_baml_type = true;
+    }
     let sig = fn_type_sig(
+        &f.generic_params,
         &f.generic_params,
         &names,
         &tys,

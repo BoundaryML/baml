@@ -14,10 +14,40 @@
 
 use std::borrow::Cow;
 
-use baml_type::{Literal, Name, RealizedTy, TyTemplate, TypeName, normalize::TypeContext};
+use baml_type::{
+    Literal, Name, RealizedTy, TyTemplate, TypeName,
+    normalize::TypeContext,
+    type_kind::{class_inhabits_any_class, is_type_kind_class},
+};
 use bex_vm_types::{errors::VmInternalError, types::RuntimeImplRule};
 
 use crate::{BexVm, type_context::StructuralEquivCtx};
+
+/// A resolver candidate borrows immutable package rules and owns only rules
+/// copied out of the lock-protected dynamic side table. Static virtual calls
+/// must not deep-clone their rule metadata on every dispatch.
+pub(crate) enum RuntimeImplRuleCandidate<'vm> {
+    Static(&'vm RuntimeImplRule),
+    Borrowed(&'vm RuntimeImplRule),
+    Owned(Box<RuntimeImplRule>),
+}
+
+impl RuntimeImplRuleCandidate<'_> {
+    pub(crate) fn is_static(&self) -> bool {
+        matches!(self, Self::Static(_))
+    }
+}
+
+impl std::ops::Deref for RuntimeImplRuleCandidate<'_> {
+    type Target = RuntimeImplRule;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Static(rule) | Self::Borrowed(rule) => rule,
+            Self::Owned(rule) => rule,
+        }
+    }
+}
 
 /// The runtime impl resolver over a running VM. Holding the `&BexVm` here —
 /// rather than threading it through every helper — keeps the whole selection
@@ -28,11 +58,36 @@ use crate::{BexVm, type_context::StructuralEquivCtx};
 #[derive(Clone, Copy)]
 pub(crate) struct ImplResolver<'vm> {
     vm: &'vm BexVm,
+    root_package: Option<bex_vm_types::HeapPtr>,
 }
 
 impl<'vm> ImplResolver<'vm> {
     pub(crate) fn new(vm: &'vm BexVm) -> Self {
-        Self { vm }
+        Self {
+            vm,
+            root_package: None,
+        }
+    }
+
+    /// Resolve using an explicitly selected runtime package as the dynamic
+    /// world root. Reflection needs this when checking a package value from
+    /// code lexically owned by a different package.
+    pub(crate) fn for_package(vm: &'vm BexVm, package: bex_vm_types::HeapPtr) -> Self {
+        Self {
+            vm,
+            root_package: Some(package),
+        }
+    }
+
+    /// Resolve in the dynamic world that owns `value`, falling back to the
+    /// lexical frame's world for static values and primitives.
+    pub(crate) fn for_value(vm: &'vm BexVm, value: bex_vm_types::Value) -> Self {
+        let package = vm.value_runtime_package(value);
+        if package.is_null() {
+            Self::new(vm)
+        } else {
+            Self::for_package(vm, package)
+        }
     }
 
     /// Every impl rule of `iface` in the program, in package-load order.
@@ -42,12 +97,48 @@ impl<'vm> ImplResolver<'vm> {
     /// one O(1) lookup over a table that already spans every package — see that
     /// type's docs for why a per-package search cannot be narrowed correctly. An
     /// unknown interface (not loaded) has no impls anywhere.
-    fn rules_for(self, iface: &TypeName) -> impl Iterator<Item = &'vm RuntimeImplRule> {
-        let iface_ptr = self.vm.lookup_interface(iface);
-        iface_ptr
+    fn rules_for(self, iface: &TypeName) -> Vec<RuntimeImplRuleCandidate<'vm>> {
+        let Some(iface_ptr) = self.vm.lookup_interface(iface) else {
+            return Vec::new();
+        };
+        let mut pointers = Vec::new();
+        pointers.extend(self.vm.packages.impl_rules_of(iface_ptr));
+        let mut packages = vec![
+            self.root_package
+                .unwrap_or_else(|| self.vm.current_runtime_package()),
+        ];
+        let mut seen = std::collections::HashSet::new();
+        while let Some(package_ptr) = packages.pop() {
+            if package_ptr.is_null() || !seen.insert(package_ptr) {
+                continue;
+            }
+            let Some(package) = self.vm.get_object(package_ptr).as_package() else {
+                continue;
+            };
+            if let Some(rules) = package.impl_rules.get(&iface_ptr) {
+                pointers.extend(rules);
+            }
+            if let Some(runtime) = &package.runtime {
+                packages.extend(runtime.dependencies.iter().copied());
+            }
+        }
+        let mut rules = pointers
             .into_iter()
-            .flat_map(move |ptr| self.vm.packages.impl_rules_of(ptr))
-            .filter_map(move |&rule_ptr| self.vm.get_object(rule_ptr).as_impl_rule())
+            .filter_map(|rule_ptr| {
+                self.vm
+                    .get_object(rule_ptr)
+                    .as_impl_rule()
+                    .map(RuntimeImplRuleCandidate::Borrowed)
+            })
+            .collect::<Vec<_>>();
+        rules.extend(
+            self.vm
+                .dynamic_dispatch
+                .rules_of(iface_ptr)
+                .into_iter()
+                .map(|rule| RuntimeImplRuleCandidate::Owned(Box::new(rule))),
+        );
+        rules
     }
 }
 
@@ -129,22 +220,45 @@ impl<'vm> ImplResolver<'vm> {
         concrete_ty: &RealizedTy,
         iface: &TypeName,
         iface_args: &[RealizedTy],
-    ) -> Option<(&'vm RuntimeImplRule, Vec<RealizedTy>)> {
+    ) -> Option<(RuntimeImplRuleCandidate<'vm>, Vec<RealizedTy>)> {
+        // Static/package-image rules are immutable and already indexed by the
+        // canonical interface pointer. Try that slice directly: this is the
+        // overwhelmingly common virtual-call path and avoids candidate Vecs,
+        // runtime-package graph walks, and dynamic-table locking.
+        if let Some(iface_ptr) = self.vm.lookup_interface(iface) {
+            for &rule_ptr in self.vm.packages.impl_rules_of(iface_ptr) {
+                let Some(rule) = self.vm.get_object(rule_ptr).as_impl_rule() else {
+                    continue;
+                };
+                if let Some(type_args) = self.requested_rule_args(rule, concrete_ty, iface_args) {
+                    return Some((RuntimeImplRuleCandidate::Static(rule), type_args));
+                }
+            }
+        }
+
         for rule in self.rules_for(iface) {
-            let Some(type_args) = self.rule_applies(rule, concrete_ty, &mut Vec::new()) else {
-                continue;
-            };
-            // Select on the interface's input args only (associated types are outputs).
-            let rule_args: Vec<RealizedTy> = rule
-                .interface_args
-                .iter()
-                .map(|t| self.substitute_checked(t, &type_args))
-                .collect();
-            if iface_args.is_empty() || self.ty_args_equivalent(&rule_args, iface_args) {
+            if let Some(type_args) = self.requested_rule_args(&rule, concrete_ty, iface_args) {
                 return Some((rule, type_args));
             }
         }
         None
+    }
+
+    fn requested_rule_args(
+        self,
+        rule: &RuntimeImplRule,
+        concrete_ty: &RealizedTy,
+        iface_args: &[RealizedTy],
+    ) -> Option<Vec<RealizedTy>> {
+        let type_args = self.rule_applies(rule, concrete_ty, &mut Vec::new())?;
+        // Select on the interface's input args only (associated types are outputs).
+        let rule_args: Vec<RealizedTy> = rule
+            .interface_args
+            .iter()
+            .map(|t| self.substitute_checked(t, &type_args))
+            .collect();
+        (iface_args.is_empty() || self.ty_args_equivalent(&rule_args, iface_args))
+            .then_some(type_args)
     }
 
     /// Realize a [`MethodImpl`](bex_vm_types::types::MethodImpl) frame template (De
@@ -208,6 +322,18 @@ impl<'vm> ImplResolver<'vm> {
         requested_assoc: &[(Name, RealizedTy)],
         stack: &mut Vec<Obligation>,
     ) -> bool {
+        // The blanket stdlib impl exists to supply AnyClass's default-method
+        // dispatch. Membership is narrower: class values only, and among the
+        // sealed reflection-kind views only `reflect.class.Type`. Keep the
+        // carve-out at the recursive proof seam so nested bounds cannot observe
+        // the blanket rule's broader receiver.
+        if iface.is_builtin_root_type("AnyClass") {
+            return matches!(
+                concrete_ty,
+                RealizedTy::Class(name, _, _) if class_inhabits_any_class(name)
+            );
+        }
+
         // Key on the normalized (literal/enum-variant → base) type so `1` and `int`
         // are the same goal for cycle purposes.
         let goal: Obligation = (
@@ -222,11 +348,16 @@ impl<'vm> ImplResolver<'vm> {
         stack.push(goal);
         // `rules_for` borrows `self.vm` immutably while `stack` is borrowed
         // mutably inside the predicate, so the candidates are collected first.
-        let candidates: Vec<&RuntimeImplRule> = self.rules_for(iface).collect();
+        let candidates = self.rules_for(iface);
         let proven = candidates.into_iter().any(|rule| {
-            self.rule_applies(rule, concrete_ty, stack)
+            self.rule_applies(&rule, concrete_ty, stack)
                 .is_some_and(|bindings| {
-                    self.interface_request_matches(rule, &bindings, requested_args, requested_assoc)
+                    self.interface_request_matches(
+                        &rule,
+                        &bindings,
+                        requested_args,
+                        requested_assoc,
+                    )
                 })
         });
         stack.pop();
@@ -333,6 +464,15 @@ impl<'vm> ImplResolver<'vm> {
         concrete: &RealizedTy,
         bindings: &mut [Option<RealizedTy>],
     ) -> bool {
+        // Reflection kind classes are the sealed runtime refinements of `type`.
+        // Keep `implement I for type` rules applicable when the dynamic receiver
+        // is one of those refinements (notably TypeValue's tostring override).
+        if matches!(pattern, TyTemplate::Type { .. })
+            && matches!(concrete, RealizedTy::Class(name, _, _) if is_type_kind_class(name))
+        {
+            return true;
+        }
+
         // A fully-realized pattern carries no frame refs or holes: compare it to the
         // concrete type semantically (union-order-insensitive, matching the type
         // checker) through the canonical fact-opaque `StructuralEquivCtx`. The

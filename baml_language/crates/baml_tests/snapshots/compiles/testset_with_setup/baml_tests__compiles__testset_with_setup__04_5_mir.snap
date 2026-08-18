@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 26525
 ---
 === MIR2 ===
 fn user.$init_test_main(registry: testing.TestCollector) -> null {
@@ -63,7 +62,7 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> void {
 fn .<lambda(<lambda($init_test_main, 0)>, 1)>() -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: null
+    let _1: void
     let _2: string
     let _3: int
 

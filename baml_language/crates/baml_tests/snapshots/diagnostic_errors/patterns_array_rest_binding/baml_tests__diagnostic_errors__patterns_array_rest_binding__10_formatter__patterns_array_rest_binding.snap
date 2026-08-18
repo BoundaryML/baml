@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 52119
 ---
 // Array rest-binding torture cases (B-531), semantic half: every function
 // here PARSES CLEAN (parser-recovery cases live in

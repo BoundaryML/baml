@@ -1,0 +1,40 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+function         ai.internal._gcp_access_token    <builtin>/ai/ns_internal/auth.baml:23
+function         ai.internal._gcp_project_id      <builtin>/ai/ns_internal/auth.baml:34
+function         ai.internal._gcp_quota_project_id <builtin>/ai/ns_internal/auth.baml:43
+function         ai.internal._aws_sign_request    <builtin>/ai/ns_internal/auth.baml:61
+function         ai.internal._aws_resolve_region  <builtin>/ai/ns_internal/auth.baml:76
+function         ai.internal._shorthand_prefixes  <builtin>/ai/ns_internal/clients.baml:7
+function         ai.internal._from_shorthand      <builtin>/ai/ns_internal/clients.baml:33
+function         ai.internal._schema_for_signature <builtin>/ai/ns_internal/helpers.baml:5
+class            ai.internal.SpecCtx              <builtin>/ai/ns_internal/helpers.baml:18
+function         ai.internal.assemble_prompt      <builtin>/ai/ns_internal/helpers.baml:27
+function         ai.internal._header              <builtin>/ai/ns_internal/http_errors.baml:7
+function         ai.internal._int_header          <builtin>/ai/ns_internal/http_errors.baml:13
+function         ai.internal._retry_after_ms      <builtin>/ai/ns_internal/http_errors.baml:32
+function         ai.internal._proxy               <builtin>/ai/ns_internal/mcp.baml:8
+function         ai.internal._media_shape         <builtin>/ai/ns_internal/media_output.baml:17
+function         ai.internal._media_envelope      <builtin>/ai/ns_internal/media_output.baml:56
+function         ai.internal._media_of_kind       <builtin>/ai/ns_internal/media_output.baml:65
+function         ai.internal._media_mixed_parts   <builtin>/ai/ns_internal/media_output.baml:80
+function         ai.internal._media_all_text      <builtin>/ai/ns_internal/media_output.baml:102
+function         ai.internal._media_join_text     <builtin>/ai/ns_internal/media_output.baml:111
+function         ai.internal._media_reject_mixed  <builtin>/ai/ns_internal/media_output.baml:123
+function         ai.internal._media_mime_type     <builtin>/ai/ns_internal/media_resolve.baml:5
+function         ai.internal._resolve_media_content <builtin>/ai/ns_internal/media_resolve.baml:65
+function         ai.internal.validate_output_type <builtin>/ai/ns_internal/prompt.baml:9
+function         ai.internal.render_output_format <builtin>/ai/ns_internal/prompt.baml:30
+type             ai.internal.OutputFormat         <builtin>/ai/ns_internal/prompt.baml:36
+function         ai.internal.build_output_format  <builtin>/ai/ns_internal/prompt.baml:39
+function         ai.internal.make_role            <builtin>/ai/ns_internal/prompt.baml:45
+function         ai.internal.get_return_type      <builtin>/ai/ns_internal/prompt.baml:51
+function         ai.internal._configured          <builtin>/ai/ns_internal/wire.baml:6
+function         ai.internal._redact_after        <builtin>/ai/ns_internal/wire.baml:16
+function         ai.internal._redact_value_end    <builtin>/ai/ns_internal/wire.baml:34
+function         ai.internal._merge_json          <builtin>/ai/ns_internal/wire.baml:48
+function         ai.internal._wire_blocks         <builtin>/ai/ns_internal/wire.baml:90
+function         ai.internal._flush_orphaned_calls <builtin>/ai/ns_internal/wire.baml:126
+function         ai.internal._resolve_pending_call <builtin>/ai/ns_internal/wire.baml:134

@@ -522,8 +522,8 @@ mod tests {
         let mut table = InferenceTable::new();
         let a = table.new_var_ty();
         let b = table.new_var_ty();
-        assert!(a != b);
-        assert!(table.shallow_resolve(&a) == a);
+        assert_ne!(a, b);
+        assert_eq!(table.shallow_resolve(&a), a);
     }
 
     #[test]
@@ -531,7 +531,7 @@ mod tests {
         let mut table = InferenceTable::new();
         let a = table.new_var_ty();
         table.unify(&a, &Ty::int()).unwrap();
-        assert!(table.shallow_resolve(&a) == Ty::int());
+        assert_eq!(table.shallow_resolve(&a), Ty::int());
     }
 
     #[test]
@@ -541,7 +541,7 @@ mod tests {
         let b = table.new_var_ty();
         table.unify(&a, &b).unwrap();
         table.unify(&b, &Ty::string()).unwrap();
-        assert!(table.shallow_resolve(&a) == Ty::string());
+        assert_eq!(table.shallow_resolve(&a), Ty::string());
     }
 
     #[test]
@@ -551,7 +551,7 @@ mod tests {
         table
             .unify(&Ty::list(elem.clone()), &Ty::list(Ty::int()))
             .unwrap();
-        assert!(table.shallow_resolve(&elem) == Ty::int());
+        assert_eq!(table.shallow_resolve(&elem), Ty::int());
 
         let err = table
             .unify(&Ty::list(Ty::int()), &Ty::list(Ty::string()))
@@ -595,7 +595,7 @@ mod tests {
         table.unify(&Ty::error(), &Ty::int()).unwrap();
         table.unify(&a, &Ty::error()).unwrap();
         // The var stays unsolved rather than being poisoned with Error.
-        assert!(table.shallow_resolve(&a) == a);
+        assert_eq!(table.shallow_resolve(&a), a);
     }
 
     #[test]
@@ -605,7 +605,7 @@ mod tests {
         let ty = Ty::list(Ty::union([Ty::int(), elem.clone()]));
         table.unify(&elem, &Ty::string()).unwrap();
         let resolved = table.resolve_completely(&ty);
-        assert!(resolved == Ty::list(Ty::union([Ty::int(), Ty::string()])));
+        assert_eq!(resolved, Ty::list(Ty::union([Ty::int(), Ty::string()])));
         assert!(!resolved.has_infer());
     }
 
@@ -651,9 +651,12 @@ mod tests {
             Ty::list(class("Box", [Ty::union([Ty::int(), Ty::null()])])),
         );
         table.unify(&left, &right).unwrap();
-        assert!(table.shallow_resolve(&k) == Ty::string());
-        assert!(table.shallow_resolve(&e) == Ty::union([Ty::int(), Ty::null()]));
-        assert!(table.resolve_completely(&left) == right);
+        assert_eq!(table.shallow_resolve(&k), Ty::string());
+        assert_eq!(
+            table.shallow_resolve(&e),
+            Ty::union([Ty::int(), Ty::null()])
+        );
+        assert_eq!(table.resolve_completely(&left), right);
     }
 
     #[test]
@@ -669,8 +672,8 @@ mod tests {
                 &Ty::union([Ty::int(), Ty::string(), Ty::bool()]),
             )
             .unwrap();
-        assert!(table.shallow_resolve(&a) == Ty::string());
-        assert!(table.shallow_resolve(&b) == Ty::bool());
+        assert_eq!(table.shallow_resolve(&a), Ty::string());
+        assert_eq!(table.shallow_resolve(&b), Ty::bool());
 
         let x = table.new_var_ty();
         let nested_left = Ty::list(Ty::union([Ty::int(), Ty::union([Ty::string(), x.clone()])]));
@@ -679,7 +682,7 @@ mod tests {
             Ty::union([Ty::string(), Ty::bool()]),
         ]));
         table.unify(&nested_left, &nested_right).unwrap();
-        assert!(table.shallow_resolve(&x) == Ty::bool());
+        assert_eq!(table.shallow_resolve(&x), Ty::bool());
     }
 
     /// Pins the S5 limitation: ground unions unify positionally, so a
@@ -712,7 +715,7 @@ mod tests {
                 &class("Pair", [Ty::int(), b.clone()]),
             )
             .unwrap();
-        assert!(table.shallow_resolve(&b) == Ty::int());
+        assert_eq!(table.shallow_resolve(&b), Ty::int());
         // And a later contradiction on either alias is caught.
         assert!(table.unify(&b, &Ty::string()).is_err());
     }
@@ -729,7 +732,7 @@ mod tests {
         table.unify(&vars[3], &vars[4]).unwrap();
         table.unify(&vars[5], &Ty::never()).unwrap();
         for var in &vars {
-            assert!(table.shallow_resolve(var) == Ty::never());
+            assert_eq!(table.shallow_resolve(var), Ty::never());
         }
     }
 
@@ -742,11 +745,11 @@ mod tests {
         let b = table.new_var_ty();
         table.unify(&b, &Ty::list(a.clone())).unwrap();
         table.unify(&b, &Ty::list(Ty::int())).unwrap();
-        assert!(table.shallow_resolve(&a) == Ty::int());
+        assert_eq!(table.shallow_resolve(&a), Ty::int());
         let wrapper = map(Ty::string(), Ty::union([b.clone(), Ty::null()]));
-        assert!(
-            table.resolve_completely(&wrapper)
-                == map(Ty::string(), Ty::union([Ty::list(Ty::int()), Ty::null()]))
+        assert_eq!(
+            table.resolve_completely(&wrapper),
+            map(Ty::string(), Ty::union([Ty::list(Ty::int()), Ty::null()]))
         );
     }
 
@@ -762,9 +765,9 @@ mod tests {
                 &func([Ty::int(), Ty::string()], Ty::bool(), Ty::never()),
             )
             .unwrap();
-        assert!(table.shallow_resolve(&p) == Ty::int());
-        assert!(table.shallow_resolve(&r) == Ty::bool());
-        assert!(table.shallow_resolve(&e) == Ty::never());
+        assert_eq!(table.shallow_resolve(&p), Ty::int());
+        assert_eq!(table.shallow_resolve(&r), Ty::bool());
+        assert_eq!(table.shallow_resolve(&e), Ty::never());
         // Arity mismatch is a head mismatch, not a partial solve.
         assert!(
             table
@@ -803,8 +806,8 @@ mod tests {
             right = Ty::list(right);
         }
         table.unify(&left, &right).unwrap();
-        assert!(table.shallow_resolve(&core) == expected_core);
-        assert!(table.resolve_completely(&left) == right);
+        assert_eq!(table.shallow_resolve(&core), expected_core);
+        assert_eq!(table.resolve_completely(&left), right);
     }
 
     #[test]
@@ -820,13 +823,13 @@ mod tests {
                 Err(())
             });
             assert!(inner.is_err());
-            assert!(table.shallow_resolve(&b) == b, "inner rollback");
-            assert!(table.shallow_resolve(&a) == Ty::int(), "outer intact");
+            assert_eq!(table.shallow_resolve(&b), b, "inner rollback");
+            assert_eq!(table.shallow_resolve(&a), Ty::int(), "outer intact");
             Ok(())
         });
         outer.unwrap();
-        assert!(table.shallow_resolve(&a) == Ty::int());
-        assert!(table.shallow_resolve(&b) == b);
+        assert_eq!(table.shallow_resolve(&a), Ty::int());
+        assert_eq!(table.shallow_resolve(&b), b);
     }
 
     #[test]
@@ -837,10 +840,10 @@ mod tests {
         table.unify(&e, &Ty::string()).unwrap();
         let once = table.resolve_completely(&ty);
         let twice = table.resolve_completely(&once);
-        assert!(once == twice);
+        assert_eq!(once, twice);
         // Var-free input returns the same interned handle, no rebuild.
         let ground = map(Ty::string(), Ty::list(Ty::bool()));
-        assert!(table.resolve_completely(&ground) == ground);
+        assert_eq!(table.resolve_completely(&ground), ground);
     }
 
     #[test]
@@ -851,15 +854,12 @@ mod tests {
         let snapshot = table.snapshot();
         table.unify(&a, &Ty::int()).unwrap();
         table.rollback_to(snapshot);
-        assert!(table.shallow_resolve(&a) == a, "rollback must unsolve");
+        assert_eq!(table.shallow_resolve(&a), a, "rollback must unsolve");
 
         let outcome: Result<(), ()> =
             table.commit_if_ok(|table| table.unify(&a, &Ty::string()).map_err(|_| ()));
         outcome.unwrap();
-        assert!(
-            table.shallow_resolve(&a) == Ty::string(),
-            "commit must keep"
-        );
+        assert_eq!(table.shallow_resolve(&a), Ty::string(), "commit must keep");
 
         let failed: Result<(), ()> = table.commit_if_ok(|table| {
             let b = table.new_var_ty();
@@ -867,6 +867,6 @@ mod tests {
             Err(())
         });
         assert!(failed.is_err());
-        assert!(table.shallow_resolve(&a) == Ty::string());
+        assert_eq!(table.shallow_resolve(&a), Ty::string());
     }
 }

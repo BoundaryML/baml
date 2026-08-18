@@ -15,9 +15,10 @@ use crate::{
     ast::{
         ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
         CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionDefaults,
-        LambdaDef, LambdaKind, LetOrigin, Literal, LoopOrigin, MapExprEntry, MatchArm, MatchArmId,
-        ObjectExprField, Param, PatId, Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch,
-        TemplateSegment, TemplateTag, TypeAnnotId, TypeExpr, TypeExprKind, UnaryOp,
+        LambdaDef, LambdaKind, LetDef, LetOrigin, Literal, LoopOrigin, MapExprEntry, MatchArm,
+        MatchArmId, ObjectExprField, Param, PatId, Pattern, SpreadField, Stmt, StmtId,
+        TemplateIfBranch, TemplateSegment, TemplateTag, TypeAnnotId, TypeArg, TypeExpr,
+        TypeExprKind, UnaryOp,
     },
 };
 
@@ -49,6 +50,9 @@ pub(crate) fn is_ident_token(kind: SyntaxKind) -> bool {
             | SyntaxKind::KW_CLIENT
             | SyntaxKind::KW_SPAWN
             | SyntaxKind::KW_AWAIT
+            | SyntaxKind::KW_CLASS
+            | SyntaxKind::KW_ENUM
+            | SyntaxKind::KW_FUNCTION
             | SyntaxKind::KW_IMPLEMENTS
             | SyntaxKind::KW_IMPLEMENT
             | SyntaxKind::KW_INTERFACE
@@ -117,6 +121,58 @@ pub(crate) fn lower(
     diags.extend(ctx_diags);
     env_var_refs.extend(ctx_env_refs);
     (body, source_map)
+}
+
+/// Lower one compiler-generated persistent binding for `Session.eval`.
+///
+/// Ordinary source files never call this path: their root lets are rejected by
+/// file lowering. Sessions use the global representation internally so each
+/// committed binding can be re-imported by later submissions.
+pub(crate) fn lower_session_let(
+    node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<EnvVarRef>,
+) -> Option<LetDef> {
+    let mut ctx = LoweringContext::new();
+    let stmt = ctx.lower_let_stmt(node);
+    let Stmt::Let {
+        pattern,
+        initializer,
+        else_branch,
+        ..
+    } = ctx.stmts[stmt].clone()
+    else {
+        unreachable!("lower_let_stmt always allocates Stmt::Let")
+    };
+    let Pattern::Bind { name, subpat } = ctx.patterns[pattern].clone() else {
+        diags.push(LoweringDiagnostic::InvalidPatternAscription {
+            reason: "session bindings require a single named binding",
+            span: node.span_range(),
+        });
+        return None;
+    };
+    if subpat.is_some() || else_branch.is_some() {
+        diags.push(LoweringDiagnostic::InvalidPatternAscription {
+            reason: "session bindings do not support patterns or `else`",
+            span: node.span_range(),
+        });
+        return None;
+    }
+    let name_span = node
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .find(|token| token.text() == name.as_str())
+        .map_or_else(|| node.span_range(), |token| token.text_range());
+    let (body, source_map, mut ctx_diags, mut ctx_env_refs) = ctx.finish(initializer);
+    diags.append(&mut ctx_diags);
+    env_var_refs.append(&mut ctx_env_refs);
+    Some(LetDef {
+        name,
+        initializer: Some((body, source_map)),
+        origin: LetOrigin::Source,
+        span: node.span_range(),
+        name_span,
+    })
 }
 
 pub(crate) fn lower_default_expr_nodes(
@@ -290,7 +346,7 @@ pub(crate) fn lower_client_initializer(
 ///         ai.internal.assemble_prompt(tagged.parts, tagged.values)
 ///     },
 ///     toolbox: ai.Toolbox.new([ai.tool(a), ...]),
-///     default_client: openai.OpenAiClient.new(model = "gpt-4o-mini"),
+///     default_client: openai.ResponsesClient.new(model = "gpt-4o-mini"),
 /// }
 /// ```
 ///
@@ -298,8 +354,12 @@ pub(crate) fn lower_client_initializer(
 /// the built-in `prompt` tag. `${role(...)}` values become prompt messages
 /// and media remains structural. `ctx` is bound to an `ai.internal.SpecCtx`,
 /// so `${ctx.output_format}` resolves to the closure's parameter and every
-/// other interpolation captures the enclosing function's parameters. Provider
-/// construction is pure, so the eager default client never touches credentials.
+/// other interpolation captures the enclosing function's parameters.
+///
+/// The `default_client` expression is evaluated when this `$spec` body runs —
+/// that is, on every call of the LLM function — never during `$init`. Provider
+/// construction itself is pure, so building the spec still never touches
+/// credentials; only a request reads them.
 ///
 /// In the `tools` list, a bare function reference is wrapped in `ai.tool(...)`;
 /// any other element expression must already produce an `ai.Tool`.
@@ -418,8 +478,8 @@ pub(crate) fn synthesize_llm_spec_body(
         .collect();
     for callee in role_callees {
         ctx.exprs[callee] = Expr::Path(vec![
-            Name::new("baml"),
-            Name::new("prompt"),
+            Name::new("ai"),
+            Name::new("internal"),
             Name::new("make_role"),
         ]);
     }
@@ -577,11 +637,25 @@ pub(crate) fn synthesize_llm_spec_body(
         span,
     );
 
-    // default_client — an eager value; provider construction is pure
-    // (credentials resolve from the environment at request time), so
-    // building the spec never touches env. Either the compile-time-mapped
-    // provider constructor for a "provider/model" string, or the user's own
-    // client expression lowered in place.
+    // default_client — evaluated when the `$spec` function RUNS, i.e. when the
+    // LLM function is called, *not* during `$init`. (This whole body is the
+    // `<Fn>$spec` companion function; the caller is `<Fn>`'s own body,
+    // `ai.Agent<Out>.new(client = client).run(Fn$spec(p...))`.) So a dynamic
+    // selector is re-read on every call and a host may load secrets after the
+    // runtime initializes.
+    //
+    // Two shapes:
+    //
+    //   * `client "provider/model"` — a STRING LITERAL, mapped at compile time
+    //     to a builtin provider constructor (`spec_client_provider` in
+    //     lower_cst.rs). Static, so an unknown prefix is a compile error.
+    //     Provider construction is pure — it never touches env.
+    //   * anything else — an arbitrary expression, wrapped in
+    //     `ai.clients.resolve(...)` so every dynamic selector shape works:
+    //     an `ai.Client` value (identity), a runtime `"provider/model"`
+    //     string, or a `baml.env.Ref` (read at call time, then the string
+    //     path). Unknown prefixes / unset vars become typed runtime `ai`
+    //     errors rather than an opaque `InitFailed`.
     let default_client = match client_spec {
         crate::lower_cst::LlmClientSpec::Provider { pkg, class, model } => {
             let model_lit = ctx.alloc_expr(Expr::Literal(Literal::String(model.clone())), span);
@@ -598,12 +672,31 @@ pub(crate) fn synthesize_llm_spec_body(
                 span,
             )
         }
-        crate::lower_cst::LlmClientSpec::Expr(rowan::NodeOrToken::Node(node)) => {
-            ctx.lower_expr(node)
+        crate::lower_cst::LlmClientSpec::Expr(value) => {
+            let inner = match value {
+                rowan::NodeOrToken::Node(node) => ctx.lower_expr(node),
+                // A bare dot-free identifier is a token, not a node.
+                rowan::NodeOrToken::Token(token) => ctx
+                    .try_lower_bare_token(token)
+                    .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
+            };
+            let resolve_callee = ctx.alloc_expr(
+                Expr::Path(vec![
+                    Name::new("ai"),
+                    Name::new("clients"),
+                    Name::new("resolve"),
+                ]),
+                span,
+            );
+            ctx.alloc_expr(
+                Expr::Call {
+                    callee: resolve_callee,
+                    type_args: vec![],
+                    args: vec![CallArg::positional(inner)],
+                },
+                span,
+            )
         }
-        crate::lower_cst::LlmClientSpec::Expr(rowan::NodeOrToken::Token(token)) => ctx
-            .try_lower_bare_token(token)
-            .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
     };
 
     let type_args = out_type.map(|t| vec![t]).unwrap_or_default();
@@ -628,11 +721,11 @@ pub(crate) fn synthesize_llm_spec_body(
 
 /// Synthesize the `$render_prompt` companion body: render the spec's prompt
 /// with the return type's output-format text —
-/// `Fn$spec(p...).prompt(ai.wire.render_output_format(reflect.type_of<Out>()))`.
+/// `Fn$spec(p...).prompt(ai.wire.render_output_format(type.of<Out>()))`.
 pub(crate) fn synthesize_spec_render_prompt_body(
     function_name: &str,
     param_names: &[Name],
-    spec_type_args: Vec<crate::ast::TypeExpr>,
+    generic_param_names: &[Name],
     out_type: Option<crate::ast::TypeExpr>,
     span: TextRange,
 ) -> (ExprBody, AstSourceMap) {
@@ -651,7 +744,7 @@ pub(crate) fn synthesize_spec_render_prompt_body(
     let spec_call = ctx.alloc_expr(
         Expr::Call {
             callee: spec_callee,
-            type_args: spec_type_args,
+            type_args: static_type_args(generic_param_names, span),
             args: spec_args,
         },
         span,
@@ -663,14 +756,11 @@ pub(crate) fn synthesize_spec_render_prompt_body(
         },
         span,
     );
-    let type_of_callee = ctx.alloc_expr(
-        Expr::Path(vec![Name::new("reflect"), Name::new("type_of")]),
-        span,
-    );
+    let type_of_callee = ctx.alloc_expr(Expr::Path(vec![Name::new("type"), Name::new("of")]), span);
     let type_of_call = ctx.alloc_expr(
         Expr::Call {
             callee: type_of_callee,
-            type_args: out_type.map(|t| vec![t]).unwrap_or_default(),
+            type_args: out_type.map(|t| vec![t.into()]).unwrap_or_default(),
             args: vec![],
         },
         span,
@@ -726,7 +816,7 @@ pub(crate) fn synthesize_spec_parse_body(
     let call = ctx.alloc_expr(
         Expr::Call {
             callee,
-            type_args: out_type.map(|t| vec![t]).unwrap_or_default(),
+            type_args: out_type.map(|t| vec![t.into()]).unwrap_or_default(),
             args: vec![CallArg::positional(json_ref)],
         },
         span,
@@ -748,7 +838,7 @@ pub(crate) fn synthesize_spec_parse_body(
 pub(crate) fn synthesize_spec_agent_run_body(
     function_name: &str,
     param_names: &[Name],
-    spec_type_args: Vec<crate::ast::TypeExpr>,
+    generic_param_names: &[Name],
     out_type: Option<crate::ast::TypeExpr>,
     span: TextRange,
 ) -> (ExprBody, AstSourceMap) {
@@ -771,7 +861,7 @@ pub(crate) fn synthesize_spec_agent_run_body(
     let spec_call = ctx.alloc_expr(
         Expr::Call {
             callee: spec_callee,
-            type_args: spec_type_args,
+            type_args: static_type_args(generic_param_names, span),
             args: spec_args,
         },
         span,
@@ -787,7 +877,7 @@ pub(crate) fn synthesize_spec_agent_run_body(
         span,
     );
     let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
-    let type_args = out_type.map(|t| vec![t]).unwrap_or_default();
+    let type_args = out_type.map(|t| vec![t.into()]).unwrap_or_default();
     let new_call = ctx.alloc_expr(
         Expr::Call {
             callee: new_callee,
@@ -834,14 +924,14 @@ pub(crate) fn synthesize_spec_agent_run_body(
 /// ```
 ///
 /// `type_args` is the explicit `<STREAM_EXPANDED, ORIGINAL>` pair, so the
-/// stdlib reifies both types from its own frame via `reflect.type_of`.
+/// stdlib reifies both types from its own frame via `type.of`.
 /// `client` is the companion's injected `ai.StreamingClient? = null`
 /// override; `from_spec` falls back to the spec's default client when it
 /// is null.
 pub fn synthesize_spec_stream_body(
     function_name: &str,
     param_names: &[Name],
-    spec_type_args: Vec<crate::ast::TypeExpr>,
+    generic_param_names: &[Name],
     type_args: Vec<crate::ast::TypeExpr>,
     span: TextRange,
 ) -> (ExprBody, AstSourceMap) {
@@ -864,7 +954,7 @@ pub fn synthesize_spec_stream_body(
     let spec_call = ctx.alloc_expr(
         Expr::Call {
             callee: spec_callee,
-            type_args: spec_type_args,
+            type_args: static_type_args(generic_param_names, span),
             args: spec_args,
         },
         span,
@@ -883,7 +973,7 @@ pub fn synthesize_spec_stream_body(
     let call = ctx.alloc_expr(
         Expr::Call {
             callee: stream_spec_callee,
-            type_args,
+            type_args: type_args.into_iter().map(Into::into).collect(),
             args: vec![
                 CallArg::positional(spec_call),
                 CallArg::named("client", client_ref),
@@ -894,6 +984,25 @@ pub fn synthesize_spec_stream_body(
 
     let (body, source_map, _diags, _env_refs) = ctx.finish(Some(call));
     (body, source_map)
+}
+
+/// Re-apply a companion's enclosing generic parameters when it calls another
+/// companion. Some LLM type parameters occur only in the return type, so
+/// ordinary argument inference has no value-position evidence for them.
+fn static_type_args(names: &[Name], span: TextRange) -> Vec<TypeArg> {
+    names
+        .iter()
+        .map(|name| {
+            TypeExprKind::Path {
+                segments: vec![name.clone()],
+                generic_args: vec![],
+                associated_type_bindings: vec![],
+                attrs: vec![],
+            }
+            .at(span)
+            .into()
+        })
+        .collect()
 }
 
 struct LoweringContext {
@@ -1198,6 +1307,7 @@ impl LoweringContext {
                 BlockElement::Stmt(node) => {
                     let stmt_id = match node.kind() {
                         SyntaxKind::LET_STMT => self.lower_let_stmt(node),
+                        SyntaxKind::TYPE_BINDING_STMT => self.lower_type_binding_stmt(node),
                         SyntaxKind::RETURN_STMT => self.lower_return_stmt(node),
                         SyntaxKind::THROW_STMT => self.lower_throw_stmt(node),
                         SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
@@ -2359,6 +2469,7 @@ impl LoweringContext {
             SyntaxKind::DESTRUCTURE_PATTERN => self.lower_destructure_pattern(node),
             SyntaxKind::ARRAY_PATTERN => self.lower_array_pattern(node),
             SyntaxKind::TYPE_PATTERN => self.lower_type_pattern(node),
+            SyntaxKind::UNREFLECT_PATTERN => self.lower_unreflect_pattern(node),
             SyntaxKind::PAREN_PATTERN => {
                 match node.children().find(|n| n.kind() == SyntaxKind::PATTERN) {
                     Some(inner) => self.lower_pattern(&inner),
@@ -2480,7 +2591,7 @@ impl LoweringContext {
                     );
                 }
             }
-            Pattern::Wildcard => {}
+            Pattern::Wildcard | Pattern::Unreflect(_) => {}
             Pattern::Bind { subpat, .. } => {
                 if let Some(sp) = subpat {
                     self.check_pattern_void_in_annotation(sp, context);
@@ -2502,6 +2613,25 @@ impl LoweringContext {
         };
         let ty = crate::lower_type_expr::lower_type_expr_node(&type_expr, &mut self.diags);
         self.alloc_pattern(Pattern::Type(ty), node.span_range())
+    }
+
+    fn lower_unreflect_pattern(&mut self, node: &SyntaxNode) -> PatId {
+        let operand = node
+            .children()
+            .next()
+            .map(|expr| self.lower_expr(&expr))
+            .or_else(|| {
+                node.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|token| {
+                        !token.kind().is_trivia()
+                            && !matches!(token.kind(), SyntaxKind::L_PAREN | SyntaxKind::R_PAREN)
+                            && token.text() != "unreflect"
+                    })
+                    .and_then(|token| self.try_lower_bare_token(&token))
+            })
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        self.alloc_pattern(Pattern::Unreflect(operand), node.span_range())
     }
 
     /// Lower a `DESTRUCTURE_PATTERN` (`(let|const)? PATH ('<' types '>')? '{' field_list '}'`).
@@ -2979,9 +3109,9 @@ impl LoweringContext {
         //      method's frame correctly (e.g. `Box.from_json` sees
         //      `T = Secret`).
         let callee_generic_args = callee_node.as_ref().and_then(find_callee_generic_args);
-        let type_args: Vec<TypeExpr> = callee_generic_args
+        let type_args: Vec<TypeArg> = callee_generic_args
             .as_ref()
-            .map(|ga| Self::lower_generic_args_node(ga, &mut self.diags))
+            .map(|ga| self.lower_call_generic_args_node(ga))
             .unwrap_or_default();
         // Mark EVERY `GENERIC_ARGS` node in the callee subtree as consumed, so
         // lowering the callee/receiver below does not wrap any of them into an
@@ -3127,6 +3257,58 @@ impl LoweringContext {
             .collect()
     }
 
+    /// Lower a call's generic arguments. Unlike type constructors and
+    /// value-position generic application, calls may contain the contextual
+    /// whole-slot `unreflect(expr)` form.
+    fn lower_call_generic_args_node(&mut self, ga: &SyntaxNode) -> Vec<TypeArg> {
+        let mut args = Vec::new();
+        for node in ga.children() {
+            match node.kind() {
+                SyntaxKind::TYPE_EXPR => {
+                    if let Some(te) = baml_compiler_syntax::ast::TypeExpr::cast(node) {
+                        args.push(TypeArg::Static(
+                            crate::lower_type_expr::lower_type_expr_node(&te, &mut self.diags),
+                        ));
+                    }
+                }
+                SyntaxKind::UNREFLECT_ARG => {
+                    let operand = node
+                        .children()
+                        .next()
+                        .map(|expr| self.lower_expr(&expr))
+                        .or_else(|| {
+                            let mut skipped_marker = false;
+                            node.children_with_tokens()
+                                .filter_map(rowan::NodeOrToken::into_token)
+                                .find(|token| {
+                                    if token.kind().is_trivia()
+                                        || matches!(
+                                            token.kind(),
+                                            SyntaxKind::L_PAREN | SyntaxKind::R_PAREN
+                                        )
+                                    {
+                                        return false;
+                                    }
+                                    if !skipped_marker && token.text() == "unreflect" {
+                                        skipped_marker = true;
+                                        return false;
+                                    }
+                                    true
+                                })
+                                .map(|token| {
+                                    let expr = lower_bare_token_expr(self, &token);
+                                    self.alloc_expr(expr, token.text_range())
+                                })
+                        })
+                        .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+                    args.push(TypeArg::Unreflect(operand));
+                }
+                _ => {}
+            }
+        }
+        args
+    }
+
     /// If `node` has a direct, unconsumed `GENERIC_ARGS` child, wrap `base` in an
     /// `Expr::GenericApply` carrying its type args; otherwise return `base`.
     /// `range` spans the whole instantiation (`foo<int>`).
@@ -3168,7 +3350,7 @@ impl LoweringContext {
         // PATH_EXPR contains WORD (or keyword-as-ident) tokens joined by DOTs.
         //
         // When a PATH_EXPR is wrapped in another PATH_EXPR for generic-arg
-        // annotation (e.g. `reflect.type_of<User>` → outer PATH_EXPR wrapping
+        // annotation (e.g. `type.of<User>` → outer PATH_EXPR wrapping
         // inner PATH_EXPR + GENERIC_ARGS), the outer node has no direct token
         // children. In that case, delegate to the inner PATH_EXPR node.
         let mut segments: Vec<(Name, TextRange)> = Vec::new();
@@ -3358,7 +3540,20 @@ impl LoweringContext {
     }
 
     fn lower_env_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
-        // Desugar `env.VAR_NAME` → `baml.env.get_or_panic("VAR_NAME")`
+        // Desugar `env.VAR_NAME` → `baml.env.ref("VAR_NAME")`
+        //
+        // `env.X` is a LATE-BOUND typed reference (`baml.env.Ref`), not an
+        // eager read. Two reasons:
+        //
+        //   1. `client Foo = ...` declarations are evaluated during `$init`,
+        //      which cannot perform io — an eager `baml.env.get_or_panic`
+        //      there died at runtime with an opaque `InitFailed`.
+        //   2. Hosts routinely load secrets *after* the runtime initializes,
+        //      so an eager snapshot taken at declaration time is wrong.
+        //
+        // The `Ref` carries the variable NAME only — a secret is never
+        // captured into a constructed value. Reads happen at use time through
+        // `Ref.get()` / `.get_or_panic()` / `.or(fallback)`.
         let range = node.span_range();
 
         let mut field_text = None;
@@ -3380,11 +3575,7 @@ impl LoweringContext {
             range,
         });
         let callee = self.alloc_expr(
-            Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("env"),
-                Name::new("get_or_panic"),
-            ]),
+            Expr::Path(vec![Name::new("baml"), Name::new("env"), Name::new("ref")]),
             range,
         );
         let arg = self.alloc_expr(Expr::Literal(Literal::String(var_name)), range);
@@ -5070,6 +5261,79 @@ impl LoweringContext {
     fn lower_return_stmt(&mut self, node: &SyntaxNode) -> StmtId {
         let expr = self.lower_optional_return_value(node);
         self.alloc_stmt(Stmt::Return(expr), node.span_range())
+    }
+
+    fn lower_type_binding_stmt(&mut self, node: &SyntaxNode) -> StmtId {
+        let name = node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+            .map(|token| Name::new(token.text()))
+            .unwrap_or_else(|| Name::new("<missing>"));
+        // The operand may have direct-token path heads and structural postfix
+        // children (`type.of<T>()` has a GENERIC_ARGS sibling before its call),
+        // so selecting the first arbitrary child is not expression-safe.
+        let value = node
+            .children()
+            .find(|child| {
+                matches!(
+                    child.kind(),
+                    SyntaxKind::BINARY_EXPR
+                        | SyntaxKind::IS_EXPR
+                        | SyntaxKind::UNARY_EXPR
+                        | SyntaxKind::CALL_EXPR
+                        | SyntaxKind::IF_EXPR
+                        | SyntaxKind::IF_LET_EXPR
+                        | SyntaxKind::MATCH_EXPR
+                        | SyntaxKind::CATCH_EXPR
+                        | SyntaxKind::THROW_EXPR
+                        | SyntaxKind::RETURN_EXPR
+                        | SyntaxKind::BLOCK_EXPR
+                        | SyntaxKind::PATH_EXPR
+                        | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::UPCAST_EXPR
+                        | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
+                        | SyntaxKind::ENV_ACCESS_EXPR
+                        | SyntaxKind::INDEX_EXPR
+                        | SyntaxKind::OPTIONAL_INDEX_EXPR
+                        | SyntaxKind::OPTIONAL_CALL_EXPR
+                        | SyntaxKind::TAGGED_TEMPLATE_EXPR
+                        | SyntaxKind::PAREN_EXPR
+                        | SyntaxKind::STRING_LITERAL
+                        | SyntaxKind::RAW_STRING_LITERAL
+                        | SyntaxKind::BACKTICK_STRING_LITERAL
+                        | SyntaxKind::BYTE_STRING_LITERAL
+                        | SyntaxKind::ARRAY_LITERAL
+                        | SyntaxKind::OBJECT_LITERAL
+                        | SyntaxKind::MAP_LITERAL
+                        | SyntaxKind::LAMBDA_EXPR
+                        | SyntaxKind::SPAWN_EXPR
+                        | SyntaxKind::AWAIT_EXPR
+                )
+            })
+            .map(|child| self.lower_expr(&child))
+            .or_else(|| {
+                let mut inside_operand = false;
+                node.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find_map(|token| {
+                        if !inside_operand {
+                            inside_operand = token.text() == "unreflect";
+                            return None;
+                        }
+                        if token.kind().is_trivia()
+                            || matches!(
+                                token.kind(),
+                                SyntaxKind::L_PAREN | SyntaxKind::R_PAREN | SyntaxKind::SEMICOLON
+                            )
+                        {
+                            return None;
+                        }
+                        self.try_lower_bare_token(&token)
+                    })
+            })
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        self.alloc_stmt(Stmt::TypeBinding { name, value }, node.span_range())
     }
 
     /// Lower the optional value of a `return` node — shared by `RETURN_STMT`

@@ -56,7 +56,7 @@ test OuterPyramid() {
   args { }
 }
 
-client GPT4o = openai.OpenAiClient.new(
+client GPT4o = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = env.OPENAI_API_KEY,
 );
@@ -68,6 +68,25 @@ test TestMakePoem() {
 
 //----
 //- diagnostics
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//     ╭─[expr_expr_full.baml:18:1]
+//  18 │ let poem = MakePoem(10);
+//     · ────────────┬───────────
+//     ·             ╰── move this binding into a function body
+//     ╰────
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//     ╭─[expr_expr_full.baml:20:1]
+//  20 │ ╭─▶ let another = {
+//  21 │ │     let x = MakePoem(10);
+//  22 │ │     let y = MakePoem(5);
+//  23 │ │     CombinePoems(x,y)
+//  24 │ ├─▶ };
+//     · ╰──── move this binding into a function body
+//     ╰────
 // E0003
 //
 //   × unresolved name: `functions`

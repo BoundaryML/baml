@@ -9,8 +9,10 @@ description = "Includes definitions and some blanket impls for sys ops"
 
 [features]
 default = [ "aws-crypto" ]
-aws-crypto = [ "sys_llm/aws-crypto" ]
-ring-crypto = [ "sys_llm/ring-crypto" ]
+# Retained as no-op passthroughs: the crypto-provider selection moved out with
+# `sys_llm`, but downstream crates (bex_engine) still name these features.
+aws-crypto = [  ]
+ring-crypto = [  ]
 
 [build-dependencies]
 baml_builtins2 = { workspace = true }
@@ -25,11 +27,11 @@ bex_heap = { workspace = true }
 bex_resource_types = { workspace = true }
 bex_sap = { workspace = true }
 bex_vm_types = { workspace = true }
-sys_llm = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [ "rt", "macros" ] }

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18967
 ---
 === MIR2 ===
 fn user.DefaultFilter() -> string {
@@ -266,7 +265,7 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: null | 
     }
 
     bb4: {
-        _6 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _7, copy _9) -> [bb5];
+        _6 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _7, copy _9) -> [bb5];
     }
 
     bb5: {
@@ -339,6 +338,7 @@ fn user.AskDocs$spec(query: string, max_results: int, filter: string) -> ai.Func
     let _5: (string) -> ai.Prompt throws never
     let _6: ai.tools.Toolbox
     let _7: ai.tools.Tool[]
+    let _8: ai.Client
 
     bb0: {
         _4 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
@@ -348,11 +348,15 @@ fn user.AskDocs$spec(query: string, max_results: int, filter: string) -> ai.Func
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<string> { const "AskDocs", copy _4, copy _5, copy _6, const item user.TestClient };
-        goto -> bb2;
+        _8 = call const fn ai.clients.resolve(const item user.TestClient) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<string> { const "AskDocs", copy _4, copy _5, copy _6, copy _8 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

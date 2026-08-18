@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 15719
 ---
 === MIR2 ===
 fn user.double_it(n: int) -> int {
@@ -68,7 +67,7 @@ fn user.PlainChat(q: string, client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -137,7 +136,7 @@ fn user.PlainChat$spec(q: string) -> ai.FunctionSpec<string> {
     let _3: (string) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
-    let _6: openai.OpenAiClient
+    let _6: openai.ResponsesClient
 
     bb0: {
         _2 = { const "q": copy _1 }: map<string, unknown>;
@@ -147,7 +146,7 @@ fn user.PlainChat$spec(q: string) -> ai.FunctionSpec<string> {
     }
 
     bb1: {
-        _6 = call const fn openai.OpenAiClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+        _6 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
@@ -324,7 +323,7 @@ fn user.SpecAgent(q: string, client: null | ai.Client) -> Answer {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<Answer, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<Answer, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -394,7 +393,7 @@ fn user.SpecAgent$spec(q: string) -> ai.FunctionSpec<Answer> {
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
     let _6: ai.tools.Tool
-    let _7: openai.OpenAiClient
+    let _7: openai.ResponsesClient
 
     bb0: {
         _2 = { const "q": copy _1 }: map<string, unknown>;
@@ -408,7 +407,7 @@ fn user.SpecAgent$spec(q: string) -> ai.FunctionSpec<Answer> {
     }
 
     bb2: {
-        _7 = call const fn openai.OpenAiClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
+        _7 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -547,7 +546,7 @@ fn user.NamedTools(q: string, client: null | ai.Client) -> Answer {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<Answer, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<Answer, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Answer>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -629,7 +628,7 @@ fn user.NamedTools$spec(q: string) -> ai.FunctionSpec<Answer> {
     }
 
     bb2: {
-        _6 = call const fn anthropic.AnthropicClient.new(const "claude-haiku-4-5", const <omitted>, const <omitted>, const <omitted>) -> [bb3];
+        _6 = call const fn anthropic.AnthropicClient.new(const "claude-haiku-4-5", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {

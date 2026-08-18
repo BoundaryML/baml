@@ -9,7 +9,7 @@ use crate::{
         Token, Type, UnaryOp, tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
-    trivia_classifier::{EmittableTrivia, TriviaSliceExt},
+    trivia_classifier::{EmittableTrivia, TriviaInfo, TriviaSliceExt},
 };
 
 #[derive(Debug)]
@@ -509,7 +509,14 @@ pub struct PathExpr {
 fn is_path_segment_kind(kind: SyntaxKind) -> bool {
     matches!(
         kind,
-        SyntaxKind::WORD | SyntaxKind::KW_CLIENT | SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT
+        SyntaxKind::WORD
+            | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_SPAWN
+            | SyntaxKind::KW_AWAIT
+            | SyntaxKind::KW_CLASS
+            | SyntaxKind::KW_ENUM
+            | SyntaxKind::KW_INTERFACE
+            | SyntaxKind::KW_FUNCTION
     )
 }
 
@@ -775,6 +782,21 @@ impl ParenExpr {
             .sum::<Option<usize>>()?;
         Some(const { "()".len() } + inner + trivia_len)
     }
+
+    /// Whether no comments are attached to either paren token or to the inner
+    /// expression's boundary. Peeling a transparent paren cannot lose trivia:
+    /// every span a parent context queries around it is empty.
+    fn is_transparent(&self, trivia: &TriviaInfo) -> bool {
+        let (open_leading, open_trailing) = trivia.get_for_range_split(self.open_paren.span());
+        let (close_leading, close_trailing) = trivia.get_for_range_split(self.close_paren.span());
+        let (expr_leading, expr_trailing) = trivia.get_for_element(&*self.expr);
+        open_leading.is_empty()
+            && open_trailing.is_empty()
+            && close_leading.is_empty()
+            && close_trailing.is_empty()
+            && expr_leading.is_empty()
+            && expr_trailing.is_empty()
+    }
 }
 
 impl PrintMultiLine for ParenExpr {
@@ -855,6 +877,23 @@ impl Printable for ParenExpr {
     }
 }
 
+impl Expression {
+    /// Strips nested [`ParenExpr`] wrappers that are transparent (no comments
+    /// attached to the parens or the inner expression's boundary), returning
+    /// the innermost expression. Callers decide per context whether printing
+    /// the peeled expression instead of `self` is safe.
+    fn peel_transparent_parens(&self, trivia: &TriviaInfo) -> &Expression {
+        let mut expr = self;
+        while let Expression::Paren(paren) = expr {
+            if !paren.is_transparent(trivia) {
+                break;
+            }
+            expr = &paren.expr;
+        }
+        expr
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::BINARY_EXPR`] node.
 #[derive(Debug)]
 pub struct BinaryExpr {
@@ -915,7 +954,8 @@ impl BinaryExpr {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let (left, right) = &*self.sides;
+        let left = self.effective_left(input.trivia);
+        let right = &self.sides.1;
         let left_width = left.single_line_width(input)?;
         let right_width = right.single_line_width(input)?;
         // Must match trivia handled by try_print_single_line
@@ -936,24 +976,54 @@ impl BinaryExpr {
         Some(len)
     }
 
+    /// The left operand with redundant parens peeled.
+    ///
+    /// `(a && b) && c` and `a && b && c` parse to different trees but mean
+    /// the same thing and print identically, so a transparent paren around
+    /// the left operand is dropped when the inner operator sits in the same
+    /// precedence row as this one (reparsing the output yields the printed
+    /// tree, keeping the formatter idempotent). Right operands are never
+    /// peeled: removing those parens would re-associate, as in `a - (b - c)`.
+    /// Mixed-precedence parens like `(a * b) + c` are kept: they are
+    /// redundant to the parser but carry clarity for the reader.
+    fn effective_left(&self, trivia: &TriviaInfo) -> &Expression {
+        let Some(row) = BinaryOpPrecedenceRow::row_for_op(&self.op) else {
+            return &self.sides.0;
+        };
+        let peeled = self.sides.0.peel_transparent_parens(trivia);
+        match peeled {
+            Expression::Binary(inner)
+                if BinaryOpPrecedenceRow::row_for_op(&inner.op) == Some(row) =>
+            {
+                peeled
+            }
+            _ => &self.sides.0,
+        }
+    }
+
     /// Recursively lifts binary expressions in the same chaining group to the top level.
     /// For ops that are not in any chaining groups, return will be the same as the original.
+    /// Redundant parens around left operands are peeled (see [`Self::effective_left`])
+    /// so a fully parenthesized chain flattens like an unparenthesized one.
     ///
     /// The vec will never be empty.
-    fn get_chaining_members(&self) -> (&Expression, Vec<(&BinaryOp, &Expression)>) {
+    fn get_chaining_members(
+        &self,
+        trivia: &TriviaInfo,
+    ) -> (&Expression, Vec<(&BinaryOp, &Expression)>) {
         let mut members = Vec::new();
         let Some(chaining_group) = BinaryOpChainingGroup::group_for_op(&self.op) else {
             members.push((&self.op, &self.sides.1));
             return (&self.sides.0, members);
         };
 
-        match &*self.sides {
+        match (self.effective_left(trivia), &self.sides.1) {
             (Expression::Binary(left), Expression::Binary(right))
                 if BinaryOpChainingGroup::group_for_op(&left.op) == Some(chaining_group)
                     && BinaryOpChainingGroup::group_for_op(&right.op) == Some(chaining_group) =>
             {
-                let (left_first, left_rest) = left.get_chaining_members();
-                let (right_first, right_rest) = right.get_chaining_members();
+                let (left_first, left_rest) = left.get_chaining_members(trivia);
+                let (right_first, right_rest) = right.get_chaining_members(trivia);
 
                 members.extend(left_rest);
                 members.push((&self.op, right_first));
@@ -964,7 +1034,7 @@ impl BinaryExpr {
             (Expression::Binary(left), right)
                 if BinaryOpChainingGroup::group_for_op(&left.op) == Some(chaining_group) =>
             {
-                let (first, left_rest) = left.get_chaining_members();
+                let (first, left_rest) = left.get_chaining_members(trivia);
 
                 members.extend(left_rest);
                 members.push((&self.op, right));
@@ -973,7 +1043,7 @@ impl BinaryExpr {
             (left, Expression::Binary(right))
                 if BinaryOpChainingGroup::group_for_op(&right.op) == Some(chaining_group) =>
             {
-                let (right_first, right_rest) = right.get_chaining_members();
+                let (right_first, right_rest) = right.get_chaining_members(trivia);
 
                 members.push((&self.op, right_first));
                 members.extend(right_rest);
@@ -1021,7 +1091,7 @@ impl PrintMultiLine for BinaryExpr {
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
-        let (first, chain_members) = self.get_chaining_members();
+        let (first, chain_members) = self.get_chaining_members(printer.trivia);
         printer.print(first, shape);
         printer.print_trivia_all_trailing_for(first.rightmost_token());
         let num_chain_members = chain_members.len();
@@ -1051,7 +1121,8 @@ impl BinaryExpr {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the binary expression on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let (left, right) = &*self.sides;
+        let left = self.effective_left(printer.trivia);
+        let right = &self.sides.1;
 
         if printer
             .print(left, Shape::unlimited_single_line())
@@ -1123,6 +1194,42 @@ impl BinaryOpChainingGroup {
             }
             BinaryOp::And(_) | BinaryOp::Pipe(_) | BinaryOp::Caret(_) => Some(Self::Bitwise),
             BinaryOp::AndAnd(_) | BinaryOp::OrOr(_) => Some(Self::Logical),
+            _ => None,
+        }
+    }
+}
+
+/// Precedence rows whose redundant left-operand parens the formatter strips
+/// (see [`BinaryExpr::effective_left`]). Ops within a row share one binding
+/// power in the parser (`infix_binding_power`), so `(a OP b) OP c` reparses
+/// identically without the parens. Comparisons, equality, shifts, `??`, and
+/// assignments are deliberately absent: chains of those are unusual enough
+/// that explicit parens read as intent.
+///
+/// Finer-grained than [`BinaryOpChainingGroup`], which mixes precedence
+/// levels (`&&` with `||`, `&` with `|`) because it only groups layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BinaryOpPrecedenceRow {
+    AddSubtract,
+    MultiplyDivideModulo,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    LogicalAnd,
+    LogicalOr,
+}
+impl BinaryOpPrecedenceRow {
+    fn row_for_op(op: &BinaryOp) -> Option<Self> {
+        match op {
+            BinaryOp::Plus(_) | BinaryOp::Minus(_) => Some(Self::AddSubtract),
+            BinaryOp::Star(_) | BinaryOp::Slash(_) | BinaryOp::Percent(_) => {
+                Some(Self::MultiplyDivideModulo)
+            }
+            BinaryOp::And(_) => Some(Self::BitwiseAnd),
+            BinaryOp::Pipe(_) => Some(Self::BitwiseOr),
+            BinaryOp::Caret(_) => Some(Self::BitwiseXor),
+            BinaryOp::AndAnd(_) => Some(Self::LogicalAnd),
+            BinaryOp::OrOr(_) => Some(Self::LogicalOr),
             _ => None,
         }
     }
@@ -2594,12 +2701,27 @@ impl CallArg {
         matches!(self.expr, Expression::Lambda(_) | Expression::Spawn(_))
     }
 
+    /// The argument expression with redundant parens peeled: the call's own
+    /// parens already delimit the argument, so a transparent paren wrapping
+    /// the whole expression carries nothing. Lambdas and `spawn` keep their
+    /// parens: peeling one would flip [`Self::is_huggable`] between passes
+    /// and break idempotency.
+    fn effective_expr(&self, trivia: &TriviaInfo) -> &Expression {
+        let peeled = self.expr.peel_transparent_parens(trivia);
+        if matches!(peeled, Expression::Lambda(_) | Expression::Spawn(_)) {
+            &self.expr
+        } else {
+            peeled
+        }
+    }
+
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let expr = self.effective_expr(input.trivia);
         let mut len = 0;
         if let Some((name, equals)) = &self.label {
             let (_, name_trailing) = input.trivia.get_for_range_split(name.span());
             let (equals_leading, equals_trailing) = input.trivia.get_for_range_split(equals.span());
-            let expr_leading = input.trivia.get_leading_for_element(&self.expr);
+            let expr_leading = input.trivia.get_leading_for_element(expr);
             len += usize::from(name.span().len())
                 + name_trailing.try_squished_len(input.input)?
                 + equals_leading.try_squished_len(input.input)?
@@ -2607,26 +2729,27 @@ impl CallArg {
                 + equals_trailing.try_squished_len(input.input)?
                 + expr_leading.try_squished_len(input.input)?;
         }
-        len += self.expr.single_line_width(input)?;
+        len += expr.single_line_width(input)?;
         Some(len)
     }
 }
 
 impl Printable for CallArg {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let expr = self.effective_expr(printer.trivia);
         if let Some((name, equals)) = &self.label {
             printer.print_raw_token(name);
             let (_, name_trailing) = printer.trivia.get_for_range_split(name.span());
             let (equals_leading, equals_trailing) =
                 printer.trivia.get_for_range_split(equals.span());
-            let expr_leading = printer.trivia.get_leading_for_element(&self.expr);
+            let expr_leading = printer.trivia.get_leading_for_element(expr);
             printer.print_trivia_squished(name_trailing);
             printer.print_trivia_squished(equals_leading);
             printer.print_str(" = ");
             printer.print_trivia_squished(equals_trailing);
             printer.print_trivia_squished(expr_leading);
         }
-        printer.print(&self.expr, shape)
+        printer.print(expr, shape)
     }
 
     fn leftmost_token(&self) -> TextRange {
@@ -4667,9 +4790,62 @@ impl Printable for GenericParamBounds {
 #[derive(Debug)]
 pub struct GenericArgs {
     pub open_angle: t::Less,
-    /// Comma-separated type arguments.
-    pub args: Vec<(crate::ast::Type, Option<t::Comma>)>,
+    /// Comma-separated static or contextual runtime type arguments.
+    pub args: Vec<(GenericArg, Option<t::Comma>)>,
     pub close_angle: t::Greater,
+}
+
+#[derive(Debug)]
+pub enum GenericArg {
+    Type(crate::ast::Type),
+    Unreflect(UnreflectArg),
+}
+
+#[derive(Debug)]
+pub struct UnreflectArg {
+    pub keyword: t::Word,
+    pub open_paren: t::LParen,
+    pub expr: Box<Expression>,
+    pub close_paren: t::RParen,
+}
+
+impl FromCST for UnreflectArg {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::UNREFLECT_ARG)?;
+        let mut it = SyntaxNodeIter::new(&node);
+        let keyword = it.expect_parse()?;
+        let open_paren = it.expect_parse()?;
+        let expr = Box::new(Expression::from_cst(it.next().ok_or_else(|| {
+            StrongAstError::missing(SyntaxKind::PATH_EXPR, it.parent)
+        })?)?);
+        let close_paren = it.expect_parse()?;
+        it.expect_end()?;
+        Ok(Self {
+            keyword,
+            open_paren,
+            expr,
+            close_paren,
+        })
+    }
+}
+
+impl Printable for UnreflectArg {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_raw_token(&self.open_paren);
+        printer.print(self.expr.as_ref(), shape);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_single_line()
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
+    }
 }
 
 impl FromCST for GenericArgs {
@@ -4691,12 +4867,20 @@ impl FromCST for GenericArgs {
                     break t::Greater::from_cst(elem)?;
                 }
                 SyntaxKind::TYPE_EXPR => {
-                    let ty = crate::ast::Type::from_cst(elem)?;
+                    let arg = GenericArg::Type(crate::ast::Type::from_cst(elem)?);
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
                         .map(t::Comma::from_cst)
                         .transpose()?;
-                    args.push((ty, comma));
+                    args.push((arg, comma));
+                }
+                SyntaxKind::UNREFLECT_ARG => {
+                    let arg = GenericArg::Unreflect(UnreflectArg::from_cst(elem)?);
+                    let comma = it
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(t::Comma::from_cst)
+                        .transpose()?;
+                    args.push((arg, comma));
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedAdditionalElement {
@@ -4728,8 +4912,12 @@ impl GenericArgs {
     /// upper bound and tracks what the printer actually emits.
     pub(crate) fn formatted_single_line_width(&self) -> usize {
         let mut len: usize = 2; // `<` and `>`
-        for (i, (ty, _)) in self.args.iter().enumerate() {
-            let arg_span = ty.rightmost_token().end() - ty.leftmost_token().start();
+        for (i, (arg, _)) in self.args.iter().enumerate() {
+            let (left, right) = match arg {
+                GenericArg::Type(ty) => (ty.leftmost_token(), ty.rightmost_token()),
+                GenericArg::Unreflect(arg) => (arg.leftmost_token(), arg.rightmost_token()),
+            };
+            let arg_span = right.end() - left.start();
             len += usize::from(arg_span);
             if i + 1 < self.args.len() {
                 len += 2; // `, `
@@ -4748,8 +4936,11 @@ impl KnownKind for GenericArgs {
 impl Printable for GenericArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.open_angle);
-        for (i, (ty, _comma)) in self.args.iter().enumerate() {
-            printer.print(ty, shape.clone());
+        for (i, (arg, _comma)) in self.args.iter().enumerate() {
+            match arg {
+                GenericArg::Type(ty) => printer.print(ty, shape.clone()),
+                GenericArg::Unreflect(arg) => printer.print(arg, shape.clone()),
+            };
             if i + 1 < self.args.len() {
                 printer.print_str(", ");
             }

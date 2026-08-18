@@ -421,17 +421,16 @@ test "fs_open_append_plus_can_read" {
 }
 
 // ============================================================================
-// close is idempotent (calling close twice returns null both times)
+// close is idempotent (calling close twice succeeds both times)
 // ============================================================================
 
-function fs_file_close_is_idempotent_fn() -> null {
+function fs_file_close_is_idempotent_fn() -> void {
     let path = fs_tmp("close_idempotent.txt");
     baml.fs.write(path, "x");
     let f = baml.fs.open(path, "r");
     f.close();
     f.close();
     baml.fs.remove(path);
-    null
 }
 
 test "fs_file_close_is_idempotent" {

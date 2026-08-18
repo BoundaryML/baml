@@ -28,6 +28,18 @@ class ModelTurn {
         out
     }
 
+    // The media payloads the turn produced, in order. A media-shaped output
+    // type is built from these instead of from the terminal text.
+    function media(self) -> MediaPart[] {
+        let out: MediaPart[] = [];
+        for (let b in self.content) {
+            if let m: root.content.Media = b {
+                out.push(m.media);
+            }
+        }
+        out
+    }
+
     // The ToolUse blocks of the turn, in order.
     function tool_uses(self) -> root.content.ToolUse[] {
         let out: root.content.ToolUse[] = [];

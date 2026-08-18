@@ -44,7 +44,7 @@ function HeaderInStringLiteral() -> string {
     x + y
 }
 
-client GPT4 = openai.OpenAiClient.new(
+client GPT4 = openai.ResponsesClient.new(
     model = "gpt-4",
     api_key = env.OPENAI_API_KEY,
 );

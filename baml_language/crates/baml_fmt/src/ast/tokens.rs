@@ -606,6 +606,9 @@ pub fn is_word_like(kind: SyntaxKind) -> bool {
         kind,
         SyntaxKind::WORD
             | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_CLASS
+            | SyntaxKind::KW_ENUM
+            | SyntaxKind::KW_FUNCTION
             | SyntaxKind::KW_IMPLEMENTS
             | SyntaxKind::KW_IMPLEMENT
             | SyntaxKind::KW_EXTENDS

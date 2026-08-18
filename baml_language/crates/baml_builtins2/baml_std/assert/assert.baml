@@ -1,20 +1,16 @@
 // Hard assertions — throw and stop execution on failure.
 
 /// Asserts that `condition` is `true`. Panics with a failure message if not.
-function is_true(condition: bool) -> null {
+function is_true(condition: bool) -> void {
     if (!condition) {
         baml.sys.panic("assertion failed: expected true")
-    } else {
-        null
     }
 }
 
 /// Asserts that `value` is not `null`. Panics if it is.
-function not_null(value: unknown?) -> null {
+function not_null(value: unknown?) -> void {
     if (value == null) {
         baml.sys.panic("assertion failed: expected non-null value")
-    } else {
-        null
     }
 }
 
@@ -48,20 +44,18 @@ function format_operand(value: unknown) -> string {
 /// - `expected`: The expected value.
 ///
 /// Returns:
-/// - `null` when `actual` and `expected` are exactly equal.
+/// - Nothing. Returns normally when `actual` and `expected` are exactly equal.
 ///
 /// Errors/Panics:
 /// - Panics when `actual != expected`.
 /// - For floating-point values this comparison is exact; prefer
 ///   `assert.approx_equal(actual, expected, eps)` when comparing computed
 ///   results within a tolerance.
-function equal(actual: unknown, expected: unknown) -> null {
+function equal(actual: unknown, expected: unknown) -> void {
     if (actual != expected) {
         baml.sys.panic(
             `assertion failed: left = ${format_operand(actual)}, right = ${format_operand(expected)}`,
         )
-    } else {
-        null
     }
 }
 
@@ -73,33 +67,28 @@ function equal(actual: unknown, expected: unknown) -> null {
 /// - `eps`: The maximum allowed absolute difference (`|actual - expected|`).
 ///
 /// Returns:
-/// - `null` when `|actual - expected| <= eps`.
+/// - Nothing. Returns normally when `|actual - expected| <= eps`.
 ///
 /// Errors/Panics:
 /// - Panics when `eps` is negative or NaN.
 /// - Panics when the absolute difference exceeds `eps` or cannot be compared
 ///   (for example, when `actual`/`expected` produce NaN deltas).
-function approx_equal(actual: float, expected: float, eps: float) -> null {
+function approx_equal(actual: float, expected: float, eps: float) -> void {
     if (eps < 0.0 || eps.is_nan()) {
         baml.sys.panic("assertion failed: epsilon must be a non-negative number")
-    } else {
-        let delta = (actual - expected).abs();
-        if (delta.is_nan() || delta > eps) {
-            baml.sys.panic(
-                `assertion failed: |left - right| = "${delta}", eps = "${eps}", left = "${actual}", right = "${expected}"`,
-            )
-        } else {
-            null
-        }
+    }
+    let delta = (actual - expected).abs();
+    if (delta.is_nan() || delta > eps) {
+        baml.sys.panic(
+            `assertion failed: |left - right| = "${delta}", eps = "${eps}", left = "${actual}", right = "${expected}"`,
+        )
     }
 }
 
 /// Asserts that `haystack` contains `needle` as a substring. Panics if not.
-function contains(haystack: string, needle: string) -> null {
+function contains(haystack: string, needle: string) -> void {
     if (!haystack.includes(needle)) {
         baml.sys.panic("assertion failed: string does not contain expected substring")
-    } else {
-        null
     }
 }
 
@@ -108,7 +97,7 @@ function is_type<T>(actual: unknown) -> T throws never {
     match (actual) {
         T => actual,
         _ => {
-            let t: type = reflect.type_of<T>();
+            let t: type = type.of<T>();
             baml.sys.panic(`assertion failed: expected type "${t}", got "${actual}"`)
         },
     }

@@ -13,6 +13,6 @@ function untagged(name: string) -> string throws never {
 
 function tagged() -> int throws never {
     let render = prompt`${role("system")}You are helpful.${role("user")}Hi!`;
-     // ^^^^^^ (baml.prompt.Context) -> ai.Prompt throws never
+     // ^^^^^^ (ai.Context) -> ai.Prompt throws never
     0
 }

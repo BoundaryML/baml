@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 26006
 ---
 === MIR2 ===
 fn user.$init_test_main(registry: testing.TestCollector) -> null {
@@ -101,7 +100,7 @@ fn .<lambda(<lambda($init_test_main, 0)>, 1)>(testset: testing.TestCollector) ->
     let _13: string // ex
     let _14: void
     let _15: string
-    let _16: () -> void throws baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    let _16: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
         _4 = copy capture[0];
@@ -156,7 +155,7 @@ fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 1)>, 2)>() -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: Sentiment // result
-    let _2: null
+    let _2: void
     let _3: string
 
     bb0: {
@@ -192,7 +191,7 @@ fn .<lambda(<lambda($init_test_main, 0)>, 3)>(testset: testing.TestCollector) ->
     let _8: string // sentiments [captured]
     let _9: void
     let _10: string
-    let _11: (testing.TestCollector) -> void throws baml.errors.InvalidArgument | baml.errors.UnknownError | testing.InvalidTestName | ai.errors.Failure
+    let _11: (testing.TestCollector) -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.UnknownError | baml.reflect.errors.CompilationError | testing.InvalidTestName | ai.errors.Failure
 
     bb0: {
         _2 = [const "happy", const "sad"]: string[];
@@ -243,7 +242,7 @@ fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>(testset: testing.Test
     let _9: string // ex
     let _10: void
     let _11: string
-    let _12: () -> void throws baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
+    let _12: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
         _3 = copy capture[0];
@@ -288,7 +287,7 @@ fn .<lambda(<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>, 5)>() -> voi
     // Locals:
     let _0: void // _0 // return
     let _1: Sentiment // result
-    let _2: null
+    let _2: void
     let _3: string
 
     bb0: {
@@ -341,7 +340,7 @@ fn user.ClassifySentiment(text: string, client: null | ai.Client) -> Sentiment {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<Sentiment, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<Sentiment>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<Sentiment, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<Sentiment>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -410,6 +409,7 @@ fn user.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<Sentiment> {
     let _3: (string) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
+    let _6: ai.Client
 
     bb0: {
         _2 = { const "text": copy _1 }: map<string, unknown>;
@@ -419,11 +419,15 @@ fn user.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<Sentiment> {
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<Sentiment> { const "ClassifySentiment", copy _2, copy _3, copy _4, const item user.GPT4o };
-        goto -> bb2;
+        _6 = call const fn ai.clients.resolve(const item user.GPT4o) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<Sentiment> { const "ClassifySentiment", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -567,7 +571,7 @@ fn user.GenerateTests(count: int, topic: string, client: null | ai.Client) -> st
     }
 
     bb4: {
-        _5 = virtual_call run as ai.Runner<string[], Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string[]>>(copy _6, copy _8) -> [bb5];
+        _5 = virtual_call run as ai.Runner<string[], Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string[]>>(copy _6, copy _8) -> [bb5];
     }
 
     bb5: {
@@ -638,6 +642,7 @@ fn user.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<string[
     let _4: (string) -> ai.Prompt throws never
     let _5: ai.tools.Toolbox
     let _6: ai.tools.Tool[]
+    let _7: ai.Client
 
     bb0: {
         _3 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
@@ -647,11 +652,15 @@ fn user.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<string[
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<string[]> { const "GenerateTests", copy _3, copy _4, copy _5, const item user.GPT4o };
-        goto -> bb2;
+        _7 = call const fn ai.clients.resolve(const item user.GPT4o) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<string[]> { const "GenerateTests", copy _3, copy _4, copy _5, copy _7 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -865,7 +874,7 @@ fn user.ClassifySentiment2(text: string, client: null | ai.Client) -> string {
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -934,6 +943,7 @@ fn user.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string> {
     let _3: (string) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
+    let _6: ai.Client
 
     bb0: {
         _2 = { const "text": copy _1 }: map<string, unknown>;
@@ -943,11 +953,15 @@ fn user.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string> {
     }
 
     bb1: {
-        _0 = ai.FunctionSpec<string> { const "ClassifySentiment2", copy _2, copy _3, copy _4, const item user.GPT4o };
-        goto -> bb2;
+        _6 = call const fn ai.clients.resolve(const item user.GPT4o) -> [bb2];
     }
 
     bb2: {
+        _0 = ai.FunctionSpec<string> { const "ClassifySentiment2", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

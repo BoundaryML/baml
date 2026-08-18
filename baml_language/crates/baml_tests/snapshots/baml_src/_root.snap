@@ -3,16 +3,77 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function $init() -> null {
     call $init_let_0
-    store_global user.parse_companions.ParseCompanionsTestClient
+    store_global user.env_ref_clients.LiveEnvRefOpenAi
     call $init_let_1
-    store_global user.streaming_parsing.StreamParseClient
+    store_global user.env_ref_desugar.EnvRefDesugarClient
     call $init_let_2
+    store_global user.parse_companions.ParseCompanionsTestClient
+    call $init_let_3
+    store_global user.streaming_parsing.StreamParseClient
+    call $init_let_4
     store_global user.type_reflection.TestClient
     load_const null
     return
 }
 
 function $init_test(registry: unknown) -> null {
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
     load_var ?1
     call ?
     pop 1

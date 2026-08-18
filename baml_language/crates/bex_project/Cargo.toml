@@ -10,6 +10,7 @@ documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 description = "Reusable compile-and-run runtime for BAML programs"
+build = "build.rs"
 
 [lib]
 doctest = false
@@ -20,8 +21,15 @@ workspace = true
 [dependencies]
 baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }
+baml_compiler2_emit = { workspace = true }
+baml_compiler2_hir = { workspace = true }
+baml_compiler2_hir_ty = { workspace = true }
+baml_compiler2_ppir = { workspace = true }
 baml_compiler2_visualization = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
+baml_compiler_lexer = { workspace = true }
+baml_compiler_parser = { workspace = true }
+baml_compiler_syntax = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }
 baml_lsp2_actions = { workspace = true }
@@ -45,6 +53,7 @@ lsp-types = { workspace = true }
 paste = { workspace = true }
 percent-encoding = { workspace = true }
 regex = { workspace = true }
+rowan = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -53,10 +62,23 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 vfs = { workspace = true }
 
+[build-dependencies]
+baml_base = { workspace = true }
+baml_builtins2 = { workspace = true }
+baml_compiler2_emit = { workspace = true }
+baml_compiler2_hir = { workspace = true }
+baml_compiler2_hir_ty = { workspace = true }
+baml_project = { workspace = true }
+baml_version = { workspace = true }
+borsh = { workspace = true }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bex_cache = { workspace = true, default-features = false }
 ignore = { workspace = true }
-tokio = { workspace = true, features = [ "sync", "rt", "time" ] }
+# `rt-multi-thread` backs `wasm_helpers::fallback_runtime`'s
+# `tokio::runtime::Runtime::new()`. It used to arrive by feature unification
+# through `sys_llm`; that crate is gone, so declare it where it is used.
+tokio = { workspace = true, features = [ "sync", "rt", "rt-multi-thread", "time" ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 sys_native = { workspace = true }

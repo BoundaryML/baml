@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13224
 ---
 === PPIR ===
 function user.both_ints(a: int | string, b: int | string) -> bool  [expr] {

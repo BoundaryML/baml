@@ -271,7 +271,7 @@ impl<'db> SchemaCx<'db, '_> {
                             .insert(name.clone(), TypeSchema::Class { fields: Vec::new() });
                         let fields = fields
                             .iter()
-                            .map(|(field_name, field_ty)| FieldSchemaField {
+                            .map(|(field_name, field_ty, _attrs)| FieldSchemaField {
                                 name: field_name.to_string(),
                                 schema: self.field_schema(field_ty, depth + 1),
                             })
@@ -810,7 +810,7 @@ mod tests {
     }
 
     const LLM_FIXTURE: &str = r##"
-client GPT4 = openai.OpenAiClient.new(model = "gpt-4o");
+client GPT4 = openai.ResponsesClient.new(model = "gpt-4o");
 
 function Extract(text: string) -> string {
   client: GPT4

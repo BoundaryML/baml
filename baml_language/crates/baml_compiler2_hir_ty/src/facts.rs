@@ -21,6 +21,11 @@ pub struct Facts<'db> {
     /// The current scope's param env (I2): each rigid variable's declared
     /// bound conjunction, as plain constraints (the trait's vocabulary).
     bounds: rustc_hash::FxHashMap<ParamTy, Vec<Interface>>,
+    /// Canonicalization asks for the same recursive alias and enum facts many
+    /// times inside one body. Cache the owned plain rows at the oracle boundary
+    /// instead of repeatedly materializing them from interned compiler data.
+    alias_defs: std::cell::RefCell<rustc_hash::FxHashMap<QualifiedTypeName, Option<Ty>>>,
+    enum_variants: std::cell::RefCell<rustc_hash::FxHashMap<QualifiedTypeName, Option<Vec<Name>>>>,
 }
 
 impl<'db> Facts<'db> {
@@ -28,6 +33,8 @@ impl<'db> Facts<'db> {
         Facts {
             db,
             bounds: rustc_hash::FxHashMap::default(),
+            alias_defs: std::cell::RefCell::new(rustc_hash::FxHashMap::default()),
+            enum_variants: std::cell::RefCell::new(rustc_hash::FxHashMap::default()),
         }
     }
 
@@ -35,7 +42,12 @@ impl<'db> Facts<'db> {
         db: &'db dyn baml_compiler2_ppir::Db,
         bounds: rustc_hash::FxHashMap<ParamTy, Vec<Interface>>,
     ) -> Facts<'db> {
-        Facts { db, bounds }
+        Facts {
+            db,
+            bounds,
+            alias_defs: std::cell::RefCell::new(rustc_hash::FxHashMap::default()),
+            enum_variants: std::cell::RefCell::new(rustc_hash::FxHashMap::default()),
+        }
     }
 
     /// The scope's param env verbatim - the overlap oracle's `bounds` input
@@ -47,31 +59,79 @@ impl<'db> Facts<'db> {
     /// Resolves a qualified name back to its definition through the owning
     /// package's canonical (ppir) items.
     pub fn definition_of(&self, name: &QualifiedTypeName) -> Option<Definition<'db>> {
-        let package = PackageId::new(self.db, name.package().clone());
-        baml_compiler2_ppir::package_items(self.db, package)
-            .lookup_type(name.namespace(), name.name())
+        definition_of(self.db, name)
+    }
+}
+
+fn definition_of<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    name: &QualifiedTypeName,
+) -> Option<Definition<'db>> {
+    let package = PackageId::new(db, name.package().clone());
+    baml_compiler2_ppir::package_items(db, package).lookup_type(name.namespace(), name.name())
+}
+
+/// Resolves an alias without retaining the result in a memo. One-shot
+/// fact-poor contexts use this directly; repeated scans use a cached context.
+pub(crate) fn uncached_alias_def(
+    db: &dyn baml_compiler2_ppir::Db,
+    name: &QualifiedTypeName,
+) -> Option<Ty> {
+    if let Some(Definition::TypeAlias(alias)) = definition_of(db, name) {
+        return Some(crate::lower::type_alias_value(db, alias).to_plain());
+    }
+    match crate::package_interface::mounted_type_row(db, name) {
+        Some(crate::package_interface::ExportedType::TypeAlias { resolved, .. }) => {
+            Some(resolved.clone())
+        }
+        _ => None,
+    }
+}
+
+/// Resolves enum variants without retaining the result in a memo. One-shot
+/// fact-poor contexts use this directly; repeated scans use a cached context.
+pub(crate) fn uncached_enum_variants(
+    db: &dyn baml_compiler2_ppir::Db,
+    name: &QualifiedTypeName,
+) -> Option<Vec<Name>> {
+    if let Some(Definition::Enum(enum_loc)) = definition_of(db, name) {
+        return Some(
+            baml_compiler2_ppir::item_data::enum_data(db, enum_loc)
+                .variants
+                .iter()
+                .map(|variant| variant.name.clone())
+                .collect(),
+        );
+    }
+    match crate::package_interface::mounted_type_row(db, name) {
+        Some(crate::package_interface::ExportedType::Enum { variants, .. }) => {
+            Some(variants.clone())
+        }
+        _ => None,
     }
 }
 
 impl TypeContext for Facts<'_> {
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
-        let Some(Definition::TypeAlias(alias)) = self.definition_of(name) else {
-            return None;
-        };
-        Some(crate::lower::type_alias_value(self.db, alias).to_plain())
+        if let Some(cached) = self.alias_defs.borrow().get(name) {
+            return cached.clone();
+        }
+        let resolved = uncached_alias_def(self.db, name);
+        self.alias_defs
+            .borrow_mut()
+            .insert(name.clone(), resolved.clone());
+        resolved
     }
 
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
-        let Some(Definition::Enum(enum_loc)) = self.definition_of(name) else {
-            return None;
-        };
-        Some(
-            baml_compiler2_ppir::item_data::enum_data(self.db, enum_loc)
-                .variants
-                .iter()
-                .map(|variant| variant.name.clone())
-                .collect(),
-        )
+        if let Some(cached) = self.enum_variants.borrow().get(name) {
+            return cached.clone();
+        }
+        let resolved = uncached_enum_variants(self.db, name);
+        self.enum_variants
+            .borrow_mut()
+            .insert(name.clone(), resolved.clone());
+        resolved
     }
 
     // -- Interface facts (I1: the impl registry answers; bounds and

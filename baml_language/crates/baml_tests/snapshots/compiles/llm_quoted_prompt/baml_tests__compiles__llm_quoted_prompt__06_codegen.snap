@@ -28,7 +28,7 @@ function user.BacktickPrompt(topic: string, client: ai.Client | null) -> string 
     call user.BacktickPrompt$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -65,6 +65,9 @@ function user.BacktickPrompt$spec(topic: string) -> ai.FunctionSpec<string> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.QuotedPromptClient
+    call ai.clients.resolve
+    store_var _6
     load_const "BacktickPrompt"
     load_deref ?1
     load_const "topic"
@@ -73,8 +76,7 @@ function user.BacktickPrompt$spec(topic: string) -> ai.FunctionSpec<string> {
     alloc_map 1
     load_var topic
     make_closure .<lambda(BacktickPrompt$spec, 0)>, 1
-    load_var _4
-    load_global user.QuotedPromptClient
+    load_var2 2 3
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
@@ -119,7 +121,7 @@ function user.QuotedPrompt(topic: string, client: ai.Client | null) -> string {
     call user.QuotedPrompt$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -153,6 +155,9 @@ function user.QuotedPrompt$spec(topic: string) -> ai.FunctionSpec<string> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.QuotedPromptClient
+    call ai.clients.resolve
+    store_var _6
     load_const "QuotedPrompt"
     load_var topic
     load_const "topic"
@@ -160,8 +165,7 @@ function user.QuotedPrompt$spec(topic: string) -> ai.FunctionSpec<string> {
     load_type unknown
     alloc_map 1
     make_closure .<lambda(QuotedPrompt$spec, 0)>, 0
-    load_var _4
-    load_global user.QuotedPromptClient
+    load_var2 2 3
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

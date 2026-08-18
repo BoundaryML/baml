@@ -1,6 +1,6 @@
 // Tests for validating map types
 
-client MyClient = openai.OpenAiClient.new(model = "gpt-4o");
+client MyClient = openai.ResponsesClient.new(model = "gpt-4o");
 
 class MapDummy {
   inner string

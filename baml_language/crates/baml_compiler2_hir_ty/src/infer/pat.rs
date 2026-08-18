@@ -25,7 +25,7 @@ use baml_compiler2_ast::{ExprBody, ExprId, MatchArmId, PatId, Pattern};
 use baml_type::{
     Freshness, TyAttr,
     interned::{InterfaceRef, Ty, TyKind},
-    normalize::{TypeContext as _, is_subtype_interned, normalize_interned},
+    normalize::{TypeContext as _, normalize_interned},
 };
 
 use super::{Expectation, InferenceContext};
@@ -432,6 +432,29 @@ impl<'db> InferenceContext<'db> {
                     .unwrap_or_else(Ty::error);
                 self.type_pattern_outcome(pat, scrut, &pat_ty)
             }
+            Pattern::Unreflect(operand) => {
+                self.validate_runtime_type_operand(body, *operand);
+                let mut identity = self.body_owner_identity;
+                for byte in pat.into_raw().into_u32().to_le_bytes() {
+                    identity ^= u32::from(byte);
+                    identity = identity.wrapping_mul(0x0100_0193);
+                }
+                let parameter = baml_type::ParamTy::new(
+                    0xc000_0000 | (identity & 0x3fff_ffff),
+                    baml_type::Name::new(format!("$unreflect${identity:08x}")),
+                );
+                let constructor = Ty::intern(TyKind::TypeVar(parameter, TyAttr::default()));
+                PatternOutcome {
+                    // Each runtime predicate is possible but cannot cover a
+                    // static alphabet. Its statement-independent rigid
+                    // singleton also keeps two source patterns distinct.
+                    dpat: DPat::single(constructor.to_plain(), scrut.to_plain()),
+                    matched_ty: scrut.clone(),
+                    recorded_ty: None,
+                    covers_type: false,
+                    consumes_matched: false,
+                }
+            }
             Pattern::Class { class, fields, .. } => {
                 let class = class.clone();
                 let fields: Vec<(baml_type::Name, PatId)> = fields
@@ -673,7 +696,7 @@ impl<'db> InferenceContext<'db> {
                 })
             })
             .collect();
-        let head_covers = provable_subtype(scrut, &head, &self.facts);
+        let head_covers = self.provable_subtype(scrut, &head);
 
         // The matrix's single-ctor STRUCT VIEW of an existential
         // (`Ctor::Interface`, rustc's non-enum struct treatment): field
@@ -868,7 +891,7 @@ impl<'db> InferenceContext<'db> {
                 consumes_matched: false,
             };
         }
-        let covers = provable_subtype(scrut, pat_ty, &self.facts);
+        let covers = self.provable_subtype(scrut, pat_ty);
         if let TyKind::Union(members, _) = scrut.kind()
             && !covers
         {
@@ -876,8 +899,7 @@ impl<'db> InferenceContext<'db> {
             let claimed: Vec<&Ty> = members
                 .iter()
                 .filter(|member| {
-                    provable_subtype(member, pat_ty, &self.facts)
-                        || provable_subtype(pat_ty, member, &self.facts)
+                    self.provable_subtype(member, pat_ty) || self.provable_subtype(pat_ty, member)
                 })
                 .collect();
             if !claimed.is_empty() {
@@ -885,7 +907,7 @@ impl<'db> InferenceContext<'db> {
                 let alts: Vec<DPat> = claimed
                     .iter()
                     .map(|member| {
-                        let inner = if provable_subtype(member, pat_ty, &self.facts) {
+                        let inner = if self.provable_subtype(member, pat_ty) {
                             DPat::wildcard(member.to_plain())
                         } else {
                             self.dpat_for_type(pat_ty, member)
@@ -936,7 +958,7 @@ impl<'db> InferenceContext<'db> {
     /// pattern type stands (rigid pairs keep the written type - TIR's
     /// `intersect_pattern_flow_types` policy).
     fn narrow_to(&self, scrut: &Ty, pat_ty: &Ty) -> Ty {
-        if provable_subtype(scrut, pat_ty, &self.facts) {
+        if self.provable_subtype(scrut, pat_ty) {
             scrut.clone()
         } else {
             pat_ty.clone()
@@ -953,7 +975,7 @@ impl<'db> InferenceContext<'db> {
         // provably fits is a wildcard at this column, whatever its shape
         // (a same-union pattern must not decompose into per-member
         // singles that no longer align with UnionMember ctors).
-        if provable_subtype(col, pat_ty, &self.facts) {
+        if self.provable_subtype(col, pat_ty) {
             return DPat::wildcard(col_plain);
         }
         match pat_ty.kind() {
@@ -1021,7 +1043,7 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             _ => {
-                if provable_subtype(col, pat_ty, &self.facts) {
+                if self.provable_subtype(col, pat_ty) {
                     DPat::wildcard(col_plain)
                 } else {
                     DPat::single(pat_plain, col_plain)
@@ -1171,7 +1193,7 @@ impl<'db> InferenceContext<'db> {
                 })
             })
             .collect();
-        let head_covers = provable_subtype(scrut, &head, &self.facts);
+        let head_covers = self.provable_subtype(scrut, &head);
 
         // Union scrutinee: claim the same-class member.
         let dpat = {
@@ -1392,8 +1414,8 @@ impl<'db> InferenceContext<'db> {
                     return true;
                 };
                 if let Some(ascribed) = self.pattern_ascription_ty(body, sub) {
-                    return provable_subtype(&ascribed, &expanded, &self.facts)
-                        || provable_subtype(&expanded, &ascribed, &self.facts);
+                    return self.provable_subtype(&ascribed, &expanded)
+                        || self.provable_subtype(&expanded, &ascribed);
                 }
                 self.pattern_fits(body, sub, &expanded)
             }
@@ -1424,7 +1446,7 @@ impl<'db> InferenceContext<'db> {
             },
             // Type patterns carry their own runtime test; the lowering
             // settles their claim - no discrimination here.
-            Pattern::Type(_) => true,
+            Pattern::Type(_) | Pattern::Unreflect(_) => true,
             Pattern::Or(alternatives) => {
                 let alternatives = alternatives.clone();
                 alternatives
@@ -1445,24 +1467,6 @@ impl<'db> InferenceContext<'db> {
             _ => Vec::new(),
         }
     }
-}
-
-/// A PROVABLE subtype verdict: ground on both sides and confirmed by the
-/// oracle. Rigid or unresolved pairs are not provable - the conservative
-/// direction for both coverage and claiming.
-pub(super) fn provable_subtype(sub: &Ty, sup: &Ty, facts: &crate::facts::Facts<'_>) -> bool {
-    if sub == sup {
-        return true;
-    }
-    if sub.has_infer() || sup.has_infer() || sub.has_error() || sup.has_error() {
-        return false;
-    }
-    // Rigid variables go to the oracle too: its typevar arms are already
-    // conservative (`T <: T`, `T <: unknown`, `never <: T` prove; a rigid
-    // against an unrelated concrete does not - which is exactly the B-633
-    // rule). The corpus pinned the case this matters for: a synthetic
-    // effect var IS covered by `throws unknown`.
-    is_subtype_interned(sub, sup, facts)
 }
 
 /// The legal shapes of a rest sub-pattern: the wildcard, a bare

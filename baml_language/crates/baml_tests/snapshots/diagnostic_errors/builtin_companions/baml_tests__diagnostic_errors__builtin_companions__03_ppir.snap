@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.Int {
+  bits: int
+}
+class user.Int$stream {
+  bits: int | null
+}
+function user.generic_carriers() -> int  [expr] {
+  { let m = baml.Map {  }; let a = baml.Array {  } } 0
+}
+function user.scalar_carriers() -> int  [expr] {
+  { let i = baml.Int {  }; let f = baml.Float {  }; let b = baml.Bigint {  }; let s = baml.String {  }; let t = baml.Bool {  }; let n = baml.Null {  }; let u = baml.Uint8Array {  } } 0
+}
+function user.type_carrier() -> int  [expr] {
+  { let t = baml.TypeValue {  } } 0
+}
+function user.user_named_int_is_unaffected() -> user.Int  [expr] {
+  {  } user.Int { bits: 32 }
+}

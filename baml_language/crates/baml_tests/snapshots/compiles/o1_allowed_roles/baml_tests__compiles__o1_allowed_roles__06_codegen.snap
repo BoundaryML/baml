@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18851
 ---
 function $init() -> null {
     call $init_let_0
@@ -33,7 +32,7 @@ function user.AskGpt4o(question: string, client: ai.Client | null) -> string {
     call user.AskGpt4o$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -70,6 +69,9 @@ function user.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.Gpt4oClient
+    call ai.clients.resolve
+    store_var _6
     load_const "AskGpt4o"
     load_deref ?1
     load_const "question"
@@ -78,8 +80,7 @@ function user.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string> {
     alloc_map 1
     load_var question
     make_closure .<lambda(AskGpt4o$spec, 0)>, 1
-    load_var _4
-    load_global user.Gpt4oClient
+    load_var2 2 3
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
@@ -124,7 +125,7 @@ function user.AskO1(question: string, client: ai.Client | null) -> string {
     call user.AskO1$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -161,6 +162,9 @@ function user.AskO1$spec(question: string) -> ai.FunctionSpec<string> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _4
+    load_global user.O1Client
+    call ai.clients.resolve
+    store_var _6
     load_const "AskO1"
     load_deref ?1
     load_const "question"
@@ -169,8 +173,7 @@ function user.AskO1$spec(question: string) -> ai.FunctionSpec<string> {
     alloc_map 1
     load_var question
     make_closure .<lambda(AskO1$spec, 0)>, 1
-    load_var _4
-    load_global user.O1Client
+    load_var2 2 3
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return

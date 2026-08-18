@@ -8,6 +8,74 @@
 
 use baml_compiler2_hir::loc::FunctionLoc;
 
+/// The stable, source-location-free identity of a callable exported across a
+/// package boundary.  These names are exactly the material MIR needs to build
+/// its linked item reference; consumers must never fabricate a `FunctionLoc`
+/// for a source-less package.
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub enum ExternalCallTarget {
+    Free {
+        package: baml_base::Name,
+        namespace: Vec<baml_base::Name>,
+        name: baml_base::Name,
+    },
+    Method {
+        package: baml_base::Name,
+        namespace: Vec<baml_base::Name>,
+        class: baml_base::Name,
+        name: baml_base::Name,
+    },
+    Interface {
+        interface: baml_type::QualifiedTypeName,
+        method: baml_base::Name,
+    },
+}
+
+/// Whether an exported callable has a symbol that a source-less consumer may
+/// link. Builtin bodies currently require source-owned lowering and therefore
+/// remain deliberately reserved until a builtin supplies an explicit ABI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub enum ExternalLinkability {
+    Linkable,
+    ReservedBuiltin,
+}
+
+/// Owned call-site facts for a source-less dependency callable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalCallable {
+    pub target: ExternalCallTarget,
+    pub linkability: ExternalLinkability,
+    /// Preserved so source-less consumers can lower compiler intrinsics and
+    /// await/sys-op call shapes through the same road as source functions.
+    pub builtin_kind: Option<baml_compiler2_ast::BuiltinKind>,
+    pub takes_self: bool,
+    pub owner_generic_params: Vec<baml_type::ParamTy>,
+    pub owner_generic_param_bounds: Vec<Vec<baml_type::Interface>>,
+    pub generic_params: Vec<baml_type::ParamTy>,
+    pub generic_param_bounds: Vec<Vec<baml_type::Interface>>,
+}
+
+impl ExternalCallable {
+    /// Call-site-suppliable generics. Synthetic callback-effect parameters are
+    /// inference-only and never participate in written arity.
+    pub fn user_generic_params(
+        &self,
+    ) -> impl Iterator<Item = (&baml_type::ParamTy, &[baml_type::Interface])> {
+        self.generic_params
+            .iter()
+            .zip(self.generic_param_bounds.iter())
+            .filter(|(param, _)| !baml_type::is_synthetic_effect_param(param.name()))
+            .map(|(param, bounds)| (param, bounds.as_slice()))
+    }
+
+    pub fn display_name(&self) -> &baml_base::Name {
+        match &self.target {
+            ExternalCallTarget::Free { name, .. } | ExternalCallTarget::Method { name, .. } => name,
+            ExternalCallTarget::Interface { method, .. } => method,
+        }
+    }
+}
+
 /// A function's effect: plain (ground - inference never leaks variables,
 /// finalize defaults unconstrained effects to `never`). Wrapped for the
 /// manual `salsa::Update` impl (`baml_type` has no salsa dependency).

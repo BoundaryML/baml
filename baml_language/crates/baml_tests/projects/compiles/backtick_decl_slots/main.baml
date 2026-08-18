@@ -6,7 +6,7 @@
 // string's auto-dedented (BEP-049 §12) runtime value. This file is already in
 // canonical form, so `baml fmt` leaves it unchanged.
 
-client Fast = openai.OpenAiClient.new(
+client Fast = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
 );

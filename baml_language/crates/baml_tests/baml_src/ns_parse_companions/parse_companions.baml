@@ -8,7 +8,7 @@
 // against literal instances. Locals go through top-level helper functions
 // (test-block local-boxing VM bug).
 
-client ParseCompanionsTestClient = openai.OpenAiClient.new(
+client ParseCompanionsTestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",

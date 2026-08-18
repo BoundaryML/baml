@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import threading
 import time
 
@@ -57,13 +58,17 @@ def test_cancellation_sync_cancel_via_call_context():
 async def test_cancellation_async_cancel_via_call_context():
     start = time.monotonic()
     ctx = BamlCallContext()
-    task = asyncio.create_task(throws_test.SleepMs_async(2000, _ctx=ctx))
 
-    await asyncio.sleep(0.05)
-    ctx.abort()
+    async def _abort_soon() -> None:
+        await asyncio.sleep(0.05)
+        ctx.abort()
+
+    abort_task = asyncio.create_task(_abort_soon())
 
     with pytest.raises(asyncio.CancelledError) as exc_info:
-        await task
+        await throws_test.SleepMs_async(2000, _ctx=ctx)
+
+    await abort_task
 
     _assert_cancelled_reason(exc_info.value)
     _assert_fast_cancellation(start)
@@ -82,6 +87,7 @@ async def test_cancellation_async_cancel_via_task_cancel():
     _assert_fast_cancellation(start)
 
 
+@pytest.mark.skipif(sys.version_info < (3, 11), reason="asyncio.TaskGroup requires Python 3.11+")
 async def test_cancellation_async_cancel_via_task_group_sibling():
     start = time.monotonic()
 
@@ -101,7 +107,7 @@ async def test_cancellation_async_cancel_via_task_group_sibling():
 
 async def test_cancellation_async_cancel_via_asyncio_timeout():
     start = time.monotonic()
-    with pytest.raises(TimeoutError):
+    with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(throws_test.SleepMs_async(2000), timeout=0.05)
 
     _assert_fast_cancellation(start)

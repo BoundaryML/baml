@@ -2121,6 +2121,31 @@ fn resolve_through_roots(
             push(&mut declarers, root);
             continue;
         }
+        let root_ref = baml_type::interned::InterfaceRef::from_constraint(&root);
+        let subject = root_ref.existential();
+        if crate::package_interface::mounted_type_row(db, &root.name).is_some() {
+            for inherited in crate::impls::direct_requires_closure(db, &root_ref, &subject, 64) {
+                if interface_declares_member(db, &inherited.name, member) {
+                    push(
+                        &mut declarers,
+                        baml_type::Interface {
+                            name: inherited.name,
+                            generics: inherited
+                                .generics
+                                .iter()
+                                .map(baml_type::interned::Ty::to_plain)
+                                .collect(),
+                            associated_types: inherited
+                                .associated_types
+                                .iter()
+                                .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                                .collect(),
+                        },
+                    );
+                }
+            }
+            continue;
+        }
         let Some(root_loc) = projection_interface_loc(db, &root.name) else {
             continue;
         };
@@ -2276,11 +2301,17 @@ fn projection_expand_aliases(facts: &crate::facts::Facts<'_>, mut ty: Ty) -> Ty 
     ty
 }
 
-fn interface_declares_member(
+pub(crate) fn interface_declares_member(
     db: &dyn baml_compiler2_ppir::Db,
     qtn: &QualifiedTypeName,
     member: &Name,
 ) -> bool {
+    if let Some(crate::package_interface::ExportedType::Interface {
+        associated_types, ..
+    }) = crate::package_interface::mounted_type_row(db, qtn)
+    {
+        return associated_types.iter().any(|assoc| assoc.name == *member);
+    }
     projection_interface_loc(db, qtn)
         .is_some_and(|loc| interface_declares_member_at(db, loc, member))
 }
@@ -2330,10 +2361,7 @@ pub fn interface_base_without_member_pin(
                 if !seen.insert(qtn.clone()) {
                     return None;
                 }
-                match facts.alias_def(&qtn) {
-                    Some(expanded) => current = expanded,
-                    None => return None,
-                }
+                current = facts.alias_def(&qtn)?;
             }
             _ => return None,
         }

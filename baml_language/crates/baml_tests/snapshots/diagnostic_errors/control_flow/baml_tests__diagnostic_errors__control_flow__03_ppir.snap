@@ -18,10 +18,10 @@ function user.LlmFunction$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmFunction$render_prompt(input: string) -> ai.Prompt  [expr] {
-  LlmFunction$spec(input).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+  LlmFunction$spec(input).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.LlmFunction$spec(input: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "LlmFunction", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Echo: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient }
+  ai.FunctionSpec { spec_name: "LlmFunction", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Echo: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }
 }
 function user.LlmFunction$stream(input: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
   ai.stream.from_spec(LlmFunction$spec(input), client = client)

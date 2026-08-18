@@ -93,7 +93,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_const 0
     cmp_int_op >
     pop_jump_if_false L4
-    jump L8
+    jump L10
 
   L4:
     load_var turn
@@ -109,39 +109,63 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_var _98
     store_var candidate
     load_type #0
+    load_deref ?1
+    load_var turn
+    call ai.Agent._has_media_output
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_type #0
     load_var candidate
     call baml.sap.parse
     store_var value
-    jump L6
+    jump L8
     load_var e
     throw_if_panic
     load_var selected
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _106
-    load_var2 36 32
+    store_var _112
+    load_var2 37 32
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
 
-  L6:
+  L7:
+    load_var selected
+    load_type ai.Client
+    load_const "id"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _106
+    load_type #0
+    load_deref ?1
+    load_var2 10 35
+    call ai.Agent._media_value
+    store_var value
+
+  L8:
     load_type #0
     load_var value
     call baml.json.to_json
-    jump L7
+    jump L9
     load_var e
     throw_if_panic
-    load_type never
+    load_type baml.json.JsonSerializationError
     load_var e
-    load_const "final value serialization failed"
-    call baml.errors.UnknownError.with_message
+    call baml.String.from
+    store_var _121
+    load_var2 38 39
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L7:
+  L9:
     call baml.json.stringify
-    store_var _118
+    store_var _126
     load_deref ?5
-    load_var _118
+    load_var _126
     init_instance ai.events.FinalProduced .value_json
     load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     alloc_array 1
@@ -160,13 +184,13 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     init_instance<1> ai.RunResult .value, .journal, .usage
     return
 
-  L8:
+  L10:
     load_deref ?5
     call ai.Journal.entries
     container_len
     store_var before
     load_type ai.content.ToolUse
-    load_type future<null, ai.errors.ToolFailedError>
+    load_type future<void, ai.errors.ToolFailedError>
     load_type never
     load_var calls
     load_type #0
@@ -175,7 +199,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     make_closure .<lambda(Agent.run, 0)>, captures=3, ntypeargs=1
     call baml.Array.map
     store_var futures
-    load_type null
+    load_type void
     load_type ai.errors.ToolFailedError
     load_var futures
     call baml.future.all
@@ -193,7 +217,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_var before
     store_var i
 
-  L9:
+  L11:
     load_var i
     store_var _48
     load_var entries
@@ -208,7 +232,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     store_var _53
     load_var _53
     narrow_bind ai.events.ToolFailed, slot=19
-    pop_jump_if_false L11
+    pop_jump_if_false L13
     load_var _53
     store_deref ?20
     load_type ai.content.ToolUse
@@ -221,7 +245,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     store_var _59
     load_var _59
     narrow_bind ai.content.ToolUse, slot=21
-    pop_jump_if_false L11
+    pop_jump_if_false L13
     load_var _59
     store_var known
     load_type string
@@ -247,11 +271,11 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     store_var_load_var _71
     load_const null
     cmp_op ==
-    pop_jump_if_false L10
+    pop_jump_if_false L12
     load_const 0
     store_var _71
 
-  L10:
+  L12:
     load_var _71
     load_const 1
     add_int
@@ -265,17 +289,17 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_var n
     load_const 3
     cmp_int_op >=
-    pop_jump_if_false L11
-    jump L12
+    pop_jump_if_false L13
+    jump L14
 
-  L11:
+  L13:
     load_var i
     load_const 1
     add_int
     store_var i
-    jump L9
+    jump L11
 
-  L12:
+  L14:
     load_var known
     load_field .id
     store_var _85
@@ -502,7 +526,8 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
   L13:
     pop 1
     load_type #0
-    load_var2 1 26
+    load_var2 1 7
+    load_var candidate
     call ai.Agent._parses
 
   L14:
@@ -524,7 +549,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _92
+    store_var _93
     load_var2 31 26
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
@@ -580,8 +605,8 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _80
-    load_var _80
+    store_var _81
+    load_var _81
     load_const "the model declined to answer"
     load_const null
     init_instance ai.errors.Refused .provider, .reason, .raw_body
@@ -592,7 +617,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _77
+    store_var _78
     load_var2 29 26
     init_instance ai.errors.ParseFailed .provider, .raw_output
     throw
@@ -686,25 +711,458 @@ function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> in
     jump L0
 }
 
-function ai.Agent._parses(self: ai.Agent<#0>, candidate: string) -> bool {
+function ai.Agent._has_media_output(self: ai.Agent<#0>, turn: ai.ModelTurn) -> bool {
+    load_type #0
+    call ai.internal._media_shape
+    store_var shape
+    load_var shape
+    load_const ":"
+    call baml.String.split
+    store_var _8
+    load_type string
+    load_var _8
+    load_const 0
+    call baml.Array.at
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const ""
+    store_var _6
+
+  L0:
+    load_var _6
+    store_var_load_var form
+    load_const ""
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L7
+
+  L1:
+    load_var form
+    load_const "mixed"
+    cmp_op ==
+    jump_if_false L2
+    jump L3
+
+  L2:
+    pop 1
+    load_var form
+    load_const "mixedlist"
+    cmp_op ==
+
+  L3:
+    pop_jump_if_false L4
+    jump L6
+
+  L4:
+    load_var shape
+    load_const ":"
+    call baml.String.split
+    store_var _24
+    load_type string
+    load_var _24
+    load_const 1
+    call baml.Array.at
+    store_var_load_var _22
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    load_const ""
+    store_var _22
+
+  L5:
+    load_var2 2 9
+    call ai.internal._media_of_kind
+    container_len
+    store_var _19
+    load_var _19
+    load_const 0
+    cmp_int_op >
+    jump L8
+
+  L6:
+    load_var turn
+    call ai.internal._media_mixed_parts
+    container_len
+    store_var _17
+    load_var _17
+    load_const 0
+    cmp_int_op >
+    jump L8
+
+  L7:
+    load_const false
+
+  L8:
+    return
+}
+
+function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider: string) -> #0 {
+    load_type #0
+    store_var t
+    load_var t
+    call ai.internal._media_shape
+    store_var shape
+    load_var shape
+    load_const ":"
+    call baml.String.split
+    store_var _10
+    load_type string
+    load_var _10
+    load_const 0
+    call baml.Array.at
+    store_var_load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const ""
+    store_var _8
+
+  L0:
+    load_var _8
+    store_var form
+    load_var shape
+    load_const ":"
+    call baml.String.split
+    store_var _16
+    load_type string
+    load_var _16
+    load_const 1
+    call baml.Array.at
+    store_var_load_var _14
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const ""
+    store_var _14
+
+  L1:
+    load_var _14
+    store_var kind
+    load_var form
+    is_type "mixedlist"
+    pop_jump_if_false L2
+    jump L22
+
+  L2:
+    load_var form
+    is_type "mixed"
+    pop_jump_if_false L3
+    jump L14
+
+  L3:
+    load_var form
+    is_type "list"
+    pop_jump_if_false L4
+    jump L13
+
+  L4:
+    load_var2 2 9
+    call ai.internal._media_of_kind
+    store_var parts
+    load_var2 2 9
+    load_var provider
+    call ai.internal._media_reject_mixed
+    pop 1
+    load_var parts
+    container_len
+    store_var _57
+    load_var _57
+    load_const 1
+    cmp_int_op !=
+    pop_jump_if_false L5
+    jump L9
+
+  L5:
+    load_const null
+    store_var only
+    load_var parts
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _97
+
+  L6:
+    load_var _97
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _98
+    load_var _98
+    is_type baml.iter.Done
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_var _98
+    store_var only
+    jump L6
+
+  L8:
+    load_var only
+    store_var payload
+    jump L23
+
+  L9:
+    load_var form
+    load_const "one"
+    cmp_op ==
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_type string
+    load_var kind
+    call baml.String.from
+    store_var _83
+    load_var t
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _87
+    load_type string
+    load_var _87
+    call baml.String.from
+    store_var _86
+    load_var parts
+    container_len
+    store_var _90
+    load_type int
+    load_var _90
+    call baml.String.from
+    store_var _89
+    load_type string
+    load_var kind
+    call baml.String.from
+    store_var _92
+    load_const "Expected zero or one "
+    load_var _83
+    bin_op +
+    load_const " output for "
+    bin_op +
+    load_var _86
+    bin_op +
+    load_const ", got "
+    bin_op +
+    load_var _89
+    bin_op +
+    load_const ". Use "
+    bin_op +
+    load_var _92
+    bin_op +
+    load_const "[] for multiple outputs."
+    bin_op +
+    store_var _59
+    jump L12
+
+  L11:
+    load_type string
+    load_var kind
+    call baml.String.from
+    store_var _67
+    load_var parts
+    container_len
+    store_var _71
+    load_type int
+    load_var _71
+    call baml.String.from
+    store_var _70
+    load_type string
+    load_var kind
+    call baml.String.from
+    store_var _73
+    load_const "Expected exactly one "
+    load_var _67
+    bin_op +
+    load_const " output, got "
+    bin_op +
+    load_var _70
+    bin_op +
+    load_const ". Use "
+    bin_op +
+    load_var _73
+    bin_op +
+    load_const "[] for multiple outputs."
+    bin_op +
+    store_var _59
+
+  L12:
+    load_var2 3 24
+    init_instance ai.errors.ParseFailed .provider, .raw_output
+    throw
+
+  L13:
+    load_var2 2 9
+    load_var provider
+    call ai.internal._media_reject_mixed
+    pop 1
+    load_var2 2 9
+    call ai.internal._media_of_kind
+    store_var payload
+    jump L23
+
+  L14:
+    load_var turn
+    call ai.internal._media_mixed_parts
+    store_var items
+    load_var items
+    container_len
+    store_var _25
+    load_var _25
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L15
+    jump L18
+
+  L15:
+    load_var items
+    call ai.internal._media_all_text
+    pop_jump_if_false L16
+    jump L17
+
+  L16:
+    load_var t
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _42
+    load_type string
+    load_var _42
+    call baml.String.from
+    store_var _41
+    load_var items
+    container_len
+    store_var _45
+    load_type int
+    load_var _45
+    call baml.String.from
+    store_var _44
+    load_var provider
+    load_const "Expected one text or image output for "
+    load_var _41
+    bin_op +
+    load_const ", got "
+    bin_op +
+    load_var _44
+    bin_op +
+    load_const " parts. Use (image | string)[] to preserve mixed outputs."
+    bin_op +
+    init_instance ai.errors.ParseFailed .provider, .raw_output
+    throw
+
+  L17:
+    load_var items
+    call ai.internal._media_join_text
+    store_var payload
+    jump L23
+
+  L18:
+    load_const null
+    store_var only
+    load_var items
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _28
+
+  L19:
+    load_var _28
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _29
+    load_var _29
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
+    load_var _29
+    store_var only
+    jump L19
+
+  L21:
+    load_var only
+    store_var payload
+    jump L23
+
+  L22:
+    load_var turn
+    call ai.internal._media_mixed_parts
+    store_var payload
+
+  L23:
+    load_type #0
+    load_var payload
+    call baml.json.from_json
+    jump L24
+    load_var e
+    throw_if_panic
+    load_type string
+    load_var kind
+    call baml.String.from
+    store_var _111
+    load_var t
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _115
+    load_type string
+    load_var _115
+    call baml.String.from
+    store_var _114
+    load_type baml.json.JsonDecodeError
+    load_var e
+    call baml.String.from
+    store_var _118
+    load_type string
+    load_var _118
+    call baml.String.from
+    store_var _117
+    load_var provider
+    load_const "the "
+    load_var _111
+    bin_op +
+    load_const " output did not fit "
+    bin_op +
+    load_var _114
+    bin_op +
+    load_const ": "
+    bin_op +
+    load_var _117
+    bin_op +
+    init_instance ai.errors.ParseFailed .provider, .raw_output
+    throw
+
+  L24:
+    return
+}
+
+function ai.Agent._parses(self: ai.Agent<#0>, turn: ai.ModelTurn, candidate: string) -> bool {
+    load_type #0
+    load_var2 1 2
+    call ai.Agent._has_media_output
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
     load_type #0
     load_var candidate
     call baml.sap.parse
     pop 1
-    jump L0
+    jump L1
     load_var e
     throw_if_panic
     load_const false
-    jump L1
-
-  L0:
-    load_const true
+    jump L3
 
   L1:
+    load_const true
+    jump L3
+
+  L2:
+    load_const true
+
+  L3:
     return
 }
 
-function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: ai.content.ToolUse, j: ai.Journal) -> null {
+function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: ai.content.ToolUse, j: ai.Journal) -> void {
     load_var2 2 3
     load_field .name
     call ai.tools.Toolbox.get
@@ -888,6 +1346,9 @@ function ai.Agent.new(max_steps: int, client: ai.Client | null, tool_errors: ai.
     return
 }
 
+function ai.Context.output_format_with(self: ai.Context, prefix: string | null, or_splitter: string | null, enum_value_prefix: string | null, hoisted_class_prefix: string | null, always_hoist_enums: bool | null, quote_class_fields: bool | null, hoist_classes: string[] | null, map_style: string | null, render_null_as: string | null) -> string {
+}
+
 function ai.FunctionSpec.arguments(self: ai.FunctionSpec<#0>) -> map<string, unknown> {
     load_var self
     load_field .args
@@ -902,6 +1363,11 @@ function ai.FunctionSpec.name(self: ai.FunctionSpec<#0>) -> string {
 
 function ai.FunctionSpec.output_type(self: ai.FunctionSpec<#0>) -> type {
     load_type #0
+    store_var output_type
+    load_var output_type
+    call ai.internal.validate_output_type
+    pop 1
+    load_var output_type
     return
 }
 
@@ -981,19 +1447,59 @@ function ai.Journal.new(spec: ai.FunctionSpec<#0>) -> ai.Journal {
     return
 }
 
-function ai.ModelTurn.terminal_text(self: ai.ModelTurn) -> string | null {
-    load_const null
+function ai.ModelTurn.media(self: ai.ModelTurn) -> (baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf)[] {
+    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    alloc_array 0
     store_var out
     load_var self
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _5
+    store_var _9
+    load_var _9
+    narrow_bind ai.content.Media, slot=5
+    pop_jump_if_false L0
+    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_var2 2 5
+    load_field .media
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_var out
+    return
+}
+
+function ai.ModelTurn.terminal_text(self: ai.ModelTurn) -> string | null {
+    load_const null
+    store_var out
+    load_var self
+    load_field .content
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1024,14 +1530,14 @@ function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.content.ToolUse[] {
     store_var out
     load_var self
     load_field .content
-    load_type baml.iter.Iterable<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1600,6 +2106,199 @@ function ai.clients.default_retry_judgment(f: ai.errors.Failure) -> bool {
     return
 }
 
+function ai.clients.resolve(selector: ai.Client | string | baml.env.Ref) -> ai.Client {
+    load_var selector
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var selector
+    store_var _5
+    load_var _5
+    narrow_bind baml.env.Ref, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var selector
+    jump L6
+
+  L2:
+    load_var _5
+    store_var named
+    load_var named
+    call baml.env.Ref.get
+    store_var _8
+    load_var _8
+    narrow_bind string, slot=5
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_type string
+    load_var named
+    load_field .name
+    call baml.String.from
+    store_var _18
+    call ai.internal._shorthand_prefixes
+    store_var _22
+    load_type string
+    load_var _22
+    call baml.String.from
+    store_var _21
+    load_type string
+    load_var named
+    load_field .name
+    call baml.String.from
+    store_var _24
+    load_const "ai.clients"
+    load_const null
+    load_const "client selector env."
+    load_var _18
+    bin_op +
+    load_const " is not set: point it at a \"provider/model\" string (valid prefixes are "
+    bin_op +
+    load_var _21
+    bin_op +
+    load_const "), or give the client: position a value with a fallback — env."
+    bin_op +
+    load_var _24
+    bin_op +
+    load_const ".get() ?? \"openai/gpt-4o-mini\""
+    bin_op +
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+
+  L4:
+    load_var _8
+    call ai.internal._from_shorthand
+    jump L6
+
+  L5:
+    load_var _2
+    call ai.internal._from_shorthand
+
+  L6:
+    return
+}
+
+function ai.content.Media.kind(self: ai.content.Media) -> string {
+    load_var self
+    load_field .media
+    store_var _2
+    load_var _2
+    store_var _3
+    load_var _3
+    narrow_bind baml.media.Image, slot=3
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var _2
+    store_var _4
+    load_var _4
+    narrow_bind baml.media.Audio, slot=4
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _2
+    store_var _5
+    load_var _5
+    narrow_bind baml.media.Video, slot=5
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "pdf"
+    jump L6
+
+  L3:
+    load_const "video"
+    jump L6
+
+  L4:
+    load_const "audio"
+    jump L6
+
+  L5:
+    load_const "image"
+
+  L6:
+    return
+}
+
+function ai.content.Media.new(value: image | audio | video | pdf, provider_id: string | null, revised_prompt: string | null) -> ai.content.Media {
+    load_var provider_id
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var provider_id
+
+  L0:
+    load_var revised_prompt
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var revised_prompt
+
+  L1:
+    load_type image | audio | video | pdf
+    load_var value
+    call baml.json.to_json
+    store_var envelope
+    jump L2
+    load_var e
+    throw_if_panic
+    load_type baml.json.JsonSerializationError
+    load_var e
+    call baml.String.from
+    store_var _12
+    load_type string
+    load_var _12
+    call baml.String.from
+    store_var _11
+    load_const "media output could not be encoded: "
+    load_var _11
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L2:
+    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_var envelope
+    call baml.json.from_json
+    store_var part
+    jump L3
+    load_var e
+    throw_if_panic
+    load_type baml.json.JsonDecodeError
+    load_var e
+    call baml.String.from
+    store_var _22
+    load_type string
+    load_var _22
+    call baml.String.from
+    store_var _21
+    load_const "media output could not be decoded: "
+    load_var _21
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L3:
+    load_var2 8 2
+    load_var revised_prompt
+    init_instance ai.content.Media .media, .provider_id, .revised_prompt
+    return
+}
+
 function ai.errors.InvalidRequest.Failure.retry_safety(self: ai.errors.InvalidRequest) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
@@ -1648,76 +2347,2072 @@ function ai.errors.ToolFailedError.Failure.retry_safety(self: ai.errors.ToolFail
     return
 }
 
-function ai.errors.classify_http(provider: string, status_code: int, body: string) -> ai.errors.Failure {
-    load_var status_code
-    load_const 429
-    cmp_int_op ==
+function ai.errors.classify_http(provider: string, status_code: int, body: string, headers: map<string, string> | null) -> ai.errors.Failure {
+    load_var headers
+    load_const <omitted>
+    cmp_op ==
     pop_jump_if_false L0
-    jump L5
+    load_const null
+    store_var headers
 
   L0:
     load_var status_code
-    load_const 408
+    load_const 429
     cmp_int_op ==
-    jump_if_false L1
-    jump L2
+    pop_jump_if_false L1
+    jump L6
 
   L1:
+    load_var status_code
+    load_const 408
+    cmp_int_op ==
+    jump_if_false L2
+    jump L3
+
+  L2:
     pop 1
     load_var status_code
     load_const 500
     cmp_int_op >=
 
-  L2:
-    pop_jump_if_false L3
-    jump L4
-
   L3:
-    load_type int
-    load_var status_code
-    call baml.String.from
-    store_var _11
-    load_var2 1 2
-    load_const "http "
-    load_var _11
-    bin_op +
-    load_var body
-    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    jump L6
+    pop_jump_if_false L4
+    jump L5
 
   L4:
     load_type int
     load_var status_code
     call baml.String.from
-    store_var _8
+    store_var _14
+    load_var2 1 2
+    load_const "http "
+    load_var _14
+    bin_op +
+    load_var body
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    jump L7
+
+  L5:
+    load_type int
+    load_var status_code
+    call baml.String.from
+    store_var _11
     load_var provider
     load_const "http "
-    load_var _8
+    load_var _11
     bin_op +
     load_var body
     init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    jump L7
+
+  L6:
+    load_var headers
+    call ai.internal._retry_after_ms
+    store_var _7
+    load_var2 1 5
+    load_var body
+    init_instance ai.errors.RateLimited .provider, .retry_after_ms, .raw_body
+
+  L7:
+    return
+}
+
+function ai.errors.normalize(error: unknown) -> ai.errors.Failure | baml.errors.UnknownError {
+    load_var error
+    store_var _2
+    load_var _2
+    narrow_bind ai.errors.Failure, slot=2
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var error
+    store_var _4
+    load_var _4
+    narrow_bind baml.errors.UnknownError, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_type unknown
+    load_var error
+    call baml.String.from
+    store_var _7
+    load_var2 1 4
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    jump L4
+
+  L2:
+    load_var _4
+    jump L4
+
+  L3:
+    load_var _2
+
+  L4:
+    return
+}
+
+function ai.internal._aws_resolve_region(region: string | null, profile: string | null) -> string | null {
+}
+
+function ai.internal._aws_sign_request(request: baml.http.Request, service: string, region: string | null, profile: string | null, access_key_id: string | null, secret_access_key: string | null, session_token: string | null) -> baml.http.Request {
+}
+
+function ai.internal._configured(value: string) -> string | null {
+    load_var value
+    call baml.String.trim
+    load_const ""
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var value
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function ai.internal._flush_orphaned_calls(out: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced)[], pending: string[]) -> void {
+    load_var pending
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    load_var2 1 4
+    load_const "No result provided"
+    init_instance ai.events.ToolFailed .id, .message
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_type string
+    load_var pending
+    call baml.Array.clear
+    pop 1
+    load_const null
+    return
+}
+
+function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
+    load_var shorthand
+    load_const "/"
+    call baml.String.index_of
+    store_var _3
+    load_var _3
+    narrow_bind int, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type string
+    load_var shorthand
+    call baml.String.from
+    store_var _62
+    call ai.internal._shorthand_prefixes
+    store_var _65
+    load_type string
+    load_var _65
+    call baml.String.from
+    store_var _64
+    load_const "ai.clients"
+    load_const null
+    load_const "client \""
+    load_var _62
+    bin_op +
+    load_const "\" is not a \"provider/model\" string (no \"/\"); valid prefixes are "
+    bin_op +
+    load_var _64
+    bin_op +
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+
+  L1:
+    load_var _3
+    store_var index
+    load_var shorthand
+    load_const 0
+    load_var index
+    call baml.String.slice
+    store_var prefix
+    load_var index
+    load_const 1
+    add_int
+    store_var _8
+    load_var shorthand
+    call baml.String.length
+    store_var _10
+    load_var2 1 6
+    load_var _10
+    call baml.String.slice
+    store_var model
+    load_var prefix
+    is_type "openai"
+    pop_jump_if_false L2
+    jump L25
+
+  L2:
+    load_var prefix
+    is_type "openai-chat"
+    pop_jump_if_false L3
+    jump L24
+
+  L3:
+    load_var prefix
+    is_type "openai-images"
+    pop_jump_if_false L4
+    jump L23
+
+  L4:
+    load_var prefix
+    is_type "azure"
+    pop_jump_if_false L5
+    jump L22
+
+  L5:
+    load_var prefix
+    is_type "ollama"
+    pop_jump_if_false L6
+    jump L21
+
+  L6:
+    load_var prefix
+    is_type "openrouter"
+    pop_jump_if_false L7
+    jump L20
+
+  L7:
+    load_var prefix
+    is_type "anthropic"
+    pop_jump_if_false L8
+    jump L19
+
+  L8:
+    load_var prefix
+    is_type "google"
+    pop_jump_if_false L9
+    jump L18
+
+  L9:
+    load_var prefix
+    is_type "vertex"
+    pop_jump_if_false L10
+    jump L17
+
+  L10:
+    load_var prefix
+    is_type "bedrock"
+    pop_jump_if_false L11
+    jump L16
+
+  L11:
+    load_var prefix
+    is_type "ai-gateway-images"
+    pop_jump_if_false L12
+    jump L15
+
+  L12:
+    load_var prefix
+    is_type "claude-code"
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_const null
+    jump L26
+
+  L14:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call claude_code.ClaudeCodeClient.new
+    jump L26
+
+  L15:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call vercel.AiGatewayImageClient.new
+    jump L26
+
+  L16:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call aws.BedrockClient.new
+    jump L26
+
+  L17:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.VertexClient.new
+    jump L26
+
+  L18:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.GoogleClient.new
+    jump L26
+
+  L19:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call anthropic.AnthropicClient.new
+    jump L26
+
+  L20:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.OpenRouterClient.new
+    jump L26
+
+  L21:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.OllamaClient.new
+    jump L26
+
+  L22:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.AzureClient.new
+    jump L26
+
+  L23:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ImageClient.new
+    jump L26
+
+  L24:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ChatClient.new
+    jump L26
+
+  L25:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+
+  L26:
+    store_var _36
+    load_var _36
+    narrow_bind ai.Client, slot=8
+    pop_jump_if_false L27
+    jump L28
+
+  L27:
+    load_type string
+    load_var prefix
+    call baml.String.from
+    store_var _47
+    load_type string
+    load_var shorthand
+    call baml.String.from
+    store_var _50
+    call ai.internal._shorthand_prefixes
+    store_var _53
+    load_type string
+    load_var _53
+    call baml.String.from
+    store_var _52
+    load_type string
+    load_var model
+    call baml.String.from
+    store_var _55
+    load_const "ai.clients"
+    load_const null
+    load_const "no builtin provider for prefix \""
+    load_var _47
+    bin_op +
+    load_const "\" in client \""
+    bin_op +
+    load_var _50
+    bin_op +
+    load_const "\"; valid prefixes are "
+    bin_op +
+    load_var _52
+    bin_op +
+    load_const " (for any other OpenAI-compatible endpoint, build openai.GenericClient.new(base_url = ..., model = \""
+    bin_op +
+    load_var _55
+    bin_op +
+    load_const "\"))"
+    bin_op +
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+
+  L28:
+    load_var _36
+    return
+}
+
+function ai.internal._gcp_access_token(credentials_json: string | null, scope: string) -> string {
+}
+
+function ai.internal._gcp_project_id(credentials_json: string | null) -> string | null {
+}
+
+function ai.internal._gcp_quota_project_id(credentials_json: string | null) -> string | null {
+}
+
+function ai.internal._header(headers: map<string, string>, lower: string, canonical: string) -> string | null {
+    load_type string
+    load_type string
+    load_var2 1 2
+    call baml.Map.get
+    store_var_load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type string
+    load_var2 1 3
+    call baml.Map.get
+    store_var _4
+
+  L0:
+    load_var _4
+    return
+}
+
+function ai.internal._int_header(headers: map<string, string>, lower: string, canonical: string) -> int | null {
+    load_var2 1 2
+    load_var canonical
+    call ai.internal._header
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=4
+    pop_jump_if_false L3
+    load_var _5
+    call baml.String.trim
+    call baml.Int.parse
+    store_var parsed
+    jump L2
+    load_var e
+    is_type baml.errors.ParseError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const null
+    store_var parsed
+
+  L2:
+    load_var parsed
+    store_var _11
+    load_var _11
+    narrow_bind int, slot=7
+    pop_jump_if_false L3
+    load_var _11
+    store_var_load_var value
+    load_const 0
+    cmp_int_op >=
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const null
+    jump L5
+
+  L4:
+    load_var value
+
+  L5:
+    return
+}
+
+function ai.internal._media_all_text(items: baml.json.json[]) -> bool {
+    load_var items
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+
+  L0:
+    load_var _2
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_var _3
+    is_type string
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const false
+    jump L4
+
+  L3:
+    load_const true
+
+  L4:
+    unary_op !
+    pop_jump_if_false L0
+    load_const false
     jump L6
 
   L5:
-    load_var provider
-    load_const null
-    load_var body
-    init_instance ai.errors.RateLimited .provider, .retry_after_ms, .raw_body
+    load_const true
 
   L6:
     return
 }
 
-function ai.errors.normalize(error: unknown) -> ai.errors.Failure | baml.errors.UnknownError {
-    load_type ai.errors.Failure
-    load_var error
-    call baml.errors.UnknownError.from
+function ai.internal._media_envelope(m: ai.content.Media) -> baml.json.json {
+    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_var m
+    load_field .media
+    call baml.json.to_json
+    jump L0
+    load_var e
+    throw_if_panic
+    load_type baml.json.JsonSerializationError
+    load_var e
+    call baml.String.from
+    store_var _8
+    load_var2 2 3
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    return
+}
+
+function ai.internal._media_join_text(items: baml.json.json[]) -> baml.json.json {
+    load_const ""
+    store_var out
+    load_var items
+    load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _4
+    store_var _8
+    load_var _8
+    narrow_bind string, slot=5
+    pop_jump_if_false L0
+    load_var2 2 5
+    bin_op +
+    store_var out
+    jump L0
+
+  L2:
+    load_var out
+    return
+}
+
+function ai.internal._media_mime_type(explicit: string | null, source_value: string, kind: string) -> string {
+    load_var explicit
+    store_var _4
+    load_var _4
+    narrow_bind string, slot=4
+    pop_jump_if_false L0
+    jump L45
+
+  L0:
+    load_var source_value
+    call baml.String.to_lower_case
+    store_var source
+    load_var source
+    load_const ".jpg"
+    call baml.String.includes
+    jump_if_false L1
+    jump L2
+
+  L1:
+    pop 1
+    load_var source
+    load_const ".jpeg"
+    call baml.String.includes
+
+  L2:
+    pop_jump_if_false L3
+    jump L44
+
+  L3:
+    load_var source
+    load_const ".png"
+    call baml.String.includes
+    pop_jump_if_false L4
+    jump L43
+
+  L4:
+    load_var source
+    load_const ".webp"
+    call baml.String.includes
+    pop_jump_if_false L5
+    jump L42
+
+  L5:
+    load_var source
+    load_const ".gif"
+    call baml.String.includes
+    pop_jump_if_false L6
+    jump L41
+
+  L6:
+    load_var source
+    load_const ".svg"
+    call baml.String.includes
+    pop_jump_if_false L7
+    jump L40
+
+  L7:
+    load_var source
+    load_const ".wav"
+    call baml.String.includes
+    pop_jump_if_false L8
+    jump L39
+
+  L8:
+    load_var source
+    load_const ".mp3"
+    call baml.String.includes
+    pop_jump_if_false L9
+    jump L38
+
+  L9:
+    load_var source
+    load_const ".flac"
+    call baml.String.includes
+    pop_jump_if_false L10
+    jump L37
+
+  L10:
+    load_var source
+    load_const ".ogg"
+    call baml.String.includes
+    pop_jump_if_false L11
+    jump L36
+
+  L11:
+    load_var source
+    load_const ".webm"
+    call baml.String.includes
+    pop_jump_if_false L12
+    jump L33
+
+  L12:
+    load_var source
+    load_const ".mov"
+    call baml.String.includes
+    pop_jump_if_false L13
+    jump L32
+
+  L13:
+    load_var source
+    load_const ".mp4"
+    call baml.String.includes
+    pop_jump_if_false L14
+    jump L29
+
+  L14:
+    load_var source
+    load_const ".avi"
+    call baml.String.includes
+    pop_jump_if_false L15
+    jump L28
+
+  L15:
+    load_var source
+    load_const ".mkv"
+    call baml.String.includes
+    pop_jump_if_false L16
+    jump L25
+
+  L16:
+    load_var source
+    load_const ".pdf"
+    call baml.String.includes
+    pop_jump_if_false L17
+    jump L24
+
+  L17:
+    load_var kind
+    load_const "audio"
+    cmp_op ==
+    pop_jump_if_false L18
+    jump L23
+
+  L18:
+    load_var kind
+    load_const "video"
+    cmp_op ==
+    pop_jump_if_false L19
+    jump L22
+
+  L19:
+    load_var kind
+    load_const "pdf"
+    cmp_op ==
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
+    load_const "image/png"
+    jump L46
+
+  L21:
+    load_const "application/pdf"
+    jump L46
+
+  L22:
+    load_const "video/mp4"
+    jump L46
+
+  L23:
+    load_const "audio/mpeg"
+    jump L46
+
+  L24:
+    load_const "application/pdf"
+    jump L46
+
+  L25:
+    load_var kind
+    load_const "audio"
+    cmp_op ==
+    pop_jump_if_false L26
+    jump L27
+
+  L26:
+    load_const "video/x-matroska"
+    jump L46
+
+  L27:
+    load_const "audio/x-matroska"
+    jump L46
+
+  L28:
+    load_const "video/x-msvideo"
+    jump L46
+
+  L29:
+    load_var kind
+    load_const "audio"
+    cmp_op ==
+    pop_jump_if_false L30
+    jump L31
+
+  L30:
+    load_const "video/mp4"
+    jump L46
+
+  L31:
+    load_const "audio/mp4"
+    jump L46
+
+  L32:
+    load_const "video/quicktime"
+    jump L46
+
+  L33:
+    load_var kind
+    load_const "audio"
+    cmp_op ==
+    pop_jump_if_false L34
+    jump L35
+
+  L34:
+    load_const "video/webm"
+    jump L46
+
+  L35:
+    load_const "audio/webm"
+    jump L46
+
+  L36:
+    load_const "audio/ogg"
+    jump L46
+
+  L37:
+    load_const "audio/flac"
+    jump L46
+
+  L38:
+    load_const "audio/mpeg"
+    jump L46
+
+  L39:
+    load_const "audio/wav"
+    jump L46
+
+  L40:
+    load_const "image/svg+xml"
+    jump L46
+
+  L41:
+    load_const "image/gif"
+    jump L46
+
+  L42:
+    load_const "image/webp"
+    jump L46
+
+  L43:
+    load_const "image/png"
+    jump L46
+
+  L44:
+    load_const "image/jpeg"
+    jump L46
+
+  L45:
+    load_var _4
+
+  L46:
+    return
+}
+
+function ai.internal._media_mixed_parts(turn: ai.ModelTurn) -> baml.json.json[] {
+    load_type baml.json.json
+    alloc_array 0
+    store_var items
+    load_var turn
+    load_field .content
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _5
+    store_var b
+    load_var b
+    store_var _9
+    load_var _9
+    narrow_bind ai.content.Text, slot=6
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var b
+    store_var _17
+    load_var _17
+    narrow_bind ai.content.Media, slot=8
+    pop_jump_if_false L0
+    load_var _17
+    store_var m
+    load_var m
+    call ai.content.Media.kind
+    load_const "image"
+    cmp_op ==
+    pop_jump_if_false L0
+    load_var m
+    call ai.internal._media_envelope
+    store_var _22
+    load_type baml.json.json
+    load_var2 2 10
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L3:
+    load_var _9
+    store_var_load_var t
+    load_field .text
+    call baml.String.trim
+    load_const ""
+    cmp_op !=
+    pop_jump_if_false L0
+    load_type baml.json.json
+    load_var2 2 7
+    load_field .text
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L4:
+    load_var items
+    return
+}
+
+function ai.internal._media_of_kind(turn: ai.ModelTurn, kind: string) -> baml.json.json[] {
+    load_type baml.json.json
+    alloc_array 0
+    store_var out
+    load_var turn
+    load_field .content
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+
+  L0:
+    load_var _5
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _6
+    store_var _10
+    load_var _10
+    narrow_bind ai.content.Media, slot=6
+    pop_jump_if_false L0
+    load_var _10
+    store_var m
+    load_var m
+    call ai.content.Media.kind
+    load_var kind
+    cmp_op ==
+    pop_jump_if_false L0
+    load_var m
+    call ai.internal._media_envelope
+    store_var _15
+    load_type baml.json.json
+    load_var2 3 8
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_var out
+    return
+}
+
+function ai.internal._media_reject_mixed(turn: ai.ModelTurn, kind: string, provider: string) -> void {
+    load_const 0
+    store_var unexpected
+    load_var turn
+    load_field .content
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _7
+    store_var b
+    load_var b
+    store_var _11
+    load_var _11
+    narrow_bind ai.content.Media, slot=8
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var b
+    store_var _16
+    load_var _16
+    narrow_bind ai.content.Text, slot=9
+    pop_jump_if_false L0
+    load_var _16
+    load_field .text
+    call baml.String.trim
+    load_const ""
+    cmp_op !=
+    pop_jump_if_false L0
+    load_var unexpected
+    load_const 1
+    add_int
+    store_var unexpected
+    jump L0
+
+  L3:
+    load_var _11
+    call ai.content.Media.kind
+    load_var kind
+    cmp_op !=
+    pop_jump_if_false L0
+    load_var unexpected
+    load_const 1
+    add_int
+    store_var unexpected
+    jump L0
+
+  L4:
+    load_var unexpected
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_const null
+    return
+
+  L6:
+    load_type string
+    load_var kind
+    call baml.String.from
+    store_var _31
+    load_type int
+    load_var unexpected
+    call baml.String.from
+    store_var _33
+    load_type string
+    load_var kind
+    call baml.String.from
+    store_var _36
+    load_var provider
+    load_const "Expected only "
+    load_var _31
+    bin_op +
+    load_const " output parts, got "
+    bin_op +
+    load_var _33
+    bin_op +
+    load_const " non-"
+    bin_op +
+    load_var _36
+    bin_op +
+    load_const " part(s). Use a text/image union return type to preserve mixed outputs."
+    bin_op +
+    init_instance ai.errors.ParseFailed .provider, .raw_output
+    throw
+}
+
+function ai.internal._media_shape(t: type) -> string {
+    load_var t
+    load_type image
+    call baml.ops.equals_equals
+    pop_jump_if_false L0
+    jump L27
+
+  L0:
+    load_var t
+    load_type audio
+    call baml.ops.equals_equals
+    pop_jump_if_false L1
+    jump L26
+
+  L1:
+    load_var t
+    load_type video
+    call baml.ops.equals_equals
+    pop_jump_if_false L2
+    jump L25
+
+  L2:
+    load_var t
+    load_type pdf
+    call baml.ops.equals_equals
+    pop_jump_if_false L3
+    jump L24
+
+  L3:
+    load_var t
+    load_type image | null
+    call baml.ops.equals_equals
+    pop_jump_if_false L4
+    jump L23
+
+  L4:
+    load_var t
+    load_type audio | null
+    call baml.ops.equals_equals
+    pop_jump_if_false L5
+    jump L22
+
+  L5:
+    load_var t
+    load_type video | null
+    call baml.ops.equals_equals
+    pop_jump_if_false L6
+    jump L21
+
+  L6:
+    load_var t
+    load_type pdf | null
+    call baml.ops.equals_equals
+    pop_jump_if_false L7
+    jump L20
+
+  L7:
+    load_var t
+    load_type image[]
+    call baml.ops.equals_equals
+    jump_if_false L8
+    jump L9
+
+  L8:
+    pop 1
+    load_var t
+    load_type image[] | null
+    call baml.ops.equals_equals
+
+  L9:
+    pop_jump_if_false L10
+    jump L19
+
+  L10:
+    load_var t
+    load_type (string | image)[]
+    call baml.ops.equals_equals
+    jump_if_false L11
+    jump L12
+
+  L11:
+    pop 1
+    load_var t
+    load_type (string | image)[] | null
+    call baml.ops.equals_equals
+
+  L12:
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var t
+    load_type string | image
+    call baml.ops.equals_equals
+    jump_if_false L14
+    jump L15
+
+  L14:
+    pop 1
+    load_var t
+    load_type string | image | null
+    call baml.ops.equals_equals
+
+  L15:
+    pop_jump_if_false L16
+    jump L17
+
+  L16:
+    load_const ""
+    jump L28
+
+  L17:
+    load_const "mixed:image"
+    jump L28
+
+  L18:
+    load_const "mixedlist:image"
+    jump L28
+
+  L19:
+    load_const "list:image"
+    jump L28
+
+  L20:
+    load_const "opt:pdf"
+    jump L28
+
+  L21:
+    load_const "opt:video"
+    jump L28
+
+  L22:
+    load_const "opt:audio"
+    jump L28
+
+  L23:
+    load_const "opt:image"
+    jump L28
+
+  L24:
+    load_const "one:pdf"
+    jump L28
+
+  L25:
+    load_const "one:video"
+    jump L28
+
+  L26:
+    load_const "one:audio"
+    jump L28
+
+  L27:
+    load_const "one:image"
+
+  L28:
+    return
+}
+
+function ai.internal._merge_json(base: baml.json.json, patch: baml.json.json) -> baml.json.json {
+    load_var patch
+    store_var _3
+    load_var _3
+    narrow_bind map<string, baml.json.json>, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var patch
+    jump L10
+
+  L1:
+    load_var _3
+    store_var patch_object
+    load_type string
+    load_type baml.json.json
+    alloc_map 0
+    store_var out
+    load_var base
+    store_var _6
+    load_var _6
+    narrow_bind map<string, baml.json.json>, slot=6
+    pop_jump_if_false L4
+    load_var _6
+    store_var base_object
+    load_type string
+    load_type baml.json.json
+    load_var base_object
+    call baml.Map.keys
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _11
+
+  L2:
+    load_var _11
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _12
+    load_var _12
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _12
+    store_var key
+    load_type string
+    load_type baml.json.json
+    load_var2 7 10
+    call baml.Map.get
+    store_var _18
+    load_type string
+    load_type baml.json.json
+    load_var2 5 10
+    load_var _18
+    call baml.Map.set
+    pop 1
+    jump L2
+
+  L4:
+    load_type string
+    load_type baml.json.json
+    load_var patch_object
+    call baml.Map.keys
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _27
+
+  L5:
+    load_var _27
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _28
+    load_var _28
+    is_type baml.iter.Done
+    pop_jump_if_false L6
+    jump L9
+
+  L6:
+    load_var _28
+    store_var key
+    load_type string
+    load_type baml.json.json
+    load_var2 4 14
+    call baml.Map.get
+    store_var value
+    load_var value
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_type string
+    load_type baml.json.json
+    load_var2 5 14
+    call baml.Map.get
+    load_var value
+    call ai.internal._merge_json
+    store_var _43
+    load_type string
+    load_type baml.json.json
+    load_var2 5 14
+    load_var _43
+    call baml.Map.set
+    pop 1
+    jump L5
+
+  L8:
+    load_type string
+    load_type baml.json.json
+    load_var2 5 14
+    call baml.Map.delete
+    pop 1
+    jump L5
+
+  L9:
+    load_var out
+
+  L10:
+    return
+}
+
+function ai.internal._proxy(conn: ai.mcp.McpConnection, name: string) -> (map<string, unknown>) -> string throws unknown {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var2 1 2
+    make_closure .<lambda(_proxy, 0)>, 2
+    return
+}
+
+function ai.internal._redact_after(text: string, marker: string) -> string {
+    load_const ""
+    store_var out
+    load_var text
+    store_var rest
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var out
+    jump L4
+
+  L2:
+    load_var2 4 2
+    call baml.String.index_of
+    store_var _6
+    load_var _6
+    narrow_bind int, slot=5
+    pop_jump_if_false L3
+    jump L5
+
+  L3:
+    load_var2 3 4
+    bin_op +
+
+  L4:
+    return
+
+  L5:
+    load_var _6
+    store_var _9
+    load_var marker
+    call baml.String.length
+    load_var _9
+    add_int
+    store_var head
+    load_var rest
+    load_const 0
+    load_var head
+    call baml.String.slice
+    store_var _11
+    load_var2 3 8
+    bin_op +
+    store_var out
+    load_var out
+    load_const "REDACTED"
+    bin_op +
+    store_var out
+    load_var rest
+    call baml.String.length
+    store_var _15
+    load_var2 4 6
+    load_var _15
+    call baml.String.slice
+    store_var tail
+    load_var tail
+    call ai.internal._redact_value_end
+    store_var _16
+    load_var tail
+    call baml.String.length
+    store_var _18
+    load_var2 9 11
+    load_var _18
+    call baml.String.slice
+    store_var rest
+    jump L0
+}
+
+function ai.internal._redact_value_end(tail: string) -> int {
+    load_var tail
+    call baml.String.length
+    store_var cut
+    load_const "&"
+    load_const " "
+    load_const "\""
+    load_const "'"
+    load_const ")"
+    load_const ","
+    load_const "\n"
+    load_const "\t"
+    load_type string
+    alloc_array 8
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 4
+    call baml.String.index_of
+    store_var _11
+    load_var _11
+    narrow_bind int, slot=5
+    pop_jump_if_false L0
+    load_var _11
+    store_var_load_var at
+    load_var cut
+    cmp_int_op <
+    pop_jump_if_false L0
+    load_var at
+    store_var cut
+    jump L0
+
+  L2:
+    load_var cut
+    return
+}
+
+function ai.internal._resolve_media_content(url: string | null, file: string | null, inline: string, mime: string, fetch_url: bool) -> ai.wire.ResolvedMedia {
+    load_var file
+    store_var _6
+    load_var _6
+    narrow_bind string, slot=6
+    pop_jump_if_false L0
+    jump L22
+
+  L0:
+    load_var inline
+    load_const ""
+    cmp_op !=
+    pop_jump_if_false L1
+    jump L21
+
+  L1:
+    load_var url
+    store_var _40
+    load_var _40
+    narrow_bind string, slot=18
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "media has no URL, file, or base64 content"
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L3:
+    load_var _40
+    store_var media_url
+    load_var media_url
+    load_const "data:"
+    call baml.String.starts_with
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var fetch_url
+    unary_op !
+    jump_if_false L5
+    jump L6
+
+  L5:
+    pop 1
+    load_var media_url
+    load_const "gs://"
+    call baml.String.starts_with
+
+  L6:
+    pop_jump_if_false L7
+    jump L14
+
+  L7:
+    load_const 30
+    call baml.time.Duration.from_seconds
+    store_var _69
+    load_var2 19 31
+    call baml.http.fetch
+    store_var response
+    jump L8
+    load_var e
+    throw_if_panic
+    load_type string
+    load_var media_url
+    call baml.String.from
+    store_var _74
+    load_type baml.errors.Io | baml.errors.Timeout
+    load_var e
+    call baml.String.from
+    store_var _78
+    load_type string
+    load_var _78
+    call baml.String.from
+    store_var _77
+    load_const "media"
+    load_const "media URL "
+    load_var _74
+    bin_op +
+    load_const " could not be fetched: "
+    bin_op +
+    load_var _77
+    bin_op +
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+
+  L8:
+    load_var response
+    call baml.http.Response.ok
+    unary_op !
+    pop_jump_if_false L9
+    jump L13
+
+  L9:
+    load_type string
+    load_type string
+    load_var response
+    load_field .headers
+    load_const "content-type"
+    call baml.Map.get
+    store_var_load_var _94
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L10
+    load_var mime
+    store_var _94
+
+  L10:
+    load_var _94
+    store_var response_mime
+    load_var response
+    sys_op baml.http.Response.bytes
+    jump L11
+    load_var e
+    throw_if_panic
+    load_type string
+    load_var media_url
+    call baml.String.from
+    store_var _106
+    load_type baml.errors.Io
+    load_var e
+    call baml.String.from
+    store_var _110
+    load_type string
+    load_var _110
+    call baml.String.from
+    store_var _109
+    load_const "media"
+    load_const "media URL "
+    load_var _106
+    bin_op +
+    load_const " body could not be read: "
+    bin_op +
+    load_var _109
+    bin_op +
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+
+  L11:
+    call baml.Uint8Array.to_base64
+    store_var _113
+    load_var response_mime
+    load_const ";"
+    call baml.String.split
+    store_var _118
+    load_type string
+    load_var _118
+    load_const 0
+    call baml.Array.at
+    store_var_load_var _116
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L12
+    load_var mime
+    store_var _116
+
+  L12:
+    load_var _116
+    call baml.String.trim
+    store_var _114
+    load_const null
+    load_var2 43 44
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+    jump L25
+
+  L13:
+    load_type string
+    load_var media_url
+    call baml.String.from
+    store_var _87
+    load_type int
+    load_var response
+    load_field .status_code
+    call baml.String.from
+    store_var _90
+    load_const "media"
+    load_const "media URL "
+    load_var _87
+    bin_op +
+    load_const " returned HTTP "
+    bin_op +
+    load_var _90
+    bin_op +
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+
+  L14:
+    load_var media_url
+    load_const null
+    load_var mime
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+    jump L25
+
+  L15:
+    load_var media_url
+    load_const ";base64,"
+    call baml.String.index_of
+    store_var _44
+    load_var _44
+    narrow_bind int, slot=20
+    pop_jump_if_false L16
+    jump L20
+
+  L16:
+    load_var media_url
+    call baml.String.length
+    load_const 48
+    cmp_int_op >
+    pop_jump_if_false L17
+    jump L18
+
+  L17:
+    load_var media_url
+    store_var preview
+    jump L19
+
+  L18:
+    load_var media_url
+    load_const 0
+    load_const 48
+    call baml.String.slice
+    store_var _56
+    load_type string
+    load_var _56
+    call baml.String.from
+    load_const "..."
+    bin_op +
+    store_var preview
+
+  L19:
+    load_type string
+    load_var preview
+    call baml.String.from
+    store_var _60
+    load_const "media carries a data: URL with no ;base64, marker, which has no payload to send: "
+    load_var _60
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L20:
+    load_var _44
+    store_var_load_var separator
+    load_const 8
+    add_int
+    store_var _47
+    load_var media_url
+    call baml.String.length
+    store_var _49
+    load_var2 19 23
+    load_var _49
+    call baml.String.slice
+    store_var _46
+    load_var media_url
+    load_const 5
+    load_var separator
+    call baml.String.slice
+    store_var _50
+    load_const null
+    load_var2 22 25
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+    jump L25
+
+  L21:
+    load_const null
+    load_var2 3 4
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+    jump L25
+
+  L22:
+    load_var _6
+    store_var_load_var path
+    load_const "r"
+    sys_op baml.fs.open
+    store_var handle
+    jump L23
+    load_var e
+    throw_if_panic
+    load_type string
+    load_var path
+    call baml.String.from
+    store_var _15
+    load_type baml.errors.InvalidArgument | baml.errors.Io
+    load_var e
+    call baml.String.from
+    store_var _19
+    load_type string
+    load_var _19
+    call baml.String.from
+    store_var _18
+    load_const "media file "
+    load_var _15
+    bin_op +
+    load_const " could not be opened: "
+    bin_op +
+    load_var _18
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L23:
+    load_var handle
+    sys_op baml.fs.File.bytes
+    call baml.Uint8Array.to_base64
+    store_var data
+    jump L24
+    load_var e
+    throw_if_panic
+    load_var handle
+    sys_op baml.fs.File.close
+    pop 1
+    load_type string
+    load_var path
+    call baml.String.from
+    store_var _30
+    load_type baml.errors.InvalidArgument | baml.errors.Io
+    load_var e
+    call baml.String.from
+    store_var _34
+    load_type string
+    load_var _34
+    call baml.String.from
+    store_var _33
+    load_const "media file "
+    load_var _30
+    bin_op +
+    load_const " could not be read: "
+    bin_op +
+    load_var _33
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L24:
+    load_var handle
+    sys_op baml.fs.File.close
+    pop 1
+    load_const null
+    load_var2 13 4
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+
+  L25:
+    return
+}
+
+function ai.internal._resolve_pending_call(pending: string[], id: string) -> void {
+    load_type string
+    load_var2 1 2
+    call baml.Array.index_of
+    store_var _5
+    load_var _5
+    narrow_bind int, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_type string
+    load_var2 1 3
+    call baml.Array.remove_at
+    pop 1
+    load_const null
+
+  L2:
+    return
+}
+
+function ai.internal._retry_after_ms(headers: map<string, string> | null) -> int | null {
+    load_var headers
+    store_var _2
+    load_var _2
+    narrow_bind map<string, string>, slot=2
+    pop_jump_if_false L1
+    load_var _2
+    store_var_load_var h
+    load_const "retry-after-ms"
+    load_const "Retry-After-Ms"
+    call ai.internal._int_header
+    store_var _6
+    load_var _6
+    narrow_bind int, slot=4
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var h
+    load_const "retry-after"
+    load_const "Retry-After"
+    call ai.internal._int_header
+    store_var _10
+    load_var _10
+    narrow_bind int, slot=5
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    jump L4
+
+  L2:
+    load_var _10
+    load_const 1000
+    mul_int
+    jump L4
+
+  L3:
+    load_var _6
+
+  L4:
     return
 }
 
 function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> {
     load_var handler
-    call reflect.signature
+    call baml.reflect.signature
     store_var sig
     load_type string
     load_type unknown
@@ -1728,14 +4423,14 @@ function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = u
     store_var required
     load_var sig
     load_field .args
-    load_type baml.iter.Iterable<Error = never, Item = reflect.Arg>
+    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.Arg>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
 
   L0:
     load_var _6
-    load_type baml.iter.Iterator<Error = never, Item = reflect.Arg>
+    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.Arg>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
@@ -1781,7 +4476,180 @@ function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = u
     return
 }
 
+function ai.internal._shorthand_prefixes() -> string {
+    load_type string
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
+    load_const ", "
+    call baml.Array.join
+    return
+}
+
+function ai.internal._wire_blocks(content: (ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media)[], keep_reasoning: bool) -> (ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media)[] {
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
+    alloc_array 0
+    store_var out
+    load_var content
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var _5
+    store_var block
+    load_var block
+    store_var _9
+    load_var _9
+    narrow_bind ai.content.Text, slot=7
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var block
+    store_var _17
+    load_var _17
+    narrow_bind ai.content.Reasoning, slot=9
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var block
+    store_var _22
+    load_var _22
+    narrow_bind ai.content.ToolUse, slot=11
+    pop_jump_if_false L0
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
+    load_var2 3 11
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L4:
+    load_var _17
+    store_var reasoning
+    load_var keep_reasoning
+    pop_jump_if_false L0
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
+    load_var2 3 10
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L5:
+    load_var _9
+    store_var_load_var text
+    load_field .text
+    call baml.String.trim
+    load_const ""
+    cmp_op !=
+    pop_jump_if_false L0
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
+    load_var2 3 8
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L6:
+    load_var out
+    return
+}
+
 function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> ai.Prompt {
+}
+
+function ai.internal.build_output_format(return_type: type) -> ai.OutputFormat {
+}
+
+function ai.internal.get_return_type(function_name: string) -> type {
+}
+
+function ai.internal.make_role(name: string) -> ai.Role {
+    load_var name
+    load_type string
+    load_type unknown
+    alloc_map 0
+    init_instance ai.Role .name, .metadata
+    return
+}
+
+function ai.internal.render_output_format(return_type: type) -> string {
+}
+
+function ai.internal.validate_output_type(return_type: type) -> void {
+    load_var return_type
+    call baml.TypeValue._validate_renderable
+    pop 1
+    load_var return_type
+    call baml.TypeValue.as_enum
+    store_var _4
+    load_var _4
+    narrow_bind baml.reflect.enum.Type, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L3
+
+  L1:
+    load_var _4
+    call baml.reflect.enum.Type.values
+    container_len
+    store_var _7
+    load_var _7
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L4
+
+  L2:
+    load_const null
+
+  L3:
+    return
+
+  L4:
+    load_var return_type
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _11
+    load_const "empty enum `"
+    load_var _11
+    bin_op +
+    load_const "` cannot be rendered as an LLM output schema"
+    bin_op +
+    store_var_load_var message
+    load_const "E0159"
+    load_const null
+    load_var message
+    init_instance baml.reflect.Diagnostic .code, .span, .message
+    load_type baml.reflect.Diagnostic
+    alloc_array 1
+    init_instance baml.reflect.errors.CompilationError .message, .diagnostics
+    throw
 }
 
 function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, params: map<string, unknown>) -> baml.json.json {
@@ -1967,7 +4835,7 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
     throw
 }
 
-function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> null {
+function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> void {
     load_type string
     load_var line
     load_const "\n"
@@ -2109,10 +4977,12 @@ function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string
     throw
 }
 
-function ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> null {
+function ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> void {
     load_var self
     load_field .p
     sys_op baml.sys.Process.close
+    pop 1
+    load_const null
     return
 }
 
@@ -2269,7 +5139,7 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
     load_var schema
     store_var _31
     load_var2 1 7
-    call ai.mcp._proxy
+    call ai.internal._proxy
     store_var _32
     load_var2 7 12
     load_var2 13 14
@@ -2284,18 +5154,6 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
 
   L3:
     load_var out
-    return
-}
-
-function ai.mcp._proxy(conn: ai.mcp.McpConnection, name: string) -> (map<string, unknown>) -> string throws unknown {
-    load_var ?1
-    make_cell
-    store_var ?1
-    load_var ?2
-    make_cell
-    store_var ?2
-    load_var2 1 2
-    make_closure .<lambda(_proxy, 0)>, 2
     return
 }
 
@@ -2343,7 +5201,7 @@ function ai.mcp.rpc_line(id: int | null, method: string, params: map<string, unk
     return
 }
 
-function ai.prompt(body: ((string) -> baml.prompt.Role throws never, baml.prompt.Context) -> baml.TaggedString throws never) -> (baml.prompt.Context) -> ai.Prompt throws never {
+function ai.prompt(body: ((string) -> ai.Role throws never, ai.Context) -> baml.TaggedString throws never) -> (ai.Context) -> ai.Prompt throws never {
     load_var ?1
     make_cell
     store_var ?1
@@ -2461,7 +5319,73 @@ function ai.stream.Stream.next(self: ai.stream.Stream<#0, #1>) -> #0 | ai.stream
     return
 }
 
-function ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> null {
+function ai.stream.TurnStream._check_terminal(self: ai.stream.TurnStream) -> void {
+    load_var self
+    load_field ._require_terminal
+    store_var _3
+    load_var _3
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L3
+
+  L1:
+    load_var _3
+    store_var provider
+    load_var self
+    load_field ._saw_terminal
+    unary_op !
+    pop_jump_if_false L2
+    jump L4
+
+  L2:
+    load_const null
+
+  L3:
+    return
+
+  L4:
+    load_var self
+    load_field ._text
+    load_const ""
+    cmp_op ==
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var self
+    load_field ._text
+    store_var partial
+    jump L7
+
+  L6:
+    load_const null
+    store_var partial
+
+  L7:
+    load_var self
+    load_field ._text
+    call baml.String.length
+    store_var _15
+    load_type int
+    load_var _15
+    call baml.String.from
+    store_var _14
+    load_var provider
+    load_const "stream ended before the provider's terminal event: the connection closed after "
+    load_var _14
+    bin_op +
+    load_const " characters of assistant text with no end-of-turn event, so the turn is truncated"
+    bin_op +
+    load_var partial
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+}
+
+function ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> void {
     load_var self
     load_const true
     store_field ._done
@@ -2480,6 +5404,8 @@ function ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> null {
   L1:
     load_var _3
     sys_op baml.http.SseStream.close
+    pop 1
+    load_const null
 
   L2:
     return
@@ -2497,6 +5423,9 @@ function ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.Model
     pop_jump_if_false L0
 
   L1:
+    load_var self
+    call ai.stream.TurnStream._check_terminal
+    pop 1
     load_var self
     load_field ._input_tokens
     load_const null
@@ -2525,24 +5454,24 @@ function ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.Model
   L5:
     load_var self
     load_field ._input_tokens
-    store_var_load_var _12
+    store_var_load_var _13
     load_const null
     cmp_op ==
     pop_jump_if_false L6
     load_const 0
-    store_var _12
+    store_var _13
 
   L6:
-    load_var _12
-    store_var _11
+    load_var _13
+    store_var _12
     load_var self
     load_field ._output_tokens
-    store_var_load_var _16
+    store_var_load_var _17
     load_const null
     cmp_op ==
     pop_jump_if_false L7
     load_const 0
-    store_var _16
+    store_var _17
 
   L7:
     load_var2 4 6
@@ -2554,19 +5483,19 @@ function ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.Model
   L8:
     load_var self
     load_field ._stop_reason
-    store_var_load_var _23
+    store_var_load_var _24
     load_const null
     cmp_op ==
     pop_jump_if_false L9
     load_const ai.content.StopReason.Complete
     alloc_variant ai.content.StopReason
-    store_var _23
+    store_var _24
 
   L9:
     load_var self
     load_field ._text
     init_instance ai.content.Text .text
-    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse
+    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
     alloc_array 1
     load_var2 7 3
     init_instance ai.ModelTurn .content, .stop_reason, .usage
@@ -2586,11 +5515,21 @@ function ai.stream.TurnStream.from_chunks(chunks: string[]) -> ai.stream.TurnStr
     load_const null
     load_const null
     load_const false
-    init_instance ai.stream.TurnStream ._sse, ._decode, ._chunks, ._cursor, ._pending, ._pcursor, ._text, ._stop_reason, ._input_tokens, ._output_tokens, ._done
+    load_const null
+    load_const false
+    init_instance ai.stream.TurnStream ._sse, ._decode, ._chunks, ._cursor, ._pending, ._pcursor, ._text, ._stop_reason, ._input_tokens, ._output_tokens, ._done, ._require_terminal, ._saw_terminal
     return
 }
 
-function ai.stream.TurnStream.from_sse(sse: baml.http.SseStream, decode: (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws unknown) -> ai.stream.TurnStream {
+function ai.stream.TurnStream.from_sse(sse: baml.http.SseStream, decode: (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws unknown, require_terminal: string | null) -> ai.stream.TurnStream {
+    load_var require_terminal
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var require_terminal
+
+  L0:
     load_var2 1 2
     load_type string
     alloc_array 0
@@ -2603,7 +5542,9 @@ function ai.stream.TurnStream.from_sse(sse: baml.http.SseStream, decode: (string
     load_const null
     load_const null
     load_const false
-    init_instance ai.stream.TurnStream ._sse, ._decode, ._chunks, ._cursor, ._pending, ._pcursor, ._text, ._stop_reason, ._input_tokens, ._output_tokens, ._done
+    load_var require_terminal
+    load_const false
+    init_instance ai.stream.TurnStream ._sse, ._decode, ._chunks, ._cursor, ._pending, ._pcursor, ._text, ._stop_reason, ._input_tokens, ._output_tokens, ._done, ._require_terminal, ._saw_terminal
     return
 }
 
@@ -2653,8 +5594,8 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_var self
     load_field ._cursor
     call baml.Array.at
-    store_var _58
-    load_var _58
+    store_var _59
+    load_var _59
     narrow_bind string, slot=20
     pop_jump_if_false L6
     jump L7
@@ -2667,7 +5608,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     jump L21
 
   L7:
-    load_var _58
+    load_var _59
     store_var c
     load_var self
     copy 0
@@ -2679,13 +5620,13 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_var self
     load_field ._text
     call baml.String.from
-    store_var _60
+    store_var _61
     load_type string
     load_var c
     call baml.String.from
-    store_var _63
+    store_var _64
     load_var2 1 22
-    load_var _63
+    load_var _64
     bin_op +
     store_field ._text
     load_var c
@@ -2704,8 +5645,8 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
   L9:
     load_var self
     load_field ._decode
-    store_var _40
-    load_var _40
+    store_var _41
+    load_var _41
     narrow_bind (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws unknown, slot=17
     pop_jump_if_false L0
     load_var2 16 17
@@ -2713,15 +5654,15 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_type baml.iter.Iterable<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _45
+    store_var _46
 
   L10:
-    load_var _45
+    load_var _46
     load_type baml.iter.Iterator<Error = never, Item = ai.stream.TextDelta | ai.stream.TurnDone | ai.stream.TurnMeta>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _46
-    load_var _46
+    store_var _47
+    load_var _47
     is_type baml.iter.Done
     pop_jump_if_false L11
     jump L0
@@ -2730,7 +5671,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var self
     load_field ._pending
-    load_var _46
+    load_var _47
     call baml.Array.push
     pop 1
     jump L10
@@ -2738,6 +5679,9 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
   L12:
     load_var self
     call ai.stream.TurnStream._finish
+    pop 1
+    load_var self
+    call ai.stream.TurnStream._check_terminal
     pop 1
     alloc_instance ai.stream.Done
     jump L21
@@ -2777,6 +5721,9 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_var _30
     narrow_bind ai.stream.TurnDone, slot=14
     pop_jump_if_false L0
+    load_var self
+    load_const true
+    store_field ._saw_terminal
     load_var self
     call ai.stream.TurnStream._finish
     pop 1
@@ -3006,13 +5953,13 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
     load_type unknown
     load_type unknown
     load_var2 4 2
-    call reflect.call_any
+    call baml.reflect.call_any
     store_var value
     jump L5
     load_var e
     store_var _15
     load_var _15
-    narrow_bind reflect.InvalidArgumentError, slot=7
+    narrow_bind baml.reflect.InvalidArgumentError, slot=7
     pop_jump_if_false L3
     jump L4
 
@@ -3028,7 +5975,7 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
     load_field .name
     call baml.String.from
     store_var _21
-    load_type reflect.InvalidArgumentError
+    load_type baml.reflect.InvalidArgumentError
     load_var bad
     call baml.String.from
     store_var _25
@@ -3204,7 +6151,7 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
 
   L2:
     load_var handler
-    call reflect.signature
+    call baml.reflect.signature
     store_var sig
     load_var name
     store_var_load_var _10
@@ -3274,9 +6221,552 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
     throw
 }
 
+function ai.wire.credential_sources(cred: string | baml.env.Ref | null, canonical_env: string | null) -> string {
+    load_type string
+    alloc_array 0
+    store_var names
+    load_var cred
+    store_var _4
+    load_var _4
+    narrow_bind baml.env.Ref, slot=4
+    pop_jump_if_false L0
+    load_type string
+    load_var2 3 4
+    load_field .name
+    call baml.Array.push
+    pop 1
+
+  L0:
+    load_var canonical_env
+    store_var _9
+    load_var _9
+    narrow_bind string, slot=5
+    pop_jump_if_false L1
+    load_type string
+    load_var2 3 5
+    call baml.Array.push
+    pop 1
+
+  L1:
+    load_var names
+    container_len
+    store_var _15
+    load_var _15
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_type string
+    load_var names
+    load_const ", "
+    call baml.Array.join
+    jump L4
+
+  L3:
+    load_const "(no environment variable was named)"
+
+  L4:
+    return
+}
+
+function ai.wire.merge_request_body(base: baml.json.json, overrides: baml.json.json | null) -> baml.json.json {
+    load_var overrides
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var2 1 2
+    call ai.internal._merge_json
+    jump L2
+
+  L1:
+    load_var base
+
+  L2:
+    return
+}
+
+function ai.wire.redact_url_secrets(text: string) -> string {
+    load_var text
+    load_const "key="
+    call ai.internal._redact_after
+    load_const "token="
+    call ai.internal._redact_after
+    load_const "secret="
+    call ai.internal._redact_after
+    return
+}
+
 function ai.wire.render_output_format(t: type) -> string {
     load_var t
-    sys_op baml.prompt.render_output_format
+    call ai.internal.validate_output_type
+    pop 1
+    load_var t
+    sys_op ai.internal.render_output_format
+    return
+}
+
+function ai.wire.resolve_credential(cred: string | baml.env.Ref | null, env_fallback: string | null) -> string | null {
+    load_var cred
+    store_var _4
+    load_var _4
+    narrow_bind string, slot=3
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_var cred
+    store_var _7
+    load_var _7
+    narrow_bind baml.env.Ref, slot=4
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    jump L5
+
+  L2:
+    load_var _7
+    call baml.env.Ref.get
+    store_var_load_var _10
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const ""
+    store_var _10
+
+  L3:
+    load_var _10
+    call ai.internal._configured
+    jump L5
+
+  L4:
+    load_var _4
+    call ai.internal._configured
+
+  L5:
+    store_var _13
+    load_var _13
+    narrow_bind string, slot=6
+    pop_jump_if_false L6
+    jump L10
+
+  L6:
+    load_var env_fallback
+    store_var _15
+    load_var _15
+    narrow_bind string, slot=7
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_const null
+    jump L11
+
+  L8:
+    load_var _15
+    sys_op baml.env.get
+    store_var_load_var _18
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L9
+    load_const ""
+    store_var _18
+
+  L9:
+    load_var _18
+    call ai.internal._configured
+    jump L11
+
+  L10:
+    load_var _13
+
+  L11:
+    return
+}
+
+function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf, fetch_url: bool) -> ai.wire.ResolvedMedia {
+    load_var media
+    store_var _3
+    load_var _3
+    narrow_bind baml.media.Image, slot=3
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var media
+    store_var _18
+    load_var _18
+    narrow_bind baml.media.Audio, slot=12
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var media
+    store_var _33
+    load_var _33
+    narrow_bind baml.media.Video, slot=21
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var media
+    call baml.media.Pdf.file
+    store_var_load_var _52
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_var media
+    call baml.media.Pdf.url
+    store_var _52
+
+  L3:
+    load_var _52
+    store_var_load_var _50
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const ""
+    store_var _50
+
+  L4:
+    load_var _50
+    store_var source
+    load_var media
+    call baml.media.Pdf.url
+    store_var _56
+    load_var media
+    call baml.media.Pdf.file
+    store_var _57
+    load_var media
+    call baml.media.Pdf.base64
+    store_var _58
+    load_var media
+    call baml.media.Pdf.mime_type
+    load_var source
+    load_const "pdf"
+    call ai.internal._media_mime_type
+    store_var _59
+    load_var2 33 34
+    load_var2 35 36
+    load_var fetch_url
+    call ai.internal._resolve_media_content
+    jump L14
+
+  L5:
+    load_var _33
+    store_var video
+    load_var video
+    call baml.media.Video.file
+    store_var_load_var _38
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L6
+    load_var video
+    call baml.media.Video.url
+    store_var _38
+
+  L6:
+    load_var _38
+    store_var_load_var _36
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
+    load_const ""
+    store_var _36
+
+  L7:
+    load_var _36
+    store_var source
+    load_var video
+    call baml.media.Video.url
+    store_var _42
+    load_var video
+    call baml.media.Video.file
+    store_var _43
+    load_var video
+    call baml.media.Video.base64
+    store_var _44
+    load_var video
+    call baml.media.Video.mime_type
+    load_var source
+    load_const "video"
+    call ai.internal._media_mime_type
+    store_var _45
+    load_var2 26 27
+    load_var2 28 29
+    load_var fetch_url
+    call ai.internal._resolve_media_content
+    jump L14
+
+  L8:
+    load_var _18
+    store_var audio
+    load_var audio
+    call baml.media.Audio.file
+    store_var_load_var _23
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L9
+    load_var audio
+    call baml.media.Audio.url
+    store_var _23
+
+  L9:
+    load_var _23
+    store_var_load_var _21
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L10
+    load_const ""
+    store_var _21
+
+  L10:
+    load_var _21
+    store_var source
+    load_var audio
+    call baml.media.Audio.url
+    store_var _27
+    load_var audio
+    call baml.media.Audio.file
+    store_var _28
+    load_var audio
+    call baml.media.Audio.base64
+    store_var _29
+    load_var audio
+    call baml.media.Audio.mime_type
+    load_var source
+    load_const "audio"
+    call ai.internal._media_mime_type
+    store_var _30
+    load_var2 17 18
+    load_var2 19 20
+    load_var fetch_url
+    call ai.internal._resolve_media_content
+    jump L14
+
+  L11:
+    load_var _3
+    store_var image
+    load_var image
+    call baml.media.Image.file
+    store_var_load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L12
+    load_var image
+    call baml.media.Image.url
+    store_var _8
+
+  L12:
+    load_var _8
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L13
+    load_const ""
+    store_var _6
+
+  L13:
+    load_var _6
+    store_var source
+    load_var image
+    call baml.media.Image.url
+    store_var _12
+    load_var image
+    call baml.media.Image.file
+    store_var _13
+    load_var image
+    call baml.media.Image.base64
+    store_var _14
+    load_var image
+    call baml.media.Image.mime_type
+    load_var source
+    load_const "image"
+    call ai.internal._media_mime_type
+    store_var _15
+    load_var2 8 9
+    load_var2 10 11
+    load_var fetch_url
+    call ai.internal._resolve_media_content
+
+  L14:
+    return
+}
+
+function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal {
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 0
+    store_var out
+    load_type string
+    alloc_array 0
+    store_var pending
+    load_var j
+    call ai.Journal.entries
+    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L12
+
+  L1:
+    load_var _7
+    store_var event
+    load_var event
+    store_var _11
+    load_var _11
+    narrow_bind ai.events.AssistantMessage, slot=8
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var event
+    store_var _38
+    load_var _38
+    narrow_bind ai.events.UserMessage, slot=15
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var event
+    store_var _46
+    load_var _46
+    narrow_bind ai.events.ToolCompleted, slot=17
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var event
+    store_var _54
+    load_var _54
+    narrow_bind ai.events.ToolFailed, slot=19
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    load_var2 3 7
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L6:
+    load_var _54
+    store_var failed
+    load_var2 4 20
+    load_field .id
+    call ai.internal._resolve_pending_call
+    pop 1
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    load_var2 3 20
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L7:
+    load_var _46
+    store_var completed
+    load_var2 4 18
+    load_field .id
+    call ai.internal._resolve_pending_call
+    pop 1
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    load_var2 3 18
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L8:
+    load_var _38
+    store_var user
+    load_var2 3 4
+    call ai.internal._flush_orphaned_calls
+    pop 1
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    load_var2 3 16
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L9:
+    load_var _11
+    store_var assistant
+    load_var2 3 4
+    call ai.internal._flush_orphaned_calls
+    pop 1
+    load_var assistant
+    load_field .content
+    load_var assistant
+    load_field .client_id
+    load_var client_id
+    cmp_op ==
+    call ai.internal._wire_blocks
+    store_var blocks
+    load_var blocks
+    container_len
+    store_var _21
+    load_var _21
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    load_var2 3 10
+    load_var assistant
+    load_field .client_id
+    init_instance ai.events.AssistantMessage .content, .client_id
+    call baml.Array.push
+    pop 1
+    load_var blocks
+    load_type baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _28
+
+  L10:
+    load_var _28
+    load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _29
+    load_var _29
+    is_type baml.iter.Done
+    pop_jump_if_false L11
+    jump L0
+
+  L11:
+    load_var _29
+    store_var _33
+    load_var _33
+    narrow_bind ai.content.ToolUse, slot=14
+    pop_jump_if_false L10
+    load_type string
+    load_var2 4 14
+    load_field .id
+    call baml.Array.push
+    pop 1
+    jump L10
+
+  L12:
+    load_var2 3 4
+    call ai.internal._flush_orphaned_calls
+    pop 1
+    load_var out
+    init_instance ai.Journal .log
     return
 }
 
@@ -3291,6 +6781,7 @@ function ai.wire.send_as(req: baml.http.Request, provider: string) -> #0 {
     load_type baml.errors.Io | baml.errors.Timeout
     load_var e
     call baml.String.from
+    call ai.wire.redact_url_secrets
     store_var _8
     load_type string
     load_var _8
@@ -3341,7 +6832,8 @@ function ai.wire.send_as(req: baml.http.Request, provider: string) -> #0 {
   L4:
     load_var2 2 3
     load_field .status_code
-    load_var text
+    load_var2 7 3
+    load_field .headers
     call ai.errors.classify_http
     throw
 }

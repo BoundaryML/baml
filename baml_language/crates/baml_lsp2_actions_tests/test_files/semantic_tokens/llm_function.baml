@@ -8,7 +8,7 @@ enum Category {
   Ham
 }
 
-client GPT4 = openai.OpenAiClient.new(model = "gpt-4");
+client GPT4 = openai.ResponsesClient.new(model = "gpt-4");
 
 function ClassifyEmail(email: Email) -> Category {
   client: GPT4
@@ -40,11 +40,11 @@ function ClassifyEmail(email: Email) -> Category {
 // llm_function.baml:11:13 (operator) len=1 "="
 // llm_function.baml:11:15 (namespace) [defaultLibrary] len=6 "openai"
 // llm_function.baml:11:21 (namespace) [defaultLibrary] len=1 "."
-// llm_function.baml:11:22 (class) [defaultLibrary] len=12 "OpenAiClient"
-// llm_function.baml:11:35 (method) len=3 "new"
-// llm_function.baml:11:39 (parameter) len=5 "model"
-// llm_function.baml:11:45 (operator) len=1 "="
-// llm_function.baml:11:47 (string) len=7 "\"gpt-4\""
+// llm_function.baml:11:22 (class) [defaultLibrary] len=15 "ResponsesClient"
+// llm_function.baml:11:38 (method) len=3 "new"
+// llm_function.baml:11:42 (parameter) len=5 "model"
+// llm_function.baml:11:48 (operator) len=1 "="
+// llm_function.baml:11:50 (string) len=7 "\"gpt-4\""
 // llm_function.baml:13:1 (keyword) len=8 "function"
 // llm_function.baml:13:10 (function) [declaration] len=13 "ClassifyEmail"
 // llm_function.baml:13:24 (parameter) [declaration] len=5 "email"

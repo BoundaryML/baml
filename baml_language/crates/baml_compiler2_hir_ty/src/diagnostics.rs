@@ -130,6 +130,12 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
+    /// A value name was written bare in a generic slot. Runtime-computed
+    /// slots require the whole-slot `unreflect(value)` marker.
+    ComputedGenericArgumentRequiresUnreflect { name: Name },
+    /// A mounted callable whose implementation is compiler-owned and has no
+    /// location-free link ABI was invoked from a source-less consumer.
+    MountedPackageCallUnsupported { path: Name },
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -146,6 +152,17 @@ pub enum TirTypeError {
         class_name: QualifiedTypeName,
         field_name: Name,
         suggestions: Vec<Name>,
+    },
+    /// Sealed reflection-kind values are VM views and cannot be constructed
+    /// with an object literal.
+    CannotConstructReflectionKind {
+        class_name: baml_type::QualifiedTypeName,
+    },
+    /// Builtin companion carriers (`baml.Int`, `baml.Map`, …) hold no fields
+    /// and cannot be constructed with an object literal.
+    CannotConstructBuiltinCompanion {
+        class_name: baml_type::QualifiedTypeName,
+        companion: baml_type::type_kind::BuiltinCompanion,
     },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
@@ -378,6 +395,13 @@ pub enum TirTypeError {
         expected: usize,
         got: usize,
     },
+    /// Runtime type arguments cannot enter the generated streaming
+    /// specialization path.
+    RuntimeTypeArgumentOnStreamingCall { callee_name: Name },
+    /// Indirect call opcodes have no runtime-type-check operand, so allowing
+    /// one would either panic during debug emission or skip the check in
+    /// release builds.
+    RuntimeTypeArgumentOnIndirectCall,
     /// Type arguments were supplied for a type that is not generic
     /// (enums and type aliases cannot take type parameters).
     TypeIsNotGeneric { type_name: Name, kind: &'static str },
@@ -796,6 +820,24 @@ pub enum TirTypeError {
     /// parameters have no generic binder to open an effect parameter on, so they must declare it
     /// explicitly.
     FunctionTypeMissingThrows,
+    /// A top-level declaration's initializer reaches an io sysop. Top-level
+    /// declarations (`client Foo = …`, `let x = …`) are evaluated by the
+    /// synthesized `$init` chainer when the engine is created, on a path that
+    /// cannot suspend — so the io does not fail with a catchable BAML error,
+    /// it kills engine construction with an opaque `InitFailed`. Detected by
+    /// [`crate::init_io`] (E0158).
+    InitIoNotAllowed {
+        /// The declaration's name.
+        declaration: Name,
+        /// `client Foo = …` (true) versus a plain top-level `let` (false).
+        /// Only affects wording.
+        is_client: bool,
+        /// Fully-qualified name of the io sysop reached (`baml.env.get`).
+        sysop: Name,
+        /// The first call hop from the initializer toward `sysop`. `None` when
+        /// the initializer calls the sysop directly.
+        via: Option<Name>,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -830,6 +872,13 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
+            }
+            TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::computed_generic_argument_requires_unreflect(
+                        name.as_str(),
+                    );
+                f.write_str(diagnostic.message.as_str())
             }
             TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
                 if suggestions.is_empty() {
@@ -890,6 +939,33 @@ impl fmt::Display for TirTypeError {
                         class_name.render_user_facing()
                     )
                 }
+            }
+            TirTypeError::CannotConstructReflectionKind { class_name } => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::cannot_construct_reflection_kind(
+                        &class_name.render_user_facing(),
+                    );
+                f.write_str(diagnostic.message.as_str())
+            }
+            TirTypeError::CannotConstructBuiltinCompanion {
+                class_name,
+                companion,
+            } => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::cannot_construct_builtin_companion(
+                        &class_name.render_user_facing(),
+                        companion.builtin,
+                        companion.origin,
+                        companion.carries_methods,
+                    );
+                f.write_str(diagnostic.message.as_str())
+            }
+            TirTypeError::MountedPackageCallUnsupported { path } => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::mounted_package_call_unsupported(
+                        path.as_str(),
+                    );
+                f.write_str(diagnostic.message.as_str())
             }
             TirTypeError::DeadCode {
                 unreachable_count, ..
@@ -1250,6 +1326,18 @@ impl fmt::Display for TirTypeError {
                     f,
                     "function `{callee_name}` expects {expected} type argument(s), got {got}"
                 )
+            }
+            TirTypeError::RuntimeTypeArgumentOnStreamingCall { callee_name } => {
+                write!(
+                    f,
+                    "runtime type arguments are not supported on streaming call `{callee_name}`"
+                )
+            }
+            TirTypeError::RuntimeTypeArgumentOnIndirectCall => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::runtime_type_argument_on_indirect_call(
+                    );
+                f.write_str(diagnostic.message.as_str())
             }
             TirTypeError::TypeIsNotGeneric { type_name, kind } => {
                 write!(
@@ -1870,6 +1958,25 @@ impl fmt::Display for TirTypeError {
                     f,
                     "function type must declare an explicit `throws` clause; add `throws never` \
                      if calling it cannot throw"
+                )
+            }
+            TirTypeError::InitIoNotAllowed {
+                declaration,
+                is_client,
+                sysop,
+                via,
+            } => {
+                let kind = if *is_client { "client" } else { "declaration" };
+                let reach = match via {
+                    Some(via) => format!("reaches `{sysop}`, which performs io, through `{via}`"),
+                    None => format!("calls `{sysop}`, which performs io"),
+                };
+                write!(
+                    f,
+                    "{kind} `{declaration}` {reach} — top-level declarations are evaluated at \
+                     startup (`$init`), where io is unavailable; resolve at request time \
+                     instead — e.g. `env.X`, a late-bound reference read only when the \
+                     request is made"
                 )
             }
         }

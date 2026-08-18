@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13990
 ---
 === PPIR ===
 function user.decode_auto(j: baml.json.json) -> root.pkg.inner.AutoBox<int>  [expr] {

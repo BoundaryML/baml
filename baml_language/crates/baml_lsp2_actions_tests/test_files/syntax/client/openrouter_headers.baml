@@ -17,8 +17,8 @@ client<llm> OpenRouterMistralSmall3_1_24b {
 //- diagnostics
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client OpenRouterMistralSmall3_1_24b = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry /
-//   │ ai.Fallback / ai.RoundRobin)
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client OpenRouterMistralSmall3_1_24b = openai.GenericClient.new(model = "...", base_url = "...");` (compose reliability
+//   │ with ai.Retry / ai.Fallback / ai.RoundRobin)
 //     ╭─[client_openrouter_headers.baml:2:1]
 //   2 │ ╭─▶ client<llm> OpenRouterMistralSmall3_1_24b {
 //   3 │ │     provider "openai-generic"

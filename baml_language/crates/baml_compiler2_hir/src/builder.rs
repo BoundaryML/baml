@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use baml_base::{Name, SourceFile};
-use baml_compiler_diagnostics::diagnostic::DiagnosticId;
+use baml_compiler_diagnostics::{diagnostic::DiagnosticId, runtime_type::SerializedKeyContainer};
 use baml_compiler2_ast::{self as ast, LoweringDiagnostic};
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::{TextRange, TextSize};
@@ -428,6 +428,9 @@ impl<'db> SemanticIndexBuilder<'db> {
     ) {
         match &body.stmts[stmt_id] {
             ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, true),
+            ast::Stmt::TypeBinding { value, .. } => {
+                self.walk_expr(*value, body, source_map, true);
+            }
             ast::Stmt::Let {
                 pattern,
                 initializer,
@@ -609,12 +612,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_match_arm(arm_id, body, source_map);
                 }
             }
-            ast::Expr::Is { scrutinee, .. } => {
+            ast::Expr::Is { scrutinee, pattern } => {
                 // `<expr> is <pattern>` is a one-shot pattern test that yields
                 // `bool`. Pattern bindings do NOT escape into the surrounding
-                // scope (use `match` / `let` if you need that). Type
-                // references inside the pattern are resolved later by TIR.
+                // scope (use `match` / `let` if you need that). Runtime
+                // `unreflect(expr)` operands are ordinary expressions in the
+                // enclosing scope and therefore need the normal HIR path walk.
                 self.walk_expr(*scrutinee, body, source_map, true);
+                self.walk_pattern_expressions(*pattern, body, source_map);
             }
             ast::Expr::Catch { base, clauses } => {
                 self.walk_expr(*base, body, source_map, true);
@@ -680,7 +685,22 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
                 self.walk_expr(*expr, body, source_map, true);
             }
-            ast::Expr::Call { callee, args, .. } | ast::Expr::OptionalCall { callee, args } => {
+            ast::Expr::Call {
+                callee,
+                type_args,
+                args,
+            } => {
+                self.walk_expr(*callee, body, source_map, true);
+                for type_arg in type_args {
+                    if let ast::TypeArg::Unreflect(operand) = type_arg {
+                        self.walk_expr(*operand, body, source_map, true);
+                    }
+                }
+                for arg in args {
+                    self.walk_expr(arg.expr, body, source_map, true);
+                }
+            }
+            ast::Expr::OptionalCall { callee, args } => {
                 self.walk_expr(*callee, body, source_map, true);
                 for arg in args {
                     self.walk_expr(arg.expr, body, source_map, true);
@@ -828,6 +848,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         source_map: &ast::AstSourceMap,
         visible_from: TextSize,
     ) {
+        // Evaluate expression-bearing pattern atoms (currently
+        // `unreflect(expr)`) in the scope surrounding the bindings. This runs
+        // before any names from this pattern are installed, so a pattern
+        // cannot accidentally refer to a binding it is in the act of
+        // declaring.
+        self.walk_pattern_expressions(pat_id, body, source_map);
+
         // Walk the pattern structurally. `collect_pattern_names` returns the
         // set of names introduced and emits diagnostics for duplicate names
         // and Or-alternative mismatches as it goes.
@@ -856,6 +883,51 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
+    fn walk_pattern_expressions(
+        &mut self,
+        pat_id: ast::PatId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        match &body.patterns[pat_id] {
+            ast::Pattern::Unreflect(operand) => {
+                self.walk_expr(*operand, body, source_map, true);
+            }
+            ast::Pattern::Bind { subpat, .. } => {
+                if let Some(subpat) = subpat {
+                    self.walk_pattern_expressions(*subpat, body, source_map);
+                }
+            }
+            ast::Pattern::Class { fields, .. } => {
+                for field in fields {
+                    self.walk_pattern_expressions(field.pat, body, source_map);
+                }
+            }
+            ast::Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ..
+            } => {
+                for pattern in prefix {
+                    self.walk_pattern_expressions(*pattern, body, source_map);
+                }
+                if let Some(pattern) = rest.as_ref().and_then(|rest| rest.pat) {
+                    self.walk_pattern_expressions(pattern, body, source_map);
+                }
+                for pattern in suffix {
+                    self.walk_pattern_expressions(*pattern, body, source_map);
+                }
+            }
+            ast::Pattern::Or(patterns) => {
+                for pattern in patterns {
+                    self.walk_pattern_expressions(*pattern, body, source_map);
+                }
+            }
+            ast::Pattern::Wildcard | ast::Pattern::Type(_) => {}
+        }
+    }
+
     /// Recursively walk a pattern and return the set of names it introduces
     /// into scope, paired with the source range of each binding's first
     /// occurrence. Emits diagnostics in two situations:
@@ -875,7 +947,9 @@ impl<'db> SemanticIndexBuilder<'db> {
         diagnostics: &mut Vec<Hir2Diagnostic>,
     ) -> PatternNames {
         match &patterns[pat_id] {
-            ast::Pattern::Wildcard | ast::Pattern::Type(_) => PatternNames::default(),
+            ast::Pattern::Wildcard | ast::Pattern::Type(_) | ast::Pattern::Unreflect(_) => {
+                PatternNames::default()
+            }
             ast::Pattern::Bind { name, subpat } => {
                 let mut result = PatternNames::default();
                 result
@@ -1749,7 +1823,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .fields
                         .iter()
                         .map(|f| (&f.name, f.name_span, f.attributes.as_slice())),
-                    "class",
+                    SerializedKeyContainer::Class,
                     is_builtin_file,
                 );
                 for method in &class.methods {
@@ -1765,7 +1839,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     enm.variants
                         .iter()
                         .map(|v| (&v.name, v.name_span, v.attributes.as_slice())),
-                    "enum",
+                    SerializedKeyContainer::Enum,
                     is_builtin_file,
                 );
             }
@@ -2050,12 +2124,11 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// cannot collide. A pure duplicate *member name* (no aliasing involved) is
     /// left to the existing `DuplicateField` / duplicate-variant (E0012) checks
     /// to avoid double-reporting; this rule only fires when at least two
-    /// *distinct* member names share a key. `container` is `"class"` or `"enum"`
-    /// and is used only for the diagnostic message.
+    /// *distinct* member names share a key.
     fn validate_alias_collisions<'a>(
         &mut self,
         members: impl Iterator<Item = (&'a Name, TextRange, &'a [ast::RawAttribute])>,
-        container: &'static str,
+        container: SerializedKeyContainer,
         is_builtin_file: bool,
     ) {
         // Builtin stdlib declarations carry no `@alias`, and type-level
@@ -2258,13 +2331,19 @@ impl<'db> SemanticIndexBuilder<'db> {
                 generic_args,
                 ..
             } => {
-                // Allow `baml.errors.*`, `root.errors.*`, and `baml.json.*` (fully qualified).
+                // Allow `baml.errors.*`, `root.errors.*`, `baml.json.*`, and
+                // BEP-066's `baml.reflect.errors.*` (fully qualified).
                 // `baml.json.JsonParseError` / `baml.json.JsonDecodeError` /
                 // `baml.json.JsonSerializationError` are stdlib error types just like
                 // `baml.errors.*` ones; they need the same exemption.
-                let is_builtin_error = segments.len() >= 3
+                let is_core_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
                     && (segments[1].as_str() == "errors" || segments[1].as_str() == "json");
+                let is_reflection_error = segments.len() >= 4
+                    && segments[0].as_str() == "baml"
+                    && segments[1].as_str() == "reflect"
+                    && segments[2].as_str() == "errors";
+                let is_builtin_error = is_core_builtin_error || is_reflection_error;
                 // Allow single-segment class names (e.g. `JsonParseError`) in
                 // builtin files — the class is resolvable in the current namespace
                 // and TIR will type-check it.  This allows builtin functions to
@@ -2324,8 +2403,10 @@ impl<'db> SemanticIndexBuilder<'db> {
                             && segments.len() == 1
                             && allowed_generic_params.iter().any(|name| name == &segments[0])
                 ) => {}
-            // `throws never` is the explicit "infallible" marker — always valid.
-            ast::TypeExprKind::Never { .. } => {}
+            // `throws never` and `throws unknown` are the two explicit effect
+            // bounds and are both valid for host-bound functions. The latter
+            // is needed by continuations that execute user bytecode.
+            ast::TypeExprKind::Never { .. } | ast::TypeExprKind::BuiltinUnknown { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),
         }
     }

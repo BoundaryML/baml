@@ -395,15 +395,13 @@ function generic_match_rigid.pick_mixed_union(x: #0 | bool) -> string {
 
   L1:
     load_var x
-    load_const true
-    cmp_op ==
+    is_type true
     pop_jump_if_false L2
     jump L3
 
   L2:
     load_var x
-    load_const false
-    cmp_op ==
+    is_type false
     pop_jump_if_false L6
     load_const "f"
     jump L5
@@ -557,8 +555,7 @@ function generic_match_rigid.rigid_cell_split(c: generic_match_rigid.RigidCell<i
     pop_jump_if_false L0
     load_var c
     load_field .v
-    load_const 1
-    cmp_op ==
+    is_type 1
     pop_jump_if_false L0
     jump L1
 
@@ -624,8 +621,7 @@ function generic_match_rigid.rigid_row_split(r: generic_match_rigid.RigidRow) ->
     pop_jump_if_false L0
     load_var r
     load_field .n
-    load_const 1
-    cmp_int_op ==
+    is_type 1
     pop_jump_if_false L0
     jump L1
 

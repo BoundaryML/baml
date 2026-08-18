@@ -20,7 +20,7 @@ client<llm> MyClient {
 //- diagnostics
 // E0010
 //
-//   × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
 //   │ ai.RoundRobin)
 //     ╭─[client_remap_role_non_string_values.baml:1:1]
 //   1 │ ╭─▶ client<llm> MyClient {

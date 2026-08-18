@@ -151,7 +151,7 @@ impl WasmHttp {
             // `as i64` for f64 is saturating: NaN → 0, +inf → i64::MAX,
             // -inf → i64::MIN, fractionals → truncated toward zero. None
             // of those make sense for an HTTP status code, and downstream
-            // consumers (`sys_llm`'s 2xx success check, auth's
+            // consumers (the stdlib's 2xx success check, auth's
             // `u16::try_from`) would misclassify them as success / 0.
             // `FromPrimitive::from_f64` returns `None` exactly when the
             // value is non-finite, out of `i64` range, or non-integer —

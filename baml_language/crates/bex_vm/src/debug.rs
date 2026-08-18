@@ -125,7 +125,7 @@ pub(crate) fn display_instruction(
         .and_then(|m| m.operand.as_ref());
 
     let metadata = match instruction {
-        Instruction::LoadConst(index) => {
+        Instruction::LoadConst(index) | Instruction::LoadCurrentPackage(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
                 format!("({})", display_value(*value))
@@ -246,6 +246,7 @@ pub(crate) fn display_instruction(
         | Instruction::Rethrow
         | Instruction::Discriminant
         | Instruction::TypeTag
+        | Instruction::RuntimeIsType
         | Instruction::IsType(_)
         | Instruction::ThrowIfPanic
         | Instruction::Unreachable
@@ -262,7 +263,8 @@ pub(crate) fn display_instruction(
         | Instruction::SendEvent
         | Instruction::ContainerLen
         | Instruction::Spawn
-        | Instruction::LoadType(_) => String::new(),
+        | Instruction::LoadType(_)
+        | Instruction::BindType(_) => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -299,6 +301,7 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
             }
         }
         bex_vm_types::ConstValue::Type(template) => format!("<type_template {template}>"),
+        bex_vm_types::ConstValue::Literal(literal) => format!("<literal {literal}>"),
         bex_vm_types::ConstValue::ClassWithTypeArgs {
             class_obj,
             type_args_templates,
@@ -365,6 +368,7 @@ const COLUMN_MARGIN: usize = 3;
 fn instruction_style(instruction: &Instruction) -> Style {
     match instruction {
         Instruction::LoadConst(_)
+        | Instruction::LoadCurrentPackage(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadVar2(..)
         | Instruction::LoadGlobal(_)
@@ -435,9 +439,11 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::AwaitAny => Style::new().green().bright(),
         Instruction::Discriminant
         | Instruction::TypeTag
+        | Instruction::RuntimeIsType
         | Instruction::IsType(_)
         | Instruction::NarrowBind { .. }
         | Instruction::LoadType(_)
+        | Instruction::BindType(_)
         | Instruction::ThrowIfPanic => Style::new().blue().bright(),
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
@@ -927,6 +933,7 @@ fn display_instruction_textual(
         // --- Type introspection ---
         Instruction::Discriminant => "discriminant".to_string(),
         Instruction::TypeTag => "type_tag".to_string(),
+        Instruction::RuntimeIsType => "runtime_is_type".to_string(),
         Instruction::IsType(const_idx) => {
             let name = meta_str(const_idx);
             format!("is_type {name}")
@@ -938,6 +945,11 @@ fn display_instruction_textual(
         Instruction::LoadType(const_idx) => {
             let name = meta_str(const_idx);
             format!("load_type {name}")
+        }
+        Instruction::BindType(slot) => format!("bind_type {slot}"),
+        Instruction::LoadCurrentPackage(const_idx) => {
+            let name = meta_str(const_idx);
+            format!("load_current_package {name}")
         }
         Instruction::DenseTag(table_idx) => {
             let names = function
@@ -1246,6 +1258,7 @@ pub fn display_compact_bytecode(
             | OpCode::CallIndirectWithRuntimeId
             | OpCode::Discriminant
             | OpCode::TypeTag
+            | OpCode::RuntimeIsType
             | OpCode::ThrowIfPanic
             | OpCode::Unreachable
             | OpCode::MakeCell
@@ -1351,6 +1364,8 @@ pub fn display_compact_bytecode(
             | OpCode::IsType
             | OpCode::DenseTag
             | OpCode::LoadType
+            | OpCode::BindType
+            | OpCode::LoadCurrentPackage
             | OpCode::MakeBoundMethod
             | OpCode::LoadDeref
             | OpCode::StoreDeref

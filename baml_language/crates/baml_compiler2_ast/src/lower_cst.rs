@@ -84,6 +84,28 @@ pub fn lower_file_with_path_and_test_owner(
     file_path: Option<&std::path::Path>,
     test_owner: Option<&str>,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, false)
+}
+
+/// Lower compiler-generated source for a `Session.eval` submission.
+///
+/// Session lowering rewrites persistent bindings into root lets before the
+/// transient source reaches HIR. This entry point is intentionally separate
+/// from ordinary file lowering so user-authored file-scope lets stay rejected.
+pub fn lower_session_file_with_path_and_test_owner(
+    root: &SyntaxNode,
+    file_path: Option<&std::path::Path>,
+    test_owner: Option<&str>,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, true)
+}
+
+fn lower_file_with_path_and_test_owner_impl(
+    root: &SyntaxNode,
+    file_path: Option<&std::path::Path>,
+    test_owner: Option<&str>,
+    is_session_submission: bool,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     let mut diags = Vec::new();
     let mut env_var_refs = Vec::new();
     let mut items = Vec::new();
@@ -129,11 +151,23 @@ pub fn lower_file_with_path_and_test_owner(
                 // Legacy `client<llm> Name { ... }` config block: removed in
                 // the single-path world. Parse succeeded so the error is one
                 // targeted diagnostic, not a cascade.
-                let name = ast::ClientDef::cast(child.clone())
-                    .and_then(|c| c.name())
+                let def = ast::ClientDef::cast(child.clone());
+                let name = def
+                    .as_ref()
+                    .and_then(ast::ClientDef::name)
                     .map_or_else(|| "MyClient".to_string(), |t| t.text().to_string());
+                // The block's own `provider`, so the suggested replacement
+                // names the client class that speaks to it rather than
+                // defaulting every migration to OpenAI.
+                let provider = def.as_ref().and_then(|c| {
+                    c.config_block()?
+                        .items()
+                        .find(|item| item.key().is_some_and(|key| key.text() == "provider"))?
+                        .value_str()
+                });
                 diags.push(LoweringDiagnostic::ClientBlockRemoved {
                     name,
+                    provider,
                     span: child.span_range(),
                 });
             }
@@ -173,6 +207,19 @@ pub fn lower_file_with_path_and_test_owner(
                     name,
                     span: child.span_range(),
                 });
+            }
+            baml_compiler_syntax::SyntaxKind::LET_STMT => {
+                if is_session_submission {
+                    if let Some(let_item) =
+                        lower_expr_body::lower_session_let(&child, &mut diags, &mut env_var_refs)
+                    {
+                        items.push(Item::Let(let_item));
+                    }
+                } else {
+                    diags.push(LoweringDiagnostic::TopLevelLetNotSupported {
+                        span: child.span_range(),
+                    });
+                }
             }
             baml_compiler_syntax::SyntaxKind::IMPLEMENTS_FOR => {
                 if let Some(imp) = lower_implements_for(&child, &mut diags, &mut env_var_refs) {
@@ -410,22 +457,13 @@ fn lower_function(
             .iter()
             .any(|(t, _)| t == "spec")
         {
-            let spec_type_args = generic_params
-                .iter()
-                .map(|param| {
-                    crate::ast::TypeExprKind::Path {
-                        segments: vec![param.name.clone()],
-                        generic_args: vec![],
-                        associated_type_bindings: vec![],
-                        attrs: vec![],
-                    }
-                    .at(llm_body_def.span)
-                })
-                .collect();
             let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
                 name.as_str(),
                 &param_names,
-                spec_type_args,
+                &generic_params
+                    .iter()
+                    .map(|param| param.name.clone())
+                    .collect::<Vec<_>>(),
                 return_type.clone(),
                 llm_body_def.span,
             );
@@ -752,12 +790,26 @@ fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
 ///
 /// Kept in sync with the builtin provider packages (`baml_std/openai` etc.)
 /// and the user-land `resolve()` convention.
+///
+/// DRIFT HAZARD — this compile-time `"provider/model"` prefix map is mirrored
+/// at runtime by `ai.clients.resolve` (`baml_std/ai/ns_clients/clients.baml`),
+/// which handles the same shorthand when the `client:` value is a dynamic
+/// string / `baml.env.Ref` instead of a literal. Add a prefix in one place and
+/// you must add it in the other.
 pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'static str)> {
     let (prefix, _model) = client.split_once('/')?;
     match prefix {
-        "openai" => Some(("openai", "OpenAiClient")),
+        "openai" => Some(("openai", "ResponsesClient")),
+        "openai-chat" => Some(("openai", "ChatClient")),
+        "openai-images" => Some(("openai", "ImageClient")),
+        "azure" => Some(("openai", "AzureClient")),
+        "ollama" => Some(("openai", "OllamaClient")),
+        "openrouter" => Some(("openai", "OpenRouterClient")),
         "anthropic" => Some(("anthropic", "AnthropicClient")),
         "google" => Some(("google", "GoogleClient")),
+        "vertex" => Some(("google", "VertexClient")),
+        "bedrock" => Some(("aws", "BedrockClient")),
+        "ai-gateway-images" => Some(("vercel", "AiGatewayImageClient")),
         "claude-code" => Some(("claude_code", "ClaudeCodeClient")),
         _ => None,
     }
@@ -819,8 +871,11 @@ pub(crate) enum LlmClientSpec {
         class: &'static str,
         model: String,
     },
-    /// An arbitrary expression evaluating to `ai.Client` (a declared client
-    /// name, a constructor call, a wrapper, ...).
+    /// An arbitrary expression evaluating to `ai.ClientSelector` (a declared
+    /// client name, a constructor call, a wrapper, a runtime
+    /// `"provider/model"` string, an `env.X` reference, ...). Wrapped in
+    /// `ai.clients.resolve(...)` by `synthesize_llm_spec_body` and resolved
+    /// when the function is called.
     Expr(rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>),
 }
 
@@ -854,7 +909,7 @@ fn resolve_llm_client(
                     reason: format!(
                         "no builtin provider for prefix \"{prefix}\"; construct a client \
                          value instead (OpenAI-compatible endpoints: \
-                         openai.OpenAiClient.new(base_url = ..., model = \"{model}\"))"
+                         openai.GenericClient.new(base_url = ..., model = \"{model}\"))"
                     ),
                     span,
                 });
@@ -976,7 +1031,7 @@ fn lower_class(
                     let all_outer_attrs = std::mem::take(expr.attrs_mut());
                     let (hoist, keep): (Vec<_>, Vec<_>) =
                         all_outer_attrs.into_iter().partition(|a| {
-                            crate::disambiguate::is_field_attr(a.name.as_str())
+                            crate::disambiguate::should_hoist_field_attr(a.name.as_str())
                                 && direct_attr_spans.contains(&a.span)
                         });
                     *expr.attrs_mut() = keep;

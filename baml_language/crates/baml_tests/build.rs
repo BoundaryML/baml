@@ -91,10 +91,20 @@ fn generate_speedtest_benches(manifest_dir: &str) {
         Ok(w) => w,
         Err(e) => {
             println!("cargo:warning=speedtest benches disabled: {e}");
-            // Emit an empty (but valid) file so the include! in the bench compiles.
+            // Emit empty (but valid) files so the include!s in both bench
+            // targets compile.
             fs::write(
                 &dest_path,
                 "// speedtest workloads unavailable at build time; no benches generated.\n",
+            )
+            .unwrap();
+            fs::write(
+                Path::new(&out_dir).join("speedtest_profiling_sources.rs"),
+                "// speedtest workloads unavailable at build time.\n\
+                 pub const PROF_SRC_COMPUTE_PURE_CALL_1M: &str = \"\";\n\
+                 pub const PROF_SRC_COMPUTE_ARRAY_BUILD_SUM_100K: &str = \"\";\n\
+                 pub const PROF_SRC_COMPUTE_FIB32_RECURSIVE: &str = \"\";\n\
+                 pub const PROF_SRC_STRING_CONCAT_LOOP_10K: &str = \"\";\n",
             )
             .unwrap();
             return;
@@ -148,6 +158,41 @@ fn generate_speedtest_benches(manifest_dir: &str) {
 ";
 
     write_formatted_code(&dest_path, benches, header);
+
+    // Also emit the small fixed subset consumed by the `profiling_overhead`
+    // bench target: same single source of truth, but only the workloads chosen
+    // to characterize tracing cost (per-call ring pairs, allocation-heavy
+    // loops, the known ring-overflow reproducer, and a string baseline).
+    let subset = [
+        "compute::pure call 1m",
+        "compute::array build sum 100k",
+        "compute::fib32 recursive",
+        "string::concat loop 10k",
+    ];
+    let prof_consts: TokenStream = subset
+        .iter()
+        .map(|name| {
+            let slug = slugify(name);
+            let ident = format_ident!("PROF_SRC_{}", slug.to_uppercase());
+            let source = all_workloads
+                .iter()
+                .find(|w| w.name == *name)
+                .map(|w| w.baml.as_str())
+                .unwrap_or("");
+            quote! {
+                pub const #ident: &str = #source;
+            }
+        })
+        .collect();
+    let prof_path = Path::new(&out_dir).join("speedtest_profiling_sources.rs");
+    write_formatted_code(
+        &prof_path,
+        prof_consts,
+        "// Auto-generated profiling-overhead workload sources by build.rs.\n\
+         // Source of truth: tools/speedtest/workloads/*.md (expanded via export_baml.py).\n\
+         // An empty const means the corpus was unavailable at build time; the\n\
+         // corresponding bench skips itself.\n",
+    );
 }
 
 /// Run `export_baml.py` and parse its JSON output into the workload list.
@@ -1036,12 +1081,16 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
     let snapshot_name = format!("10_formatter__{}", baml_file.name);
     let full_path = baml_file.full_path.display().to_string();
     let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
 
     quote! {
         #[test]
         fn #test_name() {
-            let content = #include_content;
+            // Read at runtime rather than include_str!: an embedded copy goes
+            // stale when a restored CI target/ cache skips re-embedding a
+            // changed corpus file, making the formatter output disagree with a
+            // freshly-updated snapshot on CI only.
+            let content = std::fs::read_to_string(#full_path)
+                .unwrap_or_else(|e| panic!("failed to read {}: {e}", #full_path));
             // Normalize line endings for cross-platform compatibility
             let content = content.replace("\r\n", "\n");
             let options = baml_fmt::FormatOptions::default();

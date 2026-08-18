@@ -103,6 +103,12 @@ impl<'db> InferenceContext<'db> {
                     return Attempt::Done;
                 }
                 if !ty.has_infer() && !interface_has_infer(&interface) {
+                    // One spelling, one verdict (B-1576): resolution can
+                    // ground a syntactic union after this obligation
+                    // registered. Judge the canonical form - the same
+                    // spelling finalize's mismatch filter re-judges - so
+                    // verdict and report cannot diverge.
+                    let ty = self.canonicalize_unions(&ty);
                     if *not_concrete_rejects
                         && matches!(ty.kind(), TyKind::Interface(..) | TyKind::Union(..))
                     {
@@ -442,6 +448,9 @@ impl<'db> InferenceContext<'db> {
         }
         let mut applicable = None;
         for facts in crate::impls::all_impl_facts(self.db) {
+            if !crate::impls::provides_concrete_members(&facts.interface.name) {
+                continue;
+            }
             let snapshot = self.table.snapshot();
             let applies = self.probe_candidate(receiver, name, facts).is_some();
             self.table.rollback_to(snapshot);

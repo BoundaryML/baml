@@ -16,7 +16,7 @@
 // types `baml.sap.parse` with a parse-flavored throw, this project should
 // return to ZERO diagnostics.
 
-client GPT4o = openai.OpenAiClient.new(
+client GPT4o = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = "test-key",
     base_url = "http://localhost:1234",

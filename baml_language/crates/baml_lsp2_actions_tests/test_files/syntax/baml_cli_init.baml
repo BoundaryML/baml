@@ -1,18 +1,18 @@
 // Learn more about clients at https://docs.boundaryml.com/docs/snippets/clients/overview
 
-client CustomGPT5 = openai.OpenAiClient.new(
+client CustomGPT5 = openai.ResponsesClient.new(
   model = "gpt-5",
   api_key = env.OPENAI_API_KEY,
 );
 
 // Retries compose by wrapping the inner client value.
 client CustomGPT5Mini = ai.clients.Retry.new(
-  inner = openai.OpenAiClient.new(model = "gpt-5-mini", api_key = env.OPENAI_API_KEY),
+  inner = openai.ResponsesClient.new(model = "gpt-5-mini", api_key = env.OPENAI_API_KEY),
   max_attempts = 2,
 );
 
 // Openai with chat completion
-client CustomGPT5Chat = openai.OpenAiClient.new(
+client CustomGPT5Chat = openai.ResponsesClient.new(
   model = "gpt-5",
   api_key = env.OPENAI_API_KEY,
 );

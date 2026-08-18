@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 54000
 ---
 === PPIR ===
 function user.namespace_relative_generic_class_type_pattern_requires_type_args(boxed: llm.openai.Box<int>) -> int  [expr] {
