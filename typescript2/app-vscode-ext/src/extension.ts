@@ -16,7 +16,11 @@ import {
   isProtocolCompatible,
 } from './compat';
 import { WebviewPanel } from './panels/WebviewPanel';
-import { playgroundCommandForPath } from './playground-command';
+import {
+  playgroundCommandForPath,
+  shellForDefaultWindowsProfile,
+  type WindowsTerminalProfile,
+} from './playground-command';
 import {
   type BamlProjectRoots,
   type CanonicalPath,
@@ -192,11 +196,26 @@ function projectKeyForPath(projectPath: string): string | undefined {
   }
 }
 
+function defaultTerminalShell(): string {
+  if (process.platform !== 'win32') {
+    return process.platform;
+  }
+  const terminalConfig = vscode.workspace.getConfiguration(
+    'terminal.integrated',
+  );
+  return shellForDefaultWindowsProfile(
+    terminalConfig.get<string | null>('defaultProfile.windows'),
+    terminalConfig.get<Record<string, WindowsTerminalProfile | null>>(
+      'profiles.windows',
+    ),
+  );
+}
+
 function openPlaygroundInBrowserTerminal(projectPath?: string): void {
   const { command, cwd } = playgroundCommandForPath({
     platform: process.platform,
     projectPath,
-    shell: process.platform === 'win32' ? vscode.env.shell : '',
+    shell: defaultTerminalShell(),
     wrapperPath,
   });
   const terminal = vscode.window.createTerminal({
