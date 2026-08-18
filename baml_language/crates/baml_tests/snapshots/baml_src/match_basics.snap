@@ -355,8 +355,7 @@ function match_basics.catch_all_with_variable() -> int {
 
 function match_basics.check_bool(flag: bool) -> string {
     load_var flag
-    load_const true
-    cmp_op ==
+    is_type true
     pop_jump_if_false L0
     jump L1
 
@@ -424,15 +423,13 @@ function match_basics.classify_dense(n: int) -> int {
 
 function match_basics.classify_string(s: string) -> int {
     load_var s
-    load_const "hello"
-    cmp_op ==
+    is_type "hello"
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const "world"
-    cmp_op ==
+    is_type "world"
     pop_jump_if_false L1
     jump L2
 
@@ -453,29 +450,25 @@ function match_basics.classify_string(s: string) -> int {
 
 function match_basics.classify_string_four_arms(s: string) -> int {
     load_var s
-    load_const "a"
-    cmp_op ==
+    is_type "a"
     pop_jump_if_false L0
     jump L7
 
   L0:
     load_var s
-    load_const "b"
-    cmp_op ==
+    is_type "b"
     pop_jump_if_false L1
     jump L6
 
   L1:
     load_var s
-    load_const "c"
-    cmp_op ==
+    is_type "c"
     pop_jump_if_false L2
     jump L5
 
   L2:
     load_var s
-    load_const "d"
-    cmp_op ==
+    is_type "d"
     pop_jump_if_false L3
     jump L4
 
@@ -504,29 +497,25 @@ function match_basics.classify_string_four_arms(s: string) -> int {
 
 function match_basics.classify_string_many(s: string) -> int {
     load_var s
-    load_const "alpha"
-    cmp_op ==
+    is_type "alpha"
     pop_jump_if_false L0
     jump L7
 
   L0:
     load_var s
-    load_const "beta"
-    cmp_op ==
+    is_type "beta"
     pop_jump_if_false L1
     jump L6
 
   L1:
     load_var s
-    load_const "gamma"
-    cmp_op ==
+    is_type "gamma"
     pop_jump_if_false L2
     jump L5
 
   L2:
     load_var s
-    load_const "delta"
-    cmp_op ==
+    is_type "delta"
     pop_jump_if_false L3
     jump L4
 
@@ -555,15 +544,13 @@ function match_basics.classify_string_many(s: string) -> int {
 
 function match_basics.classify_string_typed_fallback(s: string) -> int {
     load_var s
-    load_const "ok"
-    cmp_op ==
+    is_type "ok"
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const "error"
-    cmp_op ==
+    is_type "error"
     pop_jump_if_false L1
     jump L2
 
@@ -665,8 +652,7 @@ function match_basics.helper_42() -> int {
 
 function match_basics.literal_bool_false() -> string {
     load_const false
-    load_const true
-    cmp_op ==
+    is_type true
     pop_jump_if_false L0
     jump L1
 
@@ -683,8 +669,7 @@ function match_basics.literal_bool_false() -> string {
 
 function match_basics.literal_bool_true() -> string {
     load_const true
-    load_const true
-    cmp_op ==
+    is_type true
     pop_jump_if_false L0
     jump L1
 
@@ -1008,8 +993,7 @@ function match_basics.process_optional_with_zero(x: int | null) -> string {
 
   L0:
     load_var x
-    load_const 0
-    cmp_op ==
+    is_type 0
     pop_jump_if_false L1
     jump L2
 

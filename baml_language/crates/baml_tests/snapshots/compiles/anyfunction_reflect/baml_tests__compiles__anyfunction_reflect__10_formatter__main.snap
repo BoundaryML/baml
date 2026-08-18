@@ -66,11 +66,12 @@ function typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] | str
         return "no-such-tool";
     }
     // R and E come from the pins: the channel is exactly
-    // ToolError | reflect.InvalidArgumentError, so this catch is exhaustive
-    // with no wildcard arm.
+    // ToolError | reflect.InvalidArgumentError | reflect.errors.CompilationError,
+    // so this catch is exhaustive with no wildcard arm.
     return reflect.call_any(f, args) catch (e) {
         ToolError => "tool-error:" + e.message,
-        reflect.InvalidArgumentError => "bad-args"
+        reflect.InvalidArgumentError => "bad-args",
+        reflect.errors.CompilationError => "uncompiled-generic"
     };
 }
 

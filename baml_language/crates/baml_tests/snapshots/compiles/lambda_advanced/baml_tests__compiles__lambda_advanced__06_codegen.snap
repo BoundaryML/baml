@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13492
 ---
 function user.test_apply_twice_inferred() -> int {
     make_closure .<lambda(test_apply_twice_inferred, 0)>, 0
@@ -171,15 +170,13 @@ function user.test_lambda_calling_lambda() -> int {
 
 function user.test_lambda_in_match_inferred() -> int {
     load_const "double"
-    load_const "double"
-    cmp_op ==
+    is_type "double"
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_const "double"
-    load_const "negate"
-    cmp_op ==
+    is_type "negate"
     pop_jump_if_false L1
     jump L2
 

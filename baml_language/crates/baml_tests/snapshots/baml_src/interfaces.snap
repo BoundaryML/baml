@@ -3611,8 +3611,7 @@ function interfaces.fz29_main() -> string {
 
 function interfaces.fz31_main() -> string {
     load_const true
-    load_const true
-    cmp_op ==
+    is_type true
     pop_jump_if_false L0
     jump L1
 
@@ -4446,8 +4445,7 @@ function interfaces.midr_describe(s: interfaces.MidrSwitch) -> string {
     load_var s
     load_type interfaces.MidrSwitch
     virtual_load_field .active
-    load_const true
-    cmp_op ==
+    is_type true
     pop_jump_if_false L0
     jump L1
 
