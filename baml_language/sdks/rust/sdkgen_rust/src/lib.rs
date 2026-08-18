@@ -262,7 +262,7 @@ fn to_source_code_with_optional_metadata(
                         rank: 0,
                         source_file_path: enum_.origin.source_file_path.clone(),
                         span_start: enum_.origin.span_start,
-                        tokens: emit::enum_::emit(name, enum_),
+                        tokens: emit::enum_::emit(name, enum_, &analysis),
                     });
             }
             Symbol::TypeAlias(alias) => {
@@ -614,6 +614,36 @@ mod tests {
         })
     }
 
+    fn enum_symbol(n: &Name) -> Symbol {
+        Symbol::Enum(baml_codegen_types::Enum {
+            name: n.clone(),
+            docstring: None,
+            variants: vec![baml_codegen_types::EnumVariant {
+                name: baml_base::Name::new("Value"),
+                docstring: None,
+                value: "value".to_string(),
+            }],
+            origin: Origin {
+                source_file_path: "main.baml".to_string(),
+                span_start: 0,
+            },
+        })
+    }
+
+    fn alias_symbol(n: &Name) -> Symbol {
+        Symbol::TypeAlias(baml_codegen_types::TypeAlias {
+            name: n.clone(),
+            resolves_to: Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            recursive: false,
+            origin: Origin {
+                source_file_path: "main.baml".to_string(),
+                span_start: 0,
+            },
+        })
+    }
+
     /// A generic class with the given `<...>` params and properties (no
     /// methods).
     fn generic_class(n: &Name, params: &[&str], properties: Vec<(&str, Ty)>) -> Symbol {
@@ -806,6 +836,70 @@ mod tests {
         assert!(lib.contains("pub mod baml;"));
         assert!(lib.contains("pub use baml_bridge;"));
         assert!(lib.contains("pub use _runtime::init;"));
+    }
+
+    #[test]
+    fn baml_bridge_reexport_reserves_the_root_nominal_name() {
+        let n = name("user", &[], "baml_bridge");
+        for (symbol, expected) in [
+            (
+                class_symbol(&n, Vec::new(), Vec::new(), Vec::new()),
+                "pub struct baml_bridge_",
+            ),
+            (enum_symbol(&n), "pub enum baml_bridge_"),
+            (alias_symbol(&n), "pub type baml_bridge_"),
+        ] {
+            let generated = to_source_code_with_bytecode(
+                &SymbolPool::from([(n.clone(), symbol)]),
+                &[],
+                &options(),
+            );
+            assert!(generated.warnings.is_empty());
+            let lib = text(&generated, "src/lib.rs");
+            assert!(lib.contains("pub use baml_bridge;"), "{lib}");
+            assert!(lib.contains(expected), "expected `{expected}` in:\n{lib}");
+        }
+    }
+
+    #[test]
+    fn baml_bridge_reexport_reserves_the_root_namespace() {
+        let runtime_named_type = name("user", &[], "baml_bridge");
+        let in_runtime_named_namespace = name("user", &["baml_bridge"], "call");
+        let function_using_runtime_named_type = name("user", &[], "use_bridge_type");
+        let runtime_named_ty = Ty::Class(
+            runtime_named_type.clone(),
+            Vec::new(),
+            baml_base::TyAttr::EMPTY,
+        );
+        let pool = SymbolPool::from([
+            (
+                runtime_named_type.clone(),
+                class_symbol(&runtime_named_type, Vec::new(), Vec::new(), Vec::new()),
+            ),
+            (
+                in_runtime_named_namespace.clone(),
+                Symbol::Function(nullary_string_fn(&in_runtime_named_namespace)),
+            ),
+            (
+                function_using_runtime_named_type.clone(),
+                Symbol::Function(unary_fn(
+                    &function_using_runtime_named_type,
+                    runtime_named_ty.clone(),
+                    runtime_named_ty,
+                )),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("pub use baml_bridge;"), "{lib}");
+        assert!(lib.contains("pub struct baml_bridge_"), "{lib}");
+        assert!(lib.contains("pub mod baml_bridge__;"), "{lib}");
+        assert!(
+            flat(lib).contains("pubfnuse_bridge_type(u:crate::baml_bridge_,)->"),
+            "{lib}"
+        );
+        assert!(text(&generated, "src/baml_bridge__/mod.rs").contains("pub fn call()"));
     }
 
     #[test]

@@ -8,6 +8,8 @@ use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
 
 use crate::{SkipWarning, routing};
 
+const RESERVED_ROOT_TYPE_NAMES: &[&str] = &["baml_bridge"];
+
 /// Results of [`analyze`]. Emitters treat this as read-only context.
 pub(crate) struct Analysis {
     /// Nominal types (classes and enums) that will be emitted. A
@@ -23,6 +25,9 @@ pub(crate) struct Analysis {
     /// (Rust puts `mod` and type names in one namespace). Keyed by the
     /// original routed path; values are the fully renamed path.
     renames: HashMap<Vec<String>, Vec<String>>,
+    /// Emitted nominal types renamed away from generator-owned crate-root
+    /// items. Keys absent from this map retain their BAML name.
+    type_renames: HashMap<Name, String>,
     /// Emitted type names per (renamed) leaf — the namespace synthesized
     /// union enums must not collide with.
     type_names_by_leaf: HashMap<Vec<String>, HashSet<String>>,
@@ -49,6 +54,13 @@ impl Analysis {
             Some(renamed) => renamed,
             None => path,
         }
+    }
+
+    /// The Rust item name for an emitted nominal type.
+    pub(crate) fn rust_type_name<'a>(&'a self, name: &'a Name) -> &'a str {
+        self.type_renames
+            .get(name)
+            .map_or_else(|| name.name().as_str(), String::as_str)
     }
 
     /// Emitted type names in a (renamed) leaf.
@@ -237,7 +249,8 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         .collect();
     let scc = compute_sccs(&class_edges);
 
-    let renames = compute_renames(pool, &emitted);
+    let type_renames = compute_type_renames(pool, &emitted);
+    let renames = compute_renames(pool, &emitted, &type_renames);
 
     // Emitted type names per renamed leaf, for synthesized-name
     // de-collision.
@@ -250,10 +263,12 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         {
             let routed = routing::route(name).segments;
             let leaf = renames.get(&routed).cloned().unwrap_or(routed);
-            type_names_by_leaf
-                .entry(leaf)
-                .or_default()
-                .insert(name.name().as_str().to_string());
+            type_names_by_leaf.entry(leaf).or_default().insert(
+                type_renames
+                    .get(name)
+                    .cloned()
+                    .unwrap_or_else(|| name.name().as_str().to_string()),
+            );
         }
     }
 
@@ -262,6 +277,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             emitted,
             scc,
             renames,
+            type_renames,
             type_names_by_leaf,
         },
         warnings,
@@ -521,12 +537,62 @@ fn compute_sccs(edges: &BTreeMap<&Name, Vec<&Name>>) -> HashMap<Name, usize> {
     sccs
 }
 
+/// Rename emitted root types away from generator-owned public items.
+fn compute_type_renames(pool: &SymbolPool, emitted: &HashSet<Name>) -> HashMap<Name, String> {
+    let original_root_names: HashSet<String> = pool
+        .iter()
+        .filter(|(name, symbol)| {
+            routing::route(name).segments.is_empty()
+                && matches!(
+                    symbol,
+                    Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_)
+                )
+                && emitted.contains(*name)
+        })
+        .map(|(name, _)| name.name().as_str().to_string())
+        .collect();
+    let mut renames = HashMap::new();
+    let mut reserved: HashSet<String> = RESERVED_ROOT_TYPE_NAMES
+        .iter()
+        .map(|name| (*name).to_string())
+        .collect();
+    let mut names: Vec<&Name> = pool
+        .iter()
+        .filter_map(|(name, symbol)| {
+            (routing::route(name).segments.is_empty()
+                && matches!(
+                    symbol,
+                    Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_)
+                )
+                && emitted.contains(name))
+            .then_some(name)
+        })
+        .collect();
+    names.sort();
+    for name in names {
+        let original = name.name().as_str();
+        if !reserved.contains(original) {
+            reserved.insert(original.to_string());
+            continue;
+        }
+        let mut renamed = format!("{original}_");
+        while reserved.contains(&renamed) || original_root_names.contains(&renamed) {
+            renamed.push('_');
+        }
+        reserved.insert(renamed.clone());
+        renames.insert(name.clone(), renamed);
+    }
+    renames
+}
+
 /// Rust puts modules and types in one namespace: a namespace segment
-/// whose name equals a type emitted in its parent module is renamed with
-/// a trailing underscore (deterministic, and cascading to descendants).
+/// whose name equals a type emitted in its parent module or a reserved
+/// root item is renamed with trailing underscores (deterministic, and
+/// cascading to descendants).
 fn compute_renames(
     pool: &SymbolPool,
     emitted: &HashSet<Name>,
+    type_renames: &HashMap<Name, String>,
 ) -> HashMap<Vec<String>, Vec<String>> {
     // Types per module path (original routed segments).
     let mut types_in: HashMap<Vec<String>, HashSet<String>> = HashMap::new();
@@ -541,12 +607,19 @@ fn compute_renames(
             Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_)
         ) && emitted.contains(name)
         {
-            types_in
-                .entry(path.clone())
-                .or_default()
-                .insert(name.name().as_str().to_string());
+            types_in.entry(path.clone()).or_default().insert(
+                type_renames
+                    .get(name)
+                    .cloned()
+                    .unwrap_or_else(|| name.name().as_str().to_string()),
+            );
         }
     }
+    types_in.entry(Vec::new()).or_default().extend(
+        RESERVED_ROOT_TYPE_NAMES
+            .iter()
+            .map(|name| (*name).to_string()),
+    );
 
     // Rename each colliding segment, deepest paths inheriting their
     // ancestors' renames.
@@ -561,14 +634,12 @@ fn compute_renames(
             .get(parent)
             .cloned()
             .unwrap_or_else(|| parent.to_vec());
-        let collides = types_in
-            .get(parent)
-            .is_some_and(|types| types.contains(child));
-        let renamed_child = if collides {
-            format!("{child}_")
-        } else {
-            child.clone()
-        };
+        let types = types_in.get(parent);
+        let mut renamed_child = child.clone();
+        while types.is_some_and(|types| types.contains(&renamed_child)) {
+            renamed_child.push('_');
+        }
+        let collides = renamed_child != *child;
         if collides || renames.contains_key(parent) {
             let mut renamed = renamed_parent;
             renamed.push(renamed_child);

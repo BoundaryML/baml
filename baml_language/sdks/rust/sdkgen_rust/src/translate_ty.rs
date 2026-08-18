@@ -62,7 +62,7 @@ pub(crate) fn type_path(name: &Name, analysis: &Analysis) -> TokenStream {
     let routed = routing::route(name).segments;
     let segments = analysis.renamed(&routed);
     let mods = segments.iter().map(|seg| idents::ident(seg));
-    let type_ident = idents::ident(name.name().as_str());
+    let type_ident = idents::ident(analysis.rust_type_name(name));
     quote! { crate::#(#mods::)*#type_ident }
 }
 

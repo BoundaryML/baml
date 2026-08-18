@@ -80,7 +80,7 @@ pub(crate) fn emit(
         }
     }
 
-    let ident = idents::ident(name.name().as_str());
+    let ident = idents::ident(ctx.analysis.rust_type_name(name));
     let docs = doc_attrs(class.docstring.as_deref());
 
     let mut field_defs = Vec::new();

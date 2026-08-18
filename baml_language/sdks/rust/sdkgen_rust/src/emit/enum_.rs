@@ -11,11 +11,11 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use super::function::doc_attrs;
-use crate::idents;
+use crate::{analyze::Analysis, idents};
 
-pub(crate) fn emit(name: &Name, enum_: &Enum) -> TokenStream {
+pub(crate) fn emit(name: &Name, enum_: &Enum, analysis: &Analysis) -> TokenStream {
     let fqn = name.to_string();
-    let ident = idents::ident(name.name().as_str());
+    let ident = idents::ident(analysis.rust_type_name(name));
     let docs = doc_attrs(enum_.docstring.as_deref());
 
     let mut variant_defs = Vec::new();
