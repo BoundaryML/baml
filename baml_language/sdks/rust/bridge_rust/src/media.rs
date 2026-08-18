@@ -1,76 +1,78 @@
-//! Typed BAML media values used by generated Rust SDK signatures.
+//! Opaque, handle-backed BAML media values used by generated Rust SDK signatures.
 //!
-//! Media stays descriptor-backed on the Rust side. Immediately before a call,
-//! encoding turns the descriptor into an owned engine handle through the
-//! existing media C ABI; the engine takes ownership of that wire handle.
+//! Constructors allocate an engine handle immediately. Introspection goes through
+//! the media C ABI, encoding clones the handle for wire ownership, and the final
+//! Rust owner releases the original handle.
 
-use std::ffi::CString;
+use std::{ffi::CString, sync::Arc};
 
 use crate::{DecodeError, SdkError, baml_value::internal::__BamlValuePrivate, wire};
 
-#[derive(Clone, PartialEq, Eq)]
-enum Source {
-    Url(String),
-    File(String),
-    Base64(String),
+#[derive(Clone, Copy)]
+enum SourceKind {
+    Url,
+    File,
+    Base64,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+struct MediaHandle {
+    key: u64,
+    handle_type: i32,
+    #[cfg(test)]
+    release: Option<Arc<dyn Fn(u64) + Send + Sync>>,
+}
+
+impl Drop for MediaHandle {
+    fn drop(&mut self) {
+        if self.key == 0 {
+            return;
+        }
+        #[cfg(test)]
+        if let Some(release) = &self.release {
+            release(self.key);
+            return;
+        }
+        if let Ok(api) = crate::capi::api() {
+            // SAFETY: this is the one owned handle key retained by this value.
+            #[expect(unsafe_code)]
+            unsafe {
+                (api.handle_release)(self.key);
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
 struct MediaValue {
-    source: Source,
-    mime_type: Option<String>,
+    handle: Arc<MediaHandle>,
 }
 
 impl MediaValue {
-    fn new(source: Source, mime_type: Option<String>) -> Result<Self, SdkError> {
-        Self::validate(&source, mime_type.as_deref()).map_err(|field| {
-            SdkError::new(format!("media {field} contains an interior NUL byte"))
-        })?;
-        Ok(Self { source, mime_type })
-    }
-
-    fn decoded(source: Source, mime_type: Option<String>) -> Result<Self, DecodeError> {
-        Self::validate(&source, mime_type.as_deref())
-            .map_err(|field| DecodeError::InvalidMedia { field })?;
-        Ok(Self { source, mime_type })
-    }
-
-    fn validate(source: &Source, mime_type: Option<&str>) -> Result<(), &'static str> {
-        let source_value = match source {
-            Source::Url(value) | Source::File(value) | Source::Base64(value) => value,
-        };
-        CString::new(source_value.as_str()).map_err(|_| "source")?;
-        if let Some(mime_type) = mime_type {
-            CString::new(mime_type).map_err(|_| "MIME type")?;
-        }
-        Ok(())
-    }
-
-    fn to_baml(&self, kind: Kind) -> wire::InboundValue {
-        let source = match &self.source {
-            Source::Url(value) | Source::File(value) | Source::Base64(value) => {
-                CString::new(value.as_str()).expect("validated media source")
-            }
-        };
-        let mime_type = self
-            .mime_type
-            .as_deref()
+    fn create(
+        kind: Kind,
+        source_kind: SourceKind,
+        source: String,
+        mime_type: Option<String>,
+    ) -> Result<Self, SdkError> {
+        let source = CString::new(source)
+            .map_err(|_| SdkError::new("media source contains an interior NUL byte"))?;
+        let mime_type = mime_type
             .map(CString::new)
             .transpose()
-            .expect("validated media MIME type");
-        let mime_type_ptr = mime_type
-            .as_ref()
-            .map_or(std::ptr::null(), |value| value.as_ptr());
-        let api = crate::capi::api().expect("BAML runtime must be loaded before encoding media");
-        let constructor = match self.source {
-            Source::Url(_) => api.media_from_url,
-            Source::File(_) => api.media_from_file,
-            Source::Base64(_) => api.media_from_base64,
+            .map_err(|_| SdkError::new("media MIME type contains an interior NUL byte"))?;
+        let api = crate::capi::api()?;
+        let constructor = match source_kind {
+            SourceKind::Url => api.media_from_url,
+            SourceKind::File => api.media_from_file,
+            SourceKind::Base64 => api.media_from_base64,
         };
         let mut key = 0_u64;
         let mut handle_type = 0_i32;
-        // SAFETY: both strings are NUL-terminated and live for the duration of
-        // the call; both output pointers refer to initialized stack storage.
+        let mime_type_ptr = mime_type
+            .as_ref()
+            .map_or(std::ptr::null(), |value| value.as_ptr());
+        // SAFETY: both strings are NUL-terminated and live for the call, and
+        // both output pointers refer to initialized stack storage.
         #[expect(unsafe_code)]
         let status = unsafe {
             constructor(
@@ -81,23 +83,50 @@ impl MediaValue {
                 &raw mut handle_type,
             )
         };
-        // The safe constructors already enforce the engine's only descriptor
-        // rejection (interior NUL), the kind is a fixed protocol value, and
-        // `insert_entry` guarantees a matching type tag and nonzero key. A
-        // failure here therefore means the exact-version C ABI violated its
-        // contract, not a recoverable input error.
-        assert_eq!(status, 0, "failed to construct a BAML media handle");
-        assert_ne!(key, 0, "media constructor returned a zero handle");
-        assert_eq!(
-            handle_type,
-            kind.handle_type() as i32,
-            "media constructor returned the wrong handle type"
-        );
+        if status != 0 {
+            return Err(status_error(source_kind.constructor_name(), status));
+        }
+        if key == 0 || handle_type != kind.handle_type() as i32 {
+            if key != 0 {
+                // SAFETY: a successful constructor transferred this key to us.
+                #[expect(unsafe_code)]
+                unsafe {
+                    (api.handle_release)(key);
+                }
+            }
+            return Err(SdkError::new(format!(
+                "{} returned an invalid media handle",
+                source_kind.constructor_name()
+            )));
+        }
+        Ok(Self::adopt(key, handle_type))
+    }
+
+    fn adopt(key: u64, handle_type: i32) -> Self {
+        Self {
+            handle: Arc::new(MediaHandle {
+                key,
+                handle_type,
+                #[cfg(test)]
+                release: None,
+            }),
+        }
+    }
+
+    fn to_baml(&self) -> wire::InboundValue {
+        let api = crate::capi::api().expect("BAML runtime must be loaded before encoding media");
+        let mut cloned = 0_u64;
+        // SAFETY: `cloned` is valid stack storage and the retained key remains
+        // live for the duration of this call.
+        #[expect(unsafe_code)]
+        let status = unsafe { (api.handle_clone)(self.handle.key, &raw mut cloned) };
+        assert_eq!(status, 0, "failed to clone a BAML media handle");
+        assert_ne!(cloned, 0, "media handle clone returned a zero handle");
         wire::InboundValue {
             value_type: None,
             value: Some(wire::inbound_value::Value::Handle(wire::BamlHandle {
-                key,
-                handle_type,
+                key: cloned,
+                handle_type: self.handle.handle_type,
             })),
         }
     }
@@ -108,46 +137,27 @@ impl MediaValue {
     ) -> Result<(Kind, Self), DecodeError> {
         let value = crate::decode::unwrap(value);
         let got = crate::baml_value::wire_variant_kind(&value);
-        let media = match value.value {
-            Some(wire::baml_outbound_value::Value::MediaValue(media)) => media,
+        match value.value {
+            Some(wire::baml_outbound_value::Value::MediaValue(media)) => {
+                Self::from_descriptor(media, expected)
+            }
             Some(wire::baml_outbound_value::Value::HandleValue(handle)) => {
-                return Self::from_handle(handle.key, handle.handle_type, expected);
+                Self::from_handle(handle.key, handle.handle_type, expected)
             }
             Some(wire::baml_outbound_value::Value::ClassValue(class)) => {
-                let class_kind =
-                    Kind::from_wrapper_class(&class.name).ok_or(DecodeError::WrongType {
-                        expected: expected.map_or("media", Kind::name),
-                        got: "class",
-                    })?;
-                let handle = class
-                    .fields
-                    .into_iter()
-                    .find(|field| field.key == "_data")
-                    .and_then(|field| field.value)
-                    .and_then(|value| match crate::decode::unwrap(value).value {
-                        Some(wire::baml_outbound_value::Value::HandleValue(handle)) => Some(handle),
-                        _ => None,
-                    })
-                    .ok_or(DecodeError::WrongType {
-                        expected: expected.map_or("media", Kind::name),
-                        got: "media class without a handle",
-                    })?;
-                if expected.is_some_and(|expected| expected != class_kind) {
-                    return Err(DecodeError::WrongType {
-                        expected: expected.map_or("media", Kind::name),
-                        got: class_kind.name(),
-                    });
-                }
-                let decoded = Self::from_handle(handle.key, handle.handle_type, Some(class_kind))?;
-                return Ok(decoded);
+                Self::from_wrapper_class(class, expected)
             }
-            _ => {
-                return Err(DecodeError::WrongType {
-                    expected: expected.map_or("media", Kind::name),
-                    got,
-                });
-            }
-        };
+            _ => Err(DecodeError::WrongType {
+                expected: expected.map_or("media", Kind::name),
+                got,
+            }),
+        }
+    }
+
+    fn from_descriptor(
+        media: wire::BamlValueMedia,
+        expected: Option<Kind>,
+    ) -> Result<(Kind, Self), DecodeError> {
         let Some(kind) = Kind::from_media_type(media.media) else {
             return Err(DecodeError::WrongType {
                 expected: expected.map_or("media", Kind::name),
@@ -160,10 +170,10 @@ impl MediaValue {
                 got: kind.name(),
             });
         }
-        let source = match media.value {
-            Some(wire::baml_value_media::Value::Url(value)) => Source::Url(value),
-            Some(wire::baml_value_media::Value::File(value)) => Source::File(value),
-            Some(wire::baml_value_media::Value::Base64(value)) => Source::Base64(value),
+        let (source_kind, source) = match media.value {
+            Some(wire::baml_value_media::Value::Url(value)) => (SourceKind::Url, value),
+            Some(wire::baml_value_media::Value::File(value)) => (SourceKind::File, value),
+            Some(wire::baml_value_media::Value::Base64(value)) => (SourceKind::Base64, value),
             None => {
                 return Err(DecodeError::WrongType {
                     expected: expected.map_or("media", Kind::name),
@@ -171,7 +181,44 @@ impl MediaValue {
                 });
             }
         };
-        Ok((kind, Self::decoded(source, media.mime_type)?))
+        validate_descriptor(&source, media.mime_type.as_deref())?;
+        let value = Self::create(kind, source_kind, source, media.mime_type).map_err(|_| {
+            DecodeError::WrongType {
+                expected: expected.map_or("media", Kind::name),
+                got: "media descriptor rejected by the runtime",
+            }
+        })?;
+        Ok((kind, value))
+    }
+
+    fn from_wrapper_class(
+        class: wire::BamlValueClass,
+        expected: Option<Kind>,
+    ) -> Result<(Kind, Self), DecodeError> {
+        let class_kind = Kind::from_wrapper_class(&class.name).ok_or(DecodeError::WrongType {
+            expected: expected.map_or("media", Kind::name),
+            got: "class",
+        })?;
+        if expected.is_some_and(|expected| expected != class_kind) {
+            return Err(DecodeError::WrongType {
+                expected: expected.map_or("media", Kind::name),
+                got: class_kind.name(),
+            });
+        }
+        let handle = class
+            .fields
+            .into_iter()
+            .find(|field| field.key == "_data")
+            .and_then(|field| field.value)
+            .and_then(|value| match crate::decode::unwrap(value).value {
+                Some(wire::baml_outbound_value::Value::HandleValue(handle)) => Some(handle),
+                _ => None,
+            })
+            .ok_or(DecodeError::WrongType {
+                expected: expected.map_or("media", Kind::name),
+                got: "media class without a handle",
+            })?;
+        Self::from_handle(handle.key, handle.handle_type, Some(class_kind))
     }
 
     fn from_handle(
@@ -199,113 +246,91 @@ impl MediaValue {
                 got: kind.name(),
             });
         }
-        let api = crate::capi::api().map_err(|_| DecodeError::WrongType {
-            expected: expected.map_or("media", Kind::name),
-            got: "media handle without a loaded runtime",
-        })?;
-        let guard = HandleGuard { api, key };
-        let url = read_optional(api, api.media_url, key, handle_type)?;
-        let file = read_optional(api, api.media_file, key, handle_type)?;
-        let mime_type = read_optional(api, api.media_mime_type, key, handle_type)?;
-        let source = if let Some(url) = url {
-            Source::Url(url)
-        } else if let Some(file) = file {
-            Source::File(file)
-        } else {
-            let base64 = read_optional(api, api.media_base64, key, handle_type)?.ok_or(
-                DecodeError::WrongType {
-                    expected: expected.map_or("media", Kind::name),
-                    got: "media handle without a source",
-                },
-            )?;
-            Source::Base64(base64)
+        Ok((kind, Self::adopt(key, handle_type)))
+    }
+
+    fn optional_string(
+        &self,
+        api: &crate::capi::Api,
+        accessor: MediaAccessor,
+        context: &str,
+    ) -> Result<Option<String>, SdkError> {
+        let mut output = crate::capi::Buffer {
+            ptr: std::ptr::null(),
+            len: 0,
         };
-        let value = Self::decoded(source, mime_type)?;
-        drop(guard);
-        Ok((kind, value))
-    }
-
-    fn url(&self) -> Option<&str> {
-        match &self.source {
-            Source::Url(value) => Some(value),
-            Source::File(_) | Source::Base64(_) => None,
-        }
-    }
-
-    fn file(&self) -> Option<&str> {
-        match &self.source {
-            Source::File(value) => Some(value),
-            Source::Url(_) | Source::Base64(_) => None,
-        }
-    }
-
-    fn base64(&self) -> Option<&str> {
-        match &self.source {
-            Source::Base64(value) => Some(value),
-            Source::Url(_) | Source::File(_) => None,
-        }
-    }
-}
-
-impl std::fmt::Debug for MediaValue {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let source = match self.source {
-            Source::Url(_) => "url",
-            Source::File(_) => "file",
-            Source::Base64(_) => "base64",
-        };
-        formatter
-            .debug_struct("MediaValue")
-            .field("source", &source)
-            .field("mime_type", &self.mime_type)
-            .finish()
-    }
-}
-
-struct HandleGuard<'a> {
-    api: &'a crate::capi::Api,
-    key: u64,
-}
-
-impl Drop for HandleGuard<'_> {
-    fn drop(&mut self) {
-        // SAFETY: the outbound handle key is owned by this decoder and must be
-        // released exactly once after its descriptor has been copied out.
+        // SAFETY: `output` is valid stack storage and this value retains the
+        // matching live handle for the duration of the call.
         #[expect(unsafe_code)]
-        unsafe {
-            (self.api.handle_release)(self.key);
+        let status = unsafe { accessor(self.handle.key, self.handle.handle_type, &raw mut output) };
+        if status != 0 {
+            return Err(status_error(context, status));
+        }
+        api.take_optional_string(output)
+    }
+
+    fn url(&self) -> Result<Option<String>, SdkError> {
+        let api = crate::capi::api()?;
+        self.optional_string(api, api.media_url, "media.url")
+    }
+
+    fn file(&self) -> Result<Option<String>, SdkError> {
+        let api = crate::capi::api()?;
+        self.optional_string(api, api.media_file, "media.file")
+    }
+
+    fn base64(&self) -> Result<String, SdkError> {
+        let api = crate::capi::api()?;
+        Ok(self
+            .optional_string(api, api.media_base64, "media.base64")?
+            .unwrap_or_default())
+    }
+
+    fn mime_type(&self) -> Result<Option<String>, SdkError> {
+        let api = crate::capi::api()?;
+        self.optional_string(api, api.media_mime_type, "media.mime_type")
+    }
+}
+
+impl PartialEq for MediaValue {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.handle, &other.handle)
+    }
+}
+
+impl Eq for MediaValue {}
+
+impl SourceKind {
+    fn constructor_name(self) -> &'static str {
+        match self {
+            Self::Url => "media.from_url",
+            Self::File => "media.from_file",
+            Self::Base64 => "media.from_base64",
         }
     }
+}
+
+fn validate_descriptor(source: &str, mime_type: Option<&str>) -> Result<(), DecodeError> {
+    CString::new(source).map_err(|_| DecodeError::InvalidMedia { field: "source" })?;
+    if let Some(mime_type) = mime_type {
+        CString::new(mime_type).map_err(|_| DecodeError::InvalidMedia { field: "MIME type" })?;
+    }
+    Ok(())
+}
+
+fn status_error(context: &str, status: u32) -> SdkError {
+    let detail = match status {
+        1 => "invalid handle",
+        2 => "handle type mismatch",
+        3 => "unsupported handle type",
+        4 => "internal error",
+        5 => "unexpected null pointer",
+        _ => "unknown error",
+    };
+    SdkError::new(format!("{context}: {detail} (status {status})"))
 }
 
 type MediaAccessor = unsafe extern "C" fn(u64, i32, *mut crate::capi::Buffer) -> u32;
-
-fn read_optional(
-    api: &crate::capi::Api,
-    accessor: MediaAccessor,
-    key: u64,
-    handle_type: i32,
-) -> Result<Option<String>, DecodeError> {
-    let mut output = crate::capi::Buffer {
-        ptr: std::ptr::null(),
-        len: 0,
-    };
-    // SAFETY: `output` is valid stack storage, and the handle key and type
-    // came from the engine's outbound value.
-    #[expect(unsafe_code)]
-    let status = unsafe { accessor(key, handle_type, &raw mut output) };
-    if status != 0 {
-        return Err(DecodeError::WrongType {
-            expected: "media",
-            got: "invalid media handle",
-        });
-    }
-    api.take_optional_string(output)
-        .map_err(|_| DecodeError::WrongType {
-            expected: "media",
-            got: "invalid media descriptor",
-        })
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
@@ -400,59 +425,67 @@ fn media_ty(kind: wire::BamlTyMediaKind) -> wire::BamlTy {
 
 macro_rules! define_media {
     ($name:ident, $kind:expr) => {
-        #[doc = concat!("A BAML `", stringify!($name), "` media value.")]
-        #[derive(Clone, Debug, PartialEq, Eq)]
+        #[doc = concat!("An opaque, handle-backed BAML `", stringify!($name), "` value.")]
+        #[derive(Clone, PartialEq, Eq)]
         pub struct $name(MediaValue);
 
         impl $name {
-            /// Create a URL-backed media value.
+            /// Create a URL-backed media handle.
             pub fn from_url(
                 url: impl Into<String>,
                 mime_type: Option<String>,
             ) -> Result<Self, SdkError> {
-                MediaValue::new(Source::Url(url.into()), mime_type).map(Self)
+                MediaValue::create($kind, SourceKind::Url, url.into(), mime_type).map(Self)
             }
 
-            /// Create a file-backed media value. The engine reads the file when the value is used.
+            /// Create a file-backed media handle. The engine reads the file when the value is used.
             pub fn from_file(
                 file: impl Into<String>,
                 mime_type: Option<String>,
             ) -> Result<Self, SdkError> {
-                MediaValue::new(Source::File(file.into()), mime_type).map(Self)
+                MediaValue::create($kind, SourceKind::File, file.into(), mime_type).map(Self)
             }
 
-            /// Create a base64-backed media value.
+            /// Create a base64-backed media handle.
             pub fn from_base64(
                 base64: impl Into<String>,
                 mime_type: Option<String>,
             ) -> Result<Self, SdkError> {
-                MediaValue::new(Source::Base64(base64.into()), mime_type).map(Self)
+                MediaValue::create($kind, SourceKind::Base64, base64.into(), mime_type).map(Self)
             }
 
-            /// Return the URL descriptor, when this value is URL-backed.
-            pub fn url(&self) -> Option<&str> {
+            /// Return the URL for a URL-backed value.
+            pub fn url(&self) -> Result<Option<String>, SdkError> {
                 self.0.url()
             }
 
-            /// Return the file descriptor, when this value is file-backed.
-            pub fn file(&self) -> Option<&str> {
+            /// Return the file path for a file-backed value.
+            pub fn file(&self) -> Result<Option<String>, SdkError> {
                 self.0.file()
             }
 
-            /// Return the base64 descriptor, when this value is base64-backed.
-            pub fn base64(&self) -> Option<&str> {
+            /// Return the base64 payload, or an empty string when this value is not base64-backed.
+            pub fn base64(&self) -> Result<String, SdkError> {
                 self.0.base64()
             }
 
-            /// Return the optional MIME type supplied with this value.
-            pub fn mime_type(&self) -> Option<&str> {
-                self.0.mime_type.as_deref()
+            /// Return the media value's MIME type.
+            pub fn mime_type(&self) -> Result<Option<String>, SdkError> {
+                self.0.mime_type()
+            }
+        }
+
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter
+                    .debug_struct(stringify!($name))
+                    .finish_non_exhaustive()
             }
         }
 
         impl __BamlValuePrivate for $name {
             fn to_baml(&self) -> wire::InboundValue {
-                self.0.to_baml($kind)
+                self.0.to_baml()
             }
 
             fn from_baml(value: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -472,7 +505,7 @@ define_media!(Video, Kind::Video);
 define_media!(Pdf, Kind::Pdf);
 define_media!(GenericMedia, Kind::Generic);
 
-/// A media value whose concrete kind is selected at runtime.
+/// An opaque media handle whose concrete kind is selected at runtime.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Media {
     /// An image value.
@@ -533,6 +566,8 @@ impl_media_from!(GenericMedia, Generic);
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
     use super::*;
 
     fn outbound(
@@ -548,73 +583,6 @@ mod tests {
                 },
             )),
         }
-    }
-
-    #[test]
-    fn image_decodes_without_loading_the_runtime() {
-        let image = Image::from_baml(outbound(
-            wire::MediaTypeEnum::Image,
-            wire::baml_value_media::Value::Url("https://example.com/image.png".to_string()),
-        ))
-        .unwrap();
-        assert_eq!(image.url(), Some("https://example.com/image.png"));
-        assert_eq!(image.mime_type(), Some("image/png"));
-    }
-
-    #[test]
-    fn image_decodes_file_and_base64_sources() {
-        let file = Image::from_baml(outbound(
-            wire::MediaTypeEnum::Image,
-            wire::baml_value_media::Value::File("/tmp/image.png".to_string()),
-        ))
-        .unwrap();
-        assert_eq!(file.file(), Some("/tmp/image.png"));
-        assert_eq!(file.url(), None);
-        assert_eq!(file.base64(), None);
-
-        let base64 = Image::from_baml(outbound(
-            wire::MediaTypeEnum::Image,
-            wire::baml_value_media::Value::Base64("aGk=".to_string()),
-        ))
-        .unwrap();
-        assert_eq!(base64.base64(), Some("aGk="));
-        assert_eq!(base64.url(), None);
-        assert_eq!(base64.file(), None);
-    }
-
-    #[test]
-    fn concrete_media_rejects_a_different_kind() {
-        let error = Image::from_baml(outbound(
-            wire::MediaTypeEnum::Audio,
-            wire::baml_value_media::Value::Url("https://example.com/audio.mp3".to_string()),
-        ))
-        .unwrap_err();
-        assert_eq!(error.to_string(), "expected image, got wire variant audio");
-    }
-
-    #[test]
-    fn dynamic_media_selects_the_variant_for_each_kind() {
-        let url = || wire::baml_value_media::Value::Url("https://example.com/asset".to_string());
-        assert!(matches!(
-            Media::from_baml(outbound(wire::MediaTypeEnum::Image, url())).unwrap(),
-            Media::Image(_)
-        ));
-        assert!(matches!(
-            Media::from_baml(outbound(wire::MediaTypeEnum::Audio, url())).unwrap(),
-            Media::Audio(_)
-        ));
-        assert!(matches!(
-            Media::from_baml(outbound(wire::MediaTypeEnum::Video, url())).unwrap(),
-            Media::Video(_)
-        ));
-        assert!(matches!(
-            Media::from_baml(outbound(wire::MediaTypeEnum::Pdf, url())).unwrap(),
-            Media::Pdf(_)
-        ));
-        assert!(matches!(
-            Media::from_baml(outbound(wire::MediaTypeEnum::Other, url())).unwrap(),
-            Media::Generic(_)
-        ));
     }
 
     fn outbound_handle(kind: wire::BamlHandleType) -> wire::BamlOutboundValue {
@@ -645,6 +613,16 @@ mod tests {
     }
 
     #[test]
+    fn concrete_media_rejects_a_different_descriptor_kind_before_allocating() {
+        let error = Image::from_baml(outbound(
+            wire::MediaTypeEnum::Audio,
+            wire::baml_value_media::Value::Url("https://example.com/audio.mp3".to_string()),
+        ))
+        .unwrap_err();
+        assert_eq!(error.to_string(), "expected image, got wire variant audio");
+    }
+
+    #[test]
     fn mismatched_handle_kind_fails_before_loading_the_runtime() {
         let error =
             Image::from_baml(outbound_handle(wire::BamlHandleType::AdtMediaAudio)).unwrap_err();
@@ -662,7 +640,7 @@ mod tests {
     }
 
     #[test]
-    fn decoded_media_rejects_interior_nul_bytes() {
+    fn decoded_media_rejects_interior_nul_bytes_before_allocating() {
         let source_error = Image::from_baml(outbound(
             wire::MediaTypeEnum::Image,
             wire::baml_value_media::Value::Url("bad\0url".to_string()),
@@ -685,7 +663,7 @@ mod tests {
     }
 
     #[test]
-    fn constructors_reject_interior_nul_bytes() {
+    fn constructors_reject_interior_nul_bytes_before_loading_the_runtime() {
         assert_eq!(
             Image::from_file("bad\0path", None).unwrap_err().to_string(),
             "media source contains an interior NUL byte"
@@ -696,6 +674,39 @@ mod tests {
                 .to_string(),
             "media MIME type contains an interior NUL byte"
         );
+    }
+
+    #[test]
+    fn cloned_media_share_one_owned_handle() {
+        let image = Image(MediaValue::adopt(
+            0,
+            wire::BamlHandleType::AdtMediaImage as i32,
+        ));
+        let cloned = image.clone();
+        assert!(Arc::ptr_eq(&image.0.handle, &cloned.0.handle));
+    }
+
+    #[test]
+    fn media_handle_drop_releases_exactly_its_key() {
+        let released = Arc::new(AtomicU64::new(0));
+        let capture = Arc::clone(&released);
+        drop(MediaHandle {
+            key: 73,
+            handle_type: wire::BamlHandleType::AdtMediaImage as i32,
+            release: Some(Arc::new(move |key| {
+                capture.store(key, Ordering::SeqCst);
+            })),
+        });
+        assert_eq!(released.load(Ordering::SeqCst), 73);
+    }
+
+    #[test]
+    fn media_debug_output_is_opaque() {
+        let image = Image(MediaValue::adopt(
+            0,
+            wire::BamlHandleType::AdtMediaImage as i32,
+        ));
+        assert_eq!(format!("{image:?}"), "Image { .. }");
     }
 
     #[test]

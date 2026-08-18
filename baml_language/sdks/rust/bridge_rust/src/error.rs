@@ -165,7 +165,7 @@ pub enum DecodeError {
         /// Length of the offending wire string.
         len: usize,
     },
-    /// A decoded media descriptor cannot be safely passed back through the C ABI.
+    /// A legacy inline media descriptor cannot be safely converted to an opaque handle.
     InvalidMedia {
         /// The invalid descriptor field (`source` or `MIME type`).
         field: &'static str,

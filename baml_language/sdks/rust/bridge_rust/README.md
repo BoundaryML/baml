@@ -1,12 +1,7 @@
 # baml_bridge
 
-The BAML runtime bridge for Rust. Generated BAML SDKs (`baml-cli generate`
-with `output_type = "rust"`) depend on this crate: it boots the BAML engine,
-converts values across the boundary via the `BamlValue` trait, and surfaces
-BAML's typed `throws` contracts as `Result<T, baml_bridge::Error<E>>`.
+The BAML runtime bridge for Rust. Generated BAML SDKs (`baml-cli generate` with `output_type = "rust"`) depend on this crate: it boots the BAML engine, converts values across the boundary via the `BamlValue` trait, and surfaces BAML's typed `throws` contracts as `Result<T, baml_bridge::Error<E>>`.
 
-You normally don't add this crate by hand — the generated `baml_sdk` crate
-pins the matching version. See the BAML documentation for getting started:
-<https://docs.boundaryml.com>.
+You normally don't add this crate by hand — the generated `baml_sdk` crate pins the matching version. See the BAML documentation for getting started: <https://docs.boundaryml.com>.
 
-Generated functions with `image`, `audio`, `video`, or `pdf` parameters use `baml_bridge::media::{Image, Audio, Video, Pdf}`. Each type provides `from_url`, `from_file`, and `from_base64` constructors and can be passed directly to generated functions. A generic `media` parameter uses `baml_bridge::media::Media`, an enum over those concrete kinds plus `GenericMedia`.
+Generated functions with `image`, `audio`, `video`, or `pdf` parameters use `baml_bridge::media::{Image, Audio, Video, Pdf}`. These are opaque engine handles with `from_url`, `from_file`, and `from_base64` constructors, plus the same limited `url`, `file`, `base64`, and `mime_type` introspection surface as Python media values. Cloning a Rust media value shares its owned handle, and passing it to a generated function clones the engine key so other Rust owners remain usable. A generic `media` parameter uses `baml_bridge::media::Media`, an enum over those concrete kinds plus `GenericMedia`.
