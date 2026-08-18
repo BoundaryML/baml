@@ -33,13 +33,10 @@ pub use sys_types::{CallId, CancellationToken};
 use thiserror::Error;
 
 mod bex;
-mod bex_lsp;
 mod fs;
 mod precompiled_stdlib;
 mod precompiled_stdlib_config;
-mod project;
 mod runtime_compile;
-mod seed;
 
 pub fn runtime_compiler() -> Arc<dyn bex_engine::RuntimeCompiler> {
     runtime_compile::runtime_compiler()
@@ -106,20 +103,6 @@ pub fn is_cancelled_runtime_error(err: &RuntimeError) -> bool {
     matches!(err, RuntimeError::Engine(e) if is_cancelled_engine_error(e))
 }
 
-/// Keep pass-by-value so the returned `Arc<impl Bex>` does not capture caller locals;
-/// taking `&VfsPath` / `&HashMap` would require returning a value that references them.
-#[allow(clippy::needless_pass_by_value)]
-pub fn new(
-    root_path: vfs::VfsPath,
-    sys_ops: SysOps,
-    files: std::collections::HashMap<crate::fs::FsPath, String>,
-) -> Result<Arc<impl Bex>, RuntimeError> {
-    let project = project::BexProject::new(&root_path, Arc::new(sys_ops));
-    project.update_all_sources(&files);
-    let engine = project.take()?;
-    Ok(engine)
-}
-
 /// Initialize a runtime from a serialized BAML program — the borsh-encoded
 /// `bex_vm_types::Program` that `baml pack` embeds — rather than from source
 /// files. Mirrors [`new`] but skips compilation, decoding the program and
@@ -142,12 +125,4 @@ pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex
     Ok(Arc::new(engine))
 }
 
-// Schema types re-exported for `bridge_wasm`, which depends on `bex_project`
-// but not `baml_project` and needs to name them in its `From` impl.
-pub use baml_project::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
-pub use bex_lsp::{
-    BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, FunctionOrigin, LlmCapabilities,
-    LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, PlaygroundSourceFile,
-    PreparedRun, ProjectDiagnostic, ProjectUpdate, TestExpandError, new_lsp,
-};
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};

@@ -58,8 +58,6 @@ mod wasm_http;
 mod wasm_io;
 mod wasm_io_fs;
 mod wasm_io_glob;
-mod wasm_lsp;
-mod wasm_playground;
 mod wasm_random;
 mod wasm_sys;
 mod wasm_time;
@@ -104,7 +102,6 @@ pub use sys_wasm::{
     register_host_value_release_callback, release_host_callable,
 };
 use wasm_bindgen::prelude::*;
-pub use wasm_lsp::LspNotification;
 
 static LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 const WASM_PROFILE_ARTIFACT_MAX_BYTES: usize = 64 * 1024 * 1024;

@@ -18,7 +18,6 @@ workspace = true
 
 [dependencies]
 baml_db = { workspace = true }
-baml_project = { workspace = true }
 ouroboros = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }

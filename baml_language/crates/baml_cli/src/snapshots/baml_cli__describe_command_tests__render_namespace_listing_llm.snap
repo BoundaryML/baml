@@ -1,6 +1,0 @@
----
-source: crates/baml_cli/src/describe_command_tests.rs
-expression: output
----
-class            llm.Config                       ns_llm/models.baml:2
-function         llm.LlmIdentity                  ns_llm/models.baml:7

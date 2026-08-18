@@ -27,6 +27,5 @@ baml_compiler_diagnostics = { workspace = true }
 baml_compiler_lexer = { workspace = true }
 baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
-baml_workspace = { workspace = true }
 salsa = { workspace = true }
 

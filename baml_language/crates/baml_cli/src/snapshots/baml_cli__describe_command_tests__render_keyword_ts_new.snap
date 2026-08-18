@@ -1,7 +1,0 @@
----
-source: crates/baml_cli/src/describe_command_tests.rs
-expression: output
----
-new — BAML does not use `new` or `ClassName.new()`. Construct class values with object literals such as `User { name: "Ada" }`.
-
-see: `baml describe class`

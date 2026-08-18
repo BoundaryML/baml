@@ -64,7 +64,6 @@ wasm-bindgen-futures = { workspace = true }
 baml_builtins2_codegen = { workspace = true }
 
 [dev-dependencies]
-baml_project = { workspace = true, features = [ "testing" ] }
 indexmap = { workspace = true }
 
 [features]

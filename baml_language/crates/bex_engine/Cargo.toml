@@ -39,7 +39,6 @@ tokio = { workspace = true, features = [ "sync", "rt", "macros", "time" ] }
 wasm-bindgen-futures = { workspace = true }
 
 [dev-dependencies]
-baml_project = { workspace = true, features = [ "testing" ] }
 bex_resource_types = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }

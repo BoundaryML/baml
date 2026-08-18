@@ -154,7 +154,6 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/baml_compiler_hir/**' \
-            ':baml_language/crates/baml_workspace/**' \
             ':baml_language/crates/baml_compiler_parser/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
