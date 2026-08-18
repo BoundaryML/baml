@@ -1,4 +1,4 @@
-// E0164 (B-1563): a non-literal condition whose static type decides the
+// E0167 (B-1563): a non-literal condition whose static type decides the
 // branch warns; written literals stay idiomatic. The generic cases pin
 // the DEFERRED path: the operand type is an inference variable at check
 // time and only resolves at the fixpoint.
@@ -21,6 +21,7 @@ function tw_eager(c: TwCls) -> int {
 function tw_deferred(c: TwCls) -> int {
 	if (tw_id(c)) { 1 } else { 2 };
 	if (!tw_id(c)) { 3 } else { 4 };
+	if (tw_id(null)) { 5 } else { 6 };
 	0
 }
 
@@ -60,4 +61,11 @@ function tw_deferred(c: TwCls) -> int {
 //     ╭─[truthiness_warnings.baml:23:7]
 //  23 │     if (!tw_id(c)) { 3 } else { 4 };
 //     ·          ────────
+//     ╰────
+// E0167
+//
+//   ⚠ this condition is always falsy: a value of type `null` can never be truthy
+//     ╭─[truthiness_warnings.baml:24:6]
+//  24 │     if (tw_id(null)) { 5 } else { 6 };
+//     ·         ───────────
 //     ╰────

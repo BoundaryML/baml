@@ -123,28 +123,7 @@ impl<'db> InferenceContext<'db> {
     /// wrongly pin type variables the condition is free to leave open
     /// under truthiness.
     pub(super) fn check_condition(&mut self, body: &ExprBody, condition: ExprId) -> Ty {
-        let ty = self.infer_expr(body, condition, &Expectation::None);
-        let resolved = self.table.resolve_completely(&ty);
-        if resolved.has_error() {
-            return ty;
-        }
-        let is_literal = matches!(body.exprs[condition], Expr::Literal(_) | Expr::Null);
-        if resolved.has_infer() {
-            // The type is still open (a generic call's var solves at the
-            // fixpoint): defer the decision to `finish`, where the FINAL
-            // type is known - bailing here would pass the raw value to
-            // the strict-bool branch.
-            self.pending_truthy_conditions.push(PendingCondition {
-                expr: condition,
-                is_literal,
-                coerce: true,
-            });
-            return ty;
-        }
-        if let Some(decision) = Self::decide_condition(&resolved) {
-            self.apply_condition_decision(condition, resolved, is_literal, decision);
-        }
-        ty
+        self.check_truthy_operand(body, condition, true)
     }
 
     /// Types the operand of `!` (B-1563): same acceptance and warnings as
@@ -152,6 +131,18 @@ impl<'db> InferenceContext<'db> {
     /// `OpCode::Not` performs the truthiness coercion itself, so a
     /// recorded adjustment would be dead metadata with no MIR consumer.
     pub(super) fn check_not_operand(&mut self, body: &ExprBody, operand: ExprId) -> Ty {
+        self.check_truthy_operand(body, operand, false)
+    }
+
+    /// The shared operand walk behind both positions: infer with no
+    /// expectation, bail on error, defer open types to `finish`, decide
+    /// closed ones. `coerce` distinguishes a branch condition (records
+    /// `Adjust::Truthy`) from a `!` operand (records nothing -
+    /// `OpCode::Not` coerces itself); everything else - acceptance, the
+    /// `void` mismatch, the always-constant warning - is identical, and
+    /// keeping it in one place is what stops the two paths drifting
+    /// apart again.
+    fn check_truthy_operand(&mut self, body: &ExprBody, operand: ExprId, coerce: bool) -> Ty {
         let ty = self.infer_expr(body, operand, &Expectation::None);
         let resolved = self.table.resolve_completely(&ty);
         if resolved.has_error() {
@@ -159,26 +150,19 @@ impl<'db> InferenceContext<'db> {
         }
         let is_literal = matches!(body.exprs[operand], Expr::Literal(_) | Expr::Null);
         if resolved.has_infer() {
-            // Same deferral as `check_condition`, minus the coercion: the
-            // finalized type still owes the void mismatch or the
-            // always-constant warning.
+            // The type is still open (a generic call's var solves at the
+            // fixpoint): defer the decision to `finish`, where the FINAL
+            // type is known - bailing here would pass the raw value to
+            // the strict-bool branch.
             self.pending_truthy_conditions.push(PendingCondition {
                 expr: operand,
                 is_literal,
-                coerce: false,
+                coerce,
             });
             return ty;
         }
-        match Self::decide_condition(&resolved) {
-            Some(ConditionDecision::Mismatch) => {
-                self.result
-                    .type_mismatches
-                    .insert(operand, (Ty::bool(), resolved));
-            }
-            Some(ConditionDecision::Coerce) => {
-                self.push_always_const_warning(operand, resolved, is_literal);
-            }
-            None => {}
+        if let Some(decision) = Self::decide_condition(&resolved) {
+            self.apply_condition_decision(operand, resolved, is_literal, coerce, decision);
         }
         ty
     }
@@ -249,6 +233,7 @@ impl<'db> InferenceContext<'db> {
         condition: ExprId,
         resolved: Ty,
         is_literal: bool,
+        coerce: bool,
         decision: ConditionDecision,
     ) {
         match decision {
@@ -258,13 +243,15 @@ impl<'db> InferenceContext<'db> {
                     .insert(condition, (Ty::bool(), resolved));
             }
             ConditionDecision::Coerce => {
-                self.result.expr_adjustments.insert(
-                    condition,
-                    Box::new([Adjustment {
-                        kind: Adjust::Truthy,
-                        target: Ty::bool(),
-                    }]),
-                );
+                if coerce {
+                    self.result.expr_adjustments.insert(
+                        condition,
+                        Box::new([Adjustment {
+                            kind: Adjust::Truthy,
+                            target: Ty::bool(),
+                        }]),
+                    );
+                }
                 self.push_always_const_warning(condition, resolved, is_literal);
             }
         }
