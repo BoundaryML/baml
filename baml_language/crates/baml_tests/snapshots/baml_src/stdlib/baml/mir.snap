@@ -5037,6 +5037,70 @@ fn baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<I
     }
 }
 
+fn baml.iter.Iterator.take(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = Error, Item = Item> {
+    // Locals:
+    let _0: baml.iter.Iterator<Error = Error, Item = Item> // _0 // return
+    let _1: baml.iter.Iterator // self // param
+    let _2: int // n // param
+
+    bb0: {
+        _0 = baml.iter.Take<#1, #2> { copy _1, copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.iter.Iterator.skip(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = Error, Item = Item> {
+    // Locals:
+    let _0: baml.iter.Iterator<Error = Error, Item = Item> // _0 // return
+    let _1: baml.iter.Iterator // self // param
+    let _2: int // n // param
+
+    bb0: {
+        _0 = baml.iter.Skip<#1, #2> { copy _1, copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.iter.Iterator.take_while(self: baml.iter.Iterator, predicate: (Item) -> bool throws E2) -> baml.iter.Iterator<Error = Error | E2, Item = Item> {
+    // Locals:
+    let _0: baml.iter.Iterator<Error = Error | E2, Item = Item> // _0 // return
+    let _1: baml.iter.Iterator // self // param
+    let _2: (Item) -> bool throws E2 // predicate // param
+
+    bb0: {
+        _0 = baml.iter.TakeWhile<#1, #2, #3> { copy _1, copy _2, const false };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: (Item) -> bool throws E2) -> baml.iter.Iterator<Error = Error | E2, Item = Item> {
+    // Locals:
+    let _0: baml.iter.Iterator<Error = Error | E2, Item = Item> // _0 // return
+    let _1: baml.iter.Iterator // self // param
+    let _2: (Item) -> bool throws E2 // predicate // param
+
+    bb0: {
+        _0 = baml.iter.SkipWhile<#1, #2, #3> { copy _1, copy _2, const true };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.iter.Iterator.collect(self: baml.iter.Iterator) -> Item[] {
     // Locals:
     let _0: Item[] // _0 // return
@@ -6296,6 +6360,280 @@ fn baml.iter.Chain.Iterator.next(self: baml.iter.Chain) -> baml.iter.Done | T {
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn baml.iter.Take.Iterable.iter(self: baml.iter.Take) -> baml.iter.Iterator<Error = E, Item = T> {
+    // Locals:
+    let _0: baml.iter.Iterator<Error = E, Item = T> // _0 // return
+    let _1: baml.iter.Take // self // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.iter.Take.Iterator.next(self: baml.iter.Take) -> baml.iter.Done | T {
+    // Locals:
+    let _0: baml.iter.Done | T // _0 // return
+    let _1: baml.iter.Take // self // param
+    let _2: bool
+    let _3: int
+    let _4: baml.iter.Iterator<Error = E, Item = T>
+
+    bb0: {
+        _3 = copy _1.1;
+        _2 = copy _3 <= const 0_i64;
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _1.1 = copy _1.1 - const 1_i64;
+        _4 = copy _1.0;
+        _0 = virtual_call next as baml.iter.Iterator<Error = #1, Item = #0>(copy _4) -> [bb3];
+    }
+
+    bb2: {
+        _0 = baml.iter.Done {  };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.iter.Skip.Iterable.iter(self: baml.iter.Skip) -> baml.iter.Iterator<Error = E, Item = T> {
+    // Locals:
+    let _0: baml.iter.Iterator<Error = E, Item = T> // _0 // return
+    let _1: baml.iter.Skip // self // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.iter.Skip.Iterator.next(self: baml.iter.Skip) -> baml.iter.Done | T {
+    // Locals:
+    let _0: baml.iter.Done | T // _0 // return
+    let _1: baml.iter.Skip // self // param
+    let _2: bool
+    let _3: int
+    let _4: baml.iter.Done | T
+    let _5: baml.iter.Iterator<Error = E, Item = T>
+    let _6: bool
+    let _7: baml.iter.Iterator<Error = E, Item = T>
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = copy _1.1;
+        _2 = copy _3 > const 0_i64;
+        branch copy _2 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _7 = copy _1.0;
+        _0 = virtual_call next as baml.iter.Iterator<Error = #1, Item = #0>(copy _7) -> [bb6];
+    }
+
+    bb3: {
+        _1.1 = copy _1.1 - const 1_i64;
+        _5 = copy _1.0;
+        _4 = virtual_call next as baml.iter.Iterator<Error = #1, Item = #0>(copy _5) -> [bb4];
+    }
+
+    bb4: {
+        _6 = is_type(copy _4, baml.iter.Done);
+        branch copy _6 -> [bb5, bb1];
+    }
+
+    bb5: {
+        _0 = baml.iter.Done {  };
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn baml.iter.TakeWhile.Iterable.iter(self: baml.iter.TakeWhile) -> baml.iter.Iterator<Error = E | E2, Item = T> {
+    // Locals:
+    let _0: baml.iter.Iterator<Error = E | E2, Item = T> // _0 // return
+    let _1: baml.iter.TakeWhile // self // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.iter.TakeWhile.Iterator.next(self: baml.iter.TakeWhile) -> baml.iter.Done | T {
+    // Locals:
+    let _0: baml.iter.Done | T // _0 // return
+    let _1: baml.iter.TakeWhile // self // param
+    let _2: bool
+    let _3: baml.iter.Done | T
+    let _4: baml.iter.Iterator<Error = E, Item = T>
+    let _5: bool
+    let _6: T // x
+    let _7: bool
+    let _8: (T) -> bool throws E2
+    let _9: T
+
+    bb0: {
+        _2 = copy _1.2;
+        branch copy _2 -> [bb9, bb1];
+    }
+
+    bb1: {
+        _4 = copy _1.0;
+        _3 = virtual_call next as baml.iter.Iterator<Error = #1, Item = #0>(copy _4) -> [bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _3, baml.iter.Done);
+        branch copy _5 -> [bb7, bb3];
+    }
+
+    bb3: {
+        _6 = copy _3;
+        _8 = copy _1.1;
+        _9 = copy _6;
+        _7 = call copy _8(copy _9) -> [bb4];
+    }
+
+    bb4: {
+        branch copy _7 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _1.2 = const true;
+        goto -> bb8;
+    }
+
+    bb6: {
+        _0 = copy _6;
+        goto -> bb10;
+    }
+
+    bb7: {
+        _1.2 = const true;
+        goto -> bb8;
+    }
+
+    bb8: {
+        _0 = baml.iter.Done {  };
+        goto -> bb10;
+    }
+
+    bb9: {
+        _0 = baml.iter.Done {  };
+        goto -> bb10;
+    }
+
+    bb10: {
+        return;
+    }
+}
+
+fn baml.iter.SkipWhile.Iterable.iter(self: baml.iter.SkipWhile) -> baml.iter.Iterator<Error = E | E2, Item = T> {
+    // Locals:
+    let _0: baml.iter.Iterator<Error = E | E2, Item = T> // _0 // return
+    let _1: baml.iter.SkipWhile // self // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile) -> baml.iter.Done | T {
+    // Locals:
+    let _0: baml.iter.Done | T // _0 // return
+    let _1: baml.iter.SkipWhile // self // param
+    let _2: bool
+    let _3: baml.iter.Done | T
+    let _4: baml.iter.Iterator<Error = E, Item = T>
+    let _5: bool
+    let _6: T // x
+    let _7: bool
+    let _8: bool
+    let _9: (T) -> bool throws E2
+    let _10: T
+    let _11: baml.iter.Iterator<Error = E, Item = T>
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        _2 = copy _1.2;
+        branch copy _2 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _11 = copy _1.0;
+        _0 = virtual_call next as baml.iter.Iterator<Error = #1, Item = #0>(copy _11) -> [bb9];
+    }
+
+    bb3: {
+        _4 = copy _1.0;
+        _3 = virtual_call next as baml.iter.Iterator<Error = #1, Item = #0>(copy _4) -> [bb4];
+    }
+
+    bb4: {
+        _5 = is_type(copy _3, baml.iter.Done);
+        branch copy _5 -> [bb8, bb5];
+    }
+
+    bb5: {
+        _6 = copy _3;
+        _9 = copy _1.1;
+        _10 = copy _6;
+        _8 = call copy _9(copy _10) -> [bb6];
+    }
+
+    bb6: {
+        _7 = !copy _8;
+        branch copy _7 -> [bb7, bb1];
+    }
+
+    bb7: {
+        _1.2 = const false;
+        _0 = copy _6;
+        goto -> bb9;
+    }
+
+    bb8: {
+        _1.2 = const false;
+        _0 = baml.iter.Done {  };
+        goto -> bb9;
+    }
+
+    bb9: {
         return;
     }
 }

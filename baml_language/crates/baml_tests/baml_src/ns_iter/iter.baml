@@ -576,3 +576,129 @@ function iter_array_iter() -> int[] {
 test "iter_array_iter" {
   assert.equal(iter_array_iter(), [1, 2, 3])
 }
+
+// --- bounding adapters: take / skip / take_while / skip_while ---
+
+// The motivating case: `Repeat.new(v)` defaults to `count = -1` and repeats
+// forever. Before `take` existed there was no way to make it finite, so
+// `collect()` on it could never terminate.
+function iter_take_bounds_infinite_repeat() -> int[] throws unknown {
+  baml.iter.Repeat.new(0).take(5).collect()
+}
+
+test "iter_take_bounds_infinite_repeat" {
+  assert.equal(iter_take_bounds_infinite_repeat(), [0, 0, 0, 0, 0])
+}
+
+function iter_take_stops_early() -> int[] throws unknown {
+  baml.iter.Range.new(0, 10).take(3).collect()
+}
+
+test "iter_take_stops_early" {
+  assert.equal(iter_take_stops_early(), [0, 1, 2])
+}
+
+function iter_take_more_than_available() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([1, 2]).take(5).collect()
+}
+
+test "iter_take_more_than_available" {
+  assert.equal(iter_take_more_than_available(), [1, 2])
+}
+
+function iter_take_zero() -> int[] throws unknown {
+  baml.iter.Range.new(0, 10).take(0).collect()
+}
+
+test "iter_take_zero" {
+  assert.equal(iter_take_zero(), [])
+}
+
+function iter_skip() -> int[] throws unknown {
+  baml.iter.Range.new(0, 5).skip(2).collect()
+}
+
+test "iter_skip" {
+  assert.equal(iter_skip(), [2, 3, 4])
+}
+
+function iter_skip_past_end() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([1, 2]).skip(5).collect()
+}
+
+test "iter_skip_past_end" {
+  assert.equal(iter_skip_past_end(), [])
+}
+
+function iter_skip_zero() -> int[] throws unknown {
+  baml.iter.Range.new(0, 3).skip(0).collect()
+}
+
+test "iter_skip_zero" {
+  assert.equal(iter_skip_zero(), [0, 1, 2])
+}
+
+function iter_skip_then_take() -> int[] throws unknown {
+  baml.iter.Range.new(0, 100).skip(3).take(4).collect()
+}
+
+test "iter_skip_then_take" {
+  assert.equal(iter_skip_then_take(), [3, 4, 5, 6])
+}
+
+function iter_take_while() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([1, 2, 3, 4, 1]).take_while((x: int) -> bool { x < 3 }).collect()
+}
+
+test "iter_take_while" {
+  assert.equal(iter_take_while(), [1, 2])
+}
+
+// `take_while` stops at the first false; it does not filter later elements.
+function iter_take_while_stops_not_filters() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([2, 4, 5, 6, 8]).take_while((x: int) -> bool { x % 2 == 0 }).collect()
+}
+
+test "iter_take_while_stops_not_filters" {
+  assert.equal(iter_take_while_stops_not_filters(), [2, 4])
+}
+
+function iter_take_while_none_match() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([5, 6]).take_while((x: int) -> bool { x < 0 }).collect()
+}
+
+test "iter_take_while_none_match" {
+  assert.equal(iter_take_while_none_match(), [])
+}
+
+function iter_take_while_bounds_infinite() -> int[] throws unknown {
+  baml.iter.Range.new(0, 1000000).take_while((x: int) -> bool { x < 4 }).collect()
+}
+
+test "iter_take_while_bounds_infinite" {
+  assert.equal(iter_take_while_bounds_infinite(), [0, 1, 2, 3])
+}
+
+function iter_skip_while() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([1, 2, 3, 1, 2]).skip_while((x: int) -> bool { x < 3 }).collect()
+}
+
+test "iter_skip_while" {
+  assert.equal(iter_skip_while(), [3, 1, 2])
+}
+
+function iter_skip_while_all_match() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([1, 2]).skip_while((x: int) -> bool { x < 10 }).collect()
+}
+
+test "iter_skip_while_all_match" {
+  assert.equal(iter_skip_while_all_match(), [])
+}
+
+function iter_skip_while_none_match() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([5, 1, 2]).skip_while((x: int) -> bool { x < 0 }).collect()
+}
+
+test "iter_skip_while_none_match" {
+  assert.equal(iter_skip_while_none_match(), [5, 1, 2])
+}

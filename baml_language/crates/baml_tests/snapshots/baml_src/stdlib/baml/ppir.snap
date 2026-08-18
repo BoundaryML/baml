@@ -1125,6 +1125,24 @@ class baml.iter.Repeat$stream {
   value: T | null
   count: int | null
 }
+class baml.iter.Skip {
+  source: Iterator<Item = T, Error = E>
+  remaining: int
+}
+class baml.iter.Skip$stream {
+  source: Iterator<Item = T, Error = E> | null
+  remaining: int | null
+}
+class baml.iter.SkipWhile {
+  source: Iterator<Item = T, Error = E>
+  predicate: (T) -> bool throws E2
+  skipping: bool
+}
+class baml.iter.SkipWhile$stream {
+  source: Iterator<Item = T, Error = E> | null
+  predicate: unknown
+  skipping: bool | null
+}
 class baml.iter.StepBy {
   source: Iterator<Item = T, Error = E>
   n: int
@@ -1134,6 +1152,24 @@ class baml.iter.StepBy$stream {
   source: Iterator<Item = T, Error = E> | null
   n: int | null
   first: bool | null
+}
+class baml.iter.Take {
+  source: Iterator<Item = T, Error = E>
+  remaining: int
+}
+class baml.iter.Take$stream {
+  source: Iterator<Item = T, Error = E> | null
+  remaining: int | null
+}
+class baml.iter.TakeWhile {
+  source: Iterator<Item = T, Error = E>
+  predicate: (T) -> bool throws E2
+  done: bool
+}
+class baml.iter.TakeWhile$stream {
+  source: Iterator<Item = T, Error = E> | null
+  predicate: unknown
+  done: bool | null
 }
 function baml.iter.chain(self: ?, other: Iterable<Item = Self.Item, Error = E2>) -> Iterator<Item = Self.Item, Error = Self.Error | E2>  [expr] {
   {  } baml.iter.Chain { first: self, other: other.iter(), first_done: false }
@@ -1199,6 +1235,18 @@ function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E | E2>  [expr] {
   {  } self
 }
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E | E2>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E | E2>  [expr] {
+  {  } self
+}
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
   {  } ArrayIterator.new(self)
 }
@@ -1251,6 +1299,18 @@ function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
   { if (Not self.first_done) {  } match (self.first.next()) { baml.iter.Done => { self.first_done = true }, x: T => { return x } } } self.other.next()
 }
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { if (self.remaining Le 0) { return baml.iter.Done {  } }; self.remaining Sub= 1 } self.source.next()
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { while self.remaining Gt 0 { self.remaining Sub= 1 } match (self.source.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => {  } } } self.source.next()
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { if (self.done) { return baml.iter.Done {  } }; match (self.source.next()) { baml.iter.Done => { self.done = true }, x: T => { if (self.predicate(x)) { return x }; self.done = true } } } baml.iter.Done {  }
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { while self.skipping {  } match (self.source.next()) { baml.iter.Done => { self.skipping = false; return baml.iter.Done {  } }, x: T => {  } if (Not self.predicate(x)) { self.skipping = false; return x } } } self.source.next()
+}
 function baml.iter.peek(self: ?) -> T | baml.iter.Done  [expr] {
   { if (self.has_buffer) { return self.buffer }; let v = self.source.next(); self.buffer = v; self.has_buffer = true } v
 }
@@ -1260,11 +1320,23 @@ function baml.iter.peekable(self: ?) -> baml.iter.Peekable<Self.Item, Self.Error
 function baml.iter.reduce(self: ?, fn: (A, Self.Item) -> A throws E2, initial: A) -> A  [expr] {
   { let acc: A = initial; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Self.Item => { acc = fn(acc, x) } } } acc
 }
+function baml.iter.skip(self: ?, n: int) -> Iterator<Item = Self.Item, Error = Self.Error>  [expr] {
+  {  } baml.iter.Skip { source: self, remaining: n }
+}
+function baml.iter.skip_while(self: ?, predicate: (Self.Item) -> bool throws E2) -> Iterator<Item = Self.Item, Error = Self.Error | E2>  [expr] {
+  {  } baml.iter.SkipWhile { source: self, predicate: predicate, skipping: true }
+}
 function baml.iter.some(self: ?, predicate: (Self.Item) -> bool throws E2) -> bool  [expr] {
   { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Self.Item => {  } if (predicate(x)) { return true } } } false
 }
 function baml.iter.step_by(self: ?, n: int) -> Iterator<Item = Self.Item, Error = Self.Error>  [expr] {
   {  } baml.iter.StepBy { source: self, n: n, first: true }
+}
+function baml.iter.take(self: ?, n: int) -> Iterator<Item = Self.Item, Error = Self.Error>  [expr] {
+  {  } baml.iter.Take { source: self, remaining: n }
+}
+function baml.iter.take_while(self: ?, predicate: (Self.Item) -> bool throws E2) -> Iterator<Item = Self.Item, Error = Self.Error | E2>  [expr] {
+  {  } baml.iter.TakeWhile { source: self, predicate: predicate, done: false }
 }
 
 --- <builtin>/baml/ns_json/json.baml ---

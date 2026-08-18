@@ -310,6 +310,111 @@ function iter.$init_test_ns_iter_iter(registry: testing.TestCollector) -> null {
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_take_bounds_infinite_repeat"
+    make_closure .<lambda($init_test_ns_iter_iter, 44)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_take_stops_early"
+    make_closure .<lambda($init_test_ns_iter_iter, 45)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_take_more_than_available"
+    make_closure .<lambda($init_test_ns_iter_iter, 46)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_take_zero"
+    make_closure .<lambda($init_test_ns_iter_iter, 47)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_skip"
+    make_closure .<lambda($init_test_ns_iter_iter, 48)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_skip_past_end"
+    make_closure .<lambda($init_test_ns_iter_iter, 49)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_skip_zero"
+    make_closure .<lambda($init_test_ns_iter_iter, 50)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_skip_then_take"
+    make_closure .<lambda($init_test_ns_iter_iter, 51)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_take_while"
+    make_closure .<lambda($init_test_ns_iter_iter, 52)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_take_while_stops_not_filters"
+    make_closure .<lambda($init_test_ns_iter_iter, 53)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_take_while_none_match"
+    make_closure .<lambda($init_test_ns_iter_iter, 54)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_take_while_bounds_infinite"
+    make_closure .<lambda($init_test_ns_iter_iter, 55)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_skip_while"
+    make_closure .<lambda($init_test_ns_iter_iter, 56)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_skip_while_all_match"
+    make_closure .<lambda($init_test_ns_iter_iter, 57)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.iter"
+    load_const "iter_skip_while_none_match"
+    make_closure .<lambda($init_test_ns_iter_iter, 58)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -1875,6 +1980,166 @@ function iter.iter_shadowed_param_method(source: baml.iter.Iterable<Error = neve
     return
 }
 
+function iter.iter_skip() -> int[] {
+    load_const 0
+    load_const 5
+    load_const <omitted>
+    call baml.iter.Range.new
+    load_const 2
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "skip"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_skip_past_end() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    call baml.iter.ArrayIterator.new
+    load_const 5
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "skip"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_skip_then_take() -> int[] {
+    load_const 0
+    load_const 100
+    load_const <omitted>
+    call baml.iter.Range.new
+    load_const 3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "skip"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _2
+    load_var _2
+    load_const 4
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "take"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_skip_while() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 5
+    call baml.iter.ArrayIterator.new
+    store_var _2
+    load_type never
+    load_var _2
+    make_closure .<lambda(iter_skip_while, 0)>, 0
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "skip_while"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_skip_while_all_match() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    call baml.iter.ArrayIterator.new
+    store_var _2
+    load_type never
+    load_var _2
+    make_closure .<lambda(iter_skip_while_all_match, 0)>, 0
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "skip_while"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_skip_while_none_match() -> int[] {
+    load_type int
+    load_const 5
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 3
+    call baml.iter.ArrayIterator.new
+    store_var _2
+    load_type never
+    load_var _2
+    make_closure .<lambda(iter_skip_while_none_match, 0)>, 0
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "skip_while"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_skip_zero() -> int[] {
+    load_const 0
+    load_const 3
+    load_const <omitted>
+    call baml.iter.Range.new
+    load_const 0
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "skip"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
 function iter.iter_some_every_find() -> bool {
     load_type int
     load_const 1
@@ -1946,6 +2211,184 @@ function iter.iter_step_by() -> int[] {
     load_const 2
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "step_by"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_take_bounds_infinite_repeat() -> int[] {
+    load_type int
+    load_const 0
+    load_const <omitted>
+    call baml.iter.Repeat.new
+    load_const 5
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "take"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_take_more_than_available() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    call baml.iter.ArrayIterator.new
+    load_const 5
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "take"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_take_stops_early() -> int[] {
+    load_const 0
+    load_const 10
+    load_const <omitted>
+    call baml.iter.Range.new
+    load_const 3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "take"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_take_while() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    load_const 1
+    load_type int
+    alloc_array 5
+    call baml.iter.ArrayIterator.new
+    store_var _2
+    load_type never
+    load_var _2
+    make_closure .<lambda(iter_take_while, 0)>, 0
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "take_while"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_take_while_bounds_infinite() -> int[] {
+    load_const 0
+    load_const 1000000
+    load_const <omitted>
+    call baml.iter.Range.new
+    store_var _2
+    load_type never
+    load_var _2
+    make_closure .<lambda(iter_take_while_bounds_infinite, 0)>, 0
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "take_while"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_take_while_none_match() -> int[] {
+    load_type int
+    load_const 5
+    load_const 6
+    load_type int
+    alloc_array 2
+    call baml.iter.ArrayIterator.new
+    store_var _2
+    load_type never
+    load_var _2
+    make_closure .<lambda(iter_take_while_none_match, 0)>, 0
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "take_while"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_take_while_stops_not_filters() -> int[] {
+    load_type int
+    load_const 2
+    load_const 4
+    load_const 5
+    load_const 6
+    load_const 8
+    load_type int
+    alloc_array 5
+    call baml.iter.ArrayIterator.new
+    store_var _2
+    load_type never
+    load_var _2
+    make_closure .<lambda(iter_take_while_stops_not_filters, 0)>, 0
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "take_while"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _1
+    load_var _1
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function iter.iter_take_zero() -> int[] {
+    load_const 0
+    load_const 10
+    load_const <omitted>
+    call baml.iter.Range.new
+    load_const 0
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "take"
     virtual_call nargs=2 ntypeargs=0
     store_var _1
     load_var _1
