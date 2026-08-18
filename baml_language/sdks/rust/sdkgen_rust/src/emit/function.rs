@@ -7,7 +7,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 use crate::{
-    SkipWarning, idents,
+    SkipKind, SkipWarning, idents,
     translate_ty::{self, TyCtx},
 };
 
@@ -32,6 +32,7 @@ pub(crate) fn emit(
     let fqn = name.to_string();
     if name.name().as_str().contains('$') {
         return Err(SkipWarning {
+            kind: SkipKind::Callable,
             fqn,
             reason: "companion functions ($stream, $build_request, …) are not emitted yet"
                 .to_string(),
@@ -74,6 +75,7 @@ pub(crate) fn emit_method(
     let fqn = format!("{class_name}.{method_name}");
     if method_name.contains('$') {
         return Err(SkipWarning {
+            kind: SkipKind::Callable,
             fqn,
             reason: "companion methods ($stream, $build_request, …) are not emitted yet"
                 .to_string(),
@@ -93,6 +95,7 @@ fn emit_binding(
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, SkipWarning> {
     let skip = |reason: String| SkipWarning {
+        kind: SkipKind::Callable,
         fqn: fqn.to_string(),
         reason,
     };

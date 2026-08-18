@@ -100,6 +100,19 @@ fn create_project_with_go_generator(dir: &Path, source: &str) {
     .unwrap();
 }
 
+fn create_project_with_rust_generator(dir: &Path, source: &str) {
+    create_project(dir, source);
+    std::fs::write(
+        dir.join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.rust_client]\n\
+         output_type = \"rust\"\n\
+         output_dir = \"generated\"\n\
+         naming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
+}
+
 // ============================================================================
 // Tests for `baml check` exit codes
 // ============================================================================
@@ -286,6 +299,72 @@ fn generate_valid_project_returns_zero_exit_code() {
     assert!(
         stderr.contains("Compiling 1 file(s)"),
         "`baml generate` should keep compile progress, got: {stderr}",
+    );
+}
+
+#[test]
+fn generate_rust_keeps_llm_functions_with_implicit_failure_contract() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project_with_rust_generator(
+        tmp.path(),
+        r#"
+class Thing {
+  name string
+}
+
+function ProbeFn(text: string) -> Thing {
+  client: "openai/gpt-4o-mini"
+  prompt: `Return a Thing for ${text}. ${ctx.output_format}`
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        output.status.success(),
+        "Rust generation failed: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let generated = std::fs::read_to_string(tmp.path().join("generated/baml_sdk/src/lib.rs"))
+        .expect("Rust SDK root should be generated");
+    assert!(
+        generated.contains("pub fn ProbeFn("),
+        "generated SDK:\n{generated}"
+    );
+    assert!(
+        generated.contains("NetworkFailure") && generated.contains("ToolFailedError"),
+        "the implicit Failure contract should remain typed:\n{generated}"
+    );
+}
+
+#[test]
+fn generate_rust_fails_before_writing_a_partial_client() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project_with_rust_generator(
+        tmp.path(),
+        "function unsupported(value: image) -> image { value }\n",
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert_eq!(
+        output.status.code(),
+        Some(4),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Rust SDK generation skipped 1 user callable(s)"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        !tmp.path().join("generated").exists(),
+        "a failed generation must not write a partial SDK"
     );
 }
 

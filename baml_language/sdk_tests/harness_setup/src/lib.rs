@@ -142,6 +142,8 @@ pub type UserBamlFile = (PathBuf, String);
 pub struct LoadedFixture {
     pub baml_src: PathBuf,
     pub pool: SymbolPool,
+    pub interface_implementors:
+        std::collections::HashMap<baml_codegen_types::Name, Vec<baml_codegen_types::Ty>>,
     pub user_baml_files: Vec<UserBamlFile>,
     pub baml_bytecode: Vec<u8>,
 }
@@ -229,6 +231,7 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     }
 
     let pool = baml_project::build_symbol_pool(&db);
+    let interface_implementors = baml_project::build_interface_implementors(&db);
     let program = db
         .get_bytecode()
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode compilation failed: {e:?}"));
@@ -246,6 +249,7 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     LoadedFixture {
         baml_src: canonical,
         pool,
+        interface_implementors,
         user_baml_files,
         baml_bytecode,
     }

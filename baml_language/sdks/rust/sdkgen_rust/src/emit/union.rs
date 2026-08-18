@@ -16,7 +16,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::{
-    SkipWarning, idents,
+    SkipKind, SkipWarning, idents,
     translate_ty::{self, TyCtx},
     unions::{UnionArmKind, UnionEnum},
 };
@@ -57,6 +57,7 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
         match &arm.kind {
             UnionArmKind::Payload(ty) => {
                 let payload = translate_ty::translate(ty, ctx).map_err(|u| SkipWarning {
+                    kind: SkipKind::Type,
                     fqn: union_enum.rust_name.clone(),
                     reason: format!(
                         "generator bug: registered union arm failed to translate: {}",

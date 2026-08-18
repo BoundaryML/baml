@@ -10,7 +10,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::{
-    SkipWarning, idents,
+    SkipKind, SkipWarning, idents,
     translate_ty::{self, TyCtx},
 };
 
@@ -26,6 +26,7 @@ pub(crate) fn emit(
 ) -> Result<TokenStream, SkipWarning> {
     let ident = idents::ident(name.name().as_str());
     let rhs = translate_ty::translate(&alias.resolves_to, ctx).map_err(|u| SkipWarning {
+        kind: SkipKind::Type,
         fqn: name.to_string(),
         reason: format!(
             "generator bug: analysis accepted this alias but translation failed: {}",

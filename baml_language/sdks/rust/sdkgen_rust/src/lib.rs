@@ -39,7 +39,9 @@ mod effect_rename;
 mod emit;
 mod host_types;
 mod idents;
+mod interface_lowering;
 mod routing;
+mod throws_lowering;
 mod translate_ty;
 mod unions;
 
@@ -70,10 +72,20 @@ pub struct RustGenOptions {
 /// SDK cannot represent yet (media, non-null unions, generics, …).
 #[derive(Debug)]
 pub struct SkipWarning {
+    /// Whether the skipped symbol is callable. The CLI treats skipped user
+    /// callables as generation failures while retaining soft skips for types
+    /// and compiler-generated companions.
+    pub kind: SkipKind,
     /// Fully qualified BAML name of the skipped symbol.
     pub fqn: String,
     /// Human-readable reason, e.g. `unsupported type: media`.
     pub reason: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkipKind {
+    Callable,
+    Type,
 }
 
 /// Contents of one generated file. Nearly everything is text; the
@@ -146,7 +158,27 @@ pub fn to_source_code_with_bytecode(
     baml_bytecode: &[u8],
     options: &RustGenOptions,
 ) -> Generated {
-    to_source_code_with_optional_metadata(pool, baml_bytecode, None, options)
+    to_source_code_with_optional_metadata(pool, &HashMap::new(), baml_bytecode, None, options)
+}
+
+/// Generate a Rust SDK with closed-world interface implementor information.
+///
+/// The compiler supplies this side table so Rust can project a non-generic
+/// interface to an enum of its concrete implementors without changing the
+/// shared codegen IR seen by languages that erase interfaces.
+pub fn to_source_code_with_bytecode_and_interface_implementors(
+    pool: &SymbolPool,
+    interface_implementors: &HashMap<baml_codegen_types::Name, Vec<baml_codegen_types::Ty>>,
+    baml_bytecode: &[u8],
+    options: &RustGenOptions,
+) -> Generated {
+    to_source_code_with_optional_metadata(
+        pool,
+        interface_implementors,
+        baml_bytecode,
+        None,
+        options,
+    )
 }
 
 pub fn to_source_code_with_bytecode_and_metadata(
@@ -155,11 +187,34 @@ pub fn to_source_code_with_bytecode_and_metadata(
     embedded_baml_toml: &str,
     options: &RustGenOptions,
 ) -> Generated {
-    to_source_code_with_optional_metadata(pool, baml_bytecode, Some(embedded_baml_toml), options)
+    to_source_code_with_optional_metadata(
+        pool,
+        &HashMap::new(),
+        baml_bytecode,
+        Some(embedded_baml_toml),
+        options,
+    )
+}
+
+pub fn to_source_code_with_bytecode_and_metadata_and_interface_implementors(
+    pool: &SymbolPool,
+    interface_implementors: &HashMap<baml_codegen_types::Name, Vec<baml_codegen_types::Ty>>,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    options: &RustGenOptions,
+) -> Generated {
+    to_source_code_with_optional_metadata(
+        pool,
+        interface_implementors,
+        baml_bytecode,
+        Some(embedded_baml_toml),
+        options,
+    )
 }
 
 fn to_source_code_with_optional_metadata(
     pool: &SymbolPool,
+    interface_implementors: &HashMap<baml_codegen_types::Name, Vec<baml_codegen_types::Ty>>,
     baml_bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
     options: &RustGenOptions,
@@ -174,6 +229,14 @@ fn to_source_code_with_optional_metadata(
     // that union's variant all read `CbError` rather than `__effect_param_0`.
     let pool = effect_rename::rename_effect_params(pool);
     let pool = &host_types::lower_unrepresentable_literals(&pool);
+    let pool = &interface_lowering::lower(pool, interface_implementors);
+
+    // Error::Runtime preserves thrown values outside the generated typed
+    // contract. Narrow only nominal throws arms whose class/type could not be
+    // emitted, so one opaque stdlib error does not suppress an otherwise
+    // representable function (or its typed ai.errors.Failure variants).
+    let (preliminary_analysis, _) = analyze::analyze(pool);
+    let pool = &throws_lowering::lower(pool, &preliminary_analysis);
 
     let (analysis, mut warnings) = analyze::analyze(pool);
     let union_registry = unions::collect(pool, &analysis);
@@ -915,6 +978,139 @@ mod tests {
         assert!(
             lib.contains("/// are never written back to the caller's values.\n///\n/// # Errors"),
             "{lib}"
+        );
+    }
+
+    #[test]
+    fn closed_interface_throws_lower_to_concrete_error_union() {
+        let failure = name("ai", &["errors"], "Failure");
+        let network = name("ai", &["errors"], "NetworkFailure");
+        let tool = name("ai", &["errors"], "ToolFailedError");
+        let probe = name("user", &[], "ProbeFn");
+        let interface_ty = Ty::Interface(
+            failure.clone(),
+            Vec::new(),
+            Vec::new(),
+            baml_base::TyAttr::EMPTY,
+        );
+        let nullable_failure = Ty::Union(
+            vec![
+                interface_ty.clone(),
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let mut function = nullary_string_fn(&probe);
+        function.throws = Some(interface_ty);
+        let pool = SymbolPool::from([
+            (
+                network.clone(),
+                class_symbol(&network, Vec::new(), Vec::new(), Vec::new()),
+            ),
+            (
+                tool.clone(),
+                class_symbol(
+                    &tool,
+                    vec![baml_codegen_types::ClassProperty {
+                        name: baml_base::Name::new("cause"),
+                        docstring: None,
+                        ty: nullable_failure,
+                    }],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (probe, Symbol::Function(function)),
+        ]);
+        let implementors = HashMap::from([(
+            failure,
+            vec![
+                Ty::Class(network, Vec::new(), baml_base::TyAttr::EMPTY),
+                Ty::Class(tool, Vec::new(), baml_base::TyAttr::EMPTY),
+            ],
+        )]);
+
+        let generated = to_source_code_with_bytecode_and_interface_implementors(
+            &pool,
+            &implementors,
+            &[],
+            &options(),
+        );
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat_lib = flat(lib);
+        assert!(
+            flat_lib.contains("pubenumNetworkFailureOrToolFailedError"),
+            "{lib}"
+        );
+        assert!(
+            flat_lib.contains("Error<crate::NetworkFailureOrToolFailedError>"),
+            "{lib}"
+        );
+        let errors = text(&generated, "src/vendor/ai/errors/mod.rs");
+        let flat_errors = flat(errors);
+        assert!(
+            flat_errors.contains("pubcause:::std::option::Option<"),
+            "{errors}"
+        );
+        assert!(
+            flat_errors.contains(
+                "::std::boxed::Box<crate::vendor::ai::errors::NetworkFailureOrToolFailedError>"
+            ),
+            "{errors}"
+        );
+    }
+
+    #[test]
+    fn unrepresentable_nominal_throws_arms_use_runtime_fallback() {
+        let typed = name("user", &[], "TypedError");
+        let opaque = name("baml", &["errors"], "UnknownError");
+        let call = name("user", &[], "call");
+        let mut function = nullary_string_fn(&call);
+        function.throws = Some(Ty::Union(
+            vec![
+                Ty::Class(typed.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                Ty::Class(opaque.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+            ],
+            baml_base::TyAttr::EMPTY,
+        ));
+        let pool = SymbolPool::from([
+            (
+                typed.clone(),
+                class_symbol(&typed, Vec::new(), Vec::new(), Vec::new()),
+            ),
+            (
+                opaque.clone(),
+                class_symbol(
+                    &opaque,
+                    vec![baml_codegen_types::ClassProperty {
+                        name: baml_base::Name::new("data"),
+                        docstring: None,
+                        ty: Ty::BuiltinUnknown {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    }],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (call, Symbol::Function(function)),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
+        assert_eq!(generated.warnings[0].fqn, "baml.errors.UnknownError");
+        assert_eq!(generated.warnings[0].kind, SkipKind::Type);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            flat(lib).contains("Error<crate::TypedError>"),
+            "typed representable errors should remain in the contract:\n{lib}"
+        );
+        assert!(
+            !lib.contains("UnknownError"),
+            "opaque errors are preserved by Error::Runtime, not a generated type:\n{lib}"
         );
     }
 

@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
 
-use crate::{SkipWarning, routing};
+use crate::{SkipKind, SkipWarning, routing};
 
 /// Results of [`analyze`]. Emitters treat this as read-only context.
 pub(crate) struct Analysis {
@@ -75,6 +75,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             Symbol::Enum(_) => {
                 if name.name().as_str().contains('$') {
                     warnings.push(SkipWarning {
+                        kind: SkipKind::Type,
                         fqn: name.to_string(),
                         reason: "companion types ($stream, …) are not emitted yet".to_string(),
                     });
@@ -100,6 +101,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         // same filter the function emitter applies.
         if name.name().as_str().contains('$') {
             warnings.push(SkipWarning {
+                kind: SkipKind::Type,
                 fqn: name.to_string(),
                 reason: "companion types ($stream, …) are not emitted yet".to_string(),
             });
@@ -121,6 +123,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         });
         match unsupported {
             Some((field, reason)) => warnings.push(SkipWarning {
+                kind: SkipKind::Type,
                 fqn: name.to_string(),
                 reason: format!("field `{field}`: {reason}"),
             }),
@@ -139,6 +142,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 }
                 if let Some(unused) = class_params.iter().find(|param| !used.contains(**param)) {
                     warnings.push(SkipWarning {
+                        kind: SkipKind::Type,
                         fqn: name.to_string(),
                         reason: format!(
                             "generic type parameter `{unused}` is not used in a non-recursive \
@@ -161,6 +165,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     for (name, alias) in &aliases {
         if name.name().as_str().contains('$') {
             warnings.push(SkipWarning {
+                kind: SkipKind::Type,
                 fqn: name.to_string(),
                 reason: "companion types ($stream, …) are not emitted yet".to_string(),
             });
@@ -168,6 +173,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         }
         if alias.recursive {
             warnings.push(SkipWarning {
+                kind: SkipKind::Type,
                 fqn: name.to_string(),
                 reason: "recursive type aliases are not representable as a plain Rust `type` yet"
                     .to_string(),
@@ -179,6 +185,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         // scope, so no TypeVar is ever in scope for their right-hand side.
         match field_deps(&alias.resolves_to, &[], &mut alias_deps) {
             Err(reason) => warnings.push(SkipWarning {
+                kind: SkipKind::Type,
                 fqn: name.to_string(),
                 reason,
             }),
@@ -203,6 +210,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 .find(|dep| !alive.contains(dep) && !enums.contains(dep))
             {
                 warnings.push(SkipWarning {
+                    kind: SkipKind::Type,
                     fqn: name.to_string(),
                     reason: format!("references skipped or unknown type `{dead}`"),
                 });
