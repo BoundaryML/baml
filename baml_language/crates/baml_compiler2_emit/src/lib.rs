@@ -1919,9 +1919,14 @@ fn decompose_units_after_prefix(
             // No regular functions at all (e.g. a dirty-only emit whose sole
             // tail-producing file declares only a top-level `let`): the tail
             // begins right after the class/enum/interface definition prefix.
+            // Count only the dirty region's alias objects: the prefix's
+            // (builtins' and prior submissions' recursive aliases) are already
+            // inside `prefix_objects`, and double-counting them pushes
+            // `tail_start` past the real `$init` tail.
             let n_aliases = program
                 .objects
                 .iter()
+                .skip(prefix_objects)
                 .filter(|o| matches!(o, Object::TypeAlias(_)))
                 .count();
             tail_start = prefix_objects

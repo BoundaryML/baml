@@ -1796,6 +1796,11 @@ fn graft_session_submission(
     // values and functions from older submissions retain their original mint.
     runtime.type_values.extend(new_type_values);
     runtime.diagnostics.clone_from(&artifact.diagnostics);
+    // The maps above now hold fresh young pointers inside a package object that
+    // may itself have been promoted long ago. Without dirtying its card, a minor
+    // collection would never rescan it and the new declarations would be
+    // collected out from under the session.
+    vm.tlab.heap().conservative_write_barrier(package_ptr);
     Ok(actions)
 }
 

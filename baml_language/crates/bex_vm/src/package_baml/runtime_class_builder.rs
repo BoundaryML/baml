@@ -180,10 +180,19 @@ fn store_instance_field(
     index: usize,
     field: Value,
 ) -> Result<(), String> {
-    vm.as_instance(&value)
-        .map_err(|_| "expected an instance".to_string())?
+    let instance = vm
+        .as_instance(&value)
+        .map_err(|_| "expected an instance".to_string())?;
+    instance
         .try_store_field(index, field)
-        .map_err(|_| "native instance field index is invalid".to_string())
+        .map_err(|_| "native instance field index is invalid".to_string())?;
+    // A builder instance can be arbitrarily old by the time `build()` stores the
+    // freshly minted `Object::Type` into it; dirty its card so a minor collection
+    // rescans the instance instead of dropping the young type value.
+    if let Some(instance_ptr) = value.as_object_ptr() {
+        vm.tlab.heap().write_barrier(instance_ptr, field);
+    }
+    Ok(())
 }
 
 fn replace_array_field(

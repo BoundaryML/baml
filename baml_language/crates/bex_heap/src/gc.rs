@@ -668,6 +668,7 @@ impl BexHeap {
                 worklist.extend(package.enums.values().copied());
                 worklist.extend(package.interfaces.values().copied());
                 worklist.extend(package.functions.values().copied());
+                worklist.extend(package.type_aliases.values().copied());
                 worklist.extend(package.mounted_types.values().copied());
                 worklist.extend(package.test_init);
                 for (interface, rules) in &package.impl_rules {
@@ -723,6 +724,9 @@ impl BexHeap {
                 }
                 for field in &class.fields {
                     if let Some(type_value) = &field.runtime_type {
+                        if !type_value.owner.as_ptr().is_null() {
+                            worklist.push(type_value.owner);
+                        }
                         worklist.extend(type_value.defs().classes.values().copied());
                         worklist.extend(type_value.defs().enums.values().copied());
                     }
@@ -748,8 +752,6 @@ impl BexHeap {
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Class(_)
-            | Object::Enum(_)
             | Object::TypeAlias(_)
             | Object::Interface(_)
             | Object::ImplRule(_)
@@ -892,6 +894,7 @@ impl BexHeap {
                     .chain(package.enums.values_mut())
                     .chain(package.interfaces.values_mut())
                     .chain(package.functions.values_mut())
+                    .chain(package.type_aliases.values_mut())
                     .chain(package.mounted_types.values_mut())
                 {
                     if let Some(&new_ptr) = forwarding.get(ptr) {
@@ -996,6 +999,10 @@ impl BexHeap {
                     let Some(type_value) = &mut field.runtime_type else {
                         continue;
                     };
+                    type_value.owner = forwarding
+                        .get(&type_value.owner)
+                        .copied()
+                        .unwrap_or(type_value.owner);
                     for ptr in type_value.defs_mut().classes.values_mut() {
                         *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
                     }
@@ -1027,8 +1034,6 @@ impl BexHeap {
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Class(_)
-            | Object::Enum(_)
             | Object::TypeAlias(_)
             | Object::Interface(_)
             | Object::ImplRule(_)
@@ -1292,6 +1297,7 @@ impl BexHeap {
                     .chain(package.enums.values())
                     .chain(package.interfaces.values())
                     .chain(package.functions.values())
+                    .chain(package.type_aliases.values())
                     .chain(package.mounted_types.values())
                     .copied();
                 worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
@@ -1392,6 +1398,11 @@ impl BexHeap {
                 }
                 for field in &class.fields {
                     if let Some(type_value) = &field.runtime_type {
+                        if !type_value.owner.as_ptr().is_null()
+                            && self.generation_of(type_value.owner).is_young()
+                        {
+                            worklist.push(type_value.owner);
+                        }
                         worklist.extend(
                             type_value
                                 .defs()
@@ -1430,8 +1441,6 @@ impl BexHeap {
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Class(_)
-            | Object::Enum(_)
             | Object::TypeAlias(_)
             | Object::Interface(_)
             | Object::ImplRule(_)

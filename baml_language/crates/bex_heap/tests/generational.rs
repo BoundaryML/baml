@@ -11,9 +11,10 @@ use baml_type::{Name, QualifiedTypeName, RealizedTy, TyAttr};
 use bex_external_types::WeakHeapRef;
 use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
-    Class, GenericFunction, GlobalIndex, Object,
+    Class, ClassField, GenericFunction, GlobalIndex, Object,
     types::{
-        DynTypeDefs, LocalName, MintId, Package, RuntimePackage, RuntimeTypeProvenance, TypeValue,
+        DynTypeDefs, LocalName, MintId, Package, RuntimePackage, RuntimeTypeProvenance,
+        TypeAliasDef, TypeValue,
     },
 };
 use indexmap::IndexMap;
@@ -1029,5 +1030,142 @@ fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
     assert_eq!(
         s, "B_contents",
         "B must survive two minor GCs via the post-promotion card mark"
+    );
+}
+
+/// A helper: an otherwise-empty static-shaped package.
+fn empty_package() -> Package {
+    Package {
+        exported_names: Vec::new(),
+        classes: IndexMap::new(),
+        enums: IndexMap::new(),
+        interfaces: IndexMap::new(),
+        impl_rules: IndexMap::new(),
+        functions: IndexMap::new(),
+        type_aliases: IndexMap::new(),
+        interface_blob: Vec::new(),
+        test_init: None,
+        mounted_types: IndexMap::new(),
+        runtime: None,
+        session: None,
+    }
+}
+
+/// A session graft inserts runtime `Object::TypeAlias` pointers into
+/// `Package.type_aliases`; the collector must keep them alive and repoint the
+/// map entry when the alias moves.
+#[test]
+fn package_type_aliases_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let alias_name = QualifiedTypeName::local(Name::new("SessionAlias"));
+    let alias_ptr = tlab.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
+        name: alias_name.clone(),
+        type_tag: baml_type::typetag::TypeTag::of_head("SessionAlias"),
+        definition: RealizedTy::int(),
+    })));
+    let mut package = empty_package();
+    package.type_aliases.insert(
+        LocalName {
+            namespace: Vec::new(),
+            name: Name::new("SessionAlias"),
+        },
+        alias_ptr,
+    );
+    let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
+
+    // Root only the package: the alias must survive through the map alone, and
+    // the entry must track the alias across two moves plus a compaction.
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[package_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(stats.live_count, 2, "package and alias should both survive");
+    let Object::Package(package) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the package")
+    };
+    let forwarded = *package
+        .type_aliases
+        .values()
+        .next()
+        .expect("alias entry was lost");
+    assert_ne!(
+        forwarded, alias_ptr,
+        "the alias moved, so the entry must be repointed"
+    );
+    let Object::TypeAlias(alias) = (unsafe { forwarded.get() }) else {
+        panic!("type_aliases entry does not point at a TypeAlias")
+    };
+    assert_eq!(alias.name, alias_name);
+}
+
+/// A field-level exact-operand `TypeValue` carries an `owner` package edge; the
+/// collector must trace and forward it like the class-level provenance owner.
+#[test]
+fn field_level_type_value_owner_is_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
+    let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
+        name: QualifiedTypeName::local(Name::new("FieldOwner")),
+        fields: vec![ClassField {
+            name: "value".to_string(),
+            field_type: baml_type::RuntimeTy::Int {
+                attr: TyAttr::default(),
+            },
+            field_template: baml_type::TyTemplate::from(RealizedTy::int()),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::new(),
+            skip: false,
+            runtime_type: Some(TypeValue::runtime(
+                RealizedTy::int(),
+                MintId::Runtime(7),
+                package_ptr,
+            )),
+        }],
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+        type_tag: baml_type::typetag::TypeTag::of_head("FieldOwner"),
+        ty_attr: TyAttr::default(),
+        has_cleanup: false,
+        generic_param_count: 0,
+        runtime_type: None,
+    })));
+
+    // Root only the class: the package must stay alive purely through the
+    // field-level TypeValue.owner edge, across moves and a compaction.
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[class_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(
+        stats.live_count, 2,
+        "class and owner package should both survive"
+    );
+    let Object::Class(class) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the class")
+    };
+    let owner = class.fields[0]
+        .runtime_type
+        .as_ref()
+        .expect("field runtime type was lost")
+        .owner;
+    assert_ne!(
+        owner, package_ptr,
+        "the package moved, so owner must be repointed"
+    );
+    assert!(
+        matches!(unsafe { owner.get() }, Object::Package(_)),
+        "field-level owner does not point at the package"
     );
 }

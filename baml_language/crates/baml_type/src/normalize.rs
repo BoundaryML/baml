@@ -845,7 +845,10 @@ impl<H: Head> NormalTy<H> {
         crate::type_kind::TypeKind::ALL.iter().any(|kind| {
             let name = crate::QualifiedTypeName::new(
                 crate::Name::new("baml"),
-                vec![crate::Name::new("reflect"), crate::Name::new(kind.namespace())],
+                vec![
+                    crate::Name::new("reflect"),
+                    crate::Name::new(kind.namespace()),
+                ],
                 crate::Name::new("Type"),
             );
             ctx.head_lookup(&name).is_some_and(|known| &known == head)
@@ -867,9 +870,7 @@ impl<H: Head> NormalTy<H> {
             NormalTy::Type => Category::Type,
             NormalTy::Resource => Category::Resource,
             NormalTy::PromptAst => Category::PromptAst,
-            NormalTy::Class(name, _) if Self::head_is_type_kind_class(name, ctx) => {
-                Category::Type
-            }
+            NormalTy::Class(name, _) if Self::head_is_type_kind_class(name, ctx) => Category::Type,
             NormalTy::Class(..) => Category::Class,
             NormalTy::List(_) => Category::List,
             NormalTy::Map { .. } => Category::Map,
