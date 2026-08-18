@@ -16243,11 +16243,11 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
          61    cmp_op ==                          
          62    pop_jump_if_false +2               (to 64)
          63    jump +8                            (to 71)
-         64    load_const 12                      (0)
+         64    load_type 12                       
          65    load_var 10                        (resp)
          66    load_field 0                       (candidates)
-         67    make_bound_method 3                
-         68    call_indirect                      
+         67    load_const 13                      (0)
+         68    call 3 ntypeargs=1                 (baml.Array.at)
          69    store_var 17                       (cand)
          70    jump +3                            (to 73)
          71    load_const 6                       (null)
@@ -16278,19 +16278,19 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
          95    load_const 6                       (null)
          96    cmp_op ==                          
          97    pop_jump_if_false +4               (to 101)
-         98    load_type 13                       
+         98    load_type 14                       
          99    alloc_array 0                      
          100   store_var 19                       (_43)
          101   load_var 19                        (_43)
          102   store_var_load_var 18              (parts)
 
-  994    103   load_type 14                       
-         104   load_const 15                      ("iter")
+  994    103   load_type 15                       
+         104   load_const 16                      ("iter")
          105   virtual_call nargs=1 ntypeargs=0   
          106   store_var 20                       (_56)
          107   load_var 20                        (_56)
-         108   load_type 16                       
-         109   load_const 17                      ("next")
+         108   load_type 17                       
+         109   load_const 18                      ("next")
          110   virtual_call nargs=1 ntypeargs=0   
          111   store_var 21                       (_57)
          112   load_var 21                        (_57)
@@ -16303,7 +16303,7 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
   995    118   load_field 0                       (text)
          119   store_var 23                       (_62)
          120   load_var 23                        (_62)
-         121   narrow_bind 18 23                  
+         121   narrow_bind 19 23                  
          122   pop_jump_if_false -15              (to 107)
          123   load_var 23                        (_62)
          124   store_var 24                       (t)
@@ -16314,7 +16314,7 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
          128   load_const 6                       (null)
          129   cmp_op ==                          
          130   pop_jump_if_false +3               (to 133)
-         131   load_const 19                      (false)
+         131   load_const 20                      (false)
          132   store_var 25                       (_65)
          133   load_var 25                        (_65)
          134   pop_jump_if_false +2               (to 136)
@@ -16340,7 +16340,7 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
          152   load_const 6                       (null)
          153   cmp_op ==                          
          154   pop_jump_if_false +3               (to 157)
-         155   load_const 20                      ("")
+         155   load_const 21                      ("")
          156   store_var 27                       (_73)
          157   load_var 27                        (_73)
          158   store_var 26                       (finish)
@@ -16362,7 +16362,7 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
          173   store_var 28                       (blocked)
 
   1008   174   load_var 26                        (finish)
-         175   load_const 21                      ("MAX_TOKENS")
+         175   load_const 22                      ("MAX_TOKENS")
          176   cmp_op ==                          
          177   pop_jump_if_false +2               (to 179)
          178   jump +25                           (to 203)
@@ -16377,7 +16377,7 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
          186   jump +13                           (to 199)
 
   1012   187   load_var 26                        (finish)
-         188   load_const 22                      ("")
+         188   load_const 23                      ("")
          189   cmp_op !=                          
          190   pop_jump_if_false +2               (to 192)
          191   jump +4                            (to 195)
@@ -16387,19 +16387,19 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
 
   1012   194   jump +12                           (to 206)
 
-  1013   195   load_const 12                      (ai.content.StopReason.Complete)
+  1013   195   load_const 13                      (ai.content.StopReason.Complete)
          196   alloc_variant 774                  (ai.content.StopReason)
          197   store_var 29                       (stop)
 
   1012   198   jump +8                            (to 206)
 
-  1011   199   load_const 23                      (ai.content.StopReason.Refused)
+  1011   199   load_const 24                      (ai.content.StopReason.Refused)
          200   alloc_variant 774                  (ai.content.StopReason)
          201   store_var 29                       (stop)
 
   1010   202   jump +4                            (to 206)
 
-  1009   203   load_const 24                      (ai.content.StopReason.MaxTokens)
+  1009   203   load_const 25                      (ai.content.StopReason.MaxTokens)
          204   alloc_variant 774                  (ai.content.StopReason)
          205   store_var 29                       (stop)
 
@@ -16477,7 +16477,7 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
          266   load_const 6                       (null)
          267   cmp_op ==                          
          268   pop_jump_if_false +3               (to 271)
-         269   load_const 12                      (0)
+         269   load_const 13                      (0)
          270   store_var 15                       (_30)
          271   load_var 15                        (_30)
          272   store_var 14                       (_29)
@@ -16491,7 +16491,7 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
          280   store_var 16                       (_34)
          281   load_var2 2 14                     
          282   load_var 16                        (_34)
-         283   load_const 25                      (<omitted>)
+         283   load_const 26                      (<omitted>)
          284   call 987 ntypeargs=0               (ai.errors.classify_http)
          285   throw                              
 
@@ -17714,23 +17714,24 @@ function google.internal._vertex_key_in_query(c: google.VertexClient) -> bool {
        2    load_const 0           (null)
        3    cmp_op ==              
        4    pop_jump_if_false +2   (to 6)
-       5    jump +8                (to 13)
-       6    load_const 1           ("key")
-       7    load_var 1             (c)
-       8    load_field 9           (query_params)
-       9    make_bound_method 38   
-       10   call_indirect          
-       11   store_var 3            (_2)
-       12   jump +3                (to 15)
-       13   load_const 0           (null)
-       14   store_var 3            (_2)
-       15   load_var 3             (_2)
-       16   load_const 0           (null)
-       17   call 679 ntypeargs=0   (baml.ops.equals_equals)
-       18   unary_op !             
-       19   store_var 2            (_0)
-       20   load_var 2             (_0)
-       21   return                 
+       5    jump +9                (to 14)
+       6    load_type 1            
+       7    load_type 1            
+       8    load_var 1             (c)
+       9    load_field 9           (query_params)
+       10   load_const 2           ("key")
+       11   call 38 ntypeargs=2    (baml.Map.get)
+       12   store_var 3            (_2)
+       13   jump +3                (to 16)
+       14   load_const 0           (null)
+       15   store_var 3            (_2)
+       16   load_var 3             (_2)
+       17   load_const 0           (null)
+       18   call 679 ntypeargs=0   (baml.ops.equals_equals)
+       19   unary_op !             
+       20   store_var 2            (_0)
+       21   load_var 2             (_0)
+       22   return                 
 }
 
 function google.internal._vertex_method(c: google.VertexClient, stream: bool) -> string {
@@ -18794,11 +18795,11 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         23    cmp_op ==                          
         24    pop_jump_if_false +2               (to 26)
         25    jump +8                            (to 33)
-        26    load_const 5                       (0)
+        26    load_type 7                        
         27    load_var 1                         (resp)
         28    load_field 0                       (candidates)
-        29    make_bound_method 3                
-        30    call_indirect                      
+        29    load_const 5                       (0)
+        30    call 3 ntypeargs=1                 (baml.Array.at)
         31    store_var 13                       (cand)
         32    jump +3                            (to 35)
         33    load_const 6                       (null)
@@ -18817,7 +18818,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         45    load_const 6                       (null)
         46    cmp_op ==                          
         47    pop_jump_if_false +3               (to 50)
-        48    load_const 7                       ("")
+        48    load_const 8                       ("")
         49    store_var 15                       (_28)
         50    load_var 15                        (_28)
         51    store_var 14                       (finish)
@@ -18847,23 +18848,23 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         74    load_const 6                       (null)
         75    cmp_op ==                          
         76    pop_jump_if_false +4               (to 80)
-        77    load_type 8                        
+        77    load_type 9                        
         78    alloc_array 0                      
         79    store_var 17                       (_35)
         80    load_var 17                        (_35)
         81    store_var_load_var 16              (parts)
 
-  851   82    load_type 9                        
-        83    load_const 10                      ("iter")
+  851   82    load_type 10                       
+        83    load_const 11                      ("iter")
         84    virtual_call nargs=1 ntypeargs=0   
         85    store_var 18                       (_48)
         86    load_var 18                        (_48)
-        87    load_type 11                       
-        88    load_const 12                      ("next")
+        87    load_type 12                       
+        88    load_const 13                      ("next")
         89    virtual_call nargs=1 ntypeargs=0   
         90    store_var 19                       (_49)
         91    load_var 19                        (_49)
-        92    is_type 13                         
+        92    is_type 14                         
         93    pop_jump_if_false +2               (to 95)
         94    jump +124                          (to 218)
         95    load_var 19                        (_49)
@@ -18872,7 +18873,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
   852   97    load_field 3                       (functionCall)
         98    store_var 21                       (_54)
         99    load_var 21                        (_54)
-        100   narrow_bind 14 21                  
+        100   narrow_bind 15 21                  
         101   pop_jump_if_false +2               (to 103)
         102   jump +66                           (to 168)
 
@@ -18880,7 +18881,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         104   load_field 4                       (inlineData)
         105   store_var 29                       (_76)
         106   load_var 29                        (_76)
-        107   narrow_bind 15 29                  
+        107   narrow_bind 16 29                  
         108   pop_jump_if_false +2               (to 110)
         109   jump +32                           (to 141)
 
@@ -18888,7 +18889,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         111   load_field 0                       (text)
         112   store_var 35                       (_90)
         113   load_var 35                        (_90)
-        114   narrow_bind 16 35                  
+        114   narrow_bind 17 35                  
         115   pop_jump_if_false -29              (to 86)
         116   load_var 35                        (_90)
         117   store_var 36                       (t)
@@ -18927,7 +18928,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         145   load_const 6                       (null)
         146   cmp_op ==                          
         147   pop_jump_if_false +3               (to 150)
-        148   load_const 17                      ("image/png")
+        148   load_const 18                      ("image/png")
         149   store_var 33                       (_81)
         150   load_var 33                        (_81)
         151   store_var 32                       (_80)
@@ -18937,7 +18938,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         155   load_const 6                       (null)
         156   cmp_op ==                          
         157   pop_jump_if_false +3               (to 160)
-        158   load_const 18                      ("")
+        158   load_const 19                      ("")
         159   store_var 34                       (_85)
         160   load_var2 32 34                    
         161   call 1247 ntypeargs=0              (google.internal._gm_output_media)
@@ -18952,8 +18953,8 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
   852   168   load_var 21                        (_54)
         169   store_var 22                       (fc)
 
-  853   170   load_type 19                       
-        171   load_type 20                       
+  853   170   load_type 20                       
+        171   load_type 21                       
         172   alloc_map 0                        
         173   store_var 23                       (args)
 
@@ -18961,7 +18962,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         175   load_field 1                       (args)
         176   store_var 24                       (_58)
         177   load_var 24                        (_58)
-        178   narrow_bind 21 24                  
+        178   narrow_bind 22 24                  
         179   pop_jump_if_false +5               (to 184)
         180   load_var 24                        (_58)
         181   store_var 25                       (a)
@@ -18969,18 +18970,18 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
   855   182   load_var 25                        (a)
         183   store_var 23                       (args)
 
-  859   184   load_type 22                       
+  859   184   load_type 23                       
         185   load_var 2                         (seq)
         186   call 145 ntypeargs=1               (baml.String.from)
         187   store_var 27                       (_66)
-        188   load_type 22                       
+        188   load_type 23                       
         189   load_var 12                        (call_index)
         190   call 145 ntypeargs=1               (baml.String.from)
         191   store_var 28                       (_68)
-        192   load_const 23                      ("call_")
+        192   load_const 24                      ("call_")
         193   load_var 27                        (_66)
         194   bin_op +                           
-        195   load_const 24                      ("_")
+        195   load_const 25                      ("_")
         196   bin_op +                           
         197   load_var 28                        (_68)
         198   bin_op +                           
@@ -19002,11 +19003,11 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         210   pop 1                              
 
   864   211   load_var 12                        (call_index)
-        212   load_const 16                      (1)
+        212   load_const 17                      (1)
         213   add_int                            
         214   store_var 12                       (call_index)
 
-  865   215   load_const 25                      (true)
+  865   215   load_const 26                      (true)
         216   store_var 11                       (has_call)
 
   852   217   jump -131                          (to 86)
@@ -19036,7 +19037,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         239   jump_if_false +5                   (to 244)
         240   pop 1                              
         241   load_var 14                        (finish)
-        242   load_const 26                      ("")
+        242   load_const 27                      ("")
         243   cmp_op ==                          
         244   jump_if_false +4                   (to 248)
         245   pop 1                              
@@ -19050,7 +19051,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         252   jump +23                           (to 275)
 
   901   253   load_var 14                        (finish)
-        254   load_const 27                      ("MAX_TOKENS")
+        254   load_const 28                      ("MAX_TOKENS")
         255   cmp_op ==                          
         256   pop_jump_if_false +2               (to 258)
         257   jump +15                           (to 272)
@@ -19069,17 +19070,17 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
 
   903   268   jump +9                            (to 277)
 
-  904   269   load_const 28                      (ai.content.StopReason.Refused)
+  904   269   load_const 29                      (ai.content.StopReason.Refused)
         270   alloc_variant 774                  (ai.content.StopReason)
 
   903   271   jump +6                            (to 277)
 
-  902   272   load_const 29                      (ai.content.StopReason.MaxTokens)
+  902   272   load_const 30                      (ai.content.StopReason.MaxTokens)
         273   alloc_variant 774                  (ai.content.StopReason)
 
   901   274   jump +3                            (to 277)
 
-  900   275   load_const 16                      (ai.content.StopReason.ToolUse)
+  900   275   load_const 17                      (ai.content.StopReason.ToolUse)
         276   alloc_variant 774                  (ai.content.StopReason)
 
   908   277   store_var 41                       (_128)
@@ -19094,7 +19095,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         286   load_var 4                         (_0)
         287   return                             
 
-  896   288   load_type 30                       
+  896   288   load_type 31                       
         289   load_var 1                         (resp)
         290   call 362 ntypeargs=1               (baml.json.to_json)
         291   call 358 ntypeargs=0               (baml.json.stringify)
@@ -19123,7 +19124,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
         310   load_const 6                       (null)
         311   cmp_op ==                          
         312   pop_jump_if_false +6               (to 318)
-        313   load_type 30                       
+        313   load_type 31                       
         314   load_var 1                         (resp)
         315   call 362 ntypeargs=1               (baml.json.to_json)
         316   call 358 ntypeargs=0               (baml.json.stringify)
