@@ -289,7 +289,7 @@ namespace baml.reflect.array:
 namespace baml.reflect.class:
   class Builder { methods: [field, type, build, _build] }
   class Field { methods: [metadata, value] }
-  class PendingType { methods: [array, optional, union, resolved] }
+  class PendingType { methods: [array, optional, union, resolved, meta] }
   class Type { methods: [fields, meta, as_type] }
   function _new
   function builder

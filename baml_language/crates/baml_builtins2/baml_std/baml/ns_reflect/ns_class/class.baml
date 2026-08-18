@@ -64,11 +64,15 @@ class Builder {
   _resolved type?
 
   /// Append one field in definition order.
+  ///
+  /// A recursive field carries metadata the same way a resolved one does:
+  /// `PendingType.meta(...)` produces the `WithMeta<PendingType>` row, and the
+  /// metadata survives the atomic group build.
   //baml:mut_vm
   function field(
     self,
     name: string,
-    ty: type | baml.reflect.WithMeta<type> | PendingType,
+    ty: type | baml.reflect.WithMeta<type> | PendingType | baml.reflect.WithMeta<PendingType>,
   ) -> Builder throws baml.reflect.errors.CompilationError {
     $rust_function
   }
@@ -125,6 +129,19 @@ class PendingType {
   /// Return the frozen type, or null while any referenced builder is pending.
   //baml:mut_vm
   function resolved(self) -> type? throws never {
+    $rust_function
+  }
+
+  /// Pair this pending reference with schema metadata, mirroring `type.meta`.
+  /// Only `Builder.field` accepts the result.
+  //baml:mut_vm
+  function meta(
+    self,
+    alias: string? = null,
+    description: string? = null,
+    docstring: string? = null,
+    other: map<string, string>? = null,
+  ) -> baml.reflect.WithMeta<PendingType> throws never {
     $rust_function
   }
 }

@@ -281,14 +281,19 @@ fn package_interface_type(
     Value::object(vm.alloc_static_type(ty))
 }
 
-fn allocate_runtime_declaration_types(
-    vm: &mut BexVm,
-    package_ptr: HeapPtr,
+/// The definition overlay a package's own declarations form.
+///
+/// A statically compiled package needs none: its declarations live in the
+/// engine image and resolve by name. A runtime package's do not, so every
+/// `type` value reflection hands out of one has to carry this overlay or the
+/// name it mentions is unresolvable — the BEP-066 rule that a minted type and
+/// its definitions travel together.
+fn declaration_defs(
+    vm: &BexVm,
     classes: &IndexMap<LocalName, HeapPtr>,
     enums: &IndexMap<LocalName, HeapPtr>,
-    interfaces: &IndexMap<LocalName, HeapPtr>,
-) -> IndexMap<String, HeapPtr> {
-    let source_defs = DynTypeDefs {
+) -> DynTypeDefs {
+    DynTypeDefs {
         classes: classes
             .values()
             .filter_map(|ptr| match vm.get_object(*ptr) {
@@ -306,7 +311,38 @@ fn allocate_runtime_declaration_types(
             })
             .collect(),
         witnesses: Vec::new(),
+    }
+}
+
+/// [`declaration_defs`] for an already-populated package object. Empty for a
+/// null pointer, which is what a statically compiled callable reports.
+fn package_defs(vm: &BexVm, package_ptr: HeapPtr) -> DynTypeDefs {
+    if package_ptr.is_null() {
+        return DynTypeDefs::default();
+    }
+    let Object::Package(package) = vm.get_object(package_ptr) else {
+        return DynTypeDefs::default();
     };
+    declaration_defs(vm, &package.classes, &package.enums)
+}
+
+/// Allocate a `type` value inside a definition overlay, keeping the memoized
+/// static path when there is nothing to carry.
+fn alloc_type_in(vm: &mut BexVm, ty: RealizedTy, defs: &DynTypeDefs) -> Value {
+    if defs.is_empty() {
+        return Value::object(vm.alloc_static_type(ty));
+    }
+    Value::object(vm.alloc_static_type_with_defs(ty, defs.clone()))
+}
+
+fn allocate_runtime_declaration_types(
+    vm: &mut BexVm,
+    package_ptr: HeapPtr,
+    classes: &IndexMap<LocalName, HeapPtr>,
+    enums: &IndexMap<LocalName, HeapPtr>,
+    interfaces: &IndexMap<LocalName, HeapPtr>,
+) -> IndexMap<String, HeapPtr> {
+    let source_defs = declaration_defs(vm, classes, enums);
     let class_rows = classes
         .iter()
         .filter_map(|(name, &class_ptr)| match vm.get_object(class_ptr) {
@@ -436,7 +472,8 @@ fn function_type(vm: &mut BexVm, package: HeapPtr, name: &LocalName) -> Option<V
     let callable = package_function_value(vm, package, name)?;
     let signature = vm.callable_signature(callable)?;
     let ty = callee_fn_ty(&signature);
-    Some(Value::object(vm.alloc_static_type(ty)))
+    let defs = package_defs(vm, package);
+    Some(alloc_type_in(vm, ty, &defs))
 }
 
 fn dependency_object(vm: &BexVm, package: HeapPtr, local: &str) -> Option<HeapPtr> {
@@ -1108,6 +1145,17 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             }
             return Ok(None);
         };
+        // Signature reconstruction only sees the declared surface. A companion
+        // whose surface is free of its parent's `T` gets this far and would be
+        // handed out as an ordinary function value — and calling one directly
+        // fails inside its body as a VM internal error no `catch` can see. Refuse
+        // it here, where the caller still has a diagnostic channel.
+        if let Some(name) = vm.generic_callable_body_needs_type_args(function_value) {
+            let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
+            return Err(VmRustFnError::Thrown(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
         let actual = callee_fn_ty(&signature);
         let expected = vm
             .current_call_type_args()
@@ -1963,12 +2011,13 @@ fn alloc_arg(
     name: Option<&baml_type::Name>,
     position: usize,
     ty: RealizedTy,
+    defs: &DynTypeDefs,
 ) -> Value {
     let name = match name {
         Some(n) => Value::object(vm.alloc_string(n.as_str())),
         None => Value::object(vm.alloc_string(format!("$arg{position}"))),
     };
-    let ty = Value::object(vm.alloc_static_type(ty));
+    let ty = alloc_type_in(vm, ty, defs);
     copy::reflect::Arg { name, r#type: ty }.to_value(vm)
 }
 
@@ -1986,13 +2035,17 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
     let Some(sig) = vm.callable_signature(f_val) else {
         return Err(non_callable_error("reflect.signature"));
     };
+    // A signature reconstructed off a runtime package's function names that
+    // package's classes and enums; the reported types have to carry its
+    // declarations or nothing downstream can resolve them.
+    let defs = package_defs(vm, vm.callable_runtime_package(f_val));
     let mut positional = Vec::new();
     let mut opts: IndexMap<bex_str::BexStr, Value> = IndexMap::new();
     for param in &sig.params {
         match param.mode {
             FunctionParamMode::Required => {
                 let position = positional.len();
-                let arg = alloc_arg(vm, param.name.as_ref(), position, param.ty.clone());
+                let arg = alloc_arg(vm, param.name.as_ref(), position, param.ty.clone(), &defs);
                 positional.push(arg);
             }
             FunctionParamMode::Optional => {
@@ -2001,7 +2054,7 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
                 // it by), so it is simply absent from `opts`. Placeholders
                 // are for positionals only and never enter by-name matching.
                 if let Some(name) = &param.name {
-                    let arg = alloc_arg(vm, Some(name), positional.len(), param.ty.clone());
+                    let arg = alloc_arg(vm, Some(name), positional.len(), param.ty.clone(), &defs);
                     opts.insert(bex_str::BexStr::from(name.as_str()), arg);
                 }
             }
@@ -2009,8 +2062,8 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
     }
     let args = Value::object(vm.tlab.alloc_array(ty_arg(), positional));
     let opts = Value::object(vm.tlab.alloc_map(RealizedTy::string(), ty_arg(), opts));
-    let returns = Value::object(vm.alloc_static_type(sig.ret.clone()));
-    let errors = Value::object(vm.alloc_static_type(sig.throws));
+    let returns = alloc_type_in(vm, sig.ret.clone(), &defs);
+    let errors = alloc_type_in(vm, sig.throws, &defs);
     let docstring = opt_string(vm, sig.docstring.as_ref());
     let name = opt_string(vm, sig.name.as_ref());
     Ok(copy::reflect::Signature {
@@ -2145,6 +2198,17 @@ fn call_any_impl(
         }
         return non_callable_error("reflect.call_any").into();
     };
+    // A generic whose signature happens to be free of its own type parameters
+    // reconstructs above and would otherwise be entered with an empty frame,
+    // failing inside its body as a VM internal error.
+    if let Some(name) = vm.generic_callable_body_needs_type_args(f_val) {
+        let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
+        return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+            vm,
+            &[diagnostic],
+        ))
+        .into();
+    }
 
     // Walk the parameters in declaration order, resolving each from the map
     // by its addressable name and assembling the callee's frame as we go.

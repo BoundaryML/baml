@@ -259,3 +259,138 @@ async fn nested_type_walker_and_kind_specific_readback_work_end_to_end() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
+
+/// B-1582 item 2: decomposing a runtime type's view must keep the definition
+/// overlay the enclosing value carries. Reading the nested enum's rows used to
+/// hit `unreachable!("reflected enum … must be loaded")` in the VM.
+#[tokio::test]
+async fn nested_views_of_a_runtime_type_keep_its_definitions() {
+    let output = baml_test!(
+        r#"
+        function main() -> string throws unknown {
+            let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type();
+
+            // Through a class field's array element.
+            let root = reflect.class.new("Root", {
+                "choices": choice.array().as_type(),
+            }).as_type();
+            let root_class = root.as_class() ?? throw "expected class";
+            let field = root_class.fields().at(0) ?? throw "expected field";
+            let field_type = field.type ?? throw "expected field type";
+            let array = field_type.as_array() ?? throw "expected array";
+            let from_array = array.element_type().as_enum() ?? throw "expected array enum";
+
+            // Through a map value.
+            let map_view = reflect.map.new(type.of<string>(), choice).as_type().as_map()
+                ?? throw "expected map";
+            let from_map_value = map_view.value_type().as_enum() ?? throw "expected map enum";
+
+            // Through a union member.
+            let union_view = reflect.union.new([choice, type.of<int>()]).as_type().as_union()
+                ?? throw "expected union";
+            let member = union_view.member_types().at(0) ?? throw "expected member";
+            let from_union = member.as_enum() ?? throw "expected union enum";
+
+            [
+                (from_array.values().at(0) ?? throw "array rows").name,
+                (from_map_value.values().at(1) ?? throw "map rows").name,
+                (from_union.values().at(0) ?? throw "union rows").name,
+            ].join("|")
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("FIRST|SECOND|FIRST".into()))
+    );
+}
+
+/// The map *key* decomposes through the same helper as the value, so pin it too
+/// — a runtime enum used as a map key stays introspectable.
+#[tokio::test]
+async fn map_key_type_view_keeps_runtime_definitions() {
+    let output = baml_test!(
+        r#"
+        function main() -> string throws unknown {
+            let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type();
+            let map_view = reflect.map.new(choice, type.of<int>()).as_type().as_map()
+                ?? throw "expected map";
+            let key_enum = map_view.key_type().as_enum() ?? throw "expected key enum";
+            (key_enum.values().at(1) ?? throw "key rows").name
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("SECOND".into())));
+}
+
+/// A class nested inside a runtime-*package* type is reached the same way, and
+/// its definition lives in the owning package rather than in a per-value
+/// overlay. Reading it back must not fall through to the static type table.
+#[tokio::test]
+async fn nested_class_of_a_runtime_package_type_reads_back() {
+    let output = baml_test!(
+        r#"
+        function main() -> string throws unknown {
+            let pkg = reflect.Package.compile({
+                "schema.baml": "class Leaf { name string } class Root { leaf Leaf }",
+            })
+            let root = pkg.get_class("root.Root") ?? throw "missing Root"
+            let field = root.fields().at(0) ?? throw "missing field"
+            let field_type = field.type ?? throw "missing field type"
+            let leaf = field_type.as_class() ?? throw "expected a class view"
+            let leaf_field = leaf.fields().at(0) ?? throw "expected a leaf field"
+            leaf_field.name
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("name".into())));
+}
+
+/// A function view's own types are *produced* by reflection rather than
+/// decomposed out of a value the caller already holds, so carrying the overlay
+/// forward on the consumer side does not reach them: `package.functions()` and
+/// `reflect.signature` built their `type` values with no definitions attached,
+/// and reading a runtime package's enum back out of a parameter or a return
+/// type hit `unreachable!("reflected enum … must be loaded")`. Both producers
+/// now attach the owning package's declarations.
+#[tokio::test]
+async fn function_views_of_a_runtime_package_keep_its_definitions() {
+    let output = baml_test!(
+        r#"
+        function main() -> string throws unknown {
+            let pkg = reflect.Package.compile({
+                "schema.baml": "enum Choice { FIRST SECOND } function pick(c: Choice) -> Choice { c }",
+            })
+
+            let view = pkg.functions().get("root.pick") ?? throw "missing pick"
+            let returned = view.return_type().as_enum() ?? throw "expected a return enum"
+            let returned_row = returned.values().at(0) ?? throw "no return rows"
+            let param = view.params().at(0) ?? throw "expected a param"
+            let param_enum = param.type.as_enum() ?? throw "expected a param enum"
+            let param_row = param_enum.values().at(1) ?? throw "no param rows"
+
+            let callable = pkg.get_function<baml.AnyFunction<Returns = unknown, Throws = unknown>>(
+                "root.pick",
+            ) ?? throw "missing callable"
+            let sig = reflect.signature(callable)
+            let sig_returns = sig.returns.as_enum() ?? throw "expected a signature return enum"
+            let sig_return_row = sig_returns.values().at(0) ?? throw "no signature return rows"
+            let arg = sig.args.at(0) ?? throw "expected a signature arg"
+            let sig_arg = arg.type.as_enum() ?? throw "expected a signature arg enum"
+            let sig_arg_row = sig_arg.values().at(1) ?? throw "no signature arg rows"
+
+            let parts = [
+                returned_row.name,
+                param_row.name,
+                sig_return_row.name,
+                sig_arg_row.name,
+            ]
+            parts.join("|")
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("FIRST|SECOND|FIRST|SECOND".into()))
+    );
+}
