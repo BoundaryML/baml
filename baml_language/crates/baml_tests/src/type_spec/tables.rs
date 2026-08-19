@@ -1000,7 +1000,7 @@ fn call_plan_effect_solves_from_deferred_lambda() {
     // lower rides a deferred sub - draining goals first lands the lower
     // before E commits, so E = never, not the minimum-upper unknown.
     let source = r#"
-function ir_probe() -> int {
+function ir_probe() -> int throws unknown {
     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
     it.reduce((a: int, x: int) -> int { a + x }, 0)
 }

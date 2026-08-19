@@ -989,8 +989,9 @@ pub struct BexVm {
     /// or `throw <binding>`) reuses this instead of re-running the cause walk —
     /// which from inside a handler body would self-link — so the chain survives
     /// the re-raise. Stored as values (not raw bits) so GC forwarding preserves
-    /// both key and cause identity; deduplicated by value and cleared each
-    /// `finalize`, like `seen_throw_values`.
+    /// both key and cause identity; deduplicated by value and cleared, like
+    /// the other throw-state stores, when a fresh entry point is set on an
+    /// empty frame stack.
     thrown_value_causes: Vec<(Value, Value)>,
 
     /// Most recently observed context for each thrown value. `UnknownError`
@@ -3296,6 +3297,20 @@ impl BexVm {
             "expect callable as entry point, got {:?}",
             self.get_object(function)
         );
+
+        // A fresh top-level run starts with no in-flight throw, so drop the
+        // per-run throw bookkeeping from the previous run. These vectors are
+        // GC roots; on a reused VM (engine package init, playground evals)
+        // stale entries would keep every previously thrown value live and
+        // grow the per-throw scans without bound. Guarded on an empty frame
+        // stack so a nested entry over live frames cannot wipe in-flight
+        // throw state.
+        if self.frames.is_empty() {
+            self.seen_throw_values.clear();
+            self.thrown_value_causes.clear();
+            self.thrown_value_contexts.clear();
+            self.preserved_throw_contexts.clear();
+        }
 
         // Lower the named bindings onto the positional De Bruijn slot against the
         // callee's generic params before seeding the frame.
