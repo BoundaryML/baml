@@ -83,7 +83,7 @@ pub struct InterfaceMethodDef {
 /// interfaces, not types, so an intersection of bounds is a *set* of these.
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct InterfaceBound {
-    pub interface: baml_type::TypeName,
+    pub interface: crate::TypeHead,
     pub args: Vec<crate::TyTemplate>,
     pub assoc: Vec<(baml_type::Name, crate::TyTemplate)>,
 }

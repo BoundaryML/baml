@@ -433,7 +433,7 @@ pub struct HostClosure {
     /// optionals, omitted ones dropped), so each bridge can apply its calling
     /// convention (e.g. TypeScript's trailing `$opts`) without the callee type
     /// on the wire. `Box`-ed to keep `Object` within its size budget.
-    pub params: Box<Vec<baml_type::RealizedFunctionParamTy>>,
+    pub params: Box<Vec<baml_type::RealizedFunctionParamTy<crate::TypeHead>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]

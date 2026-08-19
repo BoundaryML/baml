@@ -482,7 +482,7 @@ mod tests {
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: None,
+            owner: crate::HeapPtr::null(),
         }));
 
         let mut head = TypeHead::of_name(&name);

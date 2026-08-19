@@ -1,5 +1,5 @@
 use bex_heap::TlabHolder;
-use bex_vm_types::types::{DynTypeDefs, DynWitnessDef, Object, TypeValue, Value};
+use bex_vm_types::types::{DynWitnessDef, Object, TypeValue, Value};
 use indexmap::IndexMap;
 
 use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, copy, resolve};

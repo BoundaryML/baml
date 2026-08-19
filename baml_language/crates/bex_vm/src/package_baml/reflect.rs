@@ -29,8 +29,8 @@ use bex_vm_types::{
     link::link_dynamic,
     relink::{IndexOperand, visit_object_operands},
     types::{
-        DynTypeDefs, LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage,
-        RuntimeTypeProvenance, SessionState, TypeValue, Value,
+        LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage, SessionState, TypeValue,
+        Value,
     },
 };
 use indexmap::IndexMap;

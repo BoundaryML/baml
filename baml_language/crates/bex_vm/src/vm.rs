@@ -103,8 +103,8 @@ use bex_vm_types::{
     StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, Instruction},
     types::{
-        BoundMethod, Closure, ConstValue, DynTypeDefs, Function, FunctionOrigin, FunctionType,
-        Instance, Type, TypeValue, UnscheduledFuture,
+        BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
+        TypeValue, UnscheduledFuture,
     },
 };
 use indexmap::IndexMap;
@@ -425,9 +425,7 @@ pub(crate) mod tests {
         EarlyYieldCheck, FunctionCaptureProps, FunctionKind, GlobalPool, HeapPtr, Object,
         ObjectIndex, RootHaver, Value, ValueKind, VmGlobals,
         bytecode::Bytecode,
-        types::{
-            BoundMethod, Closure, DynTypeDefs, Function, FunctionOrigin, TypeValue, type_tags,
-        },
+        types::{BoundMethod, Closure, Function, FunctionOrigin, TypeValue, type_tags},
     };
 
     use super::{
@@ -1621,7 +1619,7 @@ impl BexVm {
     /// knows, so the value needs no runtime-definition overlay and no owning
     /// package. All VM-side static type producers route through this method.
     pub fn alloc_static_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
-        self.alloc_static_type_with_defs(ty, DynTypeDefs::default())
+        self.alloc_static_type_with_defs(ty::default())
     }
 
     pub fn alloc_static_type_with_defs(
@@ -2079,6 +2077,30 @@ impl BexVm {
             .copied()
     }
 
+    /// The head for the declaration `qtn` names — its tag and its pointer, both
+    /// read off the declaration itself.
+    ///
+    /// The one name→head channel inside the VM, for the boundaries that
+    /// genuinely start from a name (the algebra's `baml.AnyFunction` case, host
+    /// conversion, codegen FQN constants). Everything interior already holds a
+    /// head and must deref it instead: content-addressing a name into a tag
+    /// would fabricate an identity rather than resolve one, and cannot see a
+    /// runtime-created declaration at all.
+    pub fn declaration_head(&self, qtn: &baml_type::TypeName) -> Option<bex_vm_types::TypeHead> {
+        let ptr = self
+            .lookup_type(qtn)
+            .or_else(|| self.lookup_interface(qtn))
+            .or_else(|| self.lookup_type_alias_ptr(qtn))?;
+        let tag = match self.get_object(ptr) {
+            Object::Class(class) => class.type_tag,
+            Object::Enum(enm) => enm.type_tag,
+            Object::Interface(iface) => iface.type_tag,
+            Object::TypeAlias(alias) => alias.type_tag,
+            _ => return None,
+        };
+        Some(bex_vm_types::TypeHead::new(ptr, tag))
+    }
+
     /// Look up an interface object by its qualified type name. The returned
     /// pointer is the canonical `Object::Interface` for the interface — the same
     /// pointer that keys every package's [`bex_vm_types::types::Package::impl_rules`], so it can be
@@ -2101,6 +2123,18 @@ impl BexVm {
     }
 
     /// The recursive type-alias definition for `qtn`, if any (only recursive
+    /// The `Object::TypeAlias` pointer for `qtn`, if its package declares one.
+    pub fn lookup_type_alias_ptr(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
+        let local = bex_vm_types::types::LocalName {
+            namespace: qtn.namespace().clone(),
+            name: qtn.name().clone(),
+        };
+        self.package_for_type(qtn)?
+            .type_aliases
+            .get(&local)
+            .copied()
+    }
+
     /// aliases survive to runtime; non-recursive ones are expanded inline).
     ///
     /// Reads through the package's `Object::TypeAlias` rather than a side map —

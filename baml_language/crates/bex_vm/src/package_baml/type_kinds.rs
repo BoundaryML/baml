@@ -8,9 +8,9 @@ use baml_compiler_diagnostics::{
 };
 use bex_heap::TlabHolder;
 use bex_vm_types::types::{
-    Class, ClassField, DynTypeDefs, DynWitnessDef, Enum, EnumVariant, InterfaceDef, MethodImpl,
-    Object, PortableClassDef, PortableClassFieldDef, PortableEnumDef, PortableEnumVariantDef,
-    PortableMetadata, PortableTypeDef, RuntimeImplRule, RuntimeTypeProvenance, TypeValue, Value,
+    Class, ClassField, DynWitnessDef, Enum, EnumVariant, InterfaceDef, MethodImpl, Object,
+    PortableClassDef, PortableClassFieldDef, PortableEnumDef, PortableEnumVariantDef,
+    PortableMetadata, PortableTypeDef, RuntimeImplRule, TypeValue, Value,
 };
 use indexmap::IndexMap;
 

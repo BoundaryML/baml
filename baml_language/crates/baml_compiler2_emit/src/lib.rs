@@ -810,7 +810,7 @@ fn build_packages(
                             let bound_ty = lower_constraint_head(store, id, generics, bounds);
                             split_interface(&bound_ty, resolved, generics).map(
                                 |(interface, args, assoc)| InterfaceBound {
-                                    interface,
+                                    interface: bex_vm_types::TypeHead::of_name(&interface),
                                     args,
                                     assoc,
                                 },
@@ -3479,7 +3479,7 @@ fn emit_file_group(
                 ty_attr: TyAttr::default(),
                 has_cleanup,
                 generic_param_count: class.generic_params.len(),
-                runtime_type: None,
+                owner: bex_vm_types::HeapPtr::null(),
             })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
@@ -3580,7 +3580,7 @@ fn emit_file_group(
                 docstring: enum_meta.docstring,
                 other: enum_meta.other,
                 ty_attr: TyAttr::default(),
-                runtime_type: None,
+                owner: bex_vm_types::HeapPtr::null(),
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
             program_packages
@@ -4098,7 +4098,7 @@ fn apply_signature_metadata(f: &mut Function, sig: &baml_compiler2_mir::RuntimeS
             bounds
                 .iter()
                 .map(|bound| bex_vm_types::types::InterfaceBound {
-                    interface: bound.interface.clone(),
+                    interface: bex_vm_types::TypeHead::of_name(&bound.interface),
                     args: bound
                         .args
                         .iter()

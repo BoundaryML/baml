@@ -2,10 +2,7 @@ use crate::RuntimeTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
-use crate::{
-    AtomicValueSlot, CleanupLatch, HeapPtr, Value,
-    types::{RuntimeTypeProvenance, TypeValue},
-};
+use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, Value, types::TypeValue};
 
 /// A field within a runtime class, carrying type and schema metadata.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
@@ -76,11 +73,12 @@ pub struct Class {
     /// (bound by the receiver, never by name). Set at emit time.
     pub generic_param_count: usize,
 
-    /// Present only on runtime-constructed classes. Runtime definitions are
-    /// never serialized into a compiled program, so Borsh deliberately omits
-    /// this heap-local identity/provenance payload.
+    /// The runtime package that owns this declaration, or null for a
+    /// compile-time one. A GC edge: reaching the class keeps its package — and
+    /// so its globals and dependencies — alive. Mirrors `InterfaceDef::owner`
+    /// and `TypeAliasDef::owner`.
     #[borsh(skip)]
-    pub runtime_type: Option<RuntimeTypeProvenance>,
+    pub owner: HeapPtr,
 }
 
 impl std::fmt::Display for Class {

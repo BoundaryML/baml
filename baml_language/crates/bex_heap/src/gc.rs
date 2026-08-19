@@ -707,38 +707,18 @@ impl BexHeap {
                     worklist.push(function.runtime_package);
                 }
             }
-            Object::Type(value) => {
-                if !value.owner.as_ptr().is_null() {
-                    worklist.push(value.owner);
-                }
-                worklist.extend(value.defs().classes.values().copied());
-                worklist.extend(value.defs().enums.values().copied());
-            }
+            // A declaration's own type edges are its heads, traced below for
+            // every object kind; what these two arms add is the back-edge to the
+            // package that owns them, so reaching a member keeps its package —
+            // and so its globals and dependencies — alive.
             Object::Class(class) => {
-                if let Some(runtime) = &class.runtime_type {
-                    if !runtime.owner.as_ptr().is_null() {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(runtime.defs.classes.values().copied());
-                    worklist.extend(runtime.defs.enums.values().copied());
-                }
-                for field in &class.fields {
-                    if let Some(type_value) = &field.runtime_type {
-                        if !type_value.owner.as_ptr().is_null() {
-                            worklist.push(type_value.owner);
-                        }
-                        worklist.extend(type_value.defs().classes.values().copied());
-                        worklist.extend(type_value.defs().enums.values().copied());
-                    }
+                if !class.owner.as_ptr().is_null() {
+                    worklist.push(class.owner);
                 }
             }
             Object::Enum(enm) => {
-                if let Some(runtime) = &enm.runtime_type {
-                    if !runtime.owner.as_ptr().is_null() {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(runtime.defs.classes.values().copied());
-                    worklist.extend(runtime.defs.enums.values().copied());
+                if !enm.owner.as_ptr().is_null() {
+                    worklist.push(enm.owner);
                 }
             }
             // Primitives have no references
@@ -777,13 +757,25 @@ impl BexHeap {
                     worklist.push(alias.owner);
                 }
             }
-            Object::String(_)
+            // A `type` value is exactly the type it denotes: every edge it has
+            // is a head, walked below.
+            Object::Type(_)
+            | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
         }
+
+        // Heads are ordinary references: a type naming a declaration keeps that
+        // declaration alive. An unresolved head has no pointer to trace — emit
+        // mints those, and the loader binds them before the VM exists.
+        bex_vm_types::head_walk::visit_object_heads(obj, &mut |head| {
+            if head.is_resolved() {
+                worklist.push(head.ptr());
+            }
+        });
     }
 
     /// Bug H, check 2 (heap_debug only): after a Major GC, every Gen2
@@ -996,58 +988,16 @@ impl BexHeap {
                     function.runtime_package = new_ptr;
                 }
             }
-            Object::Type(value) => {
-                if let Some(&new_ptr) = forwarding.get(&value.owner) {
-                    value.owner = new_ptr;
-                }
-                for ptr in value.defs_mut().classes.values_mut() {
-                    *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                }
-                for ptr in value.defs_mut().enums.values_mut() {
-                    *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                }
-            }
+            // Owner back-edges; heads are repointed for every object kind
+            // below, by the same walk that traced them.
             Object::Class(class) => {
-                if let Some(runtime) = &mut class.runtime_type {
-                    runtime.owner = forwarding
-                        .get(&runtime.owner)
-                        .copied()
-                        .unwrap_or(runtime.owner);
-                    for ptr in runtime.defs.classes.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                    for ptr in runtime.defs.enums.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                }
-                for field in &mut class.fields {
-                    let Some(type_value) = &mut field.runtime_type else {
-                        continue;
-                    };
-                    type_value.owner = forwarding
-                        .get(&type_value.owner)
-                        .copied()
-                        .unwrap_or(type_value.owner);
-                    for ptr in type_value.defs_mut().classes.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                    for ptr in type_value.defs_mut().enums.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
+                if let Some(&new_ptr) = forwarding.get(&class.owner) {
+                    class.owner = new_ptr;
                 }
             }
             Object::Enum(enm) => {
-                if let Some(runtime) = &mut enm.runtime_type {
-                    runtime.owner = forwarding
-                        .get(&runtime.owner)
-                        .copied()
-                        .unwrap_or(runtime.owner);
-                    for ptr in runtime.defs.classes.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                    for ptr in runtime.defs.enums.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
+                if let Some(&new_ptr) = forwarding.get(&enm.owner) {
+                    enm.owner = new_ptr;
                 }
             }
             // Primitives have no references
@@ -1081,13 +1031,26 @@ impl BexHeap {
                     alias.owner = new_ptr;
                 }
             }
-            Object::String(_)
+            // A `type` value is exactly the type it denotes: every edge it has
+            // is a head, walked below.
+            Object::Type(_)
+            | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
         }
+
+        // Repoint every head whose declaration moved. Identity is untouched —
+        // only the access path — so nothing rehashes or reorders.
+        bex_vm_types::head_walk::visit_object_heads_mut(obj, &mut |head| {
+            if head.is_resolved()
+                && let Some(&moved) = forwarding.get(&head.ptr())
+            {
+                head.forward_to(moved);
+            }
+        });
     }
 
     /// Fix up a single Value reference.
@@ -1412,72 +1375,15 @@ impl BexHeap {
                     worklist.push(function.runtime_package);
                 }
             }
-            Object::Type(value) => {
-                if !value.owner.as_ptr().is_null() && self.generation_of(value.owner).is_young() {
-                    worklist.push(value.owner);
-                }
-                worklist.extend(
-                    value
-                        .defs()
-                        .classes
-                        .values()
-                        .chain(value.defs().enums.values())
-                        .copied()
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-            }
+            // Owner back-edges; heads are scanned for every object kind below.
             Object::Class(class) => {
-                if let Some(runtime) = &class.runtime_type {
-                    if !runtime.owner.as_ptr().is_null()
-                        && self.generation_of(runtime.owner).is_young()
-                    {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(
-                        runtime
-                            .defs
-                            .classes
-                            .values()
-                            .chain(runtime.defs.enums.values())
-                            .copied()
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
-                }
-                for field in &class.fields {
-                    if let Some(type_value) = &field.runtime_type {
-                        if !type_value.owner.as_ptr().is_null()
-                            && self.generation_of(type_value.owner).is_young()
-                        {
-                            worklist.push(type_value.owner);
-                        }
-                        worklist.extend(
-                            type_value
-                                .defs()
-                                .classes
-                                .values()
-                                .chain(type_value.defs().enums.values())
-                                .copied()
-                                .filter(|ptr| self.generation_of(*ptr).is_young()),
-                        );
-                    }
+                if !class.owner.as_ptr().is_null() && self.generation_of(class.owner).is_young() {
+                    worklist.push(class.owner);
                 }
             }
             Object::Enum(enm) => {
-                if let Some(runtime) = &enm.runtime_type {
-                    if !runtime.owner.as_ptr().is_null()
-                        && self.generation_of(runtime.owner).is_young()
-                    {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(
-                        runtime
-                            .defs
-                            .classes
-                            .values()
-                            .chain(runtime.defs.enums.values())
-                            .copied()
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
+                if !enm.owner.as_ptr().is_null() && self.generation_of(enm.owner).is_young() {
+                    worklist.push(enm.owner);
                 }
             }
             // Primitives/leaf variants have no heap references.
@@ -1517,13 +1423,22 @@ impl BexHeap {
                     worklist.push(alias.owner);
                 }
             }
-            Object::String(_)
+            // A `type` value is exactly the type it denotes: every edge it has
+            // is a head, walked below.
+            Object::Type(_)
+            | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
         }
+
+        bex_vm_types::head_walk::visit_object_heads(obj, &mut |head| {
+            if head.is_resolved() && self.generation_of(head.ptr()).is_young() {
+                worklist.push(head.ptr());
+            }
+        });
     }
 
     // -------------------------------------------------------------------------

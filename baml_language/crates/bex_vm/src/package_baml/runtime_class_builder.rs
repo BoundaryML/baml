@@ -20,7 +20,7 @@ use baml_compiler_diagnostics::{
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr,
-    types::{Class, ClassField, DynTypeDefs, Object, RuntimeTypeProvenance, TypeValue, Value},
+    types::{Class, ClassField, Object, TypeValue, Value},
 };
 use indexmap::IndexMap;
 
@@ -611,7 +611,7 @@ fn validate_pending(
 fn collect_external_defs(
     vm: &BexVm,
     prepared: &IndexMap<u64, Vec<PreparedField>>,
-) -> Result<DynTypeDefs, String> {
+) -> Result<String> {
     fn from_pending(
         vm: &BexVm,
         pending: Value,
