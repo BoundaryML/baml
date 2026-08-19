@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox {
+  value: T
+}
+class user.fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox$stream {
+  value: T | null
+}
+class user.fixtures.json_cross_namespace_static_call.pkg.inner.Box {
+  value: T
+}
+class user.fixtures.json_cross_namespace_static_call.pkg.inner.Box$stream {
+  value: T | null
+}
+class user.fixtures.json_cross_namespace_static_call.pkg.inner.Plain {
+  n: int
+}
+class user.fixtures.json_cross_namespace_static_call.pkg.inner.Plain$stream {
+  n: int | null
+}

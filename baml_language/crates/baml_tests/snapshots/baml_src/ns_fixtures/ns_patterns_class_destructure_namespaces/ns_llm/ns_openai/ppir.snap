@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box {
+  value: T
+}
+class user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box$stream {
+  value: T | null
+}
+class user.fixtures.patterns_class_destructure_namespaces.llm.openai.Outer {
+  inner: user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<T>
+}
+class user.fixtures.patterns_class_destructure_namespaces.llm.openai.Outer$stream {
+  inner: user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box$stream<T> | null
+}
+class user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response {
+  text: string
+  score: int
+}
+class user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response$stream {
+  text: string | null
+  score: int | null
+}
+function user.fixtures.patterns_class_destructure_namespaces.llm.openai.DestructureBareInNamespace(response: user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response) -> int  [expr] {
+  { let Response { score: score } = response } score
+}

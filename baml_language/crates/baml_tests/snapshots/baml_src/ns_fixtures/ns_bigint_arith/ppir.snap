@@ -1,0 +1,34 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.bigint_arith.AddBigints() -> bigint  [expr] {
+  {  } 2n Add 3n
+}
+function user.fixtures.bigint_arith.BitAndBigints() -> bigint  [expr] {
+  {  } 15n BitAnd 240n
+}
+function user.fixtures.bigint_arith.BitOrBigints() -> bigint  [expr] {
+  {  } 15n BitOr 240n
+}
+function user.fixtures.bigint_arith.BitXorBigints() -> bigint  [expr] {
+  {  } 170n BitXor 255n
+}
+function user.fixtures.bigint_arith.DivBigints() -> bigint  [expr] {
+  {  } 7n Div 2n
+}
+function user.fixtures.bigint_arith.ModBigints() -> bigint  [expr] {
+  {  } 7n Mod 2n
+}
+function user.fixtures.bigint_arith.MulBigints() -> bigint  [expr] {
+  {  } 2n Mul 3n
+}
+function user.fixtures.bigint_arith.ShlBigints() -> bigint  [expr] {
+  {  } 1n Shl 4n
+}
+function user.fixtures.bigint_arith.ShrBigints() -> bigint  [expr] {
+  {  } 256n Shr 4n
+}
+function user.fixtures.bigint_arith.SubBigints() -> bigint  [expr] {
+  {  } 5n Sub 3n
+}

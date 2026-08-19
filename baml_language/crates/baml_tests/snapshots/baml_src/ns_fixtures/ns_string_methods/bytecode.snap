@@ -1,0 +1,45 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.string_methods.SplitCount(s: string) -> string {
+    load_var s
+    load_const ","
+    call baml.String.split
+    container_len
+    store_var _2
+    load_type int
+    load_var _2
+    call baml.String.from
+    return
+}
+
+function fixtures.string_methods.StartsWith(s: string) -> string {
+    load_var s
+    load_const "hello"
+    call baml.String.starts_with
+    store_var _2
+    load_type bool
+    load_var _2
+    call baml.String.from
+    return
+}
+
+function fixtures.string_methods.Trimmed(s: string) -> string {
+    load_var s
+    call baml.String.trim
+    store_var _2
+    load_type string
+    load_var _2
+    call baml.String.from
+    return
+}
+
+function fixtures.string_methods.Upper(s: string) -> string {
+    load_var s
+    call baml.String.to_upper_case
+    store_var _2
+    load_type string
+    load_var _2
+    call baml.String.from
+    return
+}

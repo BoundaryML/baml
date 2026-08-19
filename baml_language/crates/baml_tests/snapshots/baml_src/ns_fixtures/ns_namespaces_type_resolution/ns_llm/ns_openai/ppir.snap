@@ -1,0 +1,75 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.namespaces_type_resolution.llm.openai.Client {
+  api_key: string
+  org_id: string
+}
+class user.fixtures.namespaces_type_resolution.llm.openai.Client$stream {
+  api_key: string | null
+  org_id: string | null
+}
+class user.fixtures.namespaces_type_resolution.llm.openai.Error {
+  status_code: int
+  body: string
+}
+class user.fixtures.namespaces_type_resolution.llm.openai.Error$stream {
+  status_code: int | null
+  body: string | null
+}
+enum user.fixtures.namespaces_type_resolution.llm.openai.Model {GPT4o, GPT4oMini, O3}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIConstruct(key: string) -> user.fixtures.namespaces_type_resolution.llm.openai.Client  [expr] {
+  {  } user.fixtures.namespaces_type_resolution.llm.openai.Client { api_key: key, org_id: "org-123" }
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIEnumMatch(m: user.fixtures.namespaces_type_resolution.llm.openai.Model) -> string  [expr] {
+  {  } match (m) { user.fixtures.namespaces_type_resolution.llm.openai.Model.GPT4o => "gpt4o", user.fixtures.namespaces_type_resolution.llm.openai.Model.GPT4oMini => "gpt4o-mini", user.fixtures.namespaces_type_resolution.llm.openai.Model.O3 => "o3" }
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIEnumReturn() -> user.fixtures.namespaces_type_resolution.llm.openai.Model  [expr] {
+  {  } Model.GPT4o
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIIdentity(c: user.fixtures.namespaces_type_resolution.llm.openai.Client) -> user.fixtures.namespaces_type_resolution.llm.openai.Client  [expr] {
+  {  } c
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesAuthRole(r: root.fixtures.namespaces_type_resolution.auth.Role) -> string  [expr] {
+  {  } match (r) { root.fixtures.namespaces_type_resolution.auth.Role.Admin => "admin", root.fixtures.namespaces_type_resolution.auth.Role.User => "user", root.fixtures.namespaces_type_resolution.auth.Role.Guest => "guest" }
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesLlmStatus(s: root.fixtures.namespaces_type_resolution.llm.Status) -> string  [expr] {
+  {  } match (s) { root.fixtures.namespaces_type_resolution.llm.Status.Ready => "ready", root.fixtures.namespaces_type_resolution.llm.Status.Generating => "generating", root.fixtures.namespaces_type_resolution.llm.Status.Done => "done" }
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesRootStatus(s: root.fixtures.namespaces_type_resolution.Status) -> string  [expr] {
+  {  } match (s) { root.fixtures.namespaces_type_resolution.Status.Ok => "ok", root.fixtures.namespaces_type_resolution.Status.Failed => "failed", root.fixtures.namespaces_type_resolution.Status.Pending => "pending" }
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIMixedErrors(openai_err: user.fixtures.namespaces_type_resolution.llm.openai.Error, root_err: root.fixtures.namespaces_type_resolution.Error, llm_err: root.fixtures.namespaces_type_resolution.llm.Error, auth_err: root.fixtures.namespaces_type_resolution.auth.Error) -> string  [expr] {
+  {  } openai_err.body
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIMixedModels(openai_model: user.fixtures.namespaces_type_resolution.llm.openai.Model, llm_model: root.fixtures.namespaces_type_resolution.llm.Model) -> string  [expr] {
+  {  } match (openai_model) { user.fixtures.namespaces_type_resolution.llm.openai.Model.GPT4o => "gpt4o", user.fixtures.namespaces_type_resolution.llm.openai.Model.GPT4oMini => "mini", user.fixtures.namespaces_type_resolution.llm.openai.Model.O3 => "o3" }
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIThrowClass(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw user.fixtures.namespaces_type_resolution.llm.openai.Error { status_code: 429, body: "rate limited" }, _ => "ok" }
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIThrowEnum(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw Model.O3, _ => "ok" }
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesAuthConfig(cfg: root.fixtures.namespaces_type_resolution.auth.Config) -> string  [expr] {
+  {  } cfg.provider
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesAuthRole() -> root.fixtures.namespaces_type_resolution.auth.Role  [expr] {
+  {  } root.fixtures.namespaces_type_resolution.auth.Role.User
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmConfig(cfg: root.fixtures.namespaces_type_resolution.llm.Config) -> string  [expr] {
+  {  } cfg.model
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmResponse(r: root.fixtures.namespaces_type_resolution.llm.Response) -> string  [expr] {
+  {  } r.text
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmStatus() -> root.fixtures.namespaces_type_resolution.llm.Status  [expr] {
+  {  } root.fixtures.namespaces_type_resolution.llm.Status.Generating
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesRootConfig(cfg: root.fixtures.namespaces_type_resolution.Config) -> string  [expr] {
+  {  } cfg.key
+}
+function user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesRootStatus() -> root.fixtures.namespaces_type_resolution.Status  [expr] {
+  {  } root.fixtures.namespaces_type_resolution.Status.Ok
+}

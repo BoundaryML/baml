@@ -1,0 +1,119 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.closures.Box {
+  value: T
+}
+class user.fixtures.closures.Box$stream {
+  value: T | null
+}
+class user.fixtures.closures.Calculator {
+  op: string
+}
+class user.fixtures.closures.Calculator$stream {
+  op: string | null
+}
+class user.fixtures.closures.Config {
+  encoder: user.fixtures.closures.Encoder
+}
+class user.fixtures.closures.Config$stream {
+  encoder: user.fixtures.closures.Encoder$stream | null
+}
+class user.fixtures.closures.Counter {
+  value: int
+}
+class user.fixtures.closures.Counter$stream {
+  value: int | null
+}
+class user.fixtures.closures.Employee {
+  first: string
+  last: string
+}
+class user.fixtures.closures.Employee$stream {
+  first: string | null
+  last: string | null
+}
+class user.fixtures.closures.Encoder {
+  charset: string
+}
+class user.fixtures.closures.Encoder$stream {
+  charset: string | null
+}
+class user.fixtures.closures.Formatter {
+  prefix: string
+}
+class user.fixtures.closures.Formatter$stream {
+  prefix: string | null
+}
+class user.fixtures.closures.RangeCheck {
+  min: int
+  max: int
+}
+class user.fixtures.closures.RangeCheck$stream {
+  min: int | null
+  max: int | null
+}
+function user.fixtures.closures.apply(f: (int, int) -> int, a: int, b: int) -> int  [expr] {
+  {  } f(a, b)
+}
+function user.fixtures.closures.apply_to_each(items: user.fixtures.closures.Employee[], f: (user.fixtures.closures.Employee) -> string) -> string[]  [expr] {
+  {  } items.map(f)
+}
+function user.fixtures.closures.compute(self: ?, a: int, b: int) -> int  [expr] {
+  {  } if (self.op Eq "add") {  } a Add b else {  } a Mul b
+}
+function user.fixtures.closures.encode(self: ?, data: string) -> string  [expr] {
+  {  } "[" Add self.charset Add "]" Add data
+}
+function user.fixtures.closures.format(self: ?, text: string) -> string  [expr] {
+  {  } self.prefix Add text
+}
+function user.fixtures.closures.full_name(self: ?) -> string  [expr] {
+  {  } self.first Add " " Add self.last
+}
+function user.fixtures.closures.greet(self: ?, greeting: string) -> string  [expr] {
+  {  } greeting Add ", " Add self.first
+}
+function user.fixtures.closures.increment(self: ?) -> int  [expr] {
+  { self.value Add= 1 } self.value
+}
+function user.fixtures.closures.is_valid(self: ?, n: int) -> bool  [expr] {
+  {  } n Ge self.min And n Le self.max
+}
+function user.fixtures.closures.test_bound_in_lambda() -> string  [expr] {
+  { let emp = user.fixtures.closures.Employee { first: "Alice", last: "Smith" }; let make_greeter = () -> { {  } emp.greet }; let greeter = make_greeter() } greeter("Hello")
+}
+function user.fixtures.closures.test_bound_mapper() -> string[]  [expr] {
+  { let fmt = user.fixtures.closures.Formatter { prefix: ">> " }; let transform = fmt.format } ["hello", "world"].map(transform)
+}
+function user.fixtures.closures.test_bound_validator() -> bool[]  [expr] {
+  { let valid = user.fixtures.closures.RangeCheck { min: 10, max: 50 }; let check = valid.is_valid } [5, 15, 25, 75].map(check)
+}
+function user.fixtures.closures.test_field_chain_bind(cfg: user.fixtures.closures.Config) -> string  [expr] {
+  { let enc = cfg.encoder.encode } enc("payload")
+}
+function user.fixtures.closures.test_generic_bind() -> int  [expr] {
+  { let b = user.fixtures.closures.Box { value: 42 }; let get = b.unwrap } get()
+}
+function user.fixtures.closures.test_mutation_after_bind() -> int  [expr] {
+  { let c = user.fixtures.closures.Counter { value: 0 }; let inc = c.increment; c.value = 100 } inc()
+}
+function user.fixtures.closures.test_repeated_bound_calls() -> int  [expr] {
+  { let c = user.fixtures.closures.Counter { value: 0 }; let inc = c.increment; inc(); inc() } inc()
+}
+function user.fixtures.closures.test_strategy() -> int[]  [expr] {
+  { let add_calc = user.fixtures.closures.Calculator { op: "add" }; let mul_calc = user.fixtures.closures.Calculator { op: "mul" }; let do_add = add_calc.compute; let do_mul = mul_calc.compute } [apply(do_add, 3, 4), apply(do_mul, 3, 4)]
+}
+function user.fixtures.closures.test_unbound_higher_order() -> string[]  [expr] {
+  { let employees = [user.fixtures.closures.Employee { first: "Alice", last: "Smith" }] } apply_to_each(employees, Employee.full_name)
+}
+function user.fixtures.closures.test_unbound_in_map() -> string[]  [expr] {
+  { let employees = [user.fixtures.closures.Employee { first: "Alice", last: "Smith" }, user.fixtures.closures.Employee { first: "Bob", last: "Jones" }] } employees.map(Employee.full_name)
+}
+function user.fixtures.closures.unwrap(self: ?) -> T  [expr] {
+  {  } self.value
+}
+
+--- captures ---
+lambda () in test_bound_in_lambda: captures [emp]

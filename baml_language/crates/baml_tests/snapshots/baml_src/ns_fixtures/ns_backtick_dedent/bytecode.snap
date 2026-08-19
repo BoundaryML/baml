@@ -1,0 +1,94 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.backtick_dedent.FarIndented() -> string {
+    load_const "deeply\npushed in"
+    return
+}
+
+function fixtures.backtick_dedent.FirstLineFlush() -> string {
+    load_const "first\n          nested under first"
+    return
+}
+
+function fixtures.backtick_dedent.ForLoopVerbatim(xs: string[]) -> string {
+    load_const ""
+    store_var  __m3_for
+    load_var xs
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _8
+    load_type string
+    load_var _4
+    call baml.String.from
+    store_var _11
+    load_var _8
+    load_const "- "
+    load_var _11
+    bin_op +
+    load_const "\n"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_var  __m3_for
+    return
+}
+
+function fixtures.backtick_dedent.MultilineInterpVerbatim() -> string {
+    load_type string
+    load_const "x"
+    call baml.String.from
+    store_var _1
+    load_const "value: "
+    load_var _1
+    bin_op +
+    return
+}
+
+function fixtures.backtick_dedent.Ragged() -> string {
+    load_const "header\n    bullet one\n    bullet two\nfooter"
+    return
+}
+
+function fixtures.backtick_dedent.WithBlankLines() -> string {
+    load_const "para one\n\npara two"
+    return
+}
+
+function fixtures.backtick_dedent.WithInterps(name: string, count: int) -> string {
+    load_type string
+    load_var name
+    call baml.String.from
+    store_var _5
+    load_type int
+    load_var count
+    call baml.String.from
+    store_var _7
+    load_const "name:  "
+    load_var _5
+    bin_op +
+    load_const "\ncount: "
+    bin_op +
+    load_var _7
+    bin_op +
+    return
+}

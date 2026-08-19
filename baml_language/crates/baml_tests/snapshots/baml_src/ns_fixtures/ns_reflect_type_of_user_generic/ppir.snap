@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.reflect_type_of_user_generic.Person {
+  name: string
+}
+class user.fixtures.reflect_type_of_user_generic.Person$stream {
+  name: string | null
+}
+function user.fixtures.reflect_type_of_user_generic.reflect_array() -> type  [expr] {
+  {  } type.of()
+}
+function user.fixtures.reflect_type_of_user_generic.reflect_int_array() -> type  [expr] {
+  {  } reflect_array()
+}
+function user.fixtures.reflect_type_of_user_generic.reflect_person() -> type  [expr] {
+  {  } reflect_type()
+}
+function user.fixtures.reflect_type_of_user_generic.reflect_type() -> type  [expr] {
+  {  } type.of()
+}

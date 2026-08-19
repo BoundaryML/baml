@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.method_explicit_type_args.Foo.zero(self: fixtures.method_explicit_type_args.Foo) -> #0 | null {
+    load_const null
+    return
+}
+
+function fixtures.method_explicit_type_args.use_method_type_args() -> int {
+    load_type int
+    load_const "x"
+    init_instance user.fixtures.method_explicit_type_args.Foo .tag
+    call user.fixtures.method_explicit_type_args.Foo.zero
+    store_var_load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 5
+    store_var _3
+
+  L0:
+    load_var _3
+    return
+}

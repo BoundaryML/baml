@@ -1,0 +1,137 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function future_methods.$init_test_ns_future_methods_future_methods(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.future_methods"
+    load_const "methods_after_successful_settle"
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.future_methods"
+    load_const "methods_on_pending_future"
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.future_methods"
+    load_const "methods_after_cancel"
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.future_methods"
+    load_const "methods_on_errored_future"
+    make_closure .<lambda($init_test_ns_future_methods_future_methods, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function future_methods.fail_io() -> int {
+    load_const "x"
+    init_instance baml.errors.Io .message
+    throw
+}
+
+function future_methods.methods_after_cancel() -> baml.future.FutureState {
+    make_closure .<lambda(methods_after_cancel, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type baml.errors.Io
+    spawn
+    store_var _3
+    load_var _3
+    store_var f
+    load_var f
+    call baml.future.Future.cancel
+    pop 1
+    load_var f
+    call baml.future.Future.state
+    return
+}
+
+function future_methods.methods_after_successful_settle() -> bool[] {
+    make_closure .<lambda(methods_after_successful_settle, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type never
+    spawn
+    store_var _3
+    load_var _3
+    store_var_load_var f
+    await
+    pop 1
+    load_var f
+    call baml.future.Future.is_settled
+    load_var f
+    call baml.future.Future.is_result
+    load_var f
+    call baml.future.Future.is_error
+    load_var f
+    call baml.future.Future.is_cancelled
+    load_var f
+    call baml.future.Future.cancel
+    load_type bool
+    alloc_array 5
+    return
+}
+
+function future_methods.methods_on_errored_future() -> baml.future.FutureState {
+    make_closure .<lambda(methods_on_errored_future, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type baml.errors.Io
+    spawn
+    store_var _3
+    load_var _3
+    store_var_load_var f
+    await
+    pop 1
+    jump L1
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var f
+    call baml.future.Future.state
+    return
+}
+
+function future_methods.methods_on_pending_future() -> baml.future.FutureState {
+    make_closure .<lambda(methods_on_pending_future, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type baml.errors.Io
+    spawn
+    store_var _3
+    load_var _3
+    store_var f
+    load_var f
+    call baml.future.Future.is_settled
+    pop 1
+    load_var f
+    call baml.future.Future.state
+    store_var observed
+    load_var f
+    call baml.future.Future.cancel
+    pop 1
+    load_var observed
+    return
+}

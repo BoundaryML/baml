@@ -1,0 +1,1255 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function comparable_sort.$init_test_ns_comparable_sort_comparable_sort(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "spike_1a_projection_normalizes_to_never_at_concrete_callsite"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "spike_1a_concrete_error_is_catchable_at_callsite"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "spike_1a_symbolic_projection_propagates_through_generic_code"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "spike_1b_blanket_method_resolves_on_array_receiver"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "spike_1b_blanket_interface_method_wins_over_array_class_method"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "spike_1c_two_self_method_through_bounded_typevar_runs"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "phase2_user_class_compare_direct_call_in_main"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "phase2_user_class_compare_with_explicit_binding_in_main"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "phase3_runtime_sort_ints"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "phase3_runtime_generic_compare_on_primitive"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "phase3_runtime_generic_compare_on_user_class"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "phase3_runtime_sort_user_class"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "phase3_runtime_generic_fn_sort_by_compare_ints"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "phase3_runtime_user_generic_sort_by_compare_user_class"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "phase3_runtime_sort_param_receiver_in_function"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "phase5_class_with_comparable_sort_compiles_and_runs"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "is_primitive_on_generic_value_tests_realized_type"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "element_is_dispatch_runtime_both_branches"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "parity_fast_path_matches_comparator_path"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "float_nan_sorts_via_total_order_no_throw"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "sort_user_class_with_out_of_body_comparable_impl"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparable_sort"
+    load_const "user_class_still_sorts_through_comparator_path"
+    make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function comparable_sort.Countable$for$T[].count(self: #0[]) -> int {
+    load_const -1
+    return
+}
+
+function comparable_sort.FirstNamed$for$T[].first_name(self: #0[]) -> string {
+    load_var self
+    container_len
+    store_var _3
+    load_var _3
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    load_const 0
+    load_array_element
+    load_type comparable_sort.Named
+    virtual_load_field .name
+    jump L2
+
+  L1:
+    load_const ""
+
+  L2:
+    return
+}
+
+function comparable_sort.Num.Cmp.compare(self: comparable_sort.Num, other: comparable_sort.Num) -> int {
+    load_var self
+    load_field .value
+    load_var other
+    load_field .0
+    sub_int
+    return
+}
+
+function comparable_sort.OobScore.baml.Comparable.compare(self: comparable_sort.OobScore, other: comparable_sort.OobScore) -> int {
+    load_var self
+    load_field .points
+    load_var other
+    load_field .0
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.ParityItem.baml.Comparable.compare(self: comparable_sort.ParityItem, other: comparable_sort.ParityItem) -> int {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .0
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.Ranked.baml.Comparable.compare(self: comparable_sort.Ranked, other: comparable_sort.Ranked) -> int {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .0
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.Resume.baml.Comparable.compare(self: comparable_sort.Resume, other: comparable_sort.Resume) -> int {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .0
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.Risky.HasErr.f(self: comparable_sort.Risky) -> int {
+    load_const "kaboom"
+    init_instance user.comparable_sort.Kaboom .message
+    throw
+}
+
+function comparable_sort.RouteItem.baml.Comparable.compare(self: comparable_sort.RouteItem, other: comparable_sort.RouteItem) -> int {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .0
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.Safe.HasErr.f(self: comparable_sort.Safe) -> int {
+    load_var self
+    load_field .value
+    return
+}
+
+function comparable_sort.Score.baml.Comparable.compare(self: comparable_sort.Score, other: comparable_sort.Score) -> int {
+    load_var self
+    load_field .points
+    load_var other
+    load_field .0
+    cmp_int_op <
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var self
+    load_field .points
+    load_var other
+    load_field .0
+    cmp_int_op >
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_const 1
+    jump L4
+
+  L3:
+    load_const -1
+
+  L4:
+    return
+}
+
+function comparable_sort.ScorePts.baml.Comparable.compare(self: comparable_sort.ScorePts, other: comparable_sort.ScorePts) -> int {
+    load_var self
+    load_field .points
+    load_var other
+    load_field .0
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.Wrap$for$T[].g(self: #0[]) -> int {
+    load_var self
+    container_len
+    store_var _3
+    load_var _3
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    load_const 0
+    load_array_element
+    load_type comparable_sort.HasErr
+    load_const "f"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    jump L2
+
+  L1:
+    load_const 0
+    store_var _0
+
+  L2:
+    load_var _0
+    return
+}
+
+function comparable_sort.call_g(us: #0[]) -> int {
+    load_var us
+    load_type comparable_sort.Wrap<WE = (#0 as comparable_sort.HasErr).E>
+    load_const "g"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.check(xs: #0[], ys: #0[]) -> bool {
+    load_var xs
+    load_type baml.Sortable<SortError = (#0 as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    pop 1
+    load_type #0
+    load_type (#0 as baml.Comparable).CompareError
+    load_var ys
+    load_type #0
+    make_closure .<lambda(check, 0)>, captures=0, ntypeargs=1
+    call baml.Array.sort_by
+    pop 1
+    load_var xs
+    container_len
+    store_var _9
+    load_var ys
+    container_len
+    store_var _10
+    load_var2 3 4
+    cmp_int_op !=
+    pop_jump_if_false L0
+    jump L6
+
+  L0:
+    load_const 0
+    store_var i
+
+  L1:
+    load_var i
+    store_var _13
+    load_var xs
+    container_len
+    store_var _14
+    load_var2 6 7
+    cmp_int_op <
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const true
+    jump L7
+
+  L3:
+    load_var2 1 5
+    load_array_element
+    load_var2 2 5
+    load_array_element
+    load_type baml.Comparable
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _16
+    load_var _16
+    load_const 0
+    cmp_int_op !=
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L1
+
+  L5:
+    load_const false
+    jump L7
+
+  L6:
+    load_const false
+
+  L7:
+    return
+}
+
+function comparable_sort.cmp(a: #0, b: #0) -> int {
+    load_var2 1 2
+    load_type baml.Comparable
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.dispatch_f(xs: #0[]) -> #0[] {
+    load_type #0
+    load_var xs
+    call user.comparable_sort.is_fast
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type #0
+    load_var xs
+    call user.comparable_sort.slow_g
+    jump L2
+
+  L1:
+    load_type #0
+    load_var xs
+    call user.comparable_sort.fast_g
+
+  L2:
+    return
+}
+
+function comparable_sort.do_sort(xs: int[]) -> int[] {
+    load_var xs
+    load_type baml.Sortable<SortError = never>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.element_dispatch_main() -> int {
+    load_type int
+    load_type int
+    alloc_array 0
+    call user.comparable_sort.dispatch_f
+    container_len
+    store_var _6
+    load_var _6
+    load_const 0
+    cmp_int_op !=
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_type int
+    load_const 3
+    load_const 1
+    load_type int
+    alloc_array 2
+    call user.comparable_sort.dispatch_f
+    container_len
+    store_var _11
+    load_var _11
+    load_const 2
+    cmp_int_op !=
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_type comparable_sort.RouteItem
+    load_const 7
+    init_instance user.comparable_sort.RouteItem .rank
+    load_type comparable_sort.RouteItem
+    alloc_array 1
+    call user.comparable_sort.dispatch_f
+    load_const 0
+    load_array_element
+    load_field .rank
+    jump L4
+
+  L2:
+    load_const -2
+    jump L4
+
+  L3:
+    load_const -1
+
+  L4:
+    return
+}
+
+function comparable_sort.fast_g(xs: #0[]) -> #0[] {
+    load_var xs
+    return
+}
+
+function comparable_sort.float_nan_sort_main() -> bool {
+    call baml.Float.nan
+    store_var _2
+    call baml.Float.inf
+    store_var _3
+    load_const 1.0
+    load_var _2
+    load_const 0.5
+    load_var _3
+    load_type float
+    alloc_array 4
+    store_var xs
+    load_var xs
+    load_type baml.Sortable<SortError = never>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    pop 1
+    load_type float
+    load_var xs
+    load_const 0
+    call baml.Array.at
+    load_const 0.5
+    call baml.ops.equals_equals
+    unary_op !
+    jump_if_false L0
+    jump L1
+
+  L0:
+    pop 1
+    load_type float
+    load_var xs
+    load_const 1
+    call baml.Array.at
+    load_const 1.0
+    call baml.ops.equals_equals
+    unary_op !
+
+  L1:
+    jump_if_false L2
+    jump L3
+
+  L2:
+    pop 1
+    load_type float
+    load_var xs
+    load_const 2
+    call baml.Array.at
+    store_var _14
+    call baml.Float.inf
+    store_var _16
+    load_var2 4 5
+    call baml.ops.equals_equals
+    unary_op !
+
+  L3:
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_type float
+    load_var xs
+    load_const 3
+    call baml.Array.at
+    store_var _18
+    load_var _18
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var _18
+    call baml.Float.is_nan
+    jump L8
+
+  L6:
+    load_const false
+    jump L8
+
+  L7:
+    load_const false
+
+  L8:
+    return
+}
+
+function comparable_sort.gsort(xs: #0[]) -> #0[] {
+    load_type #0
+    load_type (#0 as baml.Comparable).CompareError
+    load_var xs
+    load_type #0
+    make_closure .<lambda(gsort, 0)>, captures=0, ntypeargs=1
+    call baml.Array.sort_by
+    return
+}
+
+function comparable_sort.is_fast(xs: #0[]) -> bool {
+    load_var xs
+    container_len
+    store_var _2
+    load_var _2
+    load_const 0
+    cmp_int_op ==
+    return
+}
+
+function comparable_sort.is_primitive_probe_main() -> int {
+    load_type int
+    load_const 42
+    call user.comparable_sort.probe
+    load_const 10
+    mul_int
+    store_var _2
+    load_type string
+    load_const "s"
+    call user.comparable_sort.probe
+    load_var _2
+    add_int
+    return
+}
+
+function comparable_sort.lt(a: #0, b: #0) -> bool {
+    load_var2 1 2
+    load_type comparable_sort.Cmp
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_const 0
+    cmp_int_op <
+    return
+}
+
+function comparable_sort.oob_score_sort_main() -> int {
+    load_const 3
+    init_instance user.comparable_sort.OobScore .points
+    load_const 1
+    init_instance user.comparable_sort.OobScore .points
+    load_const 2
+    init_instance user.comparable_sort.OobScore .points
+    load_type comparable_sort.OobScore
+    alloc_array 3
+    load_type baml.Sortable<SortError = never>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var s
+    load_var s
+    load_const 0
+    load_array_element
+    load_field .points
+    load_const 100
+    mul_int
+    load_var s
+    load_const 1
+    load_array_element
+    load_field .points
+    load_const 10
+    mul_int
+    add_int
+    load_var s
+    load_const 2
+    load_array_element
+    load_field .points
+    add_int
+    return
+}
+
+function comparable_sort.parity_main() -> int {
+    load_type int
+    load_const 3
+    load_const 1
+    load_const 2
+    load_const 1
+    load_const 3
+    load_type int
+    alloc_array 5
+    load_const 3
+    load_const 1
+    load_const 2
+    load_const 1
+    load_const 3
+    load_type int
+    alloc_array 5
+    call user.comparable_sort.check
+    unary_op !
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    call baml.Float.nan
+    store_var _7
+    call baml.Float.inf
+    store_var _9
+    call baml.Float.inf
+    store_var _10
+    call baml.Float.nan
+    store_var _11
+    call baml.Float.nan
+    store_var _13
+    call baml.Float.inf
+    store_var _15
+    call baml.Float.inf
+    store_var _16
+    call baml.Float.nan
+    store_var _17
+    load_type float
+    load_const 2.5
+    load_var _7
+    load_const 0.0
+    load_var _9
+    sub_float
+    load_const 0.5
+    load_var _10
+    load_const 0.0
+    load_const -0.0
+    load_var _11
+    load_const 1.5
+    load_type float
+    alloc_array 9
+    load_const 2.5
+    load_var _13
+    load_const 0.0
+    load_var _15
+    sub_float
+    load_const 0.5
+    load_var _16
+    load_const 0.0
+    load_const -0.0
+    load_var _17
+    load_const 1.5
+    load_type float
+    alloc_array 9
+    call user.comparable_sort.check
+    unary_op !
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_type string
+    load_const "b"
+    load_const "a"
+    load_const "aa"
+    load_const "b"
+    load_type string
+    alloc_array 4
+    load_const "b"
+    load_const "a"
+    load_const "aa"
+    load_const "b"
+    load_type string
+    alloc_array 4
+    call user.comparable_sort.check
+    unary_op !
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_type bigint
+    load_const 3n
+    load_const 1n
+    load_const 2n
+    load_const 1n
+    load_type bigint
+    alloc_array 4
+    load_const 3n
+    load_const 1n
+    load_const 2n
+    load_const 1n
+    load_type bigint
+    alloc_array 4
+    call user.comparable_sort.check
+    unary_op !
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_type comparable_sort.ParityItem
+    load_const 3
+    init_instance user.comparable_sort.ParityItem .rank
+    load_const 1
+    init_instance user.comparable_sort.ParityItem .rank
+    load_const 2
+    init_instance user.comparable_sort.ParityItem .rank
+    load_type comparable_sort.ParityItem
+    alloc_array 3
+    load_const 3
+    init_instance user.comparable_sort.ParityItem .rank
+    load_const 1
+    init_instance user.comparable_sort.ParityItem .rank
+    load_const 2
+    init_instance user.comparable_sort.ParityItem .rank
+    load_type comparable_sort.ParityItem
+    alloc_array 3
+    call user.comparable_sort.check
+    unary_op !
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const 0
+    jump L10
+
+  L5:
+    load_const 5
+    jump L10
+
+  L6:
+    load_const 4
+    jump L10
+
+  L7:
+    load_const 3
+    jump L10
+
+  L8:
+    load_const 2
+    jump L10
+
+  L9:
+    load_const 1
+
+  L10:
+    return
+}
+
+function comparable_sort.phase2_compare_explicit_binding_main() -> int {
+    load_const 9
+    init_instance user.comparable_sort.Score .points
+    load_const 1
+    init_instance user.comparable_sort.Score .points
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var result
+    load_var result
+    return
+}
+
+function comparable_sort.phase2_compare_main() -> int {
+    load_const 9
+    init_instance user.comparable_sort.Score .points
+    load_const 1
+    init_instance user.comparable_sort.Score .points
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.phase3_generic_compare_primitive_main() -> int {
+    load_type int
+    load_const 3
+    load_const 1
+    call user.comparable_sort.cmp
+    return
+}
+
+function comparable_sort.phase3_generic_compare_user_class_main() -> int {
+    load_type comparable_sort.ScorePts
+    load_const 9
+    init_instance user.comparable_sort.ScorePts .points
+    load_const 1
+    init_instance user.comparable_sort.ScorePts .points
+    call user.comparable_sort.cmp
+    return
+}
+
+function comparable_sort.phase3_gsort_ints_main() -> int {
+    load_type int
+    load_const 3
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 3
+    call user.comparable_sort.gsort
+    store_var s
+    load_var s
+    load_const 0
+    load_array_element
+    load_const 100
+    mul_int
+    load_var s
+    load_const 1
+    load_array_element
+    load_const 10
+    mul_int
+    add_int
+    load_var s
+    load_const 2
+    load_array_element
+    add_int
+    return
+}
+
+function comparable_sort.phase3_gsort_user_class_main() -> int {
+    load_type comparable_sort.ScorePts
+    load_const 3
+    init_instance user.comparable_sort.ScorePts .points
+    load_const 1
+    init_instance user.comparable_sort.ScorePts .points
+    load_const 2
+    init_instance user.comparable_sort.ScorePts .points
+    load_type comparable_sort.ScorePts
+    alloc_array 3
+    call user.comparable_sort.gsort
+    store_var s
+    load_var s
+    load_const 0
+    load_array_element
+    load_field .points
+    load_const 100
+    mul_int
+    load_var s
+    load_const 1
+    load_array_element
+    load_field .points
+    load_const 10
+    mul_int
+    add_int
+    load_var s
+    load_const 2
+    load_array_element
+    load_field .points
+    add_int
+    return
+}
+
+function comparable_sort.phase3_param_receiver_main() -> int {
+    load_const 3
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 3
+    call user.comparable_sort.do_sort
+    store_var s
+    load_var s
+    load_const 0
+    load_array_element
+    load_const 100
+    mul_int
+    load_var s
+    load_const 1
+    load_array_element
+    load_const 10
+    mul_int
+    add_int
+    load_var s
+    load_const 2
+    load_array_element
+    add_int
+    return
+}
+
+function comparable_sort.phase3_sort_ints_main() -> int {
+    load_const 3
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 3
+    load_type baml.Sortable<SortError = never>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var s
+    load_var s
+    load_const 0
+    load_array_element
+    load_const 100
+    mul_int
+    load_var s
+    load_const 1
+    load_array_element
+    load_const 10
+    mul_int
+    add_int
+    load_var s
+    load_const 2
+    load_array_element
+    add_int
+    return
+}
+
+function comparable_sort.phase3_sort_user_class_main() -> int {
+    load_const 3
+    init_instance user.comparable_sort.ScorePts .points
+    load_const 1
+    init_instance user.comparable_sort.ScorePts .points
+    load_const 2
+    init_instance user.comparable_sort.ScorePts .points
+    load_type comparable_sort.ScorePts
+    alloc_array 3
+    load_type baml.Sortable<SortError = never>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var sorted
+    load_var sorted
+    load_const 0
+    load_array_element
+    load_field .points
+    return
+}
+
+function comparable_sort.phase5_resume_sort_main() -> int {
+    load_const 3
+    init_instance user.comparable_sort.Resume .rank
+    load_const 1
+    init_instance user.comparable_sort.Resume .rank
+    load_const 2
+    init_instance user.comparable_sort.Resume .rank
+    load_type comparable_sort.Resume
+    alloc_array 3
+    load_type baml.Sortable<SortError = never>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var sorted
+    load_var sorted
+    load_const 0
+    load_array_element
+    load_field .rank
+    return
+}
+
+function comparable_sort.probe(x: #0) -> int {
+    load_var x
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    jump L5
+
+  L4:
+    load_const 1
+
+  L5:
+    return
+}
+
+function comparable_sort.ranked_sort_main() -> string {
+    load_const 2
+    load_const "a"
+    init_instance user.comparable_sort.Ranked .rank, .tag
+    load_const 1
+    load_const "b"
+    init_instance user.comparable_sort.Ranked .rank, .tag
+    load_const 2
+    load_const "c"
+    init_instance user.comparable_sort.Ranked .rank, .tag
+    load_const 1
+    load_const "d"
+    init_instance user.comparable_sort.Ranked .rank, .tag
+    load_type comparable_sort.Ranked
+    alloc_array 4
+    store_var xs
+    load_var xs
+    load_type baml.Sortable<SortError = never>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var result
+    load_var2 2 1
+    call baml.ops.equals_equals
+    unary_op !
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type comparable_sort.Ranked
+    load_type string
+    load_type never
+    load_var xs
+    make_closure .<lambda(ranked_sort_main, 0)>, 0
+    call baml.Array.map
+    store_var _11
+    load_type string
+    load_var _11
+    load_const ""
+    call baml.Array.join
+    jump L2
+
+  L1:
+    load_const "not self"
+
+  L2:
+    return
+}
+
+function comparable_sort.slow_g(xs: #0[]) -> #0[] {
+    load_var xs
+    return
+}
+
+function comparable_sort.spike_1a_catch_main() -> string {
+    alloc_instance user.comparable_sort.Risky
+    load_type comparable_sort.Risky
+    alloc_array 1
+    load_type comparable_sort.Wrap<WE = comparable_sort.Kaboom>
+    load_const "g"
+    virtual_call nargs=1 ntypeargs=0
+    store_var v
+    jump L2
+    load_var e
+    is_type comparable_sort.Kaboom
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const "caught:"
+    load_var e
+    load_field .message
+    bin_op +
+    jump L3
+
+  L2:
+    load_const "no throw"
+
+  L3:
+    return
+}
+
+function comparable_sort.spike_1a_never_main() -> int {
+    load_const 7
+    init_instance user.comparable_sort.Safe .value
+    load_type comparable_sort.Safe
+    alloc_array 1
+    load_type comparable_sort.Wrap<WE = never>
+    load_const "g"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.spike_1a_symbolic_main() -> string {
+    load_type comparable_sort.Risky
+    alloc_instance user.comparable_sort.Risky
+    load_type comparable_sort.Risky
+    alloc_array 1
+    call user.comparable_sort.call_g
+    store_var v
+    jump L2
+    load_var e
+    is_type comparable_sort.Kaboom
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const "caught:"
+    load_var e
+    load_field .message
+    bin_op +
+    jump L3
+
+  L2:
+    load_const "no throw"
+
+  L3:
+    return
+}
+
+function comparable_sort.spike_1b_count_main() -> int {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_type comparable_sort.Countable
+    load_const "count"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.spike_1b_first_name_main() -> string {
+    load_const "Ada"
+    init_instance user.comparable_sort.Person .name
+    load_const "Bob"
+    init_instance user.comparable_sort.Person .name
+    load_type comparable_sort.Person
+    alloc_array 2
+    load_type comparable_sort.FirstNamed
+    load_const "first_name"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.spike_1c_main() -> bool {
+    load_type comparable_sort.Num
+    load_const 1
+    init_instance user.comparable_sort.Num .value
+    load_const 2
+    init_instance user.comparable_sort.Num .value
+    call user.comparable_sort.lt
+    return
+}

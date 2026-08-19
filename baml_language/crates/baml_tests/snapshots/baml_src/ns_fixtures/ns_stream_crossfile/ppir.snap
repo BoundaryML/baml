@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.stream_crossfile.Education {
+  school: string
+  degree: user.fixtures.stream_crossfile.Degree
+  year: int
+}
+class user.fixtures.stream_crossfile.Education$stream {
+  school: string | null
+  degree: user.fixtures.stream_crossfile.Degree | null
+  year: int | null
+}
+enum user.fixtures.stream_crossfile.Degree {Bachelors, Masters, PhD}
+type user.fixtures.stream_crossfile.EducationList = user.fixtures.stream_crossfile.Education[]
+type user.fixtures.stream_crossfile.EducationList$stream = user.fixtures.stream_crossfile.Education$stream[]
+class user.fixtures.stream_crossfile.Resume {
+  name: string
+  education: Education[]
+  highest_degree: Degree
+  aliases: EducationList
+}
+class user.fixtures.stream_crossfile.Resume$stream {
+  name: string | null
+  education: Education$stream[]
+  highest_degree: Degree | null
+  aliases: Education$stream[]
+}

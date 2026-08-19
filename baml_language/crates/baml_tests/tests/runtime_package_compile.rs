@@ -207,7 +207,7 @@ function Extract<T>(document: string) -> T {
   null
 }
 
-function function_listing_omits_unspecialized_generics() -> bool throws unknown {
+function function_listing_includes_unspecialized_generics() -> bool throws unknown {
   let pkg = reflect.Package.compile({
     "main.baml": #"
 function identity<T>(value: T) -> T { value }
@@ -215,7 +215,9 @@ function Present(value: string) -> string { value }
 "#
   })
   let functions = pkg.functions()
-  functions.get("root.identity") == null && functions.get("root.Present") != null
+  let generic = functions.get("root.identity") ?? throw "root.identity not listed"
+  let concrete = functions.get("root.Present") ?? throw "root.Present not listed"
+  generic.is_generic() && !concrete.is_generic()
 }
 
 function generic_function_companion_extraction_is_refused() -> string throws unknown {
@@ -547,16 +549,20 @@ async fn unspecialized_generic_get_function_reports_reflection_limit() {
         BexExternalValue::Instance { fields, .. }
             if fields.get("code") == Some(&BexExternalValue::String("E0165".into()))
                 && fields.get("message") == Some(&BexExternalValue::String(
-                    "generic function `root.Extract` cannot be extracted through reflection: reflected packages cannot supply type arguments yet".into()
+                    "generic function `root.Extract` cannot be extracted by name through reflection: look it up in `Package.functions()` and `specialize` it first".into()
                 ))
     )));
 }
 
+/// #4473 dropped unspecialized generics from `functions()` — not by decision
+/// but because `function_type` returned `None` when signature reconstruction
+/// failed. They are listed now, as descriptors that report `is_generic()` and
+/// take `specialize`; the omission was the dead end this API replaces.
 #[tokio::test]
-async fn function_listing_omits_unspecialized_generics() {
+async fn function_listing_includes_unspecialized_generics() {
     let output = baml_test!(
         baml: SCENARIO_6_SOURCE,
-        entry: "function_listing_omits_unspecialized_generics"
+        entry: "function_listing_includes_unspecialized_generics"
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
@@ -565,8 +571,10 @@ async fn function_listing_omits_unspecialized_generics() {
 /// declared surface mentions no `T`. B-1582 showed what that value is worth: its
 /// body still materializes `T`, so calling it dies inside `LoadType` as an
 /// internal error no `catch` can see. The companion is still *listed* — see the
-/// test below — but extracting it now reports the same reflection limit its
-/// parent does.
+/// test below — but extracting it **by name** still reports the same reflection
+/// limit its parent does: a name lookup has nowhere to put type arguments. The
+/// route that works is the descriptor's own `specialize` then `get` (see
+/// `reflect_specialize.rs`).
 #[tokio::test]
 async fn generic_function_companion_extraction_reports_reflection_limit() {
     let output = baml_test!(

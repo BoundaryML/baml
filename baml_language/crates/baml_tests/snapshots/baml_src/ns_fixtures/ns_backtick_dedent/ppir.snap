@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.backtick_dedent.FarIndented() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_dedent.FirstLineFlush() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_dedent.ForLoopVerbatim(xs: string[]) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_dedent.MultilineInterpVerbatim() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_dedent.Ragged() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_dedent.WithBlankLines() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_dedent.WithInterps(name: string, count: int) -> string  [expr] {
+  {  } `...`
+}

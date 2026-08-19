@@ -1,0 +1,46 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.patterns_class_destructure_namespaces.DeepGenericDestructureNamespaceQualifiedLet() -> int  [expr] {
+  { let outer: llm.openai.Outer<string> = llm.openai.Outer { inner: llm.openai.Box { value: "done" } }; let llm.openai.Outer<string> { inner: llm.openai.Box<string> { value: value } } = outer } value.length()
+}
+function user.fixtures.patterns_class_destructure_namespaces.DeepGenericDestructureQualifiedLet() -> int  [expr] {
+  { let outer: root.fixtures.patterns_class_destructure_namespaces.llm.openai.Outer<int> = root.fixtures.patterns_class_destructure_namespaces.llm.openai.Outer { inner: root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box { value: 52 } }; let root.fixtures.patterns_class_destructure_namespaces.llm.openai.Outer<int> { inner: root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> { value: value } } = outer } value
+}
+function user.fixtures.patterns_class_destructure_namespaces.DestructureNamespaceQualifiedLet() -> int  [expr] {
+  { let response = llm.openai.Response { text: "ok", score: 45 }; let llm.openai.Response { score: score } = response } score
+}
+function user.fixtures.patterns_class_destructure_namespaces.DestructureNamespaceQualifiedMatch() -> int  [expr] {
+  { let response = llm.openai.Response { text: "ok", score: 46 } } match (response) { llm.openai.Response { score: 0 } => 0, llm.openai.Response { score: matched } => matched }
+}
+function user.fixtures.patterns_class_destructure_namespaces.DestructureQualifiedLet() -> int  [expr] {
+  { let response = root.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { text: "ok", score: 41 }; let root.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { score: score } = response } score
+}
+function user.fixtures.patterns_class_destructure_namespaces.DestructureQualifiedMatch() -> int  [expr] {
+  { let response = root.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { text: "ok", score: 42 } } match (response) { root.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { score: 0 } => 0, root.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { score: matched } => matched }
+}
+function user.fixtures.patterns_class_destructure_namespaces.GenericDestructureNamespaceQualifiedLet() -> int  [expr] {
+  { let boxed: llm.openai.Box<string> = llm.openai.Box { value: "ok" }; let llm.openai.Box<string> { value: value } = boxed } value.length()
+}
+function user.fixtures.patterns_class_destructure_namespaces.GenericDestructureQualifiedLet() -> int  [expr] {
+  { let boxed: root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> = root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box { value: 49 }; let root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> { value: value } = boxed } value
+}
+function user.fixtures.patterns_class_destructure_namespaces.GenericTypePatternNamespaceQualifiedMatch() -> int  [expr] {
+  { let boxed: llm.openai.Box<int> | llm.openai.Box<string> = llm.openai.Box { value: "ready" } } match (boxed) { llm.openai.Box<int> => 0, llm.openai.Box<string> => 51 }
+}
+function user.fixtures.patterns_class_destructure_namespaces.GenericTypePatternQualifiedMatch() -> int  [expr] {
+  { let boxed: root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> | root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string> = root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box { value: 50 } } match (boxed) { root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string> => 0, root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> => 50 }
+}
+function user.fixtures.patterns_class_destructure_namespaces.TypePatternNamespaceQualifiedLet() -> int  [expr] {
+  { let response: llm.openai.Response = llm.openai.Response { text: "ok", score: 47 } } response.score
+}
+function user.fixtures.patterns_class_destructure_namespaces.TypePatternNamespaceQualifiedMatch() -> int  [expr] {
+  { let response = llm.openai.Response { text: "ok", score: 48 } } match (response) { llm.openai.Response => response.score }
+}
+function user.fixtures.patterns_class_destructure_namespaces.TypePatternQualifiedLet() -> int  [expr] {
+  { let response: root.fixtures.patterns_class_destructure_namespaces.llm.openai.Response = root.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { text: "ok", score: 43 } } response.score
+}
+function user.fixtures.patterns_class_destructure_namespaces.TypePatternQualifiedMatch() -> int  [expr] {
+  { let response = root.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { text: "ok", score: 44 } } match (response) { root.fixtures.patterns_class_destructure_namespaces.llm.openai.Response => response.score }
+}

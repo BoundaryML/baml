@@ -76,7 +76,7 @@ fn assert_deterministic(root: &Path, emit_test_cases: bool) {
 /// empty-program emit path, and every stdlib-derived table.
 #[test]
 fn empty_project_emit_is_deterministic() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/compiles/__baml_std__");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/empty");
     assert_deterministic(&root, false);
 }
 
@@ -152,7 +152,7 @@ fn build_db(root: &Path, sources: &[(PathBuf, String)]) -> ProjectDatabase {
 /// it), not merely reusable within one project.
 #[test]
 fn stdlib_splice_is_byte_identical_to_full_compile() {
-    let empty_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/compiles/__baml_std__");
+    let empty_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/empty");
     let empty_sources = read_project(&empty_root);
     let base = generate_stdlib_program(&build_db(&empty_root, &empty_sources), OptLevel::Two)
         .expect("stdlib compile failed");

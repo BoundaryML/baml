@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+testset "basic group" {
+    test "first" {
+        assert.is_true(true)
+    }
+    test "second" {
+        assert.is_true(true)
+    }
+}

@@ -1,0 +1,45 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.lambda_field_access.Inner {
+  value: int
+}
+class user.fixtures.lambda_field_access.Inner$stream {
+  value: int | null
+}
+class user.fixtures.lambda_field_access.Outer {
+  inner: user.fixtures.lambda_field_access.Inner
+  name: string
+}
+class user.fixtures.lambda_field_access.Outer$stream {
+  inner: user.fixtures.lambda_field_access.Inner$stream | null
+  name: string | null
+}
+function user.fixtures.lambda_field_access.test_captured_field_access(obj: user.fixtures.lambda_field_access.Outer) -> string  [expr] {
+  { let get_name = () -> string { {  } obj.name } } get_name()
+}
+function user.fixtures.lambda_field_access.test_captured_nested_field(obj: user.fixtures.lambda_field_access.Outer) -> int  [expr] {
+  { let get_value = () -> int { {  } obj.inner.value } } get_value()
+}
+function user.fixtures.lambda_field_access.test_lambda_param_and_capture(obj: user.fixtures.lambda_field_access.Outer) -> int  [expr] {
+  { let add_to_value = (x: int) -> int { {  } x Add obj.inner.value } } add_to_value(10)
+}
+function user.fixtures.lambda_field_access.test_nested_lambda_capture(obj: user.fixtures.lambda_field_access.Outer) -> string  [expr] {
+  { let outer_fn = () -> { { let inner_fn = () -> string { {  } obj.name } } inner_fn() } } outer_fn()
+}
+function user.fixtures.lambda_field_access.test_no_leak_after_lambda(obj: user.fixtures.lambda_field_access.Outer) -> string  [expr] {
+  { let get_value = () -> int { {  } obj.inner.value }; let v = get_value(); let result = obj } result.name
+}
+function user.fixtures.lambda_field_access.test_sequential_lambdas(obj: user.fixtures.lambda_field_access.Outer) -> int  [expr] {
+  { let get_name = () -> string { {  } obj.name }; let get_value = () -> int { {  } obj.inner.value }; let n = get_name() } get_value()
+}
+
+--- captures ---
+lambda () in test_captured_field_access: captures [obj]
+lambda () in test_captured_nested_field: captures [obj]
+lambda () in test_no_leak_after_lambda: captures [obj]
+lambda () in ?: captures [obj]
+lambda () in test_sequential_lambdas: captures [obj]
+lambda () in test_sequential_lambdas: captures [obj]
+lambda (x) in test_lambda_param_and_capture: captures [obj]

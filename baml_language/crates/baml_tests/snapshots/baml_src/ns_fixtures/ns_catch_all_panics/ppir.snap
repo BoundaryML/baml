@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.catch_all_panics.CatchAllPanicsTyped(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch_all_panics (e) { string => "caught string", int => "caught int" }
+}
+function user.fixtures.catch_all_panics.CatchAllPanicsWildcard(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch_all_panics (e) { _ => "caught all" }
+}
+function user.fixtures.catch_all_panics.CatchThenCatchAllPanics(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch (e) { string => "caught string" } catch_all_panics (e2) { _ => "caught rest" }
+}
+function user.fixtures.catch_all_panics.MayFailIntOrString(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw "string error", 1 => throw 42, _ => "ok" }
+}

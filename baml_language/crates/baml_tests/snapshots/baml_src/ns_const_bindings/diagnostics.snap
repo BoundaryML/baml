@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_bindings.baml:16:5]
+ 16 │     const sum = 0;
+    ·     ──┬──
+    ·       ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_bindings.baml:17:10]
+ 17 │     for (const i = 0; i < 4; i += 1) {
+    ·          ──┬──
+    ·            ╰── `const` behaves like `let` for now
+    ╰────

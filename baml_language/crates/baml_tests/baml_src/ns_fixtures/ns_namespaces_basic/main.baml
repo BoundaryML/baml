@@ -1,0 +1,10 @@
+// Root namespace: defines Config, references root.fixtures.namespaces_basic.llm.Response
+class Config {
+    key string
+    model string
+}
+
+// Cross-namespace reference: use type from ns_llm namespace
+function GetResponse(cfg: Config) -> root.fixtures.namespaces_basic.llm.Response {
+    root.fixtures.namespaces_basic.llm.Response { text: "hello", model: cfg.model }
+}

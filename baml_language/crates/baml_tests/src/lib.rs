@@ -234,6 +234,9 @@ pub mod compiler2_mir;
 pub mod compiler2_emit;
 
 #[cfg(test)]
+pub mod corpus;
+
+#[cfg(test)]
 pub mod incremental;
 
 #[cfg(test)]
