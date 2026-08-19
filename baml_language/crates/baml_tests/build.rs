@@ -486,7 +486,11 @@ fn generate_project_tests(project: &TestProject) -> TokenStream {
         Tier::DiagnosticErrors => {
             // Tier 2: HIR, TIR, formatter — no MIR, no codegen
             let hir = generate_hir_test(project, stdlib_package_filter);
-            let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
+            let fmt: TokenStream = project
+                .files
+                .iter()
+                .map(|file| generate_formatter_test(project, file))
+                .collect();
             (hir, quote! {}, quote! {}, quote! {}, fmt)
         }
         Tier::Compiles | Tier::Passing | Tier::PassingLlm => {
@@ -494,7 +498,11 @@ fn generate_project_tests(project: &TestProject) -> TokenStream {
             let hir = generate_hir_test(project, stdlib_package_filter);
             let mir = generate_mir_test(project, stdlib_package_filter);
             let cg = generate_codegen_test(project, stdlib_package_filter);
-            let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
+            let fmt: TokenStream = project
+                .files
+                .iter()
+                .map(|file| generate_formatter_test(project, file))
+                .collect();
             (hir, quote! {}, mir, cg, fmt)
         }
     };
@@ -1077,11 +1085,21 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
     }
 }
 
-fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
+fn generate_formatter_test(project: &TestProject, baml_file: &BamlFile) -> TokenStream {
     let test_name = format_ident!("test_10_formatter_{}", baml_file.name);
 
     let snapshot_name = format!("10_formatter__{}", baml_file.name);
-    let full_path = baml_file.full_path.display().to_string();
+    // Only the RELATIVE subpath is baked (same rule as SNAPSHOT_SUBPATH
+    // above): this is the one generated test that reads its input at RUN
+    // time, so an absolute build-dir path would dangle in a prebuilt
+    // (relocated) test binary.
+    let input_subpath = format!(
+        "projects/{}/{}/{}",
+        project.tier.dir_name(),
+        project.name,
+        baml_file.relative_path.display()
+    )
+    .replace('\\', "/");
     let relative_path = baml_file.relative_path.display().to_string();
 
     quote! {
@@ -1090,9 +1108,11 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
             // Read at runtime rather than include_str!: an embedded copy goes
             // stale when a restored CI target/ cache skips re-embedding a
             // changed corpus file, making the formatter output disagree with a
-            // freshly-updated snapshot on CI only.
-            let content = std::fs::read_to_string(#full_path)
-                .unwrap_or_else(|e| panic!("failed to read {}: {e}", #full_path));
+            // freshly-updated snapshot on CI only. Resolved through
+            // crate::manifest_dir() so the read survives relocation too.
+            let input_path = crate::manifest_dir().join(#input_subpath);
+            let content = std::fs::read_to_string(&input_path)
+                .unwrap_or_else(|e| panic!("failed to read {}: {e}", input_path.display()));
             // Normalize line endings for cross-platform compatibility
             let content = content.replace("\r\n", "\n");
             let options = baml_fmt::FormatOptions::default();

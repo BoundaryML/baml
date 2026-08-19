@@ -193,8 +193,27 @@ fn baml_test() {
     let home = tmp.path().join("home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
-    let status = std::process::Command::new("cargo")
-        .args(["run", "-p", "baml_cli", "--", "test", "--from"])
+    // The CLI invocation is relocatable like every other path in this crate:
+    // BAML_CLI_BIN names a prebuilt baml_cli to run directly; unset, `cargo
+    // run` is pointed at the workspace manifest resolved through
+    // manifest_dir(), so the test works from any working directory instead
+    // of assuming the cwd sits inside the workspace. Byte-identical from a
+    // workspace checkout with neither env set.
+    let mut command = match std::env::var_os("BAML_CLI_BIN") {
+        Some(bin) => std::process::Command::new(bin),
+        None => {
+            let manifest = baml_tests::manifest_dir().join("../../Cargo.toml");
+            let mut command = std::process::Command::new("cargo");
+            command
+                .arg("run")
+                .arg("--manifest-path")
+                .arg(manifest)
+                .args(["-p", "baml_cli", "--"]);
+            command
+        }
+    };
+    let status = command
+        .args(["test", "--from"])
         .arg(baml_src_dir())
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BAML_HOME", &home)
