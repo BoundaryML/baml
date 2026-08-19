@@ -382,6 +382,11 @@ pub enum DiagnosticId {
     /// A condition whose static type decides the branch (always truthy /
     /// always falsy) - B-1563 truthiness.
     ConditionAlwaysConstant,
+    /// An inline `unreflect(value)` type argument would escape its call: the
+    /// runtime type parameter is rigid for that one call, but the expression's
+    /// published type still mentions it. The lexical `type T = unreflect(v)`
+    /// binding is the spelling that outlives the call.
+    RuntimeTypeMustBeNamed,
 }
 
 impl DiagnosticId {
@@ -588,6 +593,8 @@ impl DiagnosticId {
             // E0164 is owned by the non-data output-format diagnostic in #4470.
             DiagnosticId::UnspecializedReflectedGeneric => "E0165",
             DiagnosticId::CannotConstructBuiltinCompanion => "E0166",
+            // E0167 is owned by the always-constant-condition lint in #4498.
+            DiagnosticId::RuntimeTypeMustBeNamed => "E0168",
         }
     }
 }

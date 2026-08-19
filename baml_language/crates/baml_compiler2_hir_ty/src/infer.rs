@@ -729,6 +729,12 @@ enum PendingDiag<'db> {
     RuntimeTypeArgumentOnIndirectCall {
         expr: ExprId,
     },
+    /// An inline `unreflect(carrier)` slot whose rigid parameter survives into
+    /// `enclosing`'s published type.
+    RuntimeTypeMustBeNamed {
+        carrier: ExprId,
+        enclosing: ExprId,
+    },
     CannotConstructReflectionKind {
         expr: ExprId,
         class_name: baml_type::QualifiedTypeName,
@@ -1649,6 +1655,9 @@ struct InferenceContext<'db> {
     /// consumes it into durable `CallPlan::deferred_checks`, so defaults and
     /// sibling bodies cannot observe it.
     runtime_dependent_call_params: FxHashMap<ExprId, FxHashMap<usize, Ty>>,
+    /// Carriers already reported as escaping their call (E0168), so a callee
+    /// road walked twice reports once.
+    reported_runtime_escapes: rustc_hash::FxHashSet<ExprId>,
     result: InferenceResult<'db>,
 }
 
@@ -1709,6 +1718,7 @@ impl<'db> InferenceContext<'db> {
             overlap_aliases: std::cell::OnceCell::new(),
             wf_scope_env: std::cell::OnceCell::new(),
             runtime_dependent_call_params: FxHashMap::default(),
+            reported_runtime_escapes: rustc_hash::FxHashSet::default(),
             result: InferenceResult::default(),
         }
     }
@@ -7059,6 +7069,7 @@ impl<'db> InferenceContext<'db> {
         if runtime_params.is_empty() {
             return;
         }
+        self.report_runtime_type_escape(call, &Ty::from_plain(&function.return_type));
         let mut dependent = FxHashMap::default();
         for (param_index, param) in function
             .params
@@ -7241,6 +7252,49 @@ impl<'db> InferenceContext<'db> {
             .collect()
     }
 
+    /// BEP-066 ruling (A): an inline `unreflect(value)` type argument is legal
+    /// only while the runtime type stays out of the expression's published
+    /// type. The parameter is rigid for this call alone — the call site
+    /// publishes `occurrence_ty` in its place — so a result that still
+    /// mentions the parameter would be typed by a substitution the value does
+    /// not actually satisfy afterwards, and every later dispatch re-derives
+    /// the receiver's arguments from that published type.
+    ///
+    /// The exception, and the reason this is an occurs-check on the RESULT
+    /// rather than a ban on the spelling, is a result that IS the parameter
+    /// (`parse<T>(..) -> T`): occurrence-substitution then types a VALUE, the
+    /// runtime tag rides on the value itself, and nothing static claims more
+    /// than `unknown`. That is the supported dynamic path and stays legal.
+    /// One position deeper — `Wrapper<T>`, `T[]`, `T?`, a constructed `C<T>` —
+    /// the occurrence substitutes into a type CONSTRUCTOR, and the published
+    /// type starts asserting something about the value.
+    fn report_runtime_type_escape(&mut self, call: ExprId, declared_ret: &Ty) {
+        let escaping: Vec<ExprId> = self
+            .result
+            .call_plans
+            .get(&call)
+            .into_iter()
+            .flat_map(|plan| &plan.slots)
+            .filter_map(|slot| match slot {
+                CallTypeArgPlan::Runtime {
+                    operand, parameter, ..
+                } => runtime_param_escapes_result(declared_ret, parameter).then_some(*operand),
+                CallTypeArgPlan::Static { .. } => None,
+            })
+            .collect();
+        for carrier in escaping {
+            // A callee can be typed more than once (the interface probe
+            // re-runs the member road); the slot is reported once.
+            if self.reported_runtime_escapes.insert(carrier) {
+                self.pending_diags
+                    .push(PendingDiag::RuntimeTypeMustBeNamed {
+                        carrier,
+                        enclosing: call,
+                    });
+            }
+        }
+    }
+
     fn record_runtime_dependent_arguments(
         &mut self,
         call: ExprId,
@@ -7254,6 +7308,7 @@ impl<'db> InferenceContext<'db> {
         }) {
             return;
         }
+        self.report_runtime_type_escape(call, &signature.ret);
         let runtime_params = self.runtime_call_params(call);
         if runtime_params.is_empty() {
             return;
@@ -9471,6 +9526,15 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::RuntimeTypeArgumentOnIndirectCall { expr } => {
                         (TirTypeError::RuntimeTypeArgumentOnIndirectCall, expr)
                     }
+                    PendingDiag::RuntimeTypeMustBeNamed { carrier, enclosing } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::RuntimeTypeMustBeNamed,
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::UnreflectArg { carrier, enclosing },
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::CannotConstructReflectionKind { expr, class_name } => (
                         TirTypeError::CannotConstructReflectionKind { class_name },
                         expr,
@@ -9971,6 +10035,9 @@ impl<'db> InferenceContext<'db> {
                 DiagnosticLocation::TypeAnnot(id) => (2, u32::from(id.into_raw())),
                 DiagnosticLocation::Pat(id) => (4, u32::from(id.into_raw())),
                 DiagnosticLocation::TypeRef(id) => (5, u32::from(id.into_raw())),
+                DiagnosticLocation::UnreflectArg { carrier, .. } => {
+                    (6, u32::from(carrier.into_raw()))
+                }
                 DiagnosticLocation::Span(range) => (3, u32::from(range.start())),
             });
             diags.dedup();
@@ -10969,6 +11036,16 @@ fn interface_mentions_param(interface: &InterfaceRef, param: &baml_type::ParamTy
         .iter()
         .chain(interface.associated_types.iter().map(|(_, ty)| ty))
         .any(|ty| ty_mentions_param(ty, param))
+}
+
+/// Does a call-scoped runtime parameter survive into `ret` as more than the
+/// result itself? See [`InferCtx::report_runtime_type_escape`] for why the
+/// bare-parameter result is the one shape that does not escape.
+fn runtime_param_escapes_result(ret: &Ty, param: &baml_type::ParamTy) -> bool {
+    if matches!(ret.kind(), TyKind::TypeVar(candidate, _) if candidate == param) {
+        return false;
+    }
+    ty_mentions_param(ret, param)
 }
 
 fn interface_occurrence_ty(interface: &InterfaceRef) -> Ty {
