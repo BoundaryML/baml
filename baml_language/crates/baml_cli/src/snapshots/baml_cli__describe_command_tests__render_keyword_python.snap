@@ -9,7 +9,7 @@ Syntax:
   
   # baml.toml — declare a generator:
   [generator.app]
-  output_type = "python/pydantic"        # or "python/pydantic/v1"
+  output_type = "python/pydantic"        # `python` is accepted as an alias
   output_dir  = "../app"
   naming_convention = "preserve-case"
   

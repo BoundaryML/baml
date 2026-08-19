@@ -15,9 +15,8 @@ Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<n
 
 Accepted `output_type` values:
 
-- `"python/pydantic"` — Python with Pydantic v2 models
-- `"python/pydantic/v1"` — Python with Pydantic v1 models
-- `"typescript/node"` — TypeScript for Node.js
+- `"python/pydantic"` — Python with Pydantic v2 models (alias: `"python"`)
+- `"typescript/node"` — TypeScript for Node.js (alias: `"typescript"`)
 - `"typescript/web"` — TypeScript for web/WASM
 - `"swift"` — Swift
 - `"go"` — Go

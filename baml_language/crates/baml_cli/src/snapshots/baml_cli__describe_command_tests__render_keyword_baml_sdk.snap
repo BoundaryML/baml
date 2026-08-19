@@ -7,7 +7,7 @@ baml_sdk — Call your BAML functions from another language via a generated SDK.
 Syntax:
   # 1. declare a generator in baml.toml
   [generator.app]
-  output_type = "python/pydantic"   # python/pydantic | python/pydantic/v1 | typescript/node
+  output_type = "python/pydantic"   # run `baml generate add --help` for every target
   output_dir  = "../app"
   naming_convention = "preserve-case"   # preserve-case | language
   
