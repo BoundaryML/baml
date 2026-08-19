@@ -505,7 +505,7 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
 "#,
     );
 
-    let quiet = run_baml_cli(built, tmp.path(), &["run", "logged", "--from", "."]);
+    let quiet = run_baml_cli(built, tmp.path(), &["run", "logged", "--project", "."]);
     assert!(
         quiet.status.success(),
         "default run failed; stdout: {}\nstderr: {}",
@@ -522,7 +522,7 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
     let info = run_baml_cli_with_env(
         built,
         tmp.path(),
-        &["run", "logged", "--from", ".", "--log", "INFO"],
+        &["run", "logged", "--project", ".", "--log", "INFO"],
         &[("BAML_LOG", "ERROR")],
     );
     assert!(
@@ -547,7 +547,7 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
     let from_env = run_baml_cli_with_env(
         built,
         tmp.path(),
-        &["run", "logged", "--from", "."],
+        &["run", "logged", "--project", "."],
         &[("BAML_LOG", "WARN")],
     );
     assert!(
@@ -567,7 +567,7 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
         tmp.path(),
         &[
             "run",
-            "--from",
+            "--project",
             ".",
             "--log",
             "INFO",
@@ -606,7 +606,7 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
         &[
             "run",
             "logged_conversion",
-            "--from",
+            "--project",
             ".",
             "--log",
             "INFO",
@@ -666,7 +666,7 @@ class BrokenConversion {
         tmp.path(),
         &[
             "run",
-            "--from",
+            "--project",
             ".",
             "--output-format",
             "json",
