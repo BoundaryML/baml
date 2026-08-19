@@ -324,7 +324,7 @@ fn generate_rust_language_naming_convention_returns_diagnostic() {
     );
     assert!(
         stderr.contains(
-            "Rust generator `rust_client` does not yet support `naming_convention = \"language\"`; use `\"preserve-case\"`"
+            "generator `rust_client` with `output_type = \"rust\"` requires `naming_convention = \"preserve-case\"`"
         ),
         "stderr: {stderr}"
     );

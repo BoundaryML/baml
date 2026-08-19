@@ -681,36 +681,8 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
         let (Some(output_type), Some(naming_convention)) = (output_type, naming_convention) else {
             continue;
         };
-        if output_type == OutputType::Go {
-            if naming_convention != NamingConvention::Language {
-                let range = generator
-                    .naming_convention
-                    .as_ref()
-                    .map(|value| to_text_range(value.span()))
-                    .unwrap_or(table_range);
-                diags.push(
-                    Diagnostic::error(
-                        DiagnosticId::InvalidGeneratorPropertyValue,
-                        format!(
-                            "Go generator `{name}` requires `naming_convention = \"language\"`"
-                        ),
-                    )
-                    .with_primary(
-                        Span {
-                            file_id: manifest_file_id(),
-                            range,
-                        },
-                        "Go identifiers use the canonical language projection",
-                    )
-                    .with_phase(DiagnosticPhase::Validation),
-                );
-                continue;
-            }
-            if sdk_import_path.is_none() {
-                continue;
-            }
-        }
-        if output_type == OutputType::Rust && naming_convention != NamingConvention::PreserveCase {
+        let required_naming_convention = output_type.required_naming_convention();
+        if naming_convention != required_naming_convention {
             let range = generator
                 .naming_convention
                 .as_ref()
@@ -720,7 +692,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
                 Diagnostic::error(
                     DiagnosticId::InvalidGeneratorPropertyValue,
                     format!(
-                        "Rust generator `{name}` does not yet support `naming_convention = \"language\"`; use `\"preserve-case\"`"
+                        "generator `{name}` with `output_type = \"{output_type}\"` requires `naming_convention = \"{required_naming_convention}\"`"
                     ),
                 )
                 .with_primary(
@@ -728,10 +700,13 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
                         file_id: manifest_file_id(),
                         range,
                     },
-                    "unsupported naming convention for Rust",
+                    format!("use `{required_naming_convention}` for `{output_type}`"),
                 )
                 .with_phase(DiagnosticPhase::Validation),
             );
+            continue;
+        }
+        if output_type == OutputType::Go && sdk_import_path.is_none() {
             continue;
         }
 
@@ -1065,7 +1040,7 @@ mod tests {
 
     #[test]
     fn go_union_threshold_on_non_go_generator_is_rejected() {
-        let manifest = "[package]\nname = \"test\"\n\n[generator.ts]\noutput_type = \"typescript/node\"\nnaming_convention = \"language\"\nmax_typed_union_arity = 3\n";
+        let manifest = "[package]\nname = \"test\"\n\n[generator.ts]\noutput_type = \"typescript/node\"\nnaming_convention = \"preserve-case\"\nmax_typed_union_arity = 3\n";
         let (_, diagnostics) = discover_with_manifest(manifest);
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert!(
@@ -1075,20 +1050,44 @@ mod tests {
     }
 
     #[test]
-    fn rust_language_naming_convention_is_rejected() {
-        let manifest = "[package]\nname = \"test\"\n\n[generator.rust_client]\noutput_type = \"rust\"\nnaming_convention = \"language\"\n";
+    fn naming_convention_is_validated_for_every_output_type() {
+        for &output_type in OutputType::all() {
+            let required = output_type.required_naming_convention();
+            let unsupported = match required {
+                baml_codegen_types::NamingConvention::PreserveCase => "language",
+                baml_codegen_types::NamingConvention::Language => "preserve-case",
+            };
+            let sdk_import_path = if output_type == OutputType::Go {
+                "sdk_import_path = \"example.com/test/baml_sdk\"\n"
+            } else {
+                ""
+            };
+            let valid_manifest = format!(
+                "[package]\nname = \"test\"\n\n[generator.client]\noutput_type = \"{output_type}\"\nnaming_convention = \"{required}\"\n{sdk_import_path}"
+            );
+            let (generators, diagnostics) = discover_with_manifest(&valid_manifest);
+            assert_eq!(generators.len(), 1, "{output_type}: {diagnostics:?}");
+            assert!(diagnostics.is_empty(), "{output_type}: {diagnostics:?}");
 
-        let (generators, diagnostics) = discover_with_manifest(manifest);
+            let manifest = format!(
+                "[package]\nname = \"test\"\n\n[generator.client]\noutput_type = \"{output_type}\"\nnaming_convention = \"{unsupported}\"\n{sdk_import_path}"
+            );
 
-        assert!(generators.is_empty());
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(
-            diagnostics[0].id,
-            baml_db::baml_compiler_diagnostics::DiagnosticId::InvalidGeneratorPropertyValue
-        );
-        assert_eq!(
-            diagnostics[0].message,
-            "Rust generator `rust_client` does not yet support `naming_convention = \"language\"`; use `\"preserve-case\"`"
-        );
+            let (generators, diagnostics) = discover_with_manifest(&manifest);
+
+            assert!(generators.is_empty(), "{output_type}");
+            assert_eq!(diagnostics.len(), 1, "{output_type}: {diagnostics:?}");
+            assert_eq!(
+                diagnostics[0].id,
+                baml_db::baml_compiler_diagnostics::DiagnosticId::InvalidGeneratorPropertyValue
+            );
+            assert_eq!(
+                diagnostics[0].message,
+                format!(
+                    "generator `client` with `output_type = \"{output_type}\"` requires `naming_convention = \"{}\"`",
+                    required
+                )
+            );
+        }
     }
 }
