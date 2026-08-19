@@ -2,7 +2,7 @@
 //!
 //! A `type` value has no identity of its own. Two `type` values denote the
 //! same type exactly when the types they carry are **equivalent** — mutual
-//! subtypes, decided by structural equality of canonical forms (TYPE_SYSTEM.md,
+//! subtypes, decided by structural equality of canonical forms (`TYPE_SYSTEM.md`,
 //! "Equivalence and canonical forms"). Equivalence is a function of the
 //! program's facts (alias definitions, interface `requires` edges), not of the
 //! payload alone, so [`TypeValue`] deliberately implements neither `PartialEq`

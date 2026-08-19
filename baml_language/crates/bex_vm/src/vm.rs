@@ -1311,6 +1311,8 @@ fn function_object_ty<C: baml_type::normalize::TypeContext<bex_vm_types::TypeHea
 ) -> Result<bex_vm_types::ConcreteRealizedTy, VmInternalError> {
     use baml_type::{FunctionParamMode, TyAttr};
     use bex_vm_types::{ConcreteRealizedTy, RealizedFunctionParamTy};
+
+    debug_assert_eq!(type_args.len(), f.generic_param_bounds.len());
     let materialize =
         |t: &bex_vm_types::TyTemplate| -> Result<bex_vm_types::RealizedTy, VmInternalError> {
             t.substitute(type_args, ctx)
@@ -1627,19 +1629,6 @@ impl BexVm {
     /// any call dispatch context.
     pub fn current_call_type_args(&self) -> &[bex_vm_types::RealizedTy] {
         &self.pending_call_type_args
-    }
-
-    /// Materialize a statically described runtime `type` value.
-    ///
-    /// "Static" means the type refers only to declarations the program already
-    /// knows, so the value needs no runtime-definition overlay and no owning
-    /// package. All VM-side static type producers route through this method.
-    pub fn alloc_static_type(&mut self, ty: bex_vm_types::RealizedTy) -> HeapPtr {
-        debug_assert!(
-            crate::reachable::is_statically_declared(self, &ty),
-            "alloc_static_type is for types that name only compiled declarations"
-        );
-        self.tlab.alloc_type(TypeValue::new(ty))
     }
 
     fn take_type_args(&mut self, start: usize, count: usize) -> Result<TakenTypeArgs, VmError> {
@@ -2600,7 +2589,10 @@ impl BexVm {
     /// The interface resolver wants the loose `RuntimeTy`, so the sole such caller
     /// widens the result back; the `IsType` value matcher wants the invariant made
     /// explicit and uses it directly.
-    pub(crate) fn value_concrete_ty(&self, value: Value) -> Option<bex_vm_types::ConcreteRealizedTy> {
+    pub(crate) fn value_concrete_ty(
+        &self,
+        value: Value,
+    ) -> Option<bex_vm_types::ConcreteRealizedTy> {
         use baml_type::TyAttr;
         use bex_vm_types::ConcreteRealizedTy;
         if value.as_int().is_some() {
@@ -2643,6 +2635,7 @@ impl BexVm {
                     ) {
                         ConcreteRealizedTy::Media(kind, TyAttr::default())
                     } else {
+                        debug_assert_eq!(inst.class_type_args.len(), class.generic_param_count);
                         // A generic instance's stored `class_type_args` are already
                         // realized (`Box<int>` ⇒ `T = int`), so they are exactly the
                         // `ConcreteRealizedTy::Class` argument list.
@@ -3319,7 +3312,7 @@ impl BexVm {
                 for (index, ty) in type_args.into_iter().enumerate() {
                     let ty_ptr = match type_values.get(index).and_then(Clone::clone) {
                         Some(value) => self.alloc_type(value),
-                        None => self.alloc_static_type(ty),
+                        None => self.alloc_type(bex_vm_types::types::TypeValue::new(ty)),
                     };
                     self.stack.push(Value::object(ty_ptr));
                 }
@@ -5199,8 +5192,8 @@ impl BexVm {
             bex_vm_types::RealizedTy::unknown(),
             vec![Value::object(positional_ptr), Value::object(optional_ptr)],
         );
-        let ret_ty_ptr = self.alloc_static_type(ret_ty);
-        let throws_ty_ptr = self.alloc_static_type(throws_ty);
+        let ret_ty_ptr = self.alloc_type(bex_vm_types::types::TypeValue::new(ret_ty));
+        let throws_ty_ptr = self.alloc_type(bex_vm_types::types::TypeValue::new(throws_ty));
         // PR4b: host-closure calls ride the sys-op pair too. No Function
         // object backs them, so function_id 0 (unassigned).
         self.prof_enter_sysop(0, call_site, VmCaptureMask::disabled());
@@ -7403,9 +7396,12 @@ impl BexVm {
                                 // instantiations. Associated types are outputs,
                                 // not part of the resolver key.
                                 Object::Type(type_value) => match &type_value.ty {
-                                    bex_vm_types::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
-                                        (qtn.clone(), args.clone())
-                                    }
+                                    bex_vm_types::RealizedTy::Interface(
+                                        qtn,
+                                        args,
+                                        _assoc,
+                                        _attr,
+                                    ) => (*qtn, args.clone()),
                                     other => unreachable!(
                                         "VirtualCall interface operand must be an Interface type, found {other:?}"
                                     ),
@@ -8104,7 +8100,8 @@ impl BexVm {
                                 // projection) against the frame's realized type args; the
                                 // result must be realized or it is an internal error, never
                                 // a `unknown` erasure.
-                                if let Ok(realized) = <&bex_vm_types::RealizedTy>::try_from(&template)
+                                if let Ok(realized) =
+                                    <&bex_vm_types::RealizedTy>::try_from(&template)
                                 {
                                     realized.clone()
                                 } else {
@@ -8213,7 +8210,7 @@ impl BexVm {
                         match self.get_object(iface_ptr) {
                             Object::Type(type_value) => match &type_value.ty {
                                 bex_vm_types::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
-                                    (qtn.clone(), args.clone())
+                                    (*qtn, args.clone())
                                 }
                                 other => unreachable!(
                                     "MakeVirtualBoundMethod interface operand must be an \

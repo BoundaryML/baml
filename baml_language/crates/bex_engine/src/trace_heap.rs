@@ -319,7 +319,10 @@ impl TraceSnapshotBuilder {
                         type_args: instance
                             .class_type_args
                             .iter()
-                            .map(baml_type::RuntimeTy::from)
+                            .filter_map(|arg| {
+                                crate::conversion::to_wire_ty(&bex_vm_types::RuntimeTy::from(arg))
+                                    .ok()
+                            })
                             .collect(),
                         fields,
                     })

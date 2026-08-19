@@ -148,109 +148,8 @@ impl<N: Clone> TyTemplate<N> {
     }
 
     /// `Interface<A1, Assoc = A2, ...>` with default attributes.
-    pub fn interface(
-        head: N,
-        args: Vec<Self>,
-        associated_bindings: Vec<(Name, Self)>,
-    ) -> Self {
+    pub fn interface(head: N, args: Vec<Self>, associated_bindings: Vec<(Name, Self)>) -> Self {
         TyTemplate::Interface(head, args, associated_bindings, TyAttr::default())
-    }
-}
-
-impl TyTemplate {
-
-    /// Materialize this template against a frame's fully realized `type_args`,
-    /// producing a [`RealizedTy`] — every `TypeArgRef(n)` replaced by
-    /// `type_args[n]`, every associated-type projection reduced through `ctx` to
-    /// its impl binding.
-    ///
-
-    /// Compile-time counterpart to [`Self::substitute`]: resolve each
-    /// `TypeArgRef(n)` against `type_args` but leave every unresolved position
-    /// *symbolic*. An associated projection stays a projection; an out-of-range
-    /// reference falls back to `unknown`. Used by compile-time type
-    /// computation (e.g. a class field's type given the receiver's class args),
-    /// where the args may themselves be symbolic — an unspecialized generic — so
-    /// the result is a `RuntimeTy` that can still carry type variables, unlike the
-    /// runtime [`Self::substitute`], which realizes fully or fails.
-    pub fn substitute_symbolic(&self, type_args: &[RuntimeTy]) -> RuntimeTy {
-        match self {
-            Self::TypeArgRef(n) => type_args
-                .get(*n as usize)
-                .cloned()
-                .unwrap_or_else(RuntimeTy::unknown),
-            Self::List(inner, attr) => {
-                RuntimeTy::List(Box::new(inner.substitute_symbolic(type_args)), attr.clone())
-            }
-            Self::Map { key, value, attr } => RuntimeTy::Map {
-                key: Box::new(key.substitute_symbolic(type_args)),
-                value: Box::new(value.substitute_symbolic(type_args)),
-                attr: attr.clone(),
-            },
-            Self::Union(parts, attr) => RuntimeTy::Union(
-                parts
-                    .iter()
-                    .map(|p| p.substitute_symbolic(type_args))
-                    .collect(),
-                attr.clone(),
-            ),
-            Self::Class(name, args, attr) => RuntimeTy::Class(
-                name.clone(),
-                args.iter()
-                    .map(|a| a.substitute_symbolic(type_args))
-                    .collect(),
-                attr.clone(),
-            ),
-            Self::Interface(name, args, associated_bindings, attr) => RuntimeTy::Interface(
-                name.clone(),
-                args.iter()
-                    .map(|a| a.substitute_symbolic(type_args))
-                    .collect(),
-                associated_bindings
-                    .iter()
-                    .map(|(name, ty)| (name.clone(), ty.substitute_symbolic(type_args)))
-                    .collect(),
-                attr.clone(),
-            ),
-            Self::Function {
-                params,
-                ret,
-                throws,
-                attr,
-            } => RuntimeTy::Function {
-                params: params
-                    .iter()
-                    .map(|p| RuntimeFunctionParamTy {
-                        name: p.name.clone(),
-                        ty: p.ty.substitute_symbolic(type_args),
-                        mode: p.mode,
-                    })
-                    .collect(),
-                ret: Box::new(ret.substitute_symbolic(type_args)),
-                throws: Box::new(throws.substitute_symbolic(type_args)),
-                attr: attr.clone(),
-            },
-            Self::Future(value, error, attr) => RuntimeTy::Future(
-                Box::new(value.substitute_symbolic(type_args)),
-                Box::new(error.substitute_symbolic(type_args)),
-                attr.clone(),
-            ),
-            Self::AssociatedTypeProjection {
-                base,
-                interface,
-                member,
-                attr,
-            } => RuntimeTy::AssociatedTypeProjection {
-                base: Box::new(base.substitute_symbolic(type_args)),
-                interface: Box::new(interface.substitute_symbolic(type_args)),
-                member: member.clone(),
-                attr: attr.clone(),
-            },
-            // A realized leaf narrows to `RealizedTy` then widens to `RuntimeTy`.
-            other => RealizedTy::try_from(other.clone())
-                .unwrap_or_else(|e| unreachable!("realized-leaf template narrowing failed: {e}"))
-                .into(),
-        }
     }
 }
 
@@ -444,12 +343,18 @@ impl TyTemplateInterface {
             self.associated_types.clone(),
         )
     }
+}
 
-
+/// Symbolic substitution needs no more of a head than cloning it, so it sits at
+/// the same bound as [`TyTemplate::substitute_symbolic`] rather than the
+/// stronger one reduction requires.
+impl<N: Clone> TyTemplateInterface<N> {
     /// Compile-time counterpart to [`Self::substitute`] (see
     /// [`TyTemplate::substitute_symbolic`]): resolve frame refs but leave
     /// unresolved positions symbolic, producing a `RuntimeInterface`.
-    fn substitute_symbolic(&self, type_args: &[RuntimeTy]) -> RuntimeInterface {
+    ///
+    /// Head-generic for the same reason: heads are cloned through, never read.
+    pub(crate) fn substitute_symbolic(&self, type_args: &[RuntimeTy<N>]) -> RuntimeInterface<N> {
         RuntimeInterface::new(
             self.name.clone(),
             self.generics
@@ -508,6 +413,96 @@ impl<N: Clone + crate::HeadDisplay> fmt::Display for TyTemplate<N> {
 }
 
 impl<N: Clone> TyTemplate<N> {
+    /// Compile-time counterpart to [`Self::substitute`]: resolve each
+    /// `TypeArgRef(n)` against `type_args` but leave every unresolved position
+    /// *symbolic*. An associated projection stays a projection; an out-of-range
+    /// reference falls back to `unknown`. Used by compile-time type
+    /// computation (e.g. a class field's type given the receiver's class args),
+    /// where the args may themselves be symbolic — an unspecialized generic — so
+    /// the result is a `RuntimeTy` that can still carry type variables, unlike the
+    /// runtime [`Self::substitute`], which realizes fully or fails.
+    ///
+    /// Head-generic: every head position is cloned through, never inspected.
+    pub fn substitute_symbolic(&self, type_args: &[RuntimeTy<N>]) -> RuntimeTy<N> {
+        match self {
+            Self::TypeArgRef(n) => type_args
+                .get(*n as usize)
+                .cloned()
+                .unwrap_or_else(RuntimeTy::unknown),
+            Self::List(inner, attr) => {
+                RuntimeTy::List(Box::new(inner.substitute_symbolic(type_args)), attr.clone())
+            }
+            Self::Map { key, value, attr } => RuntimeTy::Map {
+                key: Box::new(key.substitute_symbolic(type_args)),
+                value: Box::new(value.substitute_symbolic(type_args)),
+                attr: attr.clone(),
+            },
+            Self::Union(parts, attr) => RuntimeTy::Union(
+                parts
+                    .iter()
+                    .map(|p| p.substitute_symbolic(type_args))
+                    .collect(),
+                attr.clone(),
+            ),
+            Self::Class(name, args, attr) => RuntimeTy::Class(
+                name.clone(),
+                args.iter()
+                    .map(|a| a.substitute_symbolic(type_args))
+                    .collect(),
+                attr.clone(),
+            ),
+            Self::Interface(name, args, associated_bindings, attr) => RuntimeTy::Interface(
+                name.clone(),
+                args.iter()
+                    .map(|a| a.substitute_symbolic(type_args))
+                    .collect(),
+                associated_bindings
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), ty.substitute_symbolic(type_args)))
+                    .collect(),
+                attr.clone(),
+            ),
+            Self::Function {
+                params,
+                ret,
+                throws,
+                attr,
+            } => RuntimeTy::Function {
+                params: params
+                    .iter()
+                    .map(|p| RuntimeFunctionParamTy {
+                        name: p.name.clone(),
+                        ty: p.ty.substitute_symbolic(type_args),
+                        mode: p.mode,
+                    })
+                    .collect(),
+                ret: Box::new(ret.substitute_symbolic(type_args)),
+                throws: Box::new(throws.substitute_symbolic(type_args)),
+                attr: attr.clone(),
+            },
+            Self::Future(value, error, attr) => RuntimeTy::Future(
+                Box::new(value.substitute_symbolic(type_args)),
+                Box::new(error.substitute_symbolic(type_args)),
+                attr.clone(),
+            ),
+            Self::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                attr,
+            } => RuntimeTy::AssociatedTypeProjection {
+                base: Box::new(base.substitute_symbolic(type_args)),
+                interface: Box::new(interface.substitute_symbolic(type_args)),
+                member: member.clone(),
+                attr: attr.clone(),
+            },
+            // A realized leaf narrows to `RealizedTy` then widens to `RuntimeTy`.
+            other => RealizedTy::<N>::try_from(other.clone())
+                .unwrap_or_else(|e| unreachable!("realized-leaf template narrowing failed: {e}"))
+                .into(),
+        }
+    }
+
     /// Returns `true` when the template contains no template-only leaf
     /// (`TypeArgRef` or an unresolved projection) at any depth — i.e. it is a
     /// fully realized type that narrows to a [`RealizedTy`].
@@ -517,7 +512,6 @@ impl<N: Clone> TyTemplate<N> {
     pub fn is_fully_concrete(&self) -> bool {
         <&RealizedTy<N>>::try_from(self).is_ok()
     }
-
 
     /// A lossy [`Ty`] view for rendering only: frame refs become
     /// `TypeVar("#n")`. Every other node maps structurally, so
@@ -831,7 +825,10 @@ mod tests {
         let user = RuntimeTy::user_class("User");
         assert_eq!(
             sub(&tmpl, &[r(user.clone())]),
-            RuntimeTy::class_with_args(crate::TypeName::local(crate::Name::new("Container")), vec![user])
+            RuntimeTy::class_with_args(
+                crate::TypeName::local(crate::Name::new("Container")),
+                vec![user]
+            )
         );
         assert!(!tmpl.is_fully_concrete());
     }

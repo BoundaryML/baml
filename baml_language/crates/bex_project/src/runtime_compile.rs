@@ -990,6 +990,20 @@ struct LoweredSession {
     result_global: String,
 }
 
+/// Everything a compile carries *because* it is a session.
+///
+/// One value rather than four parallel `Option`s that must agree: a package
+/// compile has none of this, a session compile has all of it, and there is no
+/// state in between for a reader to invent an answer for.
+struct SessionCompile {
+    artifact: RuntimeSessionCompileArtifact,
+    /// The global holding the submission's result, checked against `expected`.
+    result_global: String,
+    /// The contract from `eval<T>`; unknown when the eval is uncontracted.
+    expected: bex_vm_types::RuntimeTy,
+    lease: bex_vm_types::SessionEvalLease,
+}
+
 fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::Ty> {
     let package_id = PackageId::new(db, Name::new("user"));
     let package_items = baml_compiler2_hir::package::package_items(db, package_id);
@@ -1581,8 +1595,8 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             packages,
             mode,
         } = request;
-        let (files, mut session_artifact, result_contract, session_lease, is_session) = match mode {
-            RuntimeCompileMode::Package => (files, None, None, None, false),
+        let (files, mut session) = match mode {
+            RuntimeCompileMode::Package => (files, None),
             RuntimeCompileMode::Session(session) => {
                 let session = *session;
                 let lowered = lower_session_submission(&session)?;
@@ -1590,10 +1604,12 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 files.insert(session.submission_name.clone(), lowered.source);
                 (
                     files,
-                    Some(lowered.artifact),
-                    Some((lowered.result_global, session.expected.clone())),
-                    Some(session.lease),
-                    true,
+                    Some(SessionCompile {
+                        artifact: lowered.artifact,
+                        result_global: lowered.result_global,
+                        expected: session.expected,
+                        lease: session.lease,
+                    }),
                 )
             }
         };
@@ -1649,7 +1665,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             // exactly like an ordinary project without exposing the synthetic
             // prefix in diagnostics.
             let path = runtime_source_virtual_path(&path);
-            if is_session {
+            if session.is_some() {
                 db.add_session_file(path, &source);
             } else {
                 db.add_file(path, &source);
@@ -1667,22 +1683,41 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             return Err(diagnostics);
         }
 
-        if let Some((result_global, expected)) = &result_contract
-            && !matches!(expected, baml_type::RuntimeTy::BuiltinUnknown { .. })
+        if let Some(session) = &session
+            && !matches!(
+                session.expected,
+                bex_vm_types::RuntimeTy::BuiltinUnknown { .. }
+            )
         {
-            let result_name = result_global
+            let file = session.artifact.submission_name.as_str();
+            let result_name = session
+                .result_global
                 .strip_prefix("user.")
-                .unwrap_or(result_global.as_str());
+                .unwrap_or(session.result_global.as_str());
             let actual =
                 let_initializer_type(&db, result_name).unwrap_or_else(baml_type::Ty::unknown);
-            let expected = baml_type::Ty::from(expected.clone());
+            // The check runs in the compiler's context, which names declarations
+            // rather than pointing at them. `eval<T>` can be handed a
+            // runtime-created type, which has no name to recover — report that
+            // as the unstateable contract it is, rather than comparing against a
+            // stand-in and reporting whatever mismatch the stand-in produces.
+            let Ok(expected) = session
+                .expected
+                .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+            else {
+                return Err(vec![runtime_diagnostic(
+                    DiagnosticId::TypeMismatch,
+                    file,
+                    0,
+                    0,
+                    "`eval` contract names a runtime-created declaration, which the \
+                     compiler cannot check a submission against"
+                        .to_string(),
+                )]);
+            };
+            let expected = baml_type::Ty::from(expected);
             let context = baml_compiler2_hir_ty::facts::Facts::new(&db);
             if !baml_type::normalize::is_subtype(&actual, &expected, &context) {
-                let file = session_artifact
-                    .as_ref()
-                    .map_or("$submission.baml", |artifact| {
-                        artifact.submission_name.as_str()
-                    });
                 return Err(vec![runtime_diagnostic(
                     DiagnosticId::TypeMismatch,
                     file,
@@ -1725,30 +1760,37 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             .into_iter()
             .filter(|unit| {
                 unit.package.as_str() == "user"
-                    && session_artifact
+                    && session
                         .as_ref()
-                        .is_none_or(|session| unit.source_file == session.submission_name)
+                        .is_none_or(|s| unit.source_file == s.artifact.submission_name)
             })
             .collect();
-        if let Some(session) = session_artifact.as_mut() {
+        if let Some(session) = session.as_mut() {
             let mut initializers = Vec::new();
             for unit in &mut units {
                 if let Some(tail) = unit.init_tail.take() {
-                    let (tail, retained) = prune_session_init_tail(&tail, &session.submission_name)
-                        .map_err(|message| {
-                            vec![RuntimeCompileDiagnostic {
-                                code: "E_RUNTIME_SESSION_INIT".to_string(),
-                                message,
-                                severity: RuntimeDiagnosticSeverity::Error,
-                                span: None,
-                            }]
-                        })?;
+                    let (tail, retained) =
+                        prune_session_init_tail(&tail, &session.artifact.submission_name).map_err(
+                            |message| {
+                                vec![RuntimeCompileDiagnostic {
+                                    code: "E_RUNTIME_SESSION_INIT".to_string(),
+                                    message,
+                                    severity: RuntimeDiagnosticSeverity::Error,
+                                    span: None,
+                                }]
+                            },
+                        )?;
                     unit.init_tail = Some(tail);
                     initializers.extend(retained);
                 }
             }
-            session.initializers = initializers;
+            session.artifact.initializers = initializers;
         }
+        // The public artifact still carries these as two independent `Option`s,
+        // so the pair splits here — once, at the boundary that demands it —
+        // rather than being threaded through the function as separate values.
+        let (session_artifact, session_lease) =
+            session.map_or((None, None), |s| (Some(s.artifact), Some(s.lease)));
         Ok(RuntimeCompileArtifact {
             units,
             interface_blob,

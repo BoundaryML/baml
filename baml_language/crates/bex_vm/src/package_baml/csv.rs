@@ -58,6 +58,8 @@ use crate::{
 
 const CSV_ERROR_KIND_FQN: &str = "baml.csv.CsvErrorKind";
 const ITER_DONE_FQN: &str = "baml.iter.Done";
+use baml_type::typetag::TypeTag;
+
 const INSTANT_FQN: &str = "baml.time.Instant";
 const PLAINDATE_FQN: &str = "baml.time.PlainDate";
 const PLAINDATETIME_FQN: &str = "baml.time.PlainDateTime";
@@ -69,7 +71,7 @@ const PLAINDATETIME_FQN: &str = "baml.time.PlainDateTime";
 /// and it cannot be spoofed by a runtime declaration that happens to print the
 /// same, since those draw counter tags from a disjoint range.
 fn is_class(head: bex_vm_types::TypeHead, fq_name: &str) -> bool {
-    head.tag() == baml_type::typetag::TypeTag::of_head(fq_name)
+    head.tag() == TypeTag::of_head(fq_name)
 }
 
 // =============================================================================
@@ -1427,10 +1429,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
             };
             match idx {
                 Some(i) => Conv::Ok(Value::object(vm.alloc_variant(enm_ptr, i))),
-                None => Conv::Bad(format!(
-                    "{text:?} is not a variant of `{}`",
-                    head_key(head)
-                )),
+                None => Conv::Bad(format!("{text:?} is not a variant of `{}`", head_key(head))),
             }
         }
         Target::Instant => {
@@ -1952,7 +1951,6 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
                         ));
                     }
                 };
-                use baml_type::typetag::TypeTag;
                 match class_tag {
                     t if t == TypeTag::of_head(INSTANT_FQN) => instant_cell_text(inst)?,
                     t if t == TypeTag::of_head(PLAINDATE_FQN) => plaindate_cell_text(inst)?,
@@ -2640,21 +2638,20 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         // Header names + field types from T (or the first row's class).
         let class_info = match &ty {
             Some(RealizedTy::Class(head, type_args, _)) => {
-                Some(head.ptr())
-                    .and_then(|ptr| match vm.get_object(ptr) {
-                        Object::Class(c) => Some(
-                            c.fields
-                                .iter()
-                                .map(|f| {
-                                    (
-                                        f.name.clone(),
-                                        vm.realize_field_ty(&f.field_template, type_args),
-                                    )
-                                })
-                                .collect::<Vec<_>>(),
-                        ),
-                        _ => None,
-                    })
+                Some(head.ptr()).and_then(|ptr| match vm.get_object(ptr) {
+                    Object::Class(c) => Some(
+                        c.fields
+                            .iter()
+                            .map(|f| {
+                                (
+                                    f.name.clone(),
+                                    vm.realize_field_ty(&f.field_template, type_args),
+                                )
+                            })
+                            .collect::<Vec<_>>(),
+                    ),
+                    _ => None,
+                })
             }
             _ => None,
         };

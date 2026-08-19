@@ -300,10 +300,7 @@ impl WeakHeapRef for BexHeap {
         // Only clear the reverse entry if it still names *this* key: a handle
         // for the same object may already have been re-minted between the last
         // clone dropping and this release running.
-        let mut by_ptr = self
-            .handles_by_ptr
-            .write()
-            .expect("handles lock poisoned");
+        let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
         if by_ptr.get(&ptr).is_some_and(|(key, _)| *key == handle_key) {
             by_ptr.remove(&ptr);
         }
@@ -1075,10 +1072,7 @@ impl BexHeap {
         // The reverse index is keyed by the pointers that just moved, so it is
         // rebuilt rather than mutated in place. Keys are untouched: a handle's
         // identity does not change when its object does.
-        let mut by_ptr = self
-            .handles_by_ptr
-            .write()
-            .expect("handles lock poisoned");
+        let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
         *by_ptr = std::mem::take(&mut *by_ptr)
             .into_iter()
             .map(|(ptr, entry)| (forwarding[&ptr], entry))
@@ -1133,10 +1127,7 @@ impl BexHeap {
         // One key per object, not per call — see `handles_by_ptr`. The write
         // lock spans the check and the mint so a concurrent release cannot
         // retire the entry in between and leave two keys for one object.
-        let mut by_ptr = self
-            .handles_by_ptr
-            .write()
-            .expect("handles lock poisoned");
+        let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
         if let Some((_, weak)) = by_ptr.get(&ptr)
             && let Some(inner) = weak.upgrade()
         {

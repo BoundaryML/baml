@@ -224,7 +224,10 @@ fn append_unique_neighbor(vm: &mut BexVm, builder: Value, neighbor: Value) -> Re
 fn alloc_pending(vm: &mut BexVm, op: PendingOp, roots: Vec<Value>) -> Value {
     let class = vm.resolve_class(PENDING_FQN);
     let handle = Value::object(vm.alloc_rust_data(Arc::new(PendingHandle { op })));
-    let roots = Value::object(vm.tlab.alloc_array(bex_vm_types::RealizedTy::unknown(), roots));
+    let roots = Value::object(
+        vm.tlab
+            .alloc_array(bex_vm_types::RealizedTy::unknown(), roots),
+    );
     Value::object(vm.alloc_instance(class, vec![handle, roots, Value::NULL]))
 }
 

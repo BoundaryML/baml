@@ -159,7 +159,12 @@ const MAX_OBLIGATION_DEPTH: usize = 128;
 /// at these args / associated bindings? Tracked on a stack so a goal that
 /// recurses back to itself (an inductive cycle, with no concrete-impl base case)
 /// is detected and rejected rather than spun on until the depth backstop.
-type Obligation = (RealizedTy, TypeHead, Vec<RealizedTy>, Vec<(Name, RealizedTy)>);
+type Obligation = (
+    RealizedTy,
+    TypeHead,
+    Vec<RealizedTy>,
+    Vec<(Name, RealizedTy)>,
+);
 
 /// A literal or enum-variant type behaves as its underlying concrete type for
 /// impl resolution: `1` uses `int`'s impls and `Color.Red` uses `Color`'s (a
@@ -180,9 +185,7 @@ fn concrete_base(ty: &RealizedTy) -> Cow<'_, RealizedTy> {
             Literal::String(_) => RealizedTy::String { attr: attr.clone() },
             Literal::Bool(_) => RealizedTy::Bool { attr: attr.clone() },
         }),
-        RealizedTy::EnumVariant(name, _, attr) => {
-            Cow::Owned(RealizedTy::Enum(name.clone(), attr.clone()))
-        }
+        RealizedTy::EnumVariant(name, _, attr) => Cow::Owned(RealizedTy::Enum(*name, attr.clone())),
         _ => Cow::Borrowed(ty),
     }
 }

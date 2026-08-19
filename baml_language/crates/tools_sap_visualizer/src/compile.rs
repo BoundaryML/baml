@@ -94,7 +94,10 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                         .ok_or_else(|| {
                             format!("Synthetic class {PARSE_CLASS} missing field {PARSE_FIELD}")
                         })?;
-                    parse_field_ty = Some(field.field_type.clone());
+                    parse_field_ty = field
+                        .field_type
+                        .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+                        .ok();
                     // Don't add the synthetic class to the definitions.
                     continue;
                 }
@@ -110,7 +113,10 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                             .iter()
                             .map(|f| sys_types::ClassFieldDefinition {
                                 name: f.name.clone(),
-                                field_type: f.field_type.clone(),
+                                field_type: f
+                                    .field_type
+                                    .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+                                    .unwrap_or_else(|_| baml_type::RuntimeTy::unknown()),
                                 description: f.description.clone(),
                                 alias: f.alias.clone(),
                                 skip: f.skip,
@@ -149,7 +155,11 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
     let type_alias_definitions = program
         .recursive_type_aliases()
         .into_iter()
-        .map(|(name, ty)| (name, baml_type::RuntimeTy::from(ty)))
+        .filter_map(|(name, ty)| {
+            ty.try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+                .ok()
+                .map(|ty| (name, baml_type::RuntimeTy::from(ty)))
+        })
         .collect();
     let type_ctx =
         sap_model::TypeCtx::new(&class_defs, Arc::new(enum_defs), &type_alias_definitions);

@@ -26,47 +26,111 @@ use crate::{BexEngine, EngineError, thread::BexThread};
 /// projection, the only positions [`RuntimeTy`] admits that
 /// [`baml_type::RealizedTy`] does not — is an FFI contract violation. It is
 /// surfaced loudly as an [`EngineError::TypeMismatch`] rather than erased.
-fn realize_host_ty(ty: RuntimeTy) -> Result<baml_type::RealizedTy, EngineError> {
-    baml_type::RealizedTy::try_from(ty).map_err(|e| EngineError::TypeMismatch {
+/// A runtime type in the wire's spelling: every head replaced by the name a
+/// host can look up.
+///
+/// The outbound half of the boundary. A head with no nameable declaration is an
+/// error rather than a stand-in — the host has nothing it could do with an
+/// invented name, and quietly supplying one is how a runtime declaration ends
+/// up impersonating a compiled one.
+pub(crate) fn to_wire_ty(ty: &bex_vm_types::RuntimeTy) -> Result<RuntimeTy, EngineError> {
+    ty.try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+        .map_err(|head| EngineError::TypeMismatch {
+            message: format!("type leaving the VM names an unnameable declaration: {head}"),
+        })
+}
+
+/// The runtime's spelling of a wire type: every name resolved to the head of
+/// the declaration this engine holds for it.
+///
+/// The inbound half. Resolution goes through the program's declaration
+/// surfaces, so the head carries both halves off a real declaration — never a
+/// name-shaped guess that no lookup would confirm.
+pub(crate) fn anchor_wire_ty(
+    vm: &crate::BexVm,
+    ty: &RuntimeTy,
+) -> Result<bex_vm_types::RuntimeTy, EngineError> {
+    ty.try_map_heads(&mut |name: &baml_type::TypeName| {
+        vm.declaration_head(name)
+            .ok_or_else(|| EngineError::TypeMismatch {
+                message: format!("host-supplied type names unknown declaration `{name}`"),
+            })
+    })
+}
+
+fn realize_host_ty(
+    vm: &crate::BexVm,
+    ty: &RuntimeTy,
+) -> Result<bex_vm_types::RealizedTy, EngineError> {
+    // The single inbound anchor: a wire type's names become heads here, once,
+    // off the declarations this engine holds — so nothing downstream has to
+    // wonder whether a type it received is bound.
+    let anchored = anchor_wire_ty(vm, ty)?;
+    bex_vm_types::RealizedTy::try_from(anchored).map_err(|e| EngineError::TypeMismatch {
         message: format!("host-supplied type is not realized: {e}"),
     })
 }
 
+/// The runtime declarations a type reaches, in the wire's pointer-free form.
+///
+/// Reached by walking the type's own heads and each declaration's `owner`
+/// package — there is no table beside the type that could describe a different
+/// set. Names in the result are display data, not identities.
+///
+/// **Transitional.** This graph exists only because a `BamlTy` head is a bare
+/// FQN string: a runtime declaration's synthesized name resolves to nothing in
+/// the host's codegen registry, so the definitions have to travel beside the
+/// type for the host to make anything of it. Once a head can say *which kind of
+/// head it is*, the type carries its own identity and the graph is redundant —
+/// note that two of the four consumers already discard it and read only `root`.
+///
+/// The inbound direction is **not** transitional and does not go through here:
+/// `BamlTyArg.type_definition` is a host *request to declare*, and
+/// `BexVm::materialize_portable_type_def` is what serves it.
+#[deprecated = "transitional: the outbound definition graph only exists because a \
+                BamlTy head is a bare FQN. Delete this, TypeDefRef::Live::def, and the \
+                outbound TyDefValue arm once BamlTypeHead::{Static{fqn}, \
+                Dynamic{identity, name}} lands. Does not apply to the inbound \
+                authoring path (BamlTyArg.type_definition), which survives."]
 fn portable_type_def(
+    heap: &bex_heap::BexHeap,
     type_value: &bex_vm_types::types::TypeValue,
+    permit: PermitProof<'_>,
 ) -> bex_vm_types::types::PortableTypeDef {
     use bex_vm_types::types::{
         PortableClassDef, PortableClassFieldDef, PortableEnumDef, PortableEnumVariantDef,
         PortableMetadata, PortableTypeDef,
     };
 
-    let mut class_ptrs = type_value
-        .defs()
-        .classes
-        .values()
-        .copied()
+    let (mut class_ptrs, mut enum_ptrs) =
+        bex_vm::reachable::runtime_nominals_under_permit(heap, &type_value.ty, permit);
+    let mut owners = class_ptrs
+        .iter()
+        .chain(&enum_ptrs)
+        .filter_map(|ptr| match unsafe { ptr.get() } {
+            Object::Class(class) => Some(class.owner),
+            Object::Enum(enm) => Some(enm.owner),
+            _ => None,
+        })
+        .filter(|owner| !owner.is_null())
         .collect::<Vec<_>>();
-    let mut enum_ptrs = type_value
-        .defs()
-        .enums
-        .values()
-        .copied()
-        .collect::<Vec<_>>();
-    if !type_value.owner.is_null() {
-        // SAFETY: the VM-to-external caller holds a `PermitProof`, so the
-        // owning type and all of its definition edges cannot move here.
-        if let Object::Package(package) = unsafe { type_value.owner.get() } {
-            for ptr in package.classes.values().copied() {
-                if !class_ptrs.contains(&ptr)
-                    && !matches!(unsafe { ptr.get() }, Object::Class(class) if class.name.name().as_str().ends_with("$stream"))
-                {
-                    class_ptrs.push(ptr);
-                }
+    owners.dedup();
+    for owner in owners {
+        let Object::Package(package) = (unsafe { owner.get() }) else {
+            continue;
+        };
+        // A package contributes its whole surface, minus the `$stream`
+        // companions, which are synthesized rather than written.
+        for ptr in package.classes.values().copied() {
+            if !class_ptrs.contains(&ptr)
+                && !matches!(unsafe { ptr.get() }, Object::Class(class) if class.name.name().as_str().ends_with("$stream"))
+            {
+                class_ptrs.push(ptr);
             }
-            for ptr in package.enums.values().copied() {
-                if !enum_ptrs.contains(&ptr) {
-                    enum_ptrs.push(ptr);
-                }
+        }
+        for ptr in package.enums.values().copied() {
+            if !enum_ptrs.contains(&ptr) {
+                enum_ptrs.push(ptr);
             }
         }
     }
@@ -83,7 +147,6 @@ fn portable_type_def(
     let classes = class_ptrs
         .into_iter()
         .filter_map(|ptr| {
-            // SAFETY: definition pointers are rooted edges of `type_value`.
             let Object::Class(class) = (unsafe { ptr.get() }) else {
                 return None;
             };
@@ -94,7 +157,8 @@ fn portable_type_def(
                     .iter()
                     .map(|field| PortableClassFieldDef {
                         name: field.name.clone(),
-                        ty: field.field_type.clone(),
+                        ty: to_wire_ty(&field.field_type)
+                            .unwrap_or_else(|_| baml_type::RuntimeTy::unknown()),
                         metadata: metadata(
                             &field.description,
                             &field.alias,
@@ -117,7 +181,6 @@ fn portable_type_def(
     let enums = enum_ptrs
         .into_iter()
         .filter_map(|ptr| {
-            // SAFETY: definition pointers are rooted edges of `type_value`.
             let Object::Enum(enm) = (unsafe { ptr.get() }) else {
                 return None;
             };
@@ -142,23 +205,28 @@ fn portable_type_def(
         })
         .collect();
     PortableTypeDef {
-        root: type_value.ty.clone().into(),
+        root: to_wire_ty(&bex_vm_types::RuntimeTy::from(type_value.ty.clone()))
+            .unwrap_or_else(|_| baml_type::RuntimeTy::unknown()),
         classes,
         enums,
-        witnesses: type_value.defs().witnesses.clone(),
+        // Witnesses are carried by the impl rules, not described alongside the
+        // type; an outbound payload no longer restates them.
+        witnesses: Vec::new(),
     }
 }
 
 fn host_call_parameter_types<'a>(
-    params: &[baml_type::RealizedFunctionParamTy],
+    params: &[bex_vm_types::RealizedFunctionParamTy],
     positional_count: usize,
     optional_names: impl IntoIterator<Item = &'a str>,
 ) -> Result<(Vec<RuntimeTy>, indexmap::IndexMap<String, RuntimeTy>), String> {
     let required = params
         .iter()
         .filter(|param| param.is_required())
-        .map(|param| RuntimeTy::from(&param.ty))
-        .collect::<Vec<_>>();
+        .map(|param| {
+            to_wire_ty(&bex_vm_types::RuntimeTy::from(&param.ty)).map_err(|e| e.to_string())
+        })
+        .collect::<Result<Vec<_>, String>>()?;
     if positional_count != required.len() {
         return Err(format!(
             "host-call positional argument count {positional_count} does not match declared required count {}",
@@ -177,7 +245,10 @@ fn host_call_parameter_types<'a>(
                         .is_some_and(|candidate| candidate.as_str() == name)
             })
             .ok_or_else(|| format!("host-call supplied unknown optional argument {name:?}"))?;
-        optional.insert(name.to_string(), RuntimeTy::from(&param.ty));
+        optional.insert(
+            name.to_string(),
+            to_wire_ty(&bex_vm_types::RuntimeTy::from(&param.ty)).map_err(|e| e.to_string())?,
+        );
     }
     Ok((required, optional))
 }
@@ -380,8 +451,8 @@ impl BexEngine {
                         instance
                             .class_type_args
                             .iter()
-                            .map(baml_type::RuntimeTy::from)
-                            .collect(),
+                            .map(|arg| to_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
+                            .collect::<Result<Vec<_>, _>>()?,
                         baml_type::TyAttr::default(),
                     );
                     return Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
@@ -418,7 +489,7 @@ impl BexEngine {
                                 class_field.name.clone(),
                                 self.convert_vm_value_to_external_with_type(
                                     value,
-                                    &field_type,
+                                    &to_wire_ty(&field_type)?,
                                     permit,
                                 )?,
                             ))
@@ -430,8 +501,8 @@ impl BexEngine {
                     type_args: instance
                         .class_type_args
                         .iter()
-                        .map(baml_type::RuntimeTy::from)
-                        .collect(),
+                        .map(|arg| to_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
+                        .collect::<Result<Vec<_>, _>>()?,
                     fields: fields?,
                 })
             }
@@ -504,7 +575,7 @@ impl BexEngine {
             Object::Type(type_value) => Ok(BexExternalValue::Adt(BexExternalAdt::TypeDef(
                 bex_external_types::TypeDefRef::Live {
                     handle: self.heap.create_handle(ptr),
-                    def: portable_type_def(type_value),
+                    def: portable_type_def(&self.heap, type_value, permit),
                 },
             ))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
@@ -1054,11 +1125,12 @@ impl BexEngine {
                         )
                     })
                     .collect::<Result<Vec<_>, _>>()?;
+                let element_ty = realize_host_ty(&holder.holder_mut().vm, &runtime_element_ty)?;
                 Value::object(
                     holder
                         .holder_mut()
                         .tlab_mut()
-                        .alloc_array(realize_host_ty(runtime_element_ty)?, values),
+                        .alloc_array(element_ty, values),
                 )
             }
             BexExternalValue::Map {
@@ -1072,7 +1144,7 @@ impl BexEngine {
                     }
                     _ => (key_type, value_type),
                 };
-                let key_ty = realize_host_ty(key_type)?;
+                let key_ty = realize_host_ty(&holder.holder_mut().vm, &key_type)?;
                 let declared_value_ty = expected_ty.and_then(peel_map_value_ty);
                 let runtime_value_ty = declared_value_ty.unwrap_or(&value_type).clone();
                 let values = entries
@@ -1093,11 +1165,13 @@ impl BexEngine {
                         .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
                     })
                     .collect::<Result<indexmap::IndexMap<bex_vm_types::BexStr, Value>, _>>()?;
-                Value::object(holder.holder_mut().tlab_mut().alloc_map(
-                    key_ty,
-                    realize_host_ty(runtime_value_ty)?,
-                    values,
-                ))
+                let value_ty = realize_host_ty(&holder.holder_mut().vm, &runtime_value_ty)?;
+                Value::object(
+                    holder
+                        .holder_mut()
+                        .tlab_mut()
+                        .alloc_map(key_ty, value_ty, values),
+                )
             }
             BexExternalValue::Uint8Array(bytes) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_uint8array(bytes))
@@ -1155,6 +1229,13 @@ impl BexEngine {
                     }
                 };
 
+                // Anchor the host's type arguments once, here: everything below
+                // works against the class's own head-typed templates.
+                let type_args = type_args
+                    .iter()
+                    .map(|ty| anchor_wire_ty(&holder.holder_mut().vm, ty))
+                    .collect::<Result<Vec<_>, _>>()?;
+
                 // Build field values in the order defined by the class.
                 // Each field's declared `RuntimeTy` is passed as the conversion
                 // context so type-polymorphic external values (notably
@@ -1172,11 +1253,12 @@ impl BexEngine {
                         }
                     })?;
                     let field_ty = class_field.field_template.substitute_symbolic(&type_args);
-                    let field_value = self.coerce_inbound_arg(ext.clone(), &field_ty)?;
+                    let wire_field_ty = to_wire_ty(&field_ty)?;
+                    let field_value = self.coerce_inbound_arg(ext.clone(), &wire_field_ty)?;
                     values.push(self.convert_external_to_vm_value_with_ty_and_runtime(
                         holder,
                         field_value,
-                        Some(&field_ty),
+                        Some(&wire_field_ty),
                         dynamic_classes,
                         dynamic_enums,
                         runtime_named_objects,
@@ -1184,7 +1266,13 @@ impl BexEngine {
                 }
                 let realized_type_args = type_args
                     .into_iter()
-                    .map(realize_host_ty)
+                    .map(|ty| {
+                        bex_vm_types::RealizedTy::try_from(ty).map_err(|e| {
+                            EngineError::TypeMismatch {
+                                message: format!("host-supplied type is not realized: {e}"),
+                            }
+                        })
+                    })
                     .collect::<Result<Box<[_]>, _>>()?;
                 Value::object(
                     holder
@@ -1260,10 +1348,15 @@ impl BexEngine {
                 Value::object(holder.holder_mut().tlab_mut().alloc_collector(c))
             }
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
-                let ty = realize_host_ty(ty)?;
+                let ty = realize_host_ty(&holder.holder_mut().vm, &ty)?;
                 // The wire carries the definition only (H-4); derive a fresh
                 // static identity with the receiving VM's complete fact context.
-                Value::object(holder.holder_mut().vm.alloc_static_type(ty))
+                Value::object(
+                    holder
+                        .holder_mut()
+                        .vm
+                        .alloc_type(bex_vm_types::types::TypeValue::new(ty)),
+                )
             }
             BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
                 // A live reference from *this* engine lands as the original
@@ -1280,9 +1373,9 @@ impl BexEngine {
                     Some(ptr) => Value::object(ptr),
                     None => {
                         let vm = &mut holder.holder_mut().vm;
-                        let type_value = vm
-                            .materialize_portable_type_def(definition.into_def())
-                            .map_err(|message| EngineError::TypeMismatch { message })?;
+                        let type_value =
+                            vm.materialize_portable_type_def(&definition.into_def())
+                                .map_err(|message| EngineError::TypeMismatch { message })?;
                         Value::object(vm.alloc_type(type_value))
                     }
                 }
@@ -1425,15 +1518,21 @@ impl BexEngine {
                 // type mismatch rather than erased.
                 let realized_params = params
                     .iter()
-                    .map(baml_type::RealizedFunctionParamTy::try_from)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| EngineError::TypeMismatch {
-                        message: format!("host callable parameter type is not realized: {e}"),
-                    })?;
+                    .map(|param| {
+                        Ok(bex_vm_types::RealizedFunctionParamTy {
+                            name: param.name.clone(),
+                            ty: realize_host_ty(&holder.holder_mut().vm, &param.ty)?,
+                            mode: param.mode,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, EngineError>>()?;
                 let host_closure = bex_vm_types::HostClosure {
                     handle: arc,
-                    ret_ty: Box::new(realize_host_ty(ret)?),
-                    throws_ty: Box::new(realize_host_ty(normalized_throws)?),
+                    ret_ty: Box::new(realize_host_ty(&holder.holder_mut().vm, &ret)?),
+                    throws_ty: Box::new(realize_host_ty(
+                        &holder.holder_mut().vm,
+                        &normalized_throws,
+                    )?),
                     arity: params.len(),
                     // Capture the declared params (names + optionality) so the VM
                     // can split the call args into positional + supplied-optional
@@ -1478,7 +1577,7 @@ impl BexEngine {
     pub(crate) fn convert_host_call_args_pack(
         &self,
         pack: Value,
-        params: &[baml_type::RealizedFunctionParamTy],
+        params: &[bex_vm_types::RealizedFunctionParamTy],
         permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
         let malformed = |message: String| {
@@ -1690,11 +1789,12 @@ pub(crate) fn maybe_wrap_union(
 /// Zipping the two yields `{TStream -> null | string, TFinal -> string}`, which
 /// [`substitute_type_vars`] then applies to the method's declared return type so
 /// the host-return conversion sees concrete arms instead of bare type variables.
-pub(crate) fn collect_type_var_bindings(
-    declared: &RuntimeTy,
-    concrete: &RuntimeTy,
-    out: &mut indexmap::IndexMap<String, RuntimeTy>,
+pub(crate) fn collect_type_var_bindings<N: Clone>(
+    declared: &baml_type::RuntimeTy<N>,
+    concrete: &baml_type::RuntimeTy<N>,
+    out: &mut indexmap::IndexMap<String, baml_type::RuntimeTy<N>>,
 ) {
+    use baml_type::RuntimeTy;
     match (declared, concrete) {
         // A type-var position binds to whatever concrete type sits opposite it.
         // First binding wins (a type var should be consistent across positions).
@@ -1742,10 +1842,11 @@ pub(crate) fn collect_type_var_bindings(
 /// unsubstituted, so a concrete partial value matched no union member and the
 /// conversion panicked. Substituting from the receiver's bound type args (see
 /// [`collect_type_var_bindings`]) makes the concrete arm present.
-pub(crate) fn substitute_type_vars(
-    ty: &RuntimeTy,
-    bindings: &indexmap::IndexMap<String, RuntimeTy>,
-) -> RuntimeTy {
+pub(crate) fn substitute_type_vars<N: Clone>(
+    ty: &baml_type::RuntimeTy<N>,
+    bindings: &indexmap::IndexMap<String, baml_type::RuntimeTy<N>>,
+) -> baml_type::RuntimeTy<N> {
+    use baml_type::RuntimeTy;
     if bindings.is_empty() {
         return ty.clone();
     }
@@ -1967,7 +2068,7 @@ pub(crate) struct ParamVarPositions {
 /// The highest `TypeArgRef(N)` index appearing anywhere in a field template, or
 /// `None` if the template references no class type-arg. Used to compute a
 /// generic class's arity from its fields.
-fn template_max_type_arg_ref(t: &baml_type::TyTemplate) -> Option<u32> {
+fn template_max_type_arg_ref<N: Clone>(t: &baml_type::TyTemplate<N>) -> Option<u32> {
     use baml_type::TyTemplate as T;
     match t {
         T::TypeArgRef(n) => Some(*n),
@@ -3110,9 +3211,17 @@ impl BexEngine {
                     };
                     for class_field in &class.fields {
                         if let Some(field_value) = fields.get(&class_field.name) {
-                            let field_ty = class_field
+                            // Compare in the wire's spelling: the host supplied
+                            // `expected_args` there. A field whose template names
+                            // a declaration the host cannot name is not
+                            // host-validatable — materialization reports it.
+                            let Ok(template) = class_field
                                 .field_template
-                                .substitute_symbolic(expected_args);
+                                .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+                            else {
+                                continue;
+                            };
+                            let field_ty = template.substitute_symbolic(expected_args);
                             self.validate_host_return_schema(field_value, &field_ty)?;
                         }
                         // Missing fields are reported by
@@ -3288,7 +3397,10 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                                         && expected_args
                                             .iter()
                                             .zip(inst.class_type_args.iter())
-                                            .all(|(e, a)| e == a.as_runtime_ty()))))
+                                            .all(|(e, a)| {
+                                                to_wire_ty(a.as_runtime_ty())
+                                                    .is_ok_and(|a| *e == a)
+                                            }))))
                         })
                     } else {
                         None
@@ -3321,19 +3433,19 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 // when the container is empty, where payload inspection cannot
                 // distinguish `int[]` from `string[]` (or analogous maps).
                 Object::Array(array) => {
-                    let actual_element = array.element_ty.as_runtime_ty();
+                    let actual_element = to_wire_ty(array.element_ty.as_runtime_ty()).ok()?;
                     members.iter().find(|member| {
                         matches!(member, RuntimeTy::List(expected, _)
-                            if runtime_ty_structurally_equal(actual_element, expected))
+                            if runtime_ty_structurally_equal(&actual_element, expected))
                     })
                 }
                 Object::Map(map) => {
-                    let actual_key = map.key_ty.as_runtime_ty();
-                    let actual_value = map.value_ty.as_runtime_ty();
+                    let actual_key = to_wire_ty(map.key_ty.as_runtime_ty()).ok()?;
+                    let actual_value = to_wire_ty(map.value_ty.as_runtime_ty()).ok()?;
                     members.iter().find(|member| {
                         matches!(member, RuntimeTy::Map { key, value, .. }
-                            if runtime_ty_structurally_equal(actual_key, key)
-                                && runtime_ty_structurally_equal(actual_value, value))
+                            if runtime_ty_structurally_equal(&actual_key, key)
+                                && runtime_ty_structurally_equal(&actual_value, value))
                     })
                 }
                 Object::Uint8Array(_) => members
@@ -3449,7 +3561,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                         type_args: instance
                             .class_type_args
                             .iter()
-                            .map(baml_type::RuntimeTy::from)
+                            .filter_map(|arg| to_wire_ty(&bex_vm_types::RuntimeTy::from(arg)).ok())
                             .collect(),
                         fields,
                     }
@@ -4225,7 +4337,7 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
             element_type,
             items,
         } => BexExternalValue::Array {
-            element_type: element_type.clone(),
+            element_type: to_wire_ty(element_type).unwrap_or_else(|_| RuntimeTy::unknown()),
             items: items.iter().map(test_arg_to_external).collect(),
         },
         bex_vm_types::TestArgValue::Map {
@@ -4233,8 +4345,8 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
             value_type,
             entries,
         } => BexExternalValue::Map {
-            key_type: key_type.clone(),
-            value_type: value_type.clone(),
+            key_type: to_wire_ty(key_type).unwrap_or_else(|_| RuntimeTy::unknown()),
+            value_type: to_wire_ty(value_type).unwrap_or_else(|_| RuntimeTy::unknown()),
             entries: entries
                 .iter()
                 .map(|(k, v)| (k.clone(), test_arg_to_external(v)))

@@ -1985,7 +1985,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Some(idx) => idx,
             None => self.mint_object(Object::GenericFunction(bex_vm_types::GenericFunction {
                 function: gidx,
-                type_args: anchored_args.clone(),
+                type_args: anchored_args,
                 runtime_package: bex_vm_types::HeapPtr::null(),
             })),
         };

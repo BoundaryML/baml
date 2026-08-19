@@ -10,46 +10,32 @@ impl BamlNamespaceType for PackageBamlImpl {
     /// `v`'s concrete type, reconstructed by `BexVm::value_concrete_ty`.
     ///
     /// K-12 holds by construction: `value_concrete_ty` reports value types
-    /// (`int` for `5`), never literal types. A value with no reconstructable
-    /// BAML type — a compile-time definition object (package, class, enum,
-    /// interface, impl rule) or an opaque native handle — yields the `unknown`
-    /// type value, the same fail-open convention `reflect.signature` /
-    /// `reflect.call_any` use for unreconstructable argument types.
+    /// (`int` for `5`), never literal types. A runtime-created declaration needs
+    /// no special handling: the reconstructed type is headed at the value's own
+    /// `Instance::class` / `Variant::enm` pointer, which is the declaration
+    /// whether or not the program image contains it.
+    ///
+    /// A value with no reconstructable type is an engine leak, not a user
+    /// error: the set is exactly the objects BAML has no expression for — a
+    /// bare declaration, an unscheduled future, an opaque native handle. They
+    /// live on the heap but nothing in the language denotes one, so reaching
+    /// here means the engine handed a non-value to a value position. Reporting
+    /// `unknown` instead would be a false answer rather than a missing one:
+    /// `unknown` is the top type, and every value is already a member of it.
     fn of_value(vm: &mut BexVm, v: &Value) -> Result<Value, VmRustFnError> {
-        if let Some(ptr) = v.as_object_ptr() {
-            let nominal = match vm.get_object(ptr) {
-                Object::Instance(instance) => Some((instance.class, true)),
-                Object::Variant(variant) => Some((variant.enm, false)),
-                _ => None,
-            };
-            // A runtime-created declaration is not in the program image, so the
-            // type must be built off the value's own declaration pointer. The
-            // head carries it, which is all the provenance the old side table
-            // was standing in for.
-            if let Some((definition_ptr, is_class)) = nominal
-                && !vm.heap.is_compile_time_ptr(definition_ptr)
-            {
-                let reconstructed = match vm.get_object(definition_ptr) {
-                    Object::Class(class) if is_class => Some(bex_vm_types::RealizedTy::Class(
-                        bex_vm_types::TypeHead::new(definition_ptr, class.type_tag),
-                        Vec::new(),
-                        baml_type::TyAttr::default(),
-                    )),
-                    Object::Enum(enm) if !is_class => Some(bex_vm_types::RealizedTy::Enum(
-                        bex_vm_types::TypeHead::new(definition_ptr, enm.type_tag),
-                        baml_type::TyAttr::default(),
-                    )),
-                    _ => None,
-                };
-                if let Some(ty) = reconstructed {
-                    return Ok(Value::object(vm.tlab.alloc_type(TypeValue::new(ty))));
-                }
-            }
-        }
-        let ty = vm
-            .value_concrete_ty(*v)
-            .map_or_else(bex_vm_types::RealizedTy::unknown, bex_vm_types::RealizedTy::from);
-        Ok(Value::object(vm.alloc_static_type(ty)))
+        let Some(ty) = vm.value_concrete_ty(*v) else {
+            return Err(VmRustFnError::InternalError(
+                bex_vm_types::errors::VmInternalError::TypeError {
+                    expected: bex_vm_types::types::Type::Object(bex_vm_types::ObjectType::Any),
+                    got: vm.type_of(v),
+                },
+            ));
+        };
+        // Not `alloc_static_type`: a reconstructed type can name a runtime
+        // declaration — directly, or through a compiled generic's arguments
+        // (`Box<RuntimeFoo>`) or a container's element type.
+        let ty = bex_vm_types::RealizedTy::from(ty);
+        Ok(Value::object(vm.tlab.alloc_type(TypeValue::new(ty))))
     }
 }
 
@@ -58,10 +44,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
         let type_value = cloned_type_value(vm, *self_value);
         alloc_runtime_type(
             vm,
-            bex_vm_types::RealizedTy::List(
-                Box::new(type_value.ty.clone()),
-                baml_type::TyAttr::default(),
-            ),
+            bex_vm_types::RealizedTy::List(Box::new(type_value.ty), baml_type::TyAttr::default()),
         )
     }
 
@@ -175,8 +158,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
             _ => "output".to_string(),
         };
         let mut visited = std::collections::HashSet::new();
-        let Some((field, open_ty)) =
-            first_open_interface(vm, &type_value.ty, &root, &mut visited)
+        let Some((field, open_ty)) = first_open_interface(vm, &type_value.ty, &root, &mut visited)
         else {
             if let Some(name) = first_conflicting_render_name(vm, &type_value.ty) {
                 let diagnostic = super::type_kinds::compiler_diagnostic(
@@ -284,11 +266,14 @@ impl RenderDefinitionValidator<'_> {
                         }
                         continue;
                     }
-                    let field_ty = field
-                        .field_template
-                        .substitute(args, self.vm)
-                        .ok()
-                        .or_else(|| bex_vm_types::RealizedTy::try_from(field.field_type.clone()).ok());
+                    let field_ty =
+                        field
+                            .field_template
+                            .substitute(args, self.vm)
+                            .ok()
+                            .or_else(|| {
+                                bex_vm_types::RealizedTy::try_from(field.field_type.clone()).ok()
+                            });
                     if let Some(field_ty) = field_ty
                         && let Some(conflict) = self.visit(&field_ty)
                     {
@@ -345,7 +330,8 @@ impl RenderDefinitionValidator<'_> {
     fn check_name(&mut self, definition: &RenderDefinition) -> Option<String> {
         let display_name = render_definition_display_name(self.vm, definition);
         if let Some(previous) = self.by_display_name.get(&display_name) {
-            if previous != definition && !render_definitions_equivalent(self.vm, previous, definition)
+            if previous != definition
+                && !render_definitions_equivalent(self.vm, previous, definition)
             {
                 return Some(display_name);
             }
@@ -383,7 +369,6 @@ fn find_render_class(vm: &BexVm, head: bex_vm_types::TypeHead) -> Option<&bex_vm
         _ => None,
     }
 }
-
 
 fn render_definitions_equivalent(
     vm: &BexVm,
@@ -488,12 +473,8 @@ impl RenderDefinitionEquivalence<'_> {
             }
             (RenderDefinition::TypeAlias(left), RenderDefinition::TypeAlias(right)) => {
                 let (Some(left), Some(right)) = (
-                    self.vm
-                        .type_alias_definition(*left)
-                        .cloned(),
-                    self.vm
-                        .type_alias_definition(*right)
-                        .cloned(),
+                    self.vm.type_alias_definition(*left).cloned(),
+                    self.vm.type_alias_definition(*right).cloned(),
                 ) else {
                     return false;
                 };
@@ -685,18 +666,16 @@ fn first_open_interface(
             for field in &class.fields {
                 let child_path = format!("{path}.{}", field.name);
                 if let Some(runtime) = &field.runtime_type {
-                    if let Some(found) =
-                        first_open_interface(vm, &runtime.ty, &child_path, visited)
+                    if let Some(found) = first_open_interface(vm, &runtime.ty, &child_path, visited)
                     {
                         return Some(found);
                     }
                     continue;
                 }
-                let field_ty = field
-                    .field_template
-                    .substitute(args, vm)
-                    .ok()
-                    .or_else(|| bex_vm_types::RealizedTy::try_from(field.field_type.clone()).ok());
+                let field_ty =
+                    field.field_template.substitute(args, vm).ok().or_else(|| {
+                        bex_vm_types::RealizedTy::try_from(field.field_type.clone()).ok()
+                    });
                 if let Some(field_ty) = field_ty
                     && let Some(found) = first_open_interface(vm, &field_ty, &child_path, visited)
                 {

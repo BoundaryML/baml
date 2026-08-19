@@ -37,6 +37,20 @@ pub fn is_statically_declared(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> bool
 /// export it produce stable output.
 #[must_use]
 pub fn runtime_definitions(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Vec<HeapPtr> {
+    runtime_definitions_under_permit(&vm.heap, ty, vm.proof())
+}
+
+/// [`runtime_definitions`] for a caller that holds the heap permit without
+/// holding a [`BexVm`] — the engine's host-conversion layer.
+///
+/// This is the primitive: the walk is a heap operation, and `&BexVm` is just a
+/// place the permit is already implied.
+#[must_use]
+pub fn runtime_definitions_under_permit(
+    heap: &bex_heap::BexHeap,
+    ty: &bex_vm_types::RealizedTy,
+    _permit: bex_heap::PermitProof<'_>,
+) -> Vec<HeapPtr> {
     let mut found = Vec::new();
     let mut pending = Vec::new();
     ty.visit_heads(&mut |head| {
@@ -47,12 +61,16 @@ pub fn runtime_definitions(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Vec<Hea
     // `pending` is a stack, so reverse it to keep first-visit order.
     pending.reverse();
     while let Some(ptr) = pending.pop() {
-        if vm.heap.is_compile_time_ptr(ptr) || found.contains(&ptr) {
+        if heap.is_compile_time_ptr(ptr) || found.contains(&ptr) {
             continue;
         }
         found.push(ptr);
         let mut next = Vec::new();
-        bex_vm_types::head_walk::visit_object_heads(vm.get_object(ptr), &mut |head| {
+        // SAFETY: the permit is held for the whole walk, so no collection can
+        // move or free a declaration between reaching it and reading it.
+        #[expect(unsafe_code, reason = "reading a declaration under a held permit")]
+        let object = unsafe { ptr.get() };
+        bex_vm_types::head_walk::visit_object_heads(object, &mut |head| {
             if head.is_resolved() {
                 next.push(head.ptr());
             }
@@ -70,14 +88,23 @@ pub fn runtime_definitions(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Vec<Hea
 /// Interfaces, aliases and functions are reachable too but no consumer
 /// enumerates them, so they are simply not projected here.
 #[must_use]
-pub fn runtime_nominals(
-    vm: &BexVm,
+pub fn runtime_nominals(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> (Vec<HeapPtr>, Vec<HeapPtr>) {
+    runtime_nominals_under_permit(&vm.heap, ty, vm.proof())
+}
+
+/// [`runtime_nominals`] for a permit-holding caller without a [`BexVm`].
+#[must_use]
+pub fn runtime_nominals_under_permit(
+    heap: &bex_heap::BexHeap,
     ty: &bex_vm_types::RealizedTy,
+    permit: bex_heap::PermitProof<'_>,
 ) -> (Vec<HeapPtr>, Vec<HeapPtr>) {
     let mut classes = Vec::new();
     let mut enums = Vec::new();
-    for ptr in runtime_definitions(vm, ty) {
-        match vm.get_object(ptr) {
+    for ptr in runtime_definitions_under_permit(heap, ty, permit) {
+        // SAFETY: as in `runtime_definitions_under_permit`.
+        #[expect(unsafe_code, reason = "reading a declaration under a held permit")]
+        match unsafe { ptr.get() } {
             Object::Class(_) => classes.push(ptr),
             Object::Enum(_) => enums.push(ptr),
             _ => {}

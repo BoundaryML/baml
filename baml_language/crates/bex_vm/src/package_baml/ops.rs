@@ -18,8 +18,8 @@ use std::{
 };
 
 use baml_type::{Name, TyAttr, TypeName, normalize::TypeContext};
-use bex_vm_types::RealizedTy;
 use bex_str::BexStr;
+use bex_vm_types::RealizedTy;
 use bex_vm_types::{
     HeapPtr, ValueKind,
     errors::VmInternalError,
