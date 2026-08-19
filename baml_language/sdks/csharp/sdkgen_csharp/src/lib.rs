@@ -14,7 +14,9 @@ mod semantic;
 
 use std::{fmt, path::PathBuf};
 
-use baml_codegen_types::{OutputWriterError, SymbolPool, write_generated_output};
+use baml_codegen_types::{
+    OutputWriterError, OutputWriterOptions, SymbolPool, write_generated_output_with_options,
+};
 pub use output::{GenerationManifest, OutputValidationError};
 pub use semantic::CSharpGenerationError;
 
@@ -93,6 +95,14 @@ impl From<OutputWriterError> for GenerateIntoError {
 pub fn generate_into(
     request: CSharpGenerateRequest<'_>,
 ) -> Result<GenerationReport, GenerateIntoError> {
+    generate_into_with_options(request, OutputWriterOptions::default())
+}
+
+/// Generate and validate C# source, then install it with caller-selected writer policy.
+pub fn generate_into_with_options(
+    request: CSharpGenerateRequest<'_>,
+    output_options: OutputWriterOptions,
+) -> Result<GenerationReport, GenerateIntoError> {
     if !request.output_directory.is_absolute() {
         return Err(GenerateIntoError::InvalidOutputDirectory(
             request.output_directory,
@@ -112,7 +122,7 @@ pub fn generate_into(
         request.program_identity,
     )?;
     let (manifest, files) = output::validate_and_collect(&tree)?;
-    write_generated_output(&request.output_directory, files)?;
+    write_generated_output_with_options(&request.output_directory, files, output_options)?;
     let written_files = manifest
         .files
         .iter()
