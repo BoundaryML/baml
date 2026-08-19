@@ -19,11 +19,7 @@ use bex_engine::{
 use clap::{Args, FromArgMatches};
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{
-    bytecode_cache::CacheContext,
-    reporter::Reporter,
-    test_filter::TestFilter,
-};
+use crate::{bytecode_cache::CacheContext, reporter::Reporter, test_filter::TestFilter};
 
 /// Run BAML tests.
 ///
