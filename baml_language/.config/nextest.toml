@@ -23,6 +23,15 @@ java-gradle-serial = { max-threads = 1 }
 csharp-sdk-fixture = { max-threads = 1 }
 typescript-web-workers = { max-threads = 1 }
 
+# The baml_src aggregate tests each spawn a full `baml-cli test` sweep that
+# fans 3k+ BAML test blocks across its own worker pool — including wall-clock
+# assertions (provider timeouts, TTFT deadlines) that miss their bounds when
+# the sweep is starved by a fully loaded nextest run. Reserve the whole runner
+# while an aggregate runs; its internal parallelism uses the freed cores.
+[[profile.default.overrides]]
+filter = 'binary(=baml_src) & (test(=baml_test) + test(=bytecode))'
+threads-required = 'num-test-threads'
+
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_rust)'
 test-group = 'rust-sdk-fixture'
