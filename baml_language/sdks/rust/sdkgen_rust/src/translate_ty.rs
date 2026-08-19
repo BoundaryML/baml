@@ -114,7 +114,13 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                     let Some(union_enum) = ctx.unions.lookup(ctx.leaf, arms) else {
                         return Err(Unsupported {
                             reason: unions::shape_error(arms).unwrap_or_else(|| {
-                                "union references a skipped or unknown type".to_string()
+                                format!(
+                                    "union references a skipped or unknown type: {}",
+                                    arms.iter()
+                                        .map(std::string::ToString::to_string)
+                                        .collect::<Vec<_>>()
+                                        .join(" | ")
+                                )
                             }),
                         });
                     };

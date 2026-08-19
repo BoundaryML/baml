@@ -574,6 +574,57 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
     pool
 }
 
+/// Collect the concrete, non-generic implementors of each non-generic interface.
+///
+/// Interface declarations are intentionally absent from [`SymbolPool`]: most
+/// generators erase them or project them in language-specific ways. Generators
+/// that need a closed-world representation (notably Rust's typed `throws`
+/// surface) consume this side table and choose their own projection.
+pub fn build_interface_implementors(db: &ProjectDatabase) -> HashMap<cg::Name, Vec<cg::Ty>> {
+    let mut package_names = std::collections::HashSet::new();
+    for source_file in compiler2_all_files(db) {
+        package_names.insert(file_package::file_package(db, source_file).package.clone());
+    }
+
+    let mut implementors: HashMap<cg::Name, Vec<cg::Ty>> = HashMap::new();
+    for package_name in package_names {
+        let package = baml_compiler2_hir_ty::package_interface::package_interface(
+            db,
+            PackageId::new(db, package_name),
+        );
+        for implementation in &package.impls {
+            // A generic implementation denotes an open family rather than a
+            // finite host-language union. Likewise, a parameterized interface
+            // needs realization-specific matching that this side table does
+            // not attempt. Leave both forms untouched so generators continue
+            // to fail closed on them.
+            if !implementation.generic_params.is_empty()
+                || !implementation.interface.generics.is_empty()
+                || !implementation.interface.associated_types.is_empty()
+            {
+                continue;
+            }
+
+            let interface_name = name_from_qtn(&implementation.interface.name);
+            let concrete = convert_tir_to_codegen_ty(
+                &implementation.for_ty_pattern,
+                &HashMap::new(),
+                &std::collections::HashSet::new(),
+            );
+            implementors
+                .entry(interface_name)
+                .or_default()
+                .push(concrete);
+        }
+    }
+
+    for concrete_types in implementors.values_mut() {
+        concrete_types.sort_by_key(std::string::ToString::to_string);
+        concrete_types.dedup();
+    }
+    implementors
+}
+
 // ---------------------------------------------------------------------------
 // Type resolution
 // ---------------------------------------------------------------------------
@@ -1451,6 +1502,80 @@ function passthrough(x: Marker) -> Marker { x }
                         && generics.is_empty()
                         && associated.is_empty()),
                 "interface identity should survive in shared codegen IR: {ty:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_interface_implementors_are_available_to_language_specific_codegen() {
+        let root = Path::new("/tmp/interface_implementors_for_codegen");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            r#"
+interface Failure {}
+
+class FirstFailure {
+  message string
+  implements Failure {}
+}
+
+class SecondFailure {
+  code int
+  implements Failure {}
+}
+"#,
+        );
+
+        let diagnostics = crate::collect_compiler2_diagnostics(&db);
+        assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
+
+        let implementors = build_interface_implementors(&db);
+        let failure = cg::Name::new(Name::new("user"), vec![], Name::new("Failure"));
+        let concrete = implementors
+            .get(&failure)
+            .expect("Failure implementors must be collected");
+        let class_names: Vec<_> = concrete
+            .iter()
+            .map(|ty| match ty {
+                cg::Ty::Class(name, arguments, _attr) if arguments.is_empty() => {
+                    name.bare_name().to_string()
+                }
+                other => panic!("expected a concrete class implementor, got {other:?}"),
+            })
+            .collect();
+        assert_eq!(class_names, ["FirstFailure", "SecondFailure"]);
+    }
+
+    #[test]
+    fn test_ai_failure_implementors_are_available_to_codegen() {
+        let root = Path::new("/tmp/ai_failure_implementors_for_codegen");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            "function noop() -> string { \"ok\" }\n",
+        );
+
+        let implementors = build_interface_implementors(&db);
+        let (_failure, concrete) = implementors
+            .iter()
+            .find(|(name, _)| name.bare_name() == "Failure")
+            .expect("ai.errors.Failure implementors must be collected");
+        assert_eq!(concrete.len(), 8);
+        let pool = build_symbol_pool(&db);
+        for ty in concrete {
+            let cg::Ty::Class(name, arguments, _attr) = ty else {
+                panic!("expected concrete Failure class, got {ty:?}");
+            };
+            assert!(arguments.is_empty());
+            assert!(
+                pool.contains_key(name),
+                "Failure implementor {name:?} is not keyed the same way in the symbol pool; matching keys: {:#?}",
+                pool.keys()
+                    .filter(|key| key.bare_name() == name.bare_name())
+                    .collect::<Vec<_>>()
             );
         }
     }

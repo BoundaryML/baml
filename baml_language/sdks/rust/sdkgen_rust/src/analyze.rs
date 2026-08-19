@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
 
-use crate::{SkipWarning, routing};
+use crate::{SkipKind, SkipWarning, routing};
 
 /// Results of [`analyze`]. Emitters treat this as read-only context.
 pub(crate) struct Analysis {
@@ -61,7 +61,8 @@ impl Analysis {
 }
 
 /// Analyze the pool. Returns the analysis plus one warning per skipped
-/// class or type alias (functions warn separately at emission time).
+/// class or type alias. Methods on a skipped class also receive callable
+/// warnings because they never reach the function emitter.
 pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     let mut warnings = Vec::new();
 
@@ -75,6 +76,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             Symbol::Enum(_) => {
                 if name.name().as_str().contains('$') {
                     warnings.push(SkipWarning {
+                        kind: SkipKind::Type,
                         fqn: name.to_string(),
                         reason: "companion types ($stream, …) are not emitted yet".to_string(),
                     });
@@ -100,6 +102,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         // same filter the function emitter applies.
         if name.name().as_str().contains('$') {
             warnings.push(SkipWarning {
+                kind: SkipKind::Type,
                 fqn: name.to_string(),
                 reason: "companion types ($stream, …) are not emitted yet".to_string(),
             });
@@ -121,6 +124,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         });
         match unsupported {
             Some((field, reason)) => warnings.push(SkipWarning {
+                kind: SkipKind::Type,
                 fqn: name.to_string(),
                 reason: format!("field `{field}`: {reason}"),
             }),
@@ -139,6 +143,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 }
                 if let Some(unused) = class_params.iter().find(|param| !used.contains(**param)) {
                     warnings.push(SkipWarning {
+                        kind: SkipKind::Type,
                         fqn: name.to_string(),
                         reason: format!(
                             "generic type parameter `{unused}` is not used in a non-recursive \
@@ -161,6 +166,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     for (name, alias) in &aliases {
         if name.name().as_str().contains('$') {
             warnings.push(SkipWarning {
+                kind: SkipKind::Type,
                 fqn: name.to_string(),
                 reason: "companion types ($stream, …) are not emitted yet".to_string(),
             });
@@ -168,6 +174,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         }
         if alias.recursive {
             warnings.push(SkipWarning {
+                kind: SkipKind::Type,
                 fqn: name.to_string(),
                 reason: "recursive type aliases are not representable as a plain Rust `type` yet"
                     .to_string(),
@@ -179,6 +186,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         // scope, so no TypeVar is ever in scope for their right-hand side.
         match field_deps(&alias.resolves_to, &[], &mut alias_deps) {
             Err(reason) => warnings.push(SkipWarning {
+                kind: SkipKind::Type,
                 fqn: name.to_string(),
                 reason,
             }),
@@ -203,6 +211,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 .find(|dep| !alive.contains(dep) && !enums.contains(dep))
             {
                 warnings.push(SkipWarning {
+                    kind: SkipKind::Type,
                     fqn: name.to_string(),
                     reason: format!("references skipped or unknown type `{dead}`"),
                 });
@@ -219,6 +228,23 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
 
     let mut emitted = alive;
     emitted.extend(enums.iter().cloned());
+
+    // A skipped class never reaches `emit::class`, so none of its methods
+    // reaches the function emitter that normally produces per-callable
+    // warnings. Preserve that lost-callable information explicitly: CLI
+    // callers use it to reject partial SDKs that silently omit user methods.
+    for (name, class) in &classes {
+        if emitted.contains(*name) {
+            continue;
+        }
+        for method in class.static_methods.iter().chain(&class.instance_methods) {
+            warnings.push(SkipWarning {
+                kind: SkipKind::Callable,
+                fqn: format!("{name}.{}", method.name.as_str()),
+                reason: format!("owning class `{name}` was skipped"),
+            });
+        }
+    }
 
     // Containment graph over emitted classes: an edge per class reference
     // reachable without crossing a heap-indirected container (`Vec`,

@@ -273,9 +273,15 @@ fn codegen_fixture(
         edition: GENERATED_EDITION.to_string(),
     };
     let pool = loaded.pool;
+    let interface_implementors = loaded.interface_implementors;
     let baml_bytecode = loaded.baml_bytecode;
     let codegen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        sdkgen_rust::to_source_code_with_bytecode(&pool, &baml_bytecode, &options)
+        sdkgen_rust::to_source_code_with_bytecode_and_interface_implementors(
+            &pool,
+            &interface_implementors,
+            &baml_bytecode,
+            &options,
+        )
     }));
     match codegen_result {
         Ok(output) => {
