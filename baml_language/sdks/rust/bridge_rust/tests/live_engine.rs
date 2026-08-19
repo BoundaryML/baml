@@ -2,7 +2,15 @@
 //! inline BAML source → compile → invoke → decode, exercising the same
 //! `bridge_cffi` / `bridge_ctypes` machinery a generated SDK composes.
 
-use std::{collections::HashMap, convert::Infallible, sync::OnceLock};
+use std::{
+    collections::HashMap,
+    convert::Infallible,
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 mod common;
 
@@ -21,6 +29,10 @@ function no_op() -> void {}
 function opt_probe(a: int, o: int? = 5) -> int?[] { [a, o] }
 function gid<T>(x: T) -> T { x }
 function gname<T>() -> string { type.of<T>().to_string() }
+function slow_callback(callback: () -> void, ms: int) -> void {
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(ms));
+  callback()
+}
 "#;
 
 /// Initialize the process-global runtime once for every test in this
@@ -161,6 +173,40 @@ async fn async_invoke_round_trips() {
     .await
     .expect("async rt_int succeeds");
     assert_eq!(result, 42);
+}
+
+#[tokio::test]
+async fn dropping_timed_out_invoke_cancels_the_engine_call() {
+    ensure_runtime();
+    let called = Arc::new(AtomicBool::new(false));
+    let called_from_callback = Arc::clone(&called);
+    let callback = baml_bridge::host_value::callable_handle(
+        move || called_from_callback.store(true, Ordering::SeqCst),
+        &[],
+    );
+
+    let result = tokio::time::timeout(
+        Duration::from_millis(50),
+        runtime::invoke::<(), Infallible>(
+            "user.slow_callback",
+            encode::kwargs(vec![
+                ("callback", Some(callback)),
+                ("ms", Some(500i64.to_baml())),
+            ]),
+            vec![],
+        ),
+    )
+    .await;
+    assert!(
+        result.is_err(),
+        "the call should exceed the caller deadline"
+    );
+
+    // If dropping the timed-out future merely detached the engine call, it
+    // would wake after 500 ms and invoke the host callback. Cancellation must
+    // stop it before that observable side effect.
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert!(!called.load(Ordering::SeqCst));
 }
 
 #[tokio::test]
