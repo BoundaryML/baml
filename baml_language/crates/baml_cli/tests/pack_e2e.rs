@@ -140,7 +140,7 @@ function main() -> string {
         assert!(!quiet_stdout.contains(unexpected), "stdout: {quiet_stdout}");
     }
 
-    let logged = run_with_env(&bin, &[], &[("BAML_LOG", "WARN")]);
+    let logged = run_with_env(&bin, &[], &[("BAML_LOG", "wArN")]);
     assert!(
         logged.status.success(),
         "packed binary exited {:?}; stdout:\n{}\nstderr:\n{}",
