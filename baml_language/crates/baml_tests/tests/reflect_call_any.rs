@@ -2,7 +2,7 @@
 //! coercion carried to runtime, `reflect.signature`, and `reflect.call_any`
 //! (argument checking, callee defaults, error propagation).
 
-use baml_project::{collect_diagnostics, testing::setup_test_db};
+use baml_db::{collect_diagnostics, testing::setup_test_db};
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 

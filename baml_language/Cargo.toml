@@ -113,6 +113,7 @@ sys_native = { path = "crates/sys_native", default-features = false }
 baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
+baml_ide = { path = "crates/baml_ide" }
 baml_release = { path = "crates/baml_release" }
 baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
@@ -129,7 +130,6 @@ bex_events = { path = "crates/bex_events" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
-
 
 #  External dependencies
 anyhow = { version = "1" }

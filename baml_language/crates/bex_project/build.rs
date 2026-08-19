@@ -1,17 +1,19 @@
-use std::{collections::BTreeMap, path::Path};
+use std::collections::BTreeMap;
 
 use baml_base::Name;
 use baml_compiler2_emit::generate_stdlib_program;
 use baml_compiler2_hir::package::PackageId;
 use baml_compiler2_hir_ty::package_interface::package_interface;
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 
 #[path = "src/precompiled_stdlib_config.rs"]
 mod precompiled_stdlib_config;
 
 fn main() {
+    // Stdlib-only database: no workspace root, just the embedded stdlib
+    // sources, so the emitted prefix depends on nothing but the compiler build.
     let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("<precompiled-stdlib>"));
+    db.ensure_stdlib_sources();
 
     let interfaces = baml_builtins2::stdlib_package_names()
         .iter()

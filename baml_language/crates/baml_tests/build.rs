@@ -525,7 +525,6 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     quote! {
         mod #module_name {
             use baml_db::*;
-            use baml_project::ProjectDatabase;
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
@@ -557,7 +556,7 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                 {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
-                    let sf = db.add_file(
+                    let sf = db.file(
                         #relative_path,
                         &content,
                     );
@@ -595,7 +594,7 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
             use crate::compiler2_tir::support::render_ppir;
 
             let mut db = ProjectDatabase::new();
-            let _root = db.set_project_root(std::path::Path::new("."));
+            let _root = db.workspace(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
@@ -629,7 +628,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                 {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
-                    let sf = db.add_file(
+                    let sf = db.file(
                         #relative_path,
                         &content,
                     );
@@ -672,7 +671,7 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
             use baml_compiler2_ppir::item_data::{file_functions, function_source_map};
 
             let mut db = ProjectDatabase::new();
-            let _root = db.set_project_root(std::path::Path::new("."));
+            let _root = db.workspace(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
@@ -714,7 +713,7 @@ fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
                 {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
-                    let source_file = db.add_file(
+                    let source_file = db.file(
                         #relative_path,
                         &content,
                     );
@@ -840,11 +839,11 @@ fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
         fn test_05_diagnostics() {
             use baml_compiler_diagnostics::{DiagnosticPhase, RenderConfig, render_diagnostic};
             use baml_compiler2_hir::compiler2_all_files;
-            use baml_project::collect_compiler2_diagnostics;
+            use baml_db::collect_compiler2_diagnostics;
             use std::path::PathBuf;
 
             let mut db = ProjectDatabase::new();
-            let _root = db.set_project_root(std::path::Path::new("."));
+            let _root = db.workspace(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
@@ -909,7 +908,7 @@ fn generate_codegen_test(
                 {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
-                    db.add_file(#relative_path, &content);
+                    db.file(#relative_path, &content);
                 }
             }
         })
@@ -941,7 +940,7 @@ fn generate_codegen_test(
         #[test]
         fn test_06_codegen() {
             let mut db = ProjectDatabase::new();
-            db.set_project_root(std::path::Path::new("."));
+            db.workspace(std::path::Path::new("."));
 
             #file_loaders
 
@@ -999,12 +998,13 @@ fn generate_incremental_parsing_test(baml_file: &BamlFile) -> TokenStream {
 
             // Test single character edits maintain correctness
             let mut db = ProjectDatabase::new();
-            let source_file = db.add_file(#relative_path, &content);
+            db.workspace(std::path::Path::new("."));
+            let source_file = db.file(#relative_path, &content);
             let original_tree = baml_compiler_parser::syntax_tree(&db, source_file);
 
             // Test adding a character
             let modified = insert_char(&content, content.len() / 2, 'x');
-            let modified_file = db.add_file("modified.baml", &modified);
+            let modified_file = db.file("modified.baml", &modified);
             let modified_tree = baml_compiler_parser::syntax_tree(&db, modified_file);
 
             // Verify the trees are valid
@@ -1028,12 +1028,13 @@ fn generate_node_reuse_test(baml_file: &BamlFile) -> TokenStream {
 
             // Measure node reuse for single character edit
             let mut db = ProjectDatabase::new();
-            let source_file = db.add_file(#relative_path, &content);
+            db.workspace(std::path::Path::new("."));
+            let source_file = db.file(#relative_path, &content);
             let original_tree = baml_compiler_parser::syntax_tree(&db, source_file);
 
             // Make a small edit
             let modified = insert_char(&content, content.len() / 2, 'a');
-            let modified_file = db.add_file("modified.baml", &modified);
+            let modified_file = db.file("modified.baml", &modified);
             let modified_tree = baml_compiler_parser::syntax_tree(&db, modified_file);
 
             // Measure reuse (this is a simplified check)
@@ -1058,7 +1059,8 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
                     let mut db = ProjectDatabase::new();
-                    let source_file = db.add_file(#relative_path, &content);
+                    db.workspace(std::path::Path::new("."));
+                    let source_file = db.file(#relative_path, &content);
                     let tree = baml_compiler_parser::syntax_tree(&db, source_file);
                     assert_tree_is_lossless(&tree, &content);
                 }

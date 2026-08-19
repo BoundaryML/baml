@@ -6594,7 +6594,7 @@ mod concurrent_tests {
 mod mint_identity_tests {
     use std::sync::Arc;
 
-    use baml_project::testing::compile_source;
+    use baml_db::testing::compile_source;
     use bex_vm_types::{Object, types::MintId};
     use sys_native::SysOpsExt;
     use tokio_util::sync::CancellationToken;

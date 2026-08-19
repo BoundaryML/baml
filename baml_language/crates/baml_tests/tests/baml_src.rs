@@ -64,7 +64,7 @@ fn compile_baml_src() -> Program {
         .iter()
         .map(|(path, content)| (path.as_str(), content.as_str()))
         .collect();
-    baml_project::testing::compile_multi_file(&refs)
+    baml_db::testing::compile_multi_file(&refs)
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn promptfiddle_demo_compiles() {
     // the demo, while this existing test binary checks it without a second compiler build.
     let source =
         include_str!("../../../../typescript2/app-promptfiddle/src/playground/default.baml");
-    baml_project::testing::compile_multi_file(&[("baml_src/main.baml", source)]);
+    baml_db::testing::compile_multi_file(&[("baml_src/main.baml", source)]);
 }
 
 /// Strip the `ns_` prefix from a directory segment if it names a valid namespace

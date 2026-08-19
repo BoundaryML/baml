@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use baml_db::baml_compiler_diagnostics::{Diagnostic, Severity, render};
-use baml_project::ProjectDatabase;
+use baml_db::{
+    ProjectDatabase,
+    baml_compiler_diagnostics::{Diagnostic, Severity, render},
+};
 use clap::Args;
 
 use crate::reporter::Reporter;
@@ -63,7 +65,7 @@ impl CheckArgs {
                 let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             }
-            None => (baml_project::collect_diagnostics(db), None),
+            None => (baml_db::collect_diagnostics(db), None),
         };
         if let Some(cache) = cache {
             cache.verify_diagnostics(db)?;
@@ -159,57 +161,15 @@ pub(crate) fn render_project_diagnostics(
     db: &ProjectDatabase,
     diagnostics: &[Diagnostic],
 ) -> String {
+    // Sources and paths for every file in the database (workspace, stdlib):
+    // a diagnostic in one file may carry related spans into another.
     let mut sources = std::collections::HashMap::new();
     let mut file_paths = std::collections::HashMap::new();
-    let mut source_files = std::collections::HashMap::new();
-    for source_file in db.get_source_files() {
+    for source_file in baml_db::baml_compiler2_hir::compiler2_all_files(db) {
         let file_id = source_file.file_id(db);
         sources.insert(file_id, source_file.text(db).to_string());
         file_paths.insert(file_id, source_file.path(db));
-        source_files.insert(file_id, source_file);
-    }
-    for source_file in baml_db::baml_compiler2_hir::compiler2_all_files(db) {
-        let file_id = source_file.file_id(db);
-        sources
-            .entry(file_id)
-            .or_insert_with(|| source_file.text(db).to_string());
-        file_paths
-            .entry(file_id)
-            .or_insert_with(|| source_file.path(db));
-        source_files.entry(file_id).or_insert(source_file);
     }
     let config = crate::output::policy().diagnostic_render_config();
-    let mut highlights = baml_db::baml_compiler_diagnostics::SourceHighlights::new();
-    if config.color && config.format == render::DiagnosticFormat::Human {
-        let file_ids = diagnostics
-            .iter()
-            .flat_map(|diagnostic| {
-                diagnostic
-                    .annotations
-                    .iter()
-                    .map(|annotation| annotation.span.file_id)
-                    .chain(
-                        diagnostic
-                            .related_info
-                            .iter()
-                            .map(|related| related.span.file_id),
-                    )
-            })
-            .collect::<std::collections::HashSet<_>>();
-        let highlighter = crate::paint::Highlighter::new(db);
-        for file_id in file_ids {
-            if let Some(source_file) = source_files.get(&file_id) {
-                highlights.insert(file_id, highlighter.spans(*source_file));
-            }
-        }
-    }
-    let message_highlighter = crate::paint::MessageHighlighter::default();
-    render::render_diagnostics_with_highlighters(
-        diagnostics,
-        &sources,
-        &file_paths,
-        &highlights,
-        Some(&message_highlighter),
-        &config,
-    )
+    render::render_diagnostics(diagnostics, &sources, &file_paths, &config)
 }

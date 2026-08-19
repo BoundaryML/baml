@@ -11,7 +11,7 @@
 
 use std::sync::{Arc, atomic::AtomicBool};
 
-use baml_project::testing::compile_source;
+use baml_db::testing::compile_source;
 use baml_type::{Name, RealizedTy, TyAttr, TyTemplate, TypeName};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{

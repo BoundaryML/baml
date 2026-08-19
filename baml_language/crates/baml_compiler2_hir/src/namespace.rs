@@ -169,15 +169,16 @@ pub fn namespace_items<'db>(
     let package = namespace_id.package(db);
     let ns_path = namespace_id.path(db);
 
-    // Collect matching files, then sort alphabetically by path.
-    // Use compiler2_all_files() so that compiler2-only builtin stubs (e.g.
-    // Array<T>, Map<K,V>) are visible here without being added to the v1
-    // compiler's project.files() list.
-    let mut matching_files: Vec<SourceFile> = crate::compiler2_all_files(db)
-        .into_iter()
+    // Collect matching files from the package's own roots
+    // (`package_files`), then sort alphabetically by path — so edits to
+    // another package's file set never invalidate this namespace.
+    let package_id = crate::package::PackageId::new(db, package);
+    let mut matching_files: Vec<SourceFile> = crate::package::package_files(db, package_id)
+        .iter()
+        .copied()
         .filter(|file| {
             let pkg_info = crate::file_package::file_package(db, *file);
-            pkg_info.package == *package && pkg_info.namespace_path == *ns_path
+            pkg_info.namespace_path == *ns_path
         })
         .collect();
     matching_files.sort_by_key(|a| a.path(db));

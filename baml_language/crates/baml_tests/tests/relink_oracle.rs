@@ -18,7 +18,7 @@ use baml_compiler2_emit::{
     CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_reuse_units,
     generate_project_bytecode_with_stdlib, generate_stdlib_program, take_lowered_files,
 };
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 use bex_vm_types::{CompilationUnit, Object, Program};
 use common::{A_BAML, B_BAML, C_BAML, assert_programs_byte_identical, build_db};
 
@@ -72,7 +72,7 @@ fn relink_seeded(
     use baml_compiler2_hir_ty::throw_facts::file_throw_facts;
     let prev_db = build_db(ROOT, prev_files);
     let mut seeds = std::collections::BTreeMap::new();
-    for sf in prev_db.get_source_files() {
+    for sf in prev_db.workspace_files() {
         let path = sf.path(&prev_db).display().to_string();
         let rel = path.trim_start_matches(&format!("{ROOT}/")).to_string();
         if clean.contains(&rel.as_str()) {

@@ -10,9 +10,10 @@ use baml_type::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr};
 use text_size::TextSize;
 
 use super::support::{expr_type_in_function, make_db, render_tir};
+use crate::engine::TestDbExt;
 
 fn find_function_scope_id<'db>(
-    db: &'db baml_project::ProjectDatabase,
+    db: &'db baml_db::ProjectDatabase,
     file: baml_base::SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::scope::ScopeId<'db> {
@@ -35,7 +36,7 @@ fn find_function_scope_id<'db>(
 #[test]
 fn literal_int() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { return 1; }");
+    let file = db.file("test.baml", "function f() -> int { return 1; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
@@ -48,7 +49,7 @@ fn literal_int() {
 #[test]
 fn let_binding_widens() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { let x = 1; return x; }");
+    let file = db.file("test.baml", "function f() -> int { let x = 1; return x; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
@@ -62,7 +63,7 @@ fn let_binding_widens() {
 #[test]
 fn resolver_initializer_shadowing_uses_previous_binding() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f() -> int { let x = 1; let x = x + 1; x }",
     );
@@ -101,7 +102,7 @@ fn resolver_initializer_shadowing_uses_previous_binding() {
 #[test]
 fn class_field_access() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.name; }",
     );
@@ -123,7 +124,7 @@ fn class_field_access() {
 #[test]
 fn type_mismatch() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> string { return 1; }");
+    let file = db.file("test.baml", "function f() -> string { return 1; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> string throws never {
       { : never
@@ -137,7 +138,7 @@ fn type_mismatch() {
 #[test]
 fn unresolved_field() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.missing; }",
     );
@@ -162,7 +163,7 @@ fn unresolved_field_chained_access() {
     // Test: in `data.inner.foo`, if `inner` doesn't exist on the class,
     // the squiggly should only cover "inner", not "data.inner".
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Data {
@@ -193,7 +194,7 @@ fn unresolved_field_span_should_narrow_to_member() {
     // Regression test: the diagnostic span for an unresolved member should cover
     // only the member name ("feelin"), not the entire expression ("user.Sentiment.feelin").
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Sentiment {
@@ -225,7 +226,7 @@ fn unresolved_dotted_root_span_should_narrow_to_root() {
     // unresolved name, the diagnostic should underline only `o`, not the whole
     // `o.value` expression.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 function f() -> string {
@@ -245,7 +246,7 @@ function f() -> string {
 #[test]
 fn unknown_field_access_uses_narrowing_diagnostic() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 function load(raw: unknown) -> string {
@@ -267,7 +268,7 @@ function load(raw: unknown) -> string {
 #[test]
 fn binary_op_int_add() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(a: int, b: int) -> int { return a + b; }",
     );
@@ -283,7 +284,7 @@ fn binary_op_int_add() {
 #[test]
 fn if_else_joins_types() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(x: bool) -> int { return if (x) { 1 } else { 2 }; }",
     );
@@ -311,7 +312,7 @@ fn if_else_joins_types() {
 #[test]
 fn enum_variant_resolution() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "enum Color { Red\nGreen\nBlue }\nfunction f() -> Color { return Color.Red; }",
     );
@@ -328,7 +329,7 @@ fn enum_variant_resolution() {
 #[test]
 fn resolve_class_fields_query() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "class Point { x int\ny float\nlabel string }");
+    let file = db.file("test.baml", "class Point { x int\ny float\nlabel string }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Point {
       x: int
@@ -346,7 +347,7 @@ fn resolve_class_fields_query() {
 #[test]
 fn resolve_type_alias_query() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "type MyStr = string");
+    let file = db.file("test.baml", "type MyStr = string");
     insta::assert_snapshot!(render_tir(&db, file), @"
     type user.MyStr = string
     type user.MyStr$stream = string
@@ -360,7 +361,7 @@ fn class_field_bigint() {
     // Note: to_json returns `map<string, unknown>` for bigint until Phase 2
     // wires up the bigint.to_json() method.
     let mut db = make_db();
-    let file = db.add_file("test.baml", "class Foo { x bigint }");
+    let file = db.file("test.baml", "class Foo { x bigint }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       x: bigint
@@ -374,7 +375,7 @@ fn class_field_bigint() {
 #[test]
 fn two_functions_independent() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function ok() -> int { return 1; }\nfunction bad() -> string { return 42; }",
     );
@@ -398,7 +399,7 @@ fn unresolved_path_after_valid_type() {
     // Test: when a path like `baml.media.Image.missing` fails, `missing` should be
     // reported as unresolved (not `Image`, which is a valid type in the media namespace).
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f() -> int { return baml.media.Image.missing; }",
     );
@@ -417,7 +418,7 @@ fn unresolved_path_after_valid_type() {
 #[test]
 fn io_input_requires_baml_prefix() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> string { io.input(\"x\") }");
+    let file = db.file("test.baml", "function f() -> string { io.input(\"x\") }");
 
     let output = render_tir(&db, file);
     assert!(
@@ -429,7 +430,7 @@ fn io_input_requires_baml_prefix() {
 #[test]
 fn env_builtin_calls_require_baml_prefix() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> string? { env.get(\"X\") }");
+    let file = db.file("test.baml", "function f() -> string? { env.get(\"X\") }");
 
     let output = render_tir(&db, file);
     assert!(
@@ -441,7 +442,7 @@ fn env_builtin_calls_require_baml_prefix() {
 #[test]
 fn function_type_throws_inference_opens_immediate_callback_param() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "callback.baml",
         "function direct(cb: (value: int) -> string) -> string { let handler = cb; return \"ok\"; }",
     );
@@ -455,7 +456,7 @@ fn function_type_throws_inference_opens_immediate_callback_param() {
 #[test]
 fn function_type_throws_package_interface_exports_effect_params() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "callback.baml",
         "function direct(cb: (value: int) -> string) -> string { return \"ok\"; }",
     );
@@ -481,7 +482,7 @@ fn function_type_throws_package_interface_exports_effect_params() {
 #[test]
 fn package_interface_exports_optional_param_mode() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "search.baml",
         "function Search(query: string, limit: int = 10) -> int { limit }",
     );
@@ -506,7 +507,7 @@ fn package_interface_exports_optional_param_mode() {
 #[test]
 fn cross_file_out_of_body_implements_class_target_is_registered() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "types.baml",
         r#"
 class Dog {
@@ -514,7 +515,7 @@ class Dog {
 }
 "#,
     );
-    let impl_file = db.add_file(
+    let impl_file = db.file(
         "impl.baml",
         r#"
 interface ToJson {
@@ -535,7 +536,7 @@ implements ToJson for Dog {
         "cross-file class target must remain a first-class out-of-body impl record"
     );
 
-    let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
+    let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
     assert!(
         diagnostics.is_empty(),
         "cross-file class target should not produce diagnostics: {diagnostics:#?}"
@@ -573,7 +574,7 @@ fn builtin_equals_compare_visible_from_user_package() {
 
     let mut db = make_db();
     // A user file so the `user` package exists; `Bare` implements nothing.
-    db.add_file("main.baml", "class Bare { x: int }");
+    db.file("main.baml", "class Bare { x: int }");
     let user_pkg = PackageId::new(&db, Name::new("user"));
 
     let equals = baml_type::Interface::new(
@@ -621,7 +622,7 @@ fn builtin_equals_compare_visible_from_user_package() {
 #[test]
 fn own_class_method_lookup_matches_exported_implicit_self_type() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "service.baml",
         r#"
 class SearchService {
@@ -671,7 +672,7 @@ class SearchService {
 #[test]
 fn lambda_scope_retypes_capture_from_function_parameter() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "capture_param.baml",
         "function main(x: int) -> int { let f = () -> int { x }; return f(); }",
     );
@@ -727,7 +728,7 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
 #[test]
 fn lambda_parameter_shadowing_uses_parameter_declared_type() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "lambda_param_shadow.baml",
         r#"
 function main() -> int {
@@ -760,7 +761,7 @@ function main() -> int {
 #[test]
 fn returning_callback_forwarder_matches_explicit_function_type_return_annotation() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "callback_return.baml",
         r#"function wrap(cb: (x: int) -> int) -> int {
   return cb(1)
@@ -781,8 +782,8 @@ function demo() -> ((x: int) -> int throws never) -> int throws never {
 /// Helper: does compiling `source` produce a type mismatch diagnostic?
 fn has_type_mismatch(source: &str) -> bool {
     let mut db = make_db();
-    db.add_file("test.baml", source);
-    baml_project::collect_compiler2_diagnostics(&db)
+    db.file("test.baml", source);
+    baml_db::collect_compiler2_diagnostics(&db)
         .iter()
         .any(|diag| diag.id == baml_compiler_diagnostics::DiagnosticId::TypeMismatch)
 }
@@ -983,7 +984,7 @@ fn narrowed_nullable_index_is_accepted() {
 #[test]
 fn class_spread_requires_the_same_nominal_class_and_generic_arguments() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Left<T> { value T }
@@ -1036,7 +1037,7 @@ fn interface_declaration_surface_resolves_symbolically() {
     };
 
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "iface.baml",
         r#"
 interface Encoder {

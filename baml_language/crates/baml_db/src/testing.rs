@@ -1,0 +1,111 @@
+//! Test helpers for compiling BAML source into bytecode.
+//!
+//! These utilities panic on compile errors, so they are appropriate for test
+//! code only. Production callers should use [`crate::collect_diagnostics`] and
+//! [`baml_compiler2_emit::generate_project_bytecode_with_opt`] directly.
+
+use std::path::{Path, PathBuf};
+
+use baml_base::{Name, SourceRoot, SourceRootKind};
+use baml_compiler_diagnostics::Severity;
+pub use baml_compiler2_emit::OptLevel;
+use baml_compiler2_emit::{CompileOptions, generate_project_bytecode_with_opt};
+use bex_vm_types::Program;
+
+use crate::{ProjectDatabase, SourceRootSpec, collect_diagnostics};
+
+/// A fresh database with the stdlib installed and one empty `Workspace` root
+/// (path `.`, package `user`).
+fn workspace_db() -> (ProjectDatabase, SourceRoot) {
+    let mut db = ProjectDatabase::new();
+    db.ensure_stdlib_sources();
+    let root = db
+        .add_source_root(SourceRootSpec {
+            path: PathBuf::from("."),
+            package: Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: SourceRootKind::Workspace,
+        })
+        .unwrap_or_else(|err| unreachable!("a fresh database has no workspace root: {err}"));
+    (db, root)
+}
+
+/// Set up a test database from BAML source code: the stdlib, a `Workspace`
+/// root, and `source` as `test.baml` in it.
+pub fn setup_test_db(source: &str) -> ProjectDatabase {
+    let (mut db, root) = workspace_db();
+    db.add_or_update_file_in(root, Path::new("test.baml"), source);
+    db
+}
+
+/// Assert that a `ProjectDatabase` has no diagnostic errors in workspace files.
+///
+/// Non-workspace roots (the stdlib, source-bearing dependencies) may have
+/// known pre-existing errors that don't affect user code correctness. Only
+/// errors in workspace source files are checked here.
+#[track_caller]
+pub fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
+    let diagnostics = collect_diagnostics(db);
+
+    let user_file_ids: std::collections::HashSet<_> =
+        db.workspace_files().iter().map(|f| f.file_id(db)).collect();
+
+    let errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| matches!(d.severity, Severity::Error))
+        .filter(|d| {
+            d.primary_span()
+                .is_some_and(|span| user_file_ids.contains(&span.file_id))
+        })
+        .collect();
+    if !errors.is_empty() {
+        use std::fmt::Write;
+        let mut msg = String::from("Compilation produced diagnostic errors:\n");
+        for (i, err) in errors.iter().enumerate() {
+            let _ = writeln!(
+                msg,
+                "  {}. [{}] {}",
+                i + 1,
+                err.code(),
+                err.message_with_primary_label()
+            );
+        }
+        panic!("{msg}");
+    }
+}
+
+/// Compile BAML source with default optimization (`OptLevel::One`).
+pub fn compile_source(source: &str) -> Program {
+    compile_source_with_opt(source, OptLevel::One)
+}
+
+/// Compile BAML source with a specific optimization level.
+pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
+    let db = setup_test_db(source);
+    assert_no_diagnostic_errors(&db);
+
+    let opts = CompileOptions {
+        emit_test_cases: false,
+    };
+    generate_project_bytecode_with_opt(&db, &opts, opt)
+        .expect("generate_project_bytecode should succeed for valid test source")
+}
+
+/// Compile multiple BAML files at the given relative paths in one project.
+/// Use when a test needs cross-file or namespaced (`ns_<name>/`) layout,
+/// which `compile_source`'s single-file helper can't express.
+pub fn compile_multi_file(files: &[(&str, &str)]) -> Program {
+    let (mut db, root) = workspace_db();
+    db.add_or_update_files_in(
+        root,
+        files
+            .iter()
+            .map(|(path, content)| (Path::new(*path), *content)),
+    );
+    assert_no_diagnostic_errors(&db);
+
+    let opts = CompileOptions {
+        emit_test_cases: false,
+    };
+    generate_project_bytecode_with_opt(&db, &opts, OptLevel::One)
+        .expect("generate_project_bytecode should succeed for valid test source")
+}

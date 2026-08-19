@@ -147,7 +147,7 @@ function raw_quad_backslash() -> string { #"\\\\"# }
     #[test]
     fn invalid_strings_still_produce_errors() {
         use baml_compiler_diagnostics::Severity;
-        use baml_project::{collect_diagnostics, testing::setup_test_db};
+        use baml_db::{collect_diagnostics, testing::setup_test_db};
 
         let cases = [
             // Unterminated string — no closing quote at all

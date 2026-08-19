@@ -292,7 +292,7 @@ function enumerated_test_runs() -> bool throws unknown {
 async fn run_main_with_logs(
     source: &str,
 ) -> (Result<BexExternalValue, EngineError>, TraceLogDrainReport) {
-    let program = baml_project::testing::compile_source(source);
+    let program = baml_db::testing::compile_source(source);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,

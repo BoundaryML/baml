@@ -202,10 +202,6 @@ mod tests {
         let concise = normalize_snapshot(&render_for_test(&[]));
         insta::assert_snapshot!("root_concise_help", concise);
         insta::assert_snapshot!(
-            "describe_detailed_help",
-            normalize_snapshot(&render_for_test(&["describe"]))
-        );
-        insta::assert_snapshot!(
             "run_detailed_help",
             normalize_snapshot(&render_for_test(&["run"]))
         );

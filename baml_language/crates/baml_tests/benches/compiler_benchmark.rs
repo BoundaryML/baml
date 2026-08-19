@@ -19,8 +19,8 @@
 use std::path::{Path, PathBuf};
 
 use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
-use baml_project::ProjectDatabase;
-use baml_workspace::discover_baml_files;
+use baml_db::{ProjectDatabase, discover_baml_files};
+use baml_tests::engine::TestDbExt;
 use divan::{Bencher, black_box};
 
 fn main() {
@@ -64,13 +64,13 @@ fn read_project(root: &Path) -> ProjectSources {
 }
 
 /// Build a fresh [`ProjectDatabase`] rooted at `root` and populated with
-/// `sources`. Mirrors how the CLI loads a project (`set_project_root` first,
+/// `sources`. Mirrors how the CLI loads a project (the workspace root first,
 /// then add each discovered file) so the compiler sees the same project shape.
 fn build_db(root: &Path, sources: &ProjectSources) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(root);
+    db.workspace(root);
     for (path, content) in sources {
-        db.add_or_update_file(path, content);
+        db.file(path, content);
     }
     db
 }

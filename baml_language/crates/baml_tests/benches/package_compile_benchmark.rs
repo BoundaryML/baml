@@ -8,7 +8,8 @@
 use std::{path::Path, sync::Arc};
 
 use baml_compiler2_emit::{CompileOptions, OptLevel, generate_project_bytecode_with_opt};
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
+use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use divan::{Bencher, black_box};
 use sys_native::{CallId, SysOpsExt};
@@ -67,8 +68,8 @@ fn main() {
 
 fn engine() -> Arc<BexEngine> {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("."));
-    db.add_file("package_compile_bench.baml", OUTER_SOURCE);
+    db.workspace(Path::new("."));
+    db.file("package_compile_bench.baml", OUTER_SOURCE);
     let program = generate_project_bytecode_with_opt(
         &db,
         &CompileOptions {

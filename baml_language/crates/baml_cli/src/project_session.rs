@@ -1,6 +1,6 @@
 //! One shared setup path for every command that loads a BAML project.
 //!
-//! `check`, `run`, `test`, `pack`, `describe`, and `generate` all
+//! `check`, `run`, `test`, `pack`, and `generate` all
 //! need the same preamble — resolve the project, build the database, open
 //! the bytecode cache, install the warm seeds — but historically each
 //! command hand-rolled its own subset, and the subsets drifted: `pack`
@@ -21,16 +21,16 @@
 //!    plan (throw facts, callable-throws fragments, diagnostics blobs).
 //! 4. [`ProjectSession::prime`] — parallel per-file semantic-index prime for
 //!    commands that query whole-package aggregates without running the check
-//!    collectors (which prime internally): `describe`.
+//!    collectors (which prime internally): `generate`.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 
 use crate::{
     bytecode_cache::{CacheContext, ReusePlan},
-    project_load::{ResolvedProject, build_db_from_sources, resolve_project_sources},
+    project_load::{ResolvedProject, build_db_from_sources, resolve_project_sources, workspace_db},
 };
 
 /// How a command participates in the bytecode cache.
@@ -42,7 +42,7 @@ pub(crate) enum CacheUse {
     /// Same, in the `baml test` keyspace (`emit_test_cases: true`).
     ReadWriteTests,
     /// Consume warm seeds, never store: introspection commands
-    /// (`describe`, `generate`). Shares the run/check keyspace.
+    /// (`generate`). Shares the run/check keyspace.
     ReadOnly,
     /// No cache at all (projectless fallback, tests).
     Off,
@@ -79,7 +79,8 @@ impl ProjectSession {
         Ok(Self::from_resolved(resolved, cache_use))
     }
 
-    /// Lenient open for introspection commands (`describe`): never
+    /// Lenient open for introspection commands (`describe`, once it returns
+    /// with the IDE layer): never
     /// fails on a missing or invalid `baml.toml`. Inside a project the
     /// manifest is read raw (its bytes still key the cache, unvalidated);
     /// outside any project the session is an empty database rooted at the
@@ -90,8 +91,7 @@ impl ProjectSession {
             Some(resolved) => Ok(Self::from_resolved(resolved, cache_use)),
             None => {
                 let root = crate::project_load::projectless_search_dir(from)?;
-                let mut db = ProjectDatabase::new();
-                db.set_project_root(&root);
+                let (db, _workspace) = workspace_db(&root);
                 Ok(Self {
                     resolved: ResolvedProject {
                         root,
@@ -147,7 +147,7 @@ impl ProjectSession {
     }
 
     /// Variant of [`Self::warm_prep`] for read-only introspection
-    /// (`describe`): installs the stdlib-interface seed always, and
+    /// (`generate`): installs the stdlib-interface seed always, and
     /// the per-file throws seeds only on a **no-delta** plan — where they are
     /// byte-for-byte the stored values and the serve-time gate is a proven
     /// tautology. On a project with edits, introspection simply derives
@@ -178,11 +178,11 @@ impl ProjectSession {
     }
 
     /// Parallel per-file semantic-index prime. Commands that query
-    /// whole-package aggregates *outside* the check collectors (`describe`)
+    /// whole-package aggregates *outside* the check collectors (`generate`)
     /// call this so the aggregate fold is parallel-fed instead of a
     /// serial parse of the project. Harmless to call twice.
     pub(crate) fn prime(&self) {
-        baml_project::prime_file_indexes_parallel(&self.db);
+        baml_db::prime_file_indexes_parallel(&self.db);
     }
 
     /// A fresh, un-seeded database over the same sources — the honest

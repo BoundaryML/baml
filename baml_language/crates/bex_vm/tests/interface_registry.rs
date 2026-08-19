@@ -6,7 +6,7 @@
 //! default methods, not just the methods the impl overrides, with an override
 //! winning over the default.
 
-use baml_project::testing::compile_source;
+use baml_db::testing::compile_source;
 use baml_type::TyTemplate;
 use bex_vm_types::{Object, types::Program};
 

@@ -16,12 +16,14 @@ use std::{fmt::Write as _, path::Path};
 
 use baml_compiler2_hir::body::BodyOwnerId;
 
+use crate::engine::TestDbExt;
+
 fn corpus_verdicts(relative_path: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative_path);
     let source = std::fs::read_to_string(&path)
         .unwrap_or_else(|err| panic!("cannot read corpus {}: {err}", path.display()));
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("corpus.baml", &source);
+    let file = db.file("corpus.baml", &source);
 
     let mut out = String::new();
     for owner in baml_compiler2_ppir::file_body_owners(&db, file) {

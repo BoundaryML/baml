@@ -1,7 +1,7 @@
 //! BEP-066 constructor-correctness and removed-reader regression tests.
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{collect_diagnostics, testing::setup_test_db};
+use baml_db::{collect_diagnostics, testing::setup_test_db};
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 

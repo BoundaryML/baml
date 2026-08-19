@@ -346,6 +346,7 @@ dependencies = [
  "baml_db",
  "baml_exec",
  "baml_fmt",
+ "baml_ide",
  "baml_release",
  "baml_tests",
  "baml_type",
@@ -455,6 +456,7 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
+ "baml_type",
  "indexmap",
  "la-arena",
  "rustc-hash 2.1.2",
@@ -575,6 +577,8 @@ name = "baml_db"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "baml_builtins2",
+ "baml_compiler2_ast",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
@@ -584,7 +588,14 @@ dependencies = [
  "baml_compiler_lexer",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_type",
+ "bex_vm_types",
+ "ignore",
+ "rayon",
  "salsa",
+ "tempfile",
+ "text-size",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -611,10 +622,29 @@ name = "baml_fmt"
 version = "0.0.0-beta"
 dependencies = [
  "baml_db",
+ "baml_type",
  "ouroboros",
  "rowan 0.16.1",
  "salsa",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "baml_ide"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_codegen_types",
+ "baml_compiler2_ast",
+ "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
+ "baml_compiler2_ppir",
+ "baml_compiler_diagnostics",
+ "baml_db",
+ "baml_type",
+ "insta",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -784,6 +814,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "baml_builtins2",
+ "baml_db",
  "baml_type",
  "baml_type_runtime",
  "bex_events",
@@ -955,6 +986,7 @@ dependencies = [
  "baml_builtins2",
  "baml_builtins2_codegen",
  "baml_compiler_diagnostics",
+ "baml_db",
  "baml_type",
  "base64",
  "bex_events",
@@ -1185,40 +1217,15 @@ dependencies = [
 name = "bridge_wasm"
 version = "0.1.0"
 dependencies = [
- "baml_type",
  "baml_version",
  "base64",
- "bex_events",
- "bex_heap",
  "bex_project",
- "bridge_ctypes",
- "bytes",
  "console_error_panic_hook",
- "futures",
  "getrandom 0.3.4",
- "indexmap",
- "js-sys",
  "log",
- "lsp-server",
- "num-bigint",
- "num-traits",
- "prost",
- "reqwest",
- "serde",
- "serde-wasm-bindgen",
- "serde_json",
- "sys_glob",
- "sys_ops",
- "sys_types",
- "sys_wasm",
- "thiserror 2.0.18",
- "tsify",
- "vfs",
  "wasm-bindgen",
- "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "wasm-logger",
- "web-time",
 ]
 
 [[package]]
@@ -1698,15 +1705,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "crossbeam-channel"
-version = "0.5.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82b8f8f868b36967f9606790d1903570de9ceaf870a7bf9fbbd3016d636a2cb2"
-dependencies = [
- "crossbeam-utils",
 ]
 
 [[package]]
@@ -2333,19 +2331,6 @@ dependencies = [
  "log",
  "regex-automata",
  "regex-syntax 0.8.10",
-]
-
-[[package]]
-name = "gloo-utils"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b5555354113b18c547c1d3a98fbf7fb32a9ff4f6fa112ce823a21641a0ba3aa"
-dependencies = [
- "js-sys",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]
@@ -3222,19 +3207,6 @@ name = "lru-slab"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
-
-[[package]]
-name = "lsp-server"
-version = "0.7.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d6ada348dbc2703cbe7637b2dda05cff84d3da2819c24abcb305dd613e0ba2e"
-dependencies = [
- "crossbeam-channel",
- "log",
- "serde",
- "serde_derive",
- "serde_json",
-]
 
 [[package]]
 name = "maplit"
@@ -4818,6 +4790,7 @@ dependencies = [
  "baml_base",
  "baml_codegen_types",
  "baml_db",
+ "baml_ide",
  "baml_type",
  "baml_version",
  "borsh",
@@ -5055,17 +5028,6 @@ name = "serde_derive"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "serde_derive_internals"
-version = "0.29.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5949,32 +5911,6 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
-
-[[package]]
-name = "tsify"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ec5505497c87f1c050b4392d3f11b49a04537fcb9dc0da57bc0af168a6331f2"
-dependencies = [
- "gloo-utils",
- "serde",
- "serde-wasm-bindgen",
- "serde_json",
- "tsify-macros",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "tsify-macros"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fc2c44dc9fe4baf55b88e032621b7a11b215a1f0a7de8d0aa04367207d915bc"
-dependencies = [
- "proc-macro2",
- "quote",
- "serde_derive_internals",
- "syn 2.0.117",
-]
 
 [[package]]
 name = "tungstenite"

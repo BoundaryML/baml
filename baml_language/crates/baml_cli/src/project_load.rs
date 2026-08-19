@@ -1,11 +1,12 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use baml_project::ProjectDatabase;
-use baml_workspace::{
-    BAML_TOML, discover_baml_files, find_baml_project_root, project_search_dir,
-    project_source_root, resolve_project_search_start,
+use baml_db::{
+    BAML_TOML, Name, ProjectDatabase, SourceFile, SourceRoot, SourceRootKind, SourceRootSpec,
+    discover_baml_files, find_baml_project_root, project_search_dir, project_source_root,
+    resolve_project_search_start,
 };
+use baml_type::RESERVED_USER_PACKAGE;
 
 use crate::reporter::Reporter;
 
@@ -136,7 +137,7 @@ pub(crate) fn load_project_from_reporting(
 /// sessions: `Ok(None)` when no project root is found (instead of an error),
 /// and a present `baml.toml` is read **raw, unvalidated** — its bytes still
 /// key the bytecode cache identically to the strict path, but a broken
-/// manifest must not lock an agent out of `describe`.
+/// manifest must not lock an agent out of introspection.
 pub(crate) fn resolve_project_sources_lenient(
     from: Option<&Path>,
 ) -> Result<Option<ResolvedProject>> {
@@ -174,9 +175,9 @@ pub(crate) fn projectless_search_dir(from: Option<&Path>) -> Result<PathBuf> {
 
 /// Read-only/introspection loader: like [`load_project_from`] but **never
 /// fails on a missing `baml.toml`**. This is for the commands an agent
-/// reaches for first (`describe`) - the most expensive thing it can
-/// do is fail fast and burn a turn, so it always has something to
-/// work with.
+/// reaches for first (`run -e` probes; `describe` when it returns with the
+/// IDE layer) - the most expensive thing it can do is fail fast and burn a
+/// turn, so it always has something to work with.
 ///
 /// 1. Resolve explicit `from` with the same project/source split as
 ///    [`load_project_from`]. A containing project's settings remain available,
@@ -185,8 +186,8 @@ pub(crate) fn projectless_search_dir(from: Option<&Path>) -> Result<PathBuf> {
 ///    `[package].name`, and a malformed manifest shouldn't block it.
 /// 2. With no explicit `from`, walk ancestors for `baml.toml` or `baml_src/`.
 ///    If no marker exists, return a **default state** holding only the BAML
-///    stdlib (`baml.*`) and zero user files. This makes `baml describe
-///    baml.String` work in any directory without recursively loading it.
+///    stdlib (`baml.*`) and zero user files. This makes a stdlib-only
+///    `baml run -e` probe work in any directory without recursively loading it.
 ///
 /// Note the two branches differ in what they load:
 /// - The **default-state** branch (2) loads zero user files, so omitted
@@ -219,9 +220,8 @@ pub(crate) fn load_project_or_default(
         }
         None => {
             let canonical = resolve_search_start(from)?;
-            let mut db = ProjectDatabase::new();
             let root = project_search_dir(&canonical);
-            db.set_project_root(&root);
+            let (db, _workspace) = workspace_db(&root);
             Ok((db, root, Vec::new()))
         }
     }
@@ -381,19 +381,51 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
     })
 }
 
+/// A fresh [`ProjectDatabase`] holding the embedded stdlib and one empty
+/// `Workspace` root at `root` (package [`RESERVED_USER_PACKAGE`]) — the one
+/// database shape every CLI command compiles in. Returns the workspace root
+/// handle so the caller can add files under it.
+///
+/// This is the single constructor for CLI databases: project loads,
+/// standalone `--file` compiles, `-e` expression probes, and the projectless
+/// introspection fallback all start here, so they agree on the stdlib and on
+/// which root user files belong to.
+pub(crate) fn workspace_db(root: &Path) -> (ProjectDatabase, SourceRoot) {
+    let mut db = ProjectDatabase::new();
+    db.ensure_stdlib_sources();
+    let workspace = db
+        .add_source_root(SourceRootSpec {
+            path: root.to_path_buf(),
+            package: Name::new(RESERVED_USER_PACKAGE),
+            kind: SourceRootKind::Workspace,
+        })
+        .unwrap_or_else(|err| unreachable!("a fresh database accepts one workspace root: {err}"));
+    (db, workspace)
+}
+
+/// Add (or update) a user file in the workspace root of a database built by
+/// this module. Every constructor here goes through [`workspace_db`], so the
+/// root is always present.
+pub(crate) fn add_workspace_file(db: &mut ProjectDatabase, path: &Path, text: &str) -> SourceFile {
+    let workspace = db
+        .workspace_root()
+        .unwrap_or_else(|| unreachable!("CLI databases are built by `workspace_db`"));
+    db.add_or_update_file_in(workspace, path, text)
+}
+
 /// Build a [`ProjectDatabase`] from already-read sources.
 pub(crate) fn build_db_from_sources(
     resolved: &ResolvedProject,
     on_file: impl Fn(&Path),
 ) -> ProjectDatabase {
-    let mut db = ProjectDatabase::new();
-    db.set_project_root(&resolved.root);
+    let (mut db, workspace) = workspace_db(&resolved.root);
     for (path, _) in &resolved.files {
         on_file(path);
     }
-    // Bulk registration: one project-file-list write instead of one per file
+    // Bulk registration: one root-file-list write instead of one per file
     // (the per-file path is O(files²) Vec copies + one salsa revision each).
-    db.add_or_update_files(
+    db.add_or_update_files_in(
+        workspace,
         resolved
             .files
             .iter()
@@ -702,9 +734,11 @@ mod tests {
         assert!(files[0].ends_with("loose.baml"));
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         // The builtin `baml` package is present even with no user files.
-        let baml_pkg = baml_surface::Package::named(&db, "baml");
+        let baml_pkg = baml_db::baml_compiler2_hir::package::PackageId::new(&db, Name::new("baml"));
         assert!(
-            !baml_pkg.namespaces(&db).is_empty(),
+            !baml_db::baml_compiler2_hir::package::package_items(&db, baml_pkg)
+                .namespaces
+                .is_empty(),
             "stdlib `baml` package missing from default state"
         );
     }

@@ -8,7 +8,7 @@
 //! See the union-claim rules in `baml_compiler2_hir_ty/src/infer/pat.rs`.
 
 use baml_compiler_diagnostics::{DiagnosticId, Severity};
-use baml_project::{collect_diagnostics, testing::setup_test_db};
+use baml_db::{collect_diagnostics, testing::setup_test_db};
 
 /// Collect all error-severity diagnostic ids for a source program.
 fn error_ids(source: &str) -> Vec<DiagnosticId> {

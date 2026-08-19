@@ -1,14 +1,14 @@
 //! BEP-066 Package reflection API consistency regressions.
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{ProjectDatabase, collect_diagnostics};
-use baml_tests::baml_test;
+use baml_db::{ProjectDatabase, collect_diagnostics};
+use baml_tests::{baml_test, engine::TestDbExt};
 use bex_engine::BexExternalValue;
 
 fn diagnostics(source: &str) -> Vec<(String, String)> {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("."));
-    db.add_file("static_probe.baml", source);
+    db.workspace(std::path::Path::new("."));
+    db.file("static_probe.baml", source);
     collect_diagnostics(&db)
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
@@ -27,8 +27,8 @@ function probe(pkg: reflect.Package) -> bool {
 }
 "#;
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("."));
-    db.add_file("probe.baml", source);
+    db.workspace(std::path::Path::new("."));
+    db.file("probe.baml", source);
     let errors = collect_diagnostics(&db)
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)

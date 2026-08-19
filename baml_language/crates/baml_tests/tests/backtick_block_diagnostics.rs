@@ -7,13 +7,14 @@
 //! user-facing diagnostic pointing at the offending tag. Covers both the M5
 //! `prompt` path and plain untagged backticks (the shared segment builder).
 
-use baml_project::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_db::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_tests::engine::TestDbExt;
 
 /// Compile `source` and return the user-facing diagnostic messages.
 fn messages(source: &str) -> Vec<String> {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("."));
-    db.add_file("test.baml", source);
+    db.workspace(std::path::Path::new("."));
+    db.file("test.baml", source);
     collect_compiler2_diagnostics(&db)
         .iter()
         .map(|d| d.message.clone())

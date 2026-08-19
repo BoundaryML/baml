@@ -1533,18 +1533,13 @@ pub fn package_impl_locs<'db>(
     pkg_id: PackageId<'db>,
 ) -> Vec<baml_compiler2_hir::loc::ImplLoc<'db>> {
     let mut out = Vec::new();
-    for file in baml_compiler2_hir::compiler2_all_files(db) {
-        let file_pkg = PackageId::new(
-            db,
-            baml_compiler2_hir::file_package::file_package(db, file).package,
-        );
-        if file_pkg != pkg_id {
-            continue;
-        }
+    // Scan only the package's own files (`package_files`), so edits to
+    // another root's file set never invalidate this query.
+    for file in baml_compiler2_hir::package::package_files(db, pkg_id) {
         // `file_impls` yields the blocks in source order, so the resolver's
         // "first full match" is reproducible.
         out.extend(
-            baml_compiler2_ppir::item_data::file_impls(db, file)
+            baml_compiler2_ppir::item_data::file_impls(db, *file)
                 .iter()
                 .copied(),
         );

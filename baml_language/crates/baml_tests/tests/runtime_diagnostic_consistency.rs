@@ -1,7 +1,7 @@
 //! BEP-066 M-1/M-6/E-1/E-5 diagnostic consistency oracles.
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{collect_diagnostics, testing::setup_test_db};
+use baml_db::{collect_diagnostics, testing::setup_test_db};
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 

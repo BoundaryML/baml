@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use super::harness::{NodeKind, collect_hir_ty_error_channel, collect_hir_ty_nodes};
+use crate::engine::TestDbExt;
 
 pub(crate) fn baml_src_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src")
@@ -56,7 +57,7 @@ fn s15_sweep_baml_src() {
     let loaded: Vec<(String, String, baml_base::SourceFile)> = files
         .into_iter()
         .map(|(rel, content)| {
-            let file = db.add_file(&rel, &content);
+            let file = db.file(&rel, &content);
             (rel, content, file)
         })
         .collect();

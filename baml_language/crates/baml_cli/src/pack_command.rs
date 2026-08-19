@@ -30,9 +30,8 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
+use baml_db::{ProjectDatabase, baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_exec::{OutputFormat, PACK_SECTION_NAME, PackEnvelope, validate_help_param};
-use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
 use clap::Args;
@@ -40,7 +39,7 @@ use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
-    project_load::{resolve_standalone_file, validate_file_project_flags},
+    project_load::{resolve_standalone_file, validate_file_project_flags, workspace_db},
     reporter::Reporter,
 };
 
@@ -374,9 +373,8 @@ impl PackArgs {
             .with_context(|| format!("failed to read {}", canonical.display()))?;
         let needs_format_hint = crate::run_command::source_needs_format_hint(&content);
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(parent);
-        db.add_or_update_file(&canonical, &content);
+        let (mut db, workspace) = workspace_db(parent);
+        db.add_or_update_file_in(workspace, &canonical, &content);
         Ok((db, needs_format_hint))
     }
 
@@ -497,7 +495,7 @@ fn label_for(targets: &[ResolvedPackTarget]) -> String {
 
 /// Collect diagnostics; render errors to stderr and bail with `ctx`.
 fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Result<()> {
-    let diagnostics = baml_project::collect_diagnostics(db);
+    let diagnostics = baml_db::collect_diagnostics(db);
     bail_on_error_diagnostics(db, &diagnostics, ctx, reporter)
 }
 
@@ -698,7 +696,7 @@ mod tests {
     /// namespaced functions (`ns_<name>/foo.baml` → `<name>.foo`). Single
     /// `engine_from_source` can't express folder-based namespaces.
     fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
-        let snapshot = baml_project::testing::compile_multi_file(files);
+        let snapshot = baml_db::testing::compile_multi_file(files);
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("BexEngine::new should succeed")
     }

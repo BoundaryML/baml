@@ -17,15 +17,17 @@ mod tests {
             elaborated_function_signature, function_parameter_defaults, function_signature,
         },
     };
-    use baml_project::ProjectDatabase;
+    use baml_db::ProjectDatabase;
     use salsa::Setter;
+
+    use crate::engine::TestDbExt;
 
     // ── Helper ────────────────────────────────────────────────────────────────
 
     /// Create a minimal test database with a project root at ".".
     fn make_db() -> ProjectDatabase {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(std::path::Path::new("."));
+        db.workspace(std::path::Path::new("."));
         db
     }
 
@@ -80,8 +82,8 @@ mod tests {
     fn package_items_merges_multiple_files() {
         let mut db = make_db();
 
-        let _file_a = db.add_file("a.baml", "class Foo { name string }");
-        let _file_b = db.add_file(
+        let _file_a = db.file("a.baml", "class Foo { name string }");
+        let _file_b = db.file(
             "b.baml",
             "function bar(x: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
@@ -111,7 +113,7 @@ mod tests {
     #[test]
     fn package_items_includes_enum_and_type_alias() {
         let mut db = make_db();
-        let _f = db.add_file(
+        let _f = db.file(
             "types.baml",
             "enum Color { Red\nGreen\nBlue }\ntype Str = string",
         );
@@ -134,7 +136,7 @@ mod tests {
     #[test]
     fn class_methods_not_in_value_namespace() {
         let mut db = make_db();
-        let _f = db.add_file(
+        let _f = db.file(
             "methods.baml",
             "class MyClass {\n  name string\n  function helper(x: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }\n}",
         );
@@ -159,7 +161,7 @@ mod tests {
     #[test]
     fn package_items_lookup_helpers() {
         let mut db = make_db();
-        let _f = db.add_file("lookup.baml", "class Point {}\nenum Dir { N\nS }");
+        let _f = db.file("lookup.baml", "class Point {}\nenum Dir { N\nS }");
 
         let pkg_id = PackageId::new(&db, Name::new("user"));
         let items = package_items(&db, pkg_id);
@@ -182,8 +184,8 @@ mod tests {
     #[test]
     fn lookup_type_namespace_item_api() {
         let mut db = make_db();
-        let _f1 = db.add_file("main.baml", "class Config { key string }");
-        let _f2 = db.add_file("ns_llm/models.baml", "class Response { text string }");
+        let _f1 = db.file("main.baml", "class Config { key string }");
+        let _f2 = db.file("ns_llm/models.baml", "class Response { text string }");
 
         let pkg_id = PackageId::new(&db, Name::new("user"));
         let pkg_items = package_items(&db, pkg_id);
@@ -221,7 +223,7 @@ mod tests {
     #[test]
     fn namespace_items_for_user_root() {
         let mut db = make_db();
-        let _f = db.add_file("ns.baml", "class Widget {}");
+        let _f = db.file("ns.baml", "class Widget {}");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
@@ -235,7 +237,7 @@ mod tests {
     #[test]
     fn item_tree_stores_function_data() {
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "fn.baml",
             "function greet(name: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
@@ -277,7 +279,7 @@ mod tests {
     #[test]
     fn impls_map_is_consistent_with_legacy_representation() {
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "impls.baml",
             r#"
             interface Show {
@@ -365,7 +367,7 @@ mod tests {
         use baml_type::{Ty, TyAttr};
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "resolver.baml",
             r#"
             interface Printable { function p(self) -> string }
@@ -477,7 +479,7 @@ mod tests {
     #[test]
     fn scope_bindings_returns_params_from_index() {
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "bindings.baml",
             "function add(a: int, b: int) -> int { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
@@ -535,8 +537,8 @@ mod tests {
     #[test]
     fn duplicate_type_name_across_files_produces_conflict() {
         let mut db = make_db();
-        let _file_a = db.add_file("a.baml", "class Foo { x int }");
-        let _file_b = db.add_file("b.baml", "class Foo { y string }");
+        let _file_a = db.file("a.baml", "class Foo { x int }");
+        let _file_b = db.file("b.baml", "class Foo { y string }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
@@ -559,15 +561,15 @@ mod tests {
     #[test]
     fn duplicate_value_name_three_files() {
         let mut db = make_db();
-        let _file_a = db.add_file(
+        let _file_a = db.file(
             "a.baml",
             "function greet(x: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
-        let _file_b = db.add_file(
+        let _file_b = db.file(
             "b.baml",
             "function greet(y: int) -> int { client: \"openai/gpt-4o-mini\"\nprompt: `hey` }",
         );
-        let _file_c = db.add_file(
+        let _file_c = db.file(
             "c.baml",
             "function greet(z: bool) -> bool { client: \"openai/gpt-4o-mini\"\nprompt: `yo` }",
         );
@@ -591,8 +593,8 @@ mod tests {
     #[test]
     fn different_kinds_same_name_produces_conflict() {
         let mut db = make_db();
-        let _file_a = db.add_file("a.baml", "class Thing { x int }");
-        let _file_b = db.add_file("b.baml", "enum Thing { A\nB }");
+        let _file_a = db.file("a.baml", "class Thing { x int }");
+        let _file_b = db.file("b.baml", "enum Thing { A\nB }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
@@ -617,10 +619,10 @@ mod tests {
     #[test]
     fn mixed_declaration_kinds_across_files_produce_one_conflict() {
         let mut db = make_db();
-        let file_a = db.add_file("a.baml", "class Shared { value int }");
-        let file_b = db.add_file("b.baml", "enum Shared { One\nTwo }");
-        let file_c = db.add_file("c.baml", "type Shared = string");
-        let file_d = db.add_file("d.baml", "function Shared() -> int { 1 }");
+        let file_a = db.file("a.baml", "class Shared { value int }");
+        let file_b = db.file("b.baml", "enum Shared { One\nTwo }");
+        let file_c = db.file("c.baml", "type Shared = string");
+        let file_d = db.file("d.baml", "function Shared() -> int { 1 }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
@@ -662,8 +664,8 @@ mod tests {
     #[test]
     fn type_and_client_names_collide_across_files() {
         let mut db = make_db();
-        let _type_file = db.add_file("types.baml", "type Backend = string");
-        let _client_file = db.add_file(
+        let _type_file = db.file("types.baml", "type Backend = string");
+        let _client_file = db.file(
             "clients.baml",
             r#"client Backend = openai.ResponsesClient.new(model = "gpt-4o-mini");"#,
         );
@@ -684,8 +686,8 @@ mod tests {
     #[test]
     fn type_and_value_names_in_different_baml_namespaces_are_legal() {
         let mut db = make_db();
-        let _type_file = db.add_file("ns_models/types.baml", "class Shared { value int }");
-        let _value_file = db.add_file("ns_api/functions.baml", "function Shared() -> int { 1 }");
+        let _type_file = db.file("ns_models/types.baml", "class Shared { value int }");
+        let _value_file = db.file("ns_api/functions.baml", "function Shared() -> int { 1 }");
 
         let package = PackageId::new(&db, Name::new("user"));
         assert!(package_items(&db, package).conflicts().is_empty());
@@ -694,12 +696,12 @@ mod tests {
     #[test]
     fn same_named_tests_keep_function_scoped_identity() {
         let mut db = make_db();
-        let _file_a = db.add_file(
+        let _file_a = db.file(
             "a.baml",
             "function First() -> int { 1 }\ntest Shared { functions [First] }
 ",
         );
-        let _file_b = db.add_file(
+        let _file_b = db.file(
             "b.baml",
             "function Second() -> int { 2 }\ntest Shared { functions [Second] }
 ",
@@ -714,8 +716,8 @@ mod tests {
     #[test]
     fn no_conflict_for_unique_names() {
         let mut db = make_db();
-        let _file_a = db.add_file("a.baml", "class Foo { x int }");
-        let _file_b = db.add_file("b.baml", "class Bar { y string }");
+        let _file_a = db.file("a.baml", "class Foo { x int }");
+        let _file_b = db.file("b.baml", "class Bar { y string }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
@@ -727,8 +729,8 @@ mod tests {
     #[test]
     fn package_items_propagates_conflicts() {
         let mut db = make_db();
-        let _file_a = db.add_file("a.baml", "class Dup {}");
-        let _file_b = db.add_file("b.baml", "class Dup {}");
+        let _file_a = db.file("a.baml", "class Dup {}");
+        let _file_b = db.file("b.baml", "class Dup {}");
 
         let pkg_id = PackageId::new(&db, Name::new("user"));
         let items = package_items(&db, pkg_id);
@@ -746,8 +748,8 @@ mod tests {
     fn alphabetical_ordering_is_deterministic() {
         let mut db = make_db();
         // Add z.baml first, then a.baml — a.baml should still win
-        let file_z = db.add_file("z.baml", "class Widget { z_field string }");
-        let file_a = db.add_file("a.baml", "class Widget { a_field int }");
+        let file_z = db.file("z.baml", "class Widget { z_field string }");
+        let file_a = db.file("a.baml", "class Widget { a_field int }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
@@ -766,7 +768,7 @@ mod tests {
     #[test]
     fn same_file_duplicate_type_produces_conflict() {
         let mut db = make_db();
-        let _file = db.add_file("mixed.baml", "enum Foo { A\nB }\nclass Foo { x int }");
+        let _file = db.file("mixed.baml", "enum Foo { A\nB }\nclass Foo { x int }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
@@ -785,7 +787,7 @@ mod tests {
         use baml_compiler2_hir::{contributions::DefinitionKind, diagnostic::Hir2Diagnostic};
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "dup_method.baml",
             "class Foo {\n  name string\n  function Bar(self) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }\n  function Bar(self) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `bye` }\n}",
         );
@@ -814,7 +816,7 @@ mod tests {
         use baml_compiler2_hir::{contributions::DefinitionKind, diagnostic::Hir2Diagnostic};
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "dup_field.baml",
             "class Foo {\n  name string\n  name int\n}",
         );
@@ -843,7 +845,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "dup_alias.baml",
             "class Foo {\n  a string @alias(\"x\")\n  b string @alias(\"x\")\n}",
         );
@@ -870,7 +872,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "name_vs_alias.baml",
             "class Foo {\n  x string\n  b string @alias(\"x\")\n}",
         );
@@ -892,7 +894,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "alias_own_name.baml",
             "class Foo {\n  a string @alias(\"a\")\n  b string\n}",
         );
@@ -915,7 +917,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "skip_no_collide.baml",
             "class Foo {\n  a string @alias(\"x\")\n  b string @alias(\"x\") @skip\n}",
         );
@@ -938,7 +940,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "dup_name_only.baml",
             "class Foo {\n  name string\n  name int\n}",
         );
@@ -962,7 +964,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "dup_variant_alias.baml",
             "enum E {\n  A @alias(\"x\")\n  B @alias(\"x\")\n}",
         );
@@ -996,7 +998,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "variant_name_vs_alias.baml",
             "enum E {\n  Shared\n  B @alias(\"Shared\")\n}",
         );
@@ -1020,7 +1022,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "variant_alias_own_name.baml",
             "enum E {\n  A @alias(\"A\")\n  B\n}",
         );
@@ -1043,7 +1045,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "skip_variant_no_collide.baml",
             "enum E {\n  A @alias(\"x\")\n  B @alias(\"x\") @skip\n}",
         );
@@ -1066,7 +1068,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file("dup_variant_name_only.baml", "enum E {\n  A\n  A\n}");
+        let file = db.file("dup_variant_name_only.baml", "enum E {\n  A\n  A\n}");
 
         let index = file_semantic_index(&db, file);
         let diags = index.diagnostics();
@@ -1086,7 +1088,7 @@ mod tests {
         use baml_compiler2_hir::{contributions::DefinitionKind, diagnostic::Hir2Diagnostic};
 
         let mut db = make_db();
-        let file = db.add_file("dup_variant.baml", "enum Color { Red\nGreen\nRed }");
+        let file = db.file("dup_variant.baml", "enum Color { Red\nGreen\nRed }");
 
         let index = file_semantic_index(&db, file);
         let diags = index.diagnostics();
@@ -1132,7 +1134,7 @@ mod tests {
 
         for (label, file_name, source) in cases {
             let mut db = make_db();
-            let file = db.add_file(file_name, source);
+            let file = db.file(file_name, source);
             let index = file_semantic_index(&db, file);
             let diags = index.diagnostics();
             let dups: Vec<_> = diags
@@ -1163,7 +1165,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "distinct_params.baml",
             "function Foo(x: int, y: string = \"hi\") -> string { y }",
         );
@@ -1182,7 +1184,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "shadow_let.baml",
             "function foo() -> int {\n  let x = 1;\n  let x = 2;\n  return x;\n}",
         );
@@ -1200,7 +1202,7 @@ mod tests {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "dup_array_pattern.baml",
             r#"
 function foo(xs: int[]) -> int {
@@ -1222,7 +1224,7 @@ function foo(xs: int[]) -> int {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "dup_class_pattern.baml",
             r#"
 class User {
@@ -1249,7 +1251,7 @@ function foo(user: User) -> int {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "dup_chain_pattern.baml",
             r#"
 class User {
@@ -1276,7 +1278,7 @@ function foo(user: User) -> string {
         use text_size::TextSize;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "initializer_shadow.baml",
             "function foo() -> int {\n  let x = 1;\n  let x = x + 1;\n  x\n}",
         );
@@ -1319,7 +1321,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::scope::ScopeKind;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "lambda_local_block.baml",
             "function foo() -> int {\n  let f = () -> int {\n    { let x = 1; x }\n  };\n  f()\n}",
         );
@@ -1348,7 +1350,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::scope::ScopeKind;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "lambda_default_capture.baml",
             "function foo() -> int {\n  let seed = 1;\n  let f = (x: int = seed) -> int { x };\n  f()\n}",
         );
@@ -1385,7 +1387,7 @@ function foo(user: User) -> string {
         use text_size::TextSize;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "while_scope.baml",
             "function foo() -> int {\n  let x = 1;\n  let once = true;\n  while (once) {\n    let x = 99;\n    once = false;\n  };\n  x\n}",
         );
@@ -1449,7 +1451,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::scope::ScopeKind;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "scope_kinds.baml",
             r#"function f(x: int) -> int {
   let _local = 1
@@ -1511,7 +1513,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::{contributions::DefinitionKind, diagnostic::Hir2Diagnostic};
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "cross_kind.baml",
             "class Foo {\n  bar string\n  function bar(self) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }\n}",
         );
@@ -1540,7 +1542,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "user_rust_fn.baml",
             "function deep_copy<T>(value: T) -> T {\n  $rust_function\n}",
         );
@@ -1559,7 +1561,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "user_internal_attr.baml",
             "@@internal.uses(vm)\nfunction helper(value: string) -> string {\n  value\n}",
         );
@@ -1578,7 +1580,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "user_rust_type.baml",
             "class Response {\n  _body $rust_type\n}",
         );
@@ -1616,7 +1618,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::file_package::file_package;
 
         let mut db = make_db();
-        let file = db.add_file("ns_llm/client.baml", "class Foo {}");
+        let file = db.file("ns_llm/client.baml", "class Foo {}");
 
         let pkg_info = file_package(&db, file);
         assert_eq!(pkg_info.package.as_str(), "user");
@@ -1633,7 +1635,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::file_package::file_package;
 
         let mut db = make_db();
-        let file = db.add_file("ns_llm/helpers/utils.baml", "class Bar {}");
+        let file = db.file("ns_llm/helpers/utils.baml", "class Bar {}");
 
         let pkg_info = file_package(&db, file);
         assert_eq!(pkg_info.package.as_str(), "user");
@@ -1650,7 +1652,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::file_package::file_package;
 
         let mut db = make_db();
-        let file = db.add_file("ns_llm/ns_openai/client.baml", "class Baz {}");
+        let file = db.file("ns_llm/ns_openai/client.baml", "class Baz {}");
 
         let pkg_info = file_package(&db, file);
         assert_eq!(pkg_info.package.as_str(), "user");
@@ -1667,7 +1669,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::file_package::file_package;
 
         let mut db = make_db();
-        let file = db.add_file("plain/folder/file.baml", "class Qux {}");
+        let file = db.file("plain/folder/file.baml", "class Qux {}");
 
         let pkg_info = file_package(&db, file);
         assert_eq!(pkg_info.package.as_str(), "user");
@@ -1683,7 +1685,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::file_package::file_package;
 
         let mut db = make_db();
-        let file = db.add_file("main.baml", "class Root {}");
+        let file = db.file("main.baml", "class Root {}");
 
         let pkg_info = file_package(&db, file);
         assert_eq!(pkg_info.package.as_str(), "user");
@@ -1699,7 +1701,7 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::file_package::file_package;
 
         let mut db = make_db();
-        let file = db.add_file("ns_123bad/file.baml", "class Bad {}");
+        let file = db.file("ns_123bad/file.baml", "class Bad {}");
 
         let pkg_info = file_package(&db, file);
         assert_eq!(pkg_info.package.as_str(), "user");
@@ -1713,8 +1715,8 @@ function foo(user: User) -> string {
     #[test]
     fn namespace_items_separate_for_ns_folder() {
         let mut db = make_db();
-        let _root_file = db.add_file("main.baml", "class Config { key string }");
-        let _ns_file = db.add_file("ns_llm/models.baml", "class Response { text string }");
+        let _root_file = db.file("main.baml", "class Config { key string }");
+        let _ns_file = db.file("ns_llm/models.baml", "class Response { text string }");
 
         let user_pkg_id = PackageId::new(&db, Name::new("user"));
         let items = package_items(&db, user_pkg_id);
@@ -1737,8 +1739,8 @@ function foo(user: User) -> string {
     #[test]
     fn same_name_different_namespaces_no_conflict() {
         let mut db = make_db();
-        let _f1 = db.add_file("ns_llm/types.baml", "class Response { text string }");
-        let _f2 = db.add_file("ns_http/types.baml", "class Response { status int }");
+        let _f1 = db.file("ns_llm/types.baml", "class Response { text string }");
+        let _f2 = db.file("ns_http/types.baml", "class Response { status int }");
 
         let user_pkg_id = PackageId::new(&db, Name::new("user"));
         let items = package_items(&db, user_pkg_id);
@@ -1769,8 +1771,8 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::package::package_items;
 
         let mut db = make_db();
-        let _root = db.add_file("main.baml", "class foo { x int }");
-        let _ns = db.add_file("ns_foo/stuff.baml", "class Bar { y string }");
+        let _root = db.file("main.baml", "class foo { x int }");
+        let _ns = db.file("ns_foo/stuff.baml", "class Bar { y string }");
 
         let user_pkg_id = PackageId::new(&db, Name::new("user"));
         let items = package_items(&db, user_pkg_id);
@@ -1790,8 +1792,8 @@ function foo(user: User) -> string {
         use baml_compiler2_hir::package::package_items;
 
         let mut db = make_db();
-        let _root = db.add_file("main.baml", "class Config { x int }");
-        let _ns = db.add_file("ns_llm/stuff.baml", "class Model { y string }");
+        let _root = db.file("main.baml", "class Config { x int }");
+        let _ns = db.file("ns_llm/stuff.baml", "class Model { y string }");
 
         let user_pkg_id = PackageId::new(&db, Name::new("user"));
         let items = package_items(&db, user_pkg_id);
@@ -1807,7 +1809,7 @@ function foo(user: User) -> string {
     #[test]
     fn function_signature_tracks_default_presence_not_default_expression() {
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "defaults.baml",
             "function f(required: string, optional: int = 41) -> string { return required; }",
         );
@@ -1857,7 +1859,7 @@ function foo(user: User) -> string {
     #[test]
     fn function_type_throws_immediate_callback_param_opens() {
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "callback.baml",
             "function direct(cb: (value: int) -> string) -> string { return \"ok\"; }",
         );
@@ -1878,7 +1880,7 @@ function foo(user: User) -> string {
     #[test]
     fn function_type_throws_alias_hidden_callback_stays_closed() {
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "alias_hidden.baml",
             "type Handler = (value: int) -> string throws never\nfunction use_alias(cb: Handler) -> string { return \"ok\"; }",
         );
@@ -1895,7 +1897,7 @@ function foo(user: User) -> string {
     #[test]
     fn function_type_throws_nested_callback_position_left_unfilled() {
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "nested.baml",
             "function nested(cb: ((value: int) -> string) -> string) -> string { return \"ok\"; }",
         );
@@ -1917,7 +1919,7 @@ function foo(user: User) -> string {
     #[test]
     fn function_type_throws_return_position_left_unfilled() {
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "returns_fn.baml",
             "function returns_handler() -> (value: int) -> string { return \"ok\"; }",
         );
@@ -1937,7 +1939,7 @@ function foo(user: User) -> string {
     #[test]
     fn function_type_throws_return_position_callbacks_left_unfilled() {
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "returns_wrapper.baml",
             "function returns_wrapper() -> ((value: int) -> string) -> string { return \"ok\"; }",
         );
@@ -1955,7 +1957,7 @@ function foo(user: User) -> string {
     #[test]
     fn function_type_throws_return_position_preserves_explicit_throws() {
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "returns_explicit_wrapper.baml",
             "function returns_explicit_wrapper() -> ((value: int) -> string throws string) -> string throws never { return \"ok\"; }",
         );
@@ -1975,7 +1977,7 @@ function foo(user: User) -> string {
     #[test]
     fn function_type_throws_method_immediate_callback_param_opens() {
         let mut db = make_db();
-        let file = db.add_file(
+        let file = db.file(
             "method_callback.baml",
             "class Box<T> {\n  value T\n  function run(cb: (value: T) -> string) -> string { return \"ok\"; }\n}",
         );
@@ -2014,11 +2016,11 @@ function foo(user: User) -> string {
             let mut db = ProjectDatabase::new_with_event_callback(Box::new(move |e| {
                 events.lock().unwrap().push(e);
             }));
-            db.set_project_root(std::path::Path::new("."));
+            db.workspace(std::path::Path::new("."));
             db
         };
 
-        let file = db.add_file("comment.baml", "class Foo {}");
+        let file = db.file("comment.baml", "class Foo {}");
 
         // First run: prime all caches.
         {
@@ -2107,7 +2109,7 @@ test my_test {
   args {}
 }
 "##;
-        let file = db.add_file("spans.baml", src);
+        let file = db.file("spans.baml", src);
         let text = |range: text_size::TextRange| {
             &src[usize::from(range.start())..usize::from(range.end())]
         };
@@ -2198,7 +2200,7 @@ test my_test {
             "in-class impl docstrings are absent today"
         );
 
-        let file_b = db.add_file(
+        let file_b = db.file(
             "spans_b.baml",
             "/// Free impl docs.\nimplements MyIface for int {\n  function m(self) -> int { 2 }\n}\n",
         );

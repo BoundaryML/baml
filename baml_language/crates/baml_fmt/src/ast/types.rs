@@ -1494,13 +1494,11 @@ mod tests {
         baml_compiler_parser::parse_green,
         baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode},
     };
-    use baml_project::ProjectDatabase;
 
     use super::*;
 
     fn function_type_param(source: &str, index: usize) -> FunctionTypeParam {
-        let mut db = ProjectDatabase::new();
-        let file = db.add_file("test.baml", source);
+        let (db, file) = crate::single_file_db("test.baml", source);
         let parsed = parse_green(&db, file);
         let syntax_tree = SyntaxNode::new_root(parsed);
         let node = syntax_tree

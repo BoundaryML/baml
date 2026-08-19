@@ -63,6 +63,7 @@ baml_builtins2 = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
+baml_db = { workspace = true }
 baml_version = { workspace = true }
 borsh = { workspace = true }
 

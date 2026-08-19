@@ -18,6 +18,8 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
+baml_builtins2 = { workspace = true }
+baml_compiler2_ast = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
@@ -27,5 +29,13 @@ baml_compiler_diagnostics = { workspace = true }
 baml_compiler_lexer = { workspace = true }
 baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
+baml_type = { workspace = true }
+bex_vm_types = { workspace = true }
+ignore = { workspace = true }
+rayon = { workspace = true }
 salsa = { workspace = true }
+text-size = { workspace = true }
+thiserror = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }

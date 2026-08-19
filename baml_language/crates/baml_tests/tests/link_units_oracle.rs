@@ -14,7 +14,8 @@ use std::path::Path;
 use baml_compiler2_emit::{
     CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_opt,
 };
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
+use baml_tests::engine::TestDbExt;
 use bex_vm_types::link::link;
 use common::{A_BAML, B_BAML, C_BAML, assert_programs_byte_identical, build_db};
 
@@ -107,7 +108,7 @@ function shout() -> string {
 /// discovery).
 #[test]
 fn baml_src_links_byte_identical() {
-    use baml_workspace::discover_baml_files;
+    use baml_db::discover_baml_files;
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src");
     let sources: Vec<(std::path::PathBuf, String)> = discover_baml_files(&root)
@@ -121,9 +122,9 @@ fn baml_src_links_byte_identical() {
 
     let build = || {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(&root);
+        db.workspace(&root);
         for (p, c) in &sources {
-            db.add_or_update_file(p, c);
+            db.file(p, c);
         }
         db
     };

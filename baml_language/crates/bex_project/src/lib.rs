@@ -103,6 +103,80 @@ pub fn is_cancelled_runtime_error(err: &RuntimeError) -> bool {
     matches!(err, RuntimeError::Engine(e) if is_cancelled_engine_error(e))
 }
 
+/// Compile a BAML project from in-memory sources and initialize a runtime.
+///
+/// `files` are the project's `.baml` sources keyed by the path the host
+/// spelled (relative to `root_path` or absolute); the embedded stdlib is
+/// compiled from source alongside them. Compile errors surface as
+/// [`RuntimeError::Compilation`] listing every diagnostic.
+///
+/// Keep pass-by-value so the returned `Arc<impl Bex>` does not capture caller
+/// locals; taking `&VfsPath` / `&HashMap` would require returning a value that
+/// references them.
+#[allow(clippy::needless_pass_by_value)]
+pub fn new(
+    root_path: vfs::VfsPath,
+    sys_ops: SysOps,
+    files: std::collections::HashMap<crate::fs::FsPath, String>,
+) -> Result<Arc<impl Bex>, RuntimeError> {
+    let mut db = baml_db::ProjectDatabase::new();
+    db.ensure_stdlib_sources();
+    let root = db
+        .add_source_root(baml_db::SourceRootSpec {
+            path: std::path::PathBuf::from(root_path.as_str()),
+            package: baml_base::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: baml_base::SourceRootKind::Workspace,
+        })
+        .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
+    db.add_or_update_files_in(
+        root,
+        files
+            .iter()
+            .map(|(path, text)| (path.as_path(), text.as_str())),
+    );
+
+    let diagnostics = baml_db::collect_diagnostics(&db);
+    let errors: Vec<String> = diagnostics
+        .iter()
+        .filter(|d| d.severity == baml_compiler_diagnostics::Severity::Error)
+        .map(|d| {
+            let location = d
+                .primary_span()
+                .and_then(|span| db.file_id_to_path(span.file_id))
+                .map(|path| format!("{}: ", path.display()))
+                .unwrap_or_default();
+            format!("{location}{}", d.message)
+        })
+        .collect();
+    if !errors.is_empty() {
+        return Err(RuntimeError::Compilation {
+            message: format!("{} compile error(s):\n{}", errors.len(), errors.join("\n")),
+        });
+    }
+    let program = db
+        .get_bytecode_unchecked()
+        .map_err(|e| RuntimeError::Compilation {
+            message: e.to_string(),
+        })?;
+
+    let engine = bex_engine::BexEngine::new_with_deferred_profiling_and_runtime_compiler(
+        program,
+        Arc::new(sys_ops),
+        Vec::new(),
+        Some(runtime_compiler()),
+    )?;
+    engine.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {
+        let cancelled = error.cancelled;
+        let error = error.into_engine_error();
+        if cancelled {
+            log::warn!("cancelled spawned task failed: {error}");
+        } else {
+            log::error!("unhandled spawned task failed: {error}");
+        }
+    })));
+    Ok(Arc::new(engine))
+}
+
 /// Initialize a runtime from a serialized BAML program — the borsh-encoded
 /// `bex_vm_types::Program` that `baml pack` embeds — rather than from source
 /// files. Mirrors [`new`] but skips compilation, decoding the program and
@@ -125,4 +199,4 @@ pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex
     Ok(Arc::new(engine))
 }
 
-pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};
+pub use fs::FsPath;
