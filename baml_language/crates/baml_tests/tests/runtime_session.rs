@@ -935,3 +935,265 @@ async fn client_declaration_methods_dispatch() {
         Ok(BexExternalValue::String("openai/gpt-4o-mini".into()))
     );
 }
+
+// ── MIG_BRIEF Fix 8: an assignment in a Session is an ordinary assignment ──
+//
+// A Session binding lives in a global, so an assignment to it cannot be
+// written in place and is rewritten. The rewrite used to bind the value to a
+// fresh `let` and commit it, which checked the value against nothing at all:
+// `let n = 5` followed by `n = "seven"` was accepted, and the next thing that
+// treated `n` as an `int` crashed in the VM with no catchable error. The
+// assignment now goes through the ordinary road, and the oracle for every
+// refusal below is ordinary BAML itself — the tests compare the two messages
+// character for character rather than pinning a string of their own.
+
+/// Compile ordinary BAML and return its single error the way a Session
+/// reports one: `code: message`, with the primary label folded in, which is
+/// exactly what `reflect.errors.CompilationError` carries.
+fn ordinary_compile_error(source: &str) -> String {
+    let errors = ordinary_compile_errors(source);
+    let [error] = errors.as_slice() else {
+        panic!("expected exactly one error for:\n{source}\ngot: {errors:#?}");
+    };
+    error.clone()
+}
+
+fn ordinary_compile_errors(source: &str) -> Vec<String> {
+    use baml_compiler_diagnostics::Severity;
+    use baml_project::{collect_diagnostics, testing::setup_test_db};
+
+    collect_diagnostics(&setup_test_db(source))
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == Severity::Error)
+        .map(|diagnostic| {
+            format!(
+                "{}: {}",
+                diagnostic.code(),
+                diagnostic.message_with_primary_label()
+            )
+        })
+        .collect()
+}
+
+/// The probe every case below uses: evaluate one submission and hand back its
+/// diagnostic (or `accepted`), so the Rust side can compare.
+const SESSION_ASSIGN_PROBE: &str = r####"
+function probe(s: reflect.Session, source: string) -> string throws unknown {
+  let _ = s.eval(source) catch (e) {
+    baml.reflect.errors.CompilationError => return `${e.diagnostics[0].code}: ${e.diagnostics[0].message}`,
+    baml.panics.Panic => return "compiled, panicked at runtime",
+    _ => return "wrong error",
+  }
+  "accepted"
+}
+"####;
+
+/// The ruling's headline shape: assigning a `string` to an `int` binding is
+/// refused, and the binding still holds what it held.
+const SESSION_ASSIGNMENT_AT_ANOTHER_TYPE: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  let refusal = probe(s, #"n = "seven""#)
+  let kept = s.eval<int>(#"n"#)
+  `${refusal}|${kept}`
+}
+"####;
+
+/// The crash shape from the #4529 review, verbatim. Every step of it now
+/// happens at compile time: the assignment is refused, and the method call
+/// that used to reach the VM with a `string` in an `int` binding still sees
+/// the `int`.
+const SESSION_ASSIGNMENT_CRASH_SHAPE: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  let refusal = probe(s, #"n = "seven""#)
+  let still_an_int = s.eval<int>(#"n.abs()"#)
+  `${refusal}|${still_an_int}`
+}
+"####;
+
+/// Re-declaring is not assigning: `let` at a new type is a new binding, as it
+/// is in ordinary code, and the methods that follow dispatch on the new type.
+const SESSION_LET_SHADOWS_AT_A_NEW_TYPE: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  s.eval(#"let n = "seven""#)
+  s.eval<string>(#"n.to_upper_case()"#)
+}
+"####;
+
+/// A compound assignment is checked the same way, through the same operator
+/// road: legal on the `int` it was declared with, refused once the name has
+/// been re-declared as a `string`.
+const SESSION_COMPOUND_ASSIGNMENT: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  s.eval(#"n += 1"#)
+  let after = s.eval<int>(#"n"#)
+  s.eval(#"let n = "seven""#)
+  let refusal = probe(s, #"n += 1"#)
+  `${after}|${refusal}`
+}
+"####;
+
+/// A wider numeric operand: ordinary code accepts this, so a Session must too
+/// — the refusal must be about the binding's type, never about the shape the
+/// rewrite happens to generate.
+const SESSION_COMPOUND_WITH_A_WIDER_OPERAND: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  let accepted = probe(s, #"n += 1.5"#)
+  accepted
+}
+"####;
+
+/// Values whose spelling could have been broken by wrapping: a map literal, a
+/// template literal, a value that reads the binding it writes.
+const SESSION_ASSIGNMENT_VALUE_SHAPES: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let m = { "k": 1 }"#)
+  s.eval(#"let text = "hi""#)
+  s.eval(#"m = { "k": 2 }"#)
+  s.eval(#"text = `${text} there`"#)
+  s.eval<string>(#"`${m["k"]}|${text}`"#)
+}
+"####;
+
+/// Assignment at the binding's own type is untouched, including the compound
+/// form and a value that reads the binding it writes.
+const SESSION_ASSIGNMENT_AT_THE_SAME_TYPE: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  s.eval(#"let text = "hi""#)
+  s.eval(#"n = n + 2"#)
+  s.eval(#"text += " there""#)
+  s.eval<string>(#"`${n}|${text}`"#)
+}
+"####;
+
+fn session_program(probe: &str, main: &str) -> String {
+    format!("{probe}\n{main}")
+}
+
+#[tokio::test]
+async fn session_assignment_at_another_type_fails_like_ordinary_code() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_ASSIGNMENT_AT_ANOTHER_TYPE);
+    let output = baml_test!(&program);
+    let ordinary = ordinary_compile_error(
+        r#"
+function main() -> int throws unknown {
+    let n = 5
+    n = "seven"
+    n
+}
+"#,
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(format!("{ordinary}|5").into()))
+    );
+}
+
+#[tokio::test]
+async fn the_session_assignment_crash_shape_dies_at_compile_time() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_ASSIGNMENT_CRASH_SHAPE);
+    let output = baml_test!(&program);
+    let ordinary = ordinary_compile_error(
+        r#"
+function main() -> int throws unknown {
+    let n = 5
+    n = "seven"
+    n
+}
+"#,
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(format!("{ordinary}|5").into()))
+    );
+}
+
+#[tokio::test]
+async fn a_session_let_still_shadows_at_a_new_type() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_LET_SHADOWS_AT_A_NEW_TYPE);
+    let output = baml_test!(&program);
+    assert_eq!(output.result, Ok(BexExternalValue::String("SEVEN".into())));
+}
+
+#[tokio::test]
+async fn session_compound_assignments_check_like_ordinary_code() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_COMPOUND_ASSIGNMENT);
+    let output = baml_test!(&program);
+    let ordinary = ordinary_compile_error(
+        r#"
+function main() -> string throws unknown {
+    let n = "seven"
+    n += 1
+    n
+}
+"#,
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(format!("6|{ordinary}").into()))
+    );
+}
+
+/// The check must not be stricter than ordinary code either. Ordinary BAML
+/// COMPILES `n += 1.5` on an `int` binding and fails at runtime (a hole of its
+/// own, and not this PR's to close); a Session must reach the same place
+/// rather than invent a refusal of its own. This is also the tripwire for how
+/// the value is spliced: a fresh literal loses its freshness inside
+/// parentheses, so wrapping it would make this line a compile error in
+/// Sessions and nowhere else.
+#[tokio::test]
+async fn a_session_assignment_is_no_stricter_than_ordinary_code() {
+    let ordinary = r#"
+function main() -> string throws unknown {
+    let n = 5
+    n += 1.5
+    `${n}`
+}
+"#;
+    assert!(
+        ordinary_compile_errors(ordinary).is_empty(),
+        "the ordinary spelling is expected to compile; if it no longer does, this pair needs a \
+         new operand rather than a new verdict",
+    );
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_COMPOUND_WITH_A_WIDER_OPERAND);
+    let output = baml_test!(&program);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "compiled, panicked at runtime".into()
+        ))
+    );
+}
+
+/// The value keeps its own spelling, whatever shape it has.
+#[tokio::test]
+async fn session_assignment_values_keep_their_shape() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_ASSIGNMENT_VALUE_SHAPES);
+    let output = baml_test!(&program);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("2|hi there".into()))
+    );
+}
+
+#[tokio::test]
+async fn session_assignments_at_the_binding_type_are_unaffected() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_ASSIGNMENT_AT_THE_SAME_TYPE);
+    let output = baml_test!(&program);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("7|hi there".into()))
+    );
+}
