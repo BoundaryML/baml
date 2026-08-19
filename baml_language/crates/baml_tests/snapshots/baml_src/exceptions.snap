@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
-assertion_line: 149
 ---
 function exceptions.$init_test_ns_exceptions_exceptions(registry: testing.TestCollector) -> null {
     load_var registry
@@ -827,29 +826,25 @@ function exceptions.catch_four_literal_arms_fn() -> int {
     call user.exceptions.s15_fails_lits
     jump L8
     load_var e
-    load_const "boom"
-    cmp_op ==
+    is_type "boom"
     pop_jump_if_false L0
     jump L7
 
   L0:
     load_var e
-    load_const "bang"
-    cmp_op ==
+    is_type "bang"
     pop_jump_if_false L1
     jump L6
 
   L1:
     load_var e
-    load_const "crash"
-    cmp_op ==
+    is_type "crash"
     pop_jump_if_false L2
     jump L5
 
   L2:
     load_var e
-    load_const "other"
-    cmp_op ==
+    is_type "other"
     pop_jump_if_false L3
     jump L4
 
@@ -1171,6 +1166,9 @@ function exceptions.catch_literal_int_match_fn() -> int {
     call user.exceptions.s1_fails_3
     jump L2
     load_var e
+    is_type type tag 0
+    pop_jump_if_false L0
+    load_var e
     load_const 42
     cmp_int_op ==
     pop_jump_if_false L0
@@ -1193,8 +1191,7 @@ function exceptions.catch_literal_string_match_fn() -> int {
     call user.exceptions.s1_fails_1
     jump L2
     load_var e
-    load_const "boom"
-    cmp_op ==
+    is_type "boom"
     pop_jump_if_false L0
     jump L1
 
@@ -1215,8 +1212,7 @@ function exceptions.catch_literal_string_no_match_falls_to_wildcard_fn() -> int 
     call user.exceptions.s1_fails_2
     jump L2
     load_var e
-    load_const "boom"
-    cmp_op ==
+    is_type "boom"
     pop_jump_if_false L0
     jump L1
 
@@ -1258,8 +1254,7 @@ function exceptions.catch_mixed_literal_and_typed_no_switch_fn() -> int {
     call user.exceptions.s16_fails_lit_typed
     jump L4
     load_var e
-    load_const "boom"
-    cmp_op ==
+    is_type "boom"
     pop_jump_if_false L0
     jump L3
 
@@ -1351,15 +1346,13 @@ function exceptions.catch_multiple_literals_dispatch_fn() -> int {
     call user.exceptions.s1_fails_4
     jump L4
     load_var e
-    load_const "alpha"
-    cmp_op ==
+    is_type "alpha"
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var e
-    load_const "beta"
-    cmp_op ==
+    is_type "beta"
     pop_jump_if_false L1
     jump L2
 
@@ -2320,8 +2313,7 @@ function exceptions.named_wrapper_value_catches_callback_throw_fn() -> string {
     call user.exceptions.s17_forward_cb
     jump L2
     load_var e
-    load_const "boom"
-    cmp_op ==
+    is_type "boom"
     pop_jump_if_false L0
     jump L1
 

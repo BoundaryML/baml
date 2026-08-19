@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 21269
 ---
 function user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
     load_const "done"
@@ -42,8 +41,7 @@ function user.DestructureNamespaceQualifiedMatch() -> int {
     pop_jump_if_false L0
     load_var response
     load_field .score
-    load_const 0
-    cmp_int_op ==
+    is_type 0
     pop_jump_if_false L0
     jump L1
 
@@ -76,8 +74,7 @@ function user.DestructureQualifiedMatch() -> int {
     pop_jump_if_false L0
     load_var response
     load_field .score
-    load_const 0
-    cmp_int_op ==
+    is_type 0
     pop_jump_if_false L0
     jump L1
 

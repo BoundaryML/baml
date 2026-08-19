@@ -1030,7 +1030,19 @@ fn describe_class_method(
         baml_compiler2_ppir::function_body(db, method_loc).as_ref(),
         baml_compiler2_hir::body::FunctionBody::Builtin(_)
     ) {
-        signature.clone()
+        let mut body = String::new();
+        if let Some(docstring) = &m.docstring {
+            for line in docstring.lines() {
+                body.push_str("///");
+                if !line.is_empty() {
+                    body.push(' ');
+                    body.push_str(line);
+                }
+                body.push('\n');
+            }
+        }
+        body.push_str(&signature);
+        body
     } else {
         clean_body_source(db, file, method_span)
     };

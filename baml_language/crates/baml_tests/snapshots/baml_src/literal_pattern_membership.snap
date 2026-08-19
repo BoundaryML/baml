@@ -1,0 +1,371 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function literal_pattern_membership.$init_test_ns_literal_pattern_membership_literal_pattern_membership(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "is_matches_int_one"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "is_rejects_float_one"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "is_rejects_other_int"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "guarded_match_matches_int_one"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "guarded_match_rejects_float_one"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "sparse_match_matches_int_one"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "sparse_match_rejects_float_one"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "jump_table_matches_int_one"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "jump_table_matches_int_four"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "jump_table_falls_through_on_float"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "jump_table_falls_through_on_unlisted_int"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "alias_matches_int_one"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "alias_rejects_other_int"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "bigint_literal_matches_bigint"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "bigint_literal_rejects_int"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "int_literal_matches_int"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "int_literal_rejects_bigint"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "bool_literal_matches_bool"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "bool_literal_rejects_int"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "int_literal_rejects_bool"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "string_literal_matches_contents"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.literal_pattern_membership"
+    load_const "string_literal_rejects_other"
+    make_closure .<lambda($init_test_ns_literal_pattern_membership_literal_pattern_membership, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function literal_pattern_membership.bigint_pattern(x: int | bigint) -> bool {
+    load_var x
+    is_type 1n
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function literal_pattern_membership.bool_pattern(x: int | bool) -> bool {
+    load_var x
+    is_type true
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function literal_pattern_membership.int_pattern_over_bigint(x: int | bigint) -> bool {
+    load_var x
+    is_type 1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function literal_pattern_membership.int_pattern_over_bool(x: int | bool) -> bool {
+    load_var x
+    is_type 1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function literal_pattern_membership.string_pattern(x: string) -> int {
+    load_var x
+    is_type "go"
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var x
+    is_type "stop"
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_const 2
+    jump L4
+
+  L3:
+    load_const 1
+
+  L4:
+    return
+}
+
+function literal_pattern_membership.via_alias(x: int) -> bool {
+    load_var x
+    is_type 1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function literal_pattern_membership.via_guarded_match(x: int | float) -> bool {
+    load_var x
+    is_type 1
+    pop_jump_if_false L0
+    load_const true
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function literal_pattern_membership.via_is(x: int | float) -> bool {
+    load_var x
+    is_type 1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function literal_pattern_membership.via_jump_table(x: int | float) -> int {
+    load_var x
+    is_type type tag 0
+    pop_jump_if_false L0
+    load_var x
+    jump_table [L4, L3, L2, L1], default L0
+
+  L0:
+    load_const 0
+    jump L5
+
+  L1: 4
+    load_const 4
+    jump L5
+
+  L2: 3
+    load_const 3
+    jump L5
+
+  L3: 2
+    load_const 2
+    jump L5
+
+  L4: 1
+    load_const 1
+
+  L5:
+    return
+}
+
+function literal_pattern_membership.via_sparse_match(x: int | float) -> int {
+    load_var x
+    is_type type tag 0
+    pop_jump_if_false L1
+    load_var x
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var x
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_const 2
+    jump L4
+
+  L3:
+    load_const 1
+
+  L4:
+    return
+}

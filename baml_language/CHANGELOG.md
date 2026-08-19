@@ -6,6 +6,8 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Features
 
+- Accepted an infinite `while` loop as a divergence form: a loop whose condition is statically `true` and whose body holds no `break` bound to it now satisfies E0113, so `let … else { while (true) {} }` compiles. ([#4493](https://github.com/BoundaryML/baml/pull/4493)) - Antonio Sarosi
+- Added read-only `baml.AnyClass` narrowing and reflection for static and runtime-minted class values, with value-bound field handles and catchable typed reads. ([#4491](https://github.com/BoundaryML/baml/pull/4491)) - Antonio Sarosi
 - Added runtime reflection and type construction, including compiling and mounting packages, invoking reflected callables, and isolating dynamic work in sessions. ([#4325](https://github.com/BoundaryML/baml/pull/4325)) - Antonio Sarosi
 - Added native BAML clients for OpenAI, Anthropic, Google, Vertex AI, AWS Bedrock, Azure, Ollama, OpenRouter, and Vercel AI Gateway, including typed streaming, media outputs, AWS SigV4, and Google Cloud authentication. ([#4430](https://github.com/BoundaryML/baml/pull/4430)) - aaronvg
 - Added `baml.sys.pid()`, `baml.fs.chmod()`, and `baml.fs.symlink()`. ([#4427](https://github.com/BoundaryML/baml/pull/4427)) - 2kai2kai2
@@ -18,6 +20,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Breaking and compatibility changes
 
+- Renamed `baml.reflect.class.Field.read<T>()` to `value<T>()`. ([#4493](https://github.com/BoundaryML/baml/pull/4493)) - Antonio Sarosi
 - Renamed `openai.OpenAiClient` to `openai.ResponsesClient`. ([#4430](https://github.com/BoundaryML/baml/pull/4430)) - aaronvg
 - Improved the string stdlib APIs: renamed `String.char_at` to `String.at`, kept negative indexing, and made out-of-range access return `null`; made `String.code_point_at` return `null` out of range; removed `String.matches` in favor of `String.includes`; renamed `String.substring` to `String.slice`; and added `String.last_index_of`. ([#4433](https://github.com/BoundaryML/baml/pull/4433)) - 2kai2kai2
 - Drop support for Jinja templates: BAML now has TS-style template literals that are much easier to use. ([#4367](https://github.com/BoundaryML/baml/pull/4367)) - Avery Townsend
@@ -26,6 +29,12 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Fixes
 
+- Fixed optional-chained method calls dropping their type arguments: `x?.m<T>()` — along with inferred, class-generic, and interface-dispatched forms — now seeds the callee's type-argument frame exactly like `x.m<T>()` instead of failing at runtime with an internal frame type-arg error. An optional-chained call to a builtin I/O method (`file?.text()`) also takes the same inline sys-op path as the plain spelling, so its omitted defaulted arguments are materialized rather than reaching the engine unset. ([#4495](https://github.com/BoundaryML/baml/pull/4495)) - Antonio Sarosi
+- Rejected class-literal construction of the builtin companion carriers (`baml.Int`, `baml.Map`, `baml.String`, and the other zero-field method carriers) with E0166 instead of building a meaningless empty instance; `baml.Map {}` and `baml.Array {}` had reached MIR lowering with unsolved phantom type arguments and panicked. ([#4493](https://github.com/BoundaryML/baml/pull/4493)) - Antonio Sarosi
+- Rejected non-data LLM output schemas with catchable E0164 diagnostics instead of aborting or silently omitting the schema; this intentionally makes previously degraded renders for fields such as `uint8array`, `type`, and mixed non-data unions fail loudly. ([#4470](https://github.com/BoundaryML/baml/pull/4470)) - Antonio Sarosi
+- Fixed a silent miscompile where a map, list, or class instance allocated before a loop and mutated by a callee called inside that loop was re-allocated on every iteration. ([#4467](https://github.com/BoundaryML/baml/pull/4467)) - Antonio Sarosi
+- Restored E0007 diagnostics for method calls on `unknown` receivers, preventing unresolved calls from reaching an internal VM error. ([#4466](https://github.com/BoundaryML/baml/pull/4466)) - Antonio Sarosi
+- Added targeted E0165 reflection diagnostics when unspecialized generic functions are extracted or invoked dynamically, while preserving reflection and listing of their reconstructable generated companions. ([#4473](https://github.com/BoundaryML/baml/pull/4473)) - Antonio Sarosi
 - Rejected runtime-checked arguments on indirect calls with E0010; release builds had previously compiled them while silently omitting the check. ([#4460](https://github.com/BoundaryML/baml/pull/4460)) - Antonio Sarosi
 - Enabled runtime package compilation from `baml run` scripts and expressions. ([#4451](https://github.com/BoundaryML/baml/pull/4451)) - Antonio Sarosi
 - Supported double-quoted LLM prompts as literal, non-interpolating prompts and fixed the segfault they could cause. ([#4432](https://github.com/BoundaryML/baml/pull/4432)) - 2kai2kai2
