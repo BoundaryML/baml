@@ -200,7 +200,7 @@ mod tests {
     ///
     /// ```ignore
     /// type_expr!(Path("Foo", Attr("stream.done")))
-    /// type_expr!(WithAttrs((List(String)), Attr("stream.done")))
+    /// type_expr!(WithAttrs((List(Path("string"))), Attr("stream.done")))
     /// type_expr!(Union((Path("A")), (Path("B", Attr("stream.done")))))
     /// ```
     macro_rules! type_expr {
@@ -1816,14 +1816,17 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = int?\n"));
         assert_eq!(
             strip_spans(&ta.type_expr.unwrap()),
-            type_expr!(Optional(Int))
+            type_expr!(Optional(Path("int")))
         );
     }
 
     #[test]
     fn type_expr_simple_array() {
         let ta = first_type_alias(parse_and_lower("type T = int[]\n"));
-        assert_eq!(strip_spans(&ta.type_expr.unwrap()), type_expr!(List(Int)));
+        assert_eq!(
+            strip_spans(&ta.type_expr.unwrap()),
+            type_expr!(List(Path("int")))
+        );
     }
 
     #[test]
@@ -1832,7 +1835,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = int[]?\n"));
         assert_eq!(
             strip_spans(&ta.type_expr.unwrap()),
-            type_expr!(Optional(List(Int)))
+            type_expr!(Optional(List(Path("int"))))
         );
     }
 
@@ -1842,7 +1845,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = string?[]\n"));
         assert_eq!(
             strip_spans(&ta.type_expr.unwrap()),
-            type_expr!(List(Optional(String)))
+            type_expr!(List(Optional(Path("string"))))
         );
     }
 
@@ -1852,7 +1855,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = string?[]?\n"));
         assert_eq!(
             strip_spans(&ta.type_expr.unwrap()),
-            type_expr!(Optional(List(Optional(String))))
+            type_expr!(Optional(List(Optional(Path("string")))))
         );
     }
 
@@ -1862,7 +1865,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = int[][]\n"));
         assert_eq!(
             strip_spans(&ta.type_expr.unwrap()),
-            type_expr!(List(List(Int)))
+            type_expr!(List(List(Path("int"))))
         );
     }
 
@@ -1872,7 +1875,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = int[][][]\n"));
         assert_eq!(
             strip_spans(&ta.type_expr.unwrap()),
-            type_expr!(List(List(List(Int))))
+            type_expr!(List(List(List(Path("int")))))
         );
     }
 
@@ -1919,7 +1922,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = (int | string)[]\n"));
         assert_eq!(
             strip_spans(&ta.type_expr.unwrap()),
-            type_expr!(List(Union((Int), (String))))
+            type_expr!(List(Union((Path("int")), (Path("string")))))
         );
     }
 
@@ -1929,7 +1932,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]\n"));
         assert_eq!(
             strip_spans(&ta.type_expr.unwrap()),
-            type_expr!(List(List(Union((Int), (Bool)))))
+            type_expr!(List(List(Union((Path("int")), (Path("bool"))))))
         );
     }
 
@@ -1939,7 +1942,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]?\n"));
         assert_eq!(
             strip_spans(&ta.type_expr.unwrap()),
-            type_expr!(Optional(List(List(Union((Int), (Bool))))))
+            type_expr!(Optional(List(List(Union((Path("int")), (Path("bool")))))))
         );
     }
 
@@ -1949,7 +1952,7 @@ function f() -> int {
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)?[]\n"));
         assert_eq!(
             strip_spans(&ta.type_expr.unwrap()),
-            type_expr!(List(Optional(Union((Int), (Bool)))))
+            type_expr!(List(Optional(Union((Path("int")), (Path("bool"))))))
         );
     }
 
@@ -2143,7 +2146,7 @@ class Foo {
         // Type attribute: @stream.done stays on the TypeExpr
         assert_eq!(
             strip_spans(&field.type_expr),
-            type_expr!(WithAttrs((List(String)), Attr("stream.done")))
+            type_expr!(WithAttrs((List(Path("string"))), Attr("stream.done")))
         );
     }
 

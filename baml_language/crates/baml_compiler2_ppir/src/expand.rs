@@ -10,7 +10,6 @@ use baml_compiler2_hir::{
     nameres::{self, ForeignLookup, TypePathResolution},
     package::PackageItems,
 };
-use baml_type::{BuiltinTypeName, PrimitiveType};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
@@ -91,9 +90,6 @@ impl<'db> ForeignLookup<'db> for ExpandForeign<'_, 'db> {
 /// itself - the same derivation `collect_alias_bodies`/`collect_block_attrs`
 /// use - instead of re-walking the written path a second time.
 enum ResolvedNamed<'db> {
-    /// A builtin-scope hit (`string`, `int`, media, ...). `json` never
-    /// surfaces here: it canonicalizes to its stdlib alias definition below.
-    Builtin(BuiltinTypeName),
     Def(SymbolKind, Definition<'db>),
 }
 
@@ -106,7 +102,10 @@ fn resolve_named<'db>(path: &[Name], ctx: &ExpandCtx<'_, 'db>) -> Option<Resolve
         },
     };
     match resolver.resolve_type_path(path)? {
-        TypePathResolution::Builtin(builtin) => Some(ResolvedNamed::Builtin(builtin)),
+        // Unreachable for parsed source - `PpirTy::from_type_expr` normalizes
+        // bare builtin spellings to dedicated leaf variants before expansion
+        // sees a path - and conservatively unresolved otherwise.
+        TypePathResolution::Builtin(_) => None,
         TypePathResolution::Def(def) => {
             let kind = match def {
                 Definition::Class(_) => SymbolKind::Class,
@@ -133,7 +132,6 @@ fn def_key<'db>(def: Definition<'db>, name: &Name, ctx: &ExpandCtx<'_, 'db>) -> 
 fn resolve_qualified_key(path: &[Name], ctx: &ExpandCtx<'_, '_>) -> Option<Vec<Name>> {
     match resolve_named(path, ctx)? {
         ResolvedNamed::Def(_, def) => Some(def_key(def, path.last()?, ctx)),
-        ResolvedNamed::Builtin(_) => None,
     }
 }
 
@@ -152,14 +150,7 @@ fn requalify_for_caller(ty: PpirTy, alias_ns: &[Name], caller_ns: &[Name]) -> Pp
             generic_args,
             associated_type_bindings,
             attrs,
-        } if path.len() == 1
-            && path[0].as_str() != "root"
-            // A builtin-scope name (`int`, `string`, ...) is namespace-
-            // independent by construction - it resolves identically in the
-            // alias's namespace and the caller's - so requalifying it would
-            // manufacture a nonexistent declaration path (`root.<ns>.int`).
-            && nameres::builtin_type_scope(&path[0]).is_none() =>
-        {
+        } if path.len() == 1 && path[0].as_str() != "root" => {
             let mut qualified = Vec::with_capacity(alias_ns.len() + 2);
             qualified.push(SmolStr::from("root"));
             qualified.extend(alias_ns.iter().cloned());
@@ -283,7 +274,7 @@ fn pending_default(ty: &PpirTy, ctx: &ExpandCtx<'_, '_>, depth: u32) -> PendingD
                     }
                     PendingDefault::Null // fallback if alias body not found or depth exceeded
                 }
-                // class, enum, builtin, unknown
+                // class, enum, unknown
                 _ => PendingDefault::Null,
             }
         }
@@ -357,8 +348,7 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_, '_>) -> PpirTy {
                         attrs: d,
                     }
                 }
-                // Builtins (primitives) and unresolved names stay unchanged.
-                Some(ResolvedNamed::Builtin(_)) | None => ty.clone_without_attrs(),
+                None => ty.clone_without_attrs(),
             }
         }
 
@@ -489,54 +479,6 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_, '_>, depth: u32) -> (Ppi
                 )
             } else {
                 match resolve_named(path, ctx) {
-                    // Builtins take the same rules the dedicated PpirTy
-                    // variants take above: this arm exists so a builtin
-                    // spelled as a PATH (post-intercept-removal, or via the
-                    // shared chain's shadowing rules) streams identically to
-                    // one lowered as a dedicated node.
-                    Some(ResolvedNamed::Builtin(builtin)) => {
-                        let primitive = match builtin {
-                            BuiltinTypeName::Primitive(primitive) => primitive,
-                            // `json` canonicalizes to its alias definition in
-                            // resolve_named; intrinsics are never in scope.
-                            BuiltinTypeName::Json
-                            | BuiltinTypeName::Void
-                            | BuiltinTypeName::Never
-                            | BuiltinTypeName::Unknown => {
-                                unreachable!("not producible by resolve_named")
-                            }
-                        };
-                        match primitive {
-                            PrimitiveType::Int
-                            | PrimitiveType::Bigint
-                            | PrimitiveType::Float
-                            | PrimitiveType::Bool => (
-                                ty.clone_without_attrs(),
-                                DefaultWhenPending::PrependNull,
-                                InProgress::NotAllowed,
-                            ),
-                            PrimitiveType::String => (
-                                ty.clone_without_attrs(),
-                                DefaultWhenPending::PrependNull,
-                                InProgress::Allowed,
-                            ),
-                            PrimitiveType::Null => (
-                                ty.clone_without_attrs(),
-                                DefaultWhenPending::HasDefault,
-                                InProgress::Allowed,
-                            ),
-                            // Media and byte buffers cannot be streamed.
-                            PrimitiveType::Uint8Array
-                            | PrimitiveType::Image
-                            | PrimitiveType::Audio
-                            | PrimitiveType::Video
-                            | PrimitiveType::Pdf => (
-                                ty.clone_without_attrs(),
-                                DefaultWhenPending::InherentlyNever,
-                                InProgress::NotAllowed,
-                            ),
-                        }
-                    }
                     Some(ResolvedNamed::Def(SymbolKind::Enum, _)) => {
                         // Merge @@stream.* block attrs
                         merge_block_attrs(path, ctx, &mut must_exist, &mut done);

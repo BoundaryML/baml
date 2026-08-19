@@ -240,15 +240,75 @@ impl PpirTy {
                 generic_args,
                 associated_type_bindings,
                 ..
-            } => PpirTy::Named {
-                path: segments.clone(),
-                generic_args: generic_args.iter().map(Self::convert_type_expr).collect(),
-                associated_type_bindings: associated_type_bindings
-                    .iter()
-                    .map(|binding| (binding.name.clone(), Self::convert_type_expr(&binding.ty)))
-                    .collect(),
-                attrs,
-            },
+            } => {
+                // A bare builtin name normalizes to its dedicated leaf. This
+                // IS resolution, not a guess: the builtin scope is layer 0 of
+                // the resolution chain (`baml_compiler2_hir::nameres`), ahead
+                // of every scoped layer, so a single-segment builtin spelling
+                // resolves identically in every context - no shadowing can
+                // reach it (a shadowed declaration is only addressable as
+                // `root.<name>`, which is multi-segment). Normalizing here
+                // keeps expansion's leaf algebra (`contains_null`, the
+                // per-variant stream rules) working on one representation.
+                // Written generic args on a builtin (`string<T>`) are
+                // dropped, matching type lowering's `lower_builtin`: no
+                // builtin type is generic.
+                if let [single] = segments.as_slice()
+                    && let Some(builtin) =
+                        baml_compiler2_hir::nameres::builtin_type_scope(single)
+                {
+                    use baml_type::{BuiltinTypeName, PrimitiveType as P};
+                    return match builtin {
+                        BuiltinTypeName::Primitive(primitive) => match primitive {
+                            P::Int => PpirTy::Int { attrs },
+                            P::Bigint => PpirTy::Bigint { attrs },
+                            P::Float => PpirTy::Float { attrs },
+                            P::String => PpirTy::String { attrs },
+                            P::Bool => PpirTy::Bool { attrs },
+                            P::Null => PpirTy::Null { attrs },
+                            P::Uint8Array => PpirTy::CannotBeStreamed {
+                                origin: CannotBeStreamedOrigin::Uint8Array,
+                                attrs,
+                            },
+                            P::Image => PpirTy::CannotBeStreamed {
+                                origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Image),
+                                attrs,
+                            },
+                            P::Audio => PpirTy::CannotBeStreamed {
+                                origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Audio),
+                                attrs,
+                            },
+                            P::Video => PpirTy::CannotBeStreamed {
+                                origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Video),
+                                attrs,
+                            },
+                            P::Pdf => PpirTy::CannotBeStreamed {
+                                origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Pdf),
+                                attrs,
+                            },
+                        },
+                        // `json` is expanded to `baml.json.json` at AST
+                        // lowering (sugar), and the intrinsics have no
+                        // addressable definition, so none of these can be a
+                        // bare written path.
+                        BuiltinTypeName::Json
+                        | BuiltinTypeName::Void
+                        | BuiltinTypeName::Never
+                        | BuiltinTypeName::Unknown => {
+                            unreachable!("not in the builtin type scope as a bare path")
+                        }
+                    };
+                }
+                PpirTy::Named {
+                    path: segments.clone(),
+                    generic_args: generic_args.iter().map(Self::convert_type_expr).collect(),
+                    associated_type_bindings: associated_type_bindings
+                        .iter()
+                        .map(|binding| (binding.name.clone(), Self::convert_type_expr(&binding.ty)))
+                        .collect(),
+                    attrs,
+                }
+            }
             TypeExprKind::Optional { inner, .. } => PpirTy::Optional {
                 inner: Box::new(Self::convert_type_expr(inner)),
                 attrs,

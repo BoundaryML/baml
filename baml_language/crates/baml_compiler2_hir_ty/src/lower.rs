@@ -1049,8 +1049,8 @@ impl<'db> LowerCtx<'db> {
     }
 
     /// The type a builtin-scope name denotes. No builtin type is generic, so
-    /// written generic args and associated-type bindings are dropped here -
-    /// the same silent drop the pre-resolution intercept performed.
+    /// written generic args and associated-type bindings are silently dropped
+    /// here, matching the historical acceptance of `string<T>` spellings.
     pub(crate) fn lower_builtin(
         &self,
         builtin: BuiltinTypeName,
