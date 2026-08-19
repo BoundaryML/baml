@@ -57,7 +57,8 @@ include = [{ path = "src/baml_bridge/py.typed", format = ["sdist", "wheel"] }]
 # replaces the extension with a dev-profile one immediately afterwards (see
 # sdk_tests/crates/python_pydantic2/setup.sh). Pinning editables to `dev`
 # leaves the two steps sharing one set of cargo artifacts.
-# Wheel builds are unaffected: they use `profile`.
+# `editable-profile` affects only PEP 660 editable builds such as `uv sync`;
+# it does not affect `maturin build` or the release workflow.
 editable-profile = "dev"
 
 [tool.pytest.ini_options]
