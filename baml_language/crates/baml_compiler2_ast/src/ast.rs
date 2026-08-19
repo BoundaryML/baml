@@ -654,6 +654,11 @@ pub struct AstSourceMap {
     /// For object-constructor fields, the span of the field name keyed by
     /// `(object_expr_id, value_expr_id)`.
     pub object_field_name_spans: HashMap<(ExprId, ExprId), TextRange>,
+    /// For `unreflect(value)` type-argument slots, the span of the WHOLE slot
+    /// (marker, parens and all), keyed by the carrier expression inside it.
+    /// The carrier's own span covers only `value`, so diagnostics about the
+    /// slot itself would otherwise have no range to point at.
+    pub unreflect_arg_spans: HashMap<ExprId, TextRange>,
     /// Ids of compiler-synthesized nodes — desugarings that have no
     /// user-written source of their own (e.g. the `string.from(${…})` wrapper
     /// and the concat accumulator that backtick interpolation lowers to). Their
@@ -681,6 +686,7 @@ impl AstSourceMap {
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
             object_field_name_spans: HashMap::new(),
+            unreflect_arg_spans: HashMap::new(),
             synthetic_exprs: HashSet::new(),
             synthetic_stmts: HashSet::new(),
             synthetic_patterns: HashSet::new(),
@@ -754,6 +760,16 @@ impl AstSourceMap {
             .get(&(object_id, value_id))
             .copied()
             .unwrap_or_else(|| self.expr_span(value_id))
+    }
+
+    /// Look up the span of the `unreflect(...)` type-argument slot whose
+    /// carrier expression is `id`. Falls back to the carrier's own span when
+    /// the slot was not recorded (a synthesized marker, for instance).
+    pub fn unreflect_arg_span(&self, id: ExprId) -> TextRange {
+        self.unreflect_arg_spans
+            .get(&id)
+            .copied()
+            .unwrap_or_else(|| self.expr_span(id))
     }
 
     /// Look up the source span of a pattern by its `PatId`.
