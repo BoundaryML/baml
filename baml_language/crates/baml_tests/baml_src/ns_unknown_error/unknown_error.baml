@@ -112,7 +112,6 @@ function ue_preserves_origin_trace() -> bool {
                 frame.function_name.includes("ue_origin")
             })
         },
-        _ => false,
     }
 }
 
@@ -144,7 +143,6 @@ function ue_preserves_cause_chain() -> bool {
                 _ => false,
             }
         },
-        _ => false,
     }
 }
 
@@ -184,7 +182,6 @@ function ue_context_survives_gc() -> bool {
                 _ => false,
             }
         },
-        _ => false,
     }
 }
 
@@ -222,7 +219,6 @@ function ue_interface_dispatch_preserves_context() -> bool {
                 frame.function_name.includes("ue_origin")
             })
         },
-        _ => false,
     }
 }
 
@@ -253,7 +249,6 @@ function ue_callback_preserves_context() -> bool {
                 frame.function_name.includes("ue_invoke_callback")
             })
         },
-        _ => false,
     }
 }
 
@@ -287,7 +282,6 @@ function ue_reflect_preserves_context() -> bool {
                 frame.function_name.includes("ue_call_reflect")
             })
         },
-        _ => false,
     }
 }
 
