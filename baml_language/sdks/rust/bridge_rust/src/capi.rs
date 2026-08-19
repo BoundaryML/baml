@@ -18,6 +18,10 @@ use crate::{
 /// the synchronous duration of the call — implementations must copy.
 pub(crate) type CallbackFn = extern "C" fn(call_id: u32, content: *const c_char, length: usize);
 
+/// Request cancellation of one engine call. Zero means the cancellation was
+/// accepted; nonzero means the call was unknown or already complete.
+pub(crate) type CancelFunctionCallFn = unsafe extern "C" fn(u64) -> i32;
+
 /// The engine's BAML→host dispatch callback: BAML invoked a host-owned
 /// callable. `args` (a protobuf `BamlToHostCall`) is borrowed only for the
 /// synchronous duration of the call — implementations must copy, return
@@ -50,6 +54,7 @@ pub(crate) struct Api {
         unsafe extern "C" fn(*const u8, usize, *const c_char) -> Buffer,
     pub(crate) register_callback: unsafe extern "C" fn(CallbackFn),
     pub(crate) new_function_call: unsafe extern "C" fn() -> u64,
+    pub(crate) cancel_function_call: CancelFunctionCallFn,
     pub(crate) call_function: unsafe extern "C" fn(*const u8, usize, u32),
     pub(crate) handle_clone: unsafe extern "C" fn(u64, *mut u64) -> u32,
     pub(crate) handle_release: unsafe extern "C" fn(u64) -> u32,
@@ -144,9 +149,8 @@ struct BamlApiV1 {
     register_callback: Option<unsafe extern "C" fn(CallbackFn)>,
     call_function: Option<unsafe extern "C" fn(*const u8, usize, u32)>,
     new_function_call: Option<unsafe extern "C" fn() -> u64>,
-    /// Layout placeholder: sits between `new_function_call` and the
-    /// host-value entries in ABI order. Unused until cancellation lands.
-    cancel_function_call: Option<unsafe extern "C" fn(u64) -> i32>,
+    /// Cancels an in-flight engine call by its engine-issued id.
+    cancel_function_call: Option<CancelFunctionCallFn>,
     register_host_dispatch_callback: Option<unsafe extern "C" fn(HostDispatchFn)>,
     register_host_release_callback: Option<unsafe extern "C" fn(HostReleaseFn)>,
     complete_host_call: Option<unsafe extern "C" fn(u32, i32, *const c_char, usize)>,
@@ -255,7 +259,8 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     let register_callback = required_slot(table.register_callback, "register_callback", &path)?;
     let call_function = required_slot(table.call_function, "call_function", &path)?;
     let new_function_call = required_slot(table.new_function_call, "new_function_call", &path)?;
-    required_slot(table.cancel_function_call, "cancel_function_call", &path)?;
+    let cancel_function_call =
+        required_slot(table.cancel_function_call, "cancel_function_call", &path)?;
     let register_host_dispatch_callback = required_slot(
         table.register_host_dispatch_callback,
         "register_host_dispatch_callback",
@@ -291,6 +296,7 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         initialize_runtime_from_bytecode_with_metadata,
         register_callback,
         new_function_call,
+        cancel_function_call,
         call_function,
         handle_clone,
         handle_release,
