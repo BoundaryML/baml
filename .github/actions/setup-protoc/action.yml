@@ -1,0 +1,81 @@
+name: "Setup protoc"
+description: "Install a pinned protoc binary without querying the GitHub API"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install protoc (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        PROTOC_VERSION: "23.4"
+      run: |
+        set -euo pipefail
+
+        case "${RUNNER_OS}/${RUNNER_ARCH}" in
+          Linux/X64)
+            asset="protoc-23.4-linux-x86_64.zip"
+            checksum="0502f286ac9ed860b629a7965a14527b1f2dd131e4283fa23c2d7f184672aa9a"
+            ;;
+          Linux/ARM64)
+            asset="protoc-23.4-linux-aarch_64.zip"
+            checksum="1c7750b6e038305b5a7fc3d0cda1ebefdf106a4f30a787bf826ed2fc47c3967d"
+            ;;
+          macOS/X64)
+            asset="protoc-23.4-osx-x86_64.zip"
+            checksum="07e5fdcf1b0708d3367dc5e6eb8d135de7e407d75316c93155cfd8ab362eec80"
+            ;;
+          macOS/ARM64)
+            asset="protoc-23.4-osx-aarch_64.zip"
+            checksum="8c7afae8626b6811e7b5897d16d940c2dbf50b1e135ed958a01db6566bdda726"
+            ;;
+          *)
+            echo "Unsupported protoc platform: ${RUNNER_OS}/${RUNNER_ARCH}" >&2
+            exit 1
+            ;;
+        esac
+
+        archive="${RUNNER_TEMP}/${asset}"
+        install_dir="${RUNNER_TEMP}/protoc-${PROTOC_VERSION}"
+        curl --fail --location --silent --show-error \
+          "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${asset}" \
+          --output "${archive}"
+        printf '%s  %s\n' "${checksum}" "${archive}" | shasum --algorithm 256 --check
+        mkdir -p "${install_dir}"
+        unzip -q -o "${archive}" -d "${install_dir}"
+        echo "${install_dir}/bin" >> "${GITHUB_PATH}"
+        "${install_dir}/bin/protoc" --version
+
+    - name: Install protoc (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        PROTOC_VERSION: "23.4"
+      run: |
+        $ErrorActionPreference = "Stop"
+
+        switch ($env:RUNNER_ARCH) {
+          "X64" {
+            $asset = "protoc-23.4-win64.zip"
+            $checksum = "a309c39442fb75f0db343cb22c111a00f91cdf0767f332e170644b9378e2bcc6"
+          }
+          "ARM64" {
+            $asset = "protoc-23.4-win32.zip"
+            $checksum = "f39c948386cc167bc79659d3fdaaf3609f6ce8da6a48f780c322542580deb1f3"
+          }
+          default {
+            throw "Unsupported protoc platform: Windows/$env:RUNNER_ARCH"
+          }
+        }
+
+        $archive = Join-Path $env:RUNNER_TEMP $asset
+        $installDir = Join-Path $env:RUNNER_TEMP "protoc-$env:PROTOC_VERSION"
+        $downloadUrl = "https://github.com/protocolbuffers/protobuf/releases/download/v$env:PROTOC_VERSION/$asset"
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $archive
+        $actualChecksum = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actualChecksum -ne $checksum) {
+          throw "Checksum mismatch for ${asset}: expected $checksum, got $actualChecksum"
+        }
+        Expand-Archive -LiteralPath $archive -DestinationPath $installDir -Force
+        (Join-Path $installDir "bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        & (Join-Path $installDir "bin/protoc.exe") --version
