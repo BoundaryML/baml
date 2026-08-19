@@ -39,8 +39,6 @@ dev = [
 ]
 
 [build-system]
-# >= 1.10 for `tool.maturin.editable-profile` below; an older maturin ignores
-# the key and silently builds editables with the release profile again.
 requires = ["maturin>=1.10,<2.0"]
 build-backend = "maturin"
 
@@ -50,13 +48,6 @@ python-source = "src"
 manifest-path = "rust/bridge_python/Cargo.toml"
 module-name = "baml_bridge.baml_py"
 include = [{ path = "src/baml_bridge/py.typed", format = ["sdist", "wheel"] }]
-# Editable (PEP 660) installs otherwise inherit `profile`, i.e. `release` —
-# fat LTO, codegen-units = 1, opt-level = "s" (baml_language/Cargo.toml) — so
-# `uv sync` compiles the whole engine graph from scratch. Nothing consumes
-# that artifact: `maturin develop` is itself an editable build, and it
-# replaces the extension with a dev-profile one immediately afterwards (see
-# sdk_tests/crates/python_pydantic2/setup.sh). Pinning editables to `dev`
-# leaves the two steps sharing one set of cargo artifacts.
 # `editable-profile` affects only PEP 660 editable builds such as `uv sync`;
 # it does not affect `maturin build` or the release workflow.
 editable-profile = "dev"

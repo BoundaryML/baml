@@ -67,14 +67,6 @@ command -v uv >/dev/null 2>&1 || uv_bin="$(mise which uv)"
 #    is editable-linked. Plain `uv sync` (no --reinstall): on a fresh
 #    checkout this builds the editable wheel once; afterward it's a
 #    no-op. The shared .so it points at is (re)built by step 2.
-#
-#    That one build used to compile the entire engine graph in the
-#    `release` profile (fat LTO) and throw the result away seconds later,
-#    because step 2 overwrites the extension with a dev-profile build:
-#    199s here + 75s there on a cold CI runner. `sdks/python/pyproject.toml`
-#    now pins `editable-profile = "dev"`, so both steps are the same
-#    profile `cargo nextest` already built the workspace with and they
-#    share one set of artifacts.
 for fixture_dir in */generated; do
     [[ -d "$fixture_dir" ]] || continue
     echo "==> uv sync in $fixture_dir"
