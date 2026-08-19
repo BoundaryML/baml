@@ -895,8 +895,7 @@ fn describe_package_functions_documents_the_generic_listing_contract() {
     let db = simple_project();
     let output = describe_via_dispatch(&db, "baml.reflect.Package.functions");
     assert!(
-        output.contains("including generic ones")
-            && output.contains("specialize(args)"),
+        output.contains("including generic ones") && output.contains("specialize(args)"),
         "expected generic-listing contract in builtin method docs:\n{output}",
     );
     insta::assert_snapshot!(output);

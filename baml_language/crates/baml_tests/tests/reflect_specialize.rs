@@ -242,7 +242,7 @@ async fn specialize_rejects_an_arity_mismatch() {
     .await;
     assert_eq!(
         message,
-        "E0167|cannot specialize generic function `identity`: it declares 1 type parameter, \
+        "E0169|cannot specialize generic function `identity`: it declares 1 type parameter, \
          but 2 type arguments were supplied"
     );
 }
@@ -284,7 +284,7 @@ async fn specialize_rejects_a_bound_violation() {
     .await;
     assert_eq!(
         message,
-        "E0167|cannot specialize generic function `measure`: type argument `Loose` does not \
+        "E0169|cannot specialize generic function `measure`: type argument `Loose` does not \
          satisfy the bound `T extends Shaped`"
     );
 }
@@ -314,7 +314,7 @@ async fn specialize_rejects_an_any_class_bound_violation() {
     .await;
     assert_eq!(
         message,
-        "E0167|cannot specialize generic function `inspect`: type argument `int` does not \
+        "E0169|cannot specialize generic function `inspect`: type argument `int` does not \
          satisfy the bound `T extends baml.AnyClass`"
     );
 }
@@ -342,7 +342,7 @@ async fn specialize_rejects_a_non_generic_function() {
     .await;
     assert_eq!(
         message,
-        "E0167|function `plain` is not generic; there is nothing to specialize"
+        "E0169|function `plain` is not generic; there is nothing to specialize"
     );
 }
 
@@ -402,7 +402,7 @@ async fn a_plain_function_type_is_not_a_descriptor() {
     .await;
     assert_eq!(
         message,
-        "E0167|this function type is not a reflected function descriptor: only the entries of \
+        "E0169|this function type is not a reflected function descriptor: only the entries of \
          `Package.functions()` carry the callable `specialize` needs"
     );
 }
@@ -435,4 +435,184 @@ async fn descriptor_extraction_enforces_the_requested_contract() {
     )
     .await;
     assert_eq!(message, "E0001");
+}
+
+/// A descriptor's callable is reachable *only* through the descriptor's own
+/// `type` value. That edge is traced by `TypeValue::gc_edges`; open-coding the
+/// walk at one of the collector's sites and missing it leaves the descriptor
+/// pointing at freed or moved memory, which `get_object`'s unchecked deref
+/// turns into undefined behaviour rather than a panic. Collect between every
+/// step.
+#[tokio::test]
+async fn a_descriptor_survives_collection_between_every_step() {
+    let output = baml_test!(
+        r#"
+        type IntFn = (value: int) -> int throws never;
+
+        function identity<T>(value: T) -> T { value }
+
+        function main() -> int throws unknown {
+            let descriptor = reflect.Package.current().functions().get("root.identity")
+                ?? throw "identity not listed"
+            baml.sys.collect_garbage()
+            let specialized = descriptor.specialize([type.of<int>()])
+            baml.sys.collect_garbage()
+            let callable = specialized.get<IntFn>() ?? throw "no callable"
+            baml.sys.collect_garbage()
+            callable(7)
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
+}
+
+/// The other half of the same edge: a specialized callable holds the exact
+/// `type` values it was specialized with, and its body reads one back through
+/// `type.of<T>()`. Those values carry their own package owner and definition
+/// overlay, so a collection between specialization and call has to root and
+/// forward all of them.
+#[tokio::test]
+async fn a_specialized_body_reads_its_own_type_across_collection() {
+    let output = baml_test!(
+        r#"
+        function reflected<T>() -> type { type.of<T>() }
+
+        function main() -> bool throws unknown {
+            let schema = reflect.Package.compile({
+                "schema.baml": "class ExtractedRecord { account string amount int }",
+            })
+            let record = schema.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
+            let minted = record.as_type()
+
+            let specialized = (reflect.Package.current().functions().get("root.reflected")
+                ?? throw "reflected not listed").specialize([minted])
+            baml.sys.collect_garbage()
+            let callable = specialized.get<baml.AnyFunction<Returns = type, Throws = unknown>>()
+                ?? throw "no callable"
+            baml.sys.collect_garbage()
+            let materialized = reflect.call_any<type, unknown>(callable, {})
+            baml.sys.collect_garbage()
+
+            let view = materialized.as_class() ?? throw "materialized type is not a class"
+            let field = view.fields().at(0) ?? throw "no fields"
+            materialized == minted && field.name == "account"
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// Bounds declared *inside* a runtime-compiled package are local to it, so the
+/// proof has to resolve the interface in the descriptor's world rather than
+/// whoever happens to be calling `specialize`. Rooting it at the caller made
+/// every such bound unprovable and rejected the conforming type too.
+#[tokio::test]
+async fn bounds_declared_in_a_runtime_package_are_provable() {
+    let output = baml_test!(
+        r##"
+        function main() -> string throws unknown {
+            let pkg = reflect.Package.compile({
+                "main.baml": #"
+interface Shaped {
+  function area(self) -> int throws never
+}
+
+class Square {
+  side int
+  implements Shaped {
+    function area(self) -> int { self.side * self.side }
+  }
+}
+
+class Loose { label string }
+
+function measure<T extends Shaped>(value: T) -> int { 0 }
+"#
+            })
+            let descriptor = pkg.functions().get("root.measure") ?? throw "measure not listed"
+            let square = pkg.get_class("root.Square") ?? throw "missing Square"
+            let loose = pkg.get_class("root.Loose") ?? throw "missing Loose"
+
+            let _accepted = descriptor.specialize([square.as_type()])
+            let _ = descriptor.specialize([loose.as_type()]) catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    return "rejected:" + e.diagnostics[0].code
+                },
+                _ => return "wrong error",
+            }
+            "the non-conforming type was accepted"
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("rejected:E0169".into()))
+    );
+}
+
+/// Specialization is not incremental, so a second `specialize` is an error —
+/// but telling the caller the callable "is not generic" points at the wrong
+/// mistake. It gets its own message.
+#[tokio::test]
+async fn respecializing_reports_that_it_is_already_bound() {
+    let message = thrown_diagnostic(
+        r#"
+        function identity<T>(value: T) -> T { value }
+
+        function main() -> string throws unknown {
+            let descriptor = reflect.Package.current().functions().get("root.identity")
+                ?? throw "identity not listed"
+            let specialized = descriptor.specialize([type.of<int>()])
+            let _ = specialized.specialize([type.of<string>()]) catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    return e.diagnostics[0].code + "|" + e.diagnostics[0].message
+                },
+                _ => return "wrong error",
+            }
+            "specialize did not throw"
+        }
+        "#,
+    )
+    .await;
+    assert_eq!(
+        message,
+        "E0169|generic function `identity` is already specialized; every type parameter is bound"
+    );
+}
+
+/// Exact values are reported **positionally**, off the callable's own
+/// templates: only a position written as the type parameter itself reports the
+/// caller's value. A parameter the author wrote as a concrete type keeps its
+/// own reconstruction even when that type is structurally the one supplied —
+/// matching on the realized type instead would hand an unrelated parameter the
+/// caller's identity.
+#[tokio::test]
+async fn exact_values_are_reported_by_slot_not_by_shape() {
+    let output = baml_test!(
+        r##"
+        function main() -> bool throws unknown {
+            let pkg = reflect.Package.compile({
+                "main.baml": #"
+class Rec { label string }
+
+function pair<T>(first: T, second: Rec) -> T { first }
+"#
+            })
+            let descriptor = pkg.functions().get("root.pair") ?? throw "pair not listed"
+            let rec = pkg.get_class("root.Rec") ?? throw "missing Rec"
+            let minted = rec.as_type()
+
+            let specialized = descriptor.specialize([minted])
+            let first = specialized.params().at(0) ?? throw "no first parameter"
+            let second = specialized.params().at(1) ?? throw "no second parameter"
+
+            // `first` is written `T`; `second` is written `Rec`, which realizes
+            // to the very same class without being the caller's type argument.
+            first.type == minted
+                && second.type != minted
+                && specialized.return_type() == minted
+        }
+        "##
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

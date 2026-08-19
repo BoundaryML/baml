@@ -706,45 +706,25 @@ impl BexHeap {
                     worklist.push(function.runtime_package);
                 }
                 for value in function.exact_type_values.iter().flatten().flatten() {
-                    if !value.owner.as_ptr().is_null() {
-                        worklist.push(value.owner);
-                    }
-                    worklist.extend(value.defs().classes.values().copied());
-                    worklist.extend(value.defs().enums.values().copied());
+                    worklist.extend(value.gc_edges());
                 }
             }
             Object::Type(value) => {
-                if !value.owner.as_ptr().is_null() {
-                    worklist.push(value.owner);
-                }
-                if !value.callable.as_ptr().is_null() {
-                    worklist.push(value.callable);
-                }
-                worklist.extend(value.defs().classes.values().copied());
-                worklist.extend(value.defs().enums.values().copied());
+                worklist.extend(value.gc_edges());
             }
             Object::Class(class) => {
                 if let Some(runtime) = &class.runtime_type {
-                    if !runtime.owner.as_ptr().is_null() {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(runtime.defs.classes.values().copied());
-                    worklist.extend(runtime.defs.enums.values().copied());
+                    worklist.extend(runtime.gc_edges());
                 }
                 for field in &class.fields {
                     if let Some(type_value) = &field.runtime_type {
-                        worklist.extend(type_value.defs().classes.values().copied());
-                        worklist.extend(type_value.defs().enums.values().copied());
+                        worklist.extend(type_value.gc_edges());
                     }
                 }
             }
             Object::Enum(enm) => {
                 if let Some(runtime) = &enm.runtime_type {
-                    if !runtime.owner.as_ptr().is_null() {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(runtime.defs.classes.values().copied());
-                    worklist.extend(runtime.defs.enums.values().copied());
+                    worklist.extend(runtime.gc_edges());
                 }
             }
             // Primitives have no references
@@ -975,66 +955,25 @@ impl BexHeap {
                     function.runtime_package = new_ptr;
                 }
                 for value in function.exact_type_values.iter_mut().flatten().flatten() {
-                    value.owner = forwarding.get(&value.owner).copied().unwrap_or(value.owner);
-                    for ptr in value.defs_mut().classes.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                    for ptr in value.defs_mut().enums.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
+                    value.forward_gc_edges(forwarding);
                 }
             }
             Object::Type(value) => {
-                if let Some(&new_ptr) = forwarding.get(&value.owner) {
-                    value.owner = new_ptr;
-                }
-                if let Some(&new_ptr) = forwarding.get(&value.callable) {
-                    value.callable = new_ptr;
-                }
-                for ptr in value.defs_mut().classes.values_mut() {
-                    *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                }
-                for ptr in value.defs_mut().enums.values_mut() {
-                    *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                }
+                value.forward_gc_edges(forwarding);
             }
             Object::Class(class) => {
                 if let Some(runtime) = &mut class.runtime_type {
-                    runtime.owner = forwarding
-                        .get(&runtime.owner)
-                        .copied()
-                        .unwrap_or(runtime.owner);
-                    for ptr in runtime.defs.classes.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                    for ptr in runtime.defs.enums.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
+                    runtime.forward_gc_edges(forwarding);
                 }
                 for field in &mut class.fields {
-                    let Some(type_value) = &mut field.runtime_type else {
-                        continue;
-                    };
-                    for ptr in type_value.defs_mut().classes.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                    for ptr in type_value.defs_mut().enums.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                    if let Some(type_value) = &mut field.runtime_type {
+                        type_value.forward_gc_edges(forwarding);
                     }
                 }
             }
             Object::Enum(enm) => {
                 if let Some(runtime) = &mut enm.runtime_type {
-                    runtime.owner = forwarding
-                        .get(&runtime.owner)
-                        .copied()
-                        .unwrap_or(runtime.owner);
-                    for ptr in runtime.defs.classes.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                    for ptr in runtime.defs.enums.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
+                    runtime.forward_gc_edges(forwarding);
                 }
             }
             // Primitives have no references
@@ -1375,87 +1314,25 @@ impl BexHeap {
                     worklist.push(function.runtime_package);
                 }
                 for value in function.exact_type_values.iter().flatten().flatten() {
-                    if !value.owner.as_ptr().is_null() && self.generation_of(value.owner).is_young()
-                    {
-                        worklist.push(value.owner);
-                    }
-                    worklist.extend(
-                        value
-                            .defs()
-                            .classes
-                            .values()
-                            .chain(value.defs().enums.values())
-                            .copied()
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
+                    worklist.extend(self.young_edges(value.gc_edges()));
                 }
             }
             Object::Type(value) => {
-                if !value.owner.as_ptr().is_null() && self.generation_of(value.owner).is_young() {
-                    worklist.push(value.owner);
-                }
-                if !value.callable.as_ptr().is_null()
-                    && self.generation_of(value.callable).is_young()
-                {
-                    worklist.push(value.callable);
-                }
-                worklist.extend(
-                    value
-                        .defs()
-                        .classes
-                        .values()
-                        .chain(value.defs().enums.values())
-                        .copied()
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
+                worklist.extend(self.young_edges(value.gc_edges()));
             }
             Object::Class(class) => {
                 if let Some(runtime) = &class.runtime_type {
-                    if !runtime.owner.as_ptr().is_null()
-                        && self.generation_of(runtime.owner).is_young()
-                    {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(
-                        runtime
-                            .defs
-                            .classes
-                            .values()
-                            .chain(runtime.defs.enums.values())
-                            .copied()
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
+                    worklist.extend(self.young_edges(runtime.gc_edges()));
                 }
                 for field in &class.fields {
                     if let Some(type_value) = &field.runtime_type {
-                        worklist.extend(
-                            type_value
-                                .defs()
-                                .classes
-                                .values()
-                                .chain(type_value.defs().enums.values())
-                                .copied()
-                                .filter(|ptr| self.generation_of(*ptr).is_young()),
-                        );
+                        worklist.extend(self.young_edges(type_value.gc_edges()));
                     }
                 }
             }
             Object::Enum(enm) => {
                 if let Some(runtime) = &enm.runtime_type {
-                    if !runtime.owner.as_ptr().is_null()
-                        && self.generation_of(runtime.owner).is_young()
-                    {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(
-                        runtime
-                            .defs
-                            .classes
-                            .values()
-                            .chain(runtime.defs.enums.values())
-                            .copied()
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
+                    worklist.extend(self.young_edges(runtime.gc_edges()));
                 }
             }
             // Primitives/leaf variants have no heap references.

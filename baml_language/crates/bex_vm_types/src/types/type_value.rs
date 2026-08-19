@@ -8,6 +8,8 @@
 //! data carried inline in the object, so GC copies and `baml.deep_copy`
 //! preserve identity by construction (I-1: a copy *is* the same type value).
 
+use std::collections::HashMap;
+
 use baml_type::{Name, QualifiedTypeName, RealizedTy, normalize::TypeContext};
 use indexmap::IndexMap;
 
@@ -123,6 +125,19 @@ impl DynTypeDefs {
     pub fn is_empty(&self) -> bool {
         self.classes.is_empty() && self.enums.is_empty() && self.witnesses.is_empty()
     }
+
+    /// Every heap pointer these definitions keep alive. See
+    /// [`TypeValue::gc_edges`] for why this lives here and not in each walker.
+    pub fn gc_edges(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        self.classes.values().chain(self.enums.values()).copied()
+    }
+
+    /// Rewrite every heap pointer through a copying collection's forwarding map.
+    pub fn forward_gc_edges(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        for ptr in self.classes.values_mut().chain(self.enums.values_mut()) {
+            *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+        }
+    }
 }
 
 /// A minted identity token for a runtime `type` value.
@@ -159,6 +174,22 @@ pub struct RuntimeTypeProvenance {
     /// Runtime package that owns this nominal definition. Runtime-constructed
     /// standalone types use a null pointer. This is a GC edge.
     pub owner: HeapPtr,
+}
+
+impl RuntimeTypeProvenance {
+    /// Every heap pointer this provenance keeps alive. See
+    /// [`TypeValue::gc_edges`].
+    pub fn gc_edges(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        std::iter::once(self.owner)
+            .filter(|ptr| !ptr.is_null())
+            .chain(self.defs.gc_edges())
+    }
+
+    /// Rewrite every heap pointer through a copying collection's forwarding map.
+    pub fn forward_gc_edges(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        self.owner = forwarding.get(&self.owner).copied().unwrap_or(self.owner);
+        self.defs.forward_gc_edges(forwarding);
+    }
 }
 
 /// What an `Object::Type` wraps: the described type and its identity.
@@ -273,6 +304,35 @@ impl TypeValue {
     pub fn with_callable(mut self, callable: HeapPtr) -> Self {
         self.callable = callable;
         self
+    }
+
+    /// Every heap pointer this value keeps alive: its owning package, the
+    /// callable a function descriptor remembers, and its definition overlay.
+    ///
+    /// This is the **single** definition of that set, and every walker must go
+    /// through it. `Object::Type` is far from the only place a `TypeValue`
+    /// lives — a frame's exact type arguments, a pending call's, a specialized
+    /// callable's, a runtime class's provenance, a runtime class field's — and
+    /// each of those sites used to open-code the same walk. A field added to
+    /// this struct but missed at one of them is a dangling pointer after the
+    /// next copying collection, which `get_object`'s unchecked deref turns into
+    /// undefined behaviour rather than a panic.
+    pub fn gc_edges(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        [self.owner, self.callable]
+            .into_iter()
+            .filter(|ptr| !ptr.is_null())
+            .chain(self.defs.gc_edges())
+    }
+
+    /// Rewrite every heap pointer through a copying collection's forwarding
+    /// map. The exact counterpart of [`Self::gc_edges`]; keep the two in step.
+    pub fn forward_gc_edges(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        self.owner = forwarding.get(&self.owner).copied().unwrap_or(self.owner);
+        self.callable = forwarding
+            .get(&self.callable)
+            .copied()
+            .unwrap_or(self.callable);
+        self.defs.forward_gc_edges(forwarding);
     }
 
     /// This value's identity token.

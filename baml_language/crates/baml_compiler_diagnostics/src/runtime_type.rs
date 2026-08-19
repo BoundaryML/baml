@@ -141,7 +141,7 @@ pub fn unspecialized_reflected_generic_signature(name: &str) -> Diagnostic {
     )
 }
 
-/// E0167 — `specialize` was given the wrong number of type arguments.
+/// E0169 — `specialize` was given the wrong number of type arguments.
 pub fn specialize_arity_mismatch(name: &str, expected: usize, supplied: usize) -> Diagnostic {
     Diagnostic::error(
         DiagnosticId::ReflectSpecializationFailed,
@@ -154,7 +154,7 @@ pub fn specialize_arity_mismatch(name: &str, expected: usize, supplied: usize) -
     )
 }
 
-/// E0167 — a supplied type argument fails one of its parameter's bounds.
+/// E0169 — a supplied type argument fails one of its parameter's bounds.
 pub fn specialize_bound_violation(
     name: &str,
     parameter: &str,
@@ -170,7 +170,7 @@ pub fn specialize_bound_violation(
     )
 }
 
-/// E0167 — `specialize` was called on a callable that declares no type
+/// E0169 — `specialize` was called on a callable that declares no type
 /// parameters. `is_generic` is the guard.
 pub fn specialize_non_generic(name: &str) -> Diagnostic {
     Diagnostic::error(
@@ -179,7 +179,31 @@ pub fn specialize_non_generic(name: &str) -> Diagnostic {
     )
 }
 
-/// E0167 — `specialize` was called on a function type that reflection did not
+/// E0169 — `specialize` was called on a descriptor whose type parameters are
+/// already bound. Distinct from the sibling above: the callable *is* generic,
+/// it just has nothing left to bind, and specialization is not incremental.
+pub fn specialize_already_specialized(name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::ReflectSpecializationFailed,
+        format!("generic function `{name}` is already specialized; every type parameter is bound"),
+    )
+}
+
+/// E0169 — a fully supplied frame still did not reconstruct a signature.
+///
+/// Nothing known produces this: every slot is bound, so every template
+/// realizes. It exists so the impossible case is a catchable diagnostic rather
+/// than a descriptor that silently reports `unknown` and denies being generic.
+pub fn specialize_signature_unreconstructible(name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::ReflectSpecializationFailed,
+        format!(
+            "cannot specialize generic function `{name}`: its signature does not reconstruct              even with every type argument supplied"
+        ),
+    )
+}
+
+/// E0169 — `specialize` was called on a function type that reflection did not
 /// hand out, so there is no callable behind it to specialize.
 pub fn specialize_without_descriptor() -> Diagnostic {
     Diagnostic::error(
@@ -425,27 +449,37 @@ mod tests {
             ),
             (
                 specialize_arity_mismatch("root.Extract", 1, 2),
-                "E0167",
+                "E0169",
                 "cannot specialize generic function `root.Extract`: it declares 1 type parameter, but 2 type arguments were supplied",
             ),
             (
                 specialize_arity_mismatch("root.Pair", 2, 1),
-                "E0167",
+                "E0169",
                 "cannot specialize generic function `root.Pair`: it declares 2 type parameters, but 1 type argument was supplied",
             ),
             (
                 specialize_bound_violation("root.Extract", "T", "baml.AnyClass", "int"),
-                "E0167",
+                "E0169",
                 "cannot specialize generic function `root.Extract`: type argument `int` does not satisfy the bound `T extends baml.AnyClass`",
             ),
             (
                 specialize_non_generic("root.Present"),
-                "E0167",
+                "E0169",
                 "function `root.Present` is not generic; there is nothing to specialize",
             ),
             (
+                specialize_already_specialized("root.Extract"),
+                "E0169",
+                "generic function `root.Extract` is already specialized; every type parameter is bound",
+            ),
+            (
+                specialize_signature_unreconstructible("root.Extract"),
+                "E0169",
+                "cannot specialize generic function `root.Extract`: its signature does not reconstruct even with every type argument supplied",
+            ),
+            (
                 specialize_without_descriptor(),
-                "E0167",
+                "E0169",
                 "this function type is not a reflected function descriptor: only the entries of `Package.functions()` carry the callable `specialize` needs",
             ),
             (

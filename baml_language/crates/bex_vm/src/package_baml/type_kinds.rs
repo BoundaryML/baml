@@ -1766,13 +1766,14 @@ impl BamlClassReflectFunctionType for PackageBamlImpl {
         let baml_type::RealizedTy::Function { params, .. } = parent.ty.clone() else {
             return Err(unspecialized_descriptor_read(vm, *r#type));
         };
-        let exact = super::reflect::descriptor_exact_type_values(vm, *r#type);
+        let exact = super::reflect::descriptor_exact_positions(vm, *r#type);
         Ok(params
             .into_iter()
-            .map(|param| {
+            .enumerate()
+            .map(|(index, param)| {
                 let name = opt_string(vm, param.name.as_ref().map(baml_type::Name::as_str));
                 let optional = param.is_optional();
-                let r#type = signature_type_value(vm, param.ty, &parent, &exact);
+                let r#type = signature_type_value(vm, param.ty, &parent, exact.param(index));
                 copy::reflect::function::Parameter {
                     name,
                     r#type,
@@ -1788,8 +1789,8 @@ impl BamlClassReflectFunctionType for PackageBamlImpl {
         let baml_type::RealizedTy::Function { ret, .. } = parent.ty.clone() else {
             return Err(unspecialized_descriptor_read(vm, *r#type));
         };
-        let exact = super::reflect::descriptor_exact_type_values(vm, *r#type);
-        Ok(signature_type_value(vm, *ret, &parent, &exact))
+        let exact = super::reflect::descriptor_exact_positions(vm, *r#type);
+        Ok(signature_type_value(vm, *ret, &parent, exact.ret()))
     }
 
     fn is_generic(vm: &BexVm, r#type: &Value) -> bool {
@@ -1815,18 +1816,18 @@ impl BamlClassReflectFunctionType for PackageBamlImpl {
 
 /// One type read out of a descriptor's signature.
 ///
-/// A specialized descriptor hands back the exact value it was specialized with
-/// wherever that type appears, so a runtime-minted argument keeps its identity
-/// through `params`/`return_type`; everything else decomposes normally, keeping
-/// the parent's definition overlay.
+/// `exact` is the value this *position* was specialized with, resolved
+/// positionally by `descriptor_exact_positions`; when it is set the caller's
+/// own value is handed back so a runtime-minted argument keeps its identity.
+/// Everything else decomposes normally, keeping the parent's overlay.
 fn signature_type_value(
     vm: &mut BexVm,
     ty: baml_type::RealizedTy,
     parent: &TypeValue,
-    exact: &[TypeValue],
+    exact: Option<TypeValue>,
 ) -> Value {
-    match exact.iter().find(|value| value.ty == ty) {
-        Some(value) => Value::object(vm.tlab.alloc_type(value.clone())),
+    match exact {
+        Some(value) => Value::object(vm.tlab.alloc_type(value)),
         None => Value::object(nested_type_value(vm, ty, parent)),
     }
 }
