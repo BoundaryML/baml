@@ -2278,20 +2278,38 @@ impl BexVm {
     /// The exact minted value for `ty`, when `ty` is the bare spelling of a
     /// runtime declaration `defs` carries.
     ///
+    /// **The name has to be mint-unique.** A `DynTypeDefs` is keyed by
+    /// `QualifiedTypeName`, and only a `runtime_local` name (`user.$dyn.N.Foo`
+    /// — `reflect.class.new` / `reflect.enum.new`) has its mint *in* the name.
+    /// A static declaration and a runtime *package*'s declaration are both
+    /// plain `user.Foo`, and an overlay reaches a frame whether or not the
+    /// spelling that pulled it in is the one being recovered — `LoadType`
+    /// staples the whole frame overlay onto anything materialized there. So
+    /// matching an ordinary name against the overlay would answer a *different*
+    /// definition's mint: a static `Holder<Item>` in a frame that also touched a
+    /// runtime package's `Item` would report `type.of<T>() != type.of<Item>()`,
+    /// and two compiled packages that both declare `Item` would cross-match.
+    /// Handing back a wrong identity is worse than handing back none, so
+    /// everything but a mint-unique name declines and re-derives normally.
+    ///
     /// A decorated or parameterized spelling is a *different* type value than
-    /// the definition was minted as, so the recovered value has to describe the
-    /// same type to be usable — the equality check below is that guard, and it
-    /// keeps the rule out of the attribute-by-attribute business.
+    /// the definition was minted as, so the recovered value must also describe
+    /// the same type to be usable — the equality check below is that guard, and
+    /// it keeps the rule out of the attribute-by-attribute business.
     fn minted_declaration_value(
         &self,
         ty: &baml_type::RealizedTy,
         defs: &DynTypeDefs,
     ) -> Option<TypeValue> {
         let definition_ptr = match ty {
-            baml_type::RealizedTy::Class(name, args, _) if args.is_empty() => {
+            baml_type::RealizedTy::Class(name, args, _)
+                if args.is_empty() && name.is_runtime_minted() =>
+            {
                 defs.classes.get(name)
             }
-            baml_type::RealizedTy::Enum(name, _) => defs.enums.get(name),
+            baml_type::RealizedTy::Enum(name, _) if name.is_runtime_minted() => {
+                defs.enums.get(name)
+            }
             _ => None,
         }?;
         let value = self.runtime_declaration_identity(*definition_ptr)?;
@@ -6141,6 +6159,17 @@ impl BexVm {
         );
         self.pending_call_type_args = previous_type_args;
         self.pending_call_type_values = previous_type_values;
+        // FOLLOW-UP (not a defect today): the rooted copy of the values is
+        // dropped one line above, and the writes below read `options`, which
+        // borrows a caller *local* that no GC root covers. A collection between
+        // the two would forward the rooted copy and leave these pointers stale.
+        // It is unreachable as written — `execute_call_from_locals_offset` only
+        // pushes a frame and sizes the eval stack, with no TLAB allocation, and
+        // the native path that can allocate pushes no bytecode frame, so the
+        // guard below declines. Recorded because this lane now carries recovered
+        // identities as well as method-level ones, so the day something on that
+        // path starts allocating, this is where it bites.
+        //
         // A definition overlay can arrive without any type-argument slots of its
         // own — interface dispatch hands one down for a method that declares no
         // generics — so the metadata lane is written whenever any of the three
