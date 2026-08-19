@@ -43,6 +43,7 @@ mod param;
 pub mod pattern_overlap;
 mod primitive;
 mod realized_ty;
+mod rename;
 mod runtime_ty;
 pub mod simplify_sap;
 pub mod template;
@@ -57,6 +58,7 @@ pub use family::*;
 pub use names::*;
 pub use param::*;
 pub use primitive::*;
+pub use rename::RenameTypeName;
 pub use runtime_ty::*;
 pub use template::SubstituteError;
 

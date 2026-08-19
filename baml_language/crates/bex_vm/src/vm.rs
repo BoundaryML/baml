@@ -2251,10 +2251,7 @@ impl BexVm {
             return Some(ptr);
         }
         let package = self.package_for_type(qtn)?;
-        let local = bex_vm_types::types::LocalName {
-            namespace: qtn.namespace().clone(),
-            name: qtn.name().clone(),
-        };
+        let local = package_local_name(package, qtn)?;
         package
             .classes
             .get(&local)
@@ -2278,14 +2275,9 @@ impl BexVm {
         current_ptr: HeapPtr,
         qtn: &baml_type::TypeName,
     ) -> Option<HeapPtr> {
-        let local = bex_vm_types::types::LocalName {
-            namespace: qtn.namespace().clone(),
-            name: qtn.name().clone(),
-        };
-        self.package_for_type_in(current_ptr, qtn)?
-            .interfaces
-            .get(&local)
-            .copied()
+        let package = self.package_for_type_in(current_ptr, qtn)?;
+        let local = package_local_name(package, qtn)?;
+        package.interfaces.get(&local).copied()
     }
 
     /// Look up a class, enum, or interface object by its fully-qualified dotted
@@ -2300,13 +2292,9 @@ impl BexVm {
     /// The recursive type-alias definition for `qtn`, if any (only recursive
     /// aliases survive to runtime; non-recursive ones are expanded inline).
     pub fn recursive_type_alias(&self, qtn: &baml_type::TypeName) -> Option<&baml_type::RuntimeTy> {
-        let local = bex_vm_types::types::LocalName {
-            namespace: qtn.namespace().clone(),
-            name: qtn.name().clone(),
-        };
-        self.package_for_type(qtn)?
-            .recursive_type_aliases
-            .get(&local)
+        let package = self.package_for_type(qtn)?;
+        let local = package_local_name(package, qtn)?;
+        package.recursive_type_aliases.get(&local)
     }
 
     /// Get mutable access to an object via `HeapPtr`.
@@ -2389,14 +2377,19 @@ impl BexVm {
         let Object::Package(package) = self.get_object(package_ptr) else {
             unreachable!("runtime function owner does not point to Object::Package")
         };
-        let key = name
-            .namespace()
+        // `type_values` is keyed by the source-visible name, which is also what
+        // `reflect.Package.get_class("root.Item")` addresses — so a minted name
+        // is translated back, and one another package minted is refused.
+        let runtime = package.runtime.as_ref()?;
+        let local = runtime.source_local_name(name)?;
+        let key = local
+            .namespace
             .iter()
             .map(baml_type::Name::as_str)
-            .chain(std::iter::once(name.name().as_str()))
+            .chain(std::iter::once(local.name.as_str()))
             .collect::<Vec<_>>()
             .join(".");
-        let ptr = package.runtime.as_ref()?.type_values.get(&key).copied()?;
+        let ptr = runtime.type_values.get(&key).copied()?;
         match self.get_object(ptr) {
             Object::Type(value) if &value.ty == ty => Some(ptr),
             _ => None,
@@ -2450,18 +2443,22 @@ impl BexVm {
     /// runtime declaration `defs` carries.
     ///
     /// **The name has to be mint-unique.** A `DynTypeDefs` is keyed by
-    /// `QualifiedTypeName`, and only a `runtime_local` name (`user.$dyn.N.Foo`
-    /// — `reflect.class.new` / `reflect.enum.new`) has its mint *in* the name.
-    /// A static declaration and a runtime *package*'s declaration are both
-    /// plain `user.Foo`, and an overlay reaches a frame whether or not the
-    /// spelling that pulled it in is the one being recovered — `LoadType`
-    /// staples the whole frame overlay onto anything materialized there. So
-    /// matching an ordinary name against the overlay would answer a *different*
-    /// definition's mint: a static `Holder<Item>` in a frame that also touched a
+    /// `QualifiedTypeName`, and an overlay reaches a frame whether or not the
+    /// spelling being recovered is the one that pulled it in — `LoadType`
+    /// staples the whole frame overlay onto anything materialized there. So a
+    /// name that several definitions can spell would answer from a *different*
+    /// definition: a static `Holder<Item>` in a frame that also touched a
     /// runtime package's `Item` would report `type.of<T>() != type.of<Item>()`,
     /// and two compiled packages that both declare `Item` would cross-match.
     /// Handing back a wrong identity is worse than handing back none, so
     /// everything but a mint-unique name declines and re-derives normally.
+    ///
+    /// Every *runtime* declaration now has a mint-unique name: `reflect.class.
+    /// new` / `reflect.enum.new` mint theirs at construction, and a compiled
+    /// `reflect.Package`'s are re-spelled when the package is grafted
+    /// (`bex_vm_types::rename`). A plain `user.Foo` therefore names a static
+    /// declaration, whose mint is the deterministic digest of its spelling and
+    /// needs no recovery.
     ///
     /// A decorated or parameterized spelling is a *different* type value than
     /// the definition was minted as, so the recovered value must also describe
@@ -9764,5 +9761,25 @@ impl TlabHolder for BexVm {
     }
     fn tlab_mut(&mut self) -> &mut Tlab {
         &mut self.tlab
+    }
+}
+
+/// The key `qtn` has in `package`'s own declaration tables.
+///
+/// A runtime-compiled package's declarations are re-spelled with a hidden
+/// mint at load, while the tables that index them stay keyed by the source
+/// name — so a minted name is translated back, and one minted by a *different*
+/// package is refused rather than answered from the wrong table. A statically
+/// compiled package has no mint and takes the name as written.
+fn package_local_name(
+    package: &bex_vm_types::types::Package,
+    qtn: &baml_type::TypeName,
+) -> Option<bex_vm_types::types::LocalName> {
+    match package.runtime.as_ref() {
+        Some(runtime) => runtime.source_local_name(qtn),
+        None => (!qtn.is_runtime_minted()).then(|| bex_vm_types::types::LocalName {
+            namespace: qtn.namespace().clone(),
+            name: qtn.name().clone(),
+        }),
     }
 }

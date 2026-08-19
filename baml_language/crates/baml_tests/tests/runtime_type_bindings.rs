@@ -529,17 +529,15 @@ async fn dispatch_identity_separates_distinct_mints_and_leaves_static_generics_a
     );
 }
 
-/// A runtime *package*'s declarations do NOT keep identity across dispatch, and
-/// that is deliberate. Recovery reads a definition back out of the interface
-/// operand's overlay, which is keyed by qualified name — and a compiled
-/// package's `Item` is plain `user.Item`, exactly like a static `Item` and like
-/// every other package's `Item`. Answering from a name that several definitions
-/// can spell would hand back a *wrong* mint (see the two regressions below), so
-/// the recovery declines and the body re-derives a static value. Definitions
-/// still travel (#4501), which is what `name()` pins: the impl body can still
-/// read the type, it just does not hold the caller's identity token for it.
+/// A compiled package's declarations keep their identity across dispatch, just
+/// as `reflect.class.new`'s do. Recovery reads a definition back out of the
+/// interface operand's overlay, which is keyed by qualified name, so it works
+/// exactly as far as a name is a key — and a compiled package's declarations
+/// are re-spelled `user.$dyn.<mint>.Item` when the package is grafted, which
+/// makes them one. `name()` additionally pins that the definition still travels
+/// (#4501) and that the *rendered* name is still the source spelling.
 #[tokio::test]
-async fn runtime_package_declarations_keep_definitions_but_not_identity() {
+async fn runtime_package_declarations_keep_identity_across_dispatch() {
     let output = baml_test!(
         r##"
         interface Probe<Out> {
@@ -575,17 +573,17 @@ class Item { value string }
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("false|Item".into()))
+        Ok(BexExternalValue::String("true|Item".into()))
     );
 }
 
 /// A STATIC class must not be answered from an overlay that happens to carry a
-/// runtime definition of the same name. `LoadType` staples the whole frame
-/// overlay onto anything materialized in a frame that touched a runtime type,
-/// so binding a compiled package's `Item` puts `user.Item` in this frame's
-/// overlay — and the static `Holder<Item>` dispatch below then sees it. Reading
-/// the overlay by plain name reported `type.of<T>() != type.of<Item>()` and
-/// `== ` the *package's* mint, which no `$dyn`-named type can reproduce.
+/// runtime definition of the same source name. `LoadType` staples the whole
+/// frame overlay onto anything materialized in a frame that touched a runtime
+/// type, so binding a compiled package's `Item` puts that package's `Item` in
+/// this frame's overlay — and the static `Holder<Item>` dispatch below then
+/// sees it. What keeps them apart is that only one of the two is mint-spelled:
+/// the static slot is plain `user.Item` and matches nothing in the overlay.
 #[tokio::test]
 async fn static_class_slots_are_not_answered_from_a_same_named_runtime_definition() {
     let output = baml_test!(
@@ -631,13 +629,13 @@ class Item { value string }
     );
 }
 
-/// Two compiled packages that each declare `Item` produce two distinct mints
-/// under one qualified name. An overlay keeps the first pointer it sees per
-/// name, so a by-name recovery answered `Holder<B>` with A's mint — `==` true
-/// against a type it is not, and false against the one it is. Declining is the
-/// only honest answer available from a name alone.
+/// Two compiled packages that each declare `Item` keep two identities. Their
+/// qualified names carry their packages' mints, so an overlay holding both
+/// keeps them apart and each `Holder` answers with its own — the shape that
+/// could only decline while both were spelled `user.Item` and an overlay kept
+/// the first pointer it saw per name.
 #[tokio::test]
-async fn same_named_declarations_from_two_packages_do_not_cross_match() {
+async fn same_named_declarations_from_two_packages_keep_separate_identities() {
     let output = baml_test!(
         r##"
         interface Probe<Out> {
@@ -670,15 +668,16 @@ class Item { value string }
 
             let _first_holder = Holder<First>.new()
             let holder = Holder<Second>.new()
-            // Neither is claimed. The failure this guards is the SECOND value
-            // being `true` — answering with a foreign package's identity.
+            // Its own, and nobody else's. The failure this guards is the
+            // SECOND value being `true` — answering with a foreign package's
+            // identity, which is worse than not knowing.
             `${holder.same(second_item)}|${holder.same(first_item)}`
         }
         "##
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("false|false".into()))
+        Ok(BexExternalValue::String("true|false".into()))
     );
 }
 
@@ -761,5 +760,72 @@ async fn dispatch_identity_covers_a_runtime_enum_slot() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("true|false".into()))
+    );
+}
+
+/// The mint that makes a compiled package's declarations identity-keyed lives
+/// in a hidden namespace segment, so it must never reach a user. Every surface
+/// that renders a type name is pinned here at once — `to_string`, `to_baml`,
+/// the LLM schema `ctx.output_format` builds, and a compiler diagnostic — and
+/// each must show the name the source wrote.
+#[tokio::test]
+async fn a_package_declarations_mint_never_reaches_rendered_output() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        function Render<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> string throws unknown {
+            // `next` makes `Item` recursive, which forces the LLM schema to
+            // hoist it under a *name* rather than inline its shape.
+            let pkg = reflect.Package.compile({ "items.baml": #"
+class Item { value string, next Item? }
+function Items() -> Item[] { [Item { value: "bound", next: null }] }
+              "# })
+            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            type Item = unreflect(item_type)
+
+            // A diagnostic that has to name the type it rejected.
+            let contract = pkg.get_function<() -> Item>("root.Items") catch (e) {
+                baml.reflect.errors.CompilationError => e.diagnostics[0].message,
+                _ => "wrong error",
+            }
+            let diagnostic = if contract is string { contract } else { "no diagnostic" }
+
+            let schema = Render$render_prompt<Item[]>()
+            `${item_type.to_string()}|${item_type.to_baml()}|${schema}|${diagnostic}`
+        }
+        "##
+    );
+    let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+        panic!("main returns a string");
+    };
+    assert!(
+        !rendered.contains("$dyn"),
+        "a runtime mint leaked into rendered output: {rendered}"
+    );
+    let mut parts = rendered.splitn(4, '|');
+    assert_eq!(parts.next(), Some("Item"));
+    assert_eq!(
+        parts.next(),
+        Some("class Item {\n  value string\n  next Item?\n}")
+    );
+    let schema = parts.next().expect("schema");
+    assert!(
+        schema.contains("Item") && schema.contains("value"),
+        "the LLM schema must describe the package class by its source name: {schema}"
+    );
+    let diagnostic = parts.next().expect("diagnostic");
+    assert!(
+        diagnostic.contains("Item"),
+        "the diagnostic must name the package class by its source name: {diagnostic}"
     );
 }
