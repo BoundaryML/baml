@@ -2402,6 +2402,30 @@ impl BexVm {
         }
     }
 
+    /// Truthiness of a value (B-1563): `false`, `null`, an omitted
+    /// argument, zero (`0`, `0n`, `0.0`), and empty string/list/map/bytes
+    /// are falsy; every other
+    /// value - including `NaN`, instances, variants, closures, and
+    /// futures - is truthy. The scalar fast path never touches the heap;
+    /// only strings, containers, and the boxed numerics dereference.
+    pub fn is_truthy(&self, value: Value) -> bool {
+        use bex_vm_types::ValueKind;
+        match value.kind() {
+            ValueKind::Null | ValueKind::OmittedArg => false,
+            ValueKind::Bool(b) => b,
+            ValueKind::Int(v) => v != 0,
+            ValueKind::Object(ptr) => match self.get_object(ptr) {
+                Object::String(s) => !s.is_empty(),
+                Object::Array(arr) => !arr.is_empty(),
+                Object::Map(map) => !map.is_empty(),
+                Object::Uint8Array(bytes) => !bytes.is_empty(),
+                Object::Float(f) => *f != 0.0,
+                Object::Bigint(n) => n.sign() != num_bigint::Sign::NoSign,
+                _ => true,
+            },
+        }
+    }
+
     /// Get type of a value.
     pub fn type_of(&self, value: &Value) -> Type {
         Type::of(value, |ptr| ObjectType::of(self.get_object(ptr)))
@@ -9186,17 +9210,16 @@ impl BexVm {
 
                 // ── Expanded unary ────────────────────────────────────────────
                 OpCode::Not => {
+                    // `!` negates TRUTHINESS (B-1563) - `!0` and `if (0)`
+                    // agree, closing B-1071's asymmetry.
                     let val = self.stack.ensure_pop();
-                    match val.as_bool() {
-                        Some(b) => self.stack.push(Value::bool(!b)),
-                        None => {
-                            return Err(VmInternalError::CannotApplyUnaryOp {
-                                op: UnaryOp::Not,
-                                value: self.type_of(&val),
-                            }
-                            .into());
-                        }
-                    }
+                    let truthy = self.is_truthy(val);
+                    self.stack.push(Value::bool(!truthy));
+                }
+                OpCode::Truthy => {
+                    let val = self.stack.ensure_pop();
+                    let truthy = self.is_truthy(val);
+                    self.stack.push(Value::bool(truthy));
                 }
                 OpCode::Neg => {
                     let val = self.stack.ensure_pop();

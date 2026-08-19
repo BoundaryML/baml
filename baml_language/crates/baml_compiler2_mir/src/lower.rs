@@ -2732,6 +2732,10 @@ impl<'db> LoweringContext<'db> {
         self.tables.for_scope(key.scope).function_coercion(key.expr)
     }
 
+    fn tir_truthy_condition(&self, key: ExprMetadataKey) -> bool {
+        self.tables.for_scope(key.scope).truthy_condition(key.expr)
+    }
+
     fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> RuntimeTy {
         // Resolve associated-type projections against the bounds the compiler
         // knows statically; anything still symbolic — a `TypeVar` or a
@@ -6913,7 +6917,7 @@ impl LoweringContext<'_> {
             }
         };
 
-        let lhs_op = self.lower_to_operand(lhs);
+        let lhs_op = self.lower_condition_operand(lhs);
 
         let bb_rhs = self.builder.create_block();
         let bb_join = self.builder.create_block();
@@ -6928,6 +6932,18 @@ impl LoweringContext<'_> {
 
         self.builder.set_current_block(bb_rhs);
         self.lower_expr(rhs, sc_dest.clone());
+        // The stored result must be the COERCED bool (`a && b` is
+        // bool-typed even when its operands are not), so a truthy-marked
+        // rhs re-assigns through the coercion in place.
+        if self.tir_truthy_condition(self.expr_metadata_key(rhs)) {
+            self.builder.assign(
+                sc_dest.clone(),
+                Rvalue::UnaryOp {
+                    op: crate::UnaryOp::Truthy,
+                    operand: Operand::Copy(sc_dest.clone()),
+                },
+            );
+        }
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
@@ -9868,6 +9884,28 @@ impl<'db> LoweringContext<'db> {
         matches!(expr, AstExpr::Path(segments) if segments.len() == 1 && segments[0].as_str() == "$id")
     }
 
+    /// Lowers a condition/logical-operand expression to an operand,
+    /// applying the checker-recorded truthiness coercion (B-1563,
+    /// `Adjust::Truthy`). A `bool`-typed condition records nothing and
+    /// lowers exactly as before; the branch terminators stay strict-bool.
+    fn lower_condition_operand(&mut self, condition: AstExprId) -> Operand {
+        let op = self.lower_to_operand(condition);
+        if !self.tir_truthy_condition(self.expr_metadata_key(condition)) {
+            return op;
+        }
+        let coerced = self.builder.temp(RuntimeTy::Bool {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(
+            Place::local(coerced),
+            Rvalue::UnaryOp {
+                op: crate::UnaryOp::Truthy,
+                operand: op,
+            },
+        );
+        Operand::Copy(Place::Local(coerced))
+    }
+
     fn lower_if(
         &mut self,
         _expr_id: AstExprId,
@@ -9876,7 +9914,7 @@ impl<'db> LoweringContext<'db> {
         else_branch: Option<AstExprId>,
         dest: Place,
     ) {
-        let cond_op = self.lower_to_operand(condition);
+        let cond_op = self.lower_condition_operand(condition);
         let bb_then = self.builder.create_block();
         let bb_else = self.builder.create_block();
         let bb_join = self.builder.create_block();
@@ -11957,7 +11995,7 @@ impl LoweringContext<'_> {
                 }
 
                 self.builder.set_current_block(bb_cond);
-                let cond_op = self.lower_to_operand(condition);
+                let cond_op = self.lower_condition_operand(condition);
                 self.builder.branch(cond_op, bb_body, bb_exit);
 
                 self.builder.set_current_block(bb_body);
@@ -13098,7 +13136,7 @@ impl LoweringContext<'_> {
                 let saved_locals = self.locals.clone();
                 self.bind_pattern_inner(scrutinee, part, arm.pattern, part, false);
                 if let Some(guard) = arm.guard {
-                    let guard_op = self.lower_to_operand(guard);
+                    let guard_op = self.lower_condition_operand(guard);
                     let bb_guarded = self.builder.create_block();
                     self.builder.branch(guard_op, bb_guarded, bb_next);
                     self.builder.set_current_block(bb_guarded);
@@ -13128,7 +13166,7 @@ impl LoweringContext<'_> {
         let saved_locals = self.locals.clone();
         self.bind_pattern(scrutinee, arm.pattern);
         if let Some(guard) = arm.guard {
-            let guard_op = self.lower_to_operand(guard);
+            let guard_op = self.lower_condition_operand(guard);
             let bb_guarded = self.builder.create_block();
             self.builder.branch(guard_op, bb_guarded, bb_next);
             self.builder.set_current_block(bb_guarded);

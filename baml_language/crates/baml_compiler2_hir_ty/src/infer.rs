@@ -19,6 +19,7 @@
 pub(crate) mod flow;
 pub(crate) mod obligations;
 pub(crate) mod pat;
+pub(crate) mod truthy;
 pub mod unify;
 
 use std::{cell::RefCell, path::PathBuf, sync::Arc};
@@ -470,6 +471,10 @@ pub enum Adjust {
     /// or optional-parameter names drift), so lowering synthesizes an
     /// adapter closure (TIR's `function_coercion_for` rule).
     FunctionAdapter,
+    /// A condition position holding a non-`bool` value (B-1563): lowering
+    /// synthesizes the truthiness test (`null`/`false`/zero/empty are
+    /// falsy) so the branch itself stays strict-bool.
+    Truthy,
 }
 
 /// One call's argument-to-parameter matching and solved instantiation -
@@ -893,6 +898,14 @@ enum PendingDiag<'db> {
     InterpolatedMaybeNull {
         expr: ExprId,
         ty: Ty,
+    },
+    /// B-1563 truthiness: a NON-literal condition whose static type
+    /// decides the branch (`if (some_fn)`, `if (instance)`) - a likely
+    /// bug, warned like TS 5.6's 2872/2873.
+    ConditionAlwaysConst {
+        expr: ExprId,
+        ty: Ty,
+        always_true: bool,
     },
     GenericDestructureNoArgs {
         pat: PatId,
@@ -1614,6 +1627,10 @@ struct InferenceContext<'db> {
     /// Ground values that checked against then-open expectations by
     /// depositing bounds; re-judged once the vars solve.
     provisional_checks: Vec<(ExprId, Ty, Ty)>,
+    /// Conditions and `!` operands whose type still carried an inference
+    /// variable at check time (B-1563 truthiness); decided at finish on
+    /// the final type.
+    pending_truthy_conditions: Vec<crate::infer::truthy::PendingCondition>,
     diverges: Diverges,
     /// The body's file, for package-scoped lookups (the overlap oracle's
     /// alias map enumerates the owning package plus its dependency closure).
@@ -1686,6 +1703,7 @@ impl<'db> InferenceContext<'db> {
             loop_depth: 0,
             body_root: None,
             provisional_checks: Vec::new(),
+            pending_truthy_conditions: Vec::new(),
             diverges: Diverges::Maybe,
             owner_file: None,
             overlap_aliases: std::cell::OnceCell::new(),
@@ -1994,7 +2012,7 @@ impl<'db> InferenceContext<'db> {
                 then_branch,
                 else_branch,
             } => {
-                self.check_expr(body, *condition, &Ty::bool());
+                self.check_condition(body, *condition);
                 let facts = self.condition_facts(body, *condition);
                 let condition_diverges = self.diverges;
                 let branch_expectation = expected.adjust_for_branches(&mut self.table);
@@ -2604,7 +2622,7 @@ impl<'db> InferenceContext<'db> {
                 for binding in self.assigned_bindings(body, *loop_body) {
                     self.flow.remove(&binding);
                 }
-                let condition_ty = self.check_expr(body, *condition, &Ty::bool());
+                let condition_ty = self.check_condition(body, *condition);
                 let facts = self.condition_facts(body, *condition);
                 let entry_flow = self.flow.clone();
                 self.apply_facts(&facts.when_true);
@@ -2738,9 +2756,12 @@ impl<'db> InferenceContext<'db> {
         ) {
             return true;
         }
+        // Truthiness (B-1563) widens "statically true" beyond the literal
+        // `true` type: any always-truthy condition (`while ("x")`, an
+        // instance, a closure) has no exit edge either.
         matches!(
-            self.table.resolve_completely(condition_ty).kind(),
-            TyKind::Literal(baml_type::Literal::Bool(true), ..)
+            crate::infer::truthy::truthiness(&self.table.resolve_completely(condition_ty)),
+            crate::infer::truthy::Truthiness::AlwaysTruthy
         )
     }
 
@@ -3575,8 +3596,8 @@ impl<'db> InferenceContext<'db> {
         use baml_compiler2_ast::BinaryOp;
         match op {
             BinaryOp::And | BinaryOp::Or => {
-                let lhs_ty = self.check_expr(body, lhs, &Ty::bool());
-                let rhs_ty = self.check_expr(body, rhs, &Ty::bool());
+                let lhs_ty = self.check_condition(body, lhs);
+                let rhs_ty = self.check_condition(body, rhs);
                 let lhs_ty = self.table.resolve_completely(&lhs_ty);
                 let rhs_ty = self.table.resolve_completely(&rhs_ty);
                 const_fold_binary(op, &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool)
@@ -4083,13 +4104,19 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         match op {
             baml_compiler2_ast::UnaryOp::Not => {
-                let ty = self.check_expr(body, operand, &Ty::bool());
-                // `!` on a literal bool constant-FOLDS (TIR's
-                // `try_fold_unary`), freshness preserved.
+                let ty = self.check_not_operand(body, operand);
+                // `!` on a LITERAL constant-FOLDS through its truthiness
+                // (TIR's `try_fold_unary`, extended to the non-bool
+                // literals truthiness admits), freshness preserved.
                 let resolved = self.table.resolve_completely(&ty);
-                if let TyKind::Literal(Literal::Bool(value), freshness, _) = resolved.kind() {
+                if let TyKind::Literal(_, freshness, _) = resolved.kind() {
+                    let negated = match crate::infer::truthy::truthiness(&resolved) {
+                        crate::infer::truthy::Truthiness::AlwaysTruthy => false,
+                        crate::infer::truthy::Truthiness::AlwaysFalsy => true,
+                        crate::infer::truthy::Truthiness::Runtime => return Ty::bool(),
+                    };
                     return Ty::intern(TyKind::Literal(
-                        Literal::Bool(!value),
+                        Literal::Bool(negated),
                         *freshness,
                         TyAttr::default(),
                     ));
@@ -9069,6 +9096,11 @@ impl<'db> InferenceContext<'db> {
         {
             *ty = self.finalize_ty(ty);
         }
+        // Truthiness decisions deferred past the fixpoint (B-1563): a
+        // condition still carrying an inference variable at check time
+        // decides here, on its FINAL type, so `if (identity(0))` records
+        // the same coercion `if (0)` does.
+        self.decide_deferred_conditions(&mut result);
         // Provisional checks re-judge now that their expectations solved:
         // a definite failure joins the mismatch table (first writer per
         // expr wins - a direct mismatch is the better message).
@@ -9519,6 +9551,22 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::ConditionAlwaysConst {
+                        expr,
+                        ty,
+                        always_true,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::ConditionAlwaysConstant {
+                                ty: self.finalize_ty(&ty).to_plain(),
+                                always_true,
+                            },
+                            severity: DiagnosticSeverity::Warning,
+                            primary: DiagnosticLocation::Expr(expr),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::UnnecessaryOptionalChain {
                         expr,
                         expr_text,
