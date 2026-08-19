@@ -1,0 +1,140 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.lexical_scoping.branch_locals(b: bool) -> int {
+    load_var b
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 2
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function fixtures.lexical_scoping.capture_before_after_shadow() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_const 1
+    store_deref ?1
+    load_const 2
+    store_deref ?2
+    load_var x
+    make_closure .<lambda(capture_before_after_shadow, 0)>, 1
+    call_indirect
+    load_const 10
+    mul_int
+    store_var _5
+    load_var x
+    make_closure .<lambda(capture_before_after_shadow, 1)>, 1
+    call_indirect
+    load_var _5
+    add_int
+    return
+}
+
+function fixtures.lexical_scoping.declared_type_restored() -> string {
+    load_const "outer"
+    return
+}
+
+function fixtures.lexical_scoping.for_loop_restores_outer() -> int {
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 2
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _4
+    store_var x
+    jump L0
+
+  L2:
+    load_const 1
+    return
+}
+
+function fixtures.lexical_scoping.initializer_uses_previous() -> int {
+    load_const 1
+    load_const 1
+    add_int
+    return
+}
+
+function fixtures.lexical_scoping.nested_lambda_capture() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 7
+    store_deref ?1
+    load_var x
+    make_closure .<lambda(nested_lambda_capture, 0)>, 1
+    call_indirect
+    return
+}
+
+function fixtures.lexical_scoping.nested_outer_restored() -> int {
+    load_const 2
+    store_var x
+    load_const 3
+    store_var x
+    load_const 1
+    return
+}
+
+function fixtures.lexical_scoping.outer_restored() -> int {
+    load_const 1
+    return
+}
+
+function fixtures.lexical_scoping.same_scope_shadow() -> int {
+    load_const 2
+    return
+}
+
+function fixtures.lexical_scoping.shadow_param(x: int) -> int {
+    load_var x
+    load_const 1
+    add_int
+    return
+}
+
+function fixtures.lexical_scoping.while_body_restores_outer() -> int {
+    load_const true
+
+  L0:
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 1
+    return
+
+  L2:
+    load_const false
+    jump L0
+}

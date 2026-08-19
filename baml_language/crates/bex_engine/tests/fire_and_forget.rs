@@ -511,6 +511,31 @@ async fn call_completion_does_not_join_but_shutdown_does() {
     assert_eq!(errors[0].value, BexExternalValue::String("boom".into()));
 }
 
+#[tokio::test(start_paused = true)]
+async fn shutdown_periodically_reports_pending_futures() {
+    let source = r#"
+        function main() -> int {
+            spawn {
+                baml.sys.sleep(baml.time.Duration.from_seconds(12n));
+                42
+            };
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+
+    let mut reported = Vec::new();
+    engine
+        .shutdown_with_progress(|count| reported.push(count))
+        .await;
+
+    assert_eq!(reported, vec![1, 1]);
+}
+
 /// B-405: awaiting an unrelated future must not surface an error from a
 /// reachable future that this task observes later.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

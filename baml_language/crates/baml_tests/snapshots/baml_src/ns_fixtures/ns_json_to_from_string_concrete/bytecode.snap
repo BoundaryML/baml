@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.json_to_from_string_concrete.deserialize_user(s: string) -> fixtures.json_to_from_string_concrete.User {
+    load_type fixtures.json_to_from_string_concrete.User
+    load_var s
+    call baml.json.from_string
+    return
+}
+
+function fixtures.json_to_from_string_concrete.serialize_user(u: fixtures.json_to_from_string_concrete.User) -> string {
+    load_type fixtures.json_to_from_string_concrete.User
+    load_var u
+    call baml.json.to_string
+    return
+}

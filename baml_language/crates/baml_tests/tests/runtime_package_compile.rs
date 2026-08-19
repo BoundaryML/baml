@@ -74,6 +74,31 @@ function namespace_and_dependency_mounts() -> bool throws unknown {
     child.get_class("root.Child") != null &&
     child.diagnostics().length() == 0
 }
+
+function mounted_runtime_interface_and_return_types_stay_hidden() -> bool throws unknown {
+  let runtime_minted = reflect.class.new("RuntimeMinted", {
+    "value": type.of<string>(),
+  })
+  let app = reflect.Package.current().with_types({
+    "RuntimeMinted": runtime_minted,
+  })
+  let dependency = reflect.Package.compile({
+    "dependency.baml": #"
+interface CarriesRuntimeMint {
+  item app.RuntimeMinted
+}
+
+function make_runtime_minted() -> app.RuntimeMinted {
+  app.RuntimeMinted { value: "ok" }
+}
+"#
+  }, packages = { "app": app })
+  let consumer = reflect.Package.compile(
+    { "consumer.baml": "function ready() -> bool { true }" },
+    packages = { "dependency": dependency },
+  )
+  consumer.diagnostics().length() == 0
+}
 "####;
 
 const SUCCESSFUL_INIT_SOURCE: &str = r####"
@@ -162,6 +187,80 @@ function mismatched_function_contract() -> null throws unknown {
   })
   let _ = pkg.get_function<(int) -> string>("root.Present")
   null
+}
+
+function unspecialized_generic_function_cannot_be_extracted() -> null throws unknown {
+  let pkg = reflect.Package.compile({
+    "main.baml": #"
+client Dummy = openai.ResponsesClient.new(
+  model = "unused-reflection-only",
+  api_key = "unused",
+)
+
+function Extract<T>(document: string) -> T {
+  client: Dummy
+  prompt: `Extract ${document}`
+}
+"#
+  })
+  let _ = pkg.get_function<(string) -> string>("root.Extract")
+  null
+}
+
+function function_listing_includes_unspecialized_generics() -> bool throws unknown {
+  let pkg = reflect.Package.compile({
+    "main.baml": #"
+function identity<T>(value: T) -> T { value }
+function Present(value: string) -> string { value }
+"#
+  })
+  let functions = pkg.functions()
+  let generic = functions.get("root.identity") ?? throw "root.identity not listed"
+  let concrete = functions.get("root.Present") ?? throw "root.Present not listed"
+  generic.is_generic() && !concrete.is_generic()
+}
+
+function generic_function_companion_extraction_is_refused() -> string throws unknown {
+  let pkg = reflect.Package.compile({
+    "main.baml": #"
+client Dummy = openai.ResponsesClient.new(
+  model = "unused-reflection-only",
+  api_key = "unused",
+)
+
+function Extract<T>(document: string) -> T {
+  client: Dummy
+  prompt: `Extract ${document}`
+}
+"#
+  })
+  let extracted = pkg.get_function<(string) -> ai.Prompt>("root.Extract$render_prompt") catch (e) {
+    baml.reflect.errors.CompilationError => {
+      return e.diagnostics[0].code
+    },
+    _ => return "wrong error",
+  } else {
+    return "returned null"
+  }
+  let _ = extracted
+  "did not throw"
+}
+
+function generic_function_companion_is_listed() -> bool throws unknown {
+  let pkg = reflect.Package.compile({
+    "main.baml": #"
+client Dummy = openai.ResponsesClient.new(
+  model = "unused-reflection-only",
+  api_key = "unused",
+)
+
+function Extract<T>(document: string) -> T {
+  client: Dummy
+  prompt: `Extract ${document}`
+}
+"#
+  })
+  pkg.functions().get("root.Extract$render_prompt") != null
 }
 
 function alias_order_and_reserved_names() -> bool throws unknown {
@@ -328,6 +427,15 @@ async fn runtime_compile_honors_namespaces_and_mounted_dependencies() {
 }
 
 #[tokio::test]
+async fn mounted_runtime_types_do_not_leak_into_phantom_stub_diagnostics() {
+    let output = baml_test!(
+        baml: SCENARIO_SOURCE,
+        entry: "mounted_runtime_interface_and_return_types_stay_hidden"
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 async fn successful_compile_runs_init_before_returning_package() {
     let (result, report) = run_main_with_logs(SUCCESSFUL_INIT_SOURCE).await;
     assert_eq!(result, Ok(BexExternalValue::Bool(true)));
@@ -415,6 +523,74 @@ async fn get_function_mismatch_throws_compiler_subtyping_diagnostic() {
             if fields.get("code") == Some(&BexExternalValue::String("E0001".into()))
                 && matches!(fields.get("message"), Some(BexExternalValue::String(message)) if message.contains("not a subtype"))
     )));
+}
+
+#[tokio::test]
+async fn unspecialized_generic_get_function_reports_reflection_limit() {
+    let output = baml_test!(
+        baml: SCENARIO_6_SOURCE,
+        entry: "unspecialized_generic_function_cannot_be_extracted"
+    );
+    let Err(EngineError::UnhandledThrow { value, .. }) = output.result else {
+        panic!("expected CompilationError, got {:?}", output.result)
+    };
+    let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = *value
+    else {
+        panic!("expected CompilationError instance")
+    };
+    assert_eq!(class_name, "baml.reflect.errors.CompilationError");
+    let Some(BexExternalValue::Array { items, .. }) = fields.get("diagnostics") else {
+        panic!("missing diagnostics: {fields:?}")
+    };
+    assert!(items.iter().any(|item| matches!(
+        item,
+        BexExternalValue::Instance { fields, .. }
+            if fields.get("code") == Some(&BexExternalValue::String("E0165".into()))
+                && fields.get("message") == Some(&BexExternalValue::String(
+                    "generic function `root.Extract` cannot be extracted by name through reflection: look it up in `Package.functions()` and `specialize` it first".into()
+                ))
+    )));
+}
+
+/// #4473 dropped unspecialized generics from `functions()` — not by decision
+/// but because `function_type` returned `None` when signature reconstruction
+/// failed. They are listed now, as descriptors that report `is_generic()` and
+/// take `specialize`; the omission was the dead end this API replaces.
+#[tokio::test]
+async fn function_listing_includes_unspecialized_generics() {
+    let output = baml_test!(
+        baml: SCENARIO_6_SOURCE,
+        entry: "function_listing_includes_unspecialized_generics"
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// #4473 let a generic function's companion through `get_function` because its
+/// declared surface mentions no `T`. B-1582 showed what that value is worth: its
+/// body still materializes `T`, so calling it dies inside `LoadType` as an
+/// internal error no `catch` can see. The companion is still *listed* — see the
+/// test below — but extracting it **by name** still reports the same reflection
+/// limit its parent does: a name lookup has nowhere to put type arguments. The
+/// route that works is the descriptor's own `specialize` then `get` (see
+/// `reflect_specialize.rs`).
+#[tokio::test]
+async fn generic_function_companion_extraction_reports_reflection_limit() {
+    let output = baml_test!(
+        baml: SCENARIO_6_SOURCE,
+        entry: "generic_function_companion_extraction_is_refused"
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("E0165".into())));
+}
+
+#[tokio::test]
+async fn generic_function_companion_remains_in_function_listing() {
+    let output = baml_test!(
+        baml: SCENARIO_6_SOURCE,
+        entry: "generic_function_companion_is_listed"
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
 #[tokio::test]

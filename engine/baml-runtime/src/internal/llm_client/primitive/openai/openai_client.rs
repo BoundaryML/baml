@@ -11,7 +11,10 @@ use serde_json::json;
 
 use super::{
     properties,
-    types::{ChatCompletionResponse, ChatCompletionResponseDelta},
+    types::{
+        build_transcription_parts, ChatCompletionResponse, ChatCompletionResponseDelta,
+        TranscriptionParts,
+    },
 };
 use crate::{
     client_registry::ClientProperty,
@@ -103,6 +106,7 @@ impl WithChat for OpenAIClient {
 /// Provider-specific strategies for handling different OpenAI-compatible APIs
 enum ProviderStrategy {
     ResponsesApi,
+    TranscriptionsApi,
     StandardOpenAI { provider: String },
 }
 
@@ -223,6 +227,7 @@ impl ProviderStrategy {
     fn get_endpoint(&self, base_url: &str, is_completion: bool) -> String {
         match self {
             ProviderStrategy::ResponsesApi => format!("{base_url}/responses"),
+            ProviderStrategy::TranscriptionsApi => format!("{base_url}/audio/transcriptions"),
             ProviderStrategy::StandardOpenAI { .. } => {
                 if is_completion {
                     format!("{base_url}/completions")
@@ -240,6 +245,11 @@ impl ProviderStrategy {
         chat_converter: &impl ToProviderMessageExt,
     ) -> Result<serde_json::Value> {
         match self {
+            ProviderStrategy::TranscriptionsApi => {
+                anyhow::bail!(
+                    "BAML internal error (openai-transcriptions): multipart body construction is not wired"
+                );
+            }
             ProviderStrategy::ResponsesApi => {
                 // Start with all properties passed through
                 let mut body = properties.clone();
@@ -308,6 +318,7 @@ impl ProviderStrategy {
                     // Responses API supports streaming with the stream parameter
                     body.insert("stream".into(), json!(true));
                 }
+                ProviderStrategy::TranscriptionsApi => {}
                 ProviderStrategy::StandardOpenAI { provider } => {
                     body.insert("stream".into(), json!(true));
                     if provider == "openai" {
@@ -332,6 +343,11 @@ impl ProviderStrategy {
             -> Result<Vec<serde_json::Map<String, serde_json::Value>>>,
     ) -> Result<serde_json::Value> {
         match self {
+            ProviderStrategy::TranscriptionsApi => {
+                anyhow::bail!(
+                    "BAML internal error (openai-transcriptions): chat message formatting is not used for multipart transcriptions"
+                );
+            }
             ProviderStrategy::ResponsesApi => {
                 // For responses API, use standard formatting
                 Ok(json!(parts_to_message(&content.parts)?))
@@ -376,6 +392,8 @@ impl OpenAIClient {
     fn get_provider_strategy(&self) -> ProviderStrategy {
         if self.provider.as_str() == "openai-responses" {
             ProviderStrategy::ResponsesApi
+        } else if self.provider.as_str() == "openai-transcriptions" {
+            ProviderStrategy::TranscriptionsApi
         } else {
             ProviderStrategy::StandardOpenAI {
                 provider: self.provider.clone(),
@@ -386,9 +404,47 @@ impl OpenAIClient {
     fn get_response_type(&self) -> ResponseType {
         match self.get_provider_strategy() {
             ProviderStrategy::ResponsesApi => ResponseType::OpenAIResponses,
+            ProviderStrategy::TranscriptionsApi => ResponseType::OpenAITranscription,
             ProviderStrategy::StandardOpenAI { .. } => ResponseType::OpenAI,
         }
     }
+}
+
+fn attach_transcription_body(
+    req: reqwest::RequestBuilder,
+    parts: TranscriptionParts,
+) -> Result<reqwest::RequestBuilder> {
+    let mime = parts.mime.parse::<mime::Mime>()?.to_string();
+    let boundary = format!("----baml-transcription-{}", uuid::Uuid::new_v4());
+    let mut body = Vec::new();
+
+    for (key, value) in parts.fields {
+        body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        body.extend_from_slice(
+            format!("Content-Disposition: form-data; name=\"{key}\"\r\n\r\n").as_bytes(),
+        );
+        body.extend_from_slice(value.as_bytes());
+        body.extend_from_slice(b"\r\n");
+    }
+
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(
+        format!(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"{}\"\r\n",
+            parts.filename
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(format!("Content-Type: {mime}\r\n\r\n").as_bytes());
+    body.extend_from_slice(&parts.file_bytes);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
+    Ok(req
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(body))
 }
 
 impl RequestBuilder for OpenAIClient {
@@ -441,6 +497,16 @@ impl RequestBuilder for OpenAIClient {
         // Don't attach BAML creds to localhost requests, i.e. ollama
         if allow_proxy {
             req = req.header("baml-original-url", self.properties.base_url.as_str());
+        }
+
+        if matches!(strategy, ProviderStrategy::TranscriptionsApi) {
+            let mut parts = build_transcription_parts(&self.properties.properties, prompt)?;
+            if stream {
+                parts
+                    .fields
+                    .insert("stream".to_string(), "true".to_string());
+            }
+            return attach_transcription_body(req, parts);
         }
 
         let mut body = strategy.build_body(prompt, &self.properties.properties, self)?;
@@ -611,6 +677,13 @@ impl OpenAIClient {
         make_openai_client!(client, properties, "openai-responses")
     }
 
+    pub fn new_transcriptions(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let mut properties =
+            properties::resolve_properties(&client.elem().provider, client.options(), ctx)?;
+        properties.client_response_type = internal_llm_client::ResponseType::OpenAITranscription;
+        make_openai_client!(client, properties, "openai-transcriptions")
+    }
+
     pub fn new_openrouter(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties =
             properties::resolve_properties(&client.elem().provider, client.options(), ctx)?;
@@ -659,6 +732,16 @@ impl OpenAIClient {
         // Override response type for responses API
         properties.client_response_type = internal_llm_client::ResponseType::OpenAIResponses;
         make_openai_client!(client, properties, "openai-responses", dynamic)
+    }
+
+    pub fn dynamic_new_transcriptions(
+        client: &ClientProperty,
+        ctx: &RuntimeContext,
+    ) -> Result<OpenAIClient> {
+        let mut properties =
+            properties::resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
+        properties.client_response_type = internal_llm_client::ResponseType::OpenAITranscription;
+        make_openai_client!(client, properties, "openai-transcriptions", dynamic)
     }
 
     /// Creates an OpenRouter client from a dynamic client definition (e.g., from Python/TypeScript code).
@@ -872,11 +955,54 @@ fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, se
 
 #[cfg(test)]
 mod tests {
+    use base64::{prelude::BASE64_STANDARD, Engine};
     use indexmap::IndexMap;
     use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
     use internal_llm_client::{openai, RolesSelection, SupportedRequestModes};
 
     use super::*;
+
+    fn test_openai_client(provider: &str, response_type: ResponseType) -> OpenAIClient {
+        OpenAIClient {
+            name: "test".to_string(),
+            provider: provider.to_string(),
+            retry_policy: None,
+            context: RenderContext_Client {
+                name: "test".to_string(),
+                provider: provider.to_string(),
+                default_role: "user".to_string(),
+                allowed_roles: vec!["user".to_string(), "assistant".to_string()],
+                remap_role: HashMap::new(),
+                options: IndexMap::new(),
+            },
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                max_one_system_prompt: false,
+                resolve_audio_urls: ResolveMediaUrls::SendBase64,
+                resolve_image_urls: ResolveMediaUrls::SendUrl,
+                resolve_pdf_urls: ResolveMediaUrls::SendUrl,
+                resolve_video_urls: ResolveMediaUrls::SendUrl,
+                allowed_metadata: AllowedRoleMetadata::All,
+            },
+            properties: ResolvedOpenAI {
+                base_url: "https://api.openai.com/v1".to_string(),
+                api_key: None,
+                role_selection: RolesSelection::default(),
+                allowed_metadata: AllowedRoleMetadata::All,
+                supported_request_modes: SupportedRequestModes::default(),
+                headers: IndexMap::new(),
+                properties: BamlMap::new(),
+                query_params: IndexMap::new(),
+                proxy_url: None,
+                finish_reason_filter: FinishReasonFilter::All,
+                client_response_type: response_type,
+                media_url_handler: internal_llm_client::MediaUrlHandler::default(),
+                http_config: Default::default(),
+            },
+            client: reqwest::Client::new(),
+        }
+    }
 
     #[test]
     fn test_provider_strategy_selection() {
@@ -929,6 +1055,19 @@ mod tests {
                 // Success!
             }
             _ => panic!("Expected ResponsesApi strategy for openai-responses provider"),
+        }
+    }
+
+    #[test]
+    fn test_transcriptions_api_strategy_selection() {
+        let transcriptions_client =
+            test_openai_client("openai-transcriptions", ResponseType::OpenAITranscription);
+
+        let strategy = transcriptions_client.get_provider_strategy();
+
+        match strategy {
+            ProviderStrategy::TranscriptionsApi => {}
+            _ => panic!("Expected TranscriptionsApi strategy for openai-transcriptions provider"),
         }
     }
 
@@ -994,6 +1133,23 @@ mod tests {
     }
 
     #[test]
+    fn test_transcriptions_api_endpoint_generation() {
+        let strategy = ProviderStrategy::TranscriptionsApi;
+
+        let chat_endpoint = strategy.get_endpoint("https://api.openai.com/v1", false);
+        assert_eq!(
+            chat_endpoint,
+            "https://api.openai.com/v1/audio/transcriptions"
+        );
+
+        let completion_endpoint = strategy.get_endpoint("https://api.openai.com/v1", true);
+        assert_eq!(
+            completion_endpoint,
+            "https://api.openai.com/v1/audio/transcriptions"
+        );
+    }
+
+    #[test]
     fn test_responses_api_adds_allowed_metadata_to_content_block() {
         let part = ChatMessagePart::WithMeta(
             Box::new(ChatMessagePart::Text("stable prefix".to_string())),
@@ -1036,6 +1192,69 @@ mod tests {
         // Test completions endpoint
         let endpoint = strategy.get_endpoint("https://api.openai.com/v1", true);
         assert_eq!(endpoint, "https://api.openai.com/v1/completions");
+    }
+
+    #[test]
+    fn test_transcriptions_response_type() {
+        let transcriptions_client =
+            test_openai_client("openai-transcriptions", ResponseType::OpenAITranscription);
+
+        assert!(matches!(
+            transcriptions_client.get_response_type(),
+            ResponseType::OpenAITranscription
+        ));
+    }
+
+    #[tokio::test]
+    async fn transcriptions_build_request_uses_multipart_endpoint() {
+        let mut transcriptions_client =
+            test_openai_client("openai-transcriptions", ResponseType::OpenAITranscription);
+        transcriptions_client
+            .properties
+            .properties
+            .insert("model".to_string(), json!("gpt-4o-transcribe"));
+        let prompt = vec![RenderedChatMessage {
+            role: "user".to_string(),
+            allow_duplicate_role: false,
+            parts: vec![ChatMessagePart::Media(baml_types::BamlMedia::base64(
+                BamlMediaType::Audio,
+                BASE64_STANDARD.encode(b"fake mp3 bytes"),
+                Some("audio/mpeg".to_string()),
+            ))],
+        }];
+
+        let request = transcriptions_client
+            .build_request(either::Right(prompt.as_slice()), false, false, true)
+            .await
+            .expect("transcription request should build")
+            .build()
+            .expect("reqwest request should build");
+
+        assert_eq!(
+            request.url().as_str(),
+            "https://api.openai.com/v1/audio/transcriptions"
+        );
+        let content_type = request
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .expect("multipart request should set content-type");
+        assert!(content_type.starts_with("multipart/form-data"));
+        assert!(!content_type.starts_with("application/json"));
+
+        let body = request
+            .body()
+            .and_then(reqwest::Body::as_bytes)
+            .expect("multipart body should remain available for tracing and curl rendering");
+        assert!(body
+            .windows(b"fake mp3 bytes".len())
+            .any(|window| window == b"fake mp3 bytes"));
+        assert!(body
+            .windows(b"name=\"model\"".len())
+            .any(|window| window == b"name=\"model\""));
+        assert!(body
+            .windows(b"gpt-4o-transcribe".len())
+            .any(|window| window == b"gpt-4o-transcribe"));
     }
 
     #[test]

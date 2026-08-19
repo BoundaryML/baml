@@ -3,6 +3,7 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
+  type AnyClass
   type AnyFunction
   class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
   class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, to_int, parse, random] }
@@ -16,7 +17,7 @@ namespace baml:
   class Map<K, V> { methods: [length, has, keys, values, set, get, delete, get_or_insert, clear] }
   class Null { methods: [] }
   type Sortable
-  class String { methods: [from, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, chars, lines, slice, replace, index_of, last_index_of, at, code_point_at, repeat, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, to_code_points, from_code_points] }
+  class String { methods: [from, length, char_count, is_empty, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, chars, lines, slice, replace, index_of, last_index_of, at, code_point_at, repeat, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, to_code_points, from_code_points] }
   type Summable
   class TaggedString { methods: [] }
   type ToJson
@@ -286,8 +287,8 @@ namespace baml.reflect.array:
   class Type { methods: [element_type, as_type] }
 namespace baml.reflect.class:
   class Builder { methods: [field, type, build, _build] }
-  class Field { methods: [] }
-  class PendingType { methods: [array, optional, union, resolved] }
+  class Field { methods: [metadata, value] }
+  class PendingType { methods: [array, optional, union, resolved, meta] }
   class Type { methods: [fields, meta, as_type] }
   function _new
   function builder
@@ -304,8 +305,9 @@ namespace baml.reflect.errors:
   class EvaluationError { methods: [] }
   class SessionBusy { methods: [] }
 namespace baml.reflect.function:
+  class GenericParam { methods: [] }
   class Parameter { methods: [] }
-  class Type { methods: [params, return_type, as_type] }
+  class Type { methods: [params, return_type, is_generic, generic_params, specialize, get, as_type] }
 namespace baml.reflect.interface:
   class Implementation { methods: [field] }
   class Type { methods: [implemented_by, as_type] }

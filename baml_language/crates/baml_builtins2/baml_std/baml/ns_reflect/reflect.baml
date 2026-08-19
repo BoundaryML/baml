@@ -129,8 +129,13 @@ class Package {
   function with_types(self, types: map<string, type | baml.reflect.TypeView>) -> Package throws baml.reflect.errors.CompilationError {
     $rust_function
   }
-  /// Extract an exported function through an ordinary function-type contract.
   //baml:mut_vm
+  /// Extract an exported function through an ordinary function-type contract.
+  ///
+  /// A lookup by name has nowhere to put type arguments, so an unspecialized
+  /// generic function is refused here. Reach it through `functions()` instead:
+  /// the descriptor there takes `specialize(args)` and hands the specialized
+  /// callable back through its own `get<F>()`.
   function get_function<F>(self, name: string) -> F? throws baml.reflect.errors.CompilationError {
     $rust_function
   }
@@ -150,8 +155,13 @@ class Package {
     $rust_function
   }
 
-  /// Exported free-function signatures, keyed by package-local name.
   //baml:mut_vm
+  /// Exported free-function descriptors, keyed by package-local name.
+  ///
+  /// Every declared function is listed, including generic ones and their
+  /// generated companions. A generic entry reports `is_generic() == true` and
+  /// has no readable signature until `specialize(args)` supplies its type
+  /// arguments; the specialized descriptor's `get<F>()` yields the callable.
   function functions(self) -> map<string, baml.reflect.function.Type> throws never {
     $rust_function
   }
@@ -226,9 +236,10 @@ function signature(f: baml.AnyFunction) -> Signature throws never {
 /// default. `R` and `E` are `f`'s `Returns`/`Throws` pins, so a pinned
 /// `AnyFunction<Returns = json, Throws = ToolError>` yields typed results
 /// and an exhaustive catch; a bare `AnyFunction` returns `unknown` and
-/// throws `unknown` (which covers `InvalidArgumentError`).
+/// throws `unknown` (which covers `InvalidArgumentError` and
+/// `baml.reflect.errors.CompilationError`).
 //baml:mut_vm
 //baml:may_yield
-function call_any<R, E>(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R throws E | InvalidArgumentError {
+function call_any<R, E>(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R throws E | InvalidArgumentError | baml.reflect.errors.CompilationError {
   $rust_function
 }

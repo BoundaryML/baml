@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  ⚠ unreachable arm
+     ╭─[interfaces_2.baml:943:14]
+ 943 │         _ => "wildcard-caught"
+     ·              ─────────────────
+     ╰────

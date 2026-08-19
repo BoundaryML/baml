@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.function_call.array_length() -> int  [expr] {
+  { let array = [1, 2, 3]; return baml.Array.length(array) }
+}
+class user.fixtures.function_call.Baz {
+  name: string
+}
+class user.fixtures.function_call.Baz$stream {
+  name: string | null
+}
+function user.fixtures.function_call.Bar() -> int  [expr] {
+  { let x = Foo(1) } x
+}
+function user.fixtures.function_call.Foo(x: int) -> int  [expr] {
+  {  } x Add 1
+}
+function user.fixtures.function_call.GreetBaz(n: string) -> string  [expr] {
+  { let baz = user.fixtures.function_call.Baz { name: n } } baz.Greeting()
+}
+function user.fixtures.function_call.Greeting(self: ?) -> string  [expr] {
+  {  } "Hello, " Add self.name Add "!"
+}
+function user.fixtures.function_call.param_in_if_statement(b: bool) -> int  [expr] {
+  {  } if (b) {  } 1 else {  } 2
+}

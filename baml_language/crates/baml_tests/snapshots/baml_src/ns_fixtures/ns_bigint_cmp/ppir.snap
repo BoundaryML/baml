@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.bigint_cmp.EqDistinctAllocs() -> bool  [expr] {
+  { let a: bigint = 42n; let b: bigint = bigint.parse("42") } a Eq b
+}
+function user.fixtures.bigint_cmp.EqSameAlloc() -> bool  [expr] {
+  {  } 42n Eq 42n
+}
+function user.fixtures.bigint_cmp.OrderingGtEq() -> bool  [expr] {
+  {  } 5n Ge 5n
+}
+function user.fixtures.bigint_cmp.OrderingLt() -> bool  [expr] {
+  {  } 3n Lt 5n
+}

@@ -1,0 +1,8 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+// Nested namespace: llm.openai
+class OpenAIResponse {
+    text: string,
+    model: string,
+}

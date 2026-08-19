@@ -1724,6 +1724,13 @@ pub fn implements_interface(
     aliases: &HashMap<QualifiedTypeName, Ty>,
     mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
+    // The blanket stdlib impl supplies AnyClass's default-method dispatch, but
+    // membership is compiler-derived and narrower. Reuse the normalizer's
+    // class-only rule so `requires AnyClass` cannot observe the blanket.
+    if interface.name.is_builtin_root_type("AnyClass") {
+        return is_subtype(concrete, &interface.to_ty());
+    }
+
     // The orphan rule keeps a legal impl of `(concrete, interface)` in the
     // package of some type that *appears in the query*.
     let mut roots = Vec::new();

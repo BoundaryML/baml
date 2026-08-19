@@ -1,0 +1,294 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function union_pattern_binding.$init_test_ns_union_pattern_binding_union_pattern_binding(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.union_pattern_binding"
+    load_const "union_typed_let_else_binds_first_member"
+    make_closure .<lambda($init_test_ns_union_pattern_binding_union_pattern_binding, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.union_pattern_binding"
+    load_const "union_typed_let_else_binds_second_member"
+    make_closure .<lambda($init_test_ns_union_pattern_binding_union_pattern_binding, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.union_pattern_binding"
+    load_const "single_typed_let_else_binds"
+    make_closure .<lambda($init_test_ns_union_pattern_binding_union_pattern_binding, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.union_pattern_binding"
+    load_const "union_typed_let_else_takes_else_on_non_member"
+    make_closure .<lambda($init_test_ns_union_pattern_binding_union_pattern_binding, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.union_pattern_binding"
+    load_const "union_typed_match_arm_binds_first_member"
+    make_closure .<lambda($init_test_ns_union_pattern_binding_union_pattern_binding, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.union_pattern_binding"
+    load_const "union_typed_match_arm_binds_second_member"
+    make_closure .<lambda($init_test_ns_union_pattern_binding_union_pattern_binding, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function union_pattern_binding.upb_let_else_first_member() -> int {
+    load_const 3
+    init_instance user.union_pattern_binding.WlA .v
+    store_var _3
+    load_var _3
+    store_var _4
+    load_var _4
+    narrow_bind union_pattern_binding.WlA, slot=2
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var _3
+    store_var _5
+    load_var _5
+    narrow_bind union_pattern_binding.WlB, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L5
+
+  L2:
+    load_var _3
+    store_var_load_var x
+    type_tag
+    load_const WlA
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var x
+    load_field .0
+    jump L5
+
+  L4:
+    load_var x
+    load_field .0
+
+  L5:
+    return
+}
+
+function union_pattern_binding.upb_let_else_non_member() -> int {
+    alloc_instance user.union_pattern_binding.WlStop
+    store_var _3
+    load_var _3
+    store_var _4
+    load_var _4
+    narrow_bind union_pattern_binding.WlA, slot=2
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var _3
+    store_var _5
+    load_var _5
+    narrow_bind union_pattern_binding.WlB, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const -1
+    jump L5
+
+  L2:
+    load_var _3
+    store_var_load_var x
+    type_tag
+    load_const WlA
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var x
+    load_field .0
+    jump L5
+
+  L4:
+    load_var x
+    load_field .0
+
+  L5:
+    return
+}
+
+function union_pattern_binding.upb_let_else_second_member() -> int {
+    load_const 7
+    init_instance user.union_pattern_binding.WlB .v
+    store_var _3
+    load_var _3
+    store_var _4
+    load_var _4
+    narrow_bind union_pattern_binding.WlA, slot=2
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var _3
+    store_var _5
+    load_var _5
+    narrow_bind union_pattern_binding.WlB, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L5
+
+  L2:
+    load_var _3
+    store_var_load_var x
+    type_tag
+    load_const WlA
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var x
+    load_field .0
+    jump L5
+
+  L4:
+    load_var x
+    load_field .0
+
+  L5:
+    return
+}
+
+function union_pattern_binding.upb_match_arm_first_member() -> int {
+    load_const 3
+    init_instance user.union_pattern_binding.WlA .v
+    store_var _2
+    load_var _2
+    store_var _3
+    load_var _3
+    narrow_bind union_pattern_binding.WlA, slot=2
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var _2
+    store_var _4
+    load_var _4
+    narrow_bind union_pattern_binding.WlB, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L5
+
+  L2:
+    load_var _2
+    store_var_load_var x
+    type_tag
+    load_const WlA
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var x
+    load_field .0
+    jump L5
+
+  L4:
+    load_var x
+    load_field .0
+
+  L5:
+    return
+}
+
+function union_pattern_binding.upb_match_arm_second_member() -> int {
+    load_const 7
+    init_instance user.union_pattern_binding.WlB .v
+    store_var _2
+    load_var _2
+    store_var _3
+    load_var _3
+    narrow_bind union_pattern_binding.WlA, slot=2
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var _2
+    store_var _4
+    load_var _4
+    narrow_bind union_pattern_binding.WlB, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L5
+
+  L2:
+    load_var _2
+    store_var_load_var x
+    type_tag
+    load_const WlA
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var x
+    load_field .0
+    jump L5
+
+  L4:
+    load_var x
+    load_field .0
+
+  L5:
+    return
+}
+
+function union_pattern_binding.upb_single_typed_let_else() -> int {
+    load_const 3
+    init_instance user.union_pattern_binding.WlA .v
+    store_var _3
+    load_var _3
+    narrow_bind union_pattern_binding.WlA, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var _3
+    load_field .v
+
+  L2:
+    return
+}

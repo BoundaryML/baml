@@ -1,0 +1,470 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+    ╭─[ns_iter/iter.baml:11:49]
+ 11 │ ╭─▶ function iter_collect() -> int[] throws unknown {
+ 12 │ │     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([5, 6, 7]);
+ 13 │ │     it.collect()
+ 14 │ ╰─▶ }
+    ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+    ╭─[ns_iter/iter.baml:20:46]
+ 20 │ ╭─▶ function iter_reduce() -> int throws unknown {
+ 21 │ │     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
+ 22 │ │     it.reduce((a: int, x: int) -> int { a + x }, 0)
+ 23 │ ╰─▶ }
+    ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+    ╭─[ns_iter/iter.baml:29:45]
+ 29 │ ╭─▶ function iter_count() -> int throws unknown {
+ 30 │ │     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([9, 9, 9]);
+ 31 │ │     it.count()
+ 32 │ ╰─▶ }
+    ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+    ╭─[ns_iter/iter.baml:38:56]
+ 38 │ ╭─▶ function iter_some_every_find() -> bool throws unknown {
+ 39 │ │     let some_large = baml.iter.ArrayIterator.new([1, 2, 3]).some((x: int) -> bool { x > 2 });
+ 40 │ │     let every_small = baml.iter.ArrayIterator.new([1, 2, 3]).every((x: int) -> bool { x < 4 });
+ 41 │ │     let found = baml.iter.ArrayIterator.new([1, 2, 3, 4]).find((x: int) -> bool { x % 2 == 0 });
+ 42 │ │     some_large && every_small && found == 2
+ 43 │ ╰─▶ }
+    ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+    ╭─[ns_iter/iter.baml:49:47]
+ 49 │ ╭─▶ function iter_range() -> int[] throws unknown {
+ 50 │ │     baml.iter.Range.new(0, 5).collect()
+ 51 │ ╰─▶ }
+    ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:137:67]
+ 137 │ ╭─▶ function iter_array_first_native_methods() -> bool throws unknown {
+ 138 │ │     let mapped = [1, 2, 3].map((x: int) -> int { x * 2 });
+ 139 │ │     let flat_mapped = [1, 2].flat_map((x: int) -> int[] { [x, x + 10] });
+ 140 │ │     let reduced = [1, 2, 3, 4].reduce((acc: int, x: int) -> int { acc + x }, 0);
+ 141 │ │   
+ 142 │ │     mapped == [2, 4, 6] &&
+ 143 │ │       flat_mapped == [1, 11, 2, 12] &&
+ 144 │ │       reduced == 10
+ 145 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:151:80]
+ 151 │ ╭─▶ function iter_array_eager_filter_map_without_collect() -> int[] throws unknown {
+ 152 │ │     [1, 2, 3, 4].filter((x: int) -> bool {
+ 153 │ │       x % 2 == 0
+ 154 │ │     }).map((x: int) -> int {
+ 155 │ │       x + 10
+ 156 │ │     })
+ 157 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:163:77]
+ 163 │ ╭─▶ function iter_array_iter_lazy_over_source_details() -> int[] throws unknown {
+ 164 │ │     let xs = [1, 2];
+ 165 │ │     let seen = 0;
+ 166 │ │     let it = xs.iter().filter((x: int) -> bool {
+ 167 │ │       seen += 1;
+ 168 │ │       x % 2 == 1
+ 169 │ │     });
+ 170 │ │     xs.push(3);
+ 171 │ │     let out = it.collect();
+ 172 │ │     let details = [seen, out.length()];
+ 173 │ │     for (let x in out) {
+ 174 │ │       details.push(x);
+ 175 │ │     }
+ 176 │ │     details
+ 177 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:183:77]
+ 183 │ ╭─▶ function iter_for_loop_sees_push_during_iteration() -> int[] throws unknown {
+ 184 │ │     let xs = [1, 2];
+ 185 │ │     let visited: int[] = [];
+ 186 │ │     for (let x in xs) {
+ 187 │ │       visited.push(x);
+ 188 │ │       if (x == 1) {
+ 189 │ │         xs.push(3);
+ 190 │ │       }
+ 191 │ │     }
+ 192 │ │     visited
+ 193 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:199:71]
+ 199 │ ╭─▶ function iter_for_loop_pop_during_iteration() -> int[] throws unknown {
+ 200 │ │     let xs = [1, 2, 3, 4];
+ 201 │ │     let visited: int[] = [];
+ 202 │ │     for (let x in xs) {
+ 203 │ │       visited.push(x);
+ 204 │ │       xs.pop();
+ 205 │ │     }
+ 206 │ │     visited
+ 207 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:213:64]
+ 213 │ ╭─▶ function iter_array_eager_filter_map() -> int[] throws unknown {
+ 214 │ │     [1, 2, 3, 4].filter_map((x: int) -> int? {
+ 215 │ │       if (x % 2 == 0) {
+ 216 │ │         x * 10
+ 217 │ │       } else {
+ 218 │ │         null
+ 219 │ │       }
+ 220 │ │     })
+ 221 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:227:73]
+ 227 │ ╭─▶ function iter_array_nullable_elements_details() -> int[] throws unknown {
+ 228 │ │     let xs: int?[] = [1, null, 3];
+ 229 │ │     let visited = 0;
+ 230 │ │     let nulls = 0;
+ 231 │ │     let sum = 0;
+ 232 │ │     for (let x in xs) {
+ 233 │ │       visited += 1;
+ 234 │ │       match (x) {
+ 235 │ │         null => {
+ 236 │ │           nulls += 1;
+ 237 │ │         },
+ 238 │ │         let v: int => {
+ 239 │ │           sum += v;
+ 240 │ │         },
+ 241 │ │       }
+ 242 │ │     }
+ 243 │ │     [visited, nulls, sum, xs.iter().count()]
+ 244 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:250:71]
+ 250 │ ╭─▶ function iter_array_lazy_filter_map_collect() -> int[] throws unknown {
+ 251 │ │     [1, 2, 3, 4].iter().filter((x: int) -> bool {
+ 252 │ │       x % 2 == 0
+ 253 │ │     }).map((x: int) -> int {
+ 254 │ │       x + 10
+ 255 │ │     }).collect()
+ 256 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:262:69]
+ 262 │ ╭─▶ function iter_array_first_adapter_defaults() -> bool throws unknown {
+ 263 │ │     let mapped = baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter((x: int) -> bool {
+ 264 │ │       x % 2 == 0
+ 265 │ │     }).map((x: int) -> int {
+ 266 │ │       x * 10
+ 267 │ │     }).collect();
+ 268 │ │   
+ 269 │ │     let flattened = baml.iter.ArrayIterator.new([1, 2, 3]).filter((x: int) -> bool {
+ 270 │ │       x < 3
+ 271 │ │     }).flat_map((x: int) -> baml.iter.Iterable<Item = int, Error = never> {
+ 272 │ │       [x, x + 10]
+ 273 │ │     }).collect();
+ 274 │ │   
+ 275 │ │     let reduced = baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter((x: int) -> bool {
+ 276 │ │       x >= 2
+ 277 │ │     }).reduce((acc: int, x: int) -> int {
+ 278 │ │       acc + x
+ 279 │ │     }, 0);
+ 280 │ │   
+ 281 │ │     let visited: int[] = [];
+ 282 │ │     baml.iter.ArrayIterator.new([1, 2, 3]).filter((x: int) -> bool {
+ 283 │ │       x != 2
+ 284 │ │     }).for_each((x: int) -> void {
+ 285 │ │       visited.push(x * 3);
+ 286 │ │     });
+ 287 │ │   
+ 288 │ │     mapped == [20, 40] &&
+ 289 │ │       flattened == [1, 11, 2, 12] &&
+ 290 │ │       reduced == 9 &&
+ 291 │ │       visited == [3, 9]
+ 292 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:307:62]
+ 307 │ ╭─▶ function iter_array_filter_step_by() -> int[] throws unknown {
+ 308 │ │     baml.iter.ArrayIterator.new([1, 2, 3, 4, 5, 6]).filter((x: int) -> bool {
+ 309 │ │       x % 2 == 0
+ 310 │ │     }).step_by(2).collect()
+ 311 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:317:65]
+ 317 │ ╭─▶ function iter_array_filter_map_fluent() -> int[] throws unknown {
+ 318 │ │     [1, 2, 3, 4].iter().filter_map((x: int) -> int? {
+ 319 │ │       if (x % 2 == 0) {
+ 320 │ │         x * 10
+ 321 │ │       } else {
+ 322 │ │         null
+ 323 │ │       }
+ 324 │ │     }).collect()
+ 325 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:331:60]
+ 331 │ ╭─▶ function iter_array_chain_fluent() -> int[] throws unknown {
+ 332 │ │     [1, 2].iter().chain([3, 4]).collect()
+ 333 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:339:63]
+ 339 │ ╭─▶ function iter_array_peekable_fluent() -> int[] throws unknown {
+ 340 │ │     let p = [8, 9].iter().peekable();
+ 341 │ │     let out: int[] = [];
+ 342 │ │     match (p.peek()) {
+ 343 │ │       baml.iter.Done => {},
+ 344 │ │       let x: int => out.push(x),
+ 345 │ │     }
+ 346 │ │     match (p.next()) {
+ 347 │ │       baml.iter.Done => {},
+ 348 │ │       let x: int => out.push(x),
+ 349 │ │     }
+ 350 │ │     match (p.next()) {
+ 351 │ │       baml.iter.Done => {},
+ 352 │ │       let x: int => out.push(x),
+ 353 │ │     }
+ 354 │ │     out
+ 355 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:407:47]
+ 407 │ ╭─▶ function iter_chain() -> int[] throws unknown {
+ 408 │ │     let a: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2]);
+ 409 │ │     let b: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([3, 4]);
+ 410 │ │     a.chain(b).collect()
+ 411 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:417:48]
+ 417 │ ╭─▶ function iter_repeat() -> int[] throws unknown {
+ 418 │ │     baml.iter.Repeat<int> { value: 7, count: 3 }.collect()
+ 419 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:425:45]
+ 425 │ ╭─▶ function iter_map() -> int[] throws unknown {
+ 426 │ │     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3]);
+ 427 │ │     it.map((x: int) -> int { x * 2 }).collect()
+ 428 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:434:61]
+ 434 │ ╭─▶ function iter_map_implicit_source() -> int[] throws unknown {
+ 435 │ │     baml.iter.ArrayIterator.new([1, 2, 3]).map((x: int) -> int { x * 2 }).collect()
+ 436 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:442:74]
+ 442 │ ╭─▶ function iter_explicit_map_coerces_to_iterator() -> int[] throws unknown {
+ 443 │ │     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3]);
+ 444 │ │     let mapped: baml.iter.Iterator<Item = int, Error = never> = baml.iter.Map<int, int, never, never> {
+ 445 │ │       source: it,
+ 446 │ │       func: (x: int) -> int { x * 3 },
+ 447 │ │     };
+ 448 │ │     mapped.collect()
+ 449 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:455:48]
+ 455 │ ╭─▶ function iter_filter() -> int[] throws unknown {
+ 456 │ │     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
+ 457 │ │     it.filter((x: int) -> bool { x % 2 == 0 }).collect()
+ 458 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:464:64]
+ 464 │ ╭─▶ function iter_filter_implicit_source() -> int[] throws unknown {
+ 465 │ │     baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter((x: int) -> bool { x % 2 == 0 }).collect()
+ 466 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:472:52]
+ 472 │ ╭─▶ function iter_filter_map() -> int[] throws unknown {
+ 473 │ │     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
+ 474 │ │     it.filter_map((x: int) -> int? {
+ 475 │ │       if (x % 2 == 0) {
+ 476 │ │         x * 10
+ 477 │ │       } else {
+ 478 │ │         null
+ 479 │ │       }
+ 480 │ │     }).collect()
+ 481 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:487:68]
+ 487 │ ╭─▶ function iter_filter_map_implicit_source() -> int[] throws unknown {
+ 488 │ │     baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter_map((x: int) -> int? {
+ 489 │ │       if (x % 2 == 0) {
+ 490 │ │         x * 10
+ 491 │ │       } else {
+ 492 │ │         null
+ 493 │ │       }
+ 494 │ │     }).collect()
+ 495 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:501:50]
+ 501 │ ╭─▶ function iter_flat_map() -> int[] throws unknown {
+ 502 │ │     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2]);
+ 503 │ │     it.flat_map((x: int) -> baml.iter.Iterable<Item = int, Error = never> {
+ 504 │ │       baml.iter.ArrayIterator.new([x, x + 10])
+ 505 │ │     }).collect()
+ 506 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:512:66]
+ 512 │ ╭─▶ function iter_flat_map_implicit_source() -> int[] throws unknown {
+ 513 │ │     baml.iter.ArrayIterator.new([1, 2]).flat_map((x: int) -> baml.iter.Iterable<Item = int, Error = never> {
+ 514 │ │       baml.iter.ArrayIterator.new([x, x + 10])
+ 515 │ │     }).collect()
+ 516 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:522:49]
+ 522 │ ╭─▶ function iter_flatten() -> int[] throws unknown {
+ 523 │ │     // `flatten`'s element type parameter (`I extends Iterable<…>`) must be a
+ 524 │ │     // concrete implementor, so the elements are typed `ArrayIterator<int>` rather
+ 525 │ │     // than the abstract `Iterable<…>` existential.
+ 526 │ │     let xs: baml.iter.ArrayIterator<int>[] = [
+ 527 │ │       baml.iter.ArrayIterator.new([1, 2]),
+ 528 │ │       baml.iter.ArrayIterator.new([3, 4]),
+ 529 │ │     ];
+ 530 │ │     let outer: baml.iter.Iterator<Item = baml.iter.ArrayIterator<int>, Error = never> = baml.iter.ArrayIterator.new(xs);
+ 531 │ │     baml.iter.flatten(outer).collect()
+ 532 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:538:50]
+ 538 │ ╭─▶ function iter_peekable() -> int[] throws unknown {
+ 539 │ │     let p = baml.iter.ArrayIterator.new([4, 5]).peekable();
+ 540 │ │     let out: int[] = [];
+ 541 │ │     match (p.peek()) {
+ 542 │ │       baml.iter.Done => {},
+ 543 │ │       let x: int => out.push(x),
+ 544 │ │     }
+ 545 │ │     match (p.next()) {
+ 546 │ │       baml.iter.Done => {},
+ 547 │ │       let x: int => out.push(x),
+ 548 │ │     }
+ 549 │ │     match (p.next()) {
+ 550 │ │       baml.iter.Done => {},
+ 551 │ │       let x: int => out.push(x),
+ 552 │ │     }
+ 553 │ │     match (p.peek()) {
+ 554 │ │       baml.iter.Done => out.push(99),
+ 555 │ │       let x: int => out.push(x),
+ 556 │ │     }
+ 557 │ │     out
+ 558 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:564:49]
+ 564 │ ╭─▶ function iter_step_by() -> int[] throws unknown {
+ 565 │ │     baml.iter.Range.new(0, 6).step_by(2).collect()
+ 566 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown
+     ╭─[ns_iter/iter.baml:572:52]
+ 572 │ ╭─▶ function iter_array_iter() -> int[] throws unknown {
+ 573 │ │     [1, 2, 3].iter().collect()
+ 574 │ ╰─▶ }
+     ╰────

@@ -1,0 +1,274 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function type_reflection.$init_test_ns_type_reflection_type_reflection(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "eq_type_values_same"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "eq_type_values_different"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "neq_type_values_same"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "neq_type_values_different"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "union_order_eq_canonical_in_function"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "union_order_eq_canonical_in_test_block"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function type_reflection.GetBar(client: ai.Client | null) -> type_reflection.Bar {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type type_reflection.Bar
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    call user.type_reflection.GetBar$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<type_reflection.Bar, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<type_reflection.Bar>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
+    return
+}
+
+function type_reflection.GetBar$parse(json: string) -> type_reflection.Bar {
+    load_type type_reflection.Bar
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function type_reflection.GetBar$render_prompt() -> ai.Prompt {
+    call user.type_reflection.GetBar$spec
+    store_var _1
+    load_type type_reflection.Bar
+    call ai.wire.render_output_format
+    store_var _2
+    load_type type_reflection.Bar
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function type_reflection.GetBar$spec() -> ai.FunctionSpec<type_reflection.Bar> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_global user.type_reflection.TestClient
+    call ai.clients.resolve
+    store_var _5
+    load_const "GetBar"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(GetBar$spec, 0)>, 0
+    load_var2 1 2
+    load_type type_reflection.Bar
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function type_reflection.GetBar$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.type_reflection.GetBar$spec
+    store_var _3
+    load_type type_reflection.Bar$stream | null
+    load_type type_reflection.Bar
+    load_var2 2 1
+    call ai.stream.from_spec
+    return
+}
+
+function type_reflection.GetFoo(client: ai.Client | null) -> type_reflection.Foo {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type type_reflection.Foo
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    call user.type_reflection.GetFoo$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<type_reflection.Foo, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<type_reflection.Foo>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
+    return
+}
+
+function type_reflection.GetFoo$parse(json: string) -> type_reflection.Foo {
+    load_type type_reflection.Foo
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function type_reflection.GetFoo$render_prompt() -> ai.Prompt {
+    call user.type_reflection.GetFoo$spec
+    store_var _1
+    load_type type_reflection.Foo
+    call ai.wire.render_output_format
+    store_var _2
+    load_type type_reflection.Foo
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function type_reflection.GetFoo$spec() -> ai.FunctionSpec<type_reflection.Foo> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_global user.type_reflection.TestClient
+    call ai.clients.resolve
+    store_var _5
+    load_const "GetFoo"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(GetFoo$spec, 0)>, 0
+    load_var2 1 2
+    load_type type_reflection.Foo
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function type_reflection.GetFoo$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.type_reflection.GetFoo$spec
+    store_var _3
+    load_type type_reflection.Foo$stream | null
+    load_type type_reflection.Foo
+    load_var2 2 1
+    call ai.stream.from_spec
+    return
+}
+
+function type_reflection.eq_type_values_different_fn() -> bool {
+    load_const "GetFoo"
+    sys_op ai.internal.get_return_type
+    store_var a
+    load_const "GetBar"
+    sys_op ai.internal.get_return_type
+    store_var b
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function type_reflection.eq_type_values_same_fn() -> bool {
+    load_const "GetFoo"
+    sys_op ai.internal.get_return_type
+    store_var a
+    load_const "GetFoo"
+    sys_op ai.internal.get_return_type
+    store_var b
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function type_reflection.neq_type_values_different_fn() -> bool {
+    load_const "GetFoo"
+    sys_op ai.internal.get_return_type
+    store_var a
+    load_const "GetBar"
+    sys_op ai.internal.get_return_type
+    store_var b
+    load_var2 1 2
+    call baml.ops.equals_equals
+    unary_op !
+    return
+}
+
+function type_reflection.neq_type_values_same_fn() -> bool {
+    load_const "GetFoo"
+    sys_op ai.internal.get_return_type
+    store_var a
+    load_const "GetFoo"
+    sys_op ai.internal.get_return_type
+    store_var b
+    load_var2 1 2
+    call baml.ops.equals_equals
+    unary_op !
+    return
+}
+
+function type_reflection.union_order_eq_fn() -> bool {
+    load_type int | string
+    load_type string | int
+    call baml.ops.equals_equals
+    return
+}

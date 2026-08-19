@@ -1,0 +1,1567 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function operators.$init_test_ns_operators_operators(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.operators"
+    load_const "add"
+    make_closure .<lambda($init_test_ns_operators_operators, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "subtract"
+    make_closure .<lambda($init_test_ns_operators_operators, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "multiply"
+    make_closure .<lambda($init_test_ns_operators_operators, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "divide"
+    make_closure .<lambda($init_test_ns_operators_operators, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "modulo"
+    make_closure .<lambda($init_test_ns_operators_operators, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "bitwise_and"
+    make_closure .<lambda($init_test_ns_operators_operators, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "bitwise_or"
+    make_closure .<lambda($init_test_ns_operators_operators, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "bitwise_xor"
+    make_closure .<lambda($init_test_ns_operators_operators, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "shift_left"
+    make_closure .<lambda($init_test_ns_operators_operators, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "shift_right"
+    make_closure .<lambda($init_test_ns_operators_operators, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "bitwise_not"
+    make_closure .<lambda($init_test_ns_operators_operators, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "unary_negate"
+    make_closure .<lambda($init_test_ns_operators_operators, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "unary_not"
+    make_closure .<lambda($init_test_ns_operators_operators, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "negative_int_in_let"
+    make_closure .<lambda($init_test_ns_operators_operators, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "negative_int_arithmetic"
+    make_closure .<lambda($init_test_ns_operators_operators, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "negative_int_comparison"
+    make_closure .<lambda($init_test_ns_operators_operators, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "negative_float_in_let"
+    make_closure .<lambda($init_test_ns_operators_operators, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "double_negation"
+    make_closure .<lambda($init_test_ns_operators_operators, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "double_negation_variable"
+    make_closure .<lambda($init_test_ns_operators_operators, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "equal"
+    make_closure .<lambda($init_test_ns_operators_operators, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "not_equal"
+    make_closure .<lambda($init_test_ns_operators_operators, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "greater_than"
+    make_closure .<lambda($init_test_ns_operators_operators, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "greater_than_or_equal"
+    make_closure .<lambda($init_test_ns_operators_operators, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "less_than"
+    make_closure .<lambda($init_test_ns_operators_operators, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "less_than_or_equal"
+    make_closure .<lambda($init_test_ns_operators_operators, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "logical_and"
+    make_closure .<lambda($init_test_ns_operators_operators, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "logical_or"
+    make_closure .<lambda($init_test_ns_operators_operators, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "short_circuit_and"
+    make_closure .<lambda($init_test_ns_operators_operators, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "short_circuit_or"
+    make_closure .<lambda($init_test_ns_operators_operators, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "assign_add"
+    make_closure .<lambda($init_test_ns_operators_operators, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "assign_subtract"
+    make_closure .<lambda($init_test_ns_operators_operators, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "assign_multiply"
+    make_closure .<lambda($init_test_ns_operators_operators, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "assign_divide"
+    make_closure .<lambda($init_test_ns_operators_operators, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "assign_modulo"
+    make_closure .<lambda($init_test_ns_operators_operators, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "assign_bitwise_and"
+    make_closure .<lambda($init_test_ns_operators_operators, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "assign_bitwise_or"
+    make_closure .<lambda($init_test_ns_operators_operators, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "assign_bitwise_xor"
+    make_closure .<lambda($init_test_ns_operators_operators, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "operator_add_user_class"
+    make_closure .<lambda($init_test_ns_operators_operators, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "operator_negate_user_class"
+    make_closure .<lambda($init_test_ns_operators_operators, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "operator_union_dispatch"
+    make_closure .<lambda($init_test_ns_operators_operators, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "operator_compound_assign_user_class"
+    make_closure .<lambda($init_test_ns_operators_operators, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "operator_sub_mul_div_rem_user_class"
+    make_closure .<lambda($init_test_ns_operators_operators, 41)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "operator_multi_instantiation_selects_by_rhs_type"
+    make_closure .<lambda($init_test_ns_operators_operators, 42)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "operator_output_differs_from_self"
+    make_closure .<lambda($init_test_ns_operators_operators, 43)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "operator_negate_output_differs_from_self"
+    make_closure .<lambda($init_test_ns_operators_operators, 44)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "driver_int_arithmetic_matches_opcodes"
+    make_closure .<lambda($init_test_ns_operators_operators, 45)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "driver_float_arithmetic_matches_opcodes"
+    make_closure .<lambda($init_test_ns_operators_operators, 46)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "driver_bigint_arithmetic_matches_opcodes"
+    make_closure .<lambda($init_test_ns_operators_operators, 47)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "driver_string_add_matches_opcode"
+    make_closure .<lambda($init_test_ns_operators_operators, 48)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "driver_mixed_widening_matches_opcodes"
+    make_closure .<lambda($init_test_ns_operators_operators, 49)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "operator_mixed_primitive_union_add"
+    make_closure .<lambda($init_test_ns_operators_operators, 50)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "driver_panics_match_opcodes"
+    make_closure .<lambda($init_test_ns_operators_operators, 51)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "ordering_on_bool_dispatches_compare"
+    make_closure .<lambda($init_test_ns_operators_operators, 52)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "ordering_on_user_class_dispatches_compare"
+    make_closure .<lambda($init_test_ns_operators_operators, 53)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "ordering_override_beats_default"
+    make_closure .<lambda($init_test_ns_operators_operators, 54)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "generic_ordering_matches_opcodes"
+    make_closure .<lambda($init_test_ns_operators_operators, 55)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "ordering_panics_unwind_to_catch"
+    make_closure .<lambda($init_test_ns_operators_operators, 56)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "ordering_into_projection_destinations"
+    make_closure .<lambda($init_test_ns_operators_operators, 57)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "ordering_in_condition_position"
+    make_closure .<lambda($init_test_ns_operators_operators, 58)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "ordering_on_self_and_generic_receivers"
+    make_closure .<lambda($init_test_ns_operators_operators, 59)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "ordering_on_bool_literals"
+    make_closure .<lambda($init_test_ns_operators_operators, 60)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function operators.Boom.baml.ops.Compare.lt(self: operators.Boom, other: operators.Boom) -> bool {
+    load_const 1
+    load_var self
+    load_field .n
+    div_int
+    load_var other
+    load_field .0
+    cmp_int_op <
+    return
+}
+
+function operators.Boom.baml.ops.Equals.eq(self: operators.Boom, other: operators.Boom) -> bool {
+    load_var self
+    load_field .n
+    load_var other
+    load_field .0
+    cmp_int_op ==
+    return
+}
+
+function operators.Counter.baml.ops.Add<int>.add(self: operators.Counter, rhs: int) -> int {
+    load_var self
+    load_field .n
+    load_var rhs
+    add_int
+    return
+}
+
+function operators.Debt.baml.ops.Negate.neg(self: operators.Debt) -> int {
+    load_const 0
+    load_var self
+    load_field .amount
+    sub_int
+    return
+}
+
+function operators.Feet.baml.ops.Add<int>.add(self: operators.Feet, rhs: int) -> operators.Feet {
+    load_var self
+    load_field .v
+    load_var rhs
+    add_int
+    init_instance user.operators.Feet .v
+    return
+}
+
+function operators.Meters.baml.ops.Add<int>.add(self: operators.Meters, rhs: int) -> operators.Meters {
+    load_var self
+    load_field .v
+    load_var rhs
+    add_int
+    init_instance user.operators.Meters .v
+    return
+}
+
+function operators.OddOrder.baml.ops.Compare.gt(self: operators.OddOrder, other: operators.OddOrder) -> bool {
+    load_const true
+    return
+}
+
+function operators.OddOrder.baml.ops.Compare.lt(self: operators.OddOrder, other: operators.OddOrder) -> bool {
+    load_var self
+    load_field .n
+    load_var other
+    load_field .0
+    cmp_int_op <
+    return
+}
+
+function operators.OddOrder.baml.ops.Equals.eq(self: operators.OddOrder, other: operators.OddOrder) -> bool {
+    load_var self
+    load_field .n
+    load_var other
+    load_field .0
+    cmp_int_op ==
+    return
+}
+
+function operators.Ordered.precedes(self: operators.Ordered, other: #0) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.Poly.baml.ops.Add<float>.add(self: operators.Poly, rhs: float) -> operators.Poly {
+    load_var self
+    load_field .v
+    load_const 1000
+    add_int
+    init_instance user.operators.Poly .v
+    return
+}
+
+function operators.Poly.baml.ops.Add<int>.add(self: operators.Poly, rhs: int) -> operators.Poly {
+    load_var self
+    load_field .v
+    load_var rhs
+    add_int
+    init_instance user.operators.Poly .v
+    return
+}
+
+function operators.Ranked.baml.ops.Compare.lt(self: operators.Ranked, other: operators.Ranked) -> bool {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .0
+    cmp_int_op <
+    return
+}
+
+function operators.Ranked.baml.ops.Equals.eq(self: operators.Ranked, other: operators.Ranked) -> bool {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .0
+    cmp_int_op ==
+    return
+}
+
+function operators.Scaled.baml.ops.Divide<Scaled>.div(self: operators.Scaled, rhs: operators.Scaled) -> operators.Scaled {
+    load_var self
+    load_field .v
+    load_var rhs
+    load_field .v
+    div_int
+    init_instance user.operators.Scaled .v
+    return
+}
+
+function operators.Scaled.baml.ops.Multiply<Scaled>.mul(self: operators.Scaled, rhs: operators.Scaled) -> operators.Scaled {
+    load_var self
+    load_field .v
+    load_var rhs
+    load_field .v
+    mul_int
+    init_instance user.operators.Scaled .v
+    return
+}
+
+function operators.Scaled.baml.ops.Remainder<Scaled>.rem(self: operators.Scaled, rhs: operators.Scaled) -> operators.Scaled {
+    load_var self
+    load_field .v
+    load_var rhs
+    load_field .v
+    mod_int
+    init_instance user.operators.Scaled .v
+    return
+}
+
+function operators.Scaled.baml.ops.Subtract<Scaled>.sub(self: operators.Scaled, rhs: operators.Scaled) -> operators.Scaled {
+    load_var self
+    load_field .v
+    load_var rhs
+    load_field .v
+    sub_int
+    init_instance user.operators.Scaled .v
+    return
+}
+
+function operators.Tier.baml.ops.Compare.lt(self: operators.Tier, other: operators.Tier) -> bool {
+    load_var self
+    load_field .level
+    load_var other
+    load_field .0
+    cmp_int_op <
+    return
+}
+
+function operators.Tier.baml.ops.Equals.eq(self: operators.Tier, other: operators.Tier) -> bool {
+    load_var self
+    load_field .level
+    load_var other
+    load_field .0
+    cmp_int_op ==
+    return
+}
+
+function operators.Vec2.baml.ops.Add<Vec2>.add(self: operators.Vec2, rhs: operators.Vec2) -> operators.Vec2 {
+    load_var self
+    load_field .x
+    load_var rhs
+    load_field .x
+    add_int
+    load_var self
+    load_field .y
+    load_var rhs
+    load_field .y
+    add_int
+    init_instance user.operators.Vec2 .x, .y
+    return
+}
+
+function operators.Vec2.baml.ops.Negate.neg(self: operators.Vec2) -> operators.Vec2 {
+    load_var self
+    load_field .x
+    unary_op -
+    load_var self
+    load_field .y
+    unary_op -
+    init_instance user.operators.Vec2 .x, .y
+    return
+}
+
+function operators.Wrapped.baml.ops.Compare.lt(self: operators.Wrapped<#0>, other: operators.Wrapped<#0>) -> bool {
+    load_var self
+    load_field .weight
+    load_var other
+    load_field .0
+    cmp_int_op <
+    return
+}
+
+function operators.Wrapped.baml.ops.Equals.eq(self: operators.Wrapped<#0>, other: operators.Wrapped<#0>) -> bool {
+    load_var self
+    load_field .weight
+    load_var other
+    load_field .0
+    cmp_int_op ==
+    return
+}
+
+function operators.drv_add(a: #0, b: #0) -> #0 {
+    load_var2 1 2
+    call baml.ops.__union_add
+    return
+}
+
+function operators.drv_add_int_rhs(a: #0, b: int) -> #0 {
+    load_var2 1 2
+    call baml.ops.__union_add
+    return
+}
+
+function operators.drv_bigint_add(a: bigint, b: bigint) -> bigint {
+    load_type bigint
+    load_var2 1 2
+    call user.operators.drv_add
+    return
+}
+
+function operators.drv_bigint_add_int(a: bigint, b: int) -> bigint {
+    load_type bigint
+    load_var2 1 2
+    call user.operators.drv_add_int_rhs
+    return
+}
+
+function operators.drv_bigint_div(a: bigint, b: bigint) -> bigint {
+    load_type bigint
+    load_var2 1 2
+    call user.operators.drv_div
+    return
+}
+
+function operators.drv_catch_add_overflow() -> int {
+    call baml.Int.max_value
+    load_const 1
+    call user.operators.drv_int_add
+    jump L2
+    load_var e
+    is_type baml.panics.IntegerOverflow
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const -1
+
+  L2:
+    return
+}
+
+function operators.drv_catch_bigint_div_zero() -> bigint {
+    load_const 1n
+    load_const 0n
+    call user.operators.drv_bigint_div
+    jump L2
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const -1n
+
+  L2:
+    return
+}
+
+function operators.drv_catch_div_min_by_minus_one() -> int {
+    call baml.Int.min_value
+    load_const -1
+    call user.operators.drv_int_div
+    jump L2
+    load_var e
+    is_type baml.panics.IntegerOverflow
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const -1
+
+  L2:
+    return
+}
+
+function operators.drv_catch_float_div_zero() -> float {
+    load_const 1.0
+    load_const 0.0
+    call user.operators.drv_float_div
+    jump L2
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const -1.0
+
+  L2:
+    return
+}
+
+function operators.drv_catch_int_div_zero() -> int {
+    load_const 1
+    load_const 0
+    call user.operators.drv_int_div
+    jump L2
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const -1
+
+  L2:
+    return
+}
+
+function operators.drv_catch_int_rem_zero() -> int {
+    load_const 1
+    load_const 0
+    call user.operators.drv_int_rem
+    jump L2
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const -1
+
+  L2:
+    return
+}
+
+function operators.drv_catch_mul_overflow() -> int {
+    call baml.Int.max_value
+    load_const 2
+    call user.operators.drv_int_mul
+    jump L2
+    load_var e
+    is_type baml.panics.IntegerOverflow
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const -1
+
+  L2:
+    return
+}
+
+function operators.drv_catch_neg_overflow() -> int {
+    call baml.Int.min_value
+    call user.operators.drv_int_neg
+    jump L2
+    load_var e
+    is_type baml.panics.IntegerOverflow
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const -1
+
+  L2:
+    return
+}
+
+function operators.drv_div(a: #0, b: #0) -> #0 {
+    load_var2 1 2
+    call baml.ops.__union_div
+    return
+}
+
+function operators.drv_div_int_rhs(a: #0, b: int) -> #0 {
+    load_var2 1 2
+    call baml.ops.__union_div
+    return
+}
+
+function operators.drv_float_add(a: float, b: float) -> float {
+    load_type float
+    load_var2 1 2
+    call user.operators.drv_add
+    return
+}
+
+function operators.drv_float_add_int(a: float, b: int) -> float {
+    load_type float
+    load_var2 1 2
+    call user.operators.drv_add_int_rhs
+    return
+}
+
+function operators.drv_float_div(a: float, b: float) -> float {
+    load_type float
+    load_var2 1 2
+    call user.operators.drv_div
+    return
+}
+
+function operators.drv_float_neg(a: float) -> float {
+    load_type float
+    load_var a
+    call user.operators.drv_neg
+    return
+}
+
+function operators.drv_int_add(a: int, b: int) -> int {
+    load_type int
+    load_var2 1 2
+    call user.operators.drv_add
+    return
+}
+
+function operators.drv_int_div(a: int, b: int) -> int {
+    load_type int
+    load_var2 1 2
+    call user.operators.drv_div
+    return
+}
+
+function operators.drv_int_mul(a: int, b: int) -> int {
+    load_type int
+    load_var2 1 2
+    call user.operators.drv_mul
+    return
+}
+
+function operators.drv_int_neg(a: int) -> int {
+    load_type int
+    load_var a
+    call user.operators.drv_neg
+    return
+}
+
+function operators.drv_int_rem(a: int, b: int) -> int {
+    load_type int
+    load_var2 1 2
+    call user.operators.drv_rem
+    return
+}
+
+function operators.drv_int_sub(a: int, b: int) -> int {
+    load_type int
+    load_var2 1 2
+    call user.operators.drv_sub
+    return
+}
+
+function operators.drv_mul(a: #0, b: #0) -> #0 {
+    load_var2 1 2
+    call baml.ops.__union_mul
+    return
+}
+
+function operators.drv_neg(a: #0) -> #0 {
+    load_var a
+    call baml.ops.__union_neg
+    return
+}
+
+function operators.drv_rem(a: #0, b: #0) -> #0 {
+    load_var2 1 2
+    call baml.ops.__union_rem
+    return
+}
+
+function operators.drv_string_add(a: string, b: string) -> string {
+    load_type string
+    load_var2 1 2
+    call user.operators.drv_add
+    return
+}
+
+function operators.drv_sub(a: #0, b: #0) -> #0 {
+    load_var2 1 2
+    call baml.ops.__union_sub
+    return
+}
+
+function operators.ops_add_to_unit(u: operators.Meters | operators.Feet, n: int) -> operators.Meters | operators.Feet {
+    load_var2 1 2
+    call baml.ops.__union_add
+    return
+}
+
+function operators.ops_add_vecs(a: operators.Vec2, b: operators.Vec2) -> operators.Vec2 {
+    load_var2 1 2
+    call baml.ops.__union_add
+    return
+}
+
+function operators.ops_compound_add_vec() -> operators.Vec2 {
+    load_const 1
+    load_const 2
+    init_instance user.operators.Vec2 .x, .y
+    store_var v
+    load_var v
+    load_const 10
+    load_const 20
+    init_instance user.operators.Vec2 .x, .y
+    call baml.ops.__union_add
+    store_var v
+    load_var v
+    return
+}
+
+function operators.ops_counter_add(c: operators.Counter, n: int) -> int {
+    load_var2 1 2
+    call baml.ops.__union_add
+    return
+}
+
+function operators.ops_double_neg_var() -> int {
+    load_const -10
+    unary_op -
+    unary_op -
+    return
+}
+
+function operators.ops_mixed_union_add(n: int) -> int | float {
+    load_var n
+    call user.operators.ops_pick_int_or_float
+    load_const 1
+    call baml.ops.__union_add
+    return
+}
+
+function operators.ops_neg_debt(d: operators.Debt) -> int {
+    load_var d
+    call baml.ops.__union_neg
+    return
+}
+
+function operators.ops_neg_vec(a: operators.Vec2) -> operators.Vec2 {
+    load_var a
+    call baml.ops.__union_neg
+    return
+}
+
+function operators.ops_pick_int_or_float(n: int) -> int | float {
+    load_var n
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 2.5
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function operators.ops_poly_add_float(p: operators.Poly, f: float) -> operators.Poly {
+    load_var2 1 2
+    call baml.ops.__union_add
+    return
+}
+
+function operators.ops_poly_add_int(p: operators.Poly, n: int) -> operators.Poly {
+    load_var2 1 2
+    call baml.ops.__union_add
+    return
+}
+
+function operators.ops_ret_bool() -> bool {
+    load_const true
+    return
+}
+
+function operators.ops_scaled_div(a: operators.Scaled, b: operators.Scaled) -> operators.Scaled {
+    load_var2 1 2
+    call baml.ops.__union_div
+    return
+}
+
+function operators.ops_scaled_mul(a: operators.Scaled, b: operators.Scaled) -> operators.Scaled {
+    load_var2 1 2
+    call baml.ops.__union_mul
+    return
+}
+
+function operators.ops_scaled_rem(a: operators.Scaled, b: operators.Scaled) -> operators.Scaled {
+    load_var2 1 2
+    call baml.ops.__union_rem
+    return
+}
+
+function operators.ops_scaled_sub(a: operators.Scaled, b: operators.Scaled) -> operators.Scaled {
+    load_var2 1 2
+    call baml.ops.__union_sub
+    return
+}
+
+function operators.ord_as_if_cond() -> int {
+    load_const 1
+    init_instance user.operators.Ranked .rank
+    load_const 2
+    init_instance user.operators.Ranked .rank
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 20
+    jump L2
+
+  L1:
+    load_const 10
+
+  L2:
+    return
+}
+
+function operators.ord_as_while_cond() -> int {
+    load_const 0
+    store_var n
+    load_const false
+
+  L0:
+    load_const true
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var n
+    return
+
+  L2:
+    load_var n
+    load_const 1
+    add_int
+    store_var n
+    load_const true
+    jump L0
+}
+
+function operators.ord_bigint_lt(a: bigint, b: bigint) -> bool {
+    load_type bigint
+    load_var2 1 2
+    call user.operators.ord_lt
+    return
+}
+
+function operators.ord_bool_ge(a: bool, b: bool) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "ge"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_bool_gt(a: bool, b: bool) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "gt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_bool_le(a: bool, b: bool) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "le"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_bool_lt(a: bool, b: bool) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_catch_ge() -> bool {
+    load_const 0
+    init_instance user.operators.Boom .n
+    load_const 1
+    init_instance user.operators.Boom .n
+    load_type baml.ops.Compare
+    load_const "ge"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L2
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    store_var _0
+
+  L2:
+    load_var _0
+    return
+}
+
+function operators.ord_catch_gt() -> bool {
+    load_const 0
+    init_instance user.operators.Boom .n
+    load_const 1
+    init_instance user.operators.Boom .n
+    load_type baml.ops.Compare
+    load_const "gt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L2
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    store_var _0
+
+  L2:
+    load_var _0
+    return
+}
+
+function operators.ord_catch_le() -> bool {
+    load_const 0
+    init_instance user.operators.Boom .n
+    load_const 1
+    init_instance user.operators.Boom .n
+    load_type baml.ops.Compare
+    load_const "le"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L2
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    store_var _0
+
+  L2:
+    load_var _0
+    return
+}
+
+function operators.ord_catch_lt() -> bool {
+    load_const 0
+    init_instance user.operators.Boom .n
+    load_const 1
+    init_instance user.operators.Boom .n
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L2
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    store_var _0
+
+  L2:
+    load_var _0
+    return
+}
+
+function operators.ord_float_ge(a: float, b: float) -> bool {
+    load_type float
+    load_var2 1 2
+    call user.operators.ord_ge
+    return
+}
+
+function operators.ord_float_lt(a: float, b: float) -> bool {
+    load_type float
+    load_var2 1 2
+    call user.operators.ord_lt
+    return
+}
+
+function operators.ord_ge(a: #0, b: #0) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "ge"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_generic_int(a: operators.Wrapped<int>, b: operators.Wrapped<int>) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_generic_string(a: operators.Wrapped<string>, b: operators.Wrapped<string>) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_gt(a: #0, b: #0) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "gt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_in_short_circuit() -> bool {
+    load_const 1
+    init_instance user.operators.Ranked .rank
+    load_const 2
+    init_instance user.operators.Ranked .rank
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _1
+    load_var _1
+    jump_if_false L0
+    pop 1
+    load_const true
+    load_const false
+    load_type baml.ops.Compare
+    load_const "gt"
+    virtual_call nargs=2 ntypeargs=0
+
+  L0:
+    return
+}
+
+function operators.ord_int_ge(a: int, b: int) -> bool {
+    load_type int
+    load_var2 1 2
+    call user.operators.ord_ge
+    return
+}
+
+function operators.ord_int_gt(a: int, b: int) -> bool {
+    load_type int
+    load_var2 1 2
+    call user.operators.ord_gt
+    return
+}
+
+function operators.ord_int_le(a: int, b: int) -> bool {
+    load_type int
+    load_var2 1 2
+    call user.operators.ord_le
+    return
+}
+
+function operators.ord_int_lt(a: int, b: int) -> bool {
+    load_type int
+    load_var2 1 2
+    call user.operators.ord_lt
+    return
+}
+
+function operators.ord_into_capture() -> bool {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const false
+    store_deref ?1
+    load_var out
+    make_closure .<lambda(ord_into_capture, 0)>, 1
+    call_indirect
+    pop 1
+    load_deref ?1
+    return
+}
+
+function operators.ord_into_field() -> bool {
+    load_const false
+    init_instance user.operators.FlagBox .flag
+    store_var b
+    load_const 1
+    init_instance user.operators.Ranked .rank
+    load_const 2
+    init_instance user.operators.Ranked .rank
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var2 1 2
+    store_field .flag
+    load_var b
+    load_field .flag
+    return
+}
+
+function operators.ord_into_index() -> bool {
+    load_const false
+    load_const false
+    load_type bool
+    alloc_array 2
+    store_var xs
+    load_const 1
+    init_instance user.operators.Ranked .rank
+    load_const 2
+    init_instance user.operators.Ranked .rank
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _5
+    load_var xs
+    load_const 0
+    load_var _5
+    store_array_element
+    load_var xs
+    load_const 0
+    load_array_element
+    return
+}
+
+function operators.ord_le(a: #0, b: #0) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "le"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_lt(a: #0, b: #0) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_odd_gt(a: operators.OddOrder, b: operators.OddOrder) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "gt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_odd_le(a: operators.OddOrder, b: operators.OddOrder) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "le"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_rank_ge(a: operators.Ranked, b: operators.Ranked) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "ge"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_rank_generic_lt(a: operators.Ranked, b: operators.Ranked) -> bool {
+    load_type operators.Ranked
+    load_var2 1 2
+    call user.operators.ord_lt
+    return
+}
+
+function operators.ord_rank_gt(a: operators.Ranked, b: operators.Ranked) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "gt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_rank_le(a: operators.Ranked, b: operators.Ranked) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "le"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_rank_lt(a: operators.Ranked, b: operators.Ranked) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_self_in_default(a: operators.Tier, b: operators.Tier) -> bool {
+    load_var2 1 2
+    load_type operators.Ordered
+    load_const "precedes"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function operators.ord_string_lt(a: string, b: string) -> bool {
+    load_type string
+    load_var2 1 2
+    call user.operators.ord_lt
+    return
+}

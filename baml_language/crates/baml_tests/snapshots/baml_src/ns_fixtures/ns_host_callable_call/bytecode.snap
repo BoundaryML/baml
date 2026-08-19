@@ -1,0 +1,8 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.host_callable_call.call_with_callback(callback: (int) -> string throws never, x: int) -> string {
+    load_var2 2 1
+    call_indirect
+    return
+}
