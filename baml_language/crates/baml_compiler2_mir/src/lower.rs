@@ -3589,6 +3589,75 @@ impl<'db> LoweringContext<'db> {
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
     }
 
+    /// The **top-level `let`** `name` denotes at this expression's position, if
+    /// any. Session submissions persist their root bindings as such items, and
+    /// compiler-generated `client` declarations are the same shape.
+    fn top_level_let_at(&self, expr_id: AstExprId, name: &Name) -> Option<Definition<'db>> {
+        let span_start = self
+            .source_map
+            .as_ref()
+            .map(|source_map| source_map.expr_span(expr_id).start())
+            .unwrap_or_default();
+        match resolve_name_at_in_scope(
+            self.db,
+            self.file,
+            span_start,
+            name,
+            self.scope_func_name.as_ref(),
+        ) {
+            ResolvedName::Item(definition @ Definition::Let(_)) => Some(definition),
+            _ => None,
+        }
+    }
+
+    /// Whether a path expression's root names a top-level `let` — i.e. whether
+    /// it denotes a runtime **value** even though it is not a lexical binding.
+    fn path_root_is_top_level_let(&self, expr_id: AstExprId, name: &Name) -> bool {
+        self.top_level_let_at(expr_id, name).is_some()
+    }
+
+    /// Materialize a **top-level `let`**'s current value into a temp, when
+    /// `name` resolves to one at this expression's position.
+    ///
+    /// Session submissions persist their root bindings as initialized globals,
+    /// not as lexical locals, so such a name has no binding id and no `Place`
+    /// of its own — `place_for_path` correctly reports nothing. Every road that
+    /// wants to *use* the value (project a field off it, dispatch a method on
+    /// it) has to load it first, and reporting "no place" as a null operand is
+    /// how a method call on a session binding became a VM type error naming
+    /// `any`: `Type::of` reads a null value as the top of the object lattice.
+    ///
+    /// The temp takes TIR's recorded root type when there is one. A method
+    /// call's callee path is typed by the callee road, which does not record a
+    /// root, so `unknown` is the honest fallback there — the receiver is passed
+    /// as an ordinary argument and the callee's own signature governs it.
+    fn load_top_level_let_root(&mut self, expr_id: AstExprId, name: &Name) -> Option<Local> {
+        let definition = self.top_level_let_at(expr_id, name)?;
+        let root_ty = self
+            .path_root_ty(expr_id)
+            .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+                attr: TyAttr::default(),
+            });
+        let root_local = self.builder.temp(root_ty.clone());
+        self.lower_item_ref(expr_id, definition, Place::local(root_local));
+        // Hand out a *materialized* copy rather than the global-read local.
+        // `lower_item_ref` defines the first temp as `Use(Constant::GlobalItem)`,
+        // which emit's analysis classifies as a pure constant and virtualizes —
+        // it is re-emitted at each use instead of being stored. Every consumer
+        // that takes an `Operand` is fine with that, which is why `v.join(…)`,
+        // `m.keys()` and every other container method work off the first temp.
+        // `Rvalue::Len` is the one consumer that takes a `Place`, and a
+        // virtualized place does not survive that road — `v.length()` read a
+        // slot nothing had written and the VM reported the null as `any`. The
+        // copy is an ordinary defined local, so the place is real.
+        let materialized = self.builder.temp(root_ty);
+        self.builder.assign(
+            Place::local(materialized),
+            Rvalue::Use(Operand::Copy(Place::local(root_local))),
+        );
+        Some(materialized)
+    }
+
     /// Get the TIR-inferred type of `segments[..=seg_idx]` for a multi-segment
     /// local-rooted Path expression. Returns `None` if not recorded.
     #[allow(dead_code)]
@@ -6158,31 +6227,9 @@ impl<'db> LoweringContext<'db> {
                 _ => unreachable!("path roots are locals or captures"),
             };
             (place, ty)
-        } else if let Some(root_ty) = self.path_root_ty(expr_id)
-            && let Some(definition) = {
-                let span_start = self
-                    .source_map
-                    .as_ref()
-                    .map(|source_map| source_map.expr_span(expr_id).start())
-                    .unwrap_or_default();
-                match resolve_name_at_in_scope(
-                    self.db,
-                    self.file,
-                    span_start,
-                    &segments[0],
-                    self.scope_func_name.as_ref(),
-                ) {
-                    ResolvedName::Item(definition @ Definition::Let(_)) => Some(definition),
-                    _ => None,
-                }
-            }
-        {
-            // Persistent Session bindings are initialized globals, not lexical
-            // locals. Load the root once into a temp so the normal field-chain
-            // lowering can project its class/interface members.
-            let root_local = self.builder.temp(root_ty.clone());
-            self.lower_item_ref(expr_id, definition, Place::local(root_local));
-            (Place::Local(root_local), root_ty)
+        } else if let Some(root_local) = self.load_top_level_let_root(expr_id, &segments[0]) {
+            let ty = self.builder.local_ty(root_local);
+            (Place::Local(root_local), ty)
         } else if self.is_default_receiver_root(expr_id, segments)
             && let Some(&self_local) = self.locals.get(&Name::new("self"))
         {
@@ -8277,8 +8324,21 @@ impl<'db> LoweringContext<'db> {
             //
             // The segment just before the method name may be a real field
             // access (`r.a.b.c.d.e.speak()`) whose static type is an interface.
+            // A Session's top-level `let` is a global, so it has no local of its
+            // own; load it into one. Container and interface dispatch both start
+            // here, which is why `v.length()` on a session binding never reached
+            // a receiver at all while `v[0]` and `v.field` did.
+            //
+            // When this block declines the call, the load it emitted is a dead
+            // store and the road below loads the global again. Both reads are
+            // pure and cheap (a constant global fetch into a temp), so this is
+            // left alone rather than memoized: caching the local per
+            // (expr, name) would have to prove the first load dominates the
+            // second use, and these can land in different blocks.
             if segments.len() >= 2
-                && let Some(recv_root_local) = self.local_for_path(callee, &segments[0])
+                && let Some(recv_root_local) = self
+                    .local_for_path(callee, &segments[0])
+                    .or_else(|| self.load_top_level_let_root(callee, &segments[0]))
             {
                 let method_name = segments.last().unwrap().clone();
                 let prefix_idx = segments.len() - 2;
@@ -8475,8 +8535,13 @@ impl<'db> LoweringContext<'db> {
                 // Type-name bases like `Label<int>.method` can have concrete
                 // TIR types (`Interface`, `Class`) but are not runtime values.
                 let base_is_value = match &self.body.exprs[*base] {
+                    // A Session's top-level `let` is a value like any other,
+                    // it just lives in a global rather than a local — without
+                    // this it read as a bare type/package path and the receiver
+                    // was dropped from the call entirely.
                     AstExpr::Path(segments) if !segments.is_empty() => {
                         self.binding_id_for_path(*base, &segments[0]).is_some()
+                            || self.path_root_is_top_level_let(*base, &segments[0])
                     }
                     _ => self
                         .tir_expr_type(self.expr_metadata_key(*base))
@@ -8619,8 +8684,15 @@ impl<'db> LoweringContext<'db> {
                     (callee_op, self.lower_call_arg_operands(expr_id, args))
                 } else {
                     let receiver_op = if receiver_segments.len() == 1 {
-                        // Simple local variable receiver (e.g. `self`).
+                        // Simple local variable receiver (e.g. `self`), or a
+                        // Session's top-level `let`, which is a global rather
+                        // than a local and has to be loaded before it can be
+                        // dispatched on.
                         self.place_for_path(callee, &receiver_segments[0])
+                            .or_else(|| {
+                                self.load_top_level_let_root(callee, &receiver_segments[0])
+                                    .map(Place::local)
+                            })
                             .map_or_else(|| Operand::Constant(Constant::Null), Operand::Copy)
                     } else {
                         // Multi-segment receiver (e.g. `user.profile.items`): lower as field chain.
@@ -8653,7 +8725,13 @@ impl<'db> LoweringContext<'db> {
                     Some(item) => Operand::Constant(Constant::Function(item)),
                     None => self.lower_to_operand(callee),
                 };
-                let receiver_op = self.place_for_path(callee, &segments[0]).map(Operand::Copy);
+                let receiver_op = self
+                    .place_for_path(callee, &segments[0])
+                    .or_else(|| {
+                        self.load_top_level_let_root(callee, &segments[0])
+                            .map(Place::local)
+                    })
+                    .map(Operand::Copy);
                 if let Some(receiver_op) = receiver_op {
                     let prefix_idx = segments.len() - 2;
                     receiver_path_tir_ty = self

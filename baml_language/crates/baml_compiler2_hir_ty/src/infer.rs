@@ -6055,6 +6055,14 @@ impl<'db> InferenceContext<'db> {
                 && let Some(root) = body.root_expr
                 && let Some(root_ty) = inference.type_of_expr.get(&root).cloned()
             {
+                // The initializer's own type is the EXPRESSION type, so a
+                // fresh literal arrives unwidened - `let n = 5` would bind `5`
+                // and `n.to_string()` would be E0007 on a type with no
+                // members. A top-level let is a binding site like any other
+                // (`let` in a body applies this before recording the
+                // binding), and a session cannot annotate one to opt out, so
+                // the widening is unconditional here.
+                let root_ty = self.widen_fresh(&root_ty);
                 let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[1..]);
                 self.write_resolved_path(expr, steps);
                 return ty;
