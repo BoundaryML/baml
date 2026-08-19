@@ -21,6 +21,7 @@
 
 mod events;
 mod notifications;
+mod proto;
 mod requests;
 
 pub use requests::{initialize_result, server_capabilities};
@@ -178,6 +179,11 @@ define_request_tables! {
     }
     snapshot {
         "textDocument/formatting" => formatting,
+        "textDocument/hover" => hover,
+        "textDocument/definition" => goto_definition,
+        "textDocument/references" => references,
+        "textDocument/documentSymbol" => document_symbol,
+        "workspace/symbol" => workspace_symbol,
     }
 }
 

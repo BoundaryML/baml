@@ -727,7 +727,7 @@ fn request_gating_and_unsupported_methods() {
         .unwrap_err();
     assert!(matches!(error, LspError::RequestFailed(_)), "{error:?}");
 
-    let error = h.request(s, "textDocument/hover", json!({})).unwrap_err();
+    let error = h.request(s, "textDocument/rename", json!({})).unwrap_err();
     assert!(
         matches!(error, LspError::RequestNotSupported(_)),
         "{error:?}"
@@ -792,4 +792,167 @@ fn call_events_run_on_the_owner() {
     )));
     h.settle();
     assert_eq!(ran.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+// ── Position-based features (2.3b) ──────────────────────────────────────────
+
+/// The LSP position of `needle`'s first byte in ASCII-only `text`.
+fn pos_of(text: &str, needle: &str) -> lsp_types::Position {
+    let offset = text
+        .find(needle)
+        .unwrap_or_else(|| panic!("fixture contains {needle:?}"));
+    let before = &text[..offset];
+    let line = u32::try_from(before.matches('\n').count()).unwrap();
+    let character = u32::try_from(offset - before.rfind('\n').map_or(0, |p| p + 1)).unwrap();
+    lsp_types::Position { line, character }
+}
+
+const TYPES_FIXTURE: &str = "class Person {\n    name string\n}\n";
+const FUNCS_FIXTURE: &str =
+    "/// Greets someone.\nfunction greet(p: Person) -> string {\n    p.name\n}\n";
+
+/// A settled single-session workspace with the two feature fixtures.
+fn feature_harness() -> Harness {
+    let mut harness = Harness::new();
+    harness.fs.add_project(&harness.ws);
+    harness
+        .fs
+        .write(harness.ws.join("types.baml"), TYPES_FIXTURE);
+    harness
+        .fs
+        .write(harness.ws.join("funcs.baml"), FUNCS_FIXTURE);
+    harness.init_session(SessionKey(1), &[lsp_types::PositionEncodingKind::UTF16]);
+    harness.settle();
+    harness
+}
+
+fn position_params(uri: &Url, position: lsp_types::Position) -> Value {
+    serde_json::json!({
+        "textDocument": { "uri": uri },
+        "position": position,
+    })
+}
+
+#[test]
+fn hover_renders_the_resolved_signature() {
+    let mut harness = feature_harness();
+    let uri = harness.uri("funcs.baml");
+    let response = harness
+        .request(
+            SessionKey(1),
+            "textDocument/hover",
+            position_params(&uri, pos_of(FUNCS_FIXTURE, "greet")),
+        )
+        .expect("hover succeeds");
+    let markdown = response["contents"]["value"].as_str().expect("markdown");
+    assert!(
+        markdown.contains("function greet(p: Person) -> string throws never"),
+        "resolved signature with explicit throws, got:\n{markdown}"
+    );
+}
+
+#[test]
+fn goto_definition_crosses_files() {
+    let mut harness = feature_harness();
+    let funcs = harness.uri("funcs.baml");
+    let types = harness.uri("types.baml");
+    let response = harness
+        .request(
+            SessionKey(1),
+            "textDocument/definition",
+            position_params(&funcs, pos_of(FUNCS_FIXTURE, "Person")),
+        )
+        .expect("definition succeeds");
+    assert_eq!(response["uri"], serde_json::json!(types));
+    assert_eq!(
+        response["range"]["start"],
+        serde_json::json!(pos_of(TYPES_FIXTURE, "Person"))
+    );
+}
+
+#[test]
+fn references_include_the_declaration_on_request() {
+    let mut harness = feature_harness();
+    let types = harness.uri("types.baml");
+    let mut params = position_params(&types, pos_of(TYPES_FIXTURE, "Person"));
+    params["context"] = serde_json::json!({ "includeDeclaration": true });
+    let response = harness
+        .request(SessionKey(1), "textDocument/references", params)
+        .expect("references succeed");
+    let locations = response.as_array().expect("location array");
+    // The declaration plus the parameter-type use in funcs.baml.
+    assert_eq!(locations.len(), 2, "got: {locations:?}");
+    assert!(
+        locations
+            .iter()
+            .any(|loc| loc["uri"] == serde_json::json!(harness.uri("funcs.baml"))),
+        "cross-file use found, got: {locations:?}"
+    );
+}
+
+#[test]
+fn document_symbols_nest_members_with_distinct_ranges() {
+    let mut harness = feature_harness();
+    let types = harness.uri("types.baml");
+    let response = harness
+        .request(
+            SessionKey(1),
+            "textDocument/documentSymbol",
+            serde_json::json!({ "textDocument": { "uri": types } }),
+        )
+        .expect("symbols succeed");
+    let symbols = response.as_array().expect("symbol array");
+    assert_eq!(symbols[0]["name"], "Person");
+    let children = symbols[0]["children"].as_array().expect("members nest");
+    assert_eq!(children[0]["name"], "name");
+    // The class's full range extends past its selection range.
+    assert_ne!(
+        symbols[0]["range"]["end"],
+        symbols[0]["selectionRange"]["end"]
+    );
+}
+
+#[test]
+fn workspace_symbols_cover_user_and_materialized_stdlib() {
+    let temp = tempfile::tempdir().unwrap();
+    let stdlib_dir = temp.path().canonicalize().unwrap();
+    let mut harness = Harness::with_stdlib_dir(Some(stdlib_dir.clone()));
+    harness.fs.add_project(&harness.ws);
+    harness
+        .fs
+        .write(harness.ws.join("types.baml"), TYPES_FIXTURE);
+    harness.init_session(SessionKey(1), &[lsp_types::PositionEncodingKind::UTF16]);
+    harness.settle();
+
+    let response = harness
+        .request(
+            SessionKey(1),
+            "workspace/symbol",
+            serde_json::json!({ "query": "Person" }),
+        )
+        .expect("workspace symbols succeed");
+    let symbols = response.as_array().expect("symbol array");
+    assert!(
+        symbols.iter().any(|s| s["name"] == "Person"),
+        "user symbol found, got: {symbols:?}"
+    );
+
+    // A stdlib symbol resolves to a URI under the materialized directory.
+    let response = harness
+        .request(
+            SessionKey(1),
+            "workspace/symbol",
+            serde_json::json!({ "query": "deep_copy" }),
+        )
+        .expect("workspace symbols succeed");
+    let symbols = response.as_array().expect("symbol array");
+    let stdlib_hit = symbols
+        .iter()
+        .find(|s| s["name"] == "deep_copy")
+        .unwrap_or_else(|| panic!("stdlib symbol found, got: {symbols:?}"));
+    let uri = stdlib_hit["location"]["uri"].as_str().unwrap();
+    assert!(
+        uri.starts_with(Url::from_file_path(&stdlib_dir).unwrap().as_str()),
+        "stdlib URI maps under the materialized dir, got: {uri}"
+    );
 }

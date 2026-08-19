@@ -37,6 +37,11 @@ pub fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilities {
             },
         )),
         document_formatting_provider: Some(lsp_types::OneOf::Left(true)),
+        hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
+        definition_provider: Some(lsp_types::OneOf::Left(true)),
+        references_provider: Some(lsp_types::OneOf::Left(true)),
+        document_symbol_provider: Some(lsp_types::OneOf::Left(true)),
+        workspace_symbol_provider: Some(lsp_types::OneOf::Left(true)),
         workspace: Some(WorkspaceServerCapabilities {
             workspace_folders: Some(WorkspaceFoldersServerCapabilities {
                 supported: Some(true),
@@ -222,6 +227,149 @@ pub(super) fn formatting(
         },
         new_text: formatted,
     }]))
+}
+
+// ── Snapshot lane: position-based features ───────────────────────────────────
+
+/// The (file, byte offset) a position request addresses, in the session's
+/// encoding.
+fn file_offset(
+    snap: &crate::snapshot::Snapshot,
+    text_document: &lsp_types::TextDocumentIdentifier,
+    position: lsp_types::Position,
+) -> Result<(baml_db::SourceFile, text_size::TextSize), LspError> {
+    let path = crate::paths::canonical_document_path(snap.roots(), &text_document.uri)?;
+    let db = snap.db();
+    let Some(file) = db.get_file(&path) else {
+        return Err(LspError::FileNotFound(path));
+    };
+    let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
+    let offset = codec.position_to_offset(position)?;
+    Ok((file, offset))
+}
+
+pub(super) fn hover(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::HoverParams,
+) -> Result<Option<lsp_types::Hover>, LspError> {
+    let position_params = params.text_document_position_params;
+    let (file, offset) = file_offset(
+        snap,
+        &position_params.text_document,
+        position_params.position,
+    )?;
+    let Some(info) = baml_ide::type_at(snap.db(), file, offset) else {
+        return Ok(None);
+    };
+    Ok(Some(lsp_types::Hover {
+        contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
+            kind: lsp_types::MarkupKind::Markdown,
+            value: super::proto::hover_markdown(&info),
+        }),
+        range: None,
+    }))
+}
+
+pub(super) fn goto_definition(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::GotoDefinitionParams,
+) -> Result<Option<lsp_types::GotoDefinitionResponse>, LspError> {
+    let position_params = params.text_document_position_params;
+    let (file, offset) = file_offset(
+        snap,
+        &position_params.text_document,
+        position_params.position,
+    )?;
+    let Some(target) = baml_ide::definition_at(snap.db(), file, offset) else {
+        return Ok(None);
+    };
+    // A stdlib target with no materialized directory has no URI to open —
+    // "no definition" is the honest answer, not an error.
+    Ok(super::proto::location(snap, target).map(lsp_types::GotoDefinitionResponse::Scalar))
+}
+
+pub(super) fn references(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::ReferenceParams,
+) -> Result<Option<Vec<lsp_types::Location>>, LspError> {
+    let position_params = params.text_document_position;
+    let (file, offset) = file_offset(
+        snap,
+        &position_params.text_document,
+        position_params.position,
+    )?;
+    let db = snap.db();
+    let mut targets = baml_ide::usages_at(db, file, offset);
+    let include_declaration = params.context.include_declaration;
+    if include_declaration
+        && let Some(declaration) = baml_ide::definition_at(db, file, offset)
+        && !targets.contains(&declaration)
+    {
+        targets.insert(0, declaration);
+    }
+    let locations: Vec<lsp_types::Location> = targets
+        .into_iter()
+        .filter_map(|target| super::proto::location(snap, target))
+        .collect();
+    Ok((!locations.is_empty()).then_some(locations))
+}
+
+pub(super) fn document_symbol(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::DocumentSymbolParams,
+) -> Result<Option<lsp_types::DocumentSymbolResponse>, LspError> {
+    let text_document = params.text_document;
+    let path = crate::paths::canonical_document_path(snap.roots(), &text_document.uri)?;
+    let db = snap.db();
+    let Some(file) = db.get_file(&path) else {
+        return Err(LspError::FileNotFound(path));
+    };
+    let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
+    let symbols: Vec<lsp_types::DocumentSymbol> = baml_ide::file_outline(db, file)
+        .iter()
+        .map(|item| super::proto::document_symbol(item, &codec))
+        .collect();
+    Ok(Some(lsp_types::DocumentSymbolResponse::Nested(symbols)))
+}
+
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "the dispatch table's snapshot-handler contract is fallible"
+)]
+pub(super) fn workspace_symbol(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::WorkspaceSymbolParams,
+) -> Result<Option<lsp_types::WorkspaceSymbolResponse>, LspError> {
+    let query = params.query;
+    let db = snap.db();
+    // The compiler-visible set: workspace symbols plus the stdlib, so
+    // `String` or `deep_copy` are findable — goto-def on the result then
+    // rides the stdlib URI mapping.
+    let files = baml_db::baml_compiler2_hir::compiler2_all_files(db);
+    let symbols = baml_ide::search_symbols(db, &files, &query);
+    let infos: Vec<lsp_types::SymbolInformation> = symbols
+        .into_iter()
+        .filter_map(|symbol| {
+            let uri = crate::paths::uri_for_db_path(snap.roots(), &symbol.file.path(db))?;
+            let codec = PositionCodec::new(symbol.file.text(db), snap.cx().encoding);
+            #[expect(
+                deprecated,
+                reason = "SymbolInformation::deprecated is an LSP wire field; lsp_types keeps it and struct construction must fill it"
+            )]
+            Some(lsp_types::SymbolInformation {
+                name: symbol.name,
+                kind: super::proto::symbol_kind(symbol.kind),
+                tags: None,
+                deprecated: None,
+                location: lsp_types::Location {
+                    uri,
+                    range: codec.byte_range_to_lsp(symbol.name_span),
+                },
+                container_name: symbol.container_name,
+            })
+        })
+        .collect();
+    Ok(Some(lsp_types::WorkspaceSymbolResponse::Flat(infos)))
 }
 
 #[cfg(test)]
