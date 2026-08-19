@@ -115,12 +115,10 @@ fn narrow_truthiness_then_branch_non_null() {
       { : never
         if (x : int | null) : void
           { : never
-            return x : int | null
+            return x : int
           }
         return 0 : 0
       }
-      !! 35..36: type mismatch: expected bool, got int | null
-      !! 51..52: type mismatch: expected int, got int | null
     }
     block user.f {
     }

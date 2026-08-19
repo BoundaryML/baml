@@ -1810,7 +1810,7 @@ fn rvalue_can_panic(body: &MirFunctionBody, rvalue: &Rvalue) -> bool {
         },
         Rvalue::UnaryOp { op, operand } => match op {
             UnaryOp::Neg => operand_could_be_int(body, operand),
-            UnaryOp::Not => false,
+            UnaryOp::Not | UnaryOp::Truthy => false,
         },
         // Allocation can report `AllocFailure`, but that is a host resource
         // condition rather than a property of the program point, and treating

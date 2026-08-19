@@ -13,6 +13,8 @@ methods:
   function length(self) -> int
   /// Alias for `length()`.
   function char_count(self) -> int
+  /// Returns true if the string has no characters.
+  function is_empty(self) -> bool
   /// Returns the length of the string in **UTF-8 bytes**.
   function byte_length(self) -> int
   /// Returns the string with all Unicode characters converted to lowercase.

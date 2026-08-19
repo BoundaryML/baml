@@ -1094,6 +1094,11 @@ pub enum OpCode {
 
     // Lexical Package.current(): u32 constant-pool string index.
     LoadCurrentPackage,
+
+    // Truthiness coercion (B-1563), appended to preserve discriminants:
+    // pop a value, push its truthiness (`false`, `null`, zero, and empty
+    // string/list/map/bytes are falsy; everything else is truthy).
+    Truthy,
 }
 
 impl OpCode {
@@ -1119,6 +1124,7 @@ impl OpCode {
             | Self::MakeCell
             | Self::SendEvent
             | Self::ContainerLen
+            | Self::Truthy
             | Self::Spawn
             | Self::AwaitAny
             | Self::Add
@@ -1376,6 +1382,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
             x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
             x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
+            x if x == Self::Truthy as u8 => Ok(Self::Truthy),
             _ => Err(byte),
         }
     }
@@ -1404,6 +1411,7 @@ impl std::fmt::Display for OpCode {
             Self::TypeTag => "TYPE_TAG",
             Self::RuntimeIsType => "RUNTIME_IS_TYPE",
             Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
+            Self::Truthy => "TRUTHY",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
@@ -1576,6 +1584,8 @@ pub enum CmpOp {
 pub enum UnaryOp {
     Not,
     Neg,
+    /// Truthiness coercion (B-1563). Appended to preserve Borsh indices.
+    Truthy,
 }
 
 impl std::fmt::Display for BinOp {
@@ -1613,6 +1623,7 @@ impl std::fmt::Display for UnaryOp {
         f.write_str(match self {
             UnaryOp::Not => "!",
             UnaryOp::Neg => "-",
+            UnaryOp::Truthy => "truthy",
         })
     }
 }
@@ -2571,6 +2582,7 @@ impl Bytecode {
             Instruction::UnaryOp(op) => match op {
                 UnaryOp::Not => OpCode::Not,
                 UnaryOp::Neg => OpCode::Neg,
+                UnaryOp::Truthy => OpCode::Truthy,
             },
 
             // Constant specialization
@@ -2763,6 +2775,7 @@ mod compact_tests {
     #[test]
     fn encoded_size_matches_emitted_bytes_for_every_opcode() {
         for (instruction, expected) in [
+            (Instruction::UnaryOp(UnaryOp::Truthy), OpCode::Truthy),
             (Instruction::VirtualLoadField(1), OpCode::VirtualLoadField),
             (Instruction::VirtualStoreField(1), OpCode::VirtualStoreField),
             (Instruction::LoadField(1), OpCode::LoadField),

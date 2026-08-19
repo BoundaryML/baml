@@ -1195,6 +1195,9 @@ impl fmt::Display for BinOp {
 pub enum UnaryOp {
     Not,
     Neg,
+    /// Truthiness coercion (B-1563): `bool(value)` - false for `false`,
+    /// `null`, zero, and empty string/list/map/bytes; true otherwise.
+    Truthy,
 }
 
 impl fmt::Display for UnaryOp {
@@ -1202,6 +1205,7 @@ impl fmt::Display for UnaryOp {
         let s = match self {
             UnaryOp::Not => "!",
             UnaryOp::Neg => "-",
+            UnaryOp::Truthy => "truthy ",
         };
         write!(f, "{s}")
     }
