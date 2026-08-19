@@ -32,7 +32,7 @@ function invoke_error_normalization.$init_test_ns_invoke_error_normalization_inv
     pop 1
     load_var registry
     load_const "root.invoke_error_normalization"
-    load_const "normalize_invoke_wraps_other_unknown_values"
+    load_const "normalize_invoke_classifies_config_errors"
     make_closure .<lambda($init_test_ns_invoke_error_normalization_invoke_error_normalization, 4)>, 0
     load_const null
     call testing.TestCollector.register_test_at

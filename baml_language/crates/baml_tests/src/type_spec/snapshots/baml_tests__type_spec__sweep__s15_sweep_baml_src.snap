@@ -3,16 +3,10 @@ source: crates/baml_tests/src/type_spec/sweep.rs
 expression: report
 ---
 files: 148
-typed nodes: 89331
-hir_ty error-channel entries: 8
+typed nodes: 89336
+hir_ty error-channel entries: 2
 panics: 0
 
 == hir_ty error channel
-ns_invoke_error_normalization/invoke_error_normalization.baml:91..96 `error`: expected ai.errors.RaisedInClient, got unknown
-ns_llm_openai_chat/openai_chat.baml:4415..4420 `error`: expected ai.errors.RaisedInClient, got unknown
-ns_llm_openai_chat/openai_chat.baml:24622..24623 `e`: expected ai.errors.RaisedInClient, got unknown
-ns_llm_stream_contract/stream_contract.baml:4154..4169 `contract_decode`: expected (string) -> ai.stream.StreamEvent[] throws ai.errors.InvokeError, got (batch: string) -> ai.stream.StreamEvent[] throws baml.json.JsonDecodeError | baml.json.JsonParseError
-ns_llm_stream_contract/stream_contract.baml:4464..4479 `contract_decode`: expected (string) -> ai.stream.StreamEvent[] throws ai.errors.InvokeError, got (batch: string) -> ai.stream.StreamEvent[] throws baml.json.JsonDecodeError | baml.json.JsonParseError
-ns_llm_stream_contract/stream_contract.baml:8327..8342 `contract_decode`: expected (string) -> ai.stream.StreamEvent[] throws ai.errors.InvokeError, got (batch: string) -> ai.stream.StreamEvent[] throws baml.json.JsonDecodeError | baml.json.JsonParseError
 ns_optional_chain_type_args/optional_chain_type_args.baml:8122..8149 `animal(whi...peak<int>()`: expected user.optional_chain_type_args.Speaker, got user.optional_chain_type_args.Cat | user.optional_chain_type_args.Dog
 ns_optional_chain_type_args/optional_chain_type_args.baml:8540..8564 `pair(which)?.tag<bool>()`: expected user.optional_chain_type_args.Tagged, got user.optional_chain_type_args.Pair<int> | user.optional_chain_type_args.Pair<string>
