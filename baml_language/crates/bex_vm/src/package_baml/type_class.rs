@@ -1001,13 +1001,6 @@ fn first_non_data_type(
             let Object::Class(class) = vm.get_object(class_ptr) else {
                 return None;
             };
-            // The output formatter currently walks `ClassField::field_type`,
-            // whose class-generic leaves are intentionally unsubstituted.
-            // Reject this path before rendering can silently erase the schema;
-            // substituting class arguments in `sys_ops` is a separate fix.
-            if class.generic_param_count > 0 {
-                return Some((path.to_string(), ty.to_string()));
-            }
             for field in class.fields.iter().filter(|field| !field.skip) {
                 let child_path = format!("{path}.{}", field.name);
                 if let Some(runtime) = &field.runtime_type {

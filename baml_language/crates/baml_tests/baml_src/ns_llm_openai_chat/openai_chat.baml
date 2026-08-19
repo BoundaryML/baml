@@ -109,7 +109,7 @@ function _chat_top_keys(body: json) -> string {
 }
 
 // The failure taxonomy of one thrown error, as a comparable label.
-function _chat_failure_label(error: unknown) -> string {
+function _chat_failure_label(error: ai.errors.RaisedInClient) -> string {
     match (ai.errors.normalize(error)) {
         let f: ai.errors.RateLimited => `RateLimited/${f.retry_safety()}`,
         let f: ai.errors.InvalidRequest => `InvalidRequest/${f.status_code ?? -1}/${f.retry_safety()}`,
@@ -582,11 +582,12 @@ testset "azure_unconfigured" {
 // ─── typed configuration failures ────────────────────────────────────────────
 //
 // A missing key / bad config must reach the caller as an `ai.errors.Failure`,
-// not a `baml.errors.InvalidArgument`. `ai.errors.normalize` flattens anything
-// that is not a Failure into an untyped `UnknownError`, and that is exactly
-// what `ai.Fallback` inspects to decide whether to try the next member.
+// not a `baml.errors.InvalidArgument`. `ai.errors.normalize` classifies every
+// raw infrastructure type into a typed Failure (config bugs land in
+// `InvalidRequest`), which is exactly what `ai.Fallback` inspects to decide
+// whether to try the next member.
 
-function _config_failure_class(e: unknown) -> string {
+function _config_failure_class(e: ai.errors.RaisedInClient) -> string {
     match (ai.errors.normalize(e)) {
         let f: ai.errors.InvalidRequest => `InvalidRequest/${f.provider}`,
         // Anything else means normalize could not keep an identity — which is

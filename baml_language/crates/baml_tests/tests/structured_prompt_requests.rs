@@ -104,7 +104,7 @@ function RequestShape(input: string) -> string {
 }
 
 function main() -> string {
-  let f: baml.AnyFunction<Returns = baml.http.Request, Throws = ai.errors.Failure | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.UnknownError | baml.reflect.errors.CompilationError> = RequestShape$build_request
+  let f: baml.AnyFunction<Returns = baml.http.Request, Throws = ai.errors.Failure | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError> = RequestShape$build_request
   let request = reflect.call_any(f, { "input": "hello", "client": Override })
   request.url
 }

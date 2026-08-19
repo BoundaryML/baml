@@ -248,7 +248,7 @@ function invoke_error_normalization.capture_client_timeout(client: ai.Client) ->
     return
 }
 
-function invoke_error_normalization.normalized_kind(error: unknown) -> string {
+function invoke_error_normalization.normalized_kind(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> string {
     load_var error
     call ai.errors.normalize_invoke
     store_var _2

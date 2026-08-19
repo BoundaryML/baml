@@ -1,4 +1,4 @@
-function normalized_kind(error: unknown) -> string {
+function normalized_kind(error: ai.errors.RaisedInClient) -> string {
     match (ai.errors.normalize_invoke(error)) {
         let timeout: baml.errors.Timeout => {
             `Timeout:${timeout.message}:${timeout.duration_ms ?? -1}`
@@ -106,18 +106,16 @@ test "normalize_invoke_preserves_unknown_error_identity" {
     assert.equal(normalized_kind(normalized), "UnknownError:after")
 }
 
-test "normalize_invoke_wraps_other_unknown_values" {
+// Raw infrastructure types are CLASSIFIED into typed failures, never wrapped
+// in UnknownError: a config bug arrives as InvalidRequest with the message
+// preserved in `detail`.
+test "normalize_invoke_classifies_config_errors" {
     let original = baml.errors.InvalidArgument { message: "invalid" };
     let normalized = ai.errors.normalize_invoke(original);
     match (normalized) {
-        let unknown_error: baml.errors.UnknownError => {
-            assert.equal(unknown_error.message, [original.to_string()]);
-            match (unknown_error.data) {
-                let preserved: baml.errors.InvalidArgument => {
-                    assert.equal(preserved.message, "invalid")
-                },
-                _ => assert.is_true(false),
-            }
+        let invalid: ai.errors.InvalidRequest => {
+            assert.equal(invalid.provider, "client");
+            assert.equal(invalid.detail, "invalid")
         },
         _ => assert.is_true(false),
     }
