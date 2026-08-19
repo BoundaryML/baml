@@ -100,6 +100,18 @@ fn create_project_with_go_generator(dir: &Path, source: &str) {
     .unwrap();
 }
 
+fn create_project_with_csharp_generator(dir: &Path, source: &str) {
+    create_project(dir, source);
+    std::fs::write(
+        dir.join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.csharp_client]\n\
+         output_type = \"csharp\"\n\
+         naming_convention = \"language\"\n",
+    )
+    .unwrap();
+}
+
 // ============================================================================
 // Tests for `baml check` exit codes
 // ============================================================================
@@ -287,6 +299,41 @@ fn generate_valid_project_returns_zero_exit_code() {
         stderr.contains("Compiling 1 file(s)"),
         "`baml generate` should keep compile progress, got: {stderr}",
     );
+}
+
+#[test]
+fn generate_csharp_warns_and_preserves_legacy_output() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir(&project).unwrap();
+    create_project_with_csharp_generator(
+        &project,
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
+    );
+
+    let legacy_output = tmp.path().join("baml_client");
+    std::fs::create_dir(&legacy_output).unwrap();
+    let user_file = legacy_output.join("UserOwned.cs");
+    std::fs::write(&user_file, "// keep me\n").unwrap();
+
+    let output = run_baml_cli(built, &project, &["generate", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "C# generation failed: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("legacy C# generated directory remains at")
+            && stderr.contains("C# now generates into"),
+        "Expected a legacy C# output warning, got: {stderr}",
+    );
+    assert!(tmp.path().join("baml_sdk").is_dir());
+    assert_eq!(std::fs::read_to_string(user_file).unwrap(), "// keep me\n");
 }
 
 #[test]

@@ -11,7 +11,7 @@ The C# product has three C#-owned layers:
 - `sdk_tests/crates/csharp` owns executable generator fixtures and the small
   Rust fixture emitter used by C# protocol conformance tests.
 
-The CLI discovers a C# generator, resolves its conventional `baml_sdk` directory, and calls the generation facade. `output_dir` selects the parent of that target-owned directory, matching every other generator. Directory staging, manifests, collision checks, and atomic replacement stay inside `sdkgen_csharp`.
+The CLI discovers a C# generator, resolves its conventional `baml_sdk` directory, and calls the generation facade. `output_dir` selects the parent of that target-owned directory, matching every other generator. `sdkgen_csharp` supplies validated C# files to the shared output writer, which owns directory staging, manifests, collision checks, and atomic replacement.
 
 Shared compiler and protocol crates expose language-neutral information only.
 In particular, the compiler preserves union discovery order; the C# generator
