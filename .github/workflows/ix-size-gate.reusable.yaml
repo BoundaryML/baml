@@ -60,7 +60,7 @@ jobs:
     name: "measure-baml-size (linux)"
     # Fork PRs never run on ix machines; untrusted events fall back to the
     # GitHub-hosted runner this job used before the migration.
-    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-gnu"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 20
     continue-on-error: true
     steps:
@@ -348,7 +348,7 @@ jobs:
 
   size-gate-wasm:
     name: "measure-baml-size (wasm)"
-    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 25
     continue-on-error: true
     steps:
@@ -440,7 +440,7 @@ jobs:
 
   size-gate-report:
     name: "enforce-baml-size"
-    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     if: ${{ always() && !cancelled() }}
     needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
     permissions:

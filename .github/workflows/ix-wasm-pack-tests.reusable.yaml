@@ -31,7 +31,7 @@ jobs:
     name: "wasm-pack test"
     # Fork PRs never run on ix machines; untrusted events fall back to the
     # GitHub-hosted runner this job used before the migration.
-    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6

@@ -94,7 +94,7 @@ jobs:
     name: "cargo test (x86_64-unknown-linux-gnu)"
     # Fork PRs never run on ix machines; untrusted events fall back to the
     # GitHub-hosted runner this job used before the migration.
-    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-gnu"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
     # 40, not 25: a run landing on a cold ix machine recompiles from local
     # sccache and has been measured at 1519s+ under
     # family contention (cancelled at the old 25m cap); warm runs are 92s.
@@ -199,7 +199,7 @@ jobs:
     name: "cargo test (x86_64-unknown-linux-musl)"
     # Fork PRs never run on ix machines; untrusted events fall back to the
     # GitHub-hosted runner this job used before the migration.
-    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-musl"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-musl"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
     # 45, not 35: same reasoning as the gnu lane above; measured 1400s under
     # contention against the old 35m cap (23 of 35 minutes used).
     timeout-minutes: 45
@@ -558,7 +558,7 @@ jobs:
             // generated matrix lands in the sdk family: these jobs share the
             // gnu Rust build underneath and differ only in which language
             // toolchain each one leaves warm in the seed lineage.
-            const LINUX_RUNNER = poolOk ? ["self-hosted", "ix", "ix-sdk"] : "blacksmith-16vcpu-ubuntu-2404";
+            const LINUX_RUNNER = poolOk ? ["ix", "ix-sdk"] : "blacksmith-16vcpu-ubuntu-2404";
 
             const baseMatrix = [
               {
@@ -1194,7 +1194,7 @@ jobs:
     name: "cargo test (wasm32-unknown-unknown)"
     # Fork PRs never run on ix machines; untrusted events fall back to the
     # GitHub-hosted runner this job used before the migration.
-    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
@@ -1310,7 +1310,7 @@ jobs:
     name: "cargo build (msrv)"
     # Fork PRs never run on ix machines; untrusted events fall back to the
     # GitHub-hosted runner this job used before the migration.
-    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-msrv"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-msrv"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
     # 40 (was 25): the MSRV toolchain is unique to this job, so a run on a
     # machine without it rebuilds with a cold compile cache and measured
     # 21-25+ min under wave contention (three straight 25-min timeouts on
@@ -1408,7 +1408,7 @@ jobs:
     name: "cargo doc"
     # Fork PRs never run on ix machines; untrusted events fall back to the
     # GitHub-hosted runner this job used before the migration.
-    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-gnu"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
@@ -1489,7 +1489,7 @@ jobs:
     name: "snapshot tests"
     # Fork PRs never run on ix machines; untrusted events fall back to the
     # GitHub-hosted runner this job used before the migration.
-    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-gnu"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
     # 45, not 30: on ix machines this lane runs 7-16 min quiet but has
     # been measured at 30m+ when two full waves stack on the gnu family
     # (three timeout-cancels on 2026-08-16, all contention, all green on
