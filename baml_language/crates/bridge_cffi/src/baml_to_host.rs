@@ -325,8 +325,13 @@ pub struct PreparedCall {
 }
 
 impl PreparedCall {
-    pub(crate) fn host_call_id(&self) -> u64 {
-        self.context.host_call_id.0
+    pub(crate) fn register_active_call_route(
+        &self,
+    ) -> Result<crate::ActiveCallRouteGuard, BridgeError> {
+        crate::register_active_call_route(
+            self.context.host_call_id.0,
+            self.context.cancel.clone(),
+        )
     }
 }
 
@@ -398,7 +403,10 @@ pub fn prepare_call(bytes: &[u8]) -> Result<PreparedCall, BridgeError> {
 /// [`panic_to_outbound`]), and the PyO3 glue lets it become pyo3's
 /// `PanicException`.
 pub async fn invoke_prepared(runtime: Arc<dyn Bex>, call: PreparedCall) -> Vec<u8> {
-    let _route = crate::register_active_call_runtime(call.context.host_call_id.0, &runtime);
+    let _route = match call.register_active_call_route() {
+        Ok(route) => route,
+        Err(error) => return error_to_outbound(error),
+    };
     invoke_prepared_registered(runtime, call).await
 }
 

@@ -150,7 +150,7 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
     // Install the cancellation route before returning control to the caller.
     // The guard stays alive through synchronous callback delivery, closing
     // both the pre-start and completed-before-delivery races.
-    let route = crate::register_active_call_runtime(prepared.host_call_id(), &runtime);
+    let route = prepared.register_active_call_route()?;
 
     get_tokio_runtime()?.spawn(async move {
         let _route = route;
