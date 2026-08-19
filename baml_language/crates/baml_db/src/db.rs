@@ -53,6 +53,12 @@ pub enum SourceRootError {
     /// world-viewpoint rework lands.
     #[error("the database already has a workspace source root")]
     SecondWorkspaceRoot(SourceRoot),
+    /// The package name is reserved (a builtin package, `user`, `root`, or
+    /// `env`) and this root kind may not claim it: only `Stdlib` roots carry
+    /// builtin names, and only a `Workspace` root carries the reserved user
+    /// package name.
+    #[error("package name `{name}` is reserved")]
+    ReservedPackageName { name: Name },
 }
 
 /// The main database for BAML projects.
@@ -394,6 +400,21 @@ impl ProjectDatabase {
         if let Some(&existing) = self.roots_by_path.get(&path) {
             return Err(SourceRootError::PathTaken(existing));
         }
+        // Reserved names are claimable only by the kind they are reserved
+        // FOR: builtin packages by `Stdlib` roots (`ensure_stdlib_sources`),
+        // the reserved user package by the `Workspace` root. Anything else
+        // would silently merge into a package it does not own —
+        // `package_files` unions roots by name.
+        let reserved_for_kind = match kind {
+            SourceRootKind::Stdlib => true,
+            SourceRootKind::Workspace => package.as_str() == baml_type::RESERVED_USER_PACKAGE,
+            SourceRootKind::Dependency | SourceRootKind::Dynamic => false,
+        };
+        if !reserved_for_kind
+            && baml_builtins2::reserved_package_names().contains(&package.as_str())
+        {
+            return Err(SourceRootError::ReservedPackageName { name: package });
+        }
         if kind == SourceRootKind::Workspace
             && let Some(existing) = self.workspace_root()
         {
@@ -527,6 +548,12 @@ impl ProjectDatabase {
             if existing.text(self) != text {
                 existing.set_text(self).to(text.to_owned());
             }
+            // This is the ordinary-file path: a file that was previously a
+            // session submission (the flag is set AFTER upsert by
+            // `add_session_file`) must not keep the stale flag.
+            if existing.is_session_submission(self) {
+                existing.set_is_session_submission(self).to(false);
+            }
             let current_root = existing.source_root(self);
             if current_root == root {
                 return (existing, false);
@@ -550,6 +577,11 @@ impl ProjectDatabase {
                 Arc::make_mut(&mut self.removed_file_tombstones).remove(&path);
                 file.set_text(self).to(text.to_owned());
                 file.set_source_root(self).to(root);
+                // A revived tombstone may have been a session submission in
+                // its previous life; this path creates ordinary files.
+                if file.is_session_submission(self) {
+                    file.set_is_session_submission(self).to(false);
+                }
                 file
             }
             None => self.new_file(root, path.clone(), text),
@@ -951,7 +983,7 @@ mod tests {
         let original = db.add_or_update_file_in(
             root,
             path,
-            "function A(input: string) -> string {\n  input\n}\n",
+            "function a(input: string) -> string {\n  input\n}\n",
         );
         let original_id = original.file_id(&db);
         let baseline = crate::check::collect_compiler2_diagnostics(&db).len();
@@ -970,7 +1002,7 @@ mod tests {
             let revived = db.add_or_update_file_in(
                 root,
                 path,
-                &format!("function A(input: string) -> string {{\n  //# v{i}\n  input\n}}\n"),
+                &format!("function a(input: string) -> string {{\n  //# v{i}\n  input\n}}\n"),
             );
             assert_eq!(
                 revived.file_id(&db),
@@ -1032,11 +1064,12 @@ mod tests {
             db.add_source_root(workspace_spec("/ws2")),
             Err(SourceRootError::SecondWorkspaceRoot(workspace))
         );
+        // The reserved user package is rejected for non-workspace kinds
+        // before the duplicate-name check even runs.
         assert_eq!(
-            db.add_source_root(dependency_spec("/dep", "user")),
-            Err(SourceRootError::PackageNameTaken {
-                name: Name::new("user"),
-                by: workspace
+            db.add_source_root(dependency_spec("/dep0", "user")),
+            Err(SourceRootError::ReservedPackageName {
+                name: Name::new("user")
             })
         );
         // A mounted interface blob and a source root may share a name: the
@@ -1055,6 +1088,66 @@ mod tests {
             })
             .unwrap();
         assert_eq!(db.source_roots(), vec![dep, workspace, dynamic]);
+        assert_eq!(
+            db.add_source_root(dependency_spec("/dep2", "dep")),
+            Err(SourceRootError::PackageNameTaken {
+                name: Name::new("dep"),
+                by: dep
+            })
+        );
+    }
+
+    #[test]
+    fn reserved_package_names_are_kind_gated() {
+        let mut db = ProjectDatabase::new();
+        // Builtin names belong to `Stdlib` roots (`ensure_stdlib_sources`).
+        assert_eq!(
+            db.add_source_root(dependency_spec("/vendor/baml", "baml")),
+            Err(SourceRootError::ReservedPackageName {
+                name: Name::new("baml")
+            })
+        );
+        assert_eq!(
+            db.add_source_root(SourceRootSpec {
+                path: PathBuf::from("<builtin>/user"),
+                package: Name::new("user"),
+                kind: SourceRootKind::Dynamic,
+            }),
+            Err(SourceRootError::ReservedPackageName {
+                name: Name::new("user")
+            })
+        );
+        // The reserved user package is exactly what a `Workspace` root
+        // claims; the stdlib claims builtin names through its own kind.
+        db.add_source_root(workspace_spec("/ws"))
+            .unwrap_or_else(|e| {
+                unreachable!("workspace root claims the reserved user package: {e}")
+            });
+        db.ensure_stdlib_sources();
+    }
+
+    #[test]
+    fn upserts_clear_stale_session_submission_flags() {
+        let mut db = ProjectDatabase::new();
+        let workspace = db.add_source_root(workspace_spec("/ws")).unwrap();
+
+        // A live session file re-upserted as an ordinary file loses the flag
+        // (the flag is set AFTER upsert by `add_session_file`, so an
+        // ordinary upsert is the only way the file re-enters the maps).
+        let session = db.add_session_file("/ws/s.baml", "let a = 1;");
+        assert!(session.is_session_submission(&db));
+        let plain = db.add_or_update_file_in(workspace, Path::new("/ws/s.baml"), "class A {}");
+        assert_eq!(plain, session, "same input, updated in place");
+        assert!(!plain.is_session_submission(&db));
+
+        // A tombstoned session file revived as an ordinary file loses the
+        // flag too.
+        let session = db.add_session_file("/ws/t.baml", "let b = 2;");
+        assert!(session.is_session_submission(&db));
+        db.remove_file(Path::new("/ws/t.baml"));
+        let revived = db.add_or_update_file_in(workspace, Path::new("/ws/t.baml"), "enum E { X }");
+        assert_eq!(revived, session, "tombstone revived, not recreated");
+        assert!(!revived.is_session_submission(&db));
     }
 
     #[test]

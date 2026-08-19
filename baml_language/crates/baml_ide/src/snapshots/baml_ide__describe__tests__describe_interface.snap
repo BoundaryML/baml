@@ -1,0 +1,9 @@
+---
+source: crates/baml_ide/src/describe.rs
+assertion_line: 2012
+expression: "project.format_description(&descs[0])"
+---
+interface Named  interfaces.baml:2
+shape: interface Named
+refs: 1
+  interfaces.baml:9  implements Named {

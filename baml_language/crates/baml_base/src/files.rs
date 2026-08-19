@@ -39,7 +39,12 @@ pub enum SourceRootKind {
 /// invalidation scoped: adding or removing a file in one root bumps only that
 /// root's `files`, so another package's file-set-derived queries are
 /// untouched.
-#[salsa::input(debug)]
+// NOT `(debug)`: `SourceRoot::files` and `SourceFile::source_root` point at
+// each other, so field-printing Debug impls on both sides would recurse
+// until stack overflow the first time anyone logs a file. The root prints
+// id-only (impl below); `SourceFile`'s field-level Debug prints the root as
+// that id and terminates.
+#[salsa::input]
 pub struct SourceRoot {
     /// Root directory. A real filesystem path for `Workspace` and on-disk
     /// `Dependency` roots; a virtual `<builtin>/<pkg>` path for `Stdlib` and
@@ -55,6 +60,16 @@ pub struct SourceRoot {
     /// Files in this root, in insertion order.
     #[returns(ref)]
     pub files: Vec<SourceFile>,
+}
+
+impl std::fmt::Debug for SourceRoot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Id-only by design: printing `files` would recurse through
+        // `SourceFile::source_root` — see the comment on the struct.
+        f.debug_tuple("SourceRoot")
+            .field(&salsa::plumbing::AsId::as_id(self))
+            .finish()
+    }
 }
 
 /// Input: the ordered set of source roots in the database.

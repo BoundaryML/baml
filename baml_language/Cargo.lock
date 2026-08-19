@@ -659,17 +659,24 @@ name = "baml_ide"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "baml_builtins2",
  "baml_codegen_types",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
  "baml_compiler2_ppir",
  "baml_compiler_diagnostics",
+ "baml_compiler_parser",
+ "baml_compiler_syntax",
  "baml_db",
  "baml_type",
+ "bitflags 2.11.1",
  "insta",
+ "rowan 0.16.1",
+ "salsa",
  "serde",
  "serde_json",
+ "text-size",
 ]
 
 [[package]]
