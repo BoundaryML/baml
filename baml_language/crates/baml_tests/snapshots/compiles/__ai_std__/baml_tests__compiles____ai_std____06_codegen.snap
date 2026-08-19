@@ -151,21 +151,17 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     jump L9
     load_var e
     throw_if_panic
-    load_type baml.json.JsonSerializationError
+    load_type never
     load_var e
-    call baml.String.from
-    store_var _121
-    load_var2 38 39
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
+    load_const "final value serialization failed"
+    call baml.errors.UnknownError.with_message
     throw
 
   L9:
     call baml.json.stringify
-    store_var _126
+    store_var _124
     load_deref ?5
-    load_var _126
+    load_var _124
     init_instance ai.events.FinalProduced .value_json
     load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     alloc_array 1
@@ -2418,40 +2414,9 @@ function ai.errors.classify_http(provider: string, status_code: int, body: strin
 }
 
 function ai.errors.normalize(error: unknown) -> ai.errors.Failure | baml.errors.UnknownError {
+    load_type ai.errors.Failure
     load_var error
-    store_var _2
-    load_var _2
-    narrow_bind ai.errors.Failure, slot=2
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var error
-    store_var _4
-    load_var _4
-    narrow_bind baml.errors.UnknownError, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_type unknown
-    load_var error
-    call baml.String.from
-    store_var _7
-    load_var2 1 4
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    jump L4
-
-  L2:
-    load_var _4
-    jump L4
-
-  L3:
-    load_var _2
-
-  L4:
+    call baml.errors.UnknownError.from
     return
 }
 

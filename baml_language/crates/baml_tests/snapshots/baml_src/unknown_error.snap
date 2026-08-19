@@ -102,7 +102,7 @@ function unknown_error.ue_call_reflect(target: baml.AnyFunction<Returns = bool, 
     load_type string
     load_type unknown
     alloc_map 0
-    call reflect.call_any
+    call baml.reflect.call_any
     return
 }
 
