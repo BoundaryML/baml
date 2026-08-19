@@ -170,6 +170,13 @@ pub enum DecodeError {
         /// The invalid descriptor field (`source` or `MIME type`).
         field: &'static str,
     },
+    /// The runtime rejected a legacy inline media descriptor while converting it to an opaque handle.
+    MediaHandleCreation {
+        /// The media kind being decoded.
+        expected: &'static str,
+        /// Native constructor context and status.
+        detail: String,
+    },
     /// A union envelope selected an arm outside the generated union's range.
     InvalidUnionOptionIndex {
         /// Generated union type being decoded.
@@ -201,6 +208,9 @@ impl fmt::Display for DecodeError {
             }
             DecodeError::InvalidMedia { field } => {
                 write!(f, "media {field} contains an interior NUL byte")
+            }
+            DecodeError::MediaHandleCreation { expected, detail } => {
+                write!(f, "failed to create {expected} handle: {detail}")
             }
             DecodeError::InvalidUnionOptionIndex {
                 union,

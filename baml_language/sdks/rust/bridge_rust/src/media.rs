@@ -182,10 +182,10 @@ impl MediaValue {
             }
         };
         validate_descriptor(&source, media.mime_type.as_deref())?;
-        let value = Self::create(kind, source_kind, source, media.mime_type).map_err(|_| {
-            DecodeError::WrongType {
-                expected: expected.map_or("media", Kind::name),
-                got: "media descriptor rejected by the runtime",
+        let value = Self::create(kind, source_kind, source, media.mime_type).map_err(|error| {
+            DecodeError::MediaHandleCreation {
+                expected: expected.map_or_else(|| kind.name(), Kind::name),
+                detail: error.to_string(),
             }
         })?;
         Ok((kind, value))
