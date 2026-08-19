@@ -709,7 +709,7 @@ mod tests {
         let route = name("user", &[], "Route");
         let pick = name("user", &[], "pick");
         let command = Ty::Union(
-            ["graph.query", "graph.diff", "utf8-lossy"]
+            ["graph.query", "graph.diff", "utf8-lossy", "self"]
                 .into_iter()
                 .map(|value| {
                     Ty::Literal(
@@ -746,13 +746,13 @@ mod tests {
         let flat = flat(lib);
         assert!(
             flat.contains(
-                "pubenumGraphQueryOrGraphDiffOrUtf8Lossy{GraphQuery,GraphDiff,Utf8Lossy,}"
+                "pubenumGraphQueryOrGraphDiffOrUtf8LossyOrSelf_{GraphQuery,GraphDiff,Utf8Lossy,Self_,}"
             ),
             "{lib}"
         );
         assert!(flat.contains("pubstructRoute{"), "{lib}");
         assert!(flat.contains("pubfnpick()"), "{lib}");
-        for wire_value in ["graph.query", "graph.diff", "utf8-lossy"] {
+        for wire_value in ["graph.query", "graph.diff", "utf8-lossy", "self"] {
             assert!(
                 lib.contains(wire_value),
                 "missing wire value {wire_value}:\n{lib}"

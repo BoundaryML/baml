@@ -427,7 +427,11 @@ fn string_literal_variant_name(value: &str) -> String {
     {
         let rest: String = chars.collect();
         if rest.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            return format!("{}{rest}", first.to_ascii_uppercase());
+            let mut variant = format!("{}{rest}", first.to_ascii_uppercase());
+            if variant == "Self" {
+                variant.push('_');
+            }
+            return variant;
         }
     }
 
@@ -454,6 +458,9 @@ fn string_literal_variant_name(value: &str) -> String {
     {
         variant.insert_str(0, "Value");
     }
+    if variant == "Self" {
+        variant.push('_');
+    }
     variant
 }
 
@@ -471,6 +478,7 @@ mod tests {
 
     #[test]
     fn string_literal_variants_are_identifier_safe_and_unique() {
+        assert_eq!(string_literal_variant_name("self!"), "Self_");
         let arms = [
             string_literal("graph.query"),
             string_literal("graph-query"),
@@ -478,6 +486,8 @@ mod tests {
             string_literal("3d"),
             string_literal("---"),
             string_literal("..."),
+            string_literal("self"),
+            string_literal("Self_"),
         ];
         assert_eq!(
             unique_variant_names(&arms).unwrap(),
@@ -488,6 +498,8 @@ mod tests {
                 "Value3d",
                 "Value",
                 "Value_",
+                "Self_",
+                "Self__",
             ]
         );
     }
