@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.json_to_from_string_concrete.serialize_user(u: fixtures.json_to_from_string_concrete.User) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.json_to_from_string_concrete.User // u // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(fixtures.json_to_from_string_concrete.User);
+        _0 = call const fn baml.json.to_string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.json_to_from_string_concrete.deserialize_user(s: string) -> fixtures.json_to_from_string_concrete.User {
+    // Locals:
+    let _0: fixtures.json_to_from_string_concrete.User // _0 // return
+    let _1: string // s // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(fixtures.json_to_from_string_concrete.User);
+        _0 = call const fn baml.json.from_string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}

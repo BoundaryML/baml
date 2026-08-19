@@ -1,0 +1,88 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.namespaces_type_resolution.auth.Config {
+  provider: string
+  secret: string
+}
+class user.fixtures.namespaces_type_resolution.auth.Config$stream {
+  provider: string | null
+  secret: string | null
+}
+class user.fixtures.namespaces_type_resolution.auth.Error {
+  realm: string
+  expired: bool
+}
+class user.fixtures.namespaces_type_resolution.auth.Error$stream {
+  realm: string | null
+  expired: bool | null
+}
+class user.fixtures.namespaces_type_resolution.auth.Token {
+  value: string
+  role: user.fixtures.namespaces_type_resolution.auth.Role
+}
+class user.fixtures.namespaces_type_resolution.auth.Token$stream {
+  value: string | null
+  role: user.fixtures.namespaces_type_resolution.auth.Role | null
+}
+enum user.fixtures.namespaces_type_resolution.auth.Role {Admin, User, Guest}
+type user.fixtures.namespaces_type_resolution.auth.TokenAlias = user.fixtures.namespaces_type_resolution.auth.Token
+type user.fixtures.namespaces_type_resolution.auth.TokenAlias$stream = user.fixtures.namespaces_type_resolution.auth.Token$stream
+function user.fixtures.namespaces_type_resolution.auth.AuthAliasParam(t: user.fixtures.namespaces_type_resolution.auth.TokenAlias) -> string  [expr] {
+  {  } t.value
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthConstruct(provider: string) -> user.fixtures.namespaces_type_resolution.auth.Config  [expr] {
+  {  } user.fixtures.namespaces_type_resolution.auth.Config { provider: provider, secret: "s3cret" }
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthEnumMatch(r: user.fixtures.namespaces_type_resolution.auth.Role) -> string  [expr] {
+  {  } match (r) { user.fixtures.namespaces_type_resolution.auth.Role.Admin => "admin", user.fixtures.namespaces_type_resolution.auth.Role.User => "user", user.fixtures.namespaces_type_resolution.auth.Role.Guest => "guest" }
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthEnumReturn() -> user.fixtures.namespaces_type_resolution.auth.Role  [expr] {
+  {  } Role.Admin
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthIdentity(cfg: user.fixtures.namespaces_type_resolution.auth.Config) -> user.fixtures.namespaces_type_resolution.auth.Config  [expr] {
+  {  } cfg
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthMakeToken(v: string) -> user.fixtures.namespaces_type_resolution.auth.Token  [expr] {
+  {  } user.fixtures.namespaces_type_resolution.auth.Token { value: v, role: Role.User }
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthMatchesLlmStatus(s: root.fixtures.namespaces_type_resolution.llm.Status) -> string  [expr] {
+  {  } match (s) { root.fixtures.namespaces_type_resolution.llm.Status.Ready => "ready", root.fixtures.namespaces_type_resolution.llm.Status.Generating => "generating", root.fixtures.namespaces_type_resolution.llm.Status.Done => "done" }
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthMatchesRootStatus(s: root.fixtures.namespaces_type_resolution.Status) -> string  [expr] {
+  {  } match (s) { root.fixtures.namespaces_type_resolution.Status.Ok => "ok", root.fixtures.namespaces_type_resolution.Status.Failed => "failed", root.fixtures.namespaces_type_resolution.Status.Pending => "pending" }
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthMixedConfigs(auth_cfg: user.fixtures.namespaces_type_resolution.auth.Config, root_cfg: root.fixtures.namespaces_type_resolution.Config, llm_cfg: root.fixtures.namespaces_type_resolution.llm.Config) -> string  [expr] {
+  {  } auth_cfg.provider
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthMixedErrors(auth_err: user.fixtures.namespaces_type_resolution.auth.Error, root_err: root.fixtures.namespaces_type_resolution.Error, llm_err: root.fixtures.namespaces_type_resolution.llm.Error) -> string  [expr] {
+  {  } auth_err.realm
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthThrowClass(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw user.fixtures.namespaces_type_resolution.auth.Error { realm: "auth failed", expired: true }, _ => "ok" }
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthThrowEnum(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw Role.Guest, _ => "ok" }
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthThrowsRootError(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw root.fixtures.namespaces_type_resolution.Error { code: 403, message: "forbidden" }, _ => "ok" }
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthUsesLlmConfig(cfg: root.fixtures.namespaces_type_resolution.llm.Config) -> string  [expr] {
+  {  } cfg.model
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthUsesLlmResponse(r: root.fixtures.namespaces_type_resolution.llm.Response) -> string  [expr] {
+  {  } r.text
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthUsesLlmStatus() -> root.fixtures.namespaces_type_resolution.llm.Status  [expr] {
+  {  } root.fixtures.namespaces_type_resolution.llm.Status.Ready
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthUsesNestedClient(c: root.fixtures.namespaces_type_resolution.llm.openai.Client) -> string  [expr] {
+  {  } c.api_key
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthUsesRootConfig(cfg: root.fixtures.namespaces_type_resolution.Config) -> string  [expr] {
+  {  } cfg.key
+}
+function user.fixtures.namespaces_type_resolution.auth.AuthUsesRootStatus() -> root.fixtures.namespaces_type_resolution.Status  [expr] {
+  {  } root.fixtures.namespaces_type_resolution.Status.Pending
+}

@@ -1,0 +1,123 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function ops_bitwise.$init_test_ns_ops_bitwise_ops_bitwise(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.ops_bitwise"
+    load_const "bitwise_int_operators"
+    make_closure .<lambda($init_test_ns_ops_bitwise_ops_bitwise, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ops_bitwise"
+    load_const "bitwise_bigint_operators"
+    make_closure .<lambda($init_test_ns_ops_bitwise_ops_bitwise, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ops_bitwise"
+    load_const "bitwise_mixed_widens_to_bigint"
+    make_closure .<lambda($init_test_ns_ops_bitwise_ops_bitwise, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ops_bitwise"
+    load_const "bitwise_generic_bound_dispatch"
+    make_closure .<lambda($init_test_ns_ops_bitwise_ops_bitwise, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function ops_bitwise.band(x: #0, y: int) -> (#0 as baml.ops.BitAnd<int>).Output {
+    load_var2 1 2
+    load_type baml.ops.BitAnd<int>
+    load_const "bit_and"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function ops_bitwise.bigint_ops() -> bool {
+    load_const true
+    jump_if_false L0
+    pop 1
+    load_const true
+
+  L0:
+    jump_if_false L1
+    pop 1
+    load_const true
+
+  L1:
+    jump_if_false L2
+    pop 1
+    load_const true
+
+  L2:
+    jump_if_false L3
+    pop 1
+    load_const true
+
+  L3:
+    return
+}
+
+function ops_bitwise.bshl(x: #0, y: int) -> (#0 as baml.ops.ShiftLeft<int>).Output {
+    load_var2 1 2
+    load_type baml.ops.ShiftLeft<int>
+    load_const "shl"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function ops_bitwise.int_ops() -> bool {
+    load_const true
+    jump_if_false L0
+    pop 1
+    load_const true
+
+  L0:
+    jump_if_false L1
+    pop 1
+    load_const true
+
+  L1:
+    jump_if_false L2
+    pop 1
+    load_const true
+
+  L2:
+    jump_if_false L3
+    pop 1
+    load_const true
+
+  L3:
+    return
+}
+
+function ops_bitwise.mixed_widens() -> bool {
+    load_const 6
+    load_const 3n
+    bit_and_bigint
+    load_const 2n
+    cmp_bigint_op ==
+    jump_if_false L0
+    pop 1
+    load_const 6n
+    load_const 3
+    bit_and_bigint
+    load_const 2n
+    cmp_bigint_op ==
+
+  L0:
+    return
+}

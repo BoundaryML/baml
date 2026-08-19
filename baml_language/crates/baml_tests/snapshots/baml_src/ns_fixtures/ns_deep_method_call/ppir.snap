@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.deep_method_call.A {
+  b: user.fixtures.deep_method_call.B
+}
+class user.fixtures.deep_method_call.A$stream {
+  b: user.fixtures.deep_method_call.B$stream | null
+}
+class user.fixtures.deep_method_call.B {
+  label: string
+}
+class user.fixtures.deep_method_call.B$stream {
+  label: string | null
+}
+function user.fixtures.deep_method_call.greet(self: ?) -> string  [expr] {
+  {  } self.label
+}
+function user.fixtures.deep_method_call.test_deep_field(a: user.fixtures.deep_method_call.A) -> string  [expr] {
+  {  } a.b.label
+}
+function user.fixtures.deep_method_call.test_deep_method(a: user.fixtures.deep_method_call.A) -> string  [expr] {
+  {  } a.b.greet()
+}
+function user.fixtures.deep_method_call.test_direct_method(b: user.fixtures.deep_method_call.B) -> string  [expr] {
+  {  } b.greet()
+}

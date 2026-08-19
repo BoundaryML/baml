@@ -1,0 +1,337 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.patterns_class_destructure_namespaces.DestructureQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Response // response
+    let _2: fixtures.patterns_class_destructure_namespaces.llm.openai.Response
+    let _3: int
+    let _4: int // score
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { const "ok", const 41_i64 };
+        _2 = copy _1;
+        _3 = copy _2.1;
+        _4 = copy _3;
+        _0 = copy _4;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.DestructureQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Response // response
+    let _2: bool
+    let _3: int
+    let _4: bool
+    let _5: int
+    let _6: int // matched
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { const "ok", const 42_i64 };
+        _2 = is_type(copy _1, fixtures.patterns_class_destructure_namespaces.llm.openai.Response);
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = copy _1.1;
+        _4 = is_type(copy _3, 0);
+        branch copy _4 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _5 = copy _1.1;
+        _6 = copy _5;
+        _0 = copy _6;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.DestructureNamespaceQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Response // response
+    let _2: fixtures.patterns_class_destructure_namespaces.llm.openai.Response
+    let _3: int
+    let _4: int // score
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { const "ok", const 45_i64 };
+        _2 = copy _1;
+        _3 = copy _2.1;
+        _4 = copy _3;
+        _0 = copy _4;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.DestructureNamespaceQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Response // response
+    let _2: bool
+    let _3: int
+    let _4: bool
+    let _5: int
+    let _6: int // matched
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { const "ok", const 46_i64 };
+        _2 = is_type(copy _1, fixtures.patterns_class_destructure_namespaces.llm.openai.Response);
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = copy _1.1;
+        _4 = is_type(copy _3, 0);
+        branch copy _4 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _5 = copy _1.1;
+        _6 = copy _5;
+        _0 = copy _6;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.TypePatternQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Response // response
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { const "ok", const 43_i64 };
+        _0 = copy _1.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.TypePatternQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Response // response
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { const "ok", const 44_i64 };
+        _0 = copy _1.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.TypePatternNamespaceQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Response // response
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { const "ok", const 47_i64 };
+        _0 = copy _1.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.TypePatternNamespaceQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Response // response
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { const "ok", const 48_i64 };
+        _0 = copy _1.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.GenericDestructureQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> // boxed
+    let _2: fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int>
+    let _3: int
+    let _4: int // value
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> { const 49_i64 };
+        _2 = copy _1;
+        _3 = copy _2.0;
+        _4 = copy _3;
+        _0 = copy _4;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.GenericDestructureNamespaceQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string> // boxed
+    let _2: fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string>
+    let _3: string
+    let _4: string // value
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string> { const "ok" };
+        _2 = copy _1;
+        _3 = copy _2.0;
+        _4 = copy _3;
+        _0 = call const fn baml.String.length(copy _4) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.GenericTypePatternQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> | fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string> // boxed
+    let _2: bool
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> { const 50_i64 };
+        _2 = is_type(copy _1, fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string>);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const 50_i64;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = const 0_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.GenericTypePatternNamespaceQualifiedMatch() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> | fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string> // boxed
+    let _2: bool
+
+    bb0: {
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string> { const "ready" };
+        _2 = is_type(copy _1, fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int>);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const 51_i64;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = const 0_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.DeepGenericDestructureQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Outer<int> // outer
+    let _2: fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int>
+    let _3: fixtures.patterns_class_destructure_namespaces.llm.openai.Outer<int>
+    let _4: fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int>
+    let _5: int
+    let _6: int // value
+
+    bb0: {
+        _2 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> { const 52_i64 };
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Outer<int> { copy _2 };
+        _3 = copy _1;
+        _4 = copy _3.0;
+        _5 = copy _4.0;
+        _6 = copy _5;
+        _0 = copy _6;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_class_destructure_namespaces.DeepGenericDestructureNamespaceQualifiedLet() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.patterns_class_destructure_namespaces.llm.openai.Outer<string> // outer
+    let _2: fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string>
+    let _3: fixtures.patterns_class_destructure_namespaces.llm.openai.Outer<string>
+    let _4: fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string>
+    let _5: string
+    let _6: string // value
+
+    bb0: {
+        _2 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<string> { const "done" };
+        _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Outer<string> { copy _2 };
+        _3 = copy _1;
+        _4 = copy _3.0;
+        _5 = copy _4.0;
+        _6 = copy _5;
+        _0 = call const fn baml.String.length(copy _6) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}

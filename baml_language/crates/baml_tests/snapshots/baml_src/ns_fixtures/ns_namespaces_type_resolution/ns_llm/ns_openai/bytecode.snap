@@ -1,0 +1,258 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIConstruct(key: string) -> fixtures.namespaces_type_resolution.llm.openai.Client {
+    load_var key
+    load_const "org-123"
+    init_instance user.fixtures.namespaces_type_resolution.llm.openai.Client .api_key, .org_id
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIEnumMatch(m: fixtures.namespaces_type_resolution.llm.openai.Model) -> string {
+    load_var m
+    discriminant
+    load_const Model.GPT4o
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var m
+    discriminant
+    load_const Model.GPT4oMini
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "o3"
+    jump L4
+
+  L2:
+    load_const "gpt4o-mini"
+    jump L4
+
+  L3:
+    load_const "gpt4o"
+
+  L4:
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIEnumReturn() -> fixtures.namespaces_type_resolution.llm.openai.Model {
+    load_const user.fixtures.namespaces_type_resolution.llm.openai.Model.GPT4o
+    alloc_variant user.fixtures.namespaces_type_resolution.llm.openai.Model
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIIdentity(c: fixtures.namespaces_type_resolution.llm.openai.Client) -> fixtures.namespaces_type_resolution.llm.openai.Client {
+    load_var c
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesAuthRole(r: fixtures.namespaces_type_resolution.auth.Role) -> string {
+    load_var r
+    discriminant
+    load_const Role.Admin
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var r
+    discriminant
+    load_const Role.User
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "guest"
+    jump L4
+
+  L2:
+    load_const "user"
+    jump L4
+
+  L3:
+    load_const "admin"
+
+  L4:
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesLlmStatus(s: fixtures.namespaces_type_resolution.llm.Status) -> string {
+    load_var s
+    discriminant
+    load_const Status.Ready
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var s
+    discriminant
+    load_const Status.Generating
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "done"
+    jump L4
+
+  L2:
+    load_const "generating"
+    jump L4
+
+  L3:
+    load_const "ready"
+
+  L4:
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesRootStatus(s: fixtures.namespaces_type_resolution.Status) -> string {
+    load_var s
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var s
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "pending"
+    jump L4
+
+  L2:
+    load_const "failed"
+    jump L4
+
+  L3:
+    load_const "ok"
+
+  L4:
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIMixedErrors(openai_err: fixtures.namespaces_type_resolution.llm.openai.Error, root_err: fixtures.namespaces_type_resolution.Error, llm_err: fixtures.namespaces_type_resolution.llm.Error, auth_err: fixtures.namespaces_type_resolution.auth.Error) -> string {
+    load_var openai_err
+    load_field .body
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIMixedModels(openai_model: fixtures.namespaces_type_resolution.llm.openai.Model, llm_model: fixtures.namespaces_type_resolution.llm.Model) -> string {
+    load_var openai_model
+    discriminant
+    load_const Model.GPT4o
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var openai_model
+    discriminant
+    load_const Model.GPT4oMini
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "o3"
+    jump L4
+
+  L2:
+    load_const "mini"
+    jump L4
+
+  L3:
+    load_const "gpt4o"
+
+  L4:
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIThrowClass(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const 429
+    load_const "rate limited"
+    init_instance user.fixtures.namespaces_type_resolution.llm.openai.Error .status_code, .body
+    throw
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIThrowEnum(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const user.fixtures.namespaces_type_resolution.llm.openai.Model.O3
+    alloc_variant user.fixtures.namespaces_type_resolution.llm.openai.Model
+    throw
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesAuthConfig(cfg: fixtures.namespaces_type_resolution.auth.Config) -> string {
+    load_var cfg
+    load_field .provider
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesAuthRole() -> fixtures.namespaces_type_resolution.auth.Role {
+    load_const user.fixtures.namespaces_type_resolution.auth.Role.User
+    alloc_variant user.fixtures.namespaces_type_resolution.auth.Role
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmConfig(cfg: fixtures.namespaces_type_resolution.llm.Config) -> string {
+    load_var cfg
+    load_field .model
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmResponse(r: fixtures.namespaces_type_resolution.llm.Response) -> string {
+    load_var r
+    load_field .text
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmStatus() -> fixtures.namespaces_type_resolution.llm.Status {
+    load_const user.fixtures.namespaces_type_resolution.llm.Status.Generating
+    alloc_variant user.fixtures.namespaces_type_resolution.llm.Status
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesRootConfig(cfg: fixtures.namespaces_type_resolution.Config) -> string {
+    load_var cfg
+    load_field .key
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesRootStatus() -> fixtures.namespaces_type_resolution.Status {
+    load_const user.fixtures.namespaces_type_resolution.Status.Ok
+    alloc_variant user.fixtures.namespaces_type_resolution.Status
+    return
+}

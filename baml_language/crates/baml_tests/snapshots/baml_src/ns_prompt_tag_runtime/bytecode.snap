@@ -1,0 +1,929 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function prompt_tag_runtime.$init_test_ns_prompt_tag_runtime_prompt_tag_runtime(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "role_construction_isolation"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_tag_builds_promptast_with_role_messages"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "unqualified_prompt_tag_resolves_to_baml_llm_prompt"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_interpolates_class_and_array_like_ordinary_string"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_interpolation_honors_to_string_override"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "ordinary_string_interpolation_keeps_media_tostring_behavior"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_preserves_media_nested_in_classes_arrays_and_maps"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_preserves_nested_tostring_overrides_beside_media"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_parent_tostring_override_owns_media_subtree"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_interpolates_ctx_output_format"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "render_prompt_companion_interpolates_ctx_output_format"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "spec_prompt_render_preserves_structural_messages"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "render_prompt_companion_returns_promptast_messages"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "spec_prompt_render_keeps_media_in_promptast"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_interpolates_ctx_output_format_with"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_output_format_with_omits_leading_optional_arg"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_output_format_with_can_render_null_as_omit"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function prompt_tag_runtime.Labeled.baml.ToString.to_string(self: prompt_tag_runtime.Labeled) -> string {
+    load_const "LBL<"
+    load_var self
+    load_field .tag
+    bin_op +
+    load_const ">"
+    bin_op +
+    return
+}
+
+function prompt_tag_runtime.PtRenderPerson(client: ai.Client | null) -> prompt_tag_runtime.Person {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type prompt_tag_runtime.Person
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    call user.prompt_tag_runtime.PtRenderPerson$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<prompt_tag_runtime.Person, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<prompt_tag_runtime.Person>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
+    return
+}
+
+function prompt_tag_runtime.PtRenderPerson$parse(json: string) -> prompt_tag_runtime.Person {
+    load_type prompt_tag_runtime.Person
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function prompt_tag_runtime.PtRenderPerson$render_prompt() -> ai.Prompt {
+    call user.prompt_tag_runtime.PtRenderPerson$spec
+    store_var _1
+    load_type prompt_tag_runtime.Person
+    call ai.wire.render_output_format
+    store_var _2
+    load_type prompt_tag_runtime.Person
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function prompt_tag_runtime.PtRenderPerson$spec() -> ai.FunctionSpec<prompt_tag_runtime.Person> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _5
+    load_const "PtRenderPerson"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(PtRenderPerson$spec, 0)>, 0
+    load_var2 1 2
+    load_type prompt_tag_runtime.Person
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function prompt_tag_runtime.PtRenderPerson$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.prompt_tag_runtime.PtRenderPerson$spec
+    store_var _3
+    load_type prompt_tag_runtime.Person$stream | null
+    load_type prompt_tag_runtime.Person
+    load_var2 2 1
+    call ai.stream.from_spec
+    return
+}
+
+function prompt_tag_runtime.PtStructuredGreeting(name: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var name
+    call user.prompt_tag_runtime.PtStructuredGreeting$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function prompt_tag_runtime.PtStructuredGreeting$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function prompt_tag_runtime.PtStructuredGreeting$render_prompt(name: string) -> ai.Prompt {
+    load_var name
+    call user.prompt_tag_runtime.PtStructuredGreeting$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function prompt_tag_runtime.PtStructuredGreeting$spec(name: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _6
+    load_const "PtStructuredGreeting"
+    load_deref ?1
+    load_const "name"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var name
+    make_closure .<lambda(PtStructuredGreeting$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function prompt_tag_runtime.PtStructuredGreeting$stream(name: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var name
+    call user.prompt_tag_runtime.PtStructuredGreeting$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function prompt_tag_runtime.PtStructuredImage(photo: image, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var photo
+    call user.prompt_tag_runtime.PtStructuredImage$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function prompt_tag_runtime.PtStructuredImage$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function prompt_tag_runtime.PtStructuredImage$render_prompt(photo: image) -> ai.Prompt {
+    load_var photo
+    call user.prompt_tag_runtime.PtStructuredImage$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function prompt_tag_runtime.PtStructuredImage$spec(photo: image) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _6
+    load_const "PtStructuredImage"
+    load_deref ?1
+    load_const "photo"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var photo
+    make_closure .<lambda(PtStructuredImage$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function prompt_tag_runtime.PtStructuredImage$stream(photo: image, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var photo
+    call user.prompt_tag_runtime.PtStructuredImage$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function prompt_tag_runtime.RedactedMedia.baml.ToString.to_string(self: prompt_tag_runtime.RedactedMedia) -> string {
+    load_const "REDACTED"
+    return
+}
+
+function prompt_tag_runtime.pt_class_array_interp_fn() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_const 1
+    load_const 2
+    init_instance user.prompt_tag_runtime.Point .x, .y
+    store_deref ?1
+    load_const 10
+    load_const 20
+    load_const 30
+    load_type int
+    alloc_array 3
+    store_deref ?2
+    load_var2 1 2
+    make_closure .<tagged(pt_class_array_interp_fn, 0)>, 2
+    call ai.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "system"
+    load_const "system"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    call ai.Prompt.text
+    store_var from_prompt
+    load_type prompt_tag_runtime.Point
+    load_deref ?1
+    call baml.String.from
+    store_var _17
+    load_type int[]
+    load_deref ?2
+    call baml.String.from
+    store_var _20
+    load_var from_prompt
+    load_const " <=> "
+    bin_op +
+    load_const "Point "
+    load_var _17
+    bin_op +
+    load_const " list "
+    bin_op +
+    load_var _20
+    bin_op +
+    bin_op +
+    return
+}
+
+function prompt_tag_runtime.pt_ctx_output_format_fn() -> string {
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_type prompt_tag_runtime.Person
+    sys_op ai.internal.render_output_format
+    store_var of
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_var of
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    store_deref ?2
+    load_var ctx
+    make_closure .<tagged(pt_ctx_output_format_fn, 0)>, 1
+    call ai.prompt
+    store_var render
+    load_deref ?2
+    load_var render
+    call_indirect
+    call ai.Prompt.text
+    return
+}
+
+function prompt_tag_runtime.pt_media_bundle_fn() -> prompt_tag_runtime.MediaBundle {
+    load_const "https://example.com/picture.png"
+    load_const "image/png"
+    call baml.media.Image.from_url
+    load_const "https://example.com/sound.wav"
+    load_const "audio/wav"
+    call baml.media.Audio.from_url
+    load_const "https://example.com/clip.mp4"
+    load_const "video/mp4"
+    call baml.media.Video.from_url
+    load_const "https://example.com/document.pdf"
+    load_const "application/pdf"
+    call baml.media.Pdf.from_url
+    init_instance user.prompt_tag_runtime.MediaBundle .picture, .sound, .clip, .document
+    return
+}
+
+function prompt_tag_runtime.pt_media_string_interp_fn() -> string {
+    load_const "https://example.com/picture.png"
+    load_const "image/png"
+    call baml.media.Image.from_url
+    store_var picture
+    load_type image
+    load_var picture
+    call baml.String.from
+    store_var _2
+    load_const "Image "
+    load_var _2
+    bin_op +
+    return
+}
+
+function prompt_tag_runtime.pt_nested_media_fn() -> string {
+    load_var ?2
+    make_cell
+    store_var ?2
+    call user.prompt_tag_runtime.pt_media_bundle_fn
+    store_var bundle
+    load_var2 1 1
+    load_type prompt_tag_runtime.MediaBundle
+    alloc_array 1
+    load_var bundle
+    load_const "copy"
+    load_type string
+    load_type prompt_tag_runtime.MediaBundle
+    alloc_map 1
+    init_instance user.prompt_tag_runtime.MediaEnvelope .primary, .gallery, .lookup
+    store_deref ?2
+    load_var envelope
+    make_closure .<tagged(pt_nested_media_fn, 0)>, 1
+    call ai.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    call ai.Prompt.text
+    return
+}
+
+function prompt_tag_runtime.pt_nested_tostring_and_media_fn() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "https://example.com/picture.png"
+    load_const "image/png"
+    call baml.media.Image.from_url
+    store_var _3
+    load_const "hi"
+    init_instance user.prompt_tag_runtime.Labeled .tag
+    load_var _3
+    init_instance user.prompt_tag_runtime.LabeledMedia .label, .picture
+    store_deref ?1
+    load_var value
+    make_closure .<tagged(pt_nested_tostring_and_media_fn, 0)>, 1
+    call ai.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    call ai.Prompt.text
+    return
+}
+
+function prompt_tag_runtime.pt_output_format_with_null_as_omit_fn() -> string {
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_type prompt_tag_runtime.PersonNick
+    store_var rt
+    load_var rt
+    sys_op ai.internal.render_output_format
+    store_var _7
+    load_var rt
+    sys_op ai.internal.build_output_format
+    store_var _9
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_var2 3 4
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    store_deref ?2
+    load_var ctx
+    make_closure .<tagged(pt_output_format_with_null_as_omit_fn, 0)>, 1
+    call ai.prompt
+    store_var render
+    load_deref ?2
+    load_var render
+    call_indirect
+    call ai.Prompt.text
+    return
+}
+
+function prompt_tag_runtime.pt_output_format_with_omitted_leading_fn() -> string {
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_type prompt_tag_runtime.Person
+    store_var rt
+    load_var rt
+    sys_op ai.internal.render_output_format
+    store_var _7
+    load_var rt
+    sys_op ai.internal.build_output_format
+    store_var _9
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_var2 3 4
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    store_deref ?2
+    load_var ctx
+    make_closure .<tagged(pt_output_format_with_omitted_leading_fn, 0)>, 1
+    call ai.prompt
+    store_var render
+    load_deref ?2
+    load_var render
+    call_indirect
+    call ai.Prompt.text
+    return
+}
+
+function prompt_tag_runtime.pt_output_format_with_prefix_fn() -> string {
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_type prompt_tag_runtime.Person
+    store_var rt
+    load_var rt
+    sys_op ai.internal.render_output_format
+    store_var _7
+    load_var rt
+    sys_op ai.internal.build_output_format
+    store_var _9
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_var2 3 4
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    store_deref ?2
+    load_var ctx
+    make_closure .<tagged(pt_output_format_with_prefix_fn, 0)>, 1
+    call ai.prompt
+    store_var render
+    load_deref ?2
+    load_var render
+    call_indirect
+    call ai.Prompt.text
+    return
+}
+
+function prompt_tag_runtime.pt_parent_tostring_owns_media_fn() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "https://example.com/secret.png"
+    load_const "image/png"
+    call baml.media.Image.from_url
+    init_instance user.prompt_tag_runtime.RedactedMedia .picture
+    store_deref ?1
+    load_var value
+    make_closure .<tagged(pt_parent_tostring_owns_media_fn, 0)>, 1
+    call ai.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    call ai.Prompt.text
+    return
+}
+
+function prompt_tag_runtime.pt_render_prompt_companion_output_format_fn() -> string {
+    call user.prompt_tag_runtime.PtRenderPerson$render_prompt
+    call ai.Prompt.text
+    return
+}
+
+function prompt_tag_runtime.pt_render_prompt_messages_fn() -> ai.PromptMessage[] {
+    load_const "Ada"
+    call user.prompt_tag_runtime.PtStructuredGreeting$render_prompt
+    call ai.Prompt.messages
+    return
+}
+
+function prompt_tag_runtime.pt_role_construction_fn() -> ai.Role {
+    load_const "system"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    init_instance ai.Role .name, .metadata
+    return
+}
+
+function prompt_tag_runtime.pt_role_messages_fn() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "World"
+    store_deref ?1
+    load_var name
+    make_closure .<tagged(pt_role_messages_fn, 0)>, 1
+    call ai.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    call ai.Prompt.text
+    return
+}
+
+function prompt_tag_runtime.pt_spec_prompt_media_fn() -> string {
+    load_const "https://example.com/spec-photo.png"
+    load_const "image/png"
+    call baml.media.Image.from_url
+    call user.prompt_tag_runtime.PtStructuredImage$spec
+    store_var _5
+    load_type string
+    load_var _5
+    load_const <omitted>
+    call ai.FunctionSpec.prompt
+    call ai.Prompt.messages
+    load_const 0
+    load_array_element
+    load_field .content
+    return
+}
+
+function prompt_tag_runtime.pt_spec_prompt_messages_fn() -> ai.PromptMessage[] {
+    load_const "Ada"
+    call user.prompt_tag_runtime.PtStructuredGreeting$spec
+    store_var _2
+    load_type string
+    load_var _2
+    load_const <omitted>
+    call ai.FunctionSpec.prompt
+    call ai.Prompt.messages
+    return
+}
+
+function prompt_tag_runtime.pt_tostring_override_fn() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "hi"
+    init_instance user.prompt_tag_runtime.Labeled .tag
+    store_deref ?1
+    load_var v
+    make_closure .<tagged(pt_tostring_override_fn, 0)>, 1
+    call ai.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "system"
+    load_const "system"
+    load_const "user"
+    load_type string
+    alloc_array 2
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    call ai.Prompt.text
+    return
+}
+
+function prompt_tag_runtime.pt_unqualified_prompt_fn() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "World"
+    store_deref ?1
+    load_var name
+    make_closure .<tagged(pt_unqualified_prompt_fn, 0)>, 1
+    call ai.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    call ai.Prompt.text
+    return
+}

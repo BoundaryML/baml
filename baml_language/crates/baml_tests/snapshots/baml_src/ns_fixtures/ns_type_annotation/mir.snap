@@ -1,0 +1,132 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.type_annotation.test_type_annotation(function_name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // function_name // param
+    let _2: type // t
+
+    bb0: {
+        _2 = sys_op const fn ai.internal.get_return_type(copy _1) -> bb1;
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.fixtures.type_annotation.test_let_binding(function_name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // function_name // param
+    let _2: type // t
+
+    bb0: {
+        _2 = sys_op const fn ai.internal.get_return_type(copy _1) -> bb1;
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.fixtures.type_annotation.test_param(t: type) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: type // t // param
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.type_annotation.test_return_type(function_name: string) -> type {
+    // Locals:
+    let _0: type // _0 // return
+    let _1: string // function_name // param
+
+    bb0: {
+        _0 = sys_op const fn ai.internal.get_return_type(copy _1) -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.type_annotation.test_optional(function_name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // function_name // param
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.type_annotation.test_list(function_name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // function_name // param
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.type_annotation.test_union(function_name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // function_name // param
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.type_annotation.test_map(function_name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // function_name // param
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

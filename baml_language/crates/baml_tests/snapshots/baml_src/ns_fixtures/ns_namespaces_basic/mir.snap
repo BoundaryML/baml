@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.namespaces_basic.GetResponse(cfg: fixtures.namespaces_basic.Config) -> fixtures.namespaces_basic.llm.Response {
+    // Locals:
+    let _0: fixtures.namespaces_basic.llm.Response // _0 // return
+    let _1: fixtures.namespaces_basic.Config // cfg // param
+    let _2: string
+
+    bb0: {
+        _2 = copy _1.1;
+        _0 = user.fixtures.namespaces_basic.llm.Response { const "hello", copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
