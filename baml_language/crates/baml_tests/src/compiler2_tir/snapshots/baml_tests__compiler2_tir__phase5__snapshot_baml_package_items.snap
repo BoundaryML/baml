@@ -305,8 +305,9 @@ namespace baml.reflect.errors:
   class EvaluationError { methods: [] }
   class SessionBusy { methods: [] }
 namespace baml.reflect.function:
+  class GenericParam { methods: [] }
   class Parameter { methods: [] }
-  class Type { methods: [params, return_type, as_type] }
+  class Type { methods: [params, return_type, is_generic, generic_params, specialize, get, as_type] }
 namespace baml.reflect.interface:
   class Implementation { methods: [field] }
   class Type { methods: [implemented_by, as_type] }

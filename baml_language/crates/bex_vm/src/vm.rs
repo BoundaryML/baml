@@ -128,6 +128,15 @@ struct CallOptions<'a> {
     runtime_type_check: bool,
 }
 
+/// What a `GenericFunction` value carries into the frame it is called on: the
+/// realized types that seed `frame.type_args`, plus the exact `type` values
+/// behind them when the callable was specialized through reflection (`None` for
+/// every compile-time instantiation).
+type CarriedTypeArgs = (
+    Box<[baml_type::RealizedTy]>,
+    Option<Box<[Option<TypeValue>]>>,
+);
+
 #[derive(Clone, Debug, Default)]
 struct TakenTypeArgs {
     tys: Vec<baml_type::RealizedTy>,
@@ -138,16 +147,16 @@ struct TakenTypeArgs {
 fn append_virtual_method_type_args(
     frame_type_args: &mut Vec<baml_type::RealizedTy>,
     method_type_args: &TakenTypeArgs,
+    mut owner_type_values: Vec<Option<TypeValue>>,
 ) -> Vec<Option<TypeValue>> {
-    let mut type_values = Vec::new();
-    if !method_type_args.values.is_empty() {
+    if !method_type_args.values.is_empty() || !owner_type_values.is_empty() {
         // The resolver-provided owner/impl slots precede method-level slots in
         // the callee frame. Preserve that sparse alignment for exact values.
-        type_values.resize(frame_type_args.len(), None);
-        type_values.extend_from_slice(&method_type_args.values);
+        owner_type_values.resize(frame_type_args.len(), None);
+        owner_type_values.extend_from_slice(&method_type_args.values);
     }
     frame_type_args.extend_from_slice(&method_type_args.tys);
-    type_values
+    owner_type_values
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -321,29 +330,13 @@ impl RootHaver for BytecodeFrame {
         let Some(metadata) = &self.type_metadata else {
             return;
         };
-        roots.extend(metadata.defs.classes.values().copied());
-        roots.extend(metadata.defs.enums.values().copied());
+        roots.extend(metadata.defs.gc_edges());
         roots.extend(
             metadata
                 .values
                 .iter()
                 .flatten()
-                .map(|value| value.owner)
-                .filter(|owner| !(*owner).is_null()),
-        );
-        roots.extend(
-            metadata
-                .values
-                .iter()
-                .flatten()
-                .flat_map(|value| value.defs().enums.values().copied()),
-        );
-        roots.extend(
-            metadata
-                .values
-                .iter()
-                .flatten()
-                .flat_map(|value| value.defs().classes.values().copied()),
+                .flat_map(TypeValue::gc_edges),
         );
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
@@ -351,20 +344,9 @@ impl RootHaver for BytecodeFrame {
         let Some(metadata) = &mut self.type_metadata else {
             return;
         };
-        for ptr in metadata.defs.classes.values_mut() {
-            *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-        }
-        for ptr in metadata.defs.enums.values_mut() {
-            *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-        }
+        metadata.defs.forward_gc_edges(roots);
         for value in metadata.values.iter_mut().flatten() {
-            value.owner = roots.get(&value.owner).copied().unwrap_or(value.owner);
-            for ptr in value.defs_mut().enums.values_mut() {
-                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-            }
-            for ptr in value.defs_mut().classes.values_mut() {
-                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-            }
+            value.forward_gc_edges(roots);
         }
     }
 }
@@ -718,6 +700,76 @@ pub(crate) mod tests {
         assert_eq!(forwarded_metadata, Some(moved_metadata));
     }
 
+    /// The sibling above covers a frame's *definition overlay*. A frame's
+    /// exact type **values** carry their own edges — the owning package, the
+    /// overlay, and (for a reflected function descriptor) the callable — and
+    /// every one has to be rooted and forwarded. Each of those pointers used to
+    /// be walked by hand at six sites; this pins the descriptor edge, which is
+    /// the one a hand-rolled walk missed.
+    #[test]
+    fn frame_exact_type_values_root_and_forward_every_edge() {
+        let (mut vm, native_ptr) = vm_with_native_entry();
+        vm.set_entry_point(native_ptr, &[]);
+
+        let definition_ptr = vm.tlab.alloc(native_function_object());
+        let callable_ptr = vm.tlab.alloc(native_function_object());
+        let name = baml_type::QualifiedTypeName::from_dotted_path("test.Exact");
+        let exact = TypeValue::from_parts_with_defs(
+            baml_type::RealizedTy::string(),
+            MintId::Runtime(11),
+            DynTypeDefs::with_class(name.clone(), definition_ptr),
+        )
+        .with_callable(callable_ptr);
+
+        let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
+            panic!("expected trampoline bytecode frame");
+        };
+        frame.type_metadata = Some(Box::new(FrameTypeMetadata {
+            defs: DynTypeDefs::default(),
+            values: vec![Some(exact)],
+        }));
+
+        let mut roots = Vec::new();
+        vm.collect_roots(&mut roots);
+        assert!(
+            roots.contains(&definition_ptr),
+            "an exact type value's definitions must be rooted"
+        );
+        assert!(
+            roots.contains(&callable_ptr),
+            "a descriptor's callable must be rooted"
+        );
+
+        let (_stats, _remapped_roots, forwarding) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&roots, CollectionLevel::Major)
+        };
+        let moved_definition = forwarding
+            .get(&definition_ptr)
+            .copied()
+            .expect("definition must survive collection");
+        let moved_callable = forwarding
+            .get(&callable_ptr)
+            .copied()
+            .expect("callable must survive collection");
+        vm.forward_roots(&forwarding);
+
+        let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
+            panic!("expected trampoline bytecode frame");
+        };
+        let value = frame
+            .type_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.values.first())
+            .and_then(Option::as_ref)
+            .expect("exact value must still be there");
+        assert_eq!(
+            value.defs().classes.get(&name).copied(),
+            Some(moved_definition)
+        );
+        assert_eq!(value.callable, moved_callable);
+    }
+
     #[test]
     fn virtual_method_exact_type_values_follow_owner_slots() {
         let exact = TypeValue::from_parts(baml_type::RealizedTy::string(), MintId::Runtime(7));
@@ -728,7 +780,7 @@ pub(crate) mod tests {
         };
         let mut frame_type_args = vec![baml_type::RealizedTy::int()];
 
-        let values = append_virtual_method_type_args(&mut frame_type_args, &method);
+        let values = append_virtual_method_type_args(&mut frame_type_args, &method, Vec::new());
 
         assert_eq!(
             frame_type_args,
@@ -738,8 +790,58 @@ pub(crate) mod tests {
             ]
         );
         assert_eq!(values.len(), 2);
-        assert!(values[0].is_none(), "owner slot must remain reconstructed");
+        assert!(
+            values[0].is_none(),
+            "an owner slot with no recovered identity stays reconstructed"
+        );
         assert_eq!(values[1].as_ref().map(TypeValue::mint), Some(exact.mint()));
+    }
+
+    /// Owner slots recovered from the interface operand keep their positions
+    /// when method-level slots are appended after them.
+    #[test]
+    fn recovered_owner_type_values_precede_method_slots() {
+        let owner = TypeValue::from_parts(baml_type::RealizedTy::int(), MintId::Runtime(3));
+        let method_exact =
+            TypeValue::from_parts(baml_type::RealizedTy::string(), MintId::Runtime(7));
+        let method = TakenTypeArgs {
+            tys: vec![baml_type::RealizedTy::string()],
+            values: vec![Some(method_exact.clone())],
+            defs: DynTypeDefs::default(),
+        };
+        let mut frame_type_args = vec![baml_type::RealizedTy::int()];
+
+        let values = append_virtual_method_type_args(
+            &mut frame_type_args,
+            &method,
+            vec![Some(owner.clone())],
+        );
+
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0].as_ref().map(TypeValue::mint), Some(owner.mint()));
+        assert_eq!(
+            values[1].as_ref().map(TypeValue::mint),
+            Some(method_exact.mint())
+        );
+    }
+
+    /// A method with no type arguments of its own still hands the owner slots
+    /// down — the value lane is not gated on the method being generic.
+    #[test]
+    fn recovered_owner_type_values_survive_a_non_generic_method() {
+        let owner = TypeValue::from_parts(baml_type::RealizedTy::int(), MintId::Runtime(3));
+        let method = TakenTypeArgs::default();
+        let mut frame_type_args = vec![baml_type::RealizedTy::int()];
+
+        let values = append_virtual_method_type_args(
+            &mut frame_type_args,
+            &method,
+            vec![Some(owner.clone())],
+        );
+
+        assert_eq!(frame_type_args, vec![baml_type::RealizedTy::int()]);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].as_ref().map(TypeValue::mint), Some(owner.mint()));
     }
 }
 
@@ -1586,6 +1688,24 @@ impl BexVm {
         self.alloc_static_type_with_defs(ty, DynTypeDefs::default())
     }
 
+    /// Allocate a reflected function descriptor: a `type` value that also
+    /// remembers the callable it describes, so `specialize`/`get` can act on
+    /// it without a second lookup by name. Identity is the ordinary static
+    /// mint — the callable is provenance, not part of the type.
+    pub(crate) fn alloc_function_descriptor(
+        &mut self,
+        ty: baml_type::RealizedTy,
+        defs: DynTypeDefs,
+        callable: HeapPtr,
+    ) -> HeapPtr {
+        let ptr = self.alloc_static_type_with_defs(ty, defs);
+        let Object::Type(type_value) = self.get_object_mut(ptr) else {
+            unreachable!("alloc_static_type_with_defs allocates an Object::Type")
+        };
+        type_value.callable = callable;
+        ptr
+    }
+
     pub fn alloc_static_type_with_defs(
         &mut self,
         ty: baml_type::RealizedTy,
@@ -2012,7 +2132,24 @@ impl BexVm {
     }
 
     fn package_for_type(&self, qtn: &baml_type::TypeName) -> Option<&bex_vm_types::types::Package> {
-        let current_ptr = self.current_runtime_package();
+        self.package_for_type_in(self.current_runtime_package(), qtn)
+    }
+
+    /// [`Self::package_for_type`] against an explicitly chosen runtime package
+    /// rather than the executing frame's.
+    ///
+    /// Reflection resolves names that belong to a package it is *inspecting*,
+    /// not the one it is running in: a bound declared inside a
+    /// `Package.compile`d package is `Local` to that package, so resolving it
+    /// against the caller's world finds nothing and every such bound would fail
+    /// closed. This is the name-resolution half of what
+    /// [`ImplResolver::for_package`](crate::package_baml::ImplResolver) already
+    /// does for impl rules.
+    fn package_for_type_in(
+        &self,
+        current_ptr: HeapPtr,
+        qtn: &baml_type::TypeName,
+    ) -> Option<&bex_vm_types::types::Package> {
         if !current_ptr.is_null() {
             let current = self.get_object(current_ptr).as_package()?;
             if qtn.is_local() {
@@ -2060,11 +2197,25 @@ impl BexVm {
     /// pointer that keys every package's [`bex_vm_types::types::Package::impl_rules`], so it can be
     /// used to resolve an interface's impls in O(1).
     pub fn lookup_interface(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
+        self.lookup_interface_in(self.current_runtime_package(), qtn)
+    }
+
+    /// [`Self::lookup_interface`] rooted at an explicitly chosen runtime
+    /// package. See `package_for_type_in` (private) for why reflection needs
+    /// a root other than the executing frame's.
+    pub fn lookup_interface_in(
+        &self,
+        current_ptr: HeapPtr,
+        qtn: &baml_type::TypeName,
+    ) -> Option<HeapPtr> {
         let local = bex_vm_types::types::LocalName {
             namespace: qtn.namespace().clone(),
             name: qtn.name().clone(),
         };
-        self.package_for_type(qtn)?.interfaces.get(&local).copied()
+        self.package_for_type_in(current_ptr, qtn)?
+            .interfaces
+            .get(&local)
+            .copied()
     }
 
     /// Look up a class, enum, or interface object by its fully-qualified dotted
@@ -2180,6 +2331,90 @@ impl BexVm {
             Object::Type(value) if &value.ty == ty => Some(ptr),
             _ => None,
         }
+    }
+
+    /// Rebuild the `type` value a runtime nominal declaration was created as.
+    ///
+    /// A runtime definition records the mint it was created with, so its
+    /// identity is *read back* here rather than derived afresh — deriving would
+    /// hand out a different value for the same type (BEP-066 I-1). Provenance
+    /// deliberately excludes the definition's own pointer (nothing can name
+    /// itself through its own dependencies), so it is added back.
+    ///
+    /// `None` for a static declaration: its mint is the deterministic digest of
+    /// its spelling, so every materialization already agrees.
+    pub(crate) fn runtime_declaration_identity(
+        &self,
+        definition_ptr: HeapPtr,
+    ) -> Option<TypeValue> {
+        let (ty, defs, runtime) = match self.get_object(definition_ptr) {
+            Object::Class(class) => {
+                let runtime = class.runtime_type.as_ref()?;
+                let mut defs = runtime.defs.clone();
+                defs.classes.insert(class.name.clone(), definition_ptr);
+                let ty = baml_type::RealizedTy::Class(
+                    class.name.clone(),
+                    Vec::new(),
+                    baml_type::TyAttr::default(),
+                );
+                (ty, defs, runtime)
+            }
+            Object::Enum(enm) => {
+                let runtime = enm.runtime_type.as_ref()?;
+                let mut defs = runtime.defs.clone();
+                defs.enums.insert(enm.name.clone(), definition_ptr);
+                let ty =
+                    baml_type::RealizedTy::Enum(enm.name.clone(), baml_type::TyAttr::default());
+                (ty, defs, runtime)
+            }
+            _ => return None,
+        };
+        Some(if runtime.owner.is_null() {
+            TypeValue::from_parts_with_defs(ty, runtime.mint, defs)
+        } else {
+            TypeValue::runtime_with_defs(ty, runtime.mint, defs, runtime.owner)
+        })
+    }
+
+    /// The exact minted value for `ty`, when `ty` is the bare spelling of a
+    /// runtime declaration `defs` carries.
+    ///
+    /// **The name has to be mint-unique.** A `DynTypeDefs` is keyed by
+    /// `QualifiedTypeName`, and only a `runtime_local` name (`user.$dyn.N.Foo`
+    /// — `reflect.class.new` / `reflect.enum.new`) has its mint *in* the name.
+    /// A static declaration and a runtime *package*'s declaration are both
+    /// plain `user.Foo`, and an overlay reaches a frame whether or not the
+    /// spelling that pulled it in is the one being recovered — `LoadType`
+    /// staples the whole frame overlay onto anything materialized there. So
+    /// matching an ordinary name against the overlay would answer a *different*
+    /// definition's mint: a static `Holder<Item>` in a frame that also touched a
+    /// runtime package's `Item` would report `type.of<T>() != type.of<Item>()`,
+    /// and two compiled packages that both declare `Item` would cross-match.
+    /// Handing back a wrong identity is worse than handing back none, so
+    /// everything but a mint-unique name declines and re-derives normally.
+    ///
+    /// A decorated or parameterized spelling is a *different* type value than
+    /// the definition was minted as, so the recovered value must also describe
+    /// the same type to be usable — the equality check below is that guard, and
+    /// it keeps the rule out of the attribute-by-attribute business.
+    fn minted_declaration_value(
+        &self,
+        ty: &baml_type::RealizedTy,
+        defs: &DynTypeDefs,
+    ) -> Option<TypeValue> {
+        let definition_ptr = match ty {
+            baml_type::RealizedTy::Class(name, args, _)
+                if args.is_empty() && name.is_runtime_minted() =>
+            {
+                defs.classes.get(name)
+            }
+            baml_type::RealizedTy::Enum(name, _) if name.is_runtime_minted() => {
+                defs.enums.get(name)
+            }
+            _ => None,
+        }?;
+        let value = self.runtime_declaration_identity(*definition_ptr)?;
+        (value.ty == *ty).then_some(value)
     }
 
     fn load_global_in(&self, package: HeapPtr, index: GlobalIndex) -> Value {
@@ -2605,7 +2840,7 @@ impl BexVm {
     /// A callable value is one of three shapes, each currying its arguments in
     /// its own field; the two questions below both need the same pair, so they
     /// ask it here rather than each re-matching the three.
-    fn callable_function_and_type_args(
+    pub(crate) fn callable_function_and_type_args(
         &self,
         value: Value,
     ) -> Option<(&Function, &[baml_type::RealizedTy])> {
@@ -2645,6 +2880,14 @@ impl BexVm {
     }
 
     /// The declared name of a callable, for a diagnostic.
+    /// The name a callable value reports in a diagnostic that has no package
+    /// context — the specialization surface names callables the way
+    /// `reflect.call_any` does, by their bare declared name.
+    pub(crate) fn callable_diagnostic_name(&self, value: Value) -> Option<String> {
+        let (function, _) = self.callable_function_and_type_args(value)?;
+        Some(Self::callable_display_name(function))
+    }
+
     fn callable_display_name(function: &Function) -> String {
         function
             .declared_name
@@ -5479,10 +5722,17 @@ impl BexVm {
         // (type.of<T>, json natives) resolve T at runtime. (The
         // Closure/BoundMethod type args are classified in the consolidated match
         // above; GenericFunction is specific to generic instantiation values.)
-        let gf_type_args: Box<[baml_type::RealizedTy]> = match self.get_object(callee_ptr) {
-            Object::GenericFunction(gf) => gf.type_args.clone(),
-            _ => Box::new([]),
-        };
+        //
+        // A callable specialized through reflection additionally carries the
+        // exact `type` values behind those args — what `LoadType` needs to hand
+        // a body's `type.of<T>()` back the caller's own minted value, overlay
+        // and all. An ordinary `foo<int>` has none and stays on the cheap path.
+        // Both come off one deref: this is the call hot path.
+        let (gf_type_args, gf_exact_type_values): CarriedTypeArgs =
+            match self.get_object(callee_ptr) {
+                Object::GenericFunction(gf) => (gf.type_args.clone(), gf.exact_type_values.clone()),
+                _ => (Box::new([]), None),
+            };
 
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod
         // wrapping one. `callee_fn_ptr` is the heap pointer of the resolved
@@ -5813,12 +6063,24 @@ impl BexVm {
                     arg_count,
                     capture_mask,
                 );
+                let type_metadata = gf_exact_type_values.and_then(|values| {
+                    let mut defs = DynTypeDefs::default();
+                    for value in values.iter().flatten() {
+                        defs.merge_from(value.defs());
+                    }
+                    (!defs.is_empty() || values.iter().any(Option::is_some)).then(|| {
+                        Box::new(FrameTypeMetadata {
+                            defs,
+                            values: values.into_vec(),
+                        })
+                    })
+                });
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: callee_ptr,
                     instruction_ptr: 0,
                     locals_offset,
                     type_args: initial_type_args.into_vec(),
-                    type_metadata: None,
+                    type_metadata,
                     faulting_pc: 0,
                     call_id,
                     parent_call_id,
@@ -6025,6 +6287,17 @@ impl BexVm {
         );
         self.pending_call_type_args = previous_type_args;
         self.pending_call_type_values = previous_type_values;
+        // FOLLOW-UP (not a defect today): the rooted copy of the values is
+        // dropped one line above, and the writes below read `options`, which
+        // borrows a caller *local* that no GC root covers. A collection between
+        // the two would forward the rooted copy and leave these pointers stale.
+        // It is unreachable as written — `execute_call_from_locals_offset` only
+        // pushes a frame and sizes the eval stack, with no TLAB allocation, and
+        // the native path that can allocate pushes no bytecode frame, so the
+        // guard below declines. Recorded because this lane now carries recovered
+        // identities as well as method-level ones, so the day something on that
+        // path starts allocating, this is where it bites.
+        //
         // A definition overlay can arrive without any type-argument slots of its
         // own — interface dispatch hands one down for a method that declares no
         // generics — so the metadata lane is written whenever any of the three
@@ -7454,6 +7727,15 @@ impl BexVm {
                     // `user.$dyn.N.Out` as a name nothing defines — reflection,
                     // rendering and SAP inside an interface method would fail on
                     // a type the caller can use fine.
+                    //
+                    // The clone is `O(defs)` on every dispatch that carries any
+                    // (a static interface operand short-circuits on `is_empty`).
+                    // `Arc<DynTypeDefs>` would make it a refcount bump, but it
+                    // is not a drop-in: GC forwarding rewrites the pointers
+                    // *inside* a `DynTypeDefs` in place, so sharing would have
+                    // to be unshared again (`Arc::make_mut`) exactly where it
+                    // pays off. It stays the lever if an interface-heavy
+                    // profile ever asks for it.
                     let iface_defs =
                         iface_value
                             .as_object_ptr()
@@ -7584,9 +7866,36 @@ impl BexVm {
                         }
                         (callee, frame)
                     };
-                    let type_values = method_type_args.as_ref().map_or_else(Vec::new, |method| {
-                        append_virtual_method_type_args(&mut type_args, method)
+                    // Exact runtime identity for the receiver's class-level
+                    // slots. The resolver realizes those slots off `Self`,
+                    // which is realized types only, so `type.of<T>()` in an
+                    // impl or default-method body would derive a *fresh* mint
+                    // for a type the caller minted — structurally right,
+                    // `==`-wrong, which breaks every identity-keyed pattern
+                    // (BEP-066 I-1). The interface operand already carries the
+                    // definitions those slots name, and each runtime definition
+                    // records the mint it was created with, so the caller's
+                    // value is read back rather than re-derived. Only the
+                    // definition-carrying operand pays: a static interface
+                    // leaves `iface_defs` empty and skips the walk entirely.
+                    let owner_type_values = iface_defs.as_ref().map_or_else(Vec::new, |defs| {
+                        let mut values: Vec<Option<TypeValue>> = type_args
+                            .iter()
+                            .map(|ty| self.minted_declaration_value(ty, defs))
+                            .collect();
+                        if values.iter().all(Option::is_none) {
+                            values.clear();
+                        }
+                        values
                     });
+                    let type_values = match method_type_args.as_ref() {
+                        Some(method) => append_virtual_method_type_args(
+                            &mut type_args,
+                            method,
+                            owner_type_values,
+                        ),
+                        None => owner_type_values,
+                    };
 
                     let locals_offset = StackIndex::from_raw(args_offset);
 
@@ -8426,6 +8735,7 @@ impl BexVm {
                         function: function_global,
                         type_args: type_args.tys.into_boxed_slice(),
                         runtime_package: function.runtime_package,
+                        exact_type_values: None,
                     });
                     let ptr = self.tlab.alloc(gf);
                     self.stack.push(Value::object(ptr));
@@ -9223,20 +9533,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             self.pending_call_type_values
                 .iter()
                 .flatten()
-                .map(|value| value.owner)
-                .filter(|owner| !owner.is_null()),
-        );
-        roots.extend(
-            self.pending_call_type_values
-                .iter()
-                .flatten()
-                .flat_map(|value| value.defs().enums.values().copied()),
-        );
-        roots.extend(
-            self.pending_call_type_values
-                .iter()
-                .flatten()
-                .flat_map(|value| value.defs().classes.values().copied()),
+                .flat_map(TypeValue::gc_edges),
         );
         roots.extend(
             self.seen_throw_values
@@ -9282,13 +9579,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             }
         }
         for value in self.pending_call_type_values.iter_mut().flatten() {
-            value.owner = roots.get(&value.owner).copied().unwrap_or(value.owner);
-            for ptr in value.defs_mut().enums.values_mut() {
-                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-            }
-            for ptr in value.defs_mut().classes.values_mut() {
-                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-            }
+            value.forward_gc_edges(roots);
         }
         for value in &mut self.seen_throw_values {
             if let Some(ptr) = value.as_object_ptr()

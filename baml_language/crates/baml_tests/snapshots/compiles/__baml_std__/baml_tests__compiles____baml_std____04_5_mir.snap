@@ -8072,6 +8072,14 @@ fn baml.reflect.function.Type.params = builtin(vm)
 
 fn baml.reflect.function.Type.return_type = builtin(vm)
 
+fn baml.reflect.function.Type.is_generic = builtin(vm)
+
+fn baml.reflect.function.Type.generic_params = builtin(vm)
+
+fn baml.reflect.function.Type.specialize = builtin(vm)
+
+fn baml.reflect.function.Type.get = builtin(vm)
+
 fn baml.reflect.interface.Type.baml.reflect.TypeView.as_type = builtin(vm)
 
 fn baml.reflect.interface.Type.implemented_by = builtin(vm)

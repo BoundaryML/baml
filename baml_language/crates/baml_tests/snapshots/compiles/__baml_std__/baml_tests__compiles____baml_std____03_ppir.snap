@@ -1845,6 +1845,12 @@ class baml.reflect.errors.SessionBusy$stream {
 }
 
 --- <builtin>/baml/ns_reflect/ns_function/function.baml ---
+class baml.reflect.function.GenericParam {
+  name: string
+}
+class baml.reflect.function.GenericParam$stream {
+  name: string | null
+}
 class baml.reflect.function.Parameter {
   name: string?
   type: type
@@ -1860,8 +1866,12 @@ class baml.reflect.function.Type {
 class baml.reflect.function.Type$stream {
 }
 function baml.reflect.function.as_type(self: ?) -> type  [builtin]
+function baml.reflect.function.generic_params(self: ?) -> baml.reflect.function.GenericParam[]  [builtin]
+function baml.reflect.function.get(self: ?) -> F?  [builtin]
+function baml.reflect.function.is_generic(self: ?) -> bool  [builtin]
 function baml.reflect.function.params(self: ?) -> baml.reflect.function.Parameter[]  [builtin]
 function baml.reflect.function.return_type(self: ?) -> type  [builtin]
+function baml.reflect.function.specialize(self: ?, args: type[]) -> baml.reflect.function.Type  [builtin]
 
 --- <builtin>/baml/ns_reflect/ns_interface/interface.baml ---
 class baml.reflect.interface.Implementation {

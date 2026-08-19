@@ -296,6 +296,7 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
             function,
             type_args: key.type_args.clone().into_boxed_slice(),
             runtime_package: HeapPtr::null(),
+            exact_type_values: None,
         }));
         generic_code.push((symbol.clone(), idx));
     }

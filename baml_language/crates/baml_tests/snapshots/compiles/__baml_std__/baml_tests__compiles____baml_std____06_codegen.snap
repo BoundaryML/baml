@@ -5685,10 +5685,22 @@ function baml.reflect.enum.value(name: string, alias: string | null, description
 function baml.reflect.function.Type.baml.reflect.TypeView.as_type(self: baml.reflect.function.Type) -> type {
 }
 
+function baml.reflect.function.Type.generic_params(self: baml.reflect.function.Type) -> baml.reflect.function.GenericParam[] {
+}
+
+function baml.reflect.function.Type.get(self: baml.reflect.function.Type) -> #0 | null {
+}
+
+function baml.reflect.function.Type.is_generic(self: baml.reflect.function.Type) -> bool {
+}
+
 function baml.reflect.function.Type.params(self: baml.reflect.function.Type) -> baml.reflect.function.Parameter[] {
 }
 
 function baml.reflect.function.Type.return_type(self: baml.reflect.function.Type) -> type {
+}
+
+function baml.reflect.function.Type.specialize(self: baml.reflect.function.Type, args: type[]) -> baml.reflect.function.Type {
 }
 
 function baml.reflect.interface.Implementation.field(self: baml.reflect.interface.Implementation, interface_field: string, class_field: string | null) -> baml.reflect.interface.Implementation {

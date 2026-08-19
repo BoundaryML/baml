@@ -387,6 +387,11 @@ pub enum DiagnosticId {
     /// published type still mentions it. The lexical `type T = unreflect(v)`
     /// binding is the spelling that outlives the call.
     RuntimeTypeMustBeNamed,
+    /// `baml.reflect.function.Type.specialize` was given type arguments the
+    /// callable cannot accept: the wrong number of them, one that fails a
+    /// declared interface bound, or any at all for a callable with nothing
+    /// left to bind.
+    ReflectSpecializationFailed,
 }
 
 impl DiagnosticId {
@@ -595,6 +600,7 @@ impl DiagnosticId {
             DiagnosticId::CannotConstructBuiltinCompanion => "E0166",
             // E0167 is owned by the always-constant-condition lint in #4498.
             DiagnosticId::RuntimeTypeMustBeNamed => "E0168",
+            DiagnosticId::ReflectSpecializationFailed => "E0169",
         }
     }
 }
