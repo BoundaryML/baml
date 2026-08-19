@@ -93,6 +93,34 @@ function defer.$init_test_ns_defer_defer(registry: testing.TestCollector) -> nul
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.defer"
+    load_const "defer_runs_once_when_a_panic_unwinds_through_it"
+    make_closure .<lambda($init_test_ns_defer_defer, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.defer"
+    load_const "nested_defers_run_once_each_when_a_panic_unwinds"
+    make_closure .<lambda($init_test_ns_defer_defer, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.defer"
+    load_const "defer_runs_once_when_a_call_free_body_sees_a_panic"
+    make_closure .<lambda($init_test_ns_defer_defer, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.defer"
+    load_const "a_panicking_binding_runs_before_later_side_effects"
+    make_closure .<lambda($init_test_ns_defer_defer, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -708,4 +736,176 @@ function defer.defer_unwind_lifo_risky(log: string[]) -> void {
     pop 1
     load_var _0
     return
+}
+
+function defer.unwind_call_free_defer_runs_once() -> int {
+    load_const 10
+    init_instance user.defer.UnwindCounter .n
+    store_var_load_var c
+    call user.defer.unwind_risky_counter
+    pop 1
+    jump L1
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var c
+    load_field .n
+    return
+}
+
+function defer.unwind_defer_runs_once() -> string[] {
+    load_type string
+    alloc_array 0
+    store_var_load_var log
+    call user.defer.unwind_risky_one
+    pop 1
+    jump L1
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var log
+    return
+}
+
+function defer.unwind_nested_defers() -> string[] {
+    load_type string
+    alloc_array 0
+    store_var_load_var log
+    call user.defer.unwind_risky_nested
+    pop 1
+    jump L1
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var log
+    return
+}
+
+function defer.unwind_panicking_binding_precedes_side_effects() -> string[] {
+    load_type string
+    alloc_array 0
+    store_var_load_var log
+    call user.defer.unwind_risky_binding
+    pop 1
+    jump L1
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var log
+    return
+}
+
+function defer.unwind_risky_binding(log: string[]) -> int {
+    load_const 10
+    load_const 0
+    div_int
+    store_var x
+    load_type string
+    load_var log
+    load_const "after"
+    call baml.Array.push
+    pop 1
+    load_var x
+    return
+}
+
+function defer.unwind_risky_counter(c: defer.UnwindCounter) -> int {
+    load_const 10
+    load_const 0
+    div_int
+    store_var _0
+    load_var2 1 1
+    load_field .n
+    load_const 1
+    bin_op -
+    store_field .n
+    load_var _0
+    return
+    load_var2 1 1
+    load_field .n
+    load_const 1
+    bin_op -
+    store_field .n
+    load_var _2
+    rethrow
+}
+
+function defer.unwind_risky_nested(log: string[]) -> int {
+    load_const 10
+    load_const 0
+    div_int
+    store_var _0
+    load_type string
+    load_var log
+    load_const "inner"
+    call baml.Array.push
+    pop 1
+    load_type string
+    load_var log
+    load_const "outer"
+    call baml.Array.push
+    pop 1
+    load_var _0
+    return
+    load_type string
+    load_var log
+    load_const "inner"
+    call baml.Array.push
+    pop 1
+    load_type string
+    load_var log
+    load_const "outer"
+    call baml.Array.push
+    pop 1
+    load_var _2
+    rethrow
+}
+
+function defer.unwind_risky_one(log: string[]) -> int {
+    load_const 10
+    load_const 0
+    div_int
+    store_var _0
+    load_type string
+    load_var log
+    load_const "D"
+    call baml.Array.push
+    pop 1
+    load_var _0
+    return
+    load_type string
+    load_var log
+    load_const "D"
+    call baml.Array.push
+    pop 1
+    load_var _2
+    rethrow
 }

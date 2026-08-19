@@ -1193,6 +1193,20 @@ function interfaces.$init_test_ns_interfaces_interfaces_3(registry: testing.Test
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "virtual_dispatch_cache_distinguishes_generic_interface_instantiations"
+    make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "heterogeneous_union_dispatch_calls_inherent_non_implementor_method"
+    make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -1991,6 +2005,16 @@ function interfaces.HiadDog.HiadAnimal.speak(self: interfaces.HiadDog) -> string
     return
 }
 
+function interfaces.HudA.HudSpeaker.speak(self: interfaces.HudA) -> string {
+    load_const "interface"
+    return
+}
+
+function interfaces.HudB.speak(self: interfaces.HudB) -> string {
+    load_const "inherent"
+    return
+}
+
 function interfaces.IdmcEquatable.neq(self: interfaces.IdmcEquatable, other: #0) -> bool {
     load_var2 1 2
     load_type interfaces.IdmcEquatable
@@ -2321,6 +2345,16 @@ function interfaces.UrrsPrintable$for$UrrsBox<T>.display(self: interfaces.UrrsBo
 
 function interfaces.UrrtSame$for$UrrtPair<T, T>.tag(self: interfaces.UrrtPair<#0, #0>) -> string {
     load_const "same"
+    return
+}
+
+function interfaces.VdcBoth.VdcTagged<VdcAnimal | VdcDog>.tag(self: interfaces.VdcBoth) -> string {
+    load_const "animal-or-dog"
+    return
+}
+
+function interfaces.VdcBoth.VdcTagged<VdcAnimal>.tag(self: interfaces.VdcBoth) -> string {
+    load_const "animal"
     return
 }
 
@@ -4136,6 +4170,31 @@ function interfaces.hiad_main() -> string {
     return
 }
 
+function interfaces.hud_speak(x: interfaces.HudA | interfaces.HudB) -> string {
+    load_var x
+    is_type interfaces.HudA
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    is_type interfaces.HudB
+    pop_jump_if_false L3
+    load_var x
+    call user.interfaces.HudB.speak
+    jump L2
+
+  L1:
+    load_var x
+    call user.interfaces.HudA.HudSpeaker.speak
+
+  L2:
+    return
+
+  L3:
+    unreachable
+}
+
 function interfaces.idmc_differ(x: #0, y: #0) -> bool {
     load_var2 1 2
     load_type interfaces.IdmcEquatable
@@ -5362,6 +5421,35 @@ function interfaces.urrt_main() -> string {
     load_type int
     init_instance<2> user.interfaces.UrrtPair .left, .right
     load_type interfaces.UrrtSame
+    load_const "tag"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces.vdc_dispatch_distinguishes_instantiations() -> string {
+    alloc_instance user.interfaces.VdcBoth
+    store_var value
+    load_type interfaces.VdcAnimal
+    load_var value
+    call user.interfaces.vdc_read_tag
+    store_var _3
+    load_type interfaces.VdcAnimal | interfaces.VdcDog
+    load_var value
+    call user.interfaces.vdc_read_tag
+    store_var _6
+    load_var _3
+    load_const "|"
+    bin_op +
+    load_var _6
+    bin_op +
+    return
+}
+
+function interfaces.vdc_read_tag(value: interfaces.VdcTagged<#0>) -> string {
+    load_var value
+    load_type interfaces.VdcTagged<#0>
     load_const "tag"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
