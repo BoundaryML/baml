@@ -222,6 +222,9 @@ jobs:
         working-directory: baml_language
 
       - name: "Setup musl cross toolchain"
+        # The ix machine image bakes the musl toolchain (and has no sudo for
+        # this action's package installs); hosted fallback still needs it.
+        if: runner.environment != 'self-hosted'
         uses: ./.github/actions/setup-musl-cross
         with:
           target: x86_64-unknown-linux-musl
@@ -1004,7 +1007,9 @@ jobs:
           install_args: ${{ matrix.install-args }}
 
       - name: "Install Ruby"
-        if: matrix.sdk-label == 'ruby-sorbet'
+        # setup-ruby refuses self-hosted non-Ubuntu-image runners by design;
+        # the ix machine image ships ruby. Hosted fallback still installs it.
+        if: matrix.sdk-label == 'ruby-sorbet' && runner.environment != 'self-hosted'
         uses: ./.github/actions/setup-ruby
         with:
           ruby-version: "3.2.2"
