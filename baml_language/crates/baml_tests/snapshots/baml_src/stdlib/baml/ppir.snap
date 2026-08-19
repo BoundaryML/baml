@@ -796,6 +796,16 @@ class baml.errors.UnknownError$stream {
   data: unknown
   message: string[]
 }
+function baml.errors._preserve_context(source: unknown, target: unknown) -> null  [builtin]
+function baml.errors.from(data: unknown) -> T | baml.errors.UnknownError  [expr] {
+  {  } match (data) { value: T => { UnknownError._preserve_context(data, value) } value, UnknownError { data: inner: T } => { UnknownError._preserve_context(data, inner) } inner, error: baml.errors.UnknownError => { UnknownError._preserve_context(data, error) } error, _ => { let error = baml.errors.UnknownError { data: data, message: [] }; UnknownError._preserve_context(data, error) } error }
+}
+function baml.errors.to_string(self: ?) -> string  [expr] {
+  { let detail = self.data.to_string() } if (self.message.length() Eq 0) {  } `...` else {  } `...`
+}
+function baml.errors.with_message(data: unknown, message: string) -> T | baml.errors.UnknownError  [expr] {
+  {  } match (data) { value: T => { UnknownError._preserve_context(data, value) } value, UnknownError { data: inner: T } => { UnknownError._preserve_context(data, inner) } inner, error: baml.errors.UnknownError => { error.message = error.message.concat([message]); UnknownError._preserve_context(data, error) } error, _ => { let error = baml.errors.UnknownError { data: data, message: [message] }; UnknownError._preserve_context(data, error) } error }
+}
 
 --- <builtin>/baml/ns_events/events.baml ---
 

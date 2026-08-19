@@ -1504,6 +1504,83 @@ async fn host_callable_throw_caught_in_baml() {
     drop(arc);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_throw_normalized_as_unknown_error_preserves_context() {
+    let source = r#"
+        function invoke_host(
+            f: (int) -> string throws baml.errors.HostCallable,
+            x: int,
+        ) -> string {
+            f(x)
+        }
+
+        function normalize_host_throw(
+            f: (int) -> string throws baml.errors.HostCallable,
+            x: int,
+        ) -> string throws baml.errors.UnknownError {
+            invoke_host(f, x) catch_all (error) {
+                _ => throw baml.errors.UnknownError.with_message<never>(
+                    error,
+                    "host callback failed",
+                ),
+            }
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::Err {
+        class_name: "RuntimeError".to_string(),
+        message: "boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "normalize_host_throw",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(1),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Err(EngineError::UnhandledThrow { value, trace }) => {
+            let BexExternalValue::Instance {
+                class_name, fields, ..
+            } = value.as_ref()
+            else {
+                panic!("expected UnknownError instance, got {value:?}");
+            };
+            assert_eq!(class_name, "baml.errors.UnknownError");
+            assert!(matches!(
+                fields.get("data"),
+                Some(BexExternalValue::Instance { class_name, .. })
+                    if class_name == "baml.errors.HostCallable"
+            ));
+            assert!(matches!(
+                fields.get("message"),
+                Some(BexExternalValue::Array { items, .. })
+                    if matches!(items.as_slice(), [BexExternalValue::String(message)] if &**message == "host callback failed")
+            ));
+            assert!(
+                trace
+                    .iter()
+                    .any(|frame| frame.function_name.ends_with("invoke_host")),
+                "expected the original host-call frame in {trace:?}"
+            );
+        }
+        other => panic!("expected UnhandledThrow(UnknownError), got {other:?}"),
+    }
+    drop(arc);
+}
+
 // ============================================================================
 // Cancel eviction: a hung host call leaves an in-flight `CompletionHandle`
 //        in the `host_dispatch` table; cancelling the BAML call drops the

@@ -454,6 +454,8 @@ pub(crate) mod tests {
             call_input_capture_hook: None,
             seen_throw_values: Vec::new(),
             thrown_value_causes: Vec::new(),
+            thrown_value_contexts: Vec::new(),
+            preserved_throw_contexts: Vec::new(),
             bex_ref_seed: None,
             id_overrides: Vec::new(),
             argv: Arc::from([]),
@@ -967,6 +969,12 @@ impl RootHaver for Frame {
 /// Other than that, pretty much everything is better in a stack VM, especially
 /// simplicity (we don't even need to figure out which registers to use and when
 /// to use them).
+#[derive(Clone)]
+struct ThrowContext {
+    trace: Arc<[StackFrame]>,
+    cause: Value,
+}
+
 pub struct BexVm {
     /// Call stack.
     ///
@@ -1083,9 +1091,21 @@ pub struct BexVm {
     /// or `throw <binding>`) reuses this instead of re-running the cause walk —
     /// which from inside a handler body would self-link — so the chain survives
     /// the re-raise. Stored as values (not raw bits) so GC forwarding preserves
-    /// both key and cause identity; deduplicated by value and cleared each
-    /// `finalize`, like `seen_throw_values`.
+    /// both key and cause identity; deduplicated by value and cleared, like
+    /// the other throw-state stores, when a fresh entry point is set on an
+    /// empty frame stack.
     thrown_value_causes: Vec<(Value, Value)>,
+
+    /// Most recently observed context for each thrown value. `UnknownError`
+    /// conversion uses this to transfer the original trace and cause to the
+    /// normalized value.
+    thrown_value_contexts: Vec<(Value, ThrowContext)>,
+
+    /// One-shot context transfers registered by `UnknownError.from` and
+    /// `UnknownError.with_message`. The next fresh throw of the target consumes
+    /// the entry, preserving the source throw site instead of the conversion
+    /// boundary.
+    preserved_throw_contexts: Vec<(Value, ThrowContext)>,
 
     /// Constants for building BEX `CallRef`s on demand (the `$id` surface):
     /// `(process_euid, engine_id)`, set once by the engine when it attaches
@@ -1650,6 +1670,8 @@ impl BexVm {
             call_input_capture_hook: None,
             seen_throw_values: Vec::new(),
             thrown_value_causes: Vec::new(),
+            thrown_value_contexts: Vec::new(),
+            preserved_throw_contexts: Vec::new(),
             bex_ref_seed: None,
             id_overrides: Vec::new(),
             argv,
@@ -1900,11 +1922,8 @@ impl BexVm {
     /// context), NEVER `value`'s own materialized context, so it can never form
     /// a self-link. Keyed by value identity (like `seen_throw_values`).
     fn record_throw_cause(&mut self, value: Value, cause: Value) {
-        // A fresh throw with no enclosing handler carries no chain; skip it so
-        // the map only holds values that actually supersede an error (a missing
-        // entry looks up as `Value::NULL` anyway, preserving the deliberate
-        // null cause for genuine user/no-match rethrows).
         if cause == Value::NULL {
+            self.thrown_value_causes.retain(|(v, _)| *v != value);
             return;
         }
         if let Some((_, existing)) = self
@@ -1925,6 +1944,57 @@ impl BexVm {
             .iter()
             .find(|(v, _)| *v == value)
             .map_or(Value::NULL, |(_, cause)| *cause)
+    }
+
+    fn record_throw_context(&mut self, value: Value, trace: Arc<[StackFrame]>, cause: Value) {
+        let context = ThrowContext { trace, cause };
+        if let Some((_, existing)) = self
+            .thrown_value_contexts
+            .iter_mut()
+            .find(|(candidate, _)| *candidate == value)
+        {
+            *existing = context;
+        } else {
+            self.thrown_value_contexts.push((value, context));
+        }
+    }
+
+    fn recorded_throw_context(&self, value: Value) -> Option<ThrowContext> {
+        self.thrown_value_contexts
+            .iter()
+            .find(|(candidate, _)| *candidate == value)
+            .map(|(_, context)| context.clone())
+    }
+
+    /// Transfer the source value's most recently observed throw context to the
+    /// next fresh throw of `target`.
+    pub(crate) fn preserve_throw_context(&mut self, source: Value, target: Value) {
+        let Some(context) = self
+            .thrown_value_contexts
+            .iter()
+            .find(|(candidate, _)| *candidate == source)
+            .map(|(_, context)| context.clone())
+        else {
+            return;
+        };
+
+        if let Some((_, existing)) = self
+            .preserved_throw_contexts
+            .iter_mut()
+            .find(|(candidate, _)| *candidate == target)
+        {
+            *existing = context;
+        } else {
+            self.preserved_throw_contexts.push((target, context));
+        }
+    }
+
+    fn take_preserved_throw_context(&mut self, value: Value) -> Option<ThrowContext> {
+        let index = self
+            .preserved_throw_contexts
+            .iter()
+            .position(|(candidate, _)| *candidate == value)?;
+        Some(self.preserved_throw_contexts.swap_remove(index).1)
     }
 
     fn maybe_queue_call_error_origin(
@@ -3495,6 +3565,20 @@ impl BexVm {
             self.get_object(function)
         );
 
+        // A fresh top-level run starts with no in-flight throw, so drop the
+        // per-run throw bookkeeping from the previous run. These vectors are
+        // GC roots; on a reused VM (engine package init, playground evals)
+        // stale entries would keep every previously thrown value live and
+        // grow the per-throw scans without bound. Guarded on an empty frame
+        // stack so a nested entry over live frames cannot wipe in-flight
+        // throw state.
+        if self.frames.is_empty() {
+            self.seen_throw_values.clear();
+            self.thrown_value_causes.clear();
+            self.thrown_value_contexts.clear();
+            self.preserved_throw_contexts.clear();
+        }
+
         // Lower the named bindings onto the positional De Bruijn slot against the
         // callee's generic params before seeding the frame.
         let param_names = self.entry_point_generic_param_names(function);
@@ -4766,9 +4850,6 @@ impl BexVm {
         exception_value: Value,
         is_rethrow: bool,
     ) -> Result<(), VmError> {
-        // Capture the stack trace before unwinding destroys frame information.
-        let trace: Vec<StackFrame> = self.capture_stack_trace();
-
         // BEP-042 cause chain: identify the error currently being handled at
         // the throw site (read-only, before unwinding mutates frames/slots).
         // If this throw happened inside a handler body, that handler's caught
@@ -4793,13 +4874,26 @@ impl BexVm {
         // rethrow that never superseded an error (no recorded entry -> NULL).
         // The recorded value is the superseded error, never the re-raised
         // value's own context, so this can never form a self-link.
-        let cause_context = if is_rethrow {
-            self.recorded_throw_cause(exception_value)
+        let preserved = if is_rethrow {
+            self.recorded_throw_context(exception_value)
         } else {
-            let cause = self.find_cause_context();
-            self.record_throw_cause(exception_value, cause);
-            cause
+            self.take_preserved_throw_context(exception_value)
         };
+        let (trace, cause_context) = if let Some(context) = preserved {
+            (context.trace, context.cause)
+        } else {
+            let trace = Arc::from(self.capture_stack_trace());
+            let cause = if is_rethrow {
+                self.recorded_throw_cause(exception_value)
+            } else {
+                self.find_cause_context()
+            };
+            (trace, cause)
+        };
+        if !is_rethrow {
+            self.record_throw_cause(exception_value, cause_context);
+            self.record_throw_context(exception_value, Arc::clone(&trace), cause_context);
+        }
 
         // Frames popped by this unwind close with a status derived from the
         // thrown value's class (Exited / Cancelled / Errored) — chosen once
@@ -4962,7 +5056,7 @@ impl BexVm {
                 }
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
-                    trace,
+                    trace: trace.to_vec(),
                 });
             }
 
@@ -9546,6 +9640,14 @@ impl ::bex_vm_types::RootHaver for BexVm {
             roots.extend(value.as_object_ptr());
             roots.extend(cause.as_object_ptr());
         }
+        for (value, context) in self
+            .thrown_value_contexts
+            .iter()
+            .chain(&self.preserved_throw_contexts)
+        {
+            roots.extend(value.as_object_ptr());
+            roots.extend(context.cause.as_object_ptr());
+        }
 
         // Frame function pointers (needed once closures are heap-allocated)
         roots.extend(self.collect_frame_roots());
@@ -9630,6 +9732,22 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 && let Some(&new_ptr) = roots.get(&ptr)
             {
                 *cause = Value::object(new_ptr);
+            }
+        }
+        for (value, context) in self
+            .thrown_value_contexts
+            .iter_mut()
+            .chain(&mut self.preserved_throw_contexts)
+        {
+            if let Some(ptr) = value.as_object_ptr()
+                && let Some(&new_ptr) = roots.get(&ptr)
+            {
+                *value = Value::object(new_ptr);
+            }
+            if let Some(ptr) = context.cause.as_object_ptr()
+                && let Some(&new_ptr) = roots.get(&ptr)
+            {
+                context.cause = Value::object(new_ptr);
             }
         }
 
