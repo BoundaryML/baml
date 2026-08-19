@@ -3638,9 +3638,24 @@ impl<'db> LoweringContext<'db> {
             .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
                 attr: TyAttr::default(),
             });
-        let root_local = self.builder.temp(root_ty);
+        let root_local = self.builder.temp(root_ty.clone());
         self.lower_item_ref(expr_id, definition, Place::local(root_local));
-        Some(root_local)
+        // Hand out a *materialized* copy rather than the global-read local.
+        // `lower_item_ref` defines the first temp as `Use(Constant::GlobalItem)`,
+        // which emit's analysis classifies as a pure constant and virtualizes —
+        // it is re-emitted at each use instead of being stored. Every consumer
+        // that takes an `Operand` is fine with that, which is why `v.join(…)`,
+        // `m.keys()` and every other container method work off the first temp.
+        // `Rvalue::Len` is the one consumer that takes a `Place`, and a
+        // virtualized place does not survive that road — `v.length()` read a
+        // slot nothing had written and the VM reported the null as `any`. The
+        // copy is an ordinary defined local, so the place is real.
+        let materialized = self.builder.temp(root_ty);
+        self.builder.assign(
+            Place::local(materialized),
+            Rvalue::Use(Operand::Copy(Place::local(root_local))),
+        );
+        Some(materialized)
     }
 
     /// Get the TIR-inferred type of `segments[..=seg_idx]` for a multi-segment
@@ -8313,6 +8328,13 @@ impl<'db> LoweringContext<'db> {
             // own; load it into one. Container and interface dispatch both start
             // here, which is why `v.length()` on a session binding never reached
             // a receiver at all while `v[0]` and `v.field` did.
+            //
+            // When this block declines the call, the load it emitted is a dead
+            // store and the road below loads the global again. Both reads are
+            // pure and cheap (a constant global fetch into a temp), so this is
+            // left alone rather than memoized: caching the local per
+            // (expr, name) would have to prove the first load dominates the
+            // second use, and these can land in different blocks.
             if segments.len() >= 2
                 && let Some(recv_root_local) = self
                     .local_for_path(callee, &segments[0])

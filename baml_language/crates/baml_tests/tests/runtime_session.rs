@@ -656,12 +656,34 @@ async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
 
 /// A Session's top-level `let` is a binding site, so a fresh literal
 /// initializer widens to its base type exactly as `let` in a body does. It used
-/// to bind the literal type itself — `let n = 5` gave `n` the type `5` — and a
-/// literal type has no members, so the first thing a notebook does with its
-/// first binding failed with `E0007: type `5` has no member`. The diagnostic is
-/// the oracle: `to_string` exists on none of these bases, so the call is
-/// refused either way, and the type it names is the binding's.
+/// to bind the literal type itself — `let n = 5` gave `n` the type `5`.
+///
+/// The contract is the clean oracle: `5` accepts a `5`-typed submission and
+/// refuses an `int`-typed one, so this flips from accepted to refused at the
+/// change and cannot pass for an unrelated reason.
 const SESSION_LET_WIDENING: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  let _ = s.eval<5>(#"n"#) catch (e) {
+    baml.reflect.errors.CompilationError => return e.diagnostics[0].message,
+    _ => return "wrong error",
+  }
+  "accepted"
+}
+"####;
+
+/// The same widening seen through member resolution, for all three literal
+/// kinds at once.
+///
+/// NOTE ON THE ORACLE: this pins the *type* each message names, which is the
+/// binding's and is what changed. It does **not** endorse the message itself —
+/// `to_string` is universally available through the sugar road but is not
+/// reachable through the member walk these paths use, so "has no member
+/// `to_string`" is a second, unrelated gap (filed in MIG_BRIEF). If that gap is
+/// fixed, this test should be re-pointed at a genuinely absent member rather
+/// than deleted.
+const SESSION_LET_WIDENING_MEMBERS: &str = r####"
 function probe(s: reflect.Session, source: string) -> string throws unknown {
   let _ = s.eval(source) catch (e) {
     baml.reflect.errors.CompilationError => return e.diagnostics[0].message,
@@ -678,6 +700,28 @@ function main() -> string throws unknown {
   `${probe(s, #"n.to_string()"#)}
 ${probe(s, #"text.to_string()"#)}
 ${probe(s, #"flag.to_string()"#)}`
+}
+"####;
+
+/// A consequence of widening worth pinning rather than discovering: a match
+/// that covered the literal exhaustively no longer covers the widened base.
+/// The mirror also holds — a two-arm `true`/`false` match on a `bool` binding
+/// is exhaustive where it used to be a match on the literal `true` alone.
+const SESSION_LET_WIDENING_EXHAUSTIVENESS: &str = r####"
+function probe(s: reflect.Session, source: string) -> string throws unknown {
+  let _ = s.eval(source) catch (e) {
+    baml.reflect.errors.CompilationError => return e.diagnostics[0].message,
+    _ => return "wrong error",
+  }
+  "accepted"
+}
+
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  s.eval(#"let flag = true"#)
+  `${probe(s, #"match (n) { 5 => "five" }"#)}
+${probe(s, #"match (flag) { true => "t", false => "f" }"#)}`
 }
 "####;
 
@@ -722,9 +766,90 @@ function main() -> string throws unknown {
 }
 "####;
 
+/// MIG_BRIEF 4(b): a method call on a Session `let` binding reached the VM with
+/// a NULL receiver. A session binding is an initialized global, not a lexical
+/// local, so MIR's "place for this name" lookup correctly found nothing — and
+/// several roads turned that into "no receiver". Field access and indexing were
+/// unaffected, because those roads already loaded the global.
+///
+/// The receivers below cover every road the fix touches: a primitive companion
+/// method, a container method that lowers to a `Call`, the one that lowers to
+/// `Rvalue::Len`, a user class declared in the session, and a reflection handle.
+const SESSION_BINDING_METHOD_CALLS: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"
+    class P {
+      name string
+      function greet(self) -> string throws never {
+        "hi " + self.name
+      }
+    }
+  "#)
+  s.eval(#"let n = 5"#)
+  s.eval(#"let text = "hi""#)
+  s.eval(#"let v = ["a", "b"]"#)
+  s.eval(#"let m = { "k": 1, "j": 2 }"#)
+  s.eval(#"let p = P { name: "ada" }"#)
+  s.eval(#"let cls = reflect.class.new("R", { "a": type.of<string>() })"#)
+  s.eval<string>(
+    #"`${n.abs()}|${text.to_upper_case()}|${v.length()}|${m.length()}|${v.join("-")}|${m.keys().join("-")}|${p.greet()}|${cls.fields()[0].name}`"#
+  )
+}
+"####;
+
+/// The same call inside the submission that introduces the binding — the defect
+/// never needed two submissions, so neither does its regression.
+const SESSION_BINDING_METHOD_CALL_SAME_SUBMISSION: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval<string>(#"let v = ["a", "b"]
+v.length().to_string()"#)
+}
+"####;
+
+/// The controls that always worked, kept so a future change cannot fix method
+/// dispatch by breaking them: field access on a binding, and indexing one.
+const SESSION_BINDING_FIELD_AND_INDEX: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"class Draft { title string }"#)
+  s.eval(#"let draft = Draft { title: "titled" }"#)
+  s.eval(#"let items = [7, 8]"#)
+  s.eval<string>(#"`${draft.title}|${items[0]}`"#)
+}
+"####;
+
+/// A `client` declaration lowers to a top-level `let` too, so it took the same
+/// defect — in ORDINARY BAML, with no Session anywhere. `MyClient.id()` was a VM
+/// internal error (`expected instance, got any`) on canary.
+const CLIENT_DECLARATION_METHOD: &str = r####"
+client MyClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+function main() -> string throws unknown {
+  MyClient.id()
+}
+"####;
+
 #[tokio::test]
 async fn session_top_level_lets_widen_literal_initializers() {
     let output = baml_test!(SESSION_LET_WIDENING);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "submission result has type `int`, which is not a subtype of requested contract `5`"
+                .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn session_let_widening_is_visible_through_member_resolution() {
+    let output = baml_test!(SESSION_LET_WIDENING_MEMBERS);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
@@ -732,6 +857,17 @@ async fn session_top_level_lets_widen_literal_initializers() {
              type `string` has no member `to_string`\n\
              type `bool` has no member `to_string`"
                 .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn session_let_widening_moves_match_exhaustiveness_to_the_base_type() {
+    let output = baml_test!(SESSION_LET_WIDENING_EXHAUSTIVENESS);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "non-exhaustive match on type int; missing: _\naccepted".into()
         ))
     );
 }
@@ -767,58 +903,19 @@ async fn session_let_narrowing_still_sees_the_literal() {
     );
 }
 
-/// MIG_BRIEF 4(b): a method call on a Session `let` binding reached the VM with
-/// a NULL receiver. A session binding is an initialized global, not a lexical
-/// local, so MIR's "place for this name" lookup correctly found nothing — and
-/// three roads turned that into "no receiver": the single-segment receiver
-/// became `Constant::Null`, a member-access base read as a bare type/package
-/// path rather than a value, and the container/interface dispatch block was
-/// skipped for want of a root local. Field access and indexing were unaffected,
-/// because those roads already loaded the global.
-const SESSION_BINDING_METHOD_CALLS: &str = r####"
-function main() -> string throws unknown {
-  let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  s.eval(#"let text = "hi""#)
-  s.eval<string>(#"`${n.abs()}|${text.to_upper_case()}|${text.repeat(2)}`"#)
-}
-"####;
-
-/// The same call inside the submission that introduces the binding — the defect
-/// never needed two submissions, so neither does its regression.
-const SESSION_BINDING_METHOD_CALL_SAME_SUBMISSION: &str = r####"
-function main() -> string throws unknown {
-  let s = reflect.Session.new()
-  s.eval<string>(#"let text = "hi"
-text.to_upper_case()"#)
-}
-"####;
-
-/// The controls that always worked, kept so a future change cannot fix method
-/// dispatch by breaking them: field access on a binding, and indexing one.
-const SESSION_BINDING_FIELD_AND_INDEX: &str = r####"
-function main() -> string throws unknown {
-  let s = reflect.Session.new()
-  s.eval(#"class Draft { title string }"#)
-  s.eval(#"let draft = Draft { title: "titled" }"#)
-  s.eval(#"let items = [7, 8]"#)
-  s.eval<string>(#"`${draft.title}|${items[0]}`"#)
-}
-"####;
-
 #[tokio::test]
 async fn method_calls_on_session_let_bindings_dispatch() {
     let output = baml_test!(SESSION_BINDING_METHOD_CALLS);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("5|HI|hihi".into()))
+        Ok(BexExternalValue::String("5|HI|2|2|a-b|k-j|hi ada|a".into()))
     );
 }
 
 #[tokio::test]
 async fn method_calls_on_a_session_binding_work_in_its_own_submission() {
     let output = baml_test!(SESSION_BINDING_METHOD_CALL_SAME_SUBMISSION);
-    assert_eq!(output.result, Ok(BexExternalValue::String("HI".into())));
+    assert_eq!(output.result, Ok(BexExternalValue::String("2".into())));
 }
 
 #[tokio::test]
@@ -827,5 +924,14 @@ async fn session_binding_field_access_and_indexing_still_work() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("titled|7".into()))
+    );
+}
+
+#[tokio::test]
+async fn client_declaration_methods_dispatch() {
+    let output = baml_test!(CLIENT_DECLARATION_METHOD);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("openai/gpt-4o-mini".into()))
     );
 }
