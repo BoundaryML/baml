@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.top_level_header_comment.Foo() -> int  [expr] {
+  {  } 1
+}

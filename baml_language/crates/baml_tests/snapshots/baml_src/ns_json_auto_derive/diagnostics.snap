@@ -1,0 +1,342 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonSerializationError
+    ╭─[json_auto_derive.baml:30:90]
+ 30 │ ╭─▶         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+ 31 │ │               "[redacted]"
+ 32 │ ╰─▶         }
+    ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+    ╭─[json_auto_derive.baml:92:114]
+ 92 │ ╭─▶ function array_of_int_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 93 │ │       let a: int[] = [1, 2, 3];
+ 94 │ │       baml.json.stringify(a.to_json())
+ 95 │ ╰─▶ }
+    ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonSerializationError
+     ╭─[json_auto_derive.baml:106:90]
+ 106 │ ╭─▶         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+ 107 │ │               99
+ 108 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:112:116]
+ 112 │ ╭─▶ function array_of_class_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 113 │ │       let bs: BArr[] = [BArr { x: 1 }, BArr { x: 2 }];
+ 114 │ │       baml.json.stringify(bs.to_json())
+ 115 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:122:112]
+ 122 │ ╭─▶ function map_of_int_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 123 │ │       let m: map<string, int> = {"a": 1, "b": 2};
+ 124 │ │       baml.json.stringify(m.to_json())
+ 125 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:150:117]
+ 150 │ ╭─▶ function primitive_field_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 151 │ │       let c: C1 = C1 { x: 42 };
+ 152 │ │       let j: baml.json.json = c.to_json();
+ 153 │ │       baml.json.stringify(j)
+ 154 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:162:120]
+ 162 │ ╭─▶ function array_of_primitive_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 163 │ │       let c: C2 = C2 { xs: [1, 2, 3] };
+ 164 │ │       let j: baml.json.json = c.to_json();
+ 165 │ │       baml.json.stringify(j)
+ 166 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonSerializationError
+     ╭─[json_auto_derive.baml:177:90]
+ 177 │ ╭─▶         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+ 178 │ │               "[secret]"
+ 179 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:185:122]
+ 185 │ ╭─▶ function nested_class_override_direct_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 186 │ │       let a: ASecret = ASecret { b: BSecret { y: 7 } };
+ 187 │ │       let j: baml.json.json = a.to_json();
+ 188 │ │       baml.json.stringify(j)
+ 189 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonSerializationError
+     ╭─[json_auto_derive.baml:200:90]
+ 200 │ ╭─▶         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+ 201 │ │               0
+ 202 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:208:124]
+ 208 │ ╭─▶ function nested_class_override_in_array_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 209 │ │       let a: AItems = AItems { items: [BZero { y: 1 }, BZero { y: 2 }] };
+ 210 │ │       let j: baml.json.json = a.to_json();
+ 211 │ │       baml.json.stringify(j)
+ 212 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonSerializationError
+     ╭─[json_auto_derive.baml:223:90]
+ 223 │ ╭─▶         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+ 224 │ │               "B"
+ 225 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:231:122]
+ 231 │ ╭─▶ function nested_class_override_in_map_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 232 │ │       let a: ALookup = ALookup { lookup: {"k1": BStr { v: 1 }, "k2": BStr { v: 2 }} };
+ 233 │ │       let j: baml.json.json = a.to_json();
+ 234 │ │       baml.json.stringify(j)
+ 235 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:249:117]
+ 249 │ ╭─▶ function recursive_class_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 250 │ │       let leaf: Tree = Tree { value: 2, children: [] };
+ 251 │ │       let root: Tree = Tree { value: 1, children: [leaf] };
+ 252 │ │       let j: baml.json.json = root.to_json();
+ 253 │ │       baml.json.stringify(j)
+ 254 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:266:124]
+ 266 │ ╭─▶ function generic_class_to_json_concrete_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 267 │ │       let b: Box1<int> = Box1<int> { value: 42 };
+ 268 │ │       let j: baml.json.json = b.to_json();
+ 269 │ │       baml.json.stringify(j)
+ 270 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:279:129]
+ 279 │ ╭─▶ function generic_class_to_json_array_typearg_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 280 │ │       let b: Box2<int[]> = Box2<int[]> { value: [1, 2, 3] };
+ 281 │ │       let j: baml.json.json = b.to_json();
+ 282 │ │       baml.json.stringify(j)
+ 283 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonSerializationError
+     ╭─[json_auto_derive.baml:294:90]
+ 294 │ ╭─▶         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+ 295 │ │               "[redacted]"
+ 296 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:302:123]
+ 302 │ ╭─▶ function generic_class_honors_override_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 303 │ │       let b: Box3<SecretRedact> = Box3<SecretRedact> { value: SecretRedact { data: "hunter2" } };
+ 304 │ │       let j: baml.json.json = b.to_json();
+ 305 │ │       baml.json.stringify(j)
+ 306 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:315:124]
+ 315 │ ╭─▶ function generic_class_optional_typevar_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 316 │ │       let b: Box4<int> = Box4<int> { value: 42 };
+ 317 │ │       let j: baml.json.json = b.to_json();
+ 318 │ │       baml.json.stringify(j)
+ 319 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:326:129]
+ 326 │ ╭─▶ function generic_class_optional_typevar_null_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 327 │ │       let b: Box4<int> = Box4<int> { value: null };
+ 328 │ │       let j: baml.json.json = b.to_json();
+ 329 │ │       baml.json.stringify(j)
+ 330 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonSerializationError
+     ╭─[json_auto_derive.baml:341:90]
+ 341 │ ╭─▶         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+ 342 │ │               "[redacted]"
+ 343 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:349:125]
+ 349 │ ╭─▶ function generic_class_optional_override_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 350 │ │       let b: Box5<SecretRedact2> = Box5<SecretRedact2> { value: SecretRedact2 { data: "hunter2" } };
+ 351 │ │       let j: baml.json.json = b.to_json();
+ 352 │ │       baml.json.stringify(j)
+ 353 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonDecodeError
+     ╭─[json_auto_derive.baml:390:88]
+ 390 │ ╭─▶         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+ 391 │ │               BOverride { y: 99 }
+ 392 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonDecodeError
+     ╭─[json_auto_derive.baml:413:88]
+ 413 │ ╭─▶         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+ 414 │ │               BZeroFrom { y: 0 }
+ 415 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonDecodeError
+     ╭─[json_auto_derive.baml:436:88]
+ 436 │ ╭─▶         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+ 437 │ │               BMapFrom { v: 0 }
+ 438 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonDecodeError
+     ╭─[json_auto_derive.baml:486:88]
+ 486 │ ╭─▶         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+ 487 │ │               SecretReset { data: "[reset]" }
+ 488 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonDecodeError
+     ╭─[json_auto_derive.baml:511:88]
+ 511 │ ╭─▶         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+ 512 │ │               BOptFrom { y: 99 }
+ 513 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonDecodeError
+     ╭─[json_auto_derive.baml:611:88]
+ 611 │ ╭─▶         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+ 612 │ │               BOnlyFrom { y: 99 }
+ 613 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonSerializationError
+     ╭─[json_auto_derive.baml:638:90]
+ 638 │ ╭─▶         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+ 639 │ │               "[redacted]"
+ 640 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonSerializationError
+     ╭─[json_auto_derive.baml:662:90]
+ 662 │ ╭─▶         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+ 663 │ │               "[redacted]"
+ 664 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonDecodeError
+     ╭─[json_auto_derive.baml:667:88]
+ 667 │ ╭─▶         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+ 668 │ │               SecretBoth { data: "[reset]" }
+ 669 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonSerializationError
+     ╭─[json_auto_derive.baml:691:90]
+ 691 │ ╭─▶         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+ 692 │ │               42
+ 693 │ ╰─▶         }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonParseError
+     ╭─[json_auto_derive.baml:700:119]
+ 700 │ ╭─▶ function alias_chain_dispatch_to_json_val() -> int throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+ 701 │ │       let b: OuterTo = BAliasTo { y: 7 };
+ 702 │ │       let j: baml.json.json = b.to_json();
+ 703 │ │       match (j) {
+ 704 │ │           let n: int => n,
+ 705 │ │           _ => -1,
+ 706 │ │       }
+ 707 │ ╰─▶ }
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.JsonDecodeError
+     ╭─[json_auto_derive.baml:718:88]
+ 718 │ ╭─▶         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+ 719 │ │               BAliasFrom { y: 99 }
+ 720 │ ╰─▶         }
+     ╰────

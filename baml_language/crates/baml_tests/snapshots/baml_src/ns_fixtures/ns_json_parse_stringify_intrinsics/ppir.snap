@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.json_parse_stringify_intrinsics.match_parsed(s: string) -> string  [expr] {
+  { let j: baml.json.json = baml.json.parse(s) } match (j) { arr: baml.json.json[] => baml.json.stringify(arr), m: map<string, baml.json.json> => baml.json.stringify(m), n: int => "int", f: float => "float", b: bool => "bool", st: string => st, null => "null" }
+}
+function user.fixtures.json_parse_stringify_intrinsics.parse_and_roundtrip(s: string) -> string  [expr] {
+  { let j: baml.json.json = baml.json.parse(s) } baml.json.stringify(j)
+}
+function user.fixtures.json_parse_stringify_intrinsics.parse_and_roundtrip_pretty(s: string) -> string  [expr] {
+  { let j: baml.json.json = baml.json.parse(s) } baml.json.stringify_pretty(j)
+}

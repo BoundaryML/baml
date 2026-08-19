@@ -1,0 +1,63 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+// BEP-066: `reflect` is a keyword shorthand for `baml.reflect` (and `type`,
+// as an expression path head, for `baml.type`). A user-defined name wins:
+// the shorthand only kicks in when ordinary resolution misses.
+
+class reflect {
+    label: string,
+
+    function describe(self) -> string {
+        return "user-" + self.label;
+    }
+}
+
+// A user class named `reflect` resolves over the shorthand: construction and
+// member access on it hit the class, not the `baml.reflect` namespace.
+function user_class_shadows_shorthand() -> string {
+    let r = reflect { label: "shadow" };
+    return r.describe();
+}
+
+// Type-rooted path access on the user class also wins over the shorthand:
+// `reflect.describe` is the class's unbound method, not a `baml.reflect`
+// lookup.
+function unbound_user_method() -> string {
+    let m = reflect.describe;
+    return m(reflect { label: "x" });
+}
+
+// A local named `reflect` shadows both the class and the shorthand.
+function local_shadows_shorthand() -> int {
+    let reflect = 1;
+    return reflect + 1;
+}
+
+function helper(q: string) -> string throws never {
+    return q + "!";
+}
+
+// Even with the user class shadowing the bare name, the explicit
+// `baml.reflect` path still reaches the stdlib namespace.
+function qualified_still_works() -> string {
+    let f: baml.AnyFunction = helper;
+    let sig = baml.reflect.signature(f);
+    return sig.returns.to_string();
+}
+
+test "user class shadows shorthand" {
+    assert.equal(user_class_shadows_shorthand(), "user-shadow")
+}
+
+test "unbound user method over shorthand" {
+    assert.equal(unbound_user_method(), "user-x")
+}
+
+test "local shadows shorthand" {
+    assert.equal(local_shadows_shorthand(), 2)
+}
+
+test "qualified baml.reflect still works" {
+    assert.equal(qualified_still_works(), "string")
+}

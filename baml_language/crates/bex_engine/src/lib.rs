@@ -2449,6 +2449,16 @@ impl BexEngine {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    fn active_call_count(&self) -> usize {
+        self.active_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .filter(|call| !call.pending)
+            .count()
+    }
+
     async fn wait_for_active_calls(&self) {
         loop {
             let notified = self.lifecycle_changed.notified();
@@ -2470,11 +2480,45 @@ impl BexEngine {
     /// Wait for spawned work to settle, then run the final GC sweep that
     /// surfaces unreachable unobserved errors.
     pub async fn shutdown(self: &Arc<Self>) {
-        const WAIT_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(20);
+        self.shutdown_with_progress(|count| {
+            tracing::warn!(
+                count,
+                "BAML is still waiting for active futures to finish (press Ctrl+C to cancel now)"
+            );
+        })
+        .await;
+    }
+
+    /// Shut down the engine, reporting the number of active BAML futures every
+    /// five seconds while shutdown is blocked.
+    pub async fn shutdown_with_progress<F>(self: &Arc<Self>, on_wait: F)
+    where
+        F: FnMut(usize) + Send,
+    {
+        #[cfg(not(target_arch = "wasm32"))]
+        const WAIT_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut on_wait = on_wait;
+        #[cfg(target_arch = "wasm32")]
+        let _ = on_wait;
 
         let Some(shutdown) = self.begin_shutdown().await else {
             return;
         };
+        #[cfg(not(target_arch = "wasm32"))]
+        loop {
+            if tokio::time::timeout(WAIT_LOG_INTERVAL, self.wait_for_active_calls())
+                .await
+                .is_ok()
+            {
+                break;
+            }
+            let count = self.active_call_count();
+            if count != 0 {
+                on_wait(count);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
         self.wait_for_active_calls().await;
 
         loop {
@@ -2485,8 +2529,6 @@ impl BexEngine {
             if handles.is_empty() {
                 break;
             }
-            #[cfg(not(target_arch = "wasm32"))]
-            let count = handles.len();
             let wait = async move {
                 for handle in handles {
                     let _ = handle.wait().await;
@@ -2495,12 +2537,14 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             {
                 if tokio::time::timeout(WAIT_LOG_INTERVAL, wait).await.is_err() {
-                    tracing::warn!(count, "waiting for pending futures during engine shutdown");
+                    let count = self.active_future_count().await;
+                    if count != 0 {
+                        on_wait(count);
+                    }
                 }
             }
             #[cfg(target_arch = "wasm32")]
             {
-                let _ = WAIT_LOG_INTERVAL;
                 wait.await;
             }
         }

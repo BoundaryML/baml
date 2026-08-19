@@ -62,6 +62,17 @@ class String {
         $rust_function
     }
 
+    /// Returns true if the string has no characters.
+    ///
+    /// # Examples
+    /// ```
+    /// "".is_empty()       // true
+    /// "hello".is_empty()  // false
+    /// ```
+    function is_empty(self) -> bool throws never {
+        self.byte_length() == 0
+    }
+
     /// Returns the length of the string in **UTF-8 bytes**.
     ///
     /// This is `O(1)`. Useful for serialization, network I/O, and buffer

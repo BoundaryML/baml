@@ -400,13 +400,14 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                     Some(match value.as_str() {
                         "openai" => UnresolvedResponseType::OpenAI,
                         "openai-responses" => UnresolvedResponseType::OpenAIResponses,
+                        "openai-transcription" => UnresolvedResponseType::OpenAITranscription,
                         "anthropic" => UnresolvedResponseType::Anthropic,
                         "google" => UnresolvedResponseType::Google,
                         "vertex" => UnresolvedResponseType::Vertex,
                         other => {
                             self.push_error(
                                 format!(
-                                    "client_response_type must be one of \"openai\", \"openai-responses\", \"anthropic\", \"google\", or \"vertex\". Got: {other}"
+                                    "client_response_type must be one of \"openai\", \"openai-responses\", \"openai-transcription\", \"anthropic\", \"google\", or \"vertex\". Got: {other}"
                                 ),
                                 key_span,
                             );
@@ -415,7 +416,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                     })
                 } else {
                     self.push_error(
-                        "client_response_type must be one of \"openai\", \"openai-responses\", \"anthropic\", \"google\", or \"vertex\" and not an environment variable",
+                        "client_response_type must be one of \"openai\", \"openai-responses\", \"openai-transcription\", \"anthropic\", \"google\", or \"vertex\" and not an environment variable",
                         key_span,
                     );
                     None
@@ -1036,5 +1037,55 @@ pub(crate) fn get_proxy_url(ctx: &impl GetEnvVar) -> Option<String> {
             .ok()
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_types::{StringOr, UnresolvedValue};
+    use indexmap::IndexMap;
+
+    use crate::{clients::helpers::PropertyHandler, UnresolvedResponseType};
+
+    #[test]
+    fn openai_transcription_client_response_type_resolves() {
+        let mut options = IndexMap::new();
+        options.insert(
+            "client_response_type".to_string(),
+            (
+                (),
+                UnresolvedValue::String(StringOr::Value("openai-transcription".to_string()), ()),
+            ),
+        );
+
+        let mut properties = PropertyHandler::new(options, ());
+        let response_type = properties.ensure_client_response_type();
+        let errors = properties.finalize_empty();
+
+        assert!(errors.is_empty());
+        assert!(matches!(
+            response_type,
+            Some(UnresolvedResponseType::OpenAITranscription)
+        ));
+    }
+
+    #[test]
+    fn openai_transcription_plural_is_not_response_type_alias() {
+        let mut options = IndexMap::new();
+        options.insert(
+            "client_response_type".to_string(),
+            (
+                (),
+                UnresolvedValue::String(StringOr::Value("openai-transcriptions".to_string()), ()),
+            ),
+        );
+
+        let mut properties = PropertyHandler::new(options, ());
+
+        assert!(properties.ensure_client_response_type().is_none());
+        assert!(properties
+            .finalize_empty()
+            .iter()
+            .any(|error| error.message.contains("openai-transcription")));
     }
 }

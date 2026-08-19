@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+// snapshot the bytecode shape for a host-callable call site.
+//
+// A `Ty::Function` parameter is bound at the FFI boundary to an
+// `Object::HostClosure`; calling it via `f(x)` lowers to a plain
+// `CallIndirect` instruction at compile time. The HostClosure-specific
+// dispatch (yielding `VmExecState::SysOp { operation:
+// SysOp::BamlHostCallHostValue, args }`) is entirely a runtime concern
+// — the compiler emits no synthesized wrapper for this call.
+function call_with_callback(callback: (int) -> string, x: int) -> string {
+    callback(x)
+}

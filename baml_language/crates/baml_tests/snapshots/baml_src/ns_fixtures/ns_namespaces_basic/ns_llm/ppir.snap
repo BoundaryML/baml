@@ -1,0 +1,15 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.namespaces_basic.llm.Response {
+  text: string
+  model: string
+}
+class user.fixtures.namespaces_basic.llm.Response$stream {
+  text: string | null
+  model: string | null
+}
+function user.fixtures.namespaces_basic.llm.MakeResponse(cfg: root.fixtures.namespaces_basic.Config) -> user.fixtures.namespaces_basic.llm.Response  [expr] {
+  {  } user.fixtures.namespaces_basic.llm.Response { text: "ok", model: cfg.model }
+}

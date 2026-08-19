@@ -1,0 +1,1000 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function glob.$init_test_ns_glob_glob(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_matches_basic"
+    make_closure .<lambda($init_test_ns_glob_glob, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_matches_no_match"
+    make_closure .<lambda($init_test_ns_glob_glob, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_matches_recursive_wildcard"
+    make_closure .<lambda($init_test_ns_glob_glob, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_matches_question_mark"
+    make_closure .<lambda($init_test_ns_glob_glob, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_matches_question_mark_no_match"
+    make_closure .<lambda($init_test_ns_glob_glob, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_matches_bracket_character_class"
+    make_closure .<lambda($init_test_ns_glob_glob, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_matches_bracket_range"
+    make_closure .<lambda($init_test_ns_glob_glob, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_matches_negated_bracket"
+    make_closure .<lambda($init_test_ns_glob_glob, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_matches_alternation"
+    make_closure .<lambda($init_test_ns_glob_glob, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_matches_negated_pattern"
+    make_closure .<lambda($init_test_ns_glob_glob, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_finds_txt_files_length"
+    make_closure .<lambda($init_test_ns_glob_glob, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_finds_txt_files_has_a"
+    make_closure .<lambda($init_test_ns_glob_glob, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_finds_txt_files_has_b"
+    make_closure .<lambda($init_test_ns_glob_glob, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_returns_empty_for_no_match"
+    make_closure .<lambda($init_test_ns_glob_glob, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_only_files_by_default"
+    make_closure .<lambda($init_test_ns_glob_glob, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_options_include_dot_absolute_and_directories"
+    make_closure .<lambda($init_test_ns_glob_glob, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_matches_dot_slash_pattern_length"
+    make_closure .<lambda($init_test_ns_glob_glob, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_matches_dot_slash_pattern_has_file"
+    make_closure .<lambda($init_test_ns_glob_glob, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_matches_absolute_pattern"
+    make_closure .<lambda($init_test_ns_glob_glob, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_dot_pattern_matches_only_dot_files_length"
+    make_closure .<lambda($init_test_ns_glob_glob, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_dot_pattern_matches_only_dot_files_has_hidden"
+    make_closure .<lambda($init_test_ns_glob_glob, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_default_prunes_dot_directories"
+    make_closure .<lambda($init_test_ns_glob_glob, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_follows_symlinked_directory_when_enabled"
+    make_closure .<lambda($init_test_ns_glob_glob, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_skips_broken_symlinks_by_default_length"
+    make_closure .<lambda($init_test_ns_glob_glob, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_skips_broken_symlinks_by_default_has_real"
+    make_closure .<lambda($init_test_ns_glob_glob, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_throws_on_broken_symlink_when_opted_in"
+    make_closure .<lambda($init_test_ns_glob_glob, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.glob"
+    load_const "glob_scan_propagates_permission_errors"
+    make_closure .<lambda($init_test_ns_glob_glob, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function glob.glob_matches_alternation_fn() -> bool[] {
+    load_const "*.{ts,tsx}"
+    sys_op baml.glob.new
+    store_var g
+    load_var g
+    load_const "app.ts"
+    sys_op baml.glob.Glob.matches
+    load_var g
+    load_const "app.tsx"
+    sys_op baml.glob.Glob.matches
+    load_var g
+    load_const "app.js"
+    sys_op baml.glob.Glob.matches
+    load_type bool
+    alloc_array 3
+    return
+}
+
+function glob.glob_matches_bracket_character_class_fn() -> bool[] {
+    load_const "[abc].txt"
+    sys_op baml.glob.new
+    store_var g
+    load_var g
+    load_const "a.txt"
+    sys_op baml.glob.Glob.matches
+    load_var g
+    load_const "b.txt"
+    sys_op baml.glob.Glob.matches
+    load_var g
+    load_const "c.txt"
+    sys_op baml.glob.Glob.matches
+    load_var g
+    load_const "d.txt"
+    sys_op baml.glob.Glob.matches
+    load_type bool
+    alloc_array 4
+    return
+}
+
+function glob.glob_matches_bracket_range_fn() -> bool[] {
+    load_const "[a-c].txt"
+    sys_op baml.glob.new
+    store_var g
+    load_var g
+    load_const "a.txt"
+    sys_op baml.glob.Glob.matches
+    load_var g
+    load_const "c.txt"
+    sys_op baml.glob.Glob.matches
+    load_var g
+    load_const "d.txt"
+    sys_op baml.glob.Glob.matches
+    load_type bool
+    alloc_array 3
+    return
+}
+
+function glob.glob_matches_negated_bracket_fn() -> bool[] {
+    load_const "[^abc].txt"
+    sys_op baml.glob.new
+    store_var g
+    load_var g
+    load_const "a.txt"
+    sys_op baml.glob.Glob.matches
+    load_var g
+    load_const "d.txt"
+    sys_op baml.glob.Glob.matches
+    load_type bool
+    alloc_array 2
+    return
+}
+
+function glob.glob_matches_negated_pattern_fn() -> bool[] {
+    load_const "!index.ts"
+    sys_op baml.glob.new
+    store_var g
+    load_var g
+    load_const "main.ts"
+    sys_op baml.glob.Glob.matches
+    load_var g
+    load_const "index.ts"
+    sys_op baml.glob.Glob.matches
+    load_type bool
+    alloc_array 2
+    return
+}
+
+function glob.glob_tmp(name: string) -> string {
+    load_type string
+    load_var name
+    call baml.String.from
+    store_var _6
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _9
+    load_type bigint
+    load_var _9
+    call baml.String.from
+    store_var _8
+    load_const 0
+    load_const 1000000000
+    call baml.Int.random
+    store_var _13
+    load_type int
+    load_var _13
+    call baml.String.from
+    store_var _12
+    load_const "/tmp/baml_glob_"
+    load_var _6
+    bin_op +
+    load_const "_"
+    bin_op +
+    load_var _8
+    bin_op +
+    load_const "_"
+    bin_op +
+    load_var _12
+    bin_op +
+    return
+}
+
+function glob.scan_default_prunes_dot_directories_checks() -> bool[] {
+    load_const "prune_dot"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/visible.txt"
+    bin_op +
+    load_const "visible"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/.git"
+    bin_op +
+    load_const false
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/.git/objects"
+    bin_op +
+    load_const false
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/.git/objects/secret.txt"
+    bin_op +
+    load_const "x"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/.git/HEAD"
+    bin_op +
+    load_const "x"
+    sys_op baml.fs.write
+    pop 1
+    load_const "**/*.txt"
+    sys_op baml.glob.new
+    load_var root
+    sys_op baml.glob.Glob.scan
+    store_var result
+    load_var result
+    container_len
+    store_var _27
+    load_type string
+    load_var result
+    load_const "visible.txt"
+    call baml.Array.includes
+    store_var _28
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var _27
+    load_const 1
+    cmp_int_op ==
+    load_var _28
+    load_type bool
+    alloc_array 2
+    return
+}
+
+function glob.scan_dot_pattern_matches_only_dot_files() -> string[] {
+    load_const "dotpat"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/.hidden"
+    bin_op +
+    load_const "h"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/regular.txt"
+    bin_op +
+    load_const "r"
+    sys_op baml.fs.write
+    pop 1
+    load_const ".*"
+    sys_op baml.glob.new
+    store_var g
+    load_var2 2 1
+    load_const true
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
+    sys_op baml.glob.Glob.scan
+    store_var result
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var result
+    return
+}
+
+function glob.scan_finds_txt_files() -> string[] {
+    load_const "scan_txt"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/a.txt"
+    bin_op +
+    load_const "a"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/b.txt"
+    bin_op +
+    load_const "b"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/c.rs"
+    bin_op +
+    load_const "c"
+    sys_op baml.fs.write
+    pop 1
+    load_const "*.txt"
+    sys_op baml.glob.new
+    load_var root
+    sys_op baml.glob.Glob.scan
+    store_var result
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var result
+    return
+}
+
+function glob.scan_follows_symlinked_directory_checks() -> bool[] {
+    load_const "sym_outer"
+    call user.glob.glob_tmp
+    store_var outer_root
+    load_const "sym_target"
+    call user.glob.glob_tmp
+    store_var target
+    load_var outer_root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var target
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var target
+    load_const "/hidden_via_link.txt"
+    bin_op +
+    load_const "x"
+    sys_op baml.fs.write
+    pop 1
+    load_const "ln -s "
+    load_var target
+    bin_op +
+    load_const " "
+    bin_op +
+    load_var outer_root
+    bin_op +
+    load_const "/link_dir"
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_const "**/*.txt"
+    sys_op baml.glob.new
+    store_var g
+    load_var2 3 1
+    load_const null
+    load_const null
+    load_const true
+    load_const null
+    load_const null
+    init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
+    sys_op baml.glob.Glob.scan
+    store_var result
+    load_var result
+    container_len
+    store_var _25
+    load_type string
+    load_var result
+    load_const "link_dir/hidden_via_link.txt"
+    call baml.Array.includes
+    store_var _26
+    load_const "rm -rf "
+    load_var outer_root
+    bin_op +
+    load_const " "
+    bin_op +
+    load_var target
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var _25
+    load_const 1
+    cmp_int_op ==
+    load_var _26
+    load_type bool
+    alloc_array 2
+    return
+}
+
+function glob.scan_matches_absolute_pattern_checks() -> bool[] {
+    load_const "abs_pat"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/file.txt"
+    bin_op +
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/**/*.txt"
+    bin_op +
+    sys_op baml.glob.new
+    store_var g
+    load_var2 2 1
+    load_const null
+    load_const true
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
+    sys_op baml.glob.Glob.scan
+    store_var result
+    load_var result
+    container_len
+    store_var _17
+    load_type string
+    load_var2 3 1
+    load_const "/file.txt"
+    bin_op +
+    call baml.Array.includes
+    store_var _18
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var _17
+    load_const 1
+    cmp_int_op ==
+    load_var _18
+    load_type bool
+    alloc_array 2
+    return
+}
+
+function glob.scan_matches_dot_slash_pattern() -> string[] {
+    load_const "dotslash"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/file.txt"
+    bin_op +
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_const "./*.txt"
+    sys_op baml.glob.new
+    load_var root
+    sys_op baml.glob.Glob.scan
+    store_var result
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var result
+    return
+}
+
+function glob.scan_only_files_by_default_checks() -> bool[] {
+    load_const "only_files"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/file.txt"
+    bin_op +
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/dir.txt"
+    bin_op +
+    load_const false
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_const "*.txt"
+    sys_op baml.glob.new
+    load_var root
+    sys_op baml.glob.Glob.scan
+    store_var result
+    load_var result
+    container_len
+    store_var _17
+    load_type string
+    load_var result
+    load_const "file.txt"
+    call baml.Array.includes
+    store_var _18
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var _17
+    load_const 1
+    cmp_int_op ==
+    load_var _18
+    load_type bool
+    alloc_array 2
+    return
+}
+
+function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
+    load_const "scan_opts2"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/file.txt"
+    bin_op +
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/.hidden.txt"
+    bin_op +
+    load_const "hidden"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/dir.txt"
+    bin_op +
+    load_const false
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_const "**/*.txt"
+    sys_op baml.glob.new
+    store_var g
+    load_var2 2 1
+    load_const true
+    load_const true
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
+    sys_op baml.glob.Glob.scan
+    store_var result
+    load_var result
+    container_len
+    store_var _21
+    load_type string
+    load_var2 3 1
+    load_const "/.hidden.txt"
+    bin_op +
+    call baml.Array.includes
+    store_var _22
+    load_type string
+    load_var2 3 1
+    load_const "/dir.txt"
+    bin_op +
+    call baml.Array.includes
+    store_var _26
+    load_type string
+    load_var2 3 1
+    load_const "/file.txt"
+    bin_op +
+    call baml.Array.includes
+    store_var _30
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var _21
+    load_const 3
+    cmp_int_op ==
+    load_var2 5 6
+    load_var _30
+    load_type bool
+    alloc_array 4
+    return
+}
+
+function glob.scan_propagates_permission_errors_fn() -> bool {
+    load_const "perm_err"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/ok.txt"
+    bin_op +
+    load_const "ok"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/locked"
+    bin_op +
+    store_var_load_var locked
+    load_const false
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var locked
+    load_const "/inner.txt"
+    bin_op +
+    load_const "x"
+    sys_op baml.fs.write
+    pop 1
+    load_const "chmod 000 "
+    load_var locked
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_const "ls "
+    load_var locked
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    call baml.sys.ShellOutput.ok
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_const "**/*.txt"
+    sys_op baml.glob.new
+    load_var root
+    sys_op baml.glob.Glob.scan
+    pop 1
+    jump L3
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    rethrow
+
+  L2:
+    load_const true
+    store_var threw
+    jump L5
+
+  L3:
+    load_const false
+    store_var threw
+    jump L5
+
+  L4:
+    load_const true
+    store_var threw
+
+  L5:
+    load_const "chmod 755 "
+    load_var locked
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var threw
+    return
+}
+
+function glob.scan_returns_empty_for_no_match() -> string[] {
+    load_const "scan_empty"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/a.rs"
+    bin_op +
+    load_const "rust"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/b.rs"
+    bin_op +
+    load_const "rust"
+    sys_op baml.fs.write
+    pop 1
+    load_const "*.txt"
+    sys_op baml.glob.new
+    load_var root
+    sys_op baml.glob.Glob.scan
+    store_var result
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var result
+    return
+}
+
+function glob.scan_skips_broken_symlinks_by_default() -> string[] {
+    load_const "broken_sym"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/real.txt"
+    bin_op +
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_const "ln -s "
+    load_var root
+    bin_op +
+    load_const "/missing.txt "
+    bin_op +
+    load_var root
+    bin_op +
+    load_const "/dangling.txt"
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_const "*.txt"
+    sys_op baml.glob.new
+    store_var g
+    load_var2 2 1
+    load_const null
+    load_const null
+    load_const true
+    load_const null
+    load_const null
+    init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
+    sys_op baml.glob.Glob.scan
+    store_var result
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var result
+    return
+}
+
+function glob.scan_throws_on_broken_symlink_when_opted_in_fn() -> bool {
+    load_const "broken_throw"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/real.txt"
+    bin_op +
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_const "ln -s "
+    load_var root
+    bin_op +
+    load_const "/missing.txt "
+    bin_op +
+    load_var root
+    bin_op +
+    load_const "/dangling.txt"
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_const "*.txt"
+    sys_op baml.glob.new
+    store_var g
+    load_var2 2 1
+    load_const null
+    load_const null
+    load_const true
+    load_const true
+    load_const null
+    init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
+    sys_op baml.glob.Glob.scan
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    store_var threw
+    jump L3
+
+  L2:
+    load_const false
+    store_var threw
+
+  L3:
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var threw
+    return
+}

@@ -77,6 +77,89 @@ fn runtime_relative_virtual_path(path: &Path) -> String {
         .to_string()
 }
 
+fn interface_contains_runtime_minted_name(interface: &baml_type::Interface) -> bool {
+    interface.name.is_runtime_minted()
+        || interface
+            .generics
+            .iter()
+            .any(type_contains_runtime_minted_name)
+        || interface
+            .associated_types
+            .iter()
+            .any(|(_, ty)| type_contains_runtime_minted_name(ty))
+}
+
+/// Whether rendering `ty` as source would expose a hidden runtime-mint name.
+///
+/// Runtime-minted names can occur below otherwise source-spellable containers,
+/// function types, or interface constraints, so this must inspect the complete
+/// type rather than only its outer nominal reference.
+fn type_contains_runtime_minted_name(ty: &baml_type::Ty) -> bool {
+    use baml_type::Ty;
+
+    match ty {
+        Ty::Class(name, generics, _) => {
+            name.is_runtime_minted() || generics.iter().any(type_contains_runtime_minted_name)
+        }
+        Ty::Interface(name, generics, associated_types, _) => {
+            name.is_runtime_minted()
+                || generics.iter().any(type_contains_runtime_minted_name)
+                || associated_types
+                    .iter()
+                    .any(|(_, ty)| type_contains_runtime_minted_name(ty))
+        }
+        Ty::Enum(name, _) | Ty::EnumVariant(name, ..) | Ty::TypeAlias(name, _) => {
+            name.is_runtime_minted()
+        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => type_contains_runtime_minted_name(inner),
+        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+            type_contains_runtime_minted_name(key) || type_contains_runtime_minted_name(value)
+        }
+        Ty::Union(members, _) => members.iter().any(type_contains_runtime_minted_name),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| type_contains_runtime_minted_name(&param.ty))
+                || type_contains_runtime_minted_name(ret)
+                || type_contains_runtime_minted_name(throws)
+        }
+        Ty::Future(value, throws, _) => {
+            type_contains_runtime_minted_name(value) || type_contains_runtime_minted_name(throws)
+        }
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            type_contains_runtime_minted_name(base)
+                || interface_contains_runtime_minted_name(interface)
+        }
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Literal(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Void { .. }
+        | Ty::TypeVar(..)
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::Infer { .. } => false,
+    }
+}
+
 fn enrich_runtime_mount(
     alias: &str,
     mut package: RuntimePackageMount,
@@ -178,9 +261,16 @@ fn enrich_runtime_mount(
             // this synthetic alias package.
             " throws unknown".to_string()
         };
+        // Mounted inference owns the real return type. Hide it only when its
+        // source spelling would expose a hidden runtime-minted name and produce
+        // diagnostics in a phantom `runtime_mount_*` file.
+        let return_type = if type_contains_runtime_minted_name(&function.return_type) {
+            "unknown".to_string()
+        } else {
+            function.return_type.to_string()
+        };
         let source = format!(
-            "function {name}{generic_suffix}({params}) -> {}{throws} {{ $rust_function }}\n",
-            function.return_type
+            "function {name}{generic_suffix}({params}) -> {return_type}{throws} {{ $rust_function }}\n"
         );
         stubs.push((namespace, name, source));
     }
@@ -286,6 +376,13 @@ fn enrich_runtime_mount(
                             .expect("writing to String is infallible");
                     }
                     for (field, ty, _) in fields {
+                        // Keep ordinary source-spellable ABI intact, but avoid
+                        // exposing a runtime-minted name from any nested type.
+                        let ty = if type_contains_runtime_minted_name(ty) {
+                            "unknown".to_string()
+                        } else {
+                            ty.to_string()
+                        };
                         writeln!(&mut source, "  {field}: {ty}")
                             .expect("writing to String is infallible");
                     }
@@ -1182,16 +1279,40 @@ fn lower_session_submission(
                     &HashSet::new(),
                     &local_names,
                 );
-                let value = if operator == "=" {
-                    rhs
+                // An assignment to a visible binding IS an ordinary
+                // assignment, so it is written as one. The binding lives in a
+                // global and a global cannot be assigned in place, which is
+                // why this road exists at all — but binding a local to the
+                // global first and assigning THAT gives the ordinary
+                // assignment road everything it needs: the local carries the
+                // binding's type, so the value checks against it and a
+                // mismatch is the same diagnostic ordinary BAML gives. The
+                // local's final value is what `commit_global` writes back, and
+                // a compound operator dispatches through the same road it does
+                // anywhere else.
+                //
+                // The value is spliced in exactly as it was written, with no
+                // wrapping parentheses: parenthesizing it would change the
+                // verdict (a fresh literal loses its freshness inside
+                // parentheses, so `n += 1.5` on an `int` binding would be
+                // refused here while ordinary code accepts it), and the whole
+                // point is that the two roads agree.
+                // The local's name must be one `internal()` can never mint: a
+                // user binding called `target_1` in submission N would mint
+                // `__baml_session_N_target_1`, and a block-local of that name
+                // shadows the global the rewritten value reads — the
+                // assignment would silently read itself. A different root
+                // prefix is outside `internal()`'s range entirely.
+                let target_local = format!("__baml_assign_{sequence}_{index}");
+                let assign = if operator == "=" {
+                    format!("{target_local} = {rhs}")
                 } else {
-                    format!("{} {operator} ({rhs})", target.internal)
+                    format!("{target_local} {operator}= {rhs}")
                 };
-                let source = if prelude.is_empty() {
-                    format!("let {generated_name} = ({value})\n")
-                } else {
-                    format!("let {generated_name} = {{\n{prelude}({value})\n}}\n")
-                };
+                let source = format!(
+                    "let {generated_name} = {{\n{prelude}let {target_local} = {}\n{assign}\n{target_local}\n}}\n",
+                    target.internal
+                );
                 (source, Some(format!("user.{}", target.internal)))
             } else {
                 let rewritten = rewrite_identifiers(
@@ -1523,8 +1644,15 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             .iter()
             .map(|(name, blob, _)| (name.clone(), blob.clone()))
             .collect::<BTreeMap<_, _>>();
+        let precompiled_stdlib_names = stdlib.interfaces.keys().cloned().collect::<Vec<_>>();
         db.set_mounted_packages(mounted);
         db.set_precompiled_stdlib_packages(stdlib.interfaces);
+        debug_assert!(
+            precompiled_stdlib_names.iter().all(|name| {
+                baml_compiler2_hir::package::is_precompiled_package(&db, &Name::new(name))
+            }),
+            "set_mounted_packages must run before set_precompiled_stdlib_packages"
+        );
         // Emit needs concrete pool/global slots while producing the consumer's
         // relocatable units. Materialize link-only native stubs in the mounted
         // package; the mounted interface remains the semantic authority, and
@@ -1660,6 +1788,29 @@ mod tests {
     use baml_compiler2_hir::file_package::file_package;
 
     use super::*;
+
+    #[test]
+    fn runtime_minted_name_detection_is_recursive() {
+        let ordinary = baml_type::Ty::List(
+            Box::new(baml_type::Ty::Class(
+                baml_type::QualifiedTypeName::local(Name::new("SourceClass")),
+                Vec::new(),
+                baml_type::TyAttr::default(),
+            )),
+            baml_type::TyAttr::default(),
+        );
+        assert!(!type_contains_runtime_minted_name(&ordinary));
+
+        let nested_mint = baml_type::Ty::List(
+            Box::new(baml_type::Ty::Class(
+                baml_type::QualifiedTypeName::runtime_local(Name::new("RuntimeMinted"), 7),
+                Vec::new(),
+                baml_type::TyAttr::default(),
+            )),
+            baml_type::TyAttr::default(),
+        );
+        assert!(type_contains_runtime_minted_name(&nested_mint));
+    }
 
     #[test]
     fn runtime_virtual_paths_are_slash_oriented() {

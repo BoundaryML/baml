@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+test "with quorum" with testing.Quorum(5, 3) {
+    let result = "hello";
+    assert.not_null(result)
+}

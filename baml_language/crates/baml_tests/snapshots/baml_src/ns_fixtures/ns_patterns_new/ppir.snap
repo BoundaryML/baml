@@ -1,0 +1,93 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.patterns_new.AppError {
+  code: int
+}
+class user.fixtures.patterns_new.AppError$stream {
+  code: int | null
+}
+class user.fixtures.patterns_new.PatternBucket {
+  values: int[]
+}
+class user.fixtures.patterns_new.PatternBucket$stream {
+  values: int[]
+}
+class user.fixtures.patterns_new.PatternMatrix {
+  rows: int[][]
+}
+class user.fixtures.patterns_new.PatternMatrix$stream {
+  rows: int[][]
+}
+type user.fixtures.patterns_new.Number = int | float
+type user.fixtures.patterns_new.Number$stream = int | float
+function user.fixtures.patterns_new.bare_type_arm(v: int | string) -> int  [expr] {
+  {  } match (v) { int => 1, string => 2 }
+}
+function user.fixtures.patterns_new.call_int_callback(cb: (int) -> int) -> int  [expr] {
+  {  } match (cb) { f: (int) -> int throws unknown => f(10) }
+}
+function user.fixtures.patterns_new.call_optional_callback(cb: (int) -> int throws never?) -> int  [expr] {
+  {  } match (cb) { null => 0, f: (int) -> int throws never => f(1) }
+}
+function user.fixtures.patterns_new.catch_chain_union(mode: int) -> int  [expr] {
+  {  } risky_error(mode) catch (e) { user.fixtures.patterns_new.AppError | string => 1 }
+}
+function user.fixtures.patterns_new.catch_paren_or_chain(mode: int) -> int  [expr] {
+  {  } risky_error(mode) catch (e) { user.fixtures.patterns_new.AppError | string => 1 }
+}
+function user.fixtures.patterns_new.catch_widening_chain(mode: int) -> int  [expr] {
+  {  } risky_error(mode) catch (e) { s: string => 1, app: user.fixtures.patterns_new.AppError => 2 }
+}
+function user.fixtures.patterns_new.chain_narrow_then_wildcard(v: int | string | bool) -> int  [expr] {
+  {  } match (v) { n: int => n, _ => 0 }
+}
+function user.fixtures.patterns_new.fn_pattern(cb: (int) -> int) -> int  [expr] {
+  {  } match (cb) { f: (int) -> int throws unknown => f(0) }
+}
+function user.fixtures.patterns_new.fn_return_widens(cb: (int) -> int throws never) -> int  [expr] {
+  {  } match (cb) { (int) -> int | string throws unknown => 1 }
+}
+function user.fixtures.patterns_new.for_let_ascription(items: int[]) -> int  [expr] {
+  { let sum = 0; for n: int | string in items { sum Add= 1 } } sum
+}
+function user.fixtures.patterns_new.for_let_fn_narrow(items: (int) -> int throws never[]) -> int  [expr] {
+  { let total = 0; for f: (int) -> int throws never in items { total Add= f(0) } } total
+}
+function user.fixtures.patterns_new.for_let_with_narrow(items: int[]) -> int  [expr] {
+  { let sum = 0; for n: int in items { sum Add= n } } sum
+}
+function user.fixtures.patterns_new.int_widens_to_alias(v: user.fixtures.patterns_new.Number) -> int  [expr] {
+  {  } match (v) { n: user.fixtures.patterns_new.Number => 1 }
+}
+function user.fixtures.patterns_new.literal_widens_to_int(v: int) -> int  [expr] {
+  {  } match (v) { n: int => n }
+}
+function user.fixtures.patterns_new.match_nested_paren_union(v: int | string[]) -> int  [expr] {
+  {  } match (v) { int | string[] => 1 }
+}
+function user.fixtures.patterns_new.nested_paren_union_array_one(items: int | string[]) -> int  [expr] {
+  {  } items.length()
+}
+function user.fixtures.patterns_new.nested_paren_union_array_optional(v: int | string[]?) -> int  [expr] {
+  {  } match (v) { int | string[]? => 1 }
+}
+function user.fixtures.patterns_new.nested_paren_union_array_three(v: int | string[][]) -> int  [expr] {
+  {  } v.length()
+}
+function user.fixtures.patterns_new.nested_paren_union_array_two(items: int | string[]) -> int  [expr] {
+  {  } items.length()
+}
+function user.fixtures.patterns_new.or_with_repeated_bare_binding(v: int) -> int  [expr] {
+  {  } match (v) { x | x | x => x }
+}
+function user.fixtures.patterns_new.or_with_repeated_typed_binding(v: int | string) -> int  [expr] {
+  {  } match (v) { x: int | x: int => x, _ => 0 }
+}
+function user.fixtures.patterns_new.paren_chains_in_or(v: int) -> int  [expr] {
+  {  } match (v) { x: int | x: int => 1 }
+}
+function user.fixtures.patterns_new.risky_error(mode: int) -> int  [expr] {
+  { if (mode Eq 0) { throw user.fixtures.patterns_new.AppError { code: 1 } }; throw "boom" }
+}
