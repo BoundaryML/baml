@@ -766,3 +766,66 @@ async fn session_let_narrowing_still_sees_the_literal() {
         Ok(BexExternalValue::String("narrowed".into()))
     );
 }
+
+/// MIG_BRIEF 4(b): a method call on a Session `let` binding reached the VM with
+/// a NULL receiver. A session binding is an initialized global, not a lexical
+/// local, so MIR's "place for this name" lookup correctly found nothing — and
+/// three roads turned that into "no receiver": the single-segment receiver
+/// became `Constant::Null`, a member-access base read as a bare type/package
+/// path rather than a value, and the container/interface dispatch block was
+/// skipped for want of a root local. Field access and indexing were unaffected,
+/// because those roads already loaded the global.
+const SESSION_BINDING_METHOD_CALLS: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  s.eval(#"let text = "hi""#)
+  s.eval<string>(#"`${n.abs()}|${text.to_upper_case()}|${text.repeat(2)}`"#)
+}
+"####;
+
+/// The same call inside the submission that introduces the binding — the defect
+/// never needed two submissions, so neither does its regression.
+const SESSION_BINDING_METHOD_CALL_SAME_SUBMISSION: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval<string>(#"let text = "hi"
+text.to_upper_case()"#)
+}
+"####;
+
+/// The controls that always worked, kept so a future change cannot fix method
+/// dispatch by breaking them: field access on a binding, and indexing one.
+const SESSION_BINDING_FIELD_AND_INDEX: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"class Draft { title string }"#)
+  s.eval(#"let draft = Draft { title: "titled" }"#)
+  s.eval(#"let items = [7, 8]"#)
+  s.eval<string>(#"`${draft.title}|${items[0]}`"#)
+}
+"####;
+
+#[tokio::test]
+async fn method_calls_on_session_let_bindings_dispatch() {
+    let output = baml_test!(SESSION_BINDING_METHOD_CALLS);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("5|HI|hihi".into()))
+    );
+}
+
+#[tokio::test]
+async fn method_calls_on_a_session_binding_work_in_its_own_submission() {
+    let output = baml_test!(SESSION_BINDING_METHOD_CALL_SAME_SUBMISSION);
+    assert_eq!(output.result, Ok(BexExternalValue::String("HI".into())));
+}
+
+#[tokio::test]
+async fn session_binding_field_access_and_indexing_still_work() {
+    let output = baml_test!(SESSION_BINDING_FIELD_AND_INDEX);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("titled|7".into()))
+    );
+}
