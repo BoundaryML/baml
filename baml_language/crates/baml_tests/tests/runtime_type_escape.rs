@@ -1007,6 +1007,49 @@ function main() -> int{clause} {{
     );
 }
 
+/// The other half of that erasure, and the reason it stops where it does. A
+/// block-scoped name is erased from what LEAVES the block — the effect the
+/// enclosing function publishes, and the compiler-derived copy of it a stashed
+/// violation quotes — and from nothing else. A clause the author WROTE inside
+/// the block is quoted back verbatim, at a caret one row under the line that
+/// spells it, where the name is in scope and on screen.
+///
+/// So one program reports both spellings, deliberately: the lambda's own
+/// `Boom<Out>` as written, and the owner's published `Boom<unknown>`.
+#[test]
+fn a_lambda_clause_inside_the_block_is_quoted_as_written() {
+    insta::assert_snapshot!(
+        render_errors(
+            r#"
+class Boom<T> { payload T }
+
+function main(t: type) -> unknown throws never {
+    type Out = unreflect(t)
+    let f = (v: int) -> int throws Boom<Out> { throw "plain" }
+    f(1)
+}
+"#
+        ),
+        @r#"
+    E0096
+
+      × declared throws is `Boom<Out>`, but this function may also throw `string`
+       ╭─[test.baml:6:54]
+     6 │     let f = (v: int) -> int throws Boom<Out> { throw "plain" }
+       ·                                                      ───────
+       ╰────
+
+    E0096
+
+      × declared throws is `never`, but this function may also throw `Boom<unknown>`
+       ╭─[test.baml:7:5]
+     7 │     f(1)
+       ·     ─
+       ╰────
+    "#
+    );
+}
+
 /// The bar the audit is held to: a shape that compiles must also RUN. Every
 /// accepted transport above, on one runtime type, asking each value what class
 /// it actually carries — the tag rides on the value, so all five agree, and

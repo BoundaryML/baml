@@ -2834,8 +2834,17 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             // A contract violation stashed inside the block quotes the effect
-            // it saw. Erase there too, or E0096 prints a name (`Boom<Out>`)
-            // that means nothing outside the block it was read in.
+            // it saw. `extra` is a COPY of a contribution — compiler-derived,
+            // and quoted in a report about what the enclosing function may
+            // throw — so it is erased for the same reason the contribution is.
+            //
+            // `declared` deliberately is NOT. It is the clause an author WROTE
+            // at that site: only a lambda's own clause can name a block-scoped
+            // binding, its violation is anchored inside that block, and the
+            // line one row above the caret reads `throws Boom<Out>`. Erasing
+            // it would print `Boom<unknown>` next to the user's own `Out` —
+            // `a_lambda_clause_inside_the_block_is_quoted_as_written` pins
+            // both halves of that asymmetry.
             for pending in &mut self.pending_diags {
                 if let PendingDiag::ThrowsViolation { extra, .. } = pending {
                     *extra = replace_rigid_param(extra, &binding.parameter, &binding.occurrence_ty);
