@@ -11,9 +11,7 @@ The C# product has three C#-owned layers:
 - `sdk_tests/crates/csharp` owns executable generator fixtures and the small
   Rust fixture emitter used by C# protocol conformance tests.
 
-The CLI discovers a C# generator, resolves its conventional `baml_client`
-directory, and calls the generation facade. Directory staging, manifests,
-collision checks, and atomic replacement stay inside `sdkgen_csharp`.
+The CLI discovers a C# generator, resolves its conventional `baml_sdk` directory, and calls the generation facade. `output_dir` selects the parent of that target-owned directory, matching every other generator. Directory staging, manifests, collision checks, and atomic replacement stay inside `sdkgen_csharp`.
 
 Shared compiler and protocol crates expose language-neutral information only.
 In particular, the compiler preserves union discovery order; the C# generator
@@ -28,9 +26,7 @@ regeneration command. C# protobuf classes are generated into `obj/` by
 `Grpc.Tools` from the canonical `bridge_ctypes/types` schemas during build and
 are never checked in.
 
-Generated fixture `baml_client/` directories are recreated by the SDK test
-harness and ignored. `sdk_test_csharp::generated_baml_clients_are_not_tracked`
-guards that policy.
+Generated fixture `baml_sdk/` directories are recreated by the SDK test harness and ignored. `sdk_test_csharp::generated_baml_clients_are_not_tracked` guards that policy.
 
 See [ABI.md](ABI.md) for the native and wire contracts and
 [DEVELOPMENT.md](DEVELOPMENT.md) for generation, testing, and release commands.

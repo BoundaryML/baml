@@ -367,6 +367,15 @@ impl GenerateArgs {
                     program_identity: &generator.name,
                     output_directory: output_dir.clone(),
                 })?;
+                if self.output.is_none()
+                    && let Some(legacy_output_dir) = legacy_csharp_output_directory(&output_dir)
+                {
+                    reporter.warning(format!(
+                        "legacy C# generated directory remains at `{}`; C# now generates into `{}`. Update project references and ignore rules, then remove the legacy directory after verifying the new build. BAML leaves it untouched to avoid deleting user files",
+                        legacy_output_dir.display(),
+                        output_dir.display()
+                    ));
+                }
                 let count = report.written_files.len();
                 reporter.status(
                     "Generated",
@@ -724,6 +733,12 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
     (generators, diags)
 }
 
+fn legacy_csharp_output_directory(output_directory: &Path) -> Option<PathBuf> {
+    let legacy_output_directory = output_directory.with_file_name("baml_client");
+    (legacy_output_directory != output_directory && legacy_output_directory.is_dir())
+        .then_some(legacy_output_directory)
+}
+
 fn parse_required_go_import_path(
     generator_name: &str,
     value: Option<&Spanned<String>>,
@@ -861,7 +876,7 @@ mod tests {
     use super::{
         AddGeneratorArgs, Diagnostic, Generator, GeneratorDef, OutputType,
         add_generator_to_manifest, build_embedded_baml_toml, discover_generators,
-        is_valid_go_import_path, parse_add_output_type,
+        is_valid_go_import_path, legacy_csharp_output_directory, parse_add_output_type,
     };
 
     fn go_manifest(threshold: Option<i64>) -> String {
@@ -877,6 +892,56 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         fs::write(directory.path().join("baml.toml"), content).unwrap();
         discover_generators(directory.path())
+    }
+
+    #[test]
+    fn generator_output_directories_use_the_shared_convention() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n[generator.csharp_default]\noutput_type = \"csharp\"\nnaming_convention = \"language\"\n\n[generator.csharp_explicit]\noutput_type = \"csharp\"\noutput_dir = \"generated\"\nnaming_convention = \"language\"\n\n[generator.python]\noutput_type = \"python/pydantic\"\nnaming_convention = \"preserve-case\"\n",
+        )
+        .unwrap();
+
+        let (generators, diagnostics) = discover_generators(directory.path());
+
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let output_for = |name: &str| {
+            &generators
+                .iter()
+                .find(|generator| generator.name == name)
+                .unwrap()
+                .output_dir
+        };
+        assert_eq!(
+            output_for("csharp_default"),
+            &directory.path().join("..").join("baml_sdk")
+        );
+        assert_eq!(
+            output_for("csharp_explicit"),
+            &directory.path().join("generated").join("baml_sdk")
+        );
+        assert_eq!(
+            output_for("python"),
+            &directory.path().join("..").join("baml_sdk")
+        );
+    }
+
+    #[test]
+    fn legacy_csharp_output_is_reported_without_being_removed() {
+        let directory = tempfile::tempdir().unwrap();
+        let legacy = directory.path().join("baml_client");
+        fs::create_dir(&legacy).unwrap();
+        fs::write(legacy.join("User.cs"), "user-owned").unwrap();
+
+        assert_eq!(
+            legacy_csharp_output_directory(&directory.path().join("baml_sdk")),
+            Some(legacy.clone())
+        );
+        assert_eq!(
+            fs::read_to_string(legacy.join("User.cs")).unwrap(),
+            "user-owned"
+        );
     }
 
     #[test]
