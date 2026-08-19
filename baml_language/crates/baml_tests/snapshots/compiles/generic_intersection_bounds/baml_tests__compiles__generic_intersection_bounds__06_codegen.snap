@@ -63,8 +63,7 @@ function user.field_into_switch(item: #0) -> int {
     load_var item
     load_type Named
     virtual_load_field .name
-    load_const "a"
-    cmp_op ==
+    is_type "a"
     pop_jump_if_false L0
     jump L1
 

@@ -103,7 +103,7 @@ impl<'db> InferenceContext<'db> {
             }
             self.diverges = super::Diverges::Maybe;
             if let Some(guard) = arm.guard {
-                self.check_expr(body, guard, &Ty::bool());
+                self.check_condition(body, guard);
                 let guard_facts = self.condition_facts(body, guard);
                 self.apply_facts(&guard_facts.when_true);
             }

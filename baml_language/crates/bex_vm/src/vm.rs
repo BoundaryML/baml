@@ -2332,6 +2332,30 @@ impl BexVm {
         }
     }
 
+    /// Truthiness of a value (B-1563): `false`, `null`, an omitted
+    /// argument, zero (`0`, `0n`, `0.0`), and empty string/list/map/bytes
+    /// are falsy; every other
+    /// value - including `NaN`, instances, variants, closures, and
+    /// futures - is truthy. The scalar fast path never touches the heap;
+    /// only strings, containers, and the boxed numerics dereference.
+    pub fn is_truthy(&self, value: Value) -> bool {
+        use bex_vm_types::ValueKind;
+        match value.kind() {
+            ValueKind::Null | ValueKind::OmittedArg => false,
+            ValueKind::Bool(b) => b,
+            ValueKind::Int(v) => v != 0,
+            ValueKind::Object(ptr) => match self.get_object(ptr) {
+                Object::String(s) => !s.is_empty(),
+                Object::Array(arr) => !arr.is_empty(),
+                Object::Map(map) => !map.is_empty(),
+                Object::Uint8Array(bytes) => !bytes.is_empty(),
+                Object::Float(f) => *f != 0.0,
+                Object::Bigint(n) => n.sign() != num_bigint::Sign::NoSign,
+                _ => true,
+            },
+        }
+    }
+
     /// Get type of a value.
     pub fn type_of(&self, value: &Value) -> Type {
         Type::of(value, |ptr| ObjectType::of(self.get_object(ptr)))
@@ -2357,6 +2381,15 @@ impl BexVm {
             ConstValue::Type(template) => {
                 crate::type_match::value_matches_template(self, value, template, frame_type_args)
             }
+            // Membership in a singleton type. Decided against the value's own
+            // identity rather than against the type it reconstructs, because
+            // `value_concrete_ty`-style reconstruction is what the general
+            // algebra needs and this is the one type whose inhabitants are
+            // enumerated rather than described. Equality here is *exact* — same
+            // representation, same contents — never the numeric-tower widening
+            // `==` applies (B-1073): `1` and `1.0` are disjoint types, so no
+            // float inhabits the int-literal singleton.
+            ConstValue::Literal(literal) => Ok(self.value_is_literal(value, literal)),
             ConstValue::ClassWithTypeArgs {
                 class_obj,
                 type_args_templates,
@@ -2488,6 +2521,181 @@ impl BexVm {
         }
     }
 
+    /// Whether `value` inhabits the singleton type denoted by `literal`.
+    ///
+    /// The runtime counterpart of `TyTemplate::Literal`: exact representation
+    /// *and* exact contents. A heap `Float` is not the int literal `1` however
+    /// close its magnitude, and a `bigint` is not an `int` — those are disjoint
+    /// types (`TYPE_SYSTEM.md` "Concrete Types": no concrete type is a subtype
+    /// of another), even though the `==` operator deliberately widens across
+    /// all three.
+    ///
+    /// Float equality is exact here by construction, not by oversight: a
+    /// singleton holds one value, so membership is identity and a tolerance
+    /// would admit values the type excludes.
+    #[allow(clippy::float_cmp)]
+    pub(crate) fn value_is_literal(&self, value: Value, literal: &baml_type::Literal) -> bool {
+        match literal {
+            baml_type::Literal::Int(n) => value.as_int() == Some(*n),
+            baml_type::Literal::Bool(b) => value.as_bool() == Some(*b),
+            baml_type::Literal::String(s) => match value.as_object_ptr() {
+                Some(ptr) => matches!(self.get_object(ptr), Object::String(v) if **v == **s),
+                None => false,
+            },
+            baml_type::Literal::Bigint(n) => match value.as_object_ptr() {
+                Some(ptr) => matches!(self.get_object(ptr), Object::Bigint(v) if **v == *n),
+                None => false,
+            },
+            // No surface syntax produces a float literal *type* (the parser
+            // rejects `1.0` in type position), so this arm is unreachable from
+            // BAML source. It is still answered exactly rather than defaulted,
+            // so a future float-literal type cannot inherit a silent `false`.
+            baml_type::Literal::Float(repr) => match value.as_object_ptr() {
+                Some(ptr) => match self.get_object(ptr) {
+                    Object::Float(v) => repr.parse::<f64>().is_ok_and(|expected| *v == expected),
+                    _ => false,
+                },
+                None => false,
+            },
+        }
+    }
+
+    /// The value's type at maximum precision — its *singleton* type where it
+    /// has one, otherwise the same leaf [`Self::value_concrete_ty`] reports.
+    ///
+    /// `TYPE_SYSTEM.md` "Values and membership" defines membership as "`v` is a
+    /// member of `T` iff `v`'s concrete type is a subtype of `T`". That only
+    /// decides literal types if the reconstructed type is the value's *most
+    /// precise* one:
+    /// reporting the int `1` as `int` makes `is_subtype(int, 1)` false and no
+    /// value would ever inhabit a literal type. Precision costs nothing at the
+    /// other end — `Literal(Int, 1) <: int` holds — so every test the coarser
+    /// reconstruction passed still passes.
+    ///
+    /// Deliberately separate from [`Self::value_concrete_ty`] rather than
+    /// replacing it: impl-registry dispatch keys on that one, and `implement I
+    /// for int` must resolve for every int, not for the singleton `1`.
+    pub(crate) fn value_singleton_ty(&self, value: Value) -> Option<baml_type::RealizedTy> {
+        use baml_type::{Freshness, RealizedTy, TyAttr};
+        let literal = |lit| RealizedTy::Literal(lit, Freshness::Regular, TyAttr::default());
+        if let Some(n) = value.as_int() {
+            return Some(literal(baml_type::Literal::Int(n)));
+        }
+        if let Some(b) = value.as_bool() {
+            return Some(literal(baml_type::Literal::Bool(b)));
+        }
+        if let Some(ptr) = value.as_object_ptr() {
+            match self.get_object(ptr) {
+                Object::String(s) => {
+                    return Some(literal(baml_type::Literal::String((**s).to_owned())));
+                }
+                Object::Bigint(n) => {
+                    return Some(literal(baml_type::Literal::Bigint((**n).clone())));
+                }
+                // A float has no literal type to be precise about, and every
+                // other object's precise type is already its concrete one.
+                _ => {}
+            }
+        }
+        Some(self.value_concrete_ty(value)?.into())
+    }
+
+    /// The callable's own `Function` plus the type arguments it already carries.
+    ///
+    /// A callable value is one of three shapes, each currying its arguments in
+    /// its own field; the two questions below both need the same pair, so they
+    /// ask it here rather than each re-matching the three.
+    fn callable_function_and_type_args(
+        &self,
+        value: Value,
+    ) -> Option<(&Function, &[baml_type::RealizedTy])> {
+        match self.get_object(value.as_object_ptr()?) {
+            Object::Closure(closure) => match unsafe { closure.function.get() } {
+                Object::Function(function) => Some((function, &closure.captured_type_args)),
+                _ => None,
+            },
+            Object::GenericFunction(generic) => {
+                let inner = self.load_global_in(generic.runtime_package, generic.function);
+                match inner.as_object_ptr().map(|ptr| self.get_object(ptr)) {
+                    Some(Object::Function(function)) => Some((function, &generic.type_args)),
+                    _ => None,
+                }
+            }
+            Object::BoundMethod(method) => match unsafe { method.function.get() } {
+                Object::Function(function) => Some((function, &method.type_args)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// The runtime package whose declarations give a callable's types meaning.
+    ///
+    /// Null for a statically compiled callable: its declarations live in the
+    /// engine image and resolve by name, so reflection needs no overlay for it.
+    pub(crate) fn callable_runtime_package(&self, value: Value) -> HeapPtr {
+        if let Some(ptr) = value.as_object_ptr()
+            && let Object::GenericFunction(generic) = self.get_object(ptr)
+            && !generic.runtime_package.is_null()
+        {
+            return generic.runtime_package;
+        }
+        self.callable_function_and_type_args(value)
+            .map_or_else(HeapPtr::null, |(function, _)| function.runtime_package)
+    }
+
+    /// The declared name of a callable, for a diagnostic.
+    fn callable_display_name(function: &Function) -> String {
+        function
+            .declared_name
+            .clone()
+            .unwrap_or_else(|| function.name.clone())
+    }
+
+    /// Name an otherwise callable value whose generic frame is incomplete.
+    /// Reflection uses this to distinguish an unspecialized generic from a
+    /// genuinely non-callable value when signature reconstruction fails.
+    pub(crate) fn unspecialized_generic_callable_name(&self, value: Value) -> Option<String> {
+        let (function, type_args) = self.callable_function_and_type_args(value)?;
+        (type_args.len() < function.generic_param_bounds.len())
+            .then(|| Self::callable_display_name(function))
+    }
+
+    /// Name a callable whose *body* cannot be realized against the type-argument
+    /// frame it carries.
+    ///
+    /// A generic function's declared signature can be free of its own type
+    /// parameters — a companion like `GenericList$render_prompt` takes the
+    /// parent's value arguments and returns an `ai.Prompt` — so signature
+    /// reconstruction succeeds and the value looks ordinary. Its body still
+    /// materializes `T` (the output-format schema, for one), and entering it
+    /// with an empty frame fails deep inside `LoadType` as a VM internal error
+    /// that no `catch` can see. Reflection asks this question before handing
+    /// such a value out or dispatching it, so the caller gets a diagnostic.
+    ///
+    /// The check runs the very substitution the body would run, so detection and
+    /// failure cannot drift apart; it is gated on the callable being a generic
+    /// missing arguments, which keeps it off every ordinary call.
+    pub(crate) fn generic_callable_body_needs_type_args(&self, value: Value) -> Option<String> {
+        let (function, type_args) = self.callable_function_and_type_args(value)?;
+        if type_args.len() >= function.generic_param_bounds.len() {
+            return None;
+        }
+        let unrealizable = |template: &baml_type::TyTemplate| {
+            matches!(
+                template.substitute(type_args, self),
+                Err(baml_type::SubstituteError::TypeArgRefOutOfRange { .. })
+            )
+        };
+        let needs_arguments = function.param_types.iter().any(&unrealizable)
+            || unrealizable(&function.return_type)
+            || unrealizable(&function.throws_type)
+            || function.bytecode.constants.iter().any(
+                |constant| matches!(constant, ConstValue::Type(template) if unrealizable(template)),
+            );
+        needs_arguments.then(|| Self::callable_display_name(function))
+    }
+
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
     /// runtime value's type satisfies (a concrete top with realized arguments, no
     /// type variables) made explicit in the type. `None` for a value kind that
@@ -2502,8 +2710,9 @@ impl BexVm {
     /// fails (→ `None`) only if a residual type variable leaked in — a bug.
     ///
     /// The interface resolver wants the loose `RuntimeTy`, so the sole such caller
-    /// widens the result back; the `IsType` value matcher wants the invariant made
-    /// explicit and uses it directly.
+    /// widens the result back. The `IsType` value matcher goes through
+    /// [`Self::value_singleton_ty`] instead — it needs the value's *most precise*
+    /// type, which for a primitive is its singleton, not its base leaf.
     pub(crate) fn value_concrete_ty(&self, value: Value) -> Option<baml_type::ConcreteRealizedTy> {
         use baml_type::{ConcreteRealizedTy, TyAttr};
         if value.as_int().is_some() {
@@ -5816,7 +6025,13 @@ impl BexVm {
         );
         self.pending_call_type_args = previous_type_args;
         self.pending_call_type_values = previous_type_values;
-        if !options.type_args.is_empty()
+        // A definition overlay can arrive without any type-argument slots of its
+        // own — interface dispatch hands one down for a method that declares no
+        // generics — so the metadata lane is written whenever any of the three
+        // has something to say, not only when the frame widens.
+        if (!options.type_args.is_empty()
+            || !options.type_defs.is_empty()
+            || !options.type_values.is_empty())
             && self.frames.len() == frames_before + 1
             && *frame_idx == frames_before
             && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frames_before)
@@ -7232,6 +7447,23 @@ impl BexVm {
                     let method_value = self.stack.ensure_pop();
                     let iface_value = self.stack.ensure_pop();
 
+                    // A parameterized interface operand carries the runtime
+                    // definitions of its arguments (BEP-066). Resolution reads
+                    // only the realized `ty` off it, so without carrying the
+                    // overlay into the callee the impl body would see
+                    // `user.$dyn.N.Out` as a name nothing defines — reflection,
+                    // rendering and SAP inside an interface method would fail on
+                    // a type the caller can use fine.
+                    let iface_defs =
+                        iface_value
+                            .as_object_ptr()
+                            .and_then(|ptr| match self.get_object(ptr) {
+                                Object::Type(type_value) if !type_value.defs().is_empty() => {
+                                    Some(type_value.defs().clone())
+                                }
+                                _ => None,
+                            });
+
                     let method_type_args = if ntypeargs == 0 {
                         None
                     } else {
@@ -7366,6 +7598,7 @@ impl BexVm {
 
                     let result = if type_args.is_empty()
                         && method_type_args.is_none()
+                        && iface_defs.is_none()
                         && self.pending_call_type_args.is_empty()
                         && self.pending_call_type_values.is_empty()
                     {
@@ -7379,10 +7612,11 @@ impl BexVm {
                             function,
                         )
                     } else {
-                        let empty_defs = DynTypeDefs::default();
-                        let type_defs = method_type_args
-                            .as_ref()
-                            .map_or(&empty_defs, |args| &args.defs);
+                        let mut type_defs = iface_defs.unwrap_or_default();
+                        if let Some(method) = method_type_args.as_ref() {
+                            type_defs.merge_from(&method.defs);
+                        }
+                        let type_defs = &type_defs;
                         self.execute_call_from_locals_offset_with_type_args(
                             callee_ptr,
                             locals_offset,
@@ -8882,17 +9116,16 @@ impl BexVm {
 
                 // ── Expanded unary ────────────────────────────────────────────
                 OpCode::Not => {
+                    // `!` negates TRUTHINESS (B-1563) - `!0` and `if (0)`
+                    // agree, closing B-1071's asymmetry.
                     let val = self.stack.ensure_pop();
-                    match val.as_bool() {
-                        Some(b) => self.stack.push(Value::bool(!b)),
-                        None => {
-                            return Err(VmInternalError::CannotApplyUnaryOp {
-                                op: UnaryOp::Not,
-                                value: self.type_of(&val),
-                            }
-                            .into());
-                        }
-                    }
+                    let truthy = self.is_truthy(val);
+                    self.stack.push(Value::bool(!truthy));
+                }
+                OpCode::Truthy => {
+                    let val = self.stack.ensure_pop();
+                    let truthy = self.is_truthy(val);
+                    self.stack.push(Value::bool(truthy));
                 }
                 OpCode::Neg => {
                     let val = self.stack.ensure_pop();

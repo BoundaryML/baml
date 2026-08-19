@@ -303,13 +303,7 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
             prompt_tokens: usage.map(|u| u.prompt_tokens),
             output_tokens: usage.map(|u| u.completion_tokens),
             total_tokens: usage.map(|u| u.total_tokens),
-            cached_input_tokens: usage.and_then(|u| {
-                // Extract cached tokens from input_tokens_details if available
-                u.input_tokens_details
-                    .as_ref()
-                    .and_then(|details| details.get("cached_tokens"))
-                    .and_then(|cached| cached.as_u64())
-            }),
+            cached_input_tokens: usage.and_then(|u| u.cached_input_tokens()),
         },
     })
 }
@@ -484,12 +478,7 @@ pub fn scan_openai_chat_completion_stream(
         inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
         inner.metadata.output_tokens = Some(usage.completion_tokens);
         inner.metadata.total_tokens = Some(usage.total_tokens);
-        inner.metadata.cached_input_tokens =
-            usage.input_tokens_details.as_ref().and_then(|details| {
-                details
-                    .get("cached_tokens")
-                    .and_then(|cached| cached.as_u64())
-            })
+        inner.metadata.cached_input_tokens = usage.cached_input_tokens();
     }
 
     Ok(())
@@ -584,6 +573,108 @@ mod tests {
             panic!("Expected LLMResponse::Success, got {result:?}");
         }
     }
+
+    #[test]
+    fn accepts_chat_completion_with_both_token_details_field_names() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::json!({
+            "id": "chatcmpl-fireworks",
+            "object": "chat.completion",
+            "model": "accounts/fireworks/models/deepseek-v4-flash-0731",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "synthetic summary text"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+                "prompt_tokens_details": { "cached_tokens": 98 },
+                "input_tokens_details": { "cached_tokens": 99 },
+                "completion_tokens_details": { "reasoning_tokens": 0 },
+                "output_tokens_details": { "reasoning_tokens": 0 }
+            }
+        });
+
+        let result = parse_openai_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            web_time::SystemTime::now(),
+            web_time::Instant::now(),
+            Some("accounts/fireworks/models/deepseek-v4-flash-0731".to_string()),
+        );
+
+        let LLMResponse::Success(response) = result else {
+            panic!("Expected LLMResponse::Success, got {result:?}");
+        };
+        assert_eq!(response.content, "synthetic summary text");
+        assert_eq!(response.metadata.prompt_tokens, Some(100));
+        assert_eq!(response.metadata.output_tokens, Some(20));
+        assert_eq!(response.metadata.total_tokens, Some(120));
+        assert_eq!(response.metadata.cached_input_tokens, Some(99));
+    }
+
+    #[test]
+    fn accepts_stream_usage_with_both_token_details_field_names() {
+        let system_now = web_time::SystemTime::now();
+        let prompt = internal_baml_jinja::RenderedPrompt::Chat(vec![]);
+        let mut accumulated = Ok(LLMCompleteResponse {
+            client: "mock".to_string(),
+            prompt: prompt.clone(),
+            content: "synthetic summary text".to_string(),
+            start_time: system_now,
+            latency: Duration::ZERO,
+            model: "accounts/fireworks/models/deepseek-v4-flash-0731".to_string(),
+            request_options: BamlMap::new(),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("stop".to_string()),
+                prompt_tokens: None,
+                output_tokens: None,
+                total_tokens: None,
+                cached_input_tokens: None,
+            },
+        });
+        let event_body = serde_json::json!({
+            "id": "chatcmpl-fireworks",
+            "object": "chat.completion.chunk",
+            "model": "accounts/fireworks/models/deepseek-v4-flash-0731",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+                "prompt_tokens_details": { "cached_tokens": 98 },
+                "input_tokens_details": { "cached_tokens": 99 },
+                "completion_tokens_details": { "reasoning_tokens": 0 },
+                "output_tokens_details": { "reasoning_tokens": 0 }
+            }
+        });
+
+        scan_openai_chat_completion_stream(
+            "mock",
+            &BamlMap::new(),
+            &prompt,
+            &system_now,
+            &web_time::Instant::now(),
+            &Some("accounts/fireworks/models/deepseek-v4-flash-0731".to_string()),
+            &mut accumulated,
+            event_body,
+        )
+        .unwrap();
+
+        let response = accumulated.unwrap();
+        assert_eq!(response.metadata.prompt_tokens, Some(100));
+        assert_eq!(response.metadata.output_tokens, Some(20));
+        assert_eq!(response.metadata.total_tokens, Some(120));
+        assert_eq!(response.metadata.cached_input_tokens, Some(99));
+    }
 }
 
 pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
@@ -674,13 +765,7 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
             prompt_tokens: usage.map(|u| u.prompt_tokens),
             output_tokens: usage.map(|u| u.completion_tokens),
             total_tokens: usage.map(|u| u.total_tokens),
-            cached_input_tokens: usage.and_then(|u| {
-                // Extract cached tokens from input_tokens_details if available
-                u.input_tokens_details
-                    .as_ref()
-                    .and_then(|details| details.get("cached_tokens"))
-                    .and_then(|cached| cached.as_u64())
-            }),
+            cached_input_tokens: usage.and_then(|u| u.cached_input_tokens()),
         },
     })
 }
@@ -750,12 +835,7 @@ pub fn scan_openai_responses_stream(
                 inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
                 inner.metadata.output_tokens = Some(usage.completion_tokens);
                 inner.metadata.total_tokens = Some(usage.total_tokens);
-                inner.metadata.cached_input_tokens =
-                    usage.input_tokens_details.as_ref().and_then(|details| {
-                        details
-                            .get("cached_tokens")
-                            .and_then(|cached| cached.as_u64())
-                    })
+                inner.metadata.cached_input_tokens = usage.cached_input_tokens();
             }
         }
         ResponseFailed { response, .. } => {
@@ -808,12 +888,7 @@ pub fn scan_openai_responses_stream(
                 inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
                 inner.metadata.output_tokens = Some(usage.completion_tokens);
                 inner.metadata.total_tokens = Some(usage.total_tokens);
-                inner.metadata.cached_input_tokens =
-                    usage.input_tokens_details.as_ref().and_then(|details| {
-                        details
-                            .get("cached_tokens")
-                            .and_then(|cached| cached.as_u64())
-                    })
+                inner.metadata.cached_input_tokens = usage.cached_input_tokens();
             }
         }
         OutputTextDelta { delta, .. } => {

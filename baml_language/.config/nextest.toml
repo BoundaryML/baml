@@ -222,6 +222,25 @@ filter = 'package(=sdk_test_go)'
 platform = { host = 'cfg(windows)' }
 setup = 'go_bridge_win'
 
+# Ruby bridge tests use the same SDK-test lanes as the generated clients will.
+# Setup builds bridge_cffi, compiles the malformed-library and foreign-thread
+# fixtures, emits real function_calls bytecode, and installs the locked ffi gem.
+[scripts.setup.ruby_sorbet_bridge_unix]
+command = './sdk_tests/crates/ruby_sorbet/setup.sh'
+
+[scripts.setup.ruby_sorbet_bridge_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/ruby_sorbet/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_ruby_sorbet)'
+platform = { host = 'cfg(unix)' }
+setup = 'ruby_sorbet_bridge_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_ruby_sorbet)'
+platform = { host = 'cfg(windows)' }
+setup = 'ruby_sorbet_bridge_win'
+
 # cpp tests link the dev-profile bridge_cffi cdylib; build it once. fire only
 # when a cpp sdk-test is selected. setup.sh / setup.ps1 are byte-for-byte
 # equivalent — same cargo build in the host shell of each platform.

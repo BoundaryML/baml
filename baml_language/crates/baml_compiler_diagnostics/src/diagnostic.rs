@@ -368,6 +368,20 @@ pub enum DiagnosticId {
     ConflictingTypeDefinitionAtRender,
     /// A top-level declaration ($init) can reach a yielding io sysop.
     InitIoNotAllowed,
+
+    /// A non-data type reached an LLM output schema renderer. These types are
+    /// valid in BAML's type system but have no output-format representation.
+    NonDataTypeAtRender,
+    /// Reflection attempted to extract or dynamically invoke a generic
+    /// callable without a complete runtime type-argument frame.
+    UnspecializedReflectedGeneric,
+    /// A class literal named one of the builtin companion carriers
+    /// (`baml.Int`, `baml.Map`, …). They exist to hang methods on a builtin
+    /// type, never to be instantiated.
+    CannotConstructBuiltinCompanion,
+    /// A condition whose static type decides the branch (always truthy /
+    /// always falsy) - B-1563 truthiness.
+    ConditionAlwaysConstant,
 }
 
 impl DiagnosticId {
@@ -546,6 +560,8 @@ impl DiagnosticId {
             DiagnosticId::OpenInterfaceAtRender => "E0161",
             DiagnosticId::ConflictingTypeDefinitionAtRender => "E0162",
             DiagnosticId::InitIoNotAllowed => "E0163",
+            DiagnosticId::NonDataTypeAtRender => "E0164",
+            DiagnosticId::ConditionAlwaysConstant => "E0167",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 
@@ -569,6 +585,9 @@ impl DiagnosticId {
             DiagnosticId::InterfaceProjectionBase => "E0156",
             DiagnosticId::MountedPackageCallUnsupported => "E0158",
             DiagnosticId::EmptyEnumAtRender => "E0159",
+            // E0164 is owned by the non-data output-format diagnostic in #4470.
+            DiagnosticId::UnspecializedReflectedGeneric => "E0165",
+            DiagnosticId::CannotConstructBuiltinCompanion => "E0166",
         }
     }
 }

@@ -2,8 +2,36 @@
 //! through offline LLM companions, retain mint identity, and remain usable
 //! through the dynamic access/JSON surfaces.
 
+use baml_compiler_diagnostics::Severity;
+use baml_project::{collect_diagnostics, testing::setup_test_db};
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
+
+fn compile_errors(source: &str) -> Vec<(String, String)> {
+    collect_diagnostics(&setup_test_db(source))
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == Severity::Error)
+        .map(|diagnostic| (diagnostic.code().to_string(), diagnostic.message))
+        .collect()
+}
+
+#[test]
+fn unknown_get_field_method_is_rejected_at_compile_time() {
+    let errors = compile_errors(
+        r#"
+        function inspect(value: unknown) -> string {
+            value.get_field<string>("name")
+        }
+        "#,
+    );
+
+    assert!(
+        errors.iter().any(|(code, message)| {
+            code == "E0007" && message.contains("get_field") && message.contains("unknown")
+        }),
+        "missing unresolved-member diagnostic: {errors:#?}"
+    );
+}
 
 #[tokio::test]
 async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {

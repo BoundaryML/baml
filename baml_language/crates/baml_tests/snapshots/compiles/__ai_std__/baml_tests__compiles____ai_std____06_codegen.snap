@@ -841,22 +841,19 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_var _14
     store_var kind
     load_var form
-    load_const "mixedlist"
-    cmp_op ==
+    is_type "mixedlist"
     pop_jump_if_false L2
     jump L22
 
   L2:
     load_var form
-    load_const "mixed"
-    cmp_op ==
+    is_type "mixed"
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var form
-    load_const "list"
-    cmp_op ==
+    is_type "list"
     pop_jump_if_false L4
     jump L13
 
@@ -2573,85 +2570,73 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     call baml.String.slice
     store_var model
     load_var prefix
-    load_const "openai"
-    cmp_op ==
+    is_type "openai"
     pop_jump_if_false L2
     jump L25
 
   L2:
     load_var prefix
-    load_const "openai-chat"
-    cmp_op ==
+    is_type "openai-chat"
     pop_jump_if_false L3
     jump L24
 
   L3:
     load_var prefix
-    load_const "openai-images"
-    cmp_op ==
+    is_type "openai-images"
     pop_jump_if_false L4
     jump L23
 
   L4:
     load_var prefix
-    load_const "azure"
-    cmp_op ==
+    is_type "azure"
     pop_jump_if_false L5
     jump L22
 
   L5:
     load_var prefix
-    load_const "ollama"
-    cmp_op ==
+    is_type "ollama"
     pop_jump_if_false L6
     jump L21
 
   L6:
     load_var prefix
-    load_const "openrouter"
-    cmp_op ==
+    is_type "openrouter"
     pop_jump_if_false L7
     jump L20
 
   L7:
     load_var prefix
-    load_const "anthropic"
-    cmp_op ==
+    is_type "anthropic"
     pop_jump_if_false L8
     jump L19
 
   L8:
     load_var prefix
-    load_const "google"
-    cmp_op ==
+    is_type "google"
     pop_jump_if_false L9
     jump L18
 
   L9:
     load_var prefix
-    load_const "vertex"
-    cmp_op ==
+    is_type "vertex"
     pop_jump_if_false L10
     jump L17
 
   L10:
     load_var prefix
-    load_const "bedrock"
-    cmp_op ==
+    is_type "bedrock"
     pop_jump_if_false L11
     jump L16
 
   L11:
     load_var prefix
-    load_const "ai-gateway-images"
-    cmp_op ==
+    is_type "ai-gateway-images"
     pop_jump_if_false L12
     jump L15
 
   L12:
     load_var prefix
-    load_const "claude-code"
-    cmp_op ==
+    is_type "claude-code"
     pop_jump_if_false L13
     jump L14
 

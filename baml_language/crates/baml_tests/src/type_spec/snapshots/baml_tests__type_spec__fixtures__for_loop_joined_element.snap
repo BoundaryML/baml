@@ -1,0 +1,42 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+455..469 'joined_map_arm': throws never
+497..754 '{\n   ...  n\n}': int
+503..509 'let ys': int[]
+512..613 'if (b)...n    }': int[]
+516..517 'b': bool
+519..538 '{\n   ...n    }': int[]
+529..532 '[0]': int[]
+530..531 '0': 0
+544..613 '{\n   ...n    }': int[]
+554..560 'xs.map': (self: int[], f: (int) -> int throws never) -> int[] throws never
+554..607 'xs.map...    })': int[]
+561..606 '(x: in...     }': (x: int) -> int throws never
+577..606 '{\n   ...     }': int
+591..592 'x': int
+591..596 'x + 1': int
+595..596 '1': 1
+619..624 'let n': int
+627..628 '0': 0
+639..644 'let y': int
+648..650 'ys': int[]
+652..746 '{\n   ...n    }': void
+708..709 'n': int
+712..713 'n': int
+712..717 'n + y': int
+716..717 'y': int
+751..752 'n': int
+989..1002 'count_bounded': throws never
+1046..1170 '{\n   ...  n\n}': int
+1052..1057 'let n': int
+1060..1061 '0': 0
+1072..1080 'let item': (T as baml.iter.Iterable).Item
+1084..1085 'c': T
+1087..1162 '{\n   ...n    }': void
+1146..1147 'n': int
+1150..1151 'n': int
+1150..1155 'n + 1': int
+1154..1155 '1': 1
+1167..1168 'n': int
