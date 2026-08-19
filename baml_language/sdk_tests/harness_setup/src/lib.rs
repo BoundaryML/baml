@@ -32,7 +32,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use baml_codegen_types::{GeneratedOutputFile, SymbolPool, write_generated_output};
+use baml_codegen_types::{
+    GeneratedOutputFile, OutputOptions, OutputProvenance, SymbolPool, VcsPolicy,
+    write_generated_output,
+};
 use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
@@ -127,8 +130,25 @@ pub(crate) fn write_codegen_output<C>(
             GeneratedOutputFile::new(relative_path, contents.as_ref().to_vec())
         })
         .collect();
-    if let Err(error) = write_generated_output(output_directory, files) {
+    if let Err(error) = write_generated_output(output_directory, files, &harness_output_options()) {
         diagnostics.record("codegen_write", fixture, error);
+    }
+}
+
+/// Provenance for harness-generated fixtures.
+///
+/// The freshness fields exist for real projects, where a later invocation
+/// decides whether to regenerate. Fixtures are rebuilt unconditionally by the
+/// harness, so a fixed marker keeps their output byte-stable across runs —
+/// which the C# determinism check depends on.
+pub(crate) fn harness_output_options() -> OutputOptions {
+    OutputOptions {
+        provenance: OutputProvenance {
+            input_fingerprint: "sdk-test-harness".to_string(),
+            toolchain_version: baml_version::CANONICAL_VERSION.to_string(),
+            generator_name: "sdk-test-harness".to_string(),
+        },
+        vcs: VcsPolicy::Ignore,
     }
 }
 

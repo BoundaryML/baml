@@ -2,7 +2,7 @@
 // Format, and LanguageServer. `baml run` is the top-level entry for
 // standalone execution.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::{Args, CommandFactory, Parser, Subcommand};
@@ -155,6 +155,13 @@ pub(crate) enum Commands {
 
     #[command(about = "Generate client code from BAML definitions")]
     Generate(crate::generate::GenerateArgs),
+
+    #[command(
+        about = "Manage generated client libraries (bridges)",
+        long_about = "Manage the client libraries BAML emits for other languages.\n\nA bridge is one `[generator.<name>]` section in `baml.toml`: a target language, an output directory, and the generated code itself. `baml generate` writes them, `--check` verifies they are current without writing, `baml bridge install` prints how to install each runtime, and `baml bridge list` shows what is configured.",
+        after_long_help = "Examples:\n  Add a bridge and see how to install its runtime:\n    baml bridge add python\n\n  Generate every configured bridge:\n    baml generate\n\n  Fail if a bridge is out of date (for CI and pre-commit):\n    baml generate --check\n\n  Show what is configured and whether it is current:\n    baml bridge list"
+    )]
+    Bridge(crate::bridge::BridgeArgs),
 
     #[command(about = "Run BAML tests")]
     Test(crate::test_command::TestArgs),
@@ -337,13 +344,33 @@ impl RuntimeCli {
         // guard's drop, after the match below returns, gives the background
         // refresh the rest of its time budget.
         let _skill_check = match &self.command {
-            Commands::Init(_) | Commands::Run(_) | Commands::Generate(_) | Commands::Pack(_) => {
-                crate::skill_check::SkillCheck::start()
-            }
+            Commands::Init(_)
+            | Commands::Run(_)
+            | Commands::Generate(_)
+            | Commands::Bridge(_)
+            | Commands::Pack(_) => crate::skill_check::SkillCheck::start(),
             _ => crate::skill_check::SkillCheck::skipped(),
         };
 
         let project = self.global.project.as_deref();
+
+        // Passive bridge-freshness warning. Whitelisted to the commands an
+        // author actually runs while editing, so an out-of-date bridge
+        // surfaces without anyone having to ask. Excluded: `playground` and
+        // `lsp` (long-running editor surfaces where a startup line is
+        // noise), machine-facing and account commands, and `bridge` itself,
+        // which either fixes the staleness or reports it precisely.
+        let _bridge_check = match &self.command {
+            Commands::Check(_)
+            | Commands::Run(_)
+            | Commands::Test(_)
+            | Commands::Pack(_)
+            | Commands::Format(_)
+            | Commands::Describe(_) => {
+                crate::bridge::passive::BridgeCheck::start(project.map(Path::to_path_buf))
+            }
+            _ => crate::bridge::passive::BridgeCheck::skipped(),
+        };
 
         match &self.command {
             Commands::Init(args) => args.run(),
@@ -355,6 +382,7 @@ impl RuntimeCli {
             Commands::Ide(args) => args.run(),
             Commands::Agent(args) => args.run(project),
             Commands::Describe(args) => args.run(project),
+            Commands::Bridge(args) => args.run(project),
             Commands::Generate(args) => args.run(project),
             Commands::Test(args) => args.run(project),
             Commands::LanguageServer(args) => match args.run() {
@@ -422,6 +450,12 @@ mod tests {
         &["fmt"],
         &["describe"],
         &["generate"],
+        &["generate", "add"],
+        &["bridge"],
+        &["bridge", "generate"],
+        &["bridge", "add"],
+        &["bridge", "install"],
+        &["bridge", "list"],
         &["test"],
         &["init"],
         &["new"],
@@ -552,18 +586,20 @@ mod tests {
     }
 
     #[test]
-    fn generate_accepts_bare_and_add_forms() {
+    fn generate_accepts_bare_check_and_add_forms() {
         let cli = RuntimeCli::parse_from_smart(vec![
             "baml-cli".into(),
             "generate".into(),
             "--project".into(),
             ".".into(),
+            "--check".into(),
         ]);
         assert_eq!(cli.global.project, Some(PathBuf::from(".")));
         let Commands::Generate(args) = cli.command else {
             panic!("expected generate command");
         };
         assert!(args.command.is_none());
+        assert!(args.check);
 
         let cli = RuntimeCli::parse_from_smart(vec![
             "baml-cli".into(),
@@ -823,8 +859,17 @@ mod tests {
             &["baml", "fmt", "baml_src/main.baml"],
             &["baml", "fmt", "--dry-run"],
             &["baml", "generate"],
-            &["baml", "generate", "--project", "./my-project"],
+            &["baml", "generate", "--check"],
             &["baml", "generate", "--output-dir", "./generated"],
+            &["baml", "generate", "add", "python"],
+            &["baml", "bridge", "add", "python"],
+            &["baml", "bridge", "generate"],
+            &["baml", "bridge", "generate", "--check"],
+            &["baml", "bridge", "generate", "--output-dir", "./generated"],
+            &["baml", "bridge", "install"],
+            &["baml", "bridge", "install", "--project", "./my-project"],
+            &["baml", "bridge", "list"],
+            &["baml", "bridge", "list", "--project", "./my-project"],
             &["baml", "init"],
             &["baml", "init", "./my-project", "--name", "my_project"],
             &["baml", "new", "./my-project"],

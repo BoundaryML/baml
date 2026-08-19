@@ -60,6 +60,7 @@ pub(crate) fn unique_root(prefix: &str) -> PathBuf {
 pub(crate) fn resolved(root: &Path, files: &[(&str, &str)]) -> ResolvedProject {
     ResolvedProject {
         root: root.to_path_buf(),
+        source_root: root.to_path_buf(),
         manifest: None,
         files: files
             .iter()

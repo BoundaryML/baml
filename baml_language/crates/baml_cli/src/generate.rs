@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_codegen_types::{
-    GeneratedOutputFile, Generator, NamingConvention, OutputType, write_generated_output,
+    GeneratedOutputFile, Generator, NamingConvention, OutputType, VcsPolicy, write_generated_output,
 };
 use baml_db::{
     FileId, Span,
@@ -27,22 +27,26 @@ use crate::{commands::release_version, reporter::Reporter};
 /// Generate client code from BAML definitions.
 ///
 /// Reads every `[generator.<name>]` section in `baml.toml`, validates the
-/// project, and writes each configured client. Use `--output-dir` to override the
-/// configured output directory for every generator in this invocation.
+/// project, and writes each configured client. Use `--check` to verify that
+/// generated clients are current without writing anything.
 #[derive(Args, Clone, Debug)]
 #[command(after_long_help = "\
 Examples:
   Generate clients for the nearest project:
     baml generate
 
-  Generate clients for a specific project:
-    baml generate --project ./my-project
+  Fail if generated clients are out of date (for CI and pre-commit):
+    baml generate --check
 
   Override the output directory:
     baml generate --output-dir ./generated")]
 pub struct GenerateArgs {
     #[command(subcommand)]
     pub command: Option<GenerateCommand>,
+
+    /// Exit non-zero if any generated client is out of date. Writes nothing.
+    #[arg(long, help_heading = "Generation options")]
+    pub check: bool,
 
     /// Output directory override (takes precedence over generator config)
     #[arg(
@@ -61,7 +65,33 @@ pub enum GenerateCommand {
     Add(AddGeneratorArgs),
 }
 
+impl GenerateArgs {
+    pub fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
+        match &self.command {
+            Some(GenerateCommand::Add(args)) => args.run(project),
+            None if self.check => crate::bridge::check(project),
+            None => run_generate(project, self.output.as_deref()),
+        }
+    }
+}
+
+/// Add a bridge to `baml.toml` and print how to install its runtime.
+///
+/// Writes a new `[generator.<name>]` section, then prints the command that
+/// installs the matching runtime for that language. BAML owns `baml.toml`, so
+/// it is edited directly; the host manifest (`pyproject.toml`,
+/// `package.json`, …) is never touched, only described.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Add a Python bridge:
+    baml bridge add python
+
+  Add a Node bridge:
+    baml bridge add typescript
+
+  Add a Go bridge, which needs its module path:
+    baml bridge add go --sdk-import-path example.com/project/baml_sdk")]
 pub struct AddGeneratorArgs {
     #[arg(
         value_name = "OUTPUT_TYPE",
@@ -77,11 +107,11 @@ pub struct AddGeneratorArgs {
 
 /// A validated generator, resolved from a `[generator.<name>]` section of
 /// `baml.toml`.
-struct GeneratorDef {
-    name: String,
-    output_type: OutputType,
+pub(crate) struct GeneratorDef {
+    pub(crate) name: String,
+    pub(crate) output_type: OutputType,
     /// Resolved output directory (absolute).
-    output_dir: PathBuf,
+    pub(crate) output_dir: PathBuf,
     /// Required `naming_convention` from the generator section. No default
     /// is permitted — generators must spell out the policy explicitly.
     naming_convention: NamingConvention,
@@ -92,7 +122,7 @@ struct GeneratorDef {
 }
 
 impl AddGeneratorArgs {
-    fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
         let root = crate::project_load::find_project_root_from(project)?.ok_or_else(|| {
             anyhow!("no BAML project found; run `baml init` before adding a generator")
         })?;
@@ -136,6 +166,18 @@ impl AddGeneratorArgs {
             "Added",
             format!("generator.{name} to {}", toml_path.display()),
         );
+
+        // Adding a bridge is exactly when someone needs to know how to
+        // install its runtime, and the version has to match this toolchain
+        // exactly. Print it now rather than making them find `bridge install`.
+        let (generators, _) = discover_generators(&root);
+        if let Some(added) = generators.iter().find(|generator| generator.name == name) {
+            #[allow(clippy::print_stdout)]
+            {
+                println!();
+            }
+            crate::bridge::print_install_for(added, &root);
+        }
         Ok(crate::ExitCode::Success)
     }
 }
@@ -209,15 +251,14 @@ fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(St
     Ok((document.to_string(), name))
 }
 
-impl GenerateArgs {
-    pub fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
-        match &self.command {
-            Some(GenerateCommand::Add(args)) => args.run(project),
-            None => self.run_generate(project),
-        }
-    }
-
-    fn run_generate(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
+/// Compile the project and write every configured bridge.
+///
+/// The shared body of `baml generate` and `baml bridge generate`.
+pub(crate) fn run_generate(
+    project: Option<&Path>,
+    output_override: Option<&Path>,
+) -> Result<crate::ExitCode> {
+    {
         let reporter = Reporter::new();
         reporter.status(
             "Generating",
@@ -240,6 +281,12 @@ impl GenerateArgs {
         }
         let _ = session.warm_prep_seeds_only();
         session.prime();
+        // Fingerprint the inputs the compiler actually loaded, before the
+        // session is consumed. Re-deriving the layout from the settings root
+        // instead would name a different file set whenever `--project` points
+        // at a source tree that is not `root/baml_src`.
+        let input_fingerprint =
+            crate::bridge::fingerprint::Inputs::from_resolved(&session.resolved).fingerprint();
         let (db, from) = (session.db, session.resolved.root);
         // Compile-time diagnostics — same shape as run/pack: render the
         // diagnostic block after abandoning the spinner so the colored
@@ -315,6 +362,8 @@ impl GenerateArgs {
 
         let embedded_baml_toml = build_embedded_baml_toml(&from)?;
 
+        let vcs = vcs_policy(&from);
+
         // Build the codegen SymbolPool from the compiler database.
         let pool = baml_project::build_symbol_pool(&db);
 
@@ -329,10 +378,19 @@ impl GenerateArgs {
 
         for generator in &generators {
             reporter.spin("Generating", &generator.name);
-            let requested_output = self
-                .output
-                .clone()
+            // `output_dir` deliberately does not feed the fingerprint: it
+            // changes where the bridge lands, never what is in it.
+            let requested_output = output_override
+                .map(Path::to_path_buf)
                 .unwrap_or_else(|| generator.output_dir.clone());
+            let options = baml_codegen_types::OutputOptions {
+                provenance: baml_codegen_types::OutputProvenance {
+                    input_fingerprint: input_fingerprint.clone(),
+                    toolchain_version: baml_version::CANONICAL_VERSION.to_string(),
+                    generator_name: generator.name.clone(),
+                },
+                vcs,
+            };
             let output_dir = if requested_output.is_absolute() {
                 requested_output
             } else {
@@ -350,6 +408,8 @@ impl GenerateArgs {
                     required_bridge_version: baml_version::CANONICAL_VERSION,
                     program_identity: &generator.name,
                     output_directory: output_dir.clone(),
+                    provenance: options.provenance.clone(),
+                    vcs: options.vcs,
                 })?;
                 let count = report.written_files.len();
                 reporter.status(
@@ -487,12 +547,13 @@ impl GenerateArgs {
                 .into_iter()
                 .map(|(path, contents)| GeneratedOutputFile::new(path, contents))
                 .collect();
-            let report = write_generated_output(&output_dir, output).with_context(|| {
-                format!(
-                    "failed to install generated output in {}",
-                    output_dir.display()
-                )
-            })?;
+            let report =
+                write_generated_output(&output_dir, output, &options).with_context(|| {
+                    format!(
+                        "failed to install generated output in {}",
+                        output_dir.display()
+                    )
+                })?;
             let count = report.written_files.len();
 
             // Persistent status line in the scrollback — one per
@@ -518,6 +579,31 @@ impl GenerateArgs {
 
         reporter.finish("Finished", format!("generated {total_files} file(s)"));
         Ok(crate::ExitCode::Success)
+    }
+}
+
+/// Read `[bridge] vcs` from `baml.toml`.
+///
+/// Defaults to today's behavior (ignore the whole generated tree). An
+/// unreadable, unparseable, or unrecognized value also falls back to the
+/// default: this is a convenience policy, not something worth failing a
+/// generation over, and a malformed manifest is already reported upstream.
+pub(crate) fn vcs_policy(project_root: &Path) -> VcsPolicy {
+    let Ok(content) = std::fs::read_to_string(project_root.join("baml.toml")) else {
+        return VcsPolicy::Ignore;
+    };
+    let Ok(manifest) = crate::manifest::parse(&content) else {
+        return VcsPolicy::Ignore;
+    };
+    match manifest
+        .bridge
+        .vcs
+        .as_ref()
+        .map(Spanned::get_ref)
+        .map(String::as_str)
+    {
+        Some("commit") => VcsPolicy::Commit,
+        _ => VcsPolicy::Ignore,
     }
 }
 
@@ -565,7 +651,7 @@ fn manifest_file_id() -> FileId {
 /// hint. A malformed manifest is impossible to reach here: the strict
 /// project loader parses and validates `baml.toml` before we ever get this
 /// far, so a parse error returns empty rather than double-reporting.
-fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
+pub(crate) fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
     let mut generators = Vec::new();
     let mut diags = Vec::new();
 

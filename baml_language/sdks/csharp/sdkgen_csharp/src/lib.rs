@@ -14,7 +14,10 @@ mod semantic;
 
 use std::{fmt, path::PathBuf};
 
-use baml_codegen_types::{OutputWriterError, SymbolPool, write_generated_output};
+use baml_codegen_types::{
+    OutputOptions, OutputProvenance, OutputWriterError, SymbolPool, VcsPolicy,
+    write_generated_output,
+};
 pub use output::{GenerationManifest, OutputValidationError};
 pub use semantic::CSharpGenerationError;
 
@@ -27,6 +30,10 @@ pub struct CSharpGenerateRequest<'a> {
     pub required_bridge_version: &'a str,
     pub program_identity: &'a str,
     pub output_directory: PathBuf,
+    /// Recorded in the ownership manifest so a later freshness check can
+    /// decide staleness from the inputs alone.
+    pub provenance: OutputProvenance,
+    pub vcs: VcsPolicy,
 }
 
 /// Installed output inventory from a completed C# generation transaction.
@@ -112,7 +119,14 @@ pub fn generate_into(
         request.program_identity,
     )?;
     let (manifest, files) = output::validate_and_collect(&tree)?;
-    write_generated_output(&request.output_directory, files)?;
+    write_generated_output(
+        &request.output_directory,
+        files,
+        &OutputOptions {
+            provenance: request.provenance,
+            vcs: request.vcs,
+        },
+    )?;
     let written_files = manifest
         .files
         .iter()

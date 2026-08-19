@@ -1648,7 +1648,7 @@ pub(crate) fn source_needs_format_hint(source: &str) -> bool {
 /// BEP-027 Appendix A: names that cannot be used as `[scripts]` keys.
 const RESERVED_VERBS: &[&str] = &[
     "run", "pack", "test", "repl", "init", "help", "version", "fmt", "lint", "check", "build",
-    "generate", "dev", "start", "serve", "add", "remove", "install", "update", "publish",
+    "generate", "bridge", "dev", "start", "serve", "add", "remove", "install", "update", "publish",
     "upgrade", "deps", "clean", "config", "info", "search", "new", "doc", "docs",
 ];
 
