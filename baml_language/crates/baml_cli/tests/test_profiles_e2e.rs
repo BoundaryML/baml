@@ -297,6 +297,29 @@ fn double_colon_is_reserved_inside_declared_test_names() {
 }
 
 #[test]
+fn double_colon_is_reserved_inside_top_level_testset_names() {
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path());
+    std::fs::write(
+        tmp.path().join("baml_src/ns_orders/tests.baml"),
+        r#"
+testset "bad::name" {
+  test "works" { assert.is_true(true) }
+}
+"#,
+    )
+    .unwrap();
+
+    let checked = run(tmp.path(), &["check"]);
+    assert!(!checked.status.success());
+    let check_error = String::from_utf8_lossy(&checked.stderr);
+    assert!(
+        check_error.contains("testset name may not contain reserved separator `::`"),
+        "{check_error}"
+    );
+}
+
+#[test]
 fn nested_reserved_names_are_discovery_errors_not_sentinel_tests() {
     let tmp = tempfile::tempdir().unwrap();
     create_project(tmp.path());
@@ -334,6 +357,31 @@ testset "outer" {
     let combined = format!("{}{}", stdout(&execution), execution_error);
     assert!(!combined.contains("(testset error)"), "{combined}");
     assert!(!combined.contains("(failed to expand)"), "{combined}");
+}
+
+#[test]
+fn double_colon_is_reserved_inside_nested_testset_names() {
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path());
+    std::fs::write(
+        tmp.path().join("baml_src/ns_orders/tests.baml"),
+        r#"
+testset "outer" {
+  testset "bad::name" {
+    test "works" { assert.is_true(true) }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let checked = run(tmp.path(), &["check"]);
+    assert!(!checked.status.success());
+    let check_error = String::from_utf8_lossy(&checked.stderr);
+    assert!(
+        check_error.contains("testset name may not contain reserved separator `::`"),
+        "{check_error}"
+    );
 }
 
 #[test]
