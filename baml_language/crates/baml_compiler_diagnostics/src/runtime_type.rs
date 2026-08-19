@@ -198,7 +198,8 @@ pub fn specialize_signature_unreconstructible(name: &str) -> Diagnostic {
     Diagnostic::error(
         DiagnosticId::ReflectSpecializationFailed,
         format!(
-            "cannot specialize generic function `{name}`: its signature does not reconstruct              even with every type argument supplied"
+            "cannot specialize generic function `{name}`: its signature does not reconstruct \
+             even with every type argument supplied"
         ),
     )
 }

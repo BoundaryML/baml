@@ -2151,7 +2151,8 @@ impl BexVm {
     }
 
     /// [`Self::lookup_interface`] rooted at an explicitly chosen runtime
-    /// package. See [`Self::package_for_type_in`].
+    /// package. See `package_for_type_in` (private) for why reflection needs
+    /// a root other than the executing frame's.
     pub fn lookup_interface_in(
         &self,
         current_ptr: HeapPtr,
