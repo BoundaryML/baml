@@ -42,7 +42,7 @@ fn user.DestructureQualifiedMatch() -> int {
 
     bb1: {
         _3 = copy _1.1;
-        _4 = copy _3 == const 0_i64;
+        _4 = is_type(copy _3, 0);
         branch copy _4 -> [bb3, bb2];
     }
 
@@ -103,7 +103,7 @@ fn user.DestructureNamespaceQualifiedMatch() -> int {
 
     bb1: {
         _3 = copy _1.1;
-        _4 = copy _3 == const 0_i64;
+        _4 = is_type(copy _3, 0);
         branch copy _4 -> [bb3, bb2];
     }
 

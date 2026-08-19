@@ -23,6 +23,7 @@ members = [
   "sdk_tests/crates/cpp",
   "sdk_tests/crates/csharp",
   "sdk_tests/crates/python_pydantic2",
+  "sdk_tests/crates/ruby_sorbet",
   # Swift sdk-tests: build.rs codegen soft-fails into build_diagnostics
   # (sdkgen_swift is early); the swift toolchain tests themselves are
   # macOS-only and setup.sh (xcframework assembly) is bound in

@@ -294,44 +294,54 @@ function user.typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] 
 
   L2:
     pop_jump_if_false L3
-    jump L8
+    jump L10
 
   L3:
     load_type string | Doc[]
     load_type ToolError
     load_var2 4 2
     call baml.reflect.call_any
-    jump L9
+    jump L11
     load_var e
     is_type ToolError
     pop_jump_if_false L4
-    jump L7
+    jump L9
 
   L4:
     load_var e
     is_type baml.reflect.InvalidArgumentError
     pop_jump_if_false L5
-    jump L6
+    jump L8
 
   L5:
     load_var e
-    rethrow
+    is_type baml.reflect.errors.CompilationError
+    pop_jump_if_false L6
+    jump L7
 
   L6:
-    load_const "bad-args"
-    jump L9
+    load_var e
+    rethrow
 
   L7:
+    load_const "uncompiled-generic"
+    jump L11
+
+  L8:
+    load_const "bad-args"
+    jump L11
+
+  L9:
     load_const "tool-error:"
     load_var e
     load_field .message
     bin_op +
-    jump L9
+    jump L11
 
-  L8:
+  L10:
     load_const "no-such-tool"
 
-  L9:
+  L11:
     return
 }
 

@@ -841,22 +841,19 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     load_var _14
     store_var kind
     load_var form
-    load_const "mixedlist"
-    cmp_op ==
+    is_type "mixedlist"
     pop_jump_if_false L2
     jump L22
 
   L2:
     load_var form
-    load_const "mixed"
-    cmp_op ==
+    is_type "mixed"
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var form
-    load_const "list"
-    cmp_op ==
+    is_type "list"
     pop_jump_if_false L4
     jump L13
 
@@ -2573,85 +2570,73 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     call baml.String.slice
     store_var model
     load_var prefix
-    load_const "openai"
-    cmp_op ==
+    is_type "openai"
     pop_jump_if_false L2
     jump L25
 
   L2:
     load_var prefix
-    load_const "openai-chat"
-    cmp_op ==
+    is_type "openai-chat"
     pop_jump_if_false L3
     jump L24
 
   L3:
     load_var prefix
-    load_const "openai-images"
-    cmp_op ==
+    is_type "openai-images"
     pop_jump_if_false L4
     jump L23
 
   L4:
     load_var prefix
-    load_const "azure"
-    cmp_op ==
+    is_type "azure"
     pop_jump_if_false L5
     jump L22
 
   L5:
     load_var prefix
-    load_const "ollama"
-    cmp_op ==
+    is_type "ollama"
     pop_jump_if_false L6
     jump L21
 
   L6:
     load_var prefix
-    load_const "openrouter"
-    cmp_op ==
+    is_type "openrouter"
     pop_jump_if_false L7
     jump L20
 
   L7:
     load_var prefix
-    load_const "anthropic"
-    cmp_op ==
+    is_type "anthropic"
     pop_jump_if_false L8
     jump L19
 
   L8:
     load_var prefix
-    load_const "google"
-    cmp_op ==
+    is_type "google"
     pop_jump_if_false L9
     jump L18
 
   L9:
     load_var prefix
-    load_const "vertex"
-    cmp_op ==
+    is_type "vertex"
     pop_jump_if_false L10
     jump L17
 
   L10:
     load_var prefix
-    load_const "bedrock"
-    cmp_op ==
+    is_type "bedrock"
     pop_jump_if_false L11
     jump L16
 
   L11:
     load_var prefix
-    load_const "ai-gateway-images"
-    cmp_op ==
+    is_type "ai-gateway-images"
     pop_jump_if_false L12
     jump L15
 
   L12:
     load_var prefix
-    load_const "claude-code"
-    cmp_op ==
+    is_type "claude-code"
     pop_jump_if_false L13
     jump L14
 
@@ -7521,29 +7506,25 @@ function anthropic.internal._anth_stream_failure(error: anthropic.internal.AnthS
     load_var _10
     store_var detail
     load_var kind
-    load_const "rate_limit_error"
-    cmp_op ==
+    is_type "rate_limit_error"
     pop_jump_if_false L8
     jump L15
 
   L8:
     load_var kind
-    load_const "overloaded_error"
-    cmp_op ==
+    is_type "overloaded_error"
     pop_jump_if_false L9
     jump L14
 
   L9:
     load_var kind
-    load_const "api_error"
-    cmp_op ==
+    is_type "api_error"
     pop_jump_if_false L10
     jump L13
 
   L10:
     load_var kind
-    load_const "timeout_error"
-    cmp_op ==
+    is_type "timeout_error"
     pop_jump_if_false L11
     jump L12
 
@@ -8767,29 +8748,25 @@ function anthropic.internal._anthropic_sse_failure(message: string) -> ai.errors
 
 function anthropic.internal._anthropic_stop_reason(s: string) -> ai.content.StopReason {
     load_var s
-    load_const "end_turn"
-    cmp_op ==
+    is_type "end_turn"
     pop_jump_if_false L0
     jump L7
 
   L0:
     load_var s
-    load_const "stop_sequence"
-    cmp_op ==
+    is_type "stop_sequence"
     pop_jump_if_false L1
     jump L6
 
   L1:
     load_var s
-    load_const "tool_use"
-    cmp_op ==
+    is_type "tool_use"
     pop_jump_if_false L2
     jump L5
 
   L2:
     load_var s
-    load_const "refusal"
-    cmp_op ==
+    is_type "refusal"
     pop_jump_if_false L3
     jump L4
 
@@ -8997,43 +8974,37 @@ function anthropic.internal.anthropic_decode_batch(batch: string, state: anthrop
   L4:
     load_var _20
     store_var_load_var t
-    load_const "error"
-    cmp_op ==
+    is_type "error"
     pop_jump_if_false L5
     jump L69
 
   L5:
     load_var t
-    load_const "message_start"
-    cmp_op ==
+    is_type "message_start"
     pop_jump_if_false L6
     jump L51
 
   L6:
     load_var t
-    load_const "content_block_start"
-    cmp_op ==
+    is_type "content_block_start"
     pop_jump_if_false L7
     jump L41
 
   L7:
     load_var t
-    load_const "content_block_delta"
-    cmp_op ==
+    is_type "content_block_delta"
     pop_jump_if_false L8
     jump L30
 
   L8:
     load_var t
-    load_const "message_delta"
-    cmp_op ==
+    is_type "message_delta"
     pop_jump_if_false L9
     jump L10
 
   L9:
     load_var t
-    load_const "message_stop"
-    cmp_op ==
+    is_type "message_stop"
     pop_jump_if_false L0
     load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
     load_var out
@@ -9214,29 +9185,25 @@ function anthropic.internal.anthropic_decode_batch(batch: string, state: anthrop
   L31:
     load_var _122
     store_var_load_var kind
-    load_const "text_delta"
-    cmp_op ==
+    is_type "text_delta"
     pop_jump_if_false L32
     jump L40
 
   L32:
     load_var kind
-    load_const "input_json_delta"
-    cmp_op ==
+    is_type "input_json_delta"
     pop_jump_if_false L33
     jump L38
 
   L33:
     load_var kind
-    load_const "thinking_delta"
-    cmp_op ==
+    is_type "thinking_delta"
     pop_jump_if_false L34
     jump L36
 
   L34:
     load_var kind
-    load_const "signature_delta"
-    cmp_op ==
+    is_type "signature_delta"
     pop_jump_if_false L0
     load_type string
     load_var state
@@ -9358,15 +9325,13 @@ function anthropic.internal.anthropic_decode_batch(batch: string, state: anthrop
   L42:
     load_var _77
     store_var_load_var kind
-    load_const "tool_use"
-    cmp_op ==
+    is_type "tool_use"
     pop_jump_if_false L43
     jump L47
 
   L43:
     load_var kind
-    load_const "thinking"
-    cmp_op ==
+    is_type "thinking"
     pop_jump_if_false L44
     jump L45
 
@@ -9975,22 +9940,19 @@ function anthropic.internal.anthropic_parse(resp: anthropic.internal.AnthropicRe
     load_var b
     load_field .type
     store_var_load_var _9
-    load_const "text"
-    cmp_op ==
+    is_type "text"
     pop_jump_if_false L2
     jump L9
 
   L2:
     load_var _9
-    load_const "thinking"
-    cmp_op ==
+    is_type "thinking"
     pop_jump_if_false L3
     jump L7
 
   L3:
     load_var _9
-    load_const "tool_use"
-    cmp_op ==
+    is_type "tool_use"
     pop_jump_if_false L0
     load_var b
     load_field .id
@@ -11056,141 +11018,121 @@ function aws.internal._audio_block(audio: baml.media.Audio) -> aws.internal.Cont
 
 function aws.internal._audio_format(mime: string) -> string {
     load_var mime
-    load_const "audio/mpeg"
-    cmp_op ==
+    is_type "audio/mpeg"
     pop_jump_if_false L0
     jump L39
 
   L0:
     load_var mime
-    load_const "audio/mp3"
-    cmp_op ==
+    is_type "audio/mp3"
     pop_jump_if_false L1
     jump L38
 
   L1:
     load_var mime
-    load_const "audio/wav"
-    cmp_op ==
+    is_type "audio/wav"
     pop_jump_if_false L2
     jump L37
 
   L2:
     load_var mime
-    load_const "audio/x-wav"
-    cmp_op ==
+    is_type "audio/x-wav"
     pop_jump_if_false L3
     jump L36
 
   L3:
     load_var mime
-    load_const "audio/wave"
-    cmp_op ==
+    is_type "audio/wave"
     pop_jump_if_false L4
     jump L35
 
   L4:
     load_var mime
-    load_const "audio/flac"
-    cmp_op ==
+    is_type "audio/flac"
     pop_jump_if_false L5
     jump L34
 
   L5:
     load_var mime
-    load_const "audio/x-flac"
-    cmp_op ==
+    is_type "audio/x-flac"
     pop_jump_if_false L6
     jump L33
 
   L6:
     load_var mime
-    load_const "audio/ogg"
-    cmp_op ==
+    is_type "audio/ogg"
     pop_jump_if_false L7
     jump L32
 
   L7:
     load_var mime
-    load_const "audio/opus"
-    cmp_op ==
+    is_type "audio/opus"
     pop_jump_if_false L8
     jump L31
 
   L8:
     load_var mime
-    load_const "audio/aac"
-    cmp_op ==
+    is_type "audio/aac"
     pop_jump_if_false L9
     jump L30
 
   L9:
     load_var mime
-    load_const "audio/x-aac"
-    cmp_op ==
+    is_type "audio/x-aac"
     pop_jump_if_false L10
     jump L29
 
   L10:
     load_var mime
-    load_const "audio/mp4"
-    cmp_op ==
+    is_type "audio/mp4"
     pop_jump_if_false L11
     jump L28
 
   L11:
     load_var mime
-    load_const "audio/m4a"
-    cmp_op ==
+    is_type "audio/m4a"
     pop_jump_if_false L12
     jump L27
 
   L12:
     load_var mime
-    load_const "audio/x-m4a"
-    cmp_op ==
+    is_type "audio/x-m4a"
     pop_jump_if_false L13
     jump L26
 
   L13:
     load_var mime
-    load_const "audio/x-matroska"
-    cmp_op ==
+    is_type "audio/x-matroska"
     pop_jump_if_false L14
     jump L25
 
   L14:
     load_var mime
-    load_const "audio/mpga"
-    cmp_op ==
+    is_type "audio/mpga"
     pop_jump_if_false L15
     jump L24
 
   L15:
     load_var mime
-    load_const "audio/pcm"
-    cmp_op ==
+    is_type "audio/pcm"
     pop_jump_if_false L16
     jump L23
 
   L16:
     load_var mime
-    load_const "audio/x-pcm"
-    cmp_op ==
+    is_type "audio/x-pcm"
     pop_jump_if_false L17
     jump L22
 
   L17:
     load_var mime
-    load_const "audio/L16"
-    cmp_op ==
+    is_type "audio/L16"
     pop_jump_if_false L18
     jump L21
 
   L18:
     load_var mime
-    load_const "audio/webm"
-    cmp_op ==
+    is_type "audio/webm"
     pop_jump_if_false L19
     jump L20
 
@@ -11382,36 +11324,31 @@ function aws.internal._image_block(image: baml.media.Image) -> aws.internal.Cont
 
 function aws.internal._image_format(mime: string) -> string {
     load_var mime
-    load_const "image/png"
-    cmp_op ==
+    is_type "image/png"
     pop_jump_if_false L0
     jump L9
 
   L0:
     load_var mime
-    load_const "image/jpeg"
-    cmp_op ==
+    is_type "image/jpeg"
     pop_jump_if_false L1
     jump L8
 
   L1:
     load_var mime
-    load_const "image/jpg"
-    cmp_op ==
+    is_type "image/jpg"
     pop_jump_if_false L2
     jump L7
 
   L2:
     load_var mime
-    load_const "image/gif"
-    cmp_op ==
+    is_type "image/gif"
     pop_jump_if_false L3
     jump L6
 
   L3:
     load_var mime
-    load_const "image/webp"
-    cmp_op ==
+    is_type "image/webp"
     pop_jump_if_false L4
     jump L5
 
@@ -12739,22 +12676,19 @@ function aws.internal._tool_choice(choice: string) -> aws.internal.ToolChoice {
     alloc_map 0
     store_var empty
     load_var choice
-    load_const "auto"
-    cmp_op ==
+    is_type "auto"
     pop_jump_if_false L0
     jump L5
 
   L0:
     load_var choice
-    load_const "any"
-    cmp_op ==
+    is_type "any"
     pop_jump_if_false L1
     jump L4
 
   L1:
     load_var choice
-    load_const "required"
-    cmp_op ==
+    is_type "required"
     pop_jump_if_false L2
     jump L3
 
@@ -12901,78 +12835,67 @@ function aws.internal._video_block(video: baml.media.Video) -> aws.internal.Cont
 
 function aws.internal._video_format(mime: string) -> string {
     load_var mime
-    load_const "video/mp4"
-    cmp_op ==
+    is_type "video/mp4"
     pop_jump_if_false L0
     jump L21
 
   L0:
     load_var mime
-    load_const "video/mpeg"
-    cmp_op ==
+    is_type "video/mpeg"
     pop_jump_if_false L1
     jump L20
 
   L1:
     load_var mime
-    load_const "video/mpg"
-    cmp_op ==
+    is_type "video/mpg"
     pop_jump_if_false L2
     jump L19
 
   L2:
     load_var mime
-    load_const "video/x-mpg"
-    cmp_op ==
+    is_type "video/x-mpg"
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var mime
-    load_const "video/x-ms-wmv"
-    cmp_op ==
+    is_type "video/x-ms-wmv"
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var mime
-    load_const "video/wmv"
-    cmp_op ==
+    is_type "video/wmv"
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var mime
-    load_const "video/x-matroska"
-    cmp_op ==
+    is_type "video/x-matroska"
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var mime
-    load_const "video/quicktime"
-    cmp_op ==
+    is_type "video/quicktime"
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var mime
-    load_const "video/x-flv"
-    cmp_op ==
+    is_type "video/x-flv"
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var mime
-    load_const "video/webm"
-    cmp_op ==
+    is_type "video/webm"
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var mime
-    load_const "video/3gpp"
-    cmp_op ==
+    is_type "video/3gpp"
     pop_jump_if_false L10
     jump L11
 
@@ -13954,36 +13877,31 @@ function aws.internal.sign_request(req: baml.http.Request, opts: aws.internal.Aw
 
 function aws.internal.stop_reason(raw: string) -> ai.content.StopReason {
     load_var raw
-    load_const "tool_use"
-    cmp_op ==
+    is_type "tool_use"
     pop_jump_if_false L0
     jump L11
 
   L0:
     load_var raw
-    load_const "max_tokens"
-    cmp_op ==
+    is_type "max_tokens"
     pop_jump_if_false L1
     jump L10
 
   L1:
     load_var raw
-    load_const "model_context_window_exceeded"
-    cmp_op ==
+    is_type "model_context_window_exceeded"
     pop_jump_if_false L2
     jump L9
 
   L2:
     load_var raw
-    load_const "content_filtered"
-    cmp_op ==
+    is_type "content_filtered"
     pop_jump_if_false L3
     jump L8
 
   L3:
     load_var raw
-    load_const "guardrail_intervened"
-    cmp_op ==
+    is_type "guardrail_intervened"
     pop_jump_if_false L4
     jump L7
 
@@ -14151,29 +14069,25 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> void {
     call baml.json.path_or
     store_var kind
     load_var kind
-    load_const "system"
-    cmp_op ==
+    is_type "system"
     pop_jump_if_false L0
     jump L28
 
   L0:
     load_var kind
-    load_const "assistant"
-    cmp_op ==
+    is_type "assistant"
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var kind
-    load_const "user"
-    cmp_op ==
+    is_type "user"
     pop_jump_if_false L2
     jump L4
 
   L2:
     load_var kind
-    load_const "result"
-    cmp_op ==
+    is_type "result"
     pop_jump_if_false L3
     jump L31
 
@@ -14232,29 +14146,25 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> void {
     call baml.json.path_or
     store_var bt
     load_var bt
-    load_const "text"
-    cmp_op ==
+    is_type "text"
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var bt
-    load_const "thinking"
-    cmp_op ==
+    is_type "thinking"
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var bt
-    load_const "tool_use"
-    cmp_op ==
+    is_type "tool_use"
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var bt
-    load_const "tool_result"
-    cmp_op ==
+    is_type "tool_result"
     pop_jump_if_false L10
     jump L11
 
@@ -14405,29 +14315,25 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> void {
     call baml.json.path_or
     store_var bt
     load_var bt
-    load_const "text"
-    cmp_op ==
+    is_type "text"
     pop_jump_if_false L19
     jump L26
 
   L19:
     load_var bt
-    load_const "thinking"
-    cmp_op ==
+    is_type "thinking"
     pop_jump_if_false L20
     jump L25
 
   L20:
     load_var bt
-    load_const "tool_use"
-    cmp_op ==
+    is_type "tool_use"
     pop_jump_if_false L21
     jump L24
 
   L21:
     load_var bt
-    load_const "tool_result"
-    cmp_op ==
+    is_type "tool_result"
     pop_jump_if_false L22
     jump L23
 
@@ -16723,11 +16629,11 @@ function google.internal._gm_decode_batch(batch: string, provider: string) -> (a
     jump L9
 
   L8:
-    load_const 0
+    load_type google.internal.GmCandidate
     load_var resp
     load_field .candidates
-    make_bound_method baml.Array.at
-    call_indirect
+    load_const 0
+    call baml.Array.at
     store_var cand
     jump L10
 
@@ -18280,11 +18186,12 @@ function google.internal._vertex_key_in_query(c: google.VertexClient) -> bool {
     jump L1
 
   L0:
-    load_const "key"
+    load_type string
+    load_type string
     load_var c
     load_field .query_params
-    make_bound_method baml.Map.get
-    call_indirect
+    load_const "key"
+    call baml.Map.get
     store_var _2
     jump L2
 
@@ -19346,11 +19253,11 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
     jump L3
 
   L2:
-    load_const 0
+    load_type google.internal.GmCandidate
     load_var resp
     load_field .candidates
-    make_bound_method baml.Array.at
-    call_indirect
+    load_const 0
+    call baml.Array.at
     store_var cand
     jump L4
 
@@ -22906,22 +22813,19 @@ function openai.internal._chat_audio_format(mime_type: string) -> string {
 
   L2:
     load_var subtype
-    load_const "mpeg"
-    cmp_op ==
+    is_type "mpeg"
     pop_jump_if_false L3
     jump L8
 
   L3:
     load_var subtype
-    load_const "mp3"
-    cmp_op ==
+    is_type "mp3"
     pop_jump_if_false L4
     jump L7
 
   L4:
     load_var subtype
-    load_const "x-wav"
-    cmp_op ==
+    is_type "x-wav"
     pop_jump_if_false L5
     jump L6
 
@@ -22952,15 +22856,13 @@ function openai.internal._chat_audio_output_mime(request_body: baml.json.json | 
     call baml.json.path_or
     store_var format
     load_var format
-    load_const "mp3"
-    cmp_op ==
+    is_type "mp3"
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var format
-    load_const "pcm16"
-    cmp_op ==
+    is_type "pcm16"
     pop_jump_if_false L1
     jump L2
 
@@ -24832,29 +24734,25 @@ function openai.internal._oai_images_mime(format: string | null) -> string {
     call baml.String.to_lower_case
     store_var normalized
     load_var normalized
-    load_const "jpeg"
-    cmp_op ==
+    is_type "jpeg"
     pop_jump_if_false L1
     jump L8
 
   L1:
     load_var normalized
-    load_const "jpg"
-    cmp_op ==
+    is_type "jpg"
     pop_jump_if_false L2
     jump L7
 
   L2:
     load_var normalized
-    load_const "webp"
-    cmp_op ==
+    is_type "webp"
     pop_jump_if_false L3
     jump L6
 
   L3:
     load_var normalized
-    load_const "gif"
-    cmp_op ==
+    is_type "gif"
     pop_jump_if_false L4
     jump L5
 
@@ -25306,57 +25204,49 @@ function openai.internal._openai_apply_message_metadata(body: baml.json.json, me
 
 function openai.internal._openai_audio_format(mime_type: string) -> string {
     load_var mime_type
-    load_const "audio/wav"
-    cmp_op ==
+    is_type "audio/wav"
     pop_jump_if_false L0
     jump L15
 
   L0:
     load_var mime_type
-    load_const "audio/x-wav"
-    cmp_op ==
+    is_type "audio/x-wav"
     pop_jump_if_false L1
     jump L14
 
   L1:
     load_var mime_type
-    load_const "audio/mpeg"
-    cmp_op ==
+    is_type "audio/mpeg"
     pop_jump_if_false L2
     jump L13
 
   L2:
     load_var mime_type
-    load_const "audio/mp3"
-    cmp_op ==
+    is_type "audio/mp3"
     pop_jump_if_false L3
     jump L12
 
   L3:
     load_var mime_type
-    load_const "audio/flac"
-    cmp_op ==
+    is_type "audio/flac"
     pop_jump_if_false L4
     jump L11
 
   L4:
     load_var mime_type
-    load_const "audio/x-flac"
-    cmp_op ==
+    is_type "audio/x-flac"
     pop_jump_if_false L5
     jump L10
 
   L5:
     load_var mime_type
-    load_const "audio/ogg"
-    cmp_op ==
+    is_type "audio/ogg"
     pop_jump_if_false L6
     jump L9
 
   L6:
     load_var mime_type
-    load_const "audio/webm"
-    cmp_op ==
+    is_type "audio/webm"
     pop_jump_if_false L7
     jump L8
 
@@ -25842,22 +25732,19 @@ function openai.internal._openai_image_mime(output_format: string | null) -> str
     call baml.String.to_lower_case
     store_var format
     load_var format
-    load_const "jpeg"
-    cmp_op ==
+    is_type "jpeg"
     pop_jump_if_false L1
     jump L6
 
   L1:
     load_var format
-    load_const "jpg"
-    cmp_op ==
+    is_type "jpg"
     pop_jump_if_false L2
     jump L5
 
   L2:
     load_var format
-    load_const "webp"
-    cmp_op ==
+    is_type "webp"
     pop_jump_if_false L3
     jump L4
 
@@ -27016,71 +26903,61 @@ function openai.internal._openai_stream_events(event: openai.internal.OaStreamEv
 
   L3:
     load_var kind
-    load_const "response.created"
-    cmp_op ==
+    is_type "response.created"
     pop_jump_if_false L4
     jump L37
 
   L4:
     load_var kind
-    load_const "response.in_progress"
-    cmp_op ==
+    is_type "response.in_progress"
     pop_jump_if_false L5
     jump L36
 
   L5:
     load_var kind
-    load_const "response.output_text.delta"
-    cmp_op ==
+    is_type "response.output_text.delta"
     pop_jump_if_false L6
     jump L35
 
   L6:
     load_var kind
-    load_const "response.output_text.done"
-    cmp_op ==
+    is_type "response.output_text.done"
     pop_jump_if_false L7
     jump L33
 
   L7:
     load_var kind
-    load_const "response.function_call_arguments.delta"
-    cmp_op ==
+    is_type "response.function_call_arguments.delta"
     pop_jump_if_false L8
     jump L31
 
   L8:
     load_var kind
-    load_const "response.function_call_arguments.done"
-    cmp_op ==
+    is_type "response.function_call_arguments.done"
     pop_jump_if_false L9
     jump L30
 
   L9:
     load_var kind
-    load_const "response.failed"
-    cmp_op ==
+    is_type "response.failed"
     pop_jump_if_false L10
     jump L29
 
   L10:
     load_var kind
-    load_const "error"
-    cmp_op ==
+    is_type "error"
     pop_jump_if_false L11
     jump L28
 
   L11:
     load_var kind
-    load_const "response.completed"
-    cmp_op ==
+    is_type "response.completed"
     pop_jump_if_false L12
     jump L20
 
   L12:
     load_var kind
-    load_const "response.incomplete"
-    cmp_op ==
+    is_type "response.incomplete"
     pop_jump_if_false L38
     load_var event
     load_field .response
@@ -28358,15 +28235,13 @@ function openai.internal.chat_lower_prompt(prompt: ai.Prompt, compat: openai.int
     load_var message
     load_field .role
     store_var_load_var _11
-    load_const ""
-    cmp_op ==
+    is_type ""
     pop_jump_if_false L2
     jump L5
 
   L2:
     load_var _11
-    load_const "tool"
-    cmp_op ==
+    is_type "tool"
     pop_jump_if_false L3
     jump L4
 
@@ -29010,36 +28885,31 @@ function openai.internal.chat_render_body(compat: openai.internal.ChatCompat, pa
 
 function openai.internal.chat_stop_reason(reason: string) -> ai.content.StopReason {
     load_var reason
-    load_const "tool_calls"
-    cmp_op ==
+    is_type "tool_calls"
     pop_jump_if_false L0
     jump L9
 
   L0:
     load_var reason
-    load_const "function_call"
-    cmp_op ==
+    is_type "function_call"
     pop_jump_if_false L1
     jump L8
 
   L1:
     load_var reason
-    load_const "length"
-    cmp_op ==
+    is_type "length"
     pop_jump_if_false L2
     jump L7
 
   L2:
     load_var reason
-    load_const "max_tokens"
-    cmp_op ==
+    is_type "max_tokens"
     pop_jump_if_false L3
     jump L6
 
   L3:
     load_var reason
-    load_const "content_filter"
-    cmp_op ==
+    is_type "content_filter"
     pop_jump_if_false L4
     jump L5
 
@@ -29596,15 +29466,13 @@ function openai.internal.openai_lower_prompt(prompt: ai.Prompt) -> (openai.inter
     load_var message
     load_field .role
     store_var_load_var _10
-    load_const ""
-    cmp_op ==
+    is_type ""
     pop_jump_if_false L2
     jump L5
 
   L2:
     load_var _10
-    load_const "tool"
-    cmp_op ==
+    is_type "tool"
     pop_jump_if_false L3
     jump L4
 
@@ -29713,29 +29581,25 @@ function openai.internal.openai_parse(resp: openai.internal.OaResponse) -> ai.Mo
     load_var item
     load_field .type
     store_var_load_var _24
-    load_const "function_call"
-    cmp_op ==
+    is_type "function_call"
     pop_jump_if_false L7
     jump L23
 
   L7:
     load_var _24
-    load_const "message"
-    cmp_op ==
+    is_type "message"
     pop_jump_if_false L8
     jump L14
 
   L8:
     load_var _24
-    load_const "reasoning"
-    cmp_op ==
+    is_type "reasoning"
     pop_jump_if_false L9
     jump L10
 
   L9:
     load_var _24
-    load_const "image_generation_call"
-    cmp_op ==
+    is_type "image_generation_call"
     pop_jump_if_false L5
     load_var item
     load_field .result
@@ -29849,15 +29713,13 @@ function openai.internal.openai_parse(resp: openai.internal.OaResponse) -> ai.Mo
   L18:
     load_var _59
     store_var_load_var kind
-    load_const "output_text"
-    cmp_op ==
+    is_type "output_text"
     pop_jump_if_false L19
     jump L21
 
   L19:
     load_var kind
-    load_const "refusal"
-    cmp_op ==
+    is_type "refusal"
     pop_jump_if_false L16
     load_const true
     store_var refused
@@ -33755,8 +33617,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     store_var_load_var total
     load_var threshold
     cmp_int_op >
-    load_const true
-    cmp_op ==
+    is_type true
     pop_jump_if_false L16
     jump L17
 
@@ -34540,29 +34401,25 @@ function vercel.internal._gw_images_mime(format: string | null) -> string {
     call baml.String.to_lower_case
     store_var normalized
     load_var normalized
-    load_const "jpeg"
-    cmp_op ==
+    is_type "jpeg"
     pop_jump_if_false L1
     jump L8
 
   L1:
     load_var normalized
-    load_const "jpg"
-    cmp_op ==
+    is_type "jpg"
     pop_jump_if_false L2
     jump L7
 
   L2:
     load_var normalized
-    load_const "webp"
-    cmp_op ==
+    is_type "webp"
     pop_jump_if_false L3
     jump L6
 
   L3:
     load_var normalized
-    load_const "gif"
-    cmp_op ==
+    is_type "gif"
     pop_jump_if_false L4
     jump L5
 

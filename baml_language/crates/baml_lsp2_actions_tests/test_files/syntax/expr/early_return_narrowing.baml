@@ -114,22 +114,6 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //  35 │     return x.field;
 //     ·            ───────
 //     ╰────
-// E0001
-//
-//   × mismatched types
-//     ╭─[expr_early_return_narrowing.baml:49:10]
-//  49 │     if (!x) {
-//     ·          ┬
-//     ·          ╰── expected `bool`, found `string | null`
-//     ╰────
-// E0001
-//
-//   × mismatched types
-//     ╭─[expr_early_return_narrowing.baml:53:12]
-//  53 │     return x;
-//     ·            ┬
-//     ·            ╰── expected `string`, found `string | null`
-//     ╰────
 // E0007
 //
 //   × type `NarrowBar | NarrowFoo` has no member `field`: its members implement no common interface that declares `field`
@@ -150,12 +134,4 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //     ╭─[expr_early_return_narrowing.baml:74:3]
 //  74 │   x.other
 //     ·   ───────
-//     ╰────
-// E0001
-//
-//   × mismatched types
-//     ╭─[expr_early_return_narrowing.baml:78:7]
-//  78 │   if (x) {
-//     ·       ┬
-//     ·       ╰── expected `bool`, found `int | null`
 //     ╰────

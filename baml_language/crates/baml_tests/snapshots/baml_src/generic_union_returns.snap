@@ -82,17 +82,13 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
 
   L0:
     load_var empty_json
-    make_bound_method baml.Array.length
-    call_indirect
-    store_var _10
+    container_len
     jump L2
 
   L1:
     load_const null
-    store_var _10
 
   L2:
-    load_var _10
     store_var_load_var _9
     load_const null
     cmp_op ==
@@ -114,26 +110,22 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
 
   L4:
     load_var metadata
-    make_bound_method baml.Map.length
-    call_indirect
-    store_var _19
+    container_len
     jump L6
 
   L5:
     load_const null
-    store_var _19
 
   L6:
-    load_var _19
-    store_var_load_var _18
+    store_var_load_var _17
     load_const null
     cmp_op ==
     pop_jump_if_false L7
     load_const 0
-    store_var _18
+    store_var _17
 
   L7:
-    load_var _18
+    load_var _17
     load_const 1
     cmp_int_op ==
     store_var map_ok
@@ -144,10 +136,10 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
     jump L11
 
   L8:
-    load_const 0
+    load_type generic_union_returns.ParsedChild
     load_var children
-    make_bound_method baml.Array.at
-    call_indirect
+    load_const 0
+    call baml.Array.at
     load_const null
     cmp_op ==
     pop_jump_if_false L9
@@ -161,10 +153,10 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
     jump L11
 
   L10:
-    load_const 0
+    load_type generic_union_returns.ParsedChild
     load_var children
-    make_bound_method baml.Array.at
-    call_indirect
+    load_const 0
+    call baml.Array.at
     load_field .0
     jump L12
 
@@ -182,19 +174,19 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
     jump L14
 
   L13:
-    load_const 0
+    load_type generic_union_returns.ParsedStatus
     load_var statuses
-    make_bound_method baml.Array.at
-    call_indirect
-    store_var _39
+    load_const 0
+    call baml.Array.at
+    store_var _37
     jump L15
 
   L14:
     load_const null
-    store_var _39
+    store_var _37
 
   L15:
-    load_var _39
+    load_var _37
     load_const user.generic_union_returns.ParsedStatus.Ready
     alloc_variant user.generic_union_returns.ParsedStatus
     call baml.ops.equals_equals

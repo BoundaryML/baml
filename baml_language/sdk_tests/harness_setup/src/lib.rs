@@ -383,16 +383,10 @@ pub fn walk_files(dir: &Path) -> Vec<PathBuf> {
 mod csharp_abi_probe_tests {
     use std::{env, fs, path::PathBuf};
 
-    #[test]
-    #[ignore = "writes bytecode to the path requested by the C# product workflow"]
-    fn emit_function_calls_bytecode() {
-        let output = PathBuf::from(
-            env::var("BAML_CSHARP_ABI_PROBE_BYTECODE")
-                .expect("BAML_CSHARP_ABI_PROBE_BYTECODE is not set"),
-        );
+    fn write_function_calls_bytecode(output: PathBuf, consumer: &str) {
         assert!(
             output.is_absolute(),
-            "C# ABI probe bytecode path must be absolute"
+            "{consumer} ABI probe bytecode path must be absolute"
         );
         let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -401,9 +395,28 @@ mod csharp_abi_probe_tests {
         let fixture = super::load_fixture(&fixtures, "function_calls");
         fs::write(&output, fixture.baml_bytecode).unwrap_or_else(|error| {
             panic!(
-                "failed to write C# ABI probe bytecode to {}: {error}",
+                "failed to write {consumer} ABI probe bytecode to {}: {error}",
                 output.display()
             )
         });
+    }
+
+    #[test]
+    #[ignore = "writes bytecode to the path requested by a bridge probe"]
+    fn emit_bridge_probe_function_calls_bytecode() {
+        let output = PathBuf::from(
+            env::var("BAML_ABI_PROBE_BYTECODE").expect("BAML_ABI_PROBE_BYTECODE is not set"),
+        );
+        write_function_calls_bytecode(output, "bridge");
+    }
+
+    #[test]
+    #[ignore = "writes bytecode to the path requested by the C# product workflow"]
+    fn emit_function_calls_bytecode() {
+        let output = PathBuf::from(
+            env::var("BAML_CSHARP_ABI_PROBE_BYTECODE")
+                .expect("BAML_CSHARP_ABI_PROBE_BYTECODE is not set"),
+        );
+        write_function_calls_bytecode(output, "C#");
     }
 }

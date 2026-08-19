@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 12948
 ---
 === MIR2 ===
 fn user.test_chained_map() -> int[] {
@@ -1222,12 +1221,12 @@ fn user.test_lambda_in_match_inferred() -> int {
 
     bb0: {
         _1 = const "double";
-        _3 = copy _1 == const "double";
+        _3 = is_type(copy _1, "double");
         branch copy _3 -> [bb4, bb1];
     }
 
     bb1: {
-        _4 = copy _1 == const "negate";
+        _4 = is_type(copy _1, "negate");
         branch copy _4 -> [bb3, bb2];
     }
 

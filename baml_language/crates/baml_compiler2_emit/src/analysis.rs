@@ -1487,17 +1487,26 @@ fn can_be_virtual(
             }
         }
 
-        // Check if the use block is a loop header (has back-edge predecessors)
-        // If so, be conservative and don't inline
+        // Preserve the existing protection for values used directly in a loop
+        // header.
         let use_preds = predecessors
             .get(&use_loc.block)
-            .map_or(&[] as &[_], |v| v.as_slice());
-
-        let has_back_edge = use_preds
+            .map_or(&[] as &[_], Vec::as_slice);
+        let use_is_loop_header = use_preds
             .iter()
             .any(|&pred| dominators.dominates(use_loc.block, pred));
 
-        if has_back_edge {
+        // An allocation with observable identity cannot be repeated implicitly.
+        // Merely checking whether the use block is a loop header misses the
+        // common shape `header -> body(use) -> header`: sinking an allocation
+        // made before that loop into its body creates a fresh object on every
+        // iteration. Look for a path from the use back to itself which does not
+        // cross the definition block, and keep the allocation materialized when
+        // such a path exists.
+        let repeats_allocation = rvalue_allocates_with_identity(&def.rvalue)
+            && use_repeats_without_definition(body, def.block, use_loc.block);
+
+        if use_is_loop_header || repeats_allocation {
             return false;
         }
 
@@ -1524,6 +1533,73 @@ fn can_be_virtual(
     }
 
     true
+}
+
+/// Whether evaluating this rvalue allocates a fresh object whose identity is
+/// observable (mutable containers, class instances, and callable objects).
+///
+/// Matched exhaustively on purpose: a wrong `false` silently miscompiles.
+fn rvalue_allocates_with_identity(rvalue: &Rvalue) -> bool {
+    match rvalue {
+        Rvalue::Map(..)
+        | Rvalue::Array(..)
+        | Rvalue::Uint8Array(_)
+        | Rvalue::Aggregate { .. }
+        | Rvalue::MakeClosure { .. }
+        | Rvalue::MakeBoundMethod { .. }
+        | Rvalue::MakeVirtualBoundMethod { .. } => true,
+        Rvalue::Use(_)
+        | Rvalue::BinaryOp { .. }
+        | Rvalue::UnaryOp { .. }
+        | Rvalue::Discriminant(_)
+        | Rvalue::TypeTag(_)
+        | Rvalue::Len(_)
+        | Rvalue::IsType { .. }
+        | Rvalue::IsTypeTag { .. }
+        | Rvalue::RuntimeIsType { .. }
+        | Rvalue::VirtualFieldAccess { .. }
+        | Rvalue::MakeGenericFunction { .. }
+        | Rvalue::MakeGenericFunctionFromValue { .. }
+        | Rvalue::LoadType(_)
+        | Rvalue::CurrentPackage(_) => false,
+    }
+}
+
+/// Whether `use_block` can execute again without first executing `def_block`.
+///
+/// `can_be_virtual` sinks an rvalue from its definition to its use. If a CFG
+/// cycle can revisit the use while bypassing the definition, sinking changes a
+/// once-evaluated binding into a per-iteration evaluation. That is observably
+/// wrong for an allocation with observable identity, so its cross-block
+/// virtualization must reject the shape.
+fn use_repeats_without_definition(
+    body: &MirFunctionBody,
+    def_block: BlockId,
+    use_block: BlockId,
+) -> bool {
+    let Some(terminator) = body.block(use_block).terminator.as_ref() else {
+        return false;
+    };
+
+    let mut worklist = terminator.successors();
+    let mut visited = HashSet::new();
+
+    while let Some(block) = worklist.pop() {
+        if block == def_block {
+            continue;
+        }
+        if block == use_block {
+            return true;
+        }
+        if !visited.insert(block) {
+            continue;
+        }
+        if let Some(terminator) = body.block(block).terminator.as_ref() {
+            worklist.extend(terminator.successors());
+        }
+    }
+
+    false
 }
 
 /// Whether evaluating this rvalue reads through any field/index projection.
@@ -1734,7 +1810,7 @@ fn rvalue_can_panic(body: &MirFunctionBody, rvalue: &Rvalue) -> bool {
         },
         Rvalue::UnaryOp { op, operand } => match op {
             UnaryOp::Neg => operand_could_be_int(body, operand),
-            UnaryOp::Not => false,
+            UnaryOp::Not | UnaryOp::Truthy => false,
         },
         // Allocation can report `AllocFailure`, but that is a host resource
         // condition rather than a property of the program point, and treating
@@ -2263,6 +2339,135 @@ mod tests {
             scope_span: None,
             is_captured: false,
         }
+    }
+
+    fn int_list_local_decl(name: Option<&str>) -> LocalDecl {
+        LocalDecl {
+            name: name.map(baml_base::Name::new),
+            ty: RuntimeTy::list(RuntimeTy::int()),
+            span: None,
+            scope_span: None,
+            is_captured: false,
+        }
+    }
+
+    /// A single static use in a CFG cycle represents repeated dynamic uses.
+    /// Sinking the array allocation from block 0 into the call in block 1 would
+    /// allocate a fresh array on every trip around the cycle.
+    #[test]
+    fn repeated_identity_allocation_is_not_virtualized() {
+        let array = Local(1);
+        let call_result = Local(2);
+        let body = MirFunctionBody {
+            blocks: vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(array),
+                            value: Rvalue::Array(
+                                baml_type::TyTemplate::from(baml_type::RealizedTy::int()),
+                                vec![],
+                            ),
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Goto { target: BlockId(1) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![],
+                    terminator: Some(Terminator::Call {
+                        callee: Operand::Constant(Constant::Null),
+                        args: vec![Operand::copy_local(array)],
+                        ntypeargs: 0,
+                        runtime_type_check: false,
+                        runtime_id: None,
+                        destination: Place::Local(call_result),
+                        target: BlockId(2),
+                        unwind: None,
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![],
+                    terminator: Some(Terminator::Goto { target: BlockId(1) }),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_list_local_decl(Some("items")),
+                int_local_decl(Some("result")),
+            ],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        };
+
+        let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
+        assert_eq!(
+            analysis.classifications.get(&array),
+            Some(&LocalClassification::Real)
+        );
+    }
+
+    /// The identity guard is cycle-specific: a single cross-block use that
+    /// cannot repeat without re-running the definition remains virtualizable.
+    #[test]
+    fn non_repeating_identity_allocation_stays_virtualized() {
+        let array = Local(1);
+        let body = MirFunctionBody {
+            blocks: vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(array),
+                            value: Rvalue::Array(
+                                baml_type::TyTemplate::from(baml_type::RealizedTy::int()),
+                                vec![],
+                            ),
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Goto { target: BlockId(1) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Use(Operand::copy_local(array)),
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Return),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_list_local_decl(None),
+                int_list_local_decl(Some("items")),
+            ],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        };
+
+        let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
+        assert_eq!(
+            analysis.classifications.get(&array),
+            Some(&LocalClassification::Virtual)
+        );
     }
 
     /// Verifies `Rvalue::Len` bindings are always classified as materialized locals.
