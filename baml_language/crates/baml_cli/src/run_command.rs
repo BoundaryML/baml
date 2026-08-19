@@ -160,9 +160,6 @@ Examples:
   List available targets:
     baml run --list")]
 pub struct RunArgs {
-    #[command(flatten)]
-    pub compiler: crate::commands::CompilerArgs,
-
     /// Function or script to run as the sole entry point.
     ///
     /// Mutually exclusive with `--function` and `--expression`.
@@ -241,10 +238,6 @@ pub struct RunArgs {
     /// Include compiler-synthesized functions in `--list` output.
     #[arg(long, help_heading = "Run output options")]
     pub include_generated: bool,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
 
     /// Arguments for the generated target CLI.
     ///
@@ -354,12 +347,16 @@ impl RunArgs {
         .map_err(|e| anyhow!("failed to create engine: {e:?}"))
     }
 
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
-        self.run_with_reporter(&reporter)
+        self.run_with_reporter(project, &reporter)
     }
 
-    fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
+    fn run_with_reporter(
+        &self,
+        project: Option<&Path>,
+        reporter: &Reporter,
+    ) -> Result<crate::ExitCode> {
         // Dispatch modes are mutually exclusive. Positional target /
         // `-f` (one or many) / `-e` all replace each other.
         let dispatch_modes: &[(&str, bool)] = &[
@@ -381,7 +378,7 @@ impl RunArgs {
         // `--file` is the standalone-source alternative to `--project`. Both
         // pointing at sources would be ambiguous (which one wins?), so
         // reject an explicit combination up front.
-        validate_file_project_flags(self.file.as_deref(), self.from.as_deref())?;
+        validate_file_project_flags(self.file.as_deref(), project)?;
 
         // Expression mode short-circuits before reaching project / file
         // loading, so combining `-e` with surfaces that change *what* is
@@ -407,7 +404,7 @@ impl RunArgs {
             // `-e -` reads stdin / `-e @file` reads file. Load once so
             // the engine compile and `argv[1]` see the same text.
             let expr_body = load_expression_source(expr_source)?;
-            return self.run_expression(&expr_body, reporter);
+            return self.run_expression(project, &expr_body, reporter);
         }
 
         // `--list` short-circuit doesn't need a resolved target; load
@@ -420,7 +417,7 @@ impl RunArgs {
                     .unwrap_or_else(|| "baml".to_string()),
                 "--list".to_string(),
             ];
-            let (db, engine, _) = self.load_and_compile(bootstrap_argv, reporter)?;
+            let (db, engine, _) = self.load_and_compile(project, bootstrap_argv, reporter)?;
             // `--file` mode is hermetic — skip the project `[scripts]`
             // lookup the same way `run_single_target` does.
             let scripts = if self.file.is_some() {
@@ -434,7 +431,7 @@ impl RunArgs {
         }
 
         if self.file.is_some() && self.target.is_none() && self.functions.is_empty() {
-            return self.run_single_target("main", reporter);
+            return self.run_single_target(project, "main", reporter);
         }
 
         // No target → print help and exit non-zero. (Implicit `main` no
@@ -457,16 +454,22 @@ impl RunArgs {
                      \n    `baml run --file {target} -f <NAME>`\n",
                 );
             }
-            return self.run_single_target(target, reporter);
+            return self.run_single_target(project, target, reporter);
         }
-        self.run_subcommand_targets(reporter)
+        self.run_subcommand_targets(project, reporter)
     }
 
     /// Positional `<TARGET>` path: one function, no subcommand layer.
     /// `[scripts]` aliases are resolved here too (positional only).
-    fn run_single_target(&self, target: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
+    fn run_single_target(
+        &self,
+        project: Option<&Path>,
+        target: &str,
+        reporter: &Reporter,
+    ) -> Result<crate::ExitCode> {
         let argv = self.build_argv_for_single(target);
-        let (db, mut engine, needs_format_hint) = self.load_and_compile(argv.clone(), reporter)?;
+        let (db, mut engine, needs_format_hint) =
+            self.load_and_compile(project, argv.clone(), reporter)?;
         Self::emit_format_hint_if_needed(reporter, needs_format_hint);
         let project_root = Self::project_root(&db)?;
 
@@ -567,9 +570,14 @@ impl RunArgs {
     }
 
     /// `-f` mode: build a multi-subcommand parser, dispatch the chosen one.
-    fn run_subcommand_targets(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
+    fn run_subcommand_targets(
+        &self,
+        project: Option<&Path>,
+        reporter: &Reporter,
+    ) -> Result<crate::ExitCode> {
         let argv = self.build_argv_for_subcommand();
-        let (db, mut engine, needs_format_hint) = self.load_and_compile(argv.clone(), reporter)?;
+        let (db, mut engine, needs_format_hint) =
+            self.load_and_compile(project, argv.clone(), reporter)?;
         let _ = db;
         Self::emit_format_hint_if_needed(reporter, needs_format_hint);
 
@@ -778,6 +786,7 @@ impl RunArgs {
     /// compile to bytecode, create engine.
     fn load_and_compile(
         &self,
+        project: Option<&Path>,
         argv: Vec<String>,
         reporter: &Reporter,
     ) -> Result<(ProjectDatabase, BexEngine, bool)> {
@@ -786,7 +795,7 @@ impl RunArgs {
         }
 
         let mut session = crate::project_session::ProjectSession::open(
-            self.from.as_deref(),
+            project,
             crate::project_session::CacheUse::ReadWrite,
         )?;
         self.vlog(format_args!(
@@ -959,7 +968,12 @@ impl RunArgs {
     /// `expr_body` is the resolved expression text — already de-referenced
     /// from inline / `@file` / stdin by the caller. We avoid re-reading
     /// because `-e -` reads stdin once.
-    fn run_expression(&self, expr_body: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
+    fn run_expression(
+        &self,
+        project: Option<&Path>,
+        expr_body: &str,
+        reporter: &Reporter,
+    ) -> Result<crate::ExitCode> {
         self.vlog(format_args!(
             "Expression mode: evaluating {} byte(s)",
             expr_body.len()
@@ -968,7 +982,7 @@ impl RunArgs {
         // `-> unknown` lets any return type through.
         let synthetic = format!("function baml_run_expr_main__() -> unknown {{\n{expr_body}\n}}");
 
-        let discovered_root = find_project_root_from(self.from.as_deref())?;
+        let discovered_root = find_project_root_from(project)?;
         let isolated_root = discovered_root
             .clone()
             .unwrap_or_else(|| std::env::temp_dir().join("baml_expr"));
@@ -1002,8 +1016,7 @@ impl RunArgs {
             // The expression may refer to project declarations. Preserve that
             // existing behavior by retrying with the surrounding project only
             // when the isolated compile proves it is necessary.
-            let (mut project_db, project_root, baml_files) =
-                load_project_or_default(self.from.as_deref())?;
+            let (mut project_db, project_root, baml_files) = load_project_or_default(project)?;
             self.vlog(format_args!(
                 "Expression requires project context: loaded {} file(s)",
                 baml_files.len()
@@ -1969,7 +1982,6 @@ mod tests {
     /// fields. Keeps test bodies focused on the field under test.
     fn run_args() -> RunArgs {
         RunArgs {
-            compiler: crate::commands::CompilerArgs::default(),
             target: None,
             functions: Vec::new(),
             expression: None,
@@ -1979,7 +1991,6 @@ mod tests {
             log: RunLogLevel::Off,
             log_file: None,
             include_generated: false,
-            from: None,
             target_args: Vec::new(),
         }
     }
@@ -1992,7 +2003,7 @@ mod tests {
         let mut args = run_args();
         args.target = Some("eval".into());
         args.functions = vec!["X".into()];
-        let err = args.run().unwrap_err();
+        let err = args.run(None).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(
@@ -2007,7 +2018,7 @@ mod tests {
         let mut args = run_args();
         args.target = Some("eval".into());
         args.expression = Some("2 + 2".into());
-        let err = args.run().unwrap_err();
+        let err = args.run(None).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(
@@ -2022,7 +2033,7 @@ mod tests {
         let mut args = run_args();
         args.functions = vec!["X".into()];
         args.expression = Some("2 + 2".into());
-        let err = args.run().unwrap_err();
+        let err = args.run(None).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(msg.contains("`-f`") && msg.contains("`-e`"), "got: {msg}");
@@ -2035,7 +2046,7 @@ mod tests {
         args.target = Some("t".into());
         args.functions = vec!["F".into()];
         args.expression = Some("e".into());
-        let err = args.run().unwrap_err();
+        let err = args.run(None).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("`<target>`"));
         assert!(msg.contains("`-f`"));
@@ -2049,7 +2060,7 @@ mod tests {
         let mut args = run_args();
         args.expression = Some("2 + 2".into());
         args.file = Some(PathBuf::from("a.baml"));
-        let err = args.run().unwrap_err();
+        let err = args.run(None).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("`-e`"), "got: {msg}");
         assert!(msg.contains("--file"), "got: {msg}");
@@ -2062,32 +2073,31 @@ mod tests {
         let mut args = run_args();
         args.expression = Some("2 + 2".into());
         args.list = true;
-        let err = args.run().unwrap_err();
+        let err = args.run(None).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("`-e`"), "got: {msg}");
         assert!(msg.contains("--list"), "got: {msg}");
     }
 
-    /// `--file` and `--from` are mutually exclusive (both name a source).
+    /// `--file` and `--project` are mutually exclusive (both name a source).
     #[test]
     fn test_run_rejects_file_plus_explicit_from() {
         let mut args = run_args();
         args.target = Some("X".into());
         args.file = Some(PathBuf::from("a.baml"));
-        args.from = Some(PathBuf::from("./project"));
-        let err = args.run().unwrap_err();
+        let err = args.run(Some(Path::new("./project"))).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(msg.contains("--file"), "got: {msg}");
     }
 
-    /// `--file` with omitted `--from` is fine.
+    /// `--file` with omitted `--project` is fine.
     #[test]
-    fn test_run_allows_file_with_omitted_from() {
+    fn test_run_allows_file_without_project() {
         let mut args = run_args();
         args.target = Some("X".into());
         args.file = Some(PathBuf::from("a.baml"));
-        validate_file_project_flags(args.file.as_deref(), args.from.as_deref()).unwrap();
+        validate_file_project_flags(args.file.as_deref(), None).unwrap();
     }
 
     // ── Clap derive parse tests ──────────────────────────────────────

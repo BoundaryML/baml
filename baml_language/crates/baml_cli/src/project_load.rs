@@ -96,14 +96,14 @@ pub(crate) fn resolve_standalone_file(file_path: &Path) -> Result<PathBuf> {
 ///   stalling while salsa type-infers hundreds of stray fixtures) the old
 ///   "`baml.toml` required" rule guarded against.
 ///
-/// An explicit `--from` is also a source-root escape hatch. Normal containing-
+/// An explicit `--project` is also a source-root escape hatch. Normal containing-
 /// project discovery still wins when the supplied path overlaps the selected
 /// `baml_src/`, but a disjoint sibling tree is loaded directly instead of being
 /// silently redirected to that `baml_src/`. The nearest ancestor `baml.toml`
 /// still supplies package/settings in that case. With no ancestor manifest,
 /// the explicit directory is a standalone manifest-less project.
 ///
-/// Without an explicit `--from`, a marker is still required. This keeps default
+/// Without an explicit `--project`, a marker is still required. This keeps default
 /// current-directory discovery from recursively loading an arbitrary workspace.
 ///
 /// Standalone single-file callers (`baml run --file …`, `baml pack --file
@@ -190,7 +190,7 @@ pub(crate) fn projectless_search_dir(from: Option<&Path>) -> Result<PathBuf> {
 ///
 /// Note the two branches differ in what they load:
 /// - The **default-state** branch (2) loads zero user files, so omitted
-///   `--from` can never trigger the workspace-slurp hang.
+///   `--project` can never trigger the workspace-slurp hang.
 /// - The **walk-up** branch (1) loads the ancestor project exactly as
 ///   [`load_project_from`] would — including the "no `baml_src/` → walk the
 ///   whole root" path. So if an ancestor
@@ -497,7 +497,7 @@ mod tests {
     }
 
     /// An ancestor manifest remains the settings/package root even when
-    /// `--from` selects a disjoint source tree.
+    /// `--project` selects a disjoint source tree.
     #[test]
     fn explicit_sibling_source_retains_ancestor_manifest() {
         let tmp = TempDir::new().unwrap();

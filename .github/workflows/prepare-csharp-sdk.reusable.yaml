@@ -84,7 +84,7 @@ jobs:
               csharp_abi_probe_tests::emit_function_calls_bytecode \
               --lib -- --ignored --exact --nocapture
             cargo run --quiet -p baml_cli -- \
-              generate --from sdk_tests/crates/csharp/primitive_slice
+              generate --project sdk_tests/crates/csharp/primitive_slice
           )
           test -s "$BAML_CSHARP_ABI_PROBE_BYTECODE"
           fixture=baml_language/sdk_tests/crates/csharp/primitive_slice

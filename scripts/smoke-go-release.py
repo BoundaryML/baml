@@ -294,7 +294,7 @@ def main() -> None:
     )
 
     run([str(cli), "--version"], cwd=consumer, env=env)
-    run([str(cli), "generate", "--from", "."], cwd=consumer, env=env)
+    run([str(cli), "generate", "--project", "."], cwd=consumer, env=env)
     if "replace " in (consumer / "go.mod").read_text(encoding="utf-8"):
         fail("external consumer unexpectedly contains a Go replace directive")
     run(
