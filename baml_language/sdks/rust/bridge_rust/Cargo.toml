@@ -36,9 +36,7 @@ indexmap = { workspace = true }
 libloading = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
-# Keep this direct instead of inheriting the workspace's `serde_json` features.
-# Cargo unifies dependency features, and `baml_bridge` only serializes strings.
-serde_json = "1.0.113"
+serde_json_feature_free = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 ureq = { workspace = true }
