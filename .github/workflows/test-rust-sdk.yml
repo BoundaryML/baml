@@ -10,6 +10,8 @@ on:
       - "languages/rust/**"
       - "engine/**/*.rs"
       - "engine/**/*.proto"
+      - ".github/actions/setup-protoc/**"
+      - ".github/actions/setup-rust/**"
       - ".github/workflows/test-rust-sdk.yml"
   push:
     branches: [canary]
@@ -17,6 +19,8 @@ on:
       - "languages/rust/**"
       - "engine/**/*.rs"
       - "engine/**/*.proto"
+      - ".github/actions/setup-protoc/**"
+      - ".github/actions/setup-rust/**"
       - ".github/workflows/test-rust-sdk.yml"
   workflow_dispatch:
 
@@ -59,9 +63,7 @@ jobs:
         shell: bash
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: ./.github/actions/setup-protoc
 
       - name: Build CFFI Library
         run: |
@@ -136,9 +138,7 @@ jobs:
         shell: bash
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: ./.github/actions/setup-protoc
 
       - name: Build CFFI Library
         run: |
