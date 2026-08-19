@@ -653,3 +653,116 @@ async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
         "fresh compiler contexts were retained: RSS grew {rss_growth} KiB"
     );
 }
+
+/// A Session's top-level `let` is a binding site, so a fresh literal
+/// initializer widens to its base type exactly as `let` in a body does. It used
+/// to bind the literal type itself — `let n = 5` gave `n` the type `5` — and a
+/// literal type has no members, so the first thing a notebook does with its
+/// first binding failed with `E0007: type `5` has no member`. The diagnostic is
+/// the oracle: `to_string` exists on none of these bases, so the call is
+/// refused either way, and the type it names is the binding's.
+const SESSION_LET_WIDENING: &str = r####"
+function probe(s: reflect.Session, source: string) -> string throws unknown {
+  let _ = s.eval(source) catch (e) {
+    baml.reflect.errors.CompilationError => return e.diagnostics[0].message,
+    _ => return "wrong error",
+  }
+  "unexpected success"
+}
+
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  s.eval(#"let text = "hi""#)
+  s.eval(#"let flag = true"#)
+  `${probe(s, #"n.to_string()"#)}
+${probe(s, #"text.to_string()"#)}
+${probe(s, #"flag.to_string()"#)}`
+}
+"####;
+
+/// Widening changes the binding, not the values that flow through it: the
+/// committed value is unchanged, rebinding across submissions still works, and
+/// a later submission still reads what the last one wrote.
+const SESSION_LET_REBINDING: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  s.eval(#"let text = "hi""#)
+  s.eval(#"let flag = true"#)
+  s.eval(#"n = 7"#)
+  s.eval(#"text = "there""#)
+  s.eval(#"flag = false"#)
+  s.eval<string>(#"`${n}|${text}|${flag}`"#)
+}
+"####;
+
+/// Widening is unconditional because a Session binding cannot opt out of it: an
+/// annotation is not a legal session spelling at all. Ordinary code keeps the
+/// precise type through `let n: 5 = 5`; a submission is refused before it gets
+/// that far, and that refusal is what this pins.
+const SESSION_LET_ANNOTATION_REJECTED: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  let _ = s.eval(#"let n: int = 5"#) catch (e) {
+    baml.reflect.errors.CompilationError => return e.diagnostics[0].message,
+    _ => return "wrong error",
+  }
+  "unexpected success"
+}
+"####;
+
+/// Widening removes literal specificity from the BINDING, not from the values
+/// flowing through it: narrowing a widened session binding still works.
+const SESSION_LET_NARROWING: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  s.eval<string>(#"if (n is 5) { "narrowed" } else { "wide" }"#)
+}
+"####;
+
+#[tokio::test]
+async fn session_top_level_lets_widen_literal_initializers() {
+    let output = baml_test!(SESSION_LET_WIDENING);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "type `int` has no member `to_string`\n\
+             type `string` has no member `to_string`\n\
+             type `bool` has no member `to_string`"
+                .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn session_let_rebinding_across_submissions_is_unaffected() {
+    let output = baml_test!(SESSION_LET_REBINDING);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("7|there|false".into()))
+    );
+}
+
+#[tokio::test]
+async fn session_let_annotations_are_still_rejected() {
+    let output = baml_test!(SESSION_LET_ANNOTATION_REJECTED);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "invalid pattern type ascription: session bindings do not support patterns or `else`: \
+             type ascription not allowed here"
+                .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn session_let_narrowing_still_sees_the_literal() {
+    let output = baml_test!(SESSION_LET_NARROWING);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("narrowed".into()))
+    );
+}
