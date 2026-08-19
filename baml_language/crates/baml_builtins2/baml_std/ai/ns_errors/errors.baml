@@ -51,7 +51,12 @@ type RaisedInClient = InvokeError
 function normalize(error: RaisedInClient) -> InvokeError throws never {
     match (error) {
         let failure: Failure => failure,
-        let unknown_error: baml.errors.UnknownError => unknown_error,
+        let unknown_error: baml.errors.UnknownError => {
+            // A host boundary may have wrapped a genuinely typed Failure;
+            // `from<Failure>` unwraps exactly that case (and never
+            // double-wraps), so typedness survives the host round-trip.
+            baml.errors.UnknownError.from<Failure>(unknown_error)
+        },
         let timeout: baml.errors.Timeout => timeout,
         let cancelled: baml.panics.Cancelled => cancelled,
         let compilation: baml.reflect.errors.CompilationError => compilation,

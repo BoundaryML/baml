@@ -115,7 +115,7 @@ namespace baml.errors:
   class StackTrace { methods: [_to_string_impl, to_string] }
   class Timeout { methods: [] }
   class TypeMismatch { methods: [] }
-  class UnknownError { methods: [] }
+  class UnknownError { methods: [from, with_message, _preserve_context, to_string] }
   class Unsupported { methods: [] }
 namespace baml.events:
 namespace baml.fs:

@@ -1,0 +1,129 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.throws_unknown.direct(flag: bool) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: bool // flag // param
+
+    bb0: {
+        branch copy _1 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const "boom";
+    }
+}
+
+fn user.fixtures.throws_unknown.union_member(flag: bool) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: bool // flag // param
+
+    bb0: {
+        branch copy _1 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const "boom";
+    }
+}
+
+fn user.fixtures.throws_unknown.aliased(flag: bool) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: bool // flag // param
+
+    bb0: {
+        branch copy _1 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const 42_i64;
+    }
+}
+
+fn user.fixtures.throws_unknown.Service.run(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.fixtures.throws_unknown.plain_unknown(value: unknown) -> unknown {
+    // Locals:
+    let _0: unknown // _0 // return
+    let _1: unknown // value // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.throws_unknown.callback_boundary(callback: () -> null throws unknown) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: () -> null throws unknown // callback // param
+    let _2: unknown // error
+    let _3: baml.errors.UnknownError
+    let _4: unknown
+    let _5: type
+
+    bb0: {
+        _0 = call copy _1() -> [bb1, unwind: bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        throw_if_panic copy _2 -> bb3;
+    }
+
+    bb3: {
+        _4 = copy _2;
+        _5 = load_type(never);
+        _3 = call const fn baml.errors.UnknownError.from<copy _5>(copy _4) -> [bb4];
+    }
+
+    bb4: {
+        throw copy _3;
+    }
+}

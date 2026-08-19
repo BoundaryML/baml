@@ -34,7 +34,7 @@ use baml_type::{
     Freshness, Name, ParamTy, TyAttr, TypeName,
     interned::{FunctionParam, Ty, TyKind},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Debug, Clone)]
 enum ResolvedTypeDefinition<'db> {
@@ -2116,6 +2116,33 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
         LoweringDiagKind::Projection(error) => (**error).clone(),
         LoweringDiagKind::FnTypeMissingThrows => TirTypeError::FunctionTypeMissingThrows,
     }
+}
+
+/// Whether a declared throws clause is an open contract: it names `unknown`
+/// directly, through a union member, or through a type alias. An open
+/// contract deliberately admits any thrown value, so throws-coverage
+/// analysis (E0097 extraneous-declaration warnings) does not apply to it.
+pub(crate) fn is_open_throws_contract(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> bool {
+    fn visit(
+        facts: &crate::facts::Facts<'_>,
+        ty: &Ty,
+        seen_aliases: &mut FxHashSet<TypeName>,
+    ) -> bool {
+        match ty.kind() {
+            TyKind::Unknown { .. } => true,
+            TyKind::Union(members, _) => members
+                .iter()
+                .any(|member| visit(facts, member, seen_aliases)),
+            TyKind::TypeAlias(name, _) if seen_aliases.insert(name.clone()) => {
+                baml_type::normalize::TypeContext::alias_def(facts, name)
+                    .map(|target| visit(facts, &Ty::from_plain(&target), seen_aliases))
+                    .unwrap_or(false)
+            }
+            _ => false,
+        }
+    }
+
+    visit(&crate::facts::Facts::new(db), ty, &mut FxHashSet::default())
 }
 
 pub fn signature_lowering_diagnostics<'db>(

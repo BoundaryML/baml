@@ -98,43 +98,16 @@ class ai.clients.RoundRobin$stream {
   members: root.Client[]
   counter: int | null
 }
-class ai.clients.StreamRelay {
-  open: () -> root.stream.TurnStream throws root.errors.InvokeError
-  retry: (root.errors.Failure) -> bool throws root.errors.InvokeError
-  current: root.stream.TurnStream?
-  emitted: bool
-  terminal: root.stream.StreamEvent[]
-  terminal_cursor: int
-  finished: bool
-}
-class ai.clients.StreamRelay$stream {
-  open: unknown
-  retry: unknown
-  current: root.stream.TurnStream$stream | null
-  emitted: bool | null
-  terminal: root.stream.StreamEvent$stream[]
-  terminal_cursor: int | null
-  finished: bool | null
-}
-class ai.clients.StreamRelayError {
-  error: root.errors.RaisedInClient
-}
-class ai.clients.StreamRelayError$stream {
-  error: root.errors.RaisedInClient$stream | null
-}
 type ai.clients.ClientSelector = root.Client | string | baml.env.Ref
 type ai.clients.ClientSelector$stream = root.Client | string | baml.env.Ref$stream
 function ai.clients._attempt(self: ?, input: root.ModelTurnInput, remaining: int) -> root.ModelTurn  [expr] {
   {  } self.inner.invoke(input) catch_all (e) { f: root.errors.Failure => {  } if (remaining Gt 1 And f.retry_safety() Eq root.errors.RetrySafety.Safe And self.retry_if(f)) { let attempt = self.max_attempts Sub remaining Add 1; let _ = baml.sys.sleep(baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f))) catch_all (se) { _ => null } } self._attempt(input, remaining Sub 1) else { throw e }, _ => throw e }
 }
 function ai.clients._try(self: ?, input: root.ModelTurnInput, index: int) -> root.ModelTurn  [expr] {
-  {  } match (self.members.at(index)) { c: root.Client => {  } c.invoke(input) catch_all (e) { f: root.errors.Failure => {  } if (index Add 1 Lt self.members.length() And f.retry_safety() Eq root.errors.RetrySafety.Safe) {  } self._try(input, index Add 1) else { throw e }, _ => throw e }, null => { throw root.errors.InvalidRequest { provider: "fallback", status_code: null, detail: "Fallback needs at...", raw_body: null } } }
-}
-function ai.clients.close_current(self: ?) -> void  [expr] {
-  {  } if let stream: root.stream.TurnStream = self.current { stream._finish() }
+  {  } match (self.members.at(index)) { c: root.Client => {  } c.invoke(input) catch_all (e) { f: root.errors.Failure => {  } if (index Add 1 Lt self.members.length() And f.retry_safety() Eq root.errors.RetrySafety.Safe) {  } self._try(input, index Add 1) else { throw e }, _ => throw e }, null => { throw baml.errors.InvalidArgument { message: "Fallback needs at..." } } }
 }
 function ai.clients.default_retry_judgment(f: root.errors.Failure) -> bool  [expr] {
-  {  } match (f) { r: root.errors.Refused => false, i: root.errors.InvalidRequest => false, p: root.errors.ParseFailed => false, f: root.errors.FinishReasonError => false, _ => true }
+  {  } match (f) { r: root.errors.Refused => false, i: root.errors.InvalidRequest => false, p: root.errors.ParseFailed => false, _ => true }
 }
 function ai.clients.delay_ms(self: ?, attempt: int, f: root.errors.Failure) -> int  [expr] {
   { let hinted = match (f) { r: root.errors.RateLimited => r.retry_after_ms, _ => null } } if let h: int = hinted {  } h else { let d = self.initial_ms; let i = 1; while i Lt attempt { d = d Mul self.multiplier; i = i Add 1 } } if (d Gt self.max_ms) {  } self.max_ms else {  } d
@@ -149,22 +122,13 @@ function ai.clients.id(self: ?) -> string  [expr] {
   {  } if let c: root.Client = self.members.at(0) {  } c.id() else {  } "fallback"
 }
 function ai.clients.invoke(self: ?, input: root.ModelTurnInput) -> root.ModelTurn  [expr] {
-  {  } self._attempt(input, self.max_attempts) catch_all (e) { _ => throw root.errors.normalize_invoke(e) }
+  {  } self._attempt(input, self.max_attempts) catch_all (e) { _ => throw root.errors.normalize(e) }
 }
 function ai.clients.invoke(self: ?, input: root.ModelTurnInput) -> root.ModelTurn  [expr] {
-  {  } { if (self.members.length() Eq 0) { throw root.errors.InvalidRequest { provider: "roundrobin", status_code: null, detail: "RoundRobin needs ...", raw_body: null } }; let index = self.counter Mod self.members.length(); self.counter = self.counter Add 1 } match (self.members.at(index)) { c: root.Client => c.invoke(input), null => { throw root.errors.InvalidRequest { provider: "roundrobin", status_code: null, detail: "RoundRobin needs ...", raw_body: null } } } catch_all (e) { _ => throw root.errors.normalize_invoke(e) }
+  {  } { let index = self.counter Mod self.members.length(); self.counter = self.counter Add 1 } match (self.members.at(index)) { c: root.Client => c.invoke(input), null => { throw baml.errors.InvalidArgument { message: "RoundRobin needs ..." } } } catch_all (e) { _ => throw root.errors.normalize(e) }
 }
 function ai.clients.invoke(self: ?, input: root.ModelTurnInput) -> root.ModelTurn  [expr] {
-  {  } self._try(input, 0) catch_all (e) { _ => throw root.errors.normalize_invoke(e) }
-}
-function ai.clients.invoke_stream(self: ?, input: root.ModelTurnInput) -> root.stream.TurnStream  [expr] {
-  { let remaining = self.max_attempts; let open = () -> root.stream.TurnStream { {  } match (self.inner) { streaming: root.stream.StreamingClient => streaming.invoke_stream(input), member: root.Client => { throw root.errors.StreamingUnsupported { client_id: member.id() } } } }; let retry = (failure: root.errors.Failure) -> bool { {  } if (failure is root.errors.StreamingUnsupported) {  } false else if (remaining Gt 1 And failure.retry_safety() Eq root.errors.RetrySafety.Safe And self.retry_if(failure)) { let attempt = self.max_attempts Sub remaining Add 1; let _ = baml.sys.sleep(baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, failure))) catch_all (e) { cancelled: baml.panics.Cancelled => throw cancelled, _ => null }; remaining Sub= 1 } true else {  } false }; let relay = ai.clients.StreamRelay { open: open, retry: retry, current: null, emitted: false, terminal: [], terminal_cursor: 0, finished: false } } root.stream.TurnStream.from_event_source(relay.next_event)
-}
-function ai.clients.invoke_stream(self: ?, input: root.ModelTurnInput) -> root.stream.TurnStream  [expr] {
-  {  } { if (self.members.length() Eq 0) { throw root.errors.InvalidRequest { provider: "roundrobin", status_code: null, detail: "RoundRobin needs ...", raw_body: null } }; let index = self.counter Mod self.members.length(); self.counter Add= 1 } match (self.members.at(index)) { streaming: root.stream.StreamingClient => streaming.invoke_stream(input), member: root.Client => { throw root.errors.StreamingUnsupported { client_id: member.id() } }, null => { throw root.errors.InvalidRequest { provider: "roundrobin", status_code: null, detail: "RoundRobin needs ...", raw_body: null } } } catch_all (e) { _ => throw root.errors.normalize_invoke(e) }
-}
-function ai.clients.invoke_stream(self: ?, input: root.ModelTurnInput) -> root.stream.TurnStream  [expr] {
-  { let index = 0; let open = () -> root.stream.TurnStream { {  } match (self.members.at(index)) { streaming: root.stream.StreamingClient => streaming.invoke_stream(input), member: root.Client => { throw root.errors.StreamingUnsupported { client_id: member.id() } }, null => { throw root.errors.InvalidRequest { provider: "fallback", status_code: null, detail: "Fallback needs at...", raw_body: null } } } }; let advance = (failure: root.errors.Failure) -> bool { {  } if (index Add 1 Lt self.members.length() And failure.retry_safety() Eq root.errors.RetrySafety.Safe) { index Add= 1 } true else {  } false }; let relay = ai.clients.StreamRelay { open: open, retry: advance, current: null, emitted: false, terminal: [], terminal_cursor: 0, finished: false } } root.stream.TurnStream.from_event_source(relay.next_event)
+  {  } self._try(input, 0) catch_all (e) { _ => throw root.errors.normalize(e) }
 }
 function ai.clients.new(initial_ms: int = 250, multiplier: int = 2, max_ms: int = 10000) -> ai.clients.Backoff  [expr] {
   {  } ai.clients.Backoff { initial_ms: initial_ms, multiplier: multiplier, max_ms: max_ms }
@@ -173,32 +137,11 @@ function ai.clients.new(inner: root.Client, max_attempts: int = 3, retry_if: (ro
   {  } ai.clients.Retry { inner: inner, max_attempts: max_attempts, retry_if: retry_if NullCoalesce default_retry_judgment, backoff: backoff NullCoalesce Backoff.new() }
 }
 function ai.clients.new(members: root.Client[]) -> ai.clients.RoundRobin  [expr] {
-  { if (members.length() Eq 0) { throw root.errors.InvalidRequest { provider: "roundrobin", status_code: null, detail: "RoundRobin needs ...", raw_body: null } } } ai.clients.RoundRobin { members: members, counter: 0 }
-}
-function ai.clients.next_event(self: ?) -> root.stream.StreamEvent | root.stream.Done  [expr] {
-  { if (self.terminal_cursor Lt self.terminal.length()) { let event = self.terminal.at(self.terminal_cursor) NullCoalesce baml.sys.panic("StreamRelay lost ..."); self.terminal_cursor Add= 1; return event }; if (self.finished) { return root.stream.Done {  } }; if (self.current Eq null) { let opened: root.stream.TurnStream | ai.clients.StreamRelayError = self.open() catch_all (e) { _ => ai.clients.StreamRelayError { error: e } } } if let failed: ai.clients.StreamRelayError = opened { self.recover(failed.error); return self.next_event() } else if let stream: root.stream.TurnStream = opened { self.current = stream } } if let stream: root.stream.TurnStream = self.current { let next: string | root.stream.Done | ai.clients.StreamRelayError = stream.next() catch_all (e) { _ => ai.clients.StreamRelayError { error: e } } } match (next) { text: string => { self.emitted = true } root.stream.TextDelta { text: text }, done: root.stream.Done => { let final: root.ModelTurn | ai.clients.StreamRelayError = stream.final_turn() catch_all (e) { _ => ai.clients.StreamRelayError { error: e } }; if let failed: ai.clients.StreamRelayError = final { self.recover(failed.error); return self.next_event() } else if let turn: root.ModelTurn = final { self.finished = true; self.terminal = [root.stream.TurnMeta { stop_reason: turn.stop_reason, input_tokens: turn.usage?.input_tokens, output_tokens: turn.usage?.output_tokens }, root.stream.TurnDone {  }]; return self.next_event() } } done, failed: ai.clients.StreamRelayError => { self.recover(failed.error) } self.next_event() } else {  } baml.sys.panic("StreamRelay has n...")
-}
-function ai.clients.recover(self: ?, error: root.errors.RaisedInClient) -> void  [expr] {
-  {  } match (root.errors.normalize_invoke(error)) { timeout: baml.errors.Timeout => { self.close_current(); throw timeout }, cancelled: baml.panics.Cancelled => { self.close_current(); throw cancelled }, failure: root.errors.Failure => {  } if (Not self.emitted And self.retry(failure)) { self.close_current(); self.current = null } else { self.close_current(); throw failure }, unknown_error: baml.errors.UnknownError => { self.close_current(); throw unknown_error }, compilation: baml.reflect.errors.CompilationError => { self.close_current(); throw compilation } }
-}
-function ai.clients.render(self: ?, input: root.ModelTurnInput) -> baml.http.Request  [expr] {
-  {  } self.inner.render(input) catch_all (e) { _ => throw root.errors.normalize(e) }
-}
-function ai.clients.render(self: ?, input: root.ModelTurnInput) -> baml.http.Request  [expr] {
-  {  } match (self.members.at(0)) { c: root.Client => c.render(input), null => { throw root.errors.InvalidRequest { provider: "roundrobin", status_code: null, detail: "RoundRobin needs ...", raw_body: null } } } catch_all (e) { _ => throw root.errors.normalize(e) }
-}
-function ai.clients.render(self: ?, input: root.ModelTurnInput) -> baml.http.Request  [expr] {
-  {  } match (self.members.at(0)) { c: root.Client => c.render(input), null => { throw root.errors.InvalidRequest { provider: "fallback", status_code: null, detail: "Fallback needs at...", raw_body: null } } } catch_all (e) { _ => throw root.errors.normalize(e) }
+  { if (members.length() Eq 0) { throw baml.errors.InvalidArgument { message: "RoundRobin needs ..." } } } ai.clients.RoundRobin { members: members, counter: 0 }
 }
 function ai.clients.resolve(selector: ai.clients.ClientSelector) -> root.Client  [expr] {
   {  } match (selector) { shorthand: string => root.internal._from_shorthand(shorthand), named: baml.env.Ref => {  } if let value: string = named.get() {  } root.internal._from_shorthand(value) else { throw root.errors.InvalidRequest { provider: "ai.clients", status_code: null, detail: `...`, raw_body: null } }, existing: root.Client => existing }
 }
-
---- captures ---
-lambda () in invoke_stream: captures [self, input]
-lambda (failure) in invoke_stream: captures [remaining, self]
-lambda () in invoke_stream: captures [self, index, input]
-lambda (failure) in invoke_stream: captures [index, self]
 
 --- <builtin>/ai/ns_content/content.baml ---
 class ai.content.Media {
@@ -244,16 +187,6 @@ function ai.content.new(value: image | audio | video | pdf, provider_id: string?
 }
 
 --- <builtin>/ai/ns_errors/errors.baml ---
-class ai.errors.FinishReasonError {
-  provider: string
-  finish_reason: root.content.StopReason
-  raw_output: string
-}
-class ai.errors.FinishReasonError$stream {
-  provider: string | null
-  finish_reason: root.content.StopReason | null
-  raw_output: string | null
-}
 class ai.errors.InvalidRequest {
   provider: string
   status_code: int?
@@ -283,14 +216,6 @@ class ai.errors.ParseFailed {
 class ai.errors.ParseFailed$stream {
   provider: string | null
   raw_output: string | null
-}
-class ai.errors.PreviewUnsupported {
-  provider: string
-  detail: string
-}
-class ai.errors.PreviewUnsupported$stream {
-  provider: string | null
-  detail: string | null
 }
 class ai.errors.RateLimited {
   provider: string
@@ -337,26 +262,13 @@ class ai.errors.ToolFailedError$stream {
   cause: Failure | null
 }
 enum ai.errors.RetrySafety {Safe, Unknown, Unsafe}
-type ai.errors.InvokeError = Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError
-type ai.errors.InvokeError$stream = Failure | baml.errors.Timeout$stream | baml.errors.UnknownError$stream | baml.panics.Cancelled$stream | baml.reflect.errors.CompilationError$stream
-type ai.errors.RaisedInClient = ai.errors.InvokeError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported
-type ai.errors.RaisedInClient$stream = ai.errors.InvokeError$stream | baml.errors.InvalidArgument$stream | baml.errors.Io$stream | baml.errors.ParseError$stream | baml.json.JsonSerializationError$stream | baml.json.JsonParseError$stream | baml.json.JsonDecodeError$stream | baml.errors.AccessError$stream | baml.errors.Unsupported$stream
 function ai.errors.classify_http(provider: string, status_code: int, body: string, headers: map<string, string>? = null) -> Failure  [expr] {
   {  } if (status_code Eq 429) {  } ai.errors.RateLimited { provider: provider, retry_after_ms: root.internal._retry_after_ms(headers), raw_body: body } else if (status_code Eq 408 Or status_code Ge 500) {  } ai.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: body } else {  } ai.errors.InvalidRequest { provider: provider, status_code: status_code, detail: `...`, raw_body: body }
 }
-function ai.errors.normalize(error: ai.errors.RaisedInClient) -> ai.errors.InvokeError  [expr] {
-  {  } match (error) { failure: Failure => failure, unknown_error: baml.errors.UnknownError => unknown_error, timeout: baml.errors.Timeout => timeout, cancelled: baml.panics.Cancelled => cancelled, compilation: baml.reflect.errors.CompilationError => compilation, invalid: baml.errors.InvalidArgument => {  } ai.errors.InvalidRequest { provider: "client", status_code: null, detail: invalid.message, raw_body: null }, parse: baml.errors.ParseError => {  } ai.errors.InvalidRequest { provider: "client", status_code: null, detail: parse.message, raw_body: null }, serialize: baml.json.JsonSerializationError => {  } ai.errors.InvalidRequest { provider: "client", status_code: null, detail: serialize.message, raw_body: null }, access: baml.errors.AccessError => {  } ai.errors.InvalidRequest { provider: "client", status_code: null, detail: access.message, raw_body: null }, unsupported: baml.errors.Unsupported => {  } ai.errors.InvalidRequest { provider: "client", status_code: null, detail: unsupported.message, raw_body: null }, io: baml.errors.Io => {  } ai.errors.NetworkFailure { provider: "client", detail: io.message, raw_body: null }, json_parse: baml.json.JsonParseError => {  } ai.errors.NetworkFailure { provider: "client", detail: json_parse.message, raw_body: null }, json_decode: baml.json.JsonDecodeError => {  } ai.errors.NetworkFailure { provider: "client", detail: json_decode.message, raw_body: null } }
-}
-function ai.errors.normalize_invoke(error: ai.errors.RaisedInClient) -> ai.errors.InvokeError  [expr] {
-  {  } normalize(error)
+function ai.errors.normalize(error: unknown) -> Failure | baml.errors.UnknownError  [expr] {
+  {  } baml.errors.UnknownError.from(error)
 }
 function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [missing]
-function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [expr] {
-  {  } RetrySafety.Safe
-}
-function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [expr] {
-  {  } RetrySafety.Safe
-}
 function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [expr] {
   {  } RetrySafety.Safe
 }
@@ -477,9 +389,6 @@ class ai.internal.SpecCtx$stream {
 function ai.internal._schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown>  [expr] {
   { let sig = reflect.signature(handler); let props: map<string, unknown> = map {  }; let required: string[] = []; for a in sig.args { let _ = props.set(a.name, baml.json.schema(a.type)); required.push(a.name) } } map { "type": "object", "properties": props, "required": required, "additionalProperties": false }
 }
-function ai.internal.assemble_llm_prompt(parts: string[], values: unknown[]) -> root.Prompt  [expr] {
-  { let first_role = Neg 1; let i = 0; while i Lt values.length() { if (first_role Lt 0 And values[i] is root.Role) { first_role = i }; i Add= 1 }; let needs_system = if (first_role Lt 0) {  } true else if (first_role Gt 0) {  } true else {  } parts[0].trim() Ne "" } if (needs_system) { let system = root.Role { name: "system", metadata: map {  } }; let llm_parts: string[] = [""]; for part in parts { llm_parts.push(part) }; let llm_values: unknown[] = [system]; for value in values { llm_values.push(value) } } assemble_prompt(llm_parts, llm_values) else {  } assemble_prompt(parts, values)
-}
 function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> root.Prompt  [builtin]
 
 --- <builtin>/ai/ns_internal/http_errors.baml ---
@@ -529,10 +438,7 @@ function ai.internal._media_mime_type(explicit: string?, source_value: string, k
   { if let supplied: string = explicit { return supplied }; let source = source_value.to_lower_case() } if (source.includes(".jpg") Or source.includes(".jpeg")) {  } "image/jpeg" else if (source.includes(".png")) {  } "image/png" else if (source.includes(".webp")) {  } "image/webp" else if (source.includes(".gif")) {  } "image/gif" else if (source.includes(".svg")) {  } "image/svg+xml" else if (source.includes(".wav")) {  } "audio/wav" else if (source.includes(".mp3")) {  } "audio/mpeg" else if (source.includes(".flac")) {  } "audio/flac" else if (source.includes(".ogg")) {  } "audio/ogg" else if (source.includes(".webm")) {  } if (kind Eq "audio") {  } "audio/webm" else {  } "video/webm" else if (source.includes(".mov")) {  } "video/quicktime" else if (source.includes(".mp4")) {  } if (kind Eq "audio") {  } "audio/mp4" else {  } "video/mp4" else if (source.includes(".avi")) {  } "video/x-msvideo" else if (source.includes(".mkv")) {  } if (kind Eq "audio") {  } "audio/x-matroska" else {  } "video/x-matroska" else if (source.includes(".pdf")) {  } "application/pdf" else if (kind Eq "audio") {  } "audio/mpeg" else if (kind Eq "video") {  } "video/mp4" else if (kind Eq "pdf") {  } "application/pdf" else {  } "image/png"
 }
 function ai.internal._resolve_media_content(url: string?, file: string?, inline: string, mime: string, fetch_url: bool) -> root.wire.ResolvedMedia  [expr] {
-  { if let path: string = file { let handle = baml.fs.open(path, "r") catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } }; let data = handle.bytes().to_base64() catch_all (e) { _ => { handle.close(); throw baml.errors.InvalidArgument { message: `...` } } }; handle.close(); return root.wire.ResolvedMedia { url: null, base64: data, mime_type: mime } }; if (inline Ne "") { return root.wire.ResolvedMedia { url: null, base64: inline, mime_type: mime } }; if let media_url: string = url { if (media_url.starts_with("data:")) { if let separator: int = media_url.index_of(";base64,") { return root.wire.ResolvedMedia { url: null, base64: media_url.slice(separator Add 8, media_url.length()), mime_type: media_url.slice(5, separator) } }; let preview = if (media_url.length() Gt 48) {  } `...` else {  } media_url; throw baml.errors.InvalidArgument { message: `...` } }; if (Not fetch_url Or media_url.starts_with("gs://")) { return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime } }; let response = baml.http.fetch(media_url, timeout = baml.time.Duration.from_seconds(30)) catch_all (e) { timeout: baml.errors.Timeout => throw timeout, _ => { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } } }; if (Not response.ok()) { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } }; let response_mime = response.headers.get("content-type") NullCoalesce mime; let body = response.bytes() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } } }; return root.wire.ResolvedMedia { url: null, base64: body.to_base64(), mime_type: response_mime.split(";").at(0) NullCoalesce mime.trim() } }; throw baml.errors.InvalidArgument { message: "media has no URL,..." } }
-}
-function ai.internal._resolve_media_preview_content(url: string?, file: string?, inline: string, mime: string) -> root.wire.ResolvedMedia  [expr] {
-  { if let path: string = file { throw ai.errors.PreviewUnsupported { provider: "media-preview", detail: `...` } }; if (inline Ne "") { return root.wire.ResolvedMedia { url: null, base64: inline, mime_type: mime } }; if let media_url: string = url { if (media_url.starts_with("data:")) { if let separator: int = media_url.index_of(";base64,") { return root.wire.ResolvedMedia { url: null, base64: media_url.slice(separator Add 8, media_url.length()), mime_type: media_url.slice(5, separator) } }; throw ai.errors.PreviewUnsupported { provider: "media-preview", detail: "request preview c..." } }; return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime } }; throw ai.errors.PreviewUnsupported { provider: "media-preview", detail: "request preview r..." } }
+  { if let path: string = file { let handle = baml.fs.open(path, "r") catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } }; let data = handle.bytes().to_base64() catch_all (e) { _ => { handle.close(); throw baml.errors.InvalidArgument { message: `...` } } }; handle.close(); return root.wire.ResolvedMedia { url: null, base64: data, mime_type: mime } }; if (inline Ne "") { return root.wire.ResolvedMedia { url: null, base64: inline, mime_type: mime } }; if let media_url: string = url { if (media_url.starts_with("data:")) { if let separator: int = media_url.index_of(";base64,") { return root.wire.ResolvedMedia { url: null, base64: media_url.slice(separator Add 8, media_url.length()), mime_type: media_url.slice(5, separator) } }; let preview = if (media_url.length() Gt 48) {  } `...` else {  } media_url; throw baml.errors.InvalidArgument { message: `...` } }; if (Not fetch_url Or media_url.starts_with("gs://")) { return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime } }; let response = baml.http.fetch(media_url, timeout = baml.time.Duration.from_seconds(30)) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } } }; if (Not response.ok()) { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } }; let response_mime = response.headers.get("content-type") NullCoalesce mime; let body = response.bytes() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } } }; return root.wire.ResolvedMedia { url: null, base64: body.to_base64(), mime_type: response_mime.split(";").at(0) NullCoalesce mime.trim() } }; throw baml.errors.InvalidArgument { message: "media has no URL,..." } }
 }
 
 --- <builtin>/ai/ns_internal/prompt.baml ---
@@ -620,7 +526,7 @@ class ai.stream.SseEvent$stream {
   id: string | null
 }
 class ai.stream.Stream {
-  _next_text: () -> string? throws root.errors.InvokeError
+  _next_text: () -> string? throws unknown
   _cache: baml.sap.ParseCache<TStream, TFinal>
   _text: string
   _finished: bool
@@ -652,9 +558,8 @@ class ai.stream.TurnMeta$stream {
   output_tokens: int | null
 }
 class ai.stream.TurnStream {
-  _event_source: ai.stream.EventSource?
   _sse: baml.http.SseStream?
-  _decode: (string) -> ai.stream.StreamEvent[] throws root.errors.InvokeError?
+  _decode: (string) -> ai.stream.StreamEvent[] throws unknown?
   _chunks: string[]
   _cursor: int
   _pending: ai.stream.StreamEvent[]
@@ -668,7 +573,6 @@ class ai.stream.TurnStream {
   _saw_terminal: bool
 }
 class ai.stream.TurnStream$stream {
-  _event_source: ai.stream.EventSource$stream | null
   _sse: baml.http.SseStream$stream | null
   _decode: unknown | null
   _chunks: string[]
@@ -683,8 +587,6 @@ class ai.stream.TurnStream$stream {
   _require_terminal: string | null
   _saw_terminal: bool | null
 }
-type ai.stream.EventSource = () -> ai.stream.StreamEvent | ai.stream.Done throws root.errors.InvokeError
-type ai.stream.EventSource$stream = unknown
 type ai.stream.StreamEvent = ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
 type ai.stream.StreamEvent$stream = ai.stream.TextDelta$stream | ai.stream.TurnMeta$stream | ai.stream.TurnDone$stream
 function ai.stream._check_terminal(self: ?) -> void  [expr] {
@@ -703,20 +605,17 @@ function ai.stream.final_turn(self: ?) -> root.ModelTurn  [expr] {
   { while true { match (self.next()) { d: ai.stream.Done => { break }, _ => null } }; self._check_terminal(); let usage: root.events.Usage? = if (self._input_tokens Ne null Or self._output_tokens Ne null) {  } root.events.Usage { input_tokens: self._input_tokens NullCoalesce 0, output_tokens: self._output_tokens NullCoalesce 0, cached_input_tokens: null, reasoning_tokens: null } else {  } null } root.ModelTurn { content: [root.content.Text { text: self._text }], stop_reason: self._stop_reason NullCoalesce root.content.StopReason.Complete, usage: usage }
 }
 function ai.stream.from_chunks(chunks: string[]) -> ai.stream.TurnStream  [expr] {
-  {  } ai.stream.TurnStream { _event_source: null, _sse: null, _decode: null, _chunks: chunks, _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false, _require_terminal: null, _saw_terminal: false }
-}
-function ai.stream.from_event_source(next_event: ai.stream.EventSource) -> ai.stream.TurnStream  [expr] {
-  {  } ai.stream.TurnStream { _event_source: next_event, _sse: null, _decode: null, _chunks: [], _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false, _require_terminal: null, _saw_terminal: false }
+  {  } ai.stream.TurnStream { _sse: null, _decode: null, _chunks: chunks, _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false, _require_terminal: null, _saw_terminal: false }
 }
 function ai.stream.from_spec(spec: root.FunctionSpec<TFinal>, client: StreamingClient? = null) -> ai.stream.Stream<TStream, TFinal>  [expr] {
-  { if (Not spec.tools().is_empty()) { throw baml.errors.InvalidArgument { message: `...` } }; let selected: StreamingClient = match (client) { s: StreamingClient => s, null => {  } match (spec.default_client) { s: StreamingClient => s, _ => { throw root.errors.StreamingUnsupported { client_id: spec.default_client.id() } } } }; let provider = match (selected) { c: root.Client => c.id() }; let turns = selected.invoke_stream(root.ModelTurnInput { prompt: spec.prompt_template, journal: root.Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }); let _ = provider } ai.stream.Stream { _next_text: () -> { {  } match (turns.next()) { d: ai.stream.Done => null, s: string => s } catch_all (e) { _ => throw root.errors.normalize(e) } }, _cache: baml.sap.__new_parse_cache(), _text: "", _finished: false }
+  { if (Not spec.tools().is_empty()) { throw baml.errors.InvalidArgument { message: `...` } }; let selected: StreamingClient = match (client) { s: StreamingClient => s, null => {  } match (spec.default_client) { s: StreamingClient => s, _ => { throw root.errors.StreamingUnsupported { client_id: spec.default_client.id() } } } }; let provider = match (selected) { c: root.Client => c.id() }; let turns = selected.invoke_stream(root.ModelTurnInput { prompt: spec.prompt_template, journal: root.Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }); let _ = provider } ai.stream.Stream { _next_text: () -> { {  } match (turns.next()) { d: ai.stream.Done => null, s: string => s } }, _cache: baml.sap.__new_parse_cache(), _text: "", _finished: false }
 }
-function ai.stream.from_sse(sse: baml.http.SseStream, decode: (string) -> ai.stream.StreamEvent[] throws root.errors.InvokeError, require_terminal: string? = null) -> ai.stream.TurnStream  [expr] {
-  {  } ai.stream.TurnStream { _event_source: null, _sse: sse, _decode: decode, _chunks: [], _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false, _require_terminal: require_terminal, _saw_terminal: false }
+function ai.stream.from_sse(sse: baml.http.SseStream, decode: (string) -> ai.stream.StreamEvent[] throws unknown, require_terminal: string? = null) -> ai.stream.TurnStream  [expr] {
+  {  } ai.stream.TurnStream { _sse: sse, _decode: decode, _chunks: [], _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false, _require_terminal: require_terminal, _saw_terminal: false }
 }
 function ai.stream.invoke_stream(self: ?, input: root.ModelTurnInput) -> ai.stream.TurnStream  [missing]
 function ai.stream.next(self: ?) -> string | ai.stream.Done  [expr] {
-  { while true { if (self._done) { return ai.stream.Done {  } }; if (self._pcursor Lt self._pending.length()) { let e = self._pending.at(self._pcursor); self._pcursor Add= 1; match (e) { d: ai.stream.TextDelta => { self._text = `...`; return d.text }, m: ai.stream.TurnMeta => { if let s: root.content.StopReason = m.stop_reason { self._stop_reason = s }; if let i: int = m.input_tokens { self._input_tokens = i }; if let o: int = m.output_tokens { self._output_tokens = o } } null, d: ai.stream.TurnDone => { self._saw_terminal = true; self._finish(); return ai.stream.Done {  } }, null => null }; continue }; if let source: ai.stream.EventSource = self._event_source { match (source()) { event: ai.stream.StreamEvent => { self._pending.push(event) } null, done: ai.stream.Done => { self._finish(); return done } }; continue }; match (self._sse) { sse: baml.http.SseStream => { match (sse.next()) { null => { self._finish(); self._check_terminal(); return ai.stream.Done {  } }, batch: string => { if let decode: (string) -> ai.stream.StreamEvent[] throws root.errors.InvokeError = self._decode { for e in decode(batch) { self._pending.push(e) } } null else {  } null } null } } null, null => {  } match (self._chunks.at(self._cursor)) { c: string => { self._cursor Add= 1; self._text = `...`; return c }, null => { self._finish(); return ai.stream.Done {  } } } } } } baml.sys.panic("unreachable")
+  { while true { if (self._done) { return ai.stream.Done {  } }; if (self._pcursor Lt self._pending.length()) { let e = self._pending.at(self._pcursor); self._pcursor Add= 1; match (e) { d: ai.stream.TextDelta => { self._text = `...`; return d.text }, m: ai.stream.TurnMeta => { if let s: root.content.StopReason = m.stop_reason { self._stop_reason = s }; if let i: int = m.input_tokens { self._input_tokens = i }; if let o: int = m.output_tokens { self._output_tokens = o } } null, d: ai.stream.TurnDone => { self._saw_terminal = true; self._finish(); return ai.stream.Done {  } }, null => null }; continue }; match (self._sse) { sse: baml.http.SseStream => { match (sse.next()) { null => { self._finish(); self._check_terminal(); return ai.stream.Done {  } }, batch: string => { if let decode: (string) -> ai.stream.StreamEvent[] throws unknown = self._decode { for e in decode(batch) { self._pending.push(e) } } null else {  } null } null } } null, null => {  } match (self._chunks.at(self._cursor)) { c: string => { self._cursor Add= 1; self._text = `...`; return c }, null => { self._finish(); return ai.stream.Done {  } } } } } } baml.sys.panic("unreachable")
 }
 function ai.stream.next(self: ?) -> TStream | ai.stream.Done  [expr] {
   { while true { if (self._finished) { return ai.stream.Done {  } } } match (self._next_text()) { null => { self._finished = true; return ai.stream.Done {  } }, s: string => { self._text = self._text Add s; let parsed: TStream | baml.sap.NoYield = baml.sap.__parse_partial(self._text, self._cache) } match (parsed) { baml.sap.NoYield => {  }, p: TStream => { return p } } } } baml.sys.panic("unreachable")
@@ -803,27 +702,22 @@ function ai.wire.resolve_credential(cred: root.Credential?, env_fallback: string
 function ai.wire.resolve_media(media: ai.MediaPart, fetch_url: bool) -> ai.wire.ResolvedMedia  [expr] {
   {  } match (media) { image: baml.media.Image => { let source = image.file() NullCoalesce image.url() NullCoalesce "" } root.internal._resolve_media_content(image.url(), image.file(), image.base64(), root.internal._media_mime_type(image.mime_type(), source, "image"), fetch_url), audio: baml.media.Audio => { let source = audio.file() NullCoalesce audio.url() NullCoalesce "" } root.internal._resolve_media_content(audio.url(), audio.file(), audio.base64(), root.internal._media_mime_type(audio.mime_type(), source, "audio"), fetch_url), video: baml.media.Video => { let source = video.file() NullCoalesce video.url() NullCoalesce "" } root.internal._resolve_media_content(video.url(), video.file(), video.base64(), root.internal._media_mime_type(video.mime_type(), source, "video"), fetch_url), pdf: baml.media.Pdf => { let source = pdf.file() NullCoalesce pdf.url() NullCoalesce "" } root.internal._resolve_media_content(pdf.url(), pdf.file(), pdf.base64(), root.internal._media_mime_type(pdf.mime_type(), source, "pdf"), fetch_url) }
 }
-function ai.wire.resolve_media_preview(media: ai.MediaPart) -> ai.wire.ResolvedMedia  [expr] {
-  {  } match (media) { image: baml.media.Image => { let source = image.file() NullCoalesce image.url() NullCoalesce "" } root.internal._resolve_media_preview_content(image.url(), image.file(), image.base64(), root.internal._media_mime_type(image.mime_type(), source, "image")), audio: baml.media.Audio => { let source = audio.file() NullCoalesce audio.url() NullCoalesce "" } root.internal._resolve_media_preview_content(audio.url(), audio.file(), audio.base64(), root.internal._media_mime_type(audio.mime_type(), source, "audio")), video: baml.media.Video => { let source = video.file() NullCoalesce video.url() NullCoalesce "" } root.internal._resolve_media_preview_content(video.url(), video.file(), video.base64(), root.internal._media_mime_type(video.mime_type(), source, "video")), pdf: baml.media.Pdf => { let source = pdf.file() NullCoalesce pdf.url() NullCoalesce "" } root.internal._resolve_media_preview_content(pdf.url(), pdf.file(), pdf.base64(), root.internal._media_mime_type(pdf.mime_type(), source, "pdf")) }
-}
 function ai.wire.sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal  [expr] {
   { let out: root.events.Event[] = []; let pending: string[] = []; for event in j.entries() { match (event) { assistant: root.events.AssistantMessage => { root.internal._flush_orphaned_calls(out, pending); let blocks = root.internal._wire_blocks(assistant.content, assistant.client_id Eq client_id); if (blocks.length() Gt 0) { out.push(root.events.AssistantMessage { content: blocks, client_id: assistant.client_id }); for block in blocks {  } if let use: root.content.ToolUse = block { pending.push(use.id) } } null else {  } null } null, user: root.events.UserMessage => { root.internal._flush_orphaned_calls(out, pending); out.push(user) } null, completed: root.events.ToolCompleted => { root.internal._resolve_pending_call(pending, completed.id); out.push(completed) } null, failed: root.events.ToolFailed => { root.internal._resolve_pending_call(pending, failed.id); out.push(failed) } null, _ => { out.push(event) } null } }; root.internal._flush_orphaned_calls(out, pending) } root.Journal { log: out }
 }
-function ai.wire.send_as(req: baml.http.Request, provider: string, request_timeout_ms: int? = null) -> T  [expr] {
-  { let timeout = match (request_timeout_ms) { milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds), null => null }; let resp = baml.http.send(req, timeout = timeout) catch_all (e) { timeout: baml.errors.Timeout => throw timeout, _ => { throw root.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: null } } }; let text = resp.text() catch_all (e) { timeout: baml.errors.Timeout => throw timeout, _ => { throw root.errors.NetworkFailure { provider: provider, detail: "the response body...", raw_body: null } } }; if (Not resp.ok()) { throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers) } } baml.json.from_string(text) catch_all (e) { _ => throw root.errors.ParseFailed { provider: provider, raw_output: text } }
+function ai.wire.send_as(req: baml.http.Request, provider: string) -> T  [expr] {
+  { let resp = baml.http.send(req) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: null } } }; let text = resp.text() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: "the response body...", raw_body: null } } }; if (Not resp.ok()) { throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers) } } baml.json.from_string(text) catch_all (e) { _ => throw root.errors.ParseFailed { provider: provider, raw_output: text } }
 }
 
 --- <builtin>/ai/runner.baml ---
 class ai.Agent {
   max_steps: int
-  schema_attempts: int
   client: Client?
   tool_errors: root.tools.ErrorMode
   on_event: (root.events.Event) -> null throws never
 }
 class ai.Agent$stream {
   max_steps: int | null
-  schema_attempts: int | null
   client: Client | null
   tool_errors: root.tools.ErrorMode | null
   on_event: unknown
@@ -839,7 +733,7 @@ class ai.RunResult$stream {
   usage: root.events.Usage$stream | null
 }
 function ai._attempt_turn(self: ?, c: Client, spec: FunctionSpec<Out>, j: Journal, total: root.events.Usage, attempts_left: int) -> ModelTurn  [expr] {
-  { let turn = c.invoke(ModelTurnInput { prompt: spec.prompt_template, journal: j, toolbox: spec.tools(), output_type: spec.output_type() }); if let u: root.events.Usage = turn.usage { total.input_tokens Add= u.input_tokens; total.output_tokens Add= u.output_tokens; if let ci: int = u.cached_input_tokens { total.cached_input_tokens = total.cached_input_tokens NullCoalesce 0 Add ci } } if let rt: int = u.reasoning_tokens { total.reasoning_tokens = total.reasoning_tokens NullCoalesce 0 Add rt }; let batch: root.events.Event[] = [root.events.AssistantMessage { content: turn.content, client_id: c.id() }]; for u in turn.tool_uses() { batch.push(root.events.ToolRequested { id: u.id, name: u.name, args: u.args }) }; if let u: root.events.Usage = turn.usage { batch.push(u) }; let candidate = turn.terminal_text() NullCoalesce ""; let accepted = turn.tool_uses().length() Gt 0 Or turn.stop_reason Eq root.content.StopReason.MaxTokens Or turn.stop_reason Eq root.content.StopReason.Refused Or self._parses(turn, candidate) } if (accepted) { j.append_all(batch); match (turn.stop_reason) { root.content.StopReason.MaxTokens => { throw root.errors.FinishReasonError { provider: c.id(), finish_reason: turn.stop_reason, raw_output: candidate } }, root.content.StopReason.Refused => { throw root.errors.Refused { provider: c.id(), reason: "the model decline...", raw_body: null } }, _ => null } } turn else if (attempts_left Gt 1) { batch.push(root.events.UserMessage { content: "The reply did not..." }); j.append_all(batch) } self._attempt_turn(c, spec, j, total, attempts_left Sub 1) else { j.append_all(batch); throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate } }
+  { let turn = c.invoke(ModelTurnInput { prompt: spec.prompt_template, journal: j, toolbox: spec.tools(), output_type: spec.output_type() }); if let u: root.events.Usage = turn.usage { total.input_tokens Add= u.input_tokens; total.output_tokens Add= u.output_tokens; if let ci: int = u.cached_input_tokens { total.cached_input_tokens = total.cached_input_tokens NullCoalesce 0 Add ci } } if let rt: int = u.reasoning_tokens { total.reasoning_tokens = total.reasoning_tokens NullCoalesce 0 Add rt }; let batch: root.events.Event[] = [root.events.AssistantMessage { content: turn.content, client_id: c.id() }]; for u in turn.tool_uses() { batch.push(root.events.ToolRequested { id: u.id, name: u.name, args: u.args }) }; if let u: root.events.Usage = turn.usage { batch.push(u) }; let candidate = turn.terminal_text() NullCoalesce ""; let accepted = turn.tool_uses().length() Gt 0 Or turn.stop_reason Eq root.content.StopReason.MaxTokens Or turn.stop_reason Eq root.content.StopReason.Refused Or self._parses(turn, candidate) } if (accepted) { j.append_all(batch); match (turn.stop_reason) { root.content.StopReason.MaxTokens => { throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate } }, root.content.StopReason.Refused => { throw root.errors.Refused { provider: c.id(), reason: "the model decline...", raw_body: null } }, _ => null } } turn else if (attempts_left Gt 1) { batch.push(root.events.UserMessage { content: "The reply did not..." }); j.append_all(batch) } self._attempt_turn(c, spec, j, total, attempts_left Sub 1) else { j.append_all(batch); throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate } }
 }
 function ai._emit_from(self: ?, j: Journal, seen: int) -> int  [expr] {
   { let entries = j.entries(); let i = seen; while i Lt entries.length() { if let e: root.events.Event = entries.at(i) { let _ = self.on_event(e) }; i = i Add 1 } } entries.length()
@@ -856,15 +750,12 @@ function ai._parses(self: ?, turn: ModelTurn, candidate: string) -> bool  [expr]
 function ai._run_one_tool(self: ?, tb: root.tools.Toolbox, call: root.content.ToolUse, j: Journal) -> void  [expr] {
   {  } match (tb.get(call.name)) { t: root.tools.Tool => { let outcome: string? = t.call(call.args) catch_all (e) { _ => { j.append_all([root.events.ToolFailed { id: call.id, message: e.to_string() }]) } if (t.on_error NullCoalesce self.tool_errors Eq root.tools.ErrorMode.Raise) { let classified = match (e) { f: root.errors.Failure => f, _ => null }; throw root.errors.ToolFailedError { id: call.id, name: call.name, message: e.to_string(), cause: classified } } else {  } null }; if let output: string = outcome { j.append_all([root.events.ToolCompleted { id: call.id, output: output }]) } } null, null => { j.append_all([root.events.ToolFailed { id: call.id, message: `...` }]) } null }
 }
-function ai._validated_schema_attempts(self: ?) -> int  [expr] {
-  { if (self.schema_attempts Lt 1) { throw baml.errors.InvalidArgument { message: "Agent schema_atte..." } } } self.schema_attempts
-}
-function ai.new(max_steps: int = 12, schema_attempts: int = 2, client: Client? = null, tool_errors: root.tools.ErrorMode = root.tools.ErrorMode.Report, on_event: (root.events.Event) -> null throws never? = null) -> ai.Agent<Out>  [expr] {
-  { if (schema_attempts Lt 1) { throw baml.errors.InvalidArgument { message: "Agent schema_atte..." } } } ai.Agent { max_steps: max_steps, schema_attempts: schema_attempts, client: client, tool_errors: tool_errors, on_event: on_event NullCoalesce (e: root.events.Event) -> { {  } null } }
+function ai.new(max_steps: int = 12, client: Client? = null, tool_errors: root.tools.ErrorMode = root.tools.ErrorMode.Report, on_event: (root.events.Event) -> null throws never? = null) -> ai.Agent<Out>  [expr] {
+  {  } ai.Agent { max_steps: max_steps, client: client, tool_errors: tool_errors, on_event: on_event NullCoalesce (e: root.events.Event) -> { {  } null } }
 }
 function ai.run(self: ?, spec: FunctionSpec<Out>) -> Self.Output  [missing]
 function ai.run(self: ?, spec: FunctionSpec<Out>) -> ai.RunResult<Out>  [expr] {
-  { let schema_attempts = self._validated_schema_attempts(); let selected = self.client NullCoalesce spec.default_client; let j = Journal.new(spec); let seen = self._emit_from(j, 0); let steps = 0; let total = root.events.Usage { input_tokens: 0, output_tokens: 0, cached_input_tokens: null, reasoning_tokens: null }; let fail_counts: map<string, int> = map {  }; while steps Lt self.max_steps { let turn = self._attempt_turn(selected, spec, j, total, schema_attempts); steps = steps Add 1; seen = self._emit_from(j, seen); let calls = turn.tool_uses() } if (calls.length() Gt 0) { let before = j.entries().length(); let futures = calls.map((call) -> { {  } spawn { () -> { {  } self._run_one_tool(spec.tools(), call, j) } } }); let _ = await baml.future.all(futures); seen = self._emit_from(j, seen); let entries = j.entries(); let i = before; while i Lt entries.length() { if let f: root.events.ToolFailed = entries.at(i) { let failed_call = calls.find((one: root.content.ToolUse) -> { {  } one.id Eq f.id }) } if let known: root.content.ToolUse = failed_call { let key = `...`; let n = fail_counts.get(key) NullCoalesce 0 Add 1; let _ = fail_counts.set(key, n) } if (n Ge 3) { throw root.errors.ToolFailedError { id: known.id, name: known.name, message: `...`, cause: null } }; i = i Add 1 } } else { let candidate = turn.terminal_text() NullCoalesce ""; let value = if (self._has_media_output(turn)) {  } self._media_value(turn, selected.id()) else {  } baml.sap.parse(candidate) catch_all (e) { _ => { throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate } } }; let value_json = baml.json.to_json(value) catch_all (e) { _ => { throw baml.errors.UnknownError { data: e, message: [e.to_string()] } } }; j.append_all([root.events.FinalProduced { value_json: baml.json.stringify(value_json) }]); seen = self._emit_from(j, seen); return ai.RunResult { value: value, journal: j, usage: total } }; throw root.errors.StepBudgetExceeded { steps: steps } }
+  { let selected = self.client NullCoalesce spec.default_client; let j = Journal.new(spec); let seen = self._emit_from(j, 0); let steps = 0; let total = root.events.Usage { input_tokens: 0, output_tokens: 0, cached_input_tokens: null, reasoning_tokens: null }; let fail_counts: map<string, int> = map {  }; while steps Lt self.max_steps { let turn = self._attempt_turn(selected, spec, j, total, 2); steps = steps Add 1; seen = self._emit_from(j, seen); let calls = turn.tool_uses() } if (calls.length() Gt 0) { let before = j.entries().length(); let futures = calls.map((call) -> { {  } spawn { () -> { {  } self._run_one_tool(spec.tools(), call, j) } } }); let _ = await baml.future.all(futures); seen = self._emit_from(j, seen); let entries = j.entries(); let i = before; while i Lt entries.length() { if let f: root.events.ToolFailed = entries.at(i) { let failed_call = calls.find((one: root.content.ToolUse) -> { {  } one.id Eq f.id }) } if let known: root.content.ToolUse = failed_call { let key = `...`; let n = fail_counts.get(key) NullCoalesce 0 Add 1; let _ = fail_counts.set(key, n) } if (n Ge 3) { throw root.errors.ToolFailedError { id: known.id, name: known.name, message: `...`, cause: null } }; i = i Add 1 } } else { let candidate = turn.terminal_text() NullCoalesce ""; let value = if (self._has_media_output(turn)) {  } self._media_value(turn, selected.id()) else {  } baml.sap.parse(candidate) catch_all (e) { _ => { throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate } } }; let value_json = baml.json.to_json(value) catch_all (e) { _ => { throw baml.errors.UnknownError.with_message(e, "final value seria...") } }; j.append_all([root.events.FinalProduced { value_json: baml.json.stringify(value_json) }]); seen = self._emit_from(j, seen); return ai.RunResult { value: value, journal: j, usage: total } }; throw root.errors.StepBudgetExceeded { steps: steps } }
 }
 
 --- captures ---
@@ -914,9 +805,6 @@ type ai.PromptPart = string | ai.MediaPart
 type ai.PromptPart$stream = string | ai.MediaPart$stream
 function ai.arguments(self: ?) -> map<string, unknown>  [expr] {
   {  } self.args
-}
-function ai.build_request(self: ?, override_client: Client? = null) -> baml.http.Request  [expr] {
-  { let selected = override_client NullCoalesce self.default_client } selected.render(ModelTurnInput { prompt: self.prompt_template, journal: Journal.new(self), toolbox: self.tools(), output_type: self.output_type() })
 }
 function ai.messages(self: ?) -> ai.PromptMessage[]  [builtin]
 function ai.name(self: ?) -> string  [expr] {
@@ -970,7 +858,6 @@ function ai.invoke(self: ?, input: ai.ModelTurnInput) -> ai.ModelTurn  [missing]
 function ai.media(self: ?) -> MediaPart[]  [expr] {
   { let out: MediaPart[] = []; for b in self.content {  } if let m: root.content.Media = b { out.push(m.media) } } out
 }
-function ai.render(self: ?, input: ai.ModelTurnInput) -> baml.http.Request  [missing]
 function ai.terminal_text(self: ?) -> string?  [expr] {
   { let out: string? = null; for b in self.content {  } if let t: root.content.Text = b { out = t.text } } out
 }

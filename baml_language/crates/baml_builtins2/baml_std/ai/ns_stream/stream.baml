@@ -46,6 +46,8 @@
 // A client that can render the same request as `invoke` but streamed.
 // Implementors must also implement Client (`requires`).
 interface StreamingClient requires root.Client {
+    // InvokeError, not just Failure | UnknownError: a streaming invocation
+    // preserves Timeout/Cancelled/CompilationError exactly like Client.invoke.
     function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream throws root.errors.InvokeError
 }
 
