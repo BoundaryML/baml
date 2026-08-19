@@ -44,6 +44,21 @@ pub struct CatchRegion {
     pub body_entry: BlockId,
     /// Handler block that receives the exception.
     pub handler: BlockId,
+    /// Every block the protected body lowers into: `body_entry` plus the
+    /// blocks created while lowering the protected code (which includes any
+    /// nested construct's blocks — a throw in a nested handler's arm correctly
+    /// routes to THIS region's handler when no closer one covers it).
+    ///
+    /// The emitter builds the exception table from these blocks' exact PC
+    /// ranges. Coverage therefore does not depend on block layout: a
+    /// `[body_entry_pc, handler_pc)` span only works if every protected block
+    /// is laid out before the handler, and reverse-postorder layout does not
+    /// guarantee that — a direct `throw` block is a CFG leaf that sinks to the
+    /// end of the function, and a call-free block that can panic (division,
+    /// indexing) has no unwind edge to anchor it either. Both escaped their
+    /// handler when a throwing call elsewhere in the block pulled the handler
+    /// to a mid-function PC.
+    pub body_blocks: Vec<BlockId>,
     /// All blocks making up the handler body (the arms). BEP-042 cause-chain: a
     /// throw whose PC lies in any of these blocks is "during handling of"
     /// `error_local`, so that error's `ErrorContext` becomes the new error's

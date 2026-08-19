@@ -199,7 +199,7 @@ impl<T> io::IoClassAiContext for T {
         // `Option → RenderOptions` mapping lives inside `output_format` (those
         // option types are module-internal there).
         let content = unwrap_output_format(&context._output_format);
-        SysOpOutput::ok(crate::output_format::render_output_format_content(
+        let rendered = crate::output_format::render_output_format_content(
             &content,
             prefix,
             or_splitter,
@@ -210,7 +210,16 @@ impl<T> io::IoClassAiContext for T {
             hoist_classes,
             map_style,
             render_null_as,
-        ))
+        );
+        match rendered {
+            Ok(rendered) => SysOpOutput::ok(rendered),
+            // Keep the structured render failure at the VM boundary instead of
+            // turning it into a successful empty schema. The public BAML method
+            // retains its existing effect signature for prompt-tag compatibility.
+            Err(error) => SysOpOutput::err(VmBamlError::RenderPrompt {
+                message: error.to_string(),
+            }),
+        }
     }
 }
 
@@ -552,6 +561,7 @@ mod schema {
             ClassFieldDefinition {
                 name: name.to_string(),
                 field_type,
+                field_template: None,
                 description: None,
                 alias: None,
                 skip: false,
@@ -1309,11 +1319,13 @@ impl io::IoNamespaceHttp for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _req: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -2265,10 +2277,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_http_fetch_sse = {
+        self.inner.baml_http__fetch_sse = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_fetch_sse(heap, permit, args, ctx, call_id)
+                t.__glue_baml_http__fetch_sse(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_ssestream_next = {

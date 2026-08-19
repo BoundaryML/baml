@@ -27,9 +27,6 @@ function user.match_pattern(cb: (value: int) -> int) -> int  [expr] {
 function user.nested_param(cb: ((value: int) -> int) -> int) -> int  [expr] {
   {  } cb((value: int) -> int { {  } value })
 }
-function user.optional_param(cb: (value: int) -> int?) -> int  [expr] {
-  {  } 1
-}
 function user.returns_fn() -> (value: int) -> int  [expr] {
   {  } (value: int) -> int { {  } value }
 }
@@ -59,4 +56,7 @@ function user.immediate_callback(cb: (value: int) -> int) -> int  [expr] {
 }
 function user.lambda_explicit_callback() -> int  [expr] {
   { let apply = (f: (value: int) -> int throws never, x: int) -> int { {  } f(x) } } apply((value: int) -> int { {  } value }, 1)
+}
+function user.optional_callback(cb: (value: int) -> int?) -> int  [expr] {
+  {  } 1
 }

@@ -26,7 +26,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client:
 
     bb2: {
         _7 = load_type(string);
-        _6 = call const fn ai.Agent.new<copy _7>(const <omitted>, copy _3, const <omitted>, const <omitted>) -> [bb3];
+        _6 = call const fn ai.Agent.new<copy _7>(const <omitted>, const <omitted>, copy _3, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -34,7 +34,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client:
     }
 
     bb4: {
-        _5 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _6, copy _8) -> [bb5];
+        _5 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _6, copy _8) -> [bb5];
     }
 
     bb5: {
@@ -43,6 +43,40 @@ fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client:
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.comment_in_type.FunctionWithComments$build_request(a: string, b: int, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // a // param
+    let _2: int // b // param
+    let _3: null | ai.Client // client // param
+    let _4: bool
+    let _5: ai.FunctionSpec<string>
+    let _6: type
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = call const fn user.fixtures.comment_in_type.FunctionWithComments$spec(copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _6>(copy _5, copy _3) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -169,7 +203,7 @@ fn .<lambda(FunctionWithComments$spec, 0)>( __spec_output_format: string) -> ai.
         _13 = copy _14.0;
         _16 = copy _2;
         _15 = copy _16.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _13, copy _15) -> [bb2];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _13, copy _15) -> [bb2];
     }
 
     bb2: {
@@ -235,7 +269,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client) -> 
 
     bb2: {
         _5 = load_type(string);
-        _4 = call const fn ai.Agent.new<copy _5>(const <omitted>, copy _1, const <omitted>, const <omitted>) -> [bb3];
+        _4 = call const fn ai.Agent.new<copy _5>(const <omitted>, const <omitted>, copy _1, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -243,7 +277,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client) -> 
     }
 
     bb4: {
-        _3 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
+        _3 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
     }
 
     bb5: {
@@ -252,6 +286,38 @@ fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client) -> 
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.comment_in_type.CommentAfterArrow$build_request(client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: null | ai.Client // client // param
+    let _2: bool
+    let _3: ai.FunctionSpec<string>
+    let _4: type
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _3 = call const fn user.fixtures.comment_in_type.CommentAfterArrow$spec() -> [bb3];
+    }
+
+    bb3: {
+        _4 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _4>(copy _3, copy _1) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -374,7 +440,7 @@ fn .<lambda(CommentAfterArrow$spec, 0)>( __spec_output_format: string) -> ai.Pro
         _13 = copy _14.0;
         _16 = copy _2;
         _15 = copy _16.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _13, copy _15) -> [bb2];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _13, copy _15) -> [bb2];
     }
 
     bb2: {

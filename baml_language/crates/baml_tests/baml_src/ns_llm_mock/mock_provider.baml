@@ -104,6 +104,7 @@ function _merged_headers(content_type: string, extra: map<string, string>) -> ma
 class MockJsonServer {
     server: baml.http.Server,
     responses: MockResponse[],
+    response_delay_ms: int,
     // Every request the client sent, in order. Appended by `handle`; readable
     // from the test after the call.
     requests: MockRequest[],
@@ -139,11 +140,21 @@ class MockJsonServer {
             self.responses.length() - 1
         };
         if let canned: MockResponse = self.responses.at(idx) {
-            baml.http.Response.new(
-                canned.status,
-                root.llm_mock._merged_headers("application/json", canned.headers),
-                canned.body.to_utf8(),
-            )
+            let headers = root.llm_mock._merged_headers("application/json", canned.headers);
+            if (self.response_delay_ms > 0) {
+                let response = baml.http.Response.new_streaming(canned.status, headers);
+                let delay = baml.time.Duration.from_milliseconds(self.response_delay_ms);
+                let body = canned.body;
+                spawn {
+                    baml.sys.sleep(delay);
+                    response.write(body.to_utf8());
+                    response.end();
+                    null
+                };
+                response
+            } else {
+                baml.http.Response.new(canned.status, headers, canned.body.to_utf8())
+            }
         } else {
             // `responses` was empty. Answer with a 500 whose body names the bug
             // rather than throwing out of a handler that must not throw.
@@ -163,10 +174,12 @@ class MockJsonServer {
 function mock_json_serve<T, E>(
     responses: MockResponse[],
     body: (mock: MockJsonServer) -> T throws E,
+    response_delay_ms: int = 0,
 ) -> T throws E | baml.errors.Io {
     let mock = MockJsonServer {
         server: baml.http.Server.bind("127.0.0.1:0"),
         responses: responses,
+        response_delay_ms: response_delay_ms,
         requests: [],
     };
     let task = spawn { mock.server.serve(mock.handle) };
@@ -182,6 +195,7 @@ function mock_json_serve<T, E>(
 class MockSseServer {
     server: baml.http.Server,
     events: string[],
+    first_event_delay: baml.time.Duration,
     // Gap between event writes. `write` backpressures until the previous chunk
     // is on the wire, and the sleep keeps events in separate socket reads.
     chunk_delay: baml.time.Duration,
@@ -210,12 +224,23 @@ class MockSseServer {
         let resp = baml.http.Response.new_streaming(200, { "content-type": "text/event-stream" });
         let events = self.events;
         let delay = self.chunk_delay;
+        let first_event_delay = self.first_event_delay;
         // The writes run in a `spawn` because hyper only reads the response body
         // after the handler returns (see `Response.new_streaming`).
         spawn {
+            baml.sys.sleep(first_event_delay);
             for (let event in events) {
                 if (event.length() > 0) {
-                    resp.write((event + "\n\n").to_utf8());
+                    resp.write((event + "\n\n").to_utf8()) catch (e) {
+                        // A request-timeout test intentionally drops the client
+                        // while this producer is still replaying later events.
+                        baml.errors.Io => {
+                            if (e.message == "streaming response could not be written: the client has hung up") {
+                                break;
+                            }
+                            throw e
+                        },
+                    };
                     baml.sys.sleep(delay);
                 }
             }
@@ -233,10 +258,12 @@ function mock_sse_serve<T, E>(
     events: string[],
     body: (mock: MockSseServer) -> T throws E,
     chunk_delay_ms: int = 10,
+    first_event_delay_ms: int = 0,
 ) -> T throws E | baml.errors.Io {
     let mock = MockSseServer {
         server: baml.http.Server.bind("127.0.0.1:0"),
         events: events,
+        first_event_delay: baml.time.Duration.from_milliseconds(first_event_delay_ms),
         chunk_delay: baml.time.Duration.from_milliseconds(chunk_delay_ms),
         requests: [],
     };

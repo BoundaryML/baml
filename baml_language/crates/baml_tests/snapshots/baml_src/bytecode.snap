@@ -41,16 +41,56 @@ function $init() -> null {
     call $init_let_18
     store_global user.parse_companions.ParseCompanionsTestClient
     call $init_let_19
-    store_global user.streaming_parsing.StreamParseClient
+    store_global user.runtime_render_identity.IdentityClient
     call $init_let_20
-    store_global user.type_reflection.TestClient
+    store_global user.streaming_parsing.StreamParseClient
     call $init_let_21
+    store_global user.structured_prompt_requests.PreviewResponses
+    call $init_let_22
+    store_global user.structured_prompt_requests.SecondResponses
+    call $init_let_23
+    store_global user.structured_prompt_requests.PreviewAnthropic
+    call $init_let_24
+    store_global user.structured_prompt_requests.PreviewGemini
+    call $init_let_25
+    store_global user.structured_prompt_requests.PreviewBedrock
+    call $init_let_26
+    store_global user.structured_prompt_requests.PreviewChat
+    call $init_let_27
+    store_global user.structured_prompt_requests.PreviewImages
+    call $init_let_28
+    store_global user.structured_prompt_requests.UnroutableChat
+    call $init_let_29
+    store_global user.structured_prompt_requests.UnroutableOllama
+    call $init_let_30
+    store_global user.structured_prompt_requests.UnroutableResponses
+    call $init_let_31
+    store_global user.type_reflection.TestClient
+    call $init_let_32
     store_global user.fixtures.retry_policy.MyClient
     load_const null
     return
 }
 
 function $init_test(registry: unknown) -> null {
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
     load_var ?1
     call ?
     pop 1

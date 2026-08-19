@@ -418,11 +418,12 @@ fn lower_function(
 
         // The function's real parameters — the injected `client` override is
         // added below and is never part of the spec's bound arguments.
-        let param_names: Vec<Name> = params
+        let user_params: Vec<Param> = params
             .iter()
             .filter(|p| p.name.as_str() != "client")
-            .map(|p| p.name.clone())
+            .cloned()
             .collect();
+        let param_names: Vec<Name> = user_params.iter().map(|p| p.name.clone()).collect();
 
         // Build and stash the `$spec` companion body while the CST prompt
         // literal is in hand (read back by `companions::llm_spec`). Skipped
@@ -459,7 +460,7 @@ fn lower_function(
         {
             let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
                 name.as_str(),
-                &param_names,
+                &user_params,
                 &generic_params
                     .iter()
                     .map(|param| param.name.clone())

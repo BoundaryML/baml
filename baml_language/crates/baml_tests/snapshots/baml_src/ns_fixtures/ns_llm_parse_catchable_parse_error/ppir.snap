@@ -14,6 +14,9 @@ enum user.fixtures.llm_parse_catchable_parse_error.Currency {USD, EUR}
 function user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice(text: string, client: ai.Client? = null) -> user.fixtures.llm_parse_catchable_parse_error.Invoice  [llm] {
   ai.Agent.new(client = client).run(ExtractInvoice$spec(text)).value
 }
+function user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$build_request(text: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  ExtractInvoice$spec(text).build_request(override_client = client)
+}
 function user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$parse(json: string) -> user.fixtures.llm_parse_catchable_parse_error.Invoice  [expr] {
   baml.sap.parse(json)
 }
@@ -21,7 +24,7 @@ function user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$render_pro
   ExtractInvoice$spec(text).prompt(output_format = ai.wire.render_output_format(type.of()))
 }
 function user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<user.fixtures.llm_parse_catchable_parse_error.Invoice>  [expr] {
-  ai.FunctionSpec { spec_name: "ExtractInvoice", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "extract an invoic...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4o) }
+  ai.FunctionSpec { spec_name: "ExtractInvoice", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "extract an invoic...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4o) }
 }
 function user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$stream(text: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<user.fixtures.llm_parse_catchable_parse_error.Invoice$stream | null, user.fixtures.llm_parse_catchable_parse_error.Invoice>  [expr] {
   ai.stream.from_spec(ExtractInvoice$spec(text), client = client)

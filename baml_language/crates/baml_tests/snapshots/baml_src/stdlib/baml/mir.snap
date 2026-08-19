@@ -4691,7 +4691,55 @@ fn baml.http.send(request: baml.http.Request, timeout: null | baml.time.Duration
 
 fn baml.http._send = builtin(io)
 
-fn baml.http.fetch_sse = builtin(io)
+fn baml.http.fetch_sse(request: baml.http.Request, timeout: null | baml.time.Duration, first_event_timeout: null | baml.time.Duration) -> baml.http.SseStream {
+    // Locals:
+    let _0: baml.http.SseStream // _0 // return
+    let _1: baml.http.Request // request // param
+    let _2: null | baml.time.Duration // timeout // param
+    let _3: null | baml.time.Duration // first_event_timeout // param
+    let _4: bool
+    let _5: bool
+    let _6: bigint
+    let _7: bigint
+
+    bb0: {
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _6 = call const fn baml.http._timeout_nanos(copy _2) -> [bb5];
+    }
+
+    bb5: {
+        _7 = call const fn baml.http._timeout_nanos(copy _3) -> [bb6];
+    }
+
+    bb6: {
+        _0 = sys_op const fn baml.http._fetch_sse(copy _1, copy _6, copy _7) -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn baml.http._fetch_sse = builtin(io)
 
 fn baml.http.Server.bind = builtin(io)
 

@@ -25,7 +25,7 @@ fn user.fixtures.o1_allowed_roles.AskO1(question: string, client: null | ai.Clie
 
     bb2: {
         _6 = load_type(string);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -33,7 +33,7 @@ fn user.fixtures.o1_allowed_roles.AskO1(question: string, client: null | ai.Clie
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -42,6 +42,39 @@ fn user.fixtures.o1_allowed_roles.AskO1(question: string, client: null | ai.Clie
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskO1$build_request(question: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // question // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.o1_allowed_roles.AskO1$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -186,7 +219,7 @@ fn .<lambda(AskO1$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
         _20 = copy _21.0;
         _23 = copy _2;
         _22 = copy _23.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _20, copy _22) -> [bb4];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _20, copy _22) -> [bb4];
     }
 
     bb4: {
@@ -252,7 +285,7 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o(question: string, client: null | ai.C
 
     bb2: {
         _6 = load_type(string);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -260,7 +293,7 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o(question: string, client: null | ai.C
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -269,6 +302,39 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o(question: string, client: null | ai.C
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskGpt4o$build_request(question: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // question // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -413,7 +479,7 @@ fn .<lambda(AskGpt4o$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
         _20 = copy _21.0;
         _23 = copy _2;
         _22 = copy _23.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _20, copy _22) -> [bb4];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _20, copy _22) -> [bb4];
     }
 
     bb4: {

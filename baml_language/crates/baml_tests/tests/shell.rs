@@ -366,6 +366,71 @@ async fn start_process_stdout_read_honors_process_timeout() {
 }
 
 #[tokio::test]
+#[cfg(unix)]
+async fn claude_code_client_preserves_process_wait_timeout() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let temp = tempfile::tempdir().expect("tempdir for Claude Code timeout probe");
+    let script = temp.path().join("claude-code-timeout-probe.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"result\"}'\nexec 1>&-\nwhile :; do :; done\n",
+    )
+    .expect("write Claude Code timeout probe");
+    let mut permissions = std::fs::metadata(&script)
+        .expect("stat Claude Code timeout probe")
+        .permissions();
+    permissions.set_mode(0o700);
+    std::fs::set_permissions(&script, permissions)
+        .expect("make Claude Code timeout probe executable");
+
+    let executable = script.to_string_lossy().into_owned();
+    let output = baml_test! {
+        baml: r#"
+            function TimeoutProviderSpec() -> string {
+                client: "openai/gpt-4o-mini"
+                prompt: `Return one string. ${ctx.output_format}`
+            }
+
+            function timeout_provider_input() -> ai.ModelTurnInput {
+                let spec = TimeoutProviderSpec@spec();
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal.new(spec),
+                    toolbox: spec.tools(),
+                    output_type: spec.output_type(),
+                }
+            }
+
+            function main(executable: string) -> string {
+                let cl = claude_code.ClaudeCodeClient.new(
+                    model = "offline-timeout-probe",
+                    executable = executable,
+                    timeout_ms = 25,
+                );
+                let _ = cl.invoke(timeout_provider_input()) catch_all (e) {
+                    let timeout: baml.errors.Timeout => {
+                        return `Timeout:${timeout.message}:${timeout.duration_ms ?? -1}`;
+                    },
+                    _ => { return `unexpected:${e.to_string()}`; },
+                };
+                "accepted"
+            }
+        "#,
+        args: {
+            "executable" => BexExternalValue::String(executable.into()),
+        },
+    };
+
+    let Ok(BexExternalValue::String(result)) = output.result else {
+        panic!("expected a string timeout result, got {:?}", output.result);
+    };
+    assert!(result.starts_with("Timeout:"), "{result}");
+    assert!(result.contains("timed out after 25ms"), "{result}");
+    assert!(result.ends_with(":25"), "{result}");
+}
+
+#[tokio::test]
 #[cfg(not(target_os = "windows"))]
 async fn shell_with_options() {
     let output = baml_test!(

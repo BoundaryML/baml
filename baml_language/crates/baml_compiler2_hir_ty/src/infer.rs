@@ -60,6 +60,32 @@ fn is_unit(ty: &Ty) -> bool {
     matches!(ty.kind(), TyKind::Void { .. } | TyKind::Null { .. })
 }
 
+/// The function type at a callback root: `ty` itself, or the sole non-null
+/// member of an optional callback — `((v: int) -> int)?` lowers to
+/// `(...) | null`.
+///
+/// This mirrors the elaboration road in `baml_compiler2_hir::signature`,
+/// which opens exactly those two shapes to a synthetic effect param. It is
+/// also the shape a lambda argument can inhabit: a lambda literal is never
+/// `null`, so the function arm is the only expectation it can satisfy.
+fn callback_root_fn(ty: &Ty) -> Option<&Ty> {
+    match ty.kind() {
+        TyKind::Function { .. } => Some(ty),
+        TyKind::Union(members, _) => {
+            let mut callback = None;
+            for member in members {
+                match member.kind() {
+                    TyKind::Null { .. } => {}
+                    TyKind::Function { .. } if callback.is_none() => callback = Some(member),
+                    _ => return None,
+                }
+            }
+            callback
+        }
+        _ => None,
+    }
+}
+
 /// The implicit `baml.spawn.SpawnParams<V, E>` a spawn's `with` chain
 /// threads (BEP-034).
 fn spawn_params_ty(value: Ty, error: Ty) -> Ty {
@@ -3357,6 +3383,35 @@ impl<'db> InferenceContext<'db> {
                 }
                 ok &= self.sub(&rets.0, &rets.1);
                 ok &= self.sub(&throws.0, &throws.1);
+                ok
+            }
+            // `baml.AnyFunction` is compiler-derived for concrete function
+            // values, rather than an ordinary impl obligation.  When a
+            // generic consumer such as `reflect.call_any<R, E>` receives a
+            // function value directly, carry its output channels into the
+            // requested associated pins so `R`/`E` are inferred from the
+            // function signature.  The generic-interface fallback below can
+            // prove conformance, but it has no way to recover these pins and
+            // leaves the call's type arguments as `Error`.
+            (
+                TyKind::Function {
+                    ret: actual_ret,
+                    throws: actual_throws,
+                    ..
+                },
+                TyKind::Interface(name, _, expected_pins, _),
+            ) if name.is_builtin_root_type("AnyFunction") => {
+                let mut ok = true;
+                for (pin, expected_pin) in expected_pins {
+                    let Some(actual_pin) = (match pin.as_str() {
+                        "Returns" => Some(actual_ret),
+                        "Throws" => Some(actual_throws),
+                        _ => None,
+                    }) else {
+                        continue;
+                    };
+                    ok &= self.sub(actual_pin, expected_pin);
+                }
                 ok
             }
             _ => {
@@ -6800,7 +6855,12 @@ impl<'db> InferenceContext<'db> {
             .cloned()
             .map(|ty| self.structurally_resolve(&ty))
             .map(|ty| self.expand_alias_ty(&ty))
-            .and_then(|ty| match ty.kind() {
+            // An OPTIONAL callback slot expects a function here just as much
+            // as an immediate one does: a lambda literal is never `null`, so
+            // the function arm is the only expectation it can satisfy. Without
+            // this the lambda's params would fall back to `Ty::error` and the
+            // slot's synthetic effect would never see the lambda's throws.
+            .and_then(|ty| match callback_root_fn(&ty)?.kind() {
                 TyKind::Function {
                     params,
                     ret,
@@ -10800,7 +10860,8 @@ impl<'db> InferenceContext<'db> {
         let data = baml_compiler2_ppir::item_data::function_data(self.db, function);
         for (index, param_ty) in self.param_tys.iter().enumerate() {
             let resolved = self.table.resolve_completely(param_ty);
-            let TyKind::Function { throws, .. } = resolved.kind() else {
+            let Some(TyKind::Function { throws, .. }) = callback_root_fn(&resolved).map(Ty::kind)
+            else {
                 continue;
             };
             if matches!(throws.kind(), TyKind::TypeVar(p, _) if p == effect) {

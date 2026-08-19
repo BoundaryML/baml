@@ -529,6 +529,59 @@ async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_argument_selects_implemented_interface_arm_on_wire() {
+    let source = r#"
+        interface Failure {}
+        class ProviderFailure {
+            message string
+        }
+        implement Failure for ProviderFailure {}
+
+        function invoke(f: (Failure | string) -> string) -> string {
+            f(ProviderFailure { message: "boom" })
+        }
+    "#;
+    let arc = register_host_callable(|items| {
+        let Some(baml_outbound_value::Value::UnionVariantValue(union)) =
+            items.first().and_then(|value| value.value.as_ref())
+        else {
+            panic!("expected selected interface-union envelope, got {items:?}")
+        };
+        assert_eq!(union.selected_option_index, Some(0));
+        assert!(matches!(
+            union
+                .value
+                .as_deref()
+                .and_then(|value| value.value.as_ref()),
+            Some(baml_outbound_value::Value::ClassValue(class))
+                if class.name == "user.ProviderFailure"
+        ));
+        FakeReturn::Ok(BexExternalValue::String("handled".into()))
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "invoke",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("interface-union callback should succeed");
+
+    assert!(matches!(
+        result,
+        BexExternalValue::String(ref value) if value.as_str() == "handled"
+    ));
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
     let source = r#"
         function round_trip(
@@ -1375,6 +1428,116 @@ async fn host_callable_throw_implementing_interface_contract_is_on_contract() {
 
     assert_host_callable_throw(&result);
     drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
+    let source = r#"
+        interface Failure {
+            function kind(self) -> string throws never
+        }
+        implement Failure for baml.errors.HostCallable {
+            function kind(self) -> string throws never { "host" }
+        }
+        function call_typed(
+            f: (int) -> int throws Failure,
+            x: int,
+        ) -> int throws Failure | baml.errors.UnknownError {
+            return f(x);
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::Err {
+        class_name: "RuntimeError".to_string(),
+        message: "boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "call_typed",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(1),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
+            BexExternalValue::Union { value, metadata } => {
+                assert!(
+                    matches!(
+                        &metadata.selected_option,
+                        RuntimeTy::Interface(name, _, _, _) if name.to_string() == "user.Failure"
+                    ),
+                    "expected the Failure interface arm, got {:?}",
+                    metadata.selected_option,
+                );
+                assert!(
+                    matches!(
+                        value.as_ref(),
+                        BexExternalValue::Instance { class_name, .. }
+                            if class_name == "baml.errors.HostCallable"
+                    ),
+                    "expected the concrete HostCallable throw, got {value:?}",
+                );
+            }
+            other => panic!("expected union-wrapped HostCallable throw, got {other:?}"),
+        },
+        other => panic!("expected UnhandledThrow, got {other:?}"),
+    }
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn root_return_selects_implemented_interface_arm_in_union() {
+    let source = r#"
+        interface Failure {}
+        class ProviderFailure {
+            message string
+        }
+        implement Failure for ProviderFailure {}
+
+        function provider_failure() -> Failure | string {
+            ProviderFailure { message: "boom" }
+        }
+    "#;
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "provider_failure",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("interface-union return should succeed");
+
+    let BexExternalValue::Union { value, metadata } = result else {
+        panic!("expected selected interface-union return")
+    };
+    assert!(matches!(
+        &metadata.selected_option,
+        RuntimeTy::Interface(name, _, _, _) if name.to_string() == "user.Failure"
+    ));
+    assert!(matches!(
+        value.as_ref(),
+        BexExternalValue::Instance { class_name, .. }
+            if class_name == "user.ProviderFailure"
+    ));
 }
 
 // ============================================================================

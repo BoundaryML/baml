@@ -185,6 +185,9 @@ fn rewrite_catch_region_blocks(regions: &mut Vec<CatchRegion>, map: &[Option<Blo
             .iter()
             .filter_map(|b| map[b.0])
             .collect();
+        // Same for the protected body blocks (a removed block was unreachable
+        // and had nothing to protect).
+        region.body_blocks = region.body_blocks.iter().filter_map(|b| map[b.0]).collect();
         true
     });
 }
@@ -305,6 +308,10 @@ fn merge_passthrough_blocks(body: &mut MirFunctionBody) {
                 *b = new_b;
             }
         }
+        // A redirected passthrough block is empty (no instructions to
+        // protect), and remapping it to its target would wrongly extend the
+        // protected range over the target's instructions — drop it instead.
+        region.body_blocks.retain(|b| !resolved.contains_key(b));
     }
 
     // Step 5: entry block redirect (shouldn't happen since we excluded it, but be safe)
@@ -1842,6 +1849,12 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
             "dangling handler {:?} in catch_region[{i}] of MIR function {name}",
             region.handler,
         );
+        for b in &region.body_blocks {
+            assert!(
+                b.0 < num_blocks,
+                "dangling body block {b:?} in catch_region[{i}] of MIR function {name}",
+            );
+        }
         assert!(
             region.error_local.0 < num_locals,
             "dangling error_local {} in catch_region[{i}] of MIR function {name}",

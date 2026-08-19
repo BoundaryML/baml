@@ -24,6 +24,7 @@ function fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: a
   L0:
     load_type fixtures.testset_vibes_nested.Sentiment
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -33,12 +34,30 @@ function fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: a
     call user.fixtures.testset_vibes_nested.ClassifySentiment$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<fixtures.testset_vibes_nested.Sentiment, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.testset_vibes_nested.Sentiment>>
+    load_type ai.Runner<fixtures.testset_vibes_nested.Sentiment, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.testset_vibes_nested.Sentiment>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
     load_var _4
     load_field .value
+    return
+}
+
+function fixtures.testset_vibes_nested.ClassifySentiment$build_request(text: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var text
+    call user.fixtures.testset_vibes_nested.ClassifySentiment$spec
+    store_var _4
+    load_type fixtures.testset_vibes_nested.Sentiment
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
     return
 }
 
@@ -117,6 +136,7 @@ function fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: 
   L0:
     load_type string
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -126,12 +146,30 @@ function fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: 
     call user.fixtures.testset_vibes_nested.ClassifySentiment2$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
     load_var _4
     load_field .value
+    return
+}
+
+function fixtures.testset_vibes_nested.ClassifySentiment2$build_request(text: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var text
+    call user.fixtures.testset_vibes_nested.ClassifySentiment2$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
     return
 }
 
@@ -239,6 +277,7 @@ function fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, 
   L0:
     load_type string[]
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -248,12 +287,30 @@ function fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, 
     call user.fixtures.testset_vibes_nested.GenerateTests$spec
     store_var _8
     load_var2 5 6
-    load_type ai.Runner<string[], Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string[]>>
+    load_type ai.Runner<string[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string[]>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _5
     load_var _5
     load_field .value
+    return
+}
+
+function fixtures.testset_vibes_nested.GenerateTests$build_request(count: int, topic: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    call user.fixtures.testset_vibes_nested.GenerateTests$spec
+    store_var _5
+    load_type string[]
+    load_var2 4 3
+    call ai.FunctionSpec.build_request
     return
 }
 

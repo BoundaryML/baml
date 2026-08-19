@@ -14,10 +14,6 @@ function nested_param(cb: ((value: int) -> int) -> int) -> int {
   cb((value: int) -> int { value })
 }
 
-function optional_param(cb: ((value: int) -> int)?) -> int {
-  1
-}
-
 function list_param(cbs: ((value: int) -> int)[]) -> int {
   0
 }

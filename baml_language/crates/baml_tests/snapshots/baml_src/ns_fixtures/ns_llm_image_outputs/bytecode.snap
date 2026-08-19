@@ -12,6 +12,7 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Cli
   L0:
     load_type image
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -21,12 +22,30 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Cli
     call user.fixtures.llm_image_outputs.GenerateImage$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>
+    load_type ai.Runner<image, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
     load_var _4
     load_field .value
+    return
+}
+
+function fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var prompt
+    call user.fixtures.llm_image_outputs.GenerateImage$spec
+    store_var _4
+    load_type image
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
     return
 }
 
@@ -120,6 +139,7 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.
   L0:
     load_type image[]
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -129,12 +149,30 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.
     call user.fixtures.llm_image_outputs.GenerateImageSet$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image[], Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>
+    load_type ai.Runner<image[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
     load_var _4
     load_field .value
+    return
+}
+
+function fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var prompt
+    call user.fixtures.llm_image_outputs.GenerateImageSet$spec
+    store_var _4
+    load_type image[]
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
     return
 }
 
@@ -228,6 +266,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
   L0:
     load_type (image | string)[]
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -237,12 +276,30 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
     call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<(string | image)[], Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>
+    load_type ai.Runner<(string | image)[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
     load_var _4
     load_field .value
+    return
+}
+
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var prompt
+    call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
+    store_var _4
+    load_type (string | image)[]
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
     return
 }
 
@@ -275,6 +332,8 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(prompt: str
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4.1"
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>

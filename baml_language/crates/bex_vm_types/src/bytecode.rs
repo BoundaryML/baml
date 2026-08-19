@@ -1855,8 +1855,12 @@ pub struct DebugLocalScope {
 /// transfers control to `handler_pc`, with the exception value stored
 /// in the frame-local slot `error_slot`.
 ///
-/// Entries are sorted by `start_pc`. For nested catch blocks the innermost
-/// (narrowest range) entry appears first.
+/// One catch region contributes one entry per coalesced run of its protected
+/// blocks (block layout can fragment a region across non-contiguous PCs), so
+/// several entries may share a `handler_pc`. Entries are stably sorted by
+/// `start_pc`; the VM picks the innermost covering entry by largest
+/// `start_pc`, then smallest `end_pc`, then latest table order (identical
+/// ranges are emitted outer-region-first).
 ///
 /// All exceptions (user-thrown values and VM panics) are routed to the
 /// handler. The handler bytecode is responsible for filtering: a

@@ -46,7 +46,9 @@
 // A client that can render the same request as `invoke` but streamed.
 // Implementors must also implement Client (`requires`).
 interface StreamingClient requires root.Client {
-    function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream throws root.errors.Failure | baml.errors.UnknownError
+    // InvokeError, not just Failure | UnknownError: a streaming invocation
+    // preserves Timeout/Cancelled/CompilationError exactly like Client.invoke.
+    function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream throws root.errors.InvokeError
 }
 
 // One decoded raw SSE event, as produced by `baml.http.SseStream.next()`:
@@ -100,6 +102,8 @@ type StreamEvent = TextDelta | TurnMeta | TurnDone;
 class Done {
 }
 
+type EventSource = () -> StreamEvent | Done throws root.errors.InvokeError;
+
 // The raw text-delta stream of ONE model turn. Pull-based: nothing is read
 // from the wire until `next()` or `final_turn()` is called.
 //
@@ -109,10 +113,13 @@ class Done {
 // turn: the accumulated text as one Text block, the folded stop_reason, and
 // usage where the wire provided token counts.
 class TurnStream {
+    // callback-backed streams: composite clients use this to relay normalized
+    // events from a selected member without exposing provider wire details.
+    _event_source: EventSource?,
     // wire-backed streams: the SSE connection plus a per-provider decoder
     // that turns one `SseStream.next()` batch into StreamEvents.
     _sse: baml.http.SseStream?,
-    _decode: ((string) -> StreamEvent[] throws unknown)?,
+    _decode: ((string) -> StreamEvent[] throws root.errors.InvokeError)?,
     // scripted streams (tests): literal delta chunks, no network.
     _chunks: string[],
     _cursor: int,
@@ -145,10 +152,11 @@ class TurnStream {
     // sole end-of-turn signal IS the socket closing.
     function from_sse(
         sse: baml.http.SseStream,
-        decode: (string) -> StreamEvent[] throws unknown,
+        decode: (string) -> StreamEvent[] throws root.errors.InvokeError,
         require_terminal: string? = null,
     ) -> TurnStream {
         TurnStream {
+            _event_source: null,
             _sse: sse,
             _decode: decode,
             _chunks: [],
@@ -171,9 +179,34 @@ class TurnStream {
     // the last chunk.
     function from_chunks(chunks: string[]) -> TurnStream {
         TurnStream {
+            _event_source: null,
             _sse: null,
             _decode: null,
             _chunks: chunks,
+            _cursor: 0,
+            _pending: [],
+            _pcursor: 0,
+            _text: "",
+            _stop_reason: null,
+            _input_tokens: null,
+            _output_tokens: null,
+            _done: false,
+            _require_terminal: null,
+            _saw_terminal: false,
+        }
+    }
+
+    // A stream backed by one normalized-event callback. Reliability clients
+    // use this to relay a chosen member's deltas and final metadata while
+    // retaining TurnStream's ordinary accumulation and termination behavior.
+    // The source itself owns any retry/fallback policy; once it returns a
+    // TextDelta, that delta is immediately visible to the caller.
+    function from_event_source(next_event: EventSource) -> TurnStream {
+        TurnStream {
+            _event_source: next_event,
+            _sse: null,
+            _decode: null,
+            _chunks: [],
             _cursor: 0,
             _pending: [],
             _pcursor: 0,
@@ -252,6 +285,19 @@ class TurnStream {
                 };
                 continue;
             }
+            if let source: EventSource = self._event_source {
+                match (source()) {
+                    let event: StreamEvent => {
+                        self._pending.push(event);
+                        null
+                    },
+                    let done: Done => {
+                        self._finish();
+                        return done;
+                    },
+                };
+                continue;
+            }
             match (self._sse) {
                 let sse: baml.http.SseStream => {
                     match (sse.next()) {
@@ -264,7 +310,7 @@ class TurnStream {
                             return Done {  };
                         },
                         let batch: string => {
-                            if let decode: (string) -> StreamEvent[] throws unknown = self._decode {
+                            if let decode: (string) -> StreamEvent[] throws root.errors.InvokeError = self._decode {
                                 for (let e in decode(batch)) {
                                     self._pending.push(e);
                                 }
@@ -338,7 +384,7 @@ class TurnStream {
 // companion. This is the one canonical host-stream class; tagged handles carry
 // its FQN across FFI so host bridges do not need to hardcode a namespace.
 class Stream<TStream, TFinal> {
-    _next_text: () -> string? throws unknown,
+    _next_text: () -> string? throws root.errors.InvokeError,
     _cache: baml.sap.ParseCache<TStream, TFinal>,
     _text: string,
     _finished: bool,
@@ -437,6 +483,8 @@ function from_spec<TStream, TFinal>(
             match (turns.next()) {
                 let d: Done => null,
                 let s: string => s,
+            } catch_all (e) {
+                _ => throw root.errors.normalize(e),
             }
         },
         _cache: baml.sap.__new_parse_cache<TStream, TFinal>(),

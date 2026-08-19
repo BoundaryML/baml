@@ -276,8 +276,12 @@ async fn skipped_non_data_and_open_interface_fields_do_not_block_rendering() {
     }
 }
 
+/// Generic DATA classes render: `Wrapper<Item>` substitutes `T` and produces
+/// a real schema. (Canary temporarily rejected every generic instantiation
+/// because its formatter could not substitute class generics; this branch's
+/// field-template substitution is the fix that comment deferred to.)
 #[tokio::test]
-async fn generic_class_output_fails_before_provider_io() {
+async fn generic_data_class_output_renders() {
     let source = format!(
         r#"
             {GENERIC_VALUE}
@@ -290,8 +294,39 @@ async fn generic_class_output_fails_before_provider_io() {
                 value T
             }}
 
+            function main() -> string throws unknown {{
+                GenericValue$render_prompt<Wrapper<Item>>("wrapped item").text()
+            }}
+            "#
+    );
+    let output = baml_test!(&source);
+    let rendered = result_string(output);
+    assert!(
+        rendered.contains("name"),
+        "schema missing Item field: {rendered}"
+    );
+    assert!(
+        rendered.contains("value"),
+        "schema missing Wrapper field: {rendered}"
+    );
+}
+
+/// A generic instantiation whose argument is genuinely non-data still fails
+/// before provider IO, through the substituted field.
+#[tokio::test]
+async fn generic_class_output_fails_before_provider_io() {
+    let source = format!(
+        r#"
+            {GENERIC_VALUE}
+
+            class Wrapper<T> {{
+                value T
+            }}
+
+            type Callback = (int) -> int throws never;
+
             function main() -> string throws never {{
-                let result = GenericValue<Wrapper<Item>>("wrapped item") catch (e) {{
+                let result = GenericValue<Wrapper<Callback>>("wrapped fn") catch (e) {{
                     baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -304,9 +339,10 @@ async fn generic_class_output_fails_before_provider_io() {
     );
     let output = baml_test!(&source);
 
-    assert_eq!(
-        result_string(output),
-        "E0164|non-data type `Wrapper<Item>` cannot be rendered as an LLM output schema"
+    let got = result_string(output);
+    assert!(
+        got.starts_with("E0164|") && got.contains("non-data"),
+        "expected an E0164 non-data rejection, got: {got}"
     );
 }
 

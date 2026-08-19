@@ -705,6 +705,13 @@ pub struct ClassDefinition {
 pub struct ClassFieldDefinition {
     pub name: String,
     pub field_type: baml_type::RuntimeTy,
+    /// Symbolic field type with class-level generic references preserved.
+    ///
+    /// `field_type` is intentionally erased for some runtime paths, so
+    /// output-format rendering uses this template when a class is visited
+    /// with concrete type arguments. `None` is retained for synthetic/test
+    /// definitions that only provide an already-realized `field_type`.
+    pub field_template: Option<baml_type::TyTemplate>,
     pub description: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,

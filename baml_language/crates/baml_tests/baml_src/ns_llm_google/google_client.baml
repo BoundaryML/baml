@@ -749,6 +749,37 @@ test "vertex_request_shape" {
     )
 }
 
+function vertex_request_timeout_ms() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_canned_turn())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let spec = GoogleEcho@spec("Say pong.");
+            let input = ai.ModelTurnInput {
+                prompt: spec.prompt_template,
+                journal: ai.Journal { log: [] },
+                toolbox: spec.tools(),
+                output_type: spec.output_type(),
+            };
+            let cl = google.VertexClient.new(
+                model = "gemini-2.5-flash",
+                api_key = "express-key",
+                base_url = mock.base_url(),
+                request_timeout_ms = 20,
+            );
+            let outcome = `turn:${cl.invoke(input).terminal_text() ?? ""}` catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.request_timeout_ms ?? -1}|${outcome}`
+        },
+        response_delay_ms = 200,
+    )
+}
+
+test "vertex_request_timeout_ms" {
+    assert.equal(vertex_request_timeout_ms(), "20|Timeout")
+}
+
 // Claude on Vertex goes to the anthropic publisher's `:rawPredict` with the
 // Anthropic Messages body (built by `anthropic.internal`), plus the required
 // `anthropic_version` field — and WITHOUT `model`, which on this platform is
@@ -891,6 +922,37 @@ test "vertex_stream_decode" {
         vertex_stream_decode(),
         "pong|/gemini-2.5-flash:streamGenerateContent|alt=sse&key=express-key",
     )
+}
+
+function vertex_stream_time_to_first_token_timeout_ms() -> string {
+    root.llm_mock.mock_sse_serve(
+        [root.llm_mock.sse_data(`{"candidates":[{"content":{"parts":[{"text":"pong"}]},"finishReason":"STOP"}]}`)],
+        (mock: root.llm_mock.MockSseServer) -> {
+            // The corpus runs every leaf concurrently, so leave transport
+            // headroom while keeping the delayed first event past the TTFT limit.
+            let cl = google.VertexClient.new(
+                model = "gemini-2.5-flash",
+                api_key = "express-key",
+                base_url = mock.base_url(),
+                request_timeout_ms = 15000,
+                time_to_first_token_timeout_ms = 5000,
+            );
+            let stream = ai.stream.from_spec<string | null, string>(
+                GoogleEcho@spec("Say pong."),
+                client = cl,
+            );
+            let outcome = stream.final() catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+        },
+        first_event_delay_ms = 10000,
+    )
+}
+
+test "vertex_stream_time_to_first_token_timeout_ms" {
+    assert.equal(vertex_stream_time_to_first_token_timeout_ms(), "5000|Timeout")
 }
 
 // ─── error taxonomy ──────────────────────────────────────────────────────────

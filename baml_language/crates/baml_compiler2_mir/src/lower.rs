@@ -3872,15 +3872,28 @@ impl<'db> LoweringContext<'db> {
             .expect("every item-tree function has a recorded scope")
             .file_scope_id(self.db);
         let func_scope = &index.scopes[func_scope_id.index() as usize];
-        let enclosing_class_name: Option<Name> = func_scope.parent.and_then(|parent_idx| {
-            let parent = &index.scopes[parent_idx.index() as usize];
-            if matches!(parent.kind, baml_compiler2_hir::scope::ScopeKind::Class) {
-                parent.name.clone()
-            } else {
-                None
-            }
-        });
-        let enclosing_impl = match baml_compiler2_ppir::item_data::method_owner(self.db, func_loc) {
+        let method_owner = baml_compiler2_ppir::item_data::method_owner(self.db, func_loc);
+        let enclosing_class_name: Option<Name> = match method_owner {
+            // Methods declared inside an `implements` block are owned by the
+            // class, but their lexical scope is the block rather than the
+            // class scope. Use the item-tree owner so an unannotated `self`
+            // parameter gets the concrete class type (and virtual calls keep
+            // their receiver type) instead of falling back to `Any`.
+            Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => Some(
+                baml_compiler2_ppir::item_data::class_data(self.db, class_loc)
+                    .name
+                    .clone(),
+            ),
+            _ => func_scope.parent.and_then(|parent_idx| {
+                let parent = &index.scopes[parent_idx.index() as usize];
+                if matches!(parent.kind, baml_compiler2_hir::scope::ScopeKind::Class) {
+                    parent.name.clone()
+                } else {
+                    None
+                }
+            }),
+        };
+        let enclosing_impl = match method_owner {
             Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => Some(
                 baml_compiler2_ppir::item_data::impl_block_data(self.db, impl_loc),
             ),
@@ -5224,11 +5237,13 @@ impl LoweringContext<'_> {
                     self.builder.catch_regions.push(CatchRegion {
                         body_entry: region_start,
                         handler: pad,
-                        // handler_body is filled in once the pad body is lowered
-                        // (below). `stack_trace_local` holds the in-flight
-                        // error's ErrorContext so a sibling defer that throws
-                        // while unwinding chains onto it (BEP-042 cause chain).
+                        // handler_body and body_blocks are filled in once the
+                        // pad bodies are lowered (below). `stack_trace_local`
+                        // holds the in-flight error's ErrorContext so a sibling
+                        // defer that throws while unwinding chains onto it
+                        // (BEP-042 cause chain).
                         handler_body: Vec::new(),
+                        body_blocks: Vec::new(),
                         error_local,
                         stack_trace_local: Some(ctx_local),
                     });
@@ -5268,6 +5283,12 @@ impl LoweringContext<'_> {
         // Emit the landing pads out of line (reached via the exception table).
         // Reverse order so the innermost (last-declared) pad is laid out first.
         if !defer_pads.is_empty() {
+            // Each defer region protects the block-index window from its
+            // `region_start` up to here — the statements after the defer, the
+            // tail expr, and the inline defer replay, plus everything nested
+            // within them. The pad bodies lowered below are appended to the
+            // OUTER siblings' regions afterwards.
+            let pads_lo = self.builder.num_blocks();
             let continuation = self.builder.current_block();
             for &(pad, body, route_ctx, region_idx) in defer_pads.iter().rev() {
                 self.builder.set_current_block(pad);
@@ -5314,6 +5335,22 @@ impl LoweringContext<'_> {
                 self.builder.catch_regions[region_idx].handler_body = std::iter::once(pad)
                     .chain((pad_body_lo..self.builder.num_blocks()).map(BlockId))
                     .collect();
+            }
+            // Each region protects its window of the block body, plus the pad
+            // bodies of the LATER-armed (inner) defers: an error unwinding
+            // through pad N whose defer body itself throws must cascade to pad
+            // N-1, so pad N's blocks belong to every outer sibling's region
+            // (the innermost covering region wins at runtime). A pad is never
+            // protected by its own region.
+            for (pos, &(_, _, _, region_idx)) in defer_pads.iter().enumerate() {
+                let window_lo = self.builder.catch_regions[region_idx].body_entry.0;
+                let mut protected: Vec<BlockId> = (window_lo..pads_lo).map(BlockId).collect();
+                for &(_, _, _, inner_region_idx) in &defer_pads[pos + 1..] {
+                    protected.extend_from_slice(
+                        &self.builder.catch_regions[inner_region_idx].handler_body,
+                    );
+                }
+                self.builder.catch_regions[region_idx].body_blocks = protected;
             }
             self.builder.set_current_block(continuation);
         }
@@ -14975,6 +15012,8 @@ impl LoweringContext<'_> {
             body_entry,
             handler: bb_handler,
             handler_body: vec![bb_handler],
+            // Filled in after the try body is lowered (below).
+            body_blocks: Vec::new(),
             error_local,
             stack_trace_local,
         });
@@ -14985,11 +15024,19 @@ impl LoweringContext<'_> {
             error_local,
         });
 
-        // Lower the try body.
+        // Lower the try body. Block IDs are dense, so the index window around
+        // the lowering captures exactly the blocks the protected body created
+        // (`bb_join`/`bb_handler` predate the window and stay out). `body_entry`
+        // itself is included for parity with the old `[body_entry_pc, ...)`
+        // range — it can hold instructions from before the catch expression.
+        let body_blocks_lo = self.builder.num_blocks();
         self.lower_expr(base, dest.clone());
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
+        self.builder.catch_regions[catch_region_idx].body_blocks = std::iter::once(body_entry)
+            .chain((body_blocks_lo..self.builder.num_blocks()).map(BlockId))
+            .collect();
 
         self.catch_context = prev_catch;
 

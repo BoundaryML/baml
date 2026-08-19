@@ -238,10 +238,14 @@ impl BexEngine {
         &self,
         value: Value,
         declared_type: &RuntimeTy,
+        vm: &BexVm,
         permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
+        let selected_interface =
+            find_implemented_interface_union_member(value, declared_type, vm, permit)?;
         // If declared type is a union, find which member matches the actual value
-        let effective_type = resolve_effective_type(value, declared_type);
+        let effective_type =
+            selected_interface.unwrap_or_else(|| resolve_effective_type(value, declared_type));
 
         let external = match value.kind() {
             ValueKind::OmittedArg => {
@@ -253,10 +257,17 @@ impl BexEngine {
             ValueKind::Int(i) => BexExternalValue::Int(i),
             ValueKind::Bool(b) => BexExternalValue::Bool(b),
             ValueKind::Object(idx) => {
-                self.convert_heap_ptr_to_external_with_type(idx, effective_type, permit)?
+                self.convert_heap_ptr_to_external_with_type(idx, effective_type, vm, permit)?
             }
         };
 
+        if let Some(selected) = selected_interface {
+            return Ok(wrap_selected_union_member(
+                external,
+                declared_type,
+                selected,
+            ));
+        }
         // Wrap in Union if declared type is a union
         maybe_wrap_union(external, declared_type)
     }
@@ -286,6 +297,7 @@ impl BexEngine {
         &self,
         ptr: HeapPtr,
         effective_type: &RuntimeTy,
+        vm: &BexVm,
         permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
         // SAFETY: We only read objects, and the pointer comes from a valid handle.
@@ -311,7 +323,9 @@ impl BexEngine {
                 let snapshot = arr.to_vec();
                 let items: Result<Vec<_>, _> = snapshot
                     .iter()
-                    .map(|v| self.convert_vm_value_to_external_with_type(*v, element_type, permit))
+                    .map(|v| {
+                        self.convert_vm_value_to_external_with_type(*v, element_type, vm, permit)
+                    })
                     .collect();
                 Ok(BexExternalValue::Array {
                     element_type: element_type.clone(),
@@ -343,7 +357,7 @@ impl BexEngine {
                             Ok((
                                 k.to_string(),
                                 self.convert_vm_value_to_external_with_type(
-                                    *v, value_type, permit,
+                                    *v, value_type, vm, permit,
                                 )?,
                             ))
                         })
@@ -419,6 +433,7 @@ impl BexEngine {
                                 self.convert_vm_value_to_external_with_type(
                                     value,
                                     &field_type,
+                                    vm,
                                     permit,
                                 )?,
                             ))
@@ -1455,6 +1470,7 @@ impl BexEngine {
         &self,
         pack: Value,
         params: &[baml_type::RealizedFunctionParamTy],
+        vm: &BexVm,
         permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
         let malformed = |message: String| {
@@ -1510,7 +1526,7 @@ impl BexEngine {
         let positional = positional_values
             .into_iter()
             .zip(required_types)
-            .map(|(value, ty)| self.convert_vm_value_to_external_with_type(value, &ty, permit))
+            .map(|(value, ty)| self.convert_vm_value_to_external_with_type(value, &ty, vm, permit))
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut optional = indexmap::IndexMap::with_capacity(optional_values.len());
@@ -1519,7 +1535,7 @@ impl BexEngine {
             let ty = &optional_types[&name];
             optional.insert(
                 name,
-                self.convert_vm_value_to_external_with_type(value, ty, permit)?,
+                self.convert_vm_value_to_external_with_type(value, ty, vm, permit)?,
             );
         }
 
@@ -1653,6 +1669,30 @@ pub(crate) fn maybe_wrap_union(
             })
         }
         _ => Ok(value),
+    }
+}
+
+fn wrap_selected_union_member(
+    value: BexExternalValue,
+    declared_type: &RuntimeTy,
+    selected: &RuntimeTy,
+) -> BexExternalValue {
+    let RuntimeTy::Union(members, _) = declared_type else {
+        return value;
+    };
+    if members.iter().any(RuntimeTy::is_null) {
+        if matches!(value, BexExternalValue::Null) {
+            return value;
+        }
+        let non_null: Vec<&RuntimeTy> = members.iter().filter(|member| !member.is_null()).collect();
+        if non_null.len() <= 1 {
+            return value;
+        }
+    }
+
+    BexExternalValue::Union {
+        value: Box::new(value),
+        metadata: UnionMetadata::new(declared_type.clone(), selected.clone()),
     }
 }
 
@@ -3193,6 +3233,54 @@ fn resolve_effective_type(value: Value, declared_type: &RuntimeTy) -> &RuntimeTy
         RuntimeTy::Union(members, _) => find_matching_union_member(value, members)
             .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
         _ => declared_type,
+    }
+}
+
+/// Select a declared interface arm using nominal facts from the live program.
+/// The ordinary VM selector runs first so exact literals, variants, containers,
+/// and classes retain precedence over interfaces they may implement.
+fn find_implemented_interface_union_member<'a>(
+    value: Value,
+    declared_type: &'a RuntimeTy,
+    vm: &BexVm,
+    permit: PermitProof<'_>,
+) -> Result<Option<&'a RuntimeTy>, EngineError> {
+    let RuntimeTy::Union(members, _) = declared_type else {
+        return Ok(None);
+    };
+    if members.iter().any(RuntimeTy::is_null)
+        && members.iter().filter(|member| !member.is_null()).count() == 1
+    {
+        return Ok(None);
+    }
+    if find_matching_union_member(value, members).is_some() {
+        return Ok(None);
+    }
+
+    let Some(runtime_ty) = crate::value_runtime_baml_ty(value, permit) else {
+        return Ok(None);
+    };
+    let mut matching: Vec<&'a RuntimeTy> = Vec::new();
+    for member in members.iter().filter(|member| {
+        matches!(member, RuntimeTy::Interface(..))
+            && baml_type::normalize::is_subtype(runtime_ty.as_ty(), member.as_ty(), vm)
+    }) {
+        if matching
+            .iter()
+            .all(|matched| !runtime_ty_structurally_equal(matched, member))
+        {
+            matching.push(member);
+        }
+    }
+
+    match matching.as_slice() {
+        [] => Ok(None),
+        [selected] => Ok(Some(*selected)),
+        _ => Err(EngineError::TypeMismatch {
+            message: format!(
+                "value of type `{runtime_ty}` matches multiple interface members of union `{declared_type}`"
+            ),
+        }),
     }
 }
 

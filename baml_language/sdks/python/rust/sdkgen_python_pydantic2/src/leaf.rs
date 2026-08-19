@@ -329,8 +329,14 @@ impl LeafBody {
     /// Mirrors `root_imports_py`'s walk shape but returns the
     /// `RelImport` form used by the post-25b2 render path.
     pub(crate) fn all_rel_imports_py(&self) -> Vec<RelImport> {
+        self.all_rel_imports_from(&self.leaf)
+    }
+
+    /// Collect this body's signature imports as rendered from `current`.
+    /// Callable-child protocols are emitted in their parent's stub, so their
+    /// imports must be anchored at the parent rather than the child leaf.
+    fn all_rel_imports_from(&self, current: &LeafPath) -> Vec<RelImport> {
         let mut acc = RootImportSets::default();
-        let current = &self.leaf;
         for (sym, _) in &self.symbols {
             match sym {
                 EmittedSymbol::Class(c) => {
@@ -811,13 +817,26 @@ fn split_hoistable_aliases(
     (hoisted, trailing)
 }
 
-/// Whether `name` lands in a leaf under a different top-level package
-/// than `leaf`. The SDK root package counts as nobody's outside.
-fn routes_outside_package(leaf: &LeafPath, name: &baml_codegen_types::Name) -> bool {
+/// Whether `name` lands in a leaf under a different logical package than
+/// `leaf`. `stream_types` is a synthetic routing prefix, so compare the source
+/// package beneath it (`ai`, `baml`, ...) rather than treating every partial
+/// type as part of one giant package. The SDK root counts as nobody's outside.
+pub(crate) fn routes_outside_package(leaf: &LeafPath, name: &baml_codegen_types::Name) -> bool {
     let routed = route_class_ref(name);
-    match (leaf.segments.first(), routed.segments.first()) {
+    match (
+        logical_package_segment(&leaf.segments),
+        logical_package_segment(&routed.segments),
+    ) {
         (Some(current), Some(other)) => current != other,
         _ => false,
+    }
+}
+
+fn logical_package_segment(segments: &[String]) -> Option<&str> {
+    match segments {
+        [prefix, package, ..] if prefix == "stream_types" => Some(package),
+        [package, ..] => Some(package),
+        [] => None,
     }
 }
 
@@ -1061,9 +1080,9 @@ fn is_media_reexport(s: &EmittedSymbol) -> bool {
 {%- if let Some(doc) = docstring %}
     {{ doc }}
 {%- endif %}
-    model_config = pydantic.ConfigDict(extra="forbid")
+    model_config = pydantic.ConfigDict(extra="ignore")
 {%- for prop in properties %}
-    {{ prop.name }}: {{ prop.ty_py }}
+    {{ prop.name }}: {{ prop.ty_py }}{% if prop.default_none %} = None{% endif %}
 {%- endfor %}
 {%- if !static_methods.is_empty() %}
 
@@ -1104,6 +1123,7 @@ struct ClassBodyPy {
 struct ClassPropertyView {
     name: String,
     ty_py: String,
+    default_none: bool,
 }
 
 struct MethodLineView {
@@ -1205,6 +1225,8 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
         // Runtime `.py`: callback Protocols are stub-only, so optional-arg
         // callables widen to `typing.Callable[..., R]` here.
         callback_protocols: None,
+        type_stream_accessors: true,
+        include_stream_done: false,
     };
 
     match s {
@@ -1225,6 +1247,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                 .map(|prop| ClassPropertyView {
                     name: prop.name.clone(),
                     ty_py: translate_ty(&prop.ty, &ctx),
+                    default_none: prop.nullable,
                 })
                 .collect();
             let attrs: Vec<(String, Option<String>)> = c
@@ -1282,7 +1305,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
             out
         }
         EmittedSymbol::TypeAlias(a) => {
-            let mut out = render_type_alias(a, leaf);
+            let mut out = render_type_alias(a, leaf, true, false);
             out.push('\n');
             out
         }
@@ -1312,14 +1335,20 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     }
 }
 
-/// Render a type alias to its source line. Shared between `.py` and
-/// `.pyi`; the body is identical (12d §3.3).
+/// Render a type alias to its source line. Runtime and stub aliases share the
+/// same structure and use the bridge stream type; stubs additionally include
+/// the generated terminal marker in the stream's `next()` result.
 ///
 /// Non-recursive aliases render as `Name: typing.TypeAlias = <RHS>`.
 /// Recursive aliases (18c) render via `typing_extensions.TypeAliasType`
 /// with inner self-references quoted, so Pydantic resolves them
 /// through its JSON-schema definitions machinery instead of recursing.
-fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) -> String {
+fn render_type_alias(
+    a: &crate::emit::type_alias::PyTypeAlias,
+    leaf: &LeafPath,
+    type_stream_accessors: bool,
+    include_stream_done: bool,
+) -> String {
     use askama::Template;
 
     // Special-case the stdlib `baml.json.json` alias.  Its expanded form is
@@ -1365,6 +1394,8 @@ fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) 
         // with optional params widens to `typing.Callable[..., R]` rather than
         // referencing a stub-only Protocol.
         callback_protocols: None,
+        type_stream_accessors,
+        include_stream_done,
     };
     let rhs = translate_ty(&a.resolves_to, &ctx);
     if a.recursive {
@@ -1740,6 +1771,13 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
         out.push_str("]\n");
     }
 
+    // Stream annotations point at the underlying runtime type directly;
+    // this is the same `BamlStream` class that the `ai.stream` leaf re-exports
+    // as `Stream`.
+    if out.contains("_BamlStream[") {
+        out.insert_str(0, "\nfrom baml_bridge import BamlStream as _BamlStream\n");
+    }
+
     out
 }
 
@@ -1750,7 +1788,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
     ...
 {%- endif %}
 {%- for prop in properties %}
-    {{ prop.name }}: {{ prop.ty_py }}
+    {{ prop.name }}: {{ prop.ty_py }}{% if prop.default_none %} = None{% endif %}
 {%- endfor %}
 {%- if !properties.is_empty() && (!static_methods.is_empty() || !instance_methods.is_empty()) %}
 
@@ -1786,6 +1824,135 @@ struct MethodBlockView {
     tight_to_prev: bool,
 }
 
+#[derive(Default)]
+struct GenericInferencePositions {
+    unambiguous_value: BTreeSet<String>,
+    closure: BTreeSet<String>,
+}
+
+fn walk_generic_inference_positions(
+    ty: &Ty,
+    in_closure: bool,
+    out: &mut GenericInferencePositions,
+) {
+    match ty {
+        Ty::TypeVar(param, _) => {
+            let target = if in_closure {
+                &mut out.closure
+            } else {
+                &mut out.unambiguous_value
+            };
+            target.insert(param.as_str().to_string());
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for param in params {
+                walk_generic_inference_positions(&param.ty, true, out);
+            }
+            walk_generic_inference_positions(ret, true, out);
+            walk_generic_inference_positions(throws, true, out);
+        }
+        Ty::List(inner, _) => walk_generic_inference_positions(inner, in_closure, out),
+        Ty::Map { key, value, .. } => {
+            walk_generic_inference_positions(key, in_closure, out);
+            walk_generic_inference_positions(value, in_closure, out);
+        }
+        Ty::Union(members, _) => {
+            let direct_typevar_count = members
+                .iter()
+                .filter(|member| matches!(member, Ty::TypeVar(..)))
+                .count();
+            for member in members {
+                // Multiple direct free vars in one value union cannot be split.
+                // Do not count that occurrence as an inference source, but keep
+                // walking every other occurrence: a separate value argument can
+                // still bind the same var before the engine's fallback gate.
+                if !in_closure && direct_typevar_count >= 2 && matches!(member, Ty::TypeVar(..)) {
+                    continue;
+                }
+                walk_generic_inference_positions(member, in_closure, out);
+            }
+        }
+        Ty::Class(_, args, _) => {
+            for arg in args {
+                walk_generic_inference_positions(arg, in_closure, out);
+            }
+        }
+        Ty::Future(value, error, _) => {
+            walk_generic_inference_positions(value, in_closure, out);
+            walk_generic_inference_positions(error, in_closure, out);
+        }
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Literal(..)
+        | Ty::Interface(..)
+        | Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Void { .. }
+        | Ty::TypeAlias(..)
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. } => {}
+    }
+}
+
+fn generic_inference_positions<'a>(
+    tys: impl IntoIterator<Item = &'a Ty>,
+) -> GenericInferencePositions {
+    let mut out = GenericInferencePositions::default();
+    for ty in tys {
+        walk_generic_inference_positions(ty, false, &mut out);
+    }
+    out
+}
+
+/// Whether omitting `_types=` is safe for every own generic parameter.
+///
+/// This mirrors the host engine's `classify_param_var_positions` rules over all
+/// declared parameter types: a non-closure, non-ambiguous value occurrence is
+/// inferable (Rule 4 supplies `RustType` when a defaulted value is omitted),
+/// while any closure occurrence poisons the var globally. A direct
+/// multi-TypeVar union is ambiguous only at that occurrence; another value
+/// argument can still bind the same var. Class `TypeVars` are excluded by the
+/// caller, which passes only the function or method's own `generic_params`.
+fn own_generic_params_inferable<'a>(
+    generic_params: &[String],
+    tys: impl IntoIterator<Item = &'a Ty>,
+) -> bool {
+    let positions = generic_inference_positions(tys);
+    generic_params.iter().all(|param| {
+        positions.unambiguous_value.contains(param) && !positions.closure.contains(param)
+    })
+}
+
+fn append_types_kwarg(typed_params: &mut String, has_keyword_only_marker: bool, optional: bool) {
+    if typed_params.is_empty() {
+        typed_params.push_str("*, ");
+    } else if has_keyword_only_marker {
+        typed_params.push_str(", ");
+    } else {
+        typed_params.push_str(", *, ");
+    }
+    if optional {
+        typed_params.push_str("_types: dict[str, typing.Any] | None = None");
+    } else {
+        typed_params.push_str("_types: dict[str, typing.Any]");
+    }
+}
+
 /// One method's `.pyi` signature block: a single `def` line for
 /// instance methods, prefixed by `@staticmethod` for statics. When the
 /// method carries a `///` docstring, replaces the trailing `...` with a
@@ -1798,18 +1965,20 @@ fn render_method_block_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     };
     let mut typed_params = render_method_params_pyi(m, ctx);
     // A method with its OWN generic params (`pair_with<U>`, static `new<T>`)
-    // requires the caller to bind them via a keyword-only `_types=` dict (the
-    // class's TypeVars ride the receiver, not `_types=`). Mirror the runtime
-    // requirement in the stub. Instance methods always have a `self` param, and
-    // statics with own generics always have at least one value param, so
-    // `typed_params` is never empty here.
+    // makes `_types=` optional only when every own TypeVar has a value position.
+    // Return/body-only, closure-poisoned, and ambiguous-union-only TypeVars keep
+    // `_types=` required. Defaulted parameters still count because the engine's
+    // Rule 4 supplies `RustType` when their value is omitted. The class's
+    // TypeVars ride the receiver and are not part of this decision.
     if !m.generic_params.is_empty() {
-        if m.optional_args.is_empty() {
-            typed_params.push_str(", *, _types: dict[str, type]");
-        } else {
-            // optionals already introduced the `*` keyword-only marker.
-            typed_params.push_str(", _types: dict[str, type]");
-        }
+        let inferable = own_generic_params_inferable(
+            &m.generic_params,
+            m.required_args
+                .iter()
+                .map(|arg| &arg.ty)
+                .chain(m.optional_args.iter().map(|arg| &arg.ty)),
+        );
+        append_types_kwarg(&mut typed_params, !m.optional_args.is_empty(), inferable);
     }
     let ret_py = translate_ty(&m.return_ty, ctx);
     // 32d: methods carry their `Raises:` block in the `.pyi` only (no runtime
@@ -1872,6 +2041,8 @@ fn render_symbol_pyi(
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        type_stream_accessors: true,
+        include_stream_done: true,
     };
 
     match s {
@@ -1888,6 +2059,7 @@ fn render_symbol_pyi(
                 .map(|prop| ClassPropertyView {
                     name: prop.name.clone(),
                     ty_py: translate_ty(&prop.ty, &ctx),
+                    default_none: prop.nullable,
                 })
                 .collect();
             let mut out = ClassBodyPyi {
@@ -1926,8 +2098,7 @@ fn render_symbol_pyi(
             out
         }
         EmittedSymbol::TypeAlias(a) => {
-            // Type alias is identical between `.py` and `.pyi`.
-            let mut out = render_type_alias(a, leaf);
+            let mut out = render_type_alias(a, leaf, true, true);
             out.push('\n');
             out
         }
@@ -1995,20 +2166,13 @@ fn render_typed_method_arguments(m: &PyMethodBinding, ctx: &TranslateCtx) -> Str
 
 fn render_function_params_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     let mut typed_params = render_typed_params(&f.param_names, &f.arg_tys, &f.arg_defaults, ctx);
-    // A generic free function requires the caller to bind every TypeVar via a
-    // keyword-only `_types=` dict (the runtime enforces this; the stub mirrors
-    // it so type checkers flag a missing/positional binding). Methods get their
-    // own surface in 01pt5.
+    // `_types=` is optional only when every own TypeVar has an engine-inferable
+    // value position. Defaulted parameters count via Rule 4. Methods use the
+    // same predicate above.
     if !f.generic_params.is_empty() {
         let has_kwonly_marker = f.arg_defaults.iter().any(Option::is_some);
-        if has_kwonly_marker {
-            // optionals already introduced a `*` keyword-only marker.
-            typed_params.push_str(", _types: dict[str, type]");
-        } else if typed_params.is_empty() {
-            typed_params.push_str("*, _types: dict[str, type]");
-        } else {
-            typed_params.push_str(", *, _types: dict[str, type]");
-        }
+        let inferable = own_generic_params_inferable(&f.generic_params, &f.arg_tys);
+        append_types_kwarg(&mut typed_params, has_kwonly_marker, inferable);
     }
     typed_params
 }
@@ -2052,12 +2216,19 @@ fn render_callable_child_protocol_pyi(
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        type_stream_accessors: true,
+        include_stream_done: true,
     };
     let child_ctx = TranslateCtx {
-        current_leaf: child_body.leaf.clone(),
+        // Child functions are exposed as methods on a Protocol emitted in the
+        // parent stub. Translate every child-local reference from the parent
+        // location so its spelling matches the parent-anchored imports.
+        current_leaf: parent_leaf.clone(),
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        type_stream_accessors: true,
+        include_stream_done: true,
     };
     let protocol_name = callable_child_protocol_name(name);
     let mut out = format!("class {protocol_name}(typing.Protocol):\n");
@@ -2244,6 +2415,11 @@ pub(crate) fn render_leaf_body_pyi(
     // the stub doesn't run at runtime, so the guard is a no-op for
     // type checkers and keeps the stub minimal.
     let mut rel_imports = body.all_rel_imports_py();
+    for child_body in callable_child_bodies.values() {
+        rel_imports.extend(child_body.all_rel_imports_from(&body.leaf));
+    }
+    rel_imports.sort();
+    rel_imports.dedup();
     if body.has_defaulted_call_params() && body.leaf.segments != ["baml"] {
         // Optional arguments annotate as `typing.Union[..., UNSET]` and
         // default to `UNSET`. The sentinel must be a bare name in the type
@@ -2343,6 +2519,8 @@ pub(crate) fn render_leaf_body_pyi(
             self_ref: None,
             defer_name_refs: false,
             callback_protocols: Some(map.clone()),
+            type_stream_accessors: true,
+            include_stream_done: true,
         };
         for (ty, _base) in &protocol_tys {
             if let Ty::Function { params, ret, .. } = ty {
@@ -2416,14 +2594,25 @@ pub(crate) fn render_leaf_body_pyi(
         out.push_str("]\n");
     }
 
-    // Referencing `ai.stream.Stream` through the generated package tree makes
-    // pyright lose the `Stream` re-export while resolving the circular
-    // `ai`/`ai.stream` stub graph. Point annotations at the underlying runtime
-    // type directly; this is the same `BamlStream` class that the
-    // `ai.stream` leaf re-exports as `Stream`.
-    if out.contains("ai.stream.Stream[") {
-        out = out.replace("ai.stream.Stream[", "_BamlStream[");
-        out.insert_str(0, "\nfrom baml_bridge import BamlStream as _BamlStream\n");
+    // Stream annotations use the bridge runtime type directly. Outside the
+    // `ai.stream` leaf, import the generated terminal marker under a private
+    // alias so nested stream types do not depend on package attribute cascades
+    // or create runtime import cycles.
+    let mut stream_imports = String::new();
+    if out.contains("_BamlStreamDone") {
+        let dots = ".".repeat(body.leaf.segments.len() + 1);
+        writeln!(
+            stream_imports,
+            "from {dots}ai.stream import Done as _BamlStreamDone"
+        )
+        .unwrap();
+    }
+    if out.contains("_BamlStream[") {
+        stream_imports.push_str("from baml_bridge import BamlStream as _BamlStream\n");
+    }
+    if !stream_imports.is_empty() {
+        stream_imports.insert(0, '\n');
+        out.insert_str(0, &stream_imports);
     }
 
     out
