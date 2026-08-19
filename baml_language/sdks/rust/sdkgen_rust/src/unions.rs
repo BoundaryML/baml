@@ -194,13 +194,12 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
 
 /// The pure (emitted-set-independent) reasons a null-stripped arm list
 /// cannot become a Rust enum: undecodable arm kinds, wire-ambiguous arm
-/// combinations, or underivable/duplicate variant names. Shared by the
+/// combinations, or underivable variant names. Shared by the
 /// class-fixpoint checks in `analyze` and [`collect`] so the two can
 /// never disagree.
 pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
     let mut has_bare_string_arm = false;
     let mut has_string_literal_arm = false;
-    let mut seen = HashSet::new();
     for arm in arms {
         match arm {
             Ty::Literal(baml_base::Literal::String(_), ..) => has_string_literal_arm = true,
@@ -213,15 +212,8 @@ pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
             Ty::String { .. } => has_bare_string_arm = true,
             _ => {}
         }
-        let Some(variant) = variant_name(arm) else {
+        if variant_name(arm).is_none() {
             return Some(format!("unsupported union arm: {arm}"));
-        };
-        // Duplicate variant names (two `Bar` classes from different
-        // namespaces) would not compile — fail closed.
-        if !seen.insert(variant.clone()) {
-            return Some(format!(
-                "union arms produce a duplicate variant name `{variant}`"
-            ));
         }
     }
     // A bare `string` arm makes string-literal arms indistinguishable on
@@ -244,8 +236,9 @@ fn synthesize(arms: &[Ty], analysis: &Analysis) -> Option<UnionEnum> {
     if shape_error(arms).is_some() {
         return None;
     }
+    let variants = unique_variant_names(arms)?;
     let mut built = Vec::new();
-    for arm in arms {
+    for (arm, variant) in arms.iter().zip(variants) {
         let kind = match arm {
             Ty::Literal(baml_base::Literal::String(value), ..) => {
                 UnionArmKind::StringLiteral(value.clone())
@@ -255,10 +248,7 @@ fn synthesize(arms: &[Ty], analysis: &Analysis) -> Option<UnionEnum> {
             }
             _ => return None,
         };
-        built.push(UnionArm {
-            variant: variant_name(arm)?,
-            kind,
-        });
+        built.push(UnionArm { variant, kind });
     }
     let rust_name = built
         .iter()
@@ -270,6 +260,24 @@ fn synthesize(arms: &[Ty], analysis: &Analysis) -> Option<UnionEnum> {
         arms: built,
         generic_params: union_generic_params(arms),
     })
+}
+
+/// Derive one distinct Rust variant name per arm. Different wire values can
+/// normalize to the same identifier (`"graph.query"` and `"graph-query"`),
+/// and nominal arms from different namespaces can share a leaf name. Trailing
+/// underscores keep all of those shapes representable without changing their
+/// wire identities.
+fn unique_variant_names(arms: &[Ty]) -> Option<Vec<String>> {
+    let mut names = Vec::with_capacity(arms.len());
+    let mut seen = HashSet::new();
+    for arm in arms {
+        let mut variant = variant_name(arm)?;
+        while !seen.insert(variant.clone()) {
+            variant.push('_');
+        }
+        names.push(variant);
+    }
+    Some(names)
 }
 
 /// The `TypeVar` names appearing anywhere in the arms, in first-appearance
@@ -351,8 +359,8 @@ fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
     }
 }
 
-/// The variant name for an arm, or `None` when no identifier-safe name
-/// can be derived.
+/// The variant name for an arm, or `None` when the arm kind has no naming
+/// strategy.
 fn variant_name(arm: &Ty) -> Option<String> {
     match arm {
         Ty::Int { .. } => Some("Int".to_string()),
@@ -371,16 +379,7 @@ fn variant_name(arm: &Ty) -> Option<String> {
         Ty::List(inner, _) => Some(format!("{}List", variant_name(inner)?)),
         Ty::Map { key: _, value, .. } => Some(format!("{}Map", variant_name(value)?)),
         Ty::Literal(baml_base::Literal::String(value), ..) => {
-            let mut chars = value.chars();
-            let first = chars.next()?;
-            if !first.is_ascii_alphabetic() {
-                return None;
-            }
-            let rest: String = chars.collect();
-            if !rest.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                return None;
-            }
-            Some(format!("{}{rest}", first.to_ascii_uppercase()))
+            Some(string_literal_variant_name(value))
         }
         Ty::Union(items, _) => {
             // Only reachable for the degenerate single-arm nested case.
@@ -403,5 +402,80 @@ fn variant_name(arm: &Ty) -> Option<String> {
         | Ty::PromptAst { .. }
         | Ty::Never { .. }
         | Ty::RustType { .. } => None,
+    }
+}
+
+/// Turn any string literal into a valid, variant-style Rust identifier while
+/// preserving the old spelling for literals that were already supported.
+fn string_literal_variant_name(value: &str) -> String {
+    let mut chars = value.chars();
+    if let Some(first) = chars.next()
+        && first.is_ascii_alphabetic()
+    {
+        let rest: String = chars.collect();
+        if rest.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            return format!("{}{rest}", first.to_ascii_uppercase());
+        }
+    }
+
+    let mut variant = String::new();
+    let mut capitalize_next = true;
+    for c in value.chars() {
+        if c.is_ascii_alphanumeric() {
+            if capitalize_next {
+                variant.push(c.to_ascii_uppercase());
+                capitalize_next = false;
+            } else {
+                variant.push(c);
+            }
+        } else {
+            capitalize_next = true;
+        }
+    }
+    if variant.is_empty() {
+        variant.push_str("Value");
+    } else if !variant
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic())
+    {
+        variant.insert_str(0, "Value");
+    }
+    variant
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn string_literal(value: &str) -> Ty {
+        Ty::Literal(
+            baml_base::Literal::String(value.to_string()),
+            baml_codegen_types::Freshness::Regular,
+            baml_base::TyAttr::EMPTY,
+        )
+    }
+
+    #[test]
+    fn string_literal_variants_are_identifier_safe_and_unique() {
+        let arms = [
+            string_literal("graph.query"),
+            string_literal("graph-query"),
+            string_literal("utf8-lossy"),
+            string_literal("3d"),
+            string_literal("---"),
+            string_literal("..."),
+        ];
+        assert_eq!(
+            unique_variant_names(&arms).unwrap(),
+            [
+                "GraphQuery",
+                "GraphQuery_",
+                "Utf8Lossy",
+                "Value3d",
+                "Value",
+                "Value_",
+            ]
+        );
     }
 }

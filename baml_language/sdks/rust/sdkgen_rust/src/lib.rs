@@ -705,6 +705,62 @@ mod tests {
     }
 
     #[test]
+    fn non_identifier_string_literal_union_arms_keep_classes_and_functions() {
+        let route = name("user", &[], "Route");
+        let pick = name("user", &[], "pick");
+        let command = Ty::Union(
+            ["graph.query", "graph.diff", "utf8-lossy"]
+                .into_iter()
+                .map(|value| {
+                    Ty::Literal(
+                        baml_base::Literal::String(value.to_string()),
+                        baml_codegen_types::Freshness::Regular,
+                        baml_base::TyAttr::EMPTY,
+                    )
+                })
+                .collect(),
+            baml_base::TyAttr::EMPTY,
+        );
+        let mut pick_fn = nullary_string_fn(&pick);
+        pick_fn.return_type = Ty::Class(route.clone(), Vec::new(), baml_base::TyAttr::EMPTY);
+        let pool = SymbolPool::from([
+            (
+                route.clone(),
+                class_symbol(
+                    &route,
+                    vec![baml_codegen_types::ClassProperty {
+                        name: baml_base::Name::new("command"),
+                        docstring: None,
+                        ty: command,
+                    }],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (pick, Symbol::Function(pick_fn)),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        assert!(
+            flat.contains(
+                "pubenumGraphQueryOrGraphDiffOrUtf8Lossy{GraphQuery,GraphDiff,Utf8Lossy,}"
+            ),
+            "{lib}"
+        );
+        assert!(flat.contains("pubstructRoute{"), "{lib}");
+        assert!(flat.contains("pubfnpick()"), "{lib}");
+        for wire_value in ["graph.query", "graph.diff", "utf8-lossy"] {
+            assert!(
+                lib.contains(wire_value),
+                "missing wire value {wire_value}:\n{lib}"
+            );
+        }
+    }
+
+    #[test]
     fn string_arm_with_string_literal_arm_skips_fail_closed() {
         let n = name("user", &[], "f");
         let union = Ty::Union(
