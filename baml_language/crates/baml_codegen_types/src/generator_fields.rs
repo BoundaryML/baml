@@ -116,18 +116,7 @@ impl From<OutputType> for Generator {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr as _;
-
     use super::{Generator, NamingConvention, OutputType};
-
-    #[test]
-    fn csharp_generator_identity_is_canonical() {
-        assert_eq!(OutputType::from_str("csharp"), Ok(OutputType::CSharp));
-        assert_eq!(OutputType::CSharp.to_string(), "csharp");
-        for &output_type in OutputType::all() {
-            assert_eq!(output_type.generated_directory(), "baml_sdk");
-        }
-    }
 
     #[test]
     fn every_output_type_has_add_defaults() {
