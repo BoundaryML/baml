@@ -326,7 +326,10 @@ pub async fn call_and_encode(
     call_ctx: FunctionCallContext,
 ) -> Vec<u8> {
     let _route =
-        crate::register_active_call_route(call_ctx.host_call_id.0, call_ctx.cancel.clone());
+        match crate::register_active_call_route(call_ctx.host_call_id.0, call_ctx.cancel.clone()) {
+            Ok(route) => route,
+            Err(error) => return error_to_outbound(error),
+        };
     call_and_encode_registered(runtime, function_name, args, call_ctx).await
 }
 
@@ -389,7 +392,10 @@ pub async fn call_handle_and_encode(
     call_ctx: FunctionCallContext,
 ) -> Vec<u8> {
     let _route =
-        crate::register_active_call_route(call_ctx.host_call_id.0, call_ctx.cancel.clone());
+        match crate::register_active_call_route(call_ctx.host_call_id.0, call_ctx.cancel.clone()) {
+            Ok(route) => route,
+            Err(error) => return error_to_outbound(error),
+        };
     call_handle_and_encode_registered(runtime, handle_key, args, call_ctx).await
 }
 

@@ -123,10 +123,15 @@ impl Drop for ActiveCallRouteGuard {
 pub(crate) fn register_active_call_route(
     call_id: u64,
     cancel: bex_project::CancellationToken,
-) -> ActiveCallRouteGuard {
+) -> Result<ActiveCallRouteGuard, BridgeError> {
     let route = Arc::new(ActiveCallRoute { cancel });
-    active_call_routes().insert(call_id, Arc::clone(&route));
-    ActiveCallRouteGuard { call_id, route }
+    let mut routes = active_call_routes();
+    if routes.contains_key(&call_id) {
+        return Err(BridgeError::DuplicateCallId(call_id));
+    }
+    routes.insert(call_id, Arc::clone(&route));
+    drop(routes);
+    Ok(ActiveCallRouteGuard { call_id, route })
 }
 
 pub mod baml_to_host;
@@ -444,7 +449,7 @@ mod cancellation_route_tests {
     fn registered_route_cancels_its_token_without_reserving_an_engine_call() {
         let call_id = new_function_call_id();
         let cancel = bex_project::CancellationToken::new();
-        let route = register_active_call_route(call_id, cancel.clone());
+        let route = register_active_call_route(call_id, cancel.clone()).unwrap();
 
         assert!(cancel_function_call_by_id(call_id));
         assert!(cancel.is_cancelled());
@@ -452,6 +457,25 @@ mod cancellation_route_tests {
 
         drop(route);
         assert!(!active_call_routes().contains_key(&call_id));
+    }
+
+    #[test]
+    fn duplicate_route_is_rejected_without_replacing_the_original() {
+        let call_id = new_function_call_id();
+        let first_cancel = bex_project::CancellationToken::new();
+        let second_cancel = bex_project::CancellationToken::new();
+        let first_route = register_active_call_route(call_id, first_cancel.clone()).unwrap();
+
+        let error = match register_active_call_route(call_id, second_cancel.clone()) {
+            Ok(_) => panic!("duplicate route unexpectedly replaced the original"),
+            Err(error) => error,
+        };
+        assert!(matches!(error, BridgeError::DuplicateCallId(id) if id == call_id));
+
+        assert!(cancel_function_call_by_id(call_id));
+        assert!(first_cancel.is_cancelled());
+        assert!(!second_cancel.is_cancelled());
+        drop(first_route);
     }
 }
 
