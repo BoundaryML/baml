@@ -880,6 +880,39 @@ mod tests {
     }
 
     #[test]
+    fn generator_output_directories_use_the_shared_convention() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n[generator.csharp_default]\noutput_type = \"csharp\"\nnaming_convention = \"language\"\n\n[generator.csharp_explicit]\noutput_type = \"csharp\"\noutput_dir = \"generated\"\nnaming_convention = \"language\"\n\n[generator.python]\noutput_type = \"python/pydantic\"\nnaming_convention = \"preserve-case\"\n",
+        )
+        .unwrap();
+
+        let (generators, diagnostics) = discover_generators(directory.path());
+
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let output_for = |name: &str| {
+            &generators
+                .iter()
+                .find(|generator| generator.name == name)
+                .unwrap()
+                .output_dir
+        };
+        assert_eq!(
+            output_for("csharp_default"),
+            &directory.path().join("..").join("baml_sdk")
+        );
+        assert_eq!(
+            output_for("csharp_explicit"),
+            &directory.path().join("generated").join("baml_sdk")
+        );
+        assert_eq!(
+            output_for("python"),
+            &directory.path().join("..").join("baml_sdk")
+        );
+    }
+
+    #[test]
     fn embedded_manifest_preserves_project_content_and_appends_owned_metadata() {
         let directory = tempfile::tempdir().unwrap();
         let original = "# keep this byte-for-byte\n[package]\nname = \"test\"";

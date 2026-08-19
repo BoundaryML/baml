@@ -121,7 +121,7 @@ jobs:
           set -euo pipefail
           product_root="$RUNNER_TEMP/csharp-product"
           package_output="$product_root/packages"
-          generated_output="$PWD/neutral-preparation/baml_client"
+          generated_output="$PWD/neutral-preparation/baml_sdk"
           mkdir -p "$package_output"
           scripts/baml-csharp-release-contract verify-generated-sources \
             --root "$generated_output" \
@@ -219,7 +219,7 @@ jobs:
             "$package" \
             "$RID" \
             "$CANONICAL" \
-            product-package/baml_client
+            product-package/baml_sdk
 
       - name: Run exact package in real musl userspace
         if: matrix.libc == 'musl'
@@ -246,5 +246,5 @@ jobs:
                 "$package" \
                 "$RID" \
                 "$CANONICAL" \
-                product-package/baml_client
+                product-package/baml_sdk
             '

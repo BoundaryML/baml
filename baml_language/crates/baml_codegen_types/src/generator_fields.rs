@@ -64,10 +64,7 @@ impl OutputType {
 
     /// Conventional generated directory for this target.
     pub const fn generated_directory(self) -> &'static str {
-        match self {
-            Self::CSharp => "baml_client",
-            _ => "baml_sdk",
-        }
+        "baml_sdk"
     }
 }
 
@@ -119,17 +116,7 @@ impl From<OutputType> for Generator {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr as _;
-
     use super::{Generator, NamingConvention, OutputType};
-
-    #[test]
-    fn csharp_generator_identity_is_canonical() {
-        assert_eq!(OutputType::from_str("csharp"), Ok(OutputType::CSharp));
-        assert_eq!(OutputType::CSharp.to_string(), "csharp");
-        assert_eq!(OutputType::CSharp.generated_directory(), "baml_client");
-        assert_eq!(OutputType::Rust.generated_directory(), "baml_sdk");
-    }
 
     #[test]
     fn every_output_type_has_add_defaults() {
