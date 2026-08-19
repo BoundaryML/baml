@@ -710,6 +710,30 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
                 continue;
             }
         }
+        if output_type == OutputType::Rust && naming_convention != NamingConvention::PreserveCase {
+            let range = generator
+                .naming_convention
+                .as_ref()
+                .map(|value| to_text_range(value.span()))
+                .unwrap_or(table_range);
+            diags.push(
+                Diagnostic::error(
+                    DiagnosticId::InvalidGeneratorPropertyValue,
+                    format!(
+                        "Rust generator `{name}` does not yet support `naming_convention = \"language\"`; use `\"preserve-case\"`"
+                    ),
+                )
+                .with_primary(
+                    Span {
+                        file_id: manifest_file_id(),
+                        range,
+                    },
+                    "unsupported naming convention for Rust",
+                )
+                .with_phase(DiagnosticPhase::Validation),
+            );
+            continue;
+        }
 
         generators.push(GeneratorDef {
             name: name.clone(),
@@ -1047,6 +1071,24 @@ mod tests {
         assert!(
             format!("{diagnostics:?}").contains("Go-only property"),
             "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn rust_language_naming_convention_is_rejected() {
+        let manifest = "[package]\nname = \"test\"\n\n[generator.rust_client]\noutput_type = \"rust\"\nnaming_convention = \"language\"\n";
+
+        let (generators, diagnostics) = discover_with_manifest(manifest);
+
+        assert!(generators.is_empty());
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].id,
+            baml_db::baml_compiler_diagnostics::DiagnosticId::InvalidGeneratorPropertyValue
+        );
+        assert_eq!(
+            diagnostics[0].message,
+            "Rust generator `rust_client` does not yet support `naming_convention = \"language\"`; use `\"preserve-case\"`"
         );
     }
 }

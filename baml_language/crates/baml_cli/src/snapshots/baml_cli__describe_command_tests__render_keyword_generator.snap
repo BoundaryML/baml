@@ -26,4 +26,4 @@ Accepted `output_type` values:
 - `"cpp"` — C++17
 - `"csharp"` — C#
 
-`naming_convention` accepts `"preserve-case"` or `"language"`. Go requires `"language"` and also requires `sdk_import_path`.
+`naming_convention` accepts `"preserve-case"` or `"language"`. Go requires `"language"` and also requires `sdk_import_path`. Rust currently requires `"preserve-case"`.
