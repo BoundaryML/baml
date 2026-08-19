@@ -91,7 +91,7 @@ fn check_reports_stale_then_goes_quiet_after_regenerating() {
     let dir = project();
 
     // Never generated: reported, and distinctly from a compile failure.
-    let output = home.run(&["bridge", "generate", "--check"], dir.path());
+    let output = home.run(&["generate", "--check"], dir.path());
     assert_eq!(output.status.code(), Some(STALE), "{}", stderr_of(&output));
     assert!(
         stderr_of(&output).contains("has never been generated"),
@@ -100,11 +100,11 @@ fn check_reports_stale_then_goes_quiet_after_regenerating() {
     );
     assert!(!generated_dir(dir.path()).exists(), "--check wrote output");
 
-    let output = home.run(&["bridge", "generate"], dir.path());
+    let output = home.run(&["generate"], dir.path());
     assert!(output.status.success(), "{}", stderr_of(&output));
     assert!(generated_dir(dir.path()).is_dir());
 
-    let output = home.run(&["bridge", "generate", "--check"], dir.path());
+    let output = home.run(&["generate", "--check"], dir.path());
     assert!(output.status.success(), "{}", stderr_of(&output));
 
     // Editing a source invalidates it without touching the generated tree.
@@ -113,7 +113,7 @@ fn check_reports_stale_then_goes_quiet_after_regenerating() {
         "class Person {\n  name string\n  age int\n}\n",
     )
     .unwrap();
-    let output = home.run(&["bridge", "generate", "--check"], dir.path());
+    let output = home.run(&["generate", "--check"], dir.path());
     assert_eq!(output.status.code(), Some(STALE), "{}", stderr_of(&output));
     assert!(
         stderr_of(&output).contains(STALE_WARNING),
@@ -121,9 +121,9 @@ fn check_reports_stale_then_goes_quiet_after_regenerating() {
         stderr_of(&output)
     );
 
-    let output = home.run(&["bridge", "generate"], dir.path());
+    let output = home.run(&["generate"], dir.path());
     assert!(output.status.success(), "{}", stderr_of(&output));
-    let output = home.run(&["bridge", "generate", "--check"], dir.path());
+    let output = home.run(&["generate", "--check"], dir.path());
     assert!(output.status.success(), "{}", stderr_of(&output));
 }
 
@@ -133,11 +133,7 @@ fn check_reports_stale_then_goes_quiet_after_regenerating() {
 fn ordinary_commands_warn_about_a_stale_bridge() {
     let home = TestHome::new();
     let dir = project();
-    assert!(
-        home.run(&["bridge", "generate"], dir.path())
-            .status
-            .success()
-    );
+    assert!(home.run(&["generate"], dir.path()).status.success());
     fs::write(
         dir.path().join("baml_src/main.baml"),
         "class Person {\n  name string\n  age int\n}\n",
@@ -160,11 +156,7 @@ fn ordinary_commands_warn_about_a_stale_bridge() {
 fn excluded_commands_never_warn() {
     let home = TestHome::new();
     let dir = project();
-    assert!(
-        home.run(&["bridge", "generate"], dir.path())
-            .status
-            .success()
-    );
+    assert!(home.run(&["generate"], dir.path()).status.success());
     fs::write(
         dir.path().join("baml_src/main.baml"),
         "class Person {\n  name string\n  age int\n}\n",
@@ -223,35 +215,24 @@ fn install_detects_the_host_package_manager() {
     assert!(stdout.contains("recommended: found"), "{stdout}");
 }
 
-/// `baml generate` appears in existing scripts and CI jobs. It no longer
-/// generates, but it must fail with the replacement named — not with clap's
-/// bare "unrecognized subcommand", which leaves nothing to act on.
+/// `baml generate` remains the primary generation entry point.
 #[test]
-fn the_moved_generate_command_names_its_replacement() {
+fn generate_writes_clients_and_generate_add_remains_available() {
     let home = TestHome::new();
     let dir = project();
 
     let output = home.run(&["generate"], dir.path());
 
-    assert!(!output.status.success());
-    let stderr = stderr_of(&output);
+    assert!(output.status.success(), "{}", stderr_of(&output));
     assert!(
-        stderr.contains("`baml generate` is now `baml bridge generate`"),
-        "{stderr}"
-    );
-    assert!(
-        !generated_dir(dir.path()).exists(),
-        "the stub generated output"
+        generated_dir(dir.path()).exists(),
+        "generate wrote no output"
     );
 
-    // `generate add` has its own replacement and must name that one.
     let output = home.run(&["generate", "add", "python"], dir.path());
-    assert!(!output.status.success());
-    let stderr = stderr_of(&output);
-    assert!(
-        stderr.contains("`baml generate add` is now `baml bridge add`"),
-        "{stderr}"
-    );
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let manifest = fs::read_to_string(dir.path().join("baml.toml")).unwrap();
+    assert!(manifest.contains("[generator.client2]"), "{manifest}");
 }
 
 /// A team that commits its bridge needs the tree and the manifest tracked,
@@ -268,11 +249,7 @@ fn the_commit_vcs_policy_writes_a_gitignore_that_ignores_nothing() {
     )
     .unwrap();
 
-    assert!(
-        home.run(&["bridge", "generate"], dir.path())
-            .status
-            .success()
-    );
+    assert!(home.run(&["generate"], dir.path()).status.success());
 
     let gitignore = fs::read_to_string(generated_dir(dir.path()).join(".gitignore")).unwrap();
     assert!(!gitignore.contains("\n*\n"), "{gitignore}");

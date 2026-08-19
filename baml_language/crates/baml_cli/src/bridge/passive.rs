@@ -95,7 +95,7 @@ fn stale_warnings(from: Option<PathBuf>) -> Vec<String> {
                 // init` writes its generator lines commented out and the
                 // no-generators check above already returned.
                 status::Status::NeverGenerated => Some(format!(
-                    "generated bridge `{}` has not been generated yet; run `baml bridge generate`",
+                    "generated bridge `{}` has not been generated yet; run `baml generate`",
                     generator.name
                 )),
                 status::Status::Stale(reasons) => Some(status::warning(&generator.name, &reasons)),
@@ -224,7 +224,7 @@ mod tests {
         assert_eq!(warnings.len(), 1, "{warnings:?}");
         assert_eq!(
             warnings[0],
-            "generated bridge `client1` is out of date; run `baml bridge generate`"
+            "generated bridge `client1` is out of date; run `baml generate`"
         );
     }
 

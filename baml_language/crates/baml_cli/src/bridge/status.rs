@@ -1,6 +1,6 @@
 //! The one place that decides whether a generated bridge is out of date.
 //!
-//! `bridge generate --check`, `bridge list`, and the passive warning all call
+//! `generate --check`, `bridge list`, and the passive warning all call
 //! [`evaluate`], so they cannot disagree about what "stale" means. They differ
 //! only in [`Depth`] and in how they present the answer.
 
@@ -142,7 +142,7 @@ pub(crate) fn warning(generator_name: &str, reasons: &[Reason]) -> String {
             Reason::Missing(paths) => format!("is missing files ({})", summarize(paths)),
         },
     );
-    format!("generated bridge `{generator_name}` {detail}; run `baml bridge generate`")
+    format!("generated bridge `{generator_name}` {detail}; run `baml generate`")
 }
 
 /// Name at most two paths, then count the rest, so a wholesale change does

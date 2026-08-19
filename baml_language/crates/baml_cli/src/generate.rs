@@ -15,7 +15,7 @@ use baml_db::{
     baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, render},
 };
 use clap::{
-    Args,
+    Args, Subcommand,
     builder::{PossibleValue, PossibleValuesParser, TypedValueParser},
 };
 use text_size::{TextRange, TextSize};
@@ -24,44 +24,54 @@ use toml_edit::{DocumentMut, Item, Table, value};
 
 use crate::{commands::release_version, reporter::Reporter};
 
-/// The pre-`bridge` spelling of `baml bridge generate`.
+/// Generate client code from BAML definitions.
 ///
-/// This no longer generates anything. It stays registered so the old
-/// invocation fails with a message naming its replacement rather than with
-/// clap's bare "unrecognized subcommand", which would leave someone with a
-/// CI job to fix and no idea what to fix it to.
-///
-/// Every argument is swallowed so `baml generate --output-dir ./x` and
-/// `baml generate add python` both reach the message instead of failing on
-/// an unknown flag first.
+/// Reads every `[generator.<name>]` section in `baml.toml`, validates the
+/// project, and writes each configured client. Use `--check` to verify that
+/// generated clients are current without writing anything.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Generate clients for the nearest project:
+    baml generate
+
+  Fail if generated clients are out of date (for CI and pre-commit):
+    baml generate --check
+
+  Override the output directory:
+    baml generate --output-dir ./generated")]
 pub struct GenerateArgs {
-    #[arg(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0..)]
-    pub args: Vec<std::ffi::OsString>,
+    #[command(subcommand)]
+    pub command: Option<GenerateCommand>,
+
+    /// Exit non-zero if any generated client is out of date. Writes nothing.
+    #[arg(long, help_heading = "Generation options")]
+    pub check: bool,
+
+    /// Output directory override (takes precedence over generator config)
+    #[arg(
+        long = "output-dir",
+        alias = "output",
+        short = 'o',
+        value_name = "PATH",
+        help_heading = "Generation options"
+    )]
+    pub output: Option<PathBuf>,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum GenerateCommand {
+    /// Add a client generator to baml.toml.
+    Add(AddGeneratorArgs),
 }
 
 impl GenerateArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
-        // `generate add <TARGET>` has its own replacement, so name that one
-        // specifically instead of sending people to the generate verb.
-        let (was, now) = match self.args.first().and_then(|arg| arg.to_str()) {
-            Some("add") => ("baml generate add", "baml bridge add"),
-            _ => ("baml generate", "baml bridge generate"),
-        };
-        crate::reporter::print_error(format_args!("`{was}` is now `{now}`"));
-        #[allow(clippy::print_stderr)]
-        {
-            eprintln!();
-            eprintln!("  the generated client libraries are called bridges, and every");
-            eprintln!("  operation on them lives under `baml bridge`:");
-            eprintln!();
-            eprintln!("    baml bridge generate           write each configured bridge");
-            eprintln!("    baml bridge generate --check   verify they are current (for CI)");
-            eprintln!("    baml bridge add <TARGET>       configure a new bridge");
-            eprintln!("    baml bridge install            print how to install a runtime");
-            eprintln!("    baml bridge list               show what is configured");
+    pub fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
+        match &self.command {
+            Some(GenerateCommand::Add(args)) => args.run(project),
+            None if self.check => crate::bridge::check(project),
+            None => run_generate(project, self.output.as_deref()),
         }
-        Ok(crate::ExitCode::InvalidArgs)
     }
 }
 
@@ -243,7 +253,7 @@ fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(St
 
 /// Compile the project and write every configured bridge.
 ///
-/// The body of `baml bridge generate`.
+/// The shared body of `baml generate` and `baml bridge generate`.
 pub(crate) fn run_generate(
     project: Option<&Path>,
     output_override: Option<&Path>,

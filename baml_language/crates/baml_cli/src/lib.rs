@@ -77,7 +77,7 @@ pub enum ExitCode {
     // same conditions); BEP-027 §"Exit codes" only mandates non-zero,
     // so we pick the conventional code and keep the two runtimes aligned.
     TargetError,
-    // `baml bridge generate --check` found a bridge that is out of date.
+    // `baml generate --check` found a bridge that is out of date.
     // Distinct from `Other` so CI can tell a stale bridge apart from a
     // project that does not compile without scraping stderr.
     BridgeStale,

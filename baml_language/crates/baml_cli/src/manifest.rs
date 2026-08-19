@@ -59,7 +59,7 @@ pub(crate) struct BridgeManifest {
     /// `vcs = "ignore"` (the default) ignores each generated tree as a unit.
     /// `vcs = "commit"` writes a `.gitignore` that ignores nothing, so a team
     /// that commits its bridge keeps the tree *and* the ownership manifest
-    /// tracked — which is what lets `bridge generate --check` run from a
+    /// tracked — which is what lets `generate --check` run from a
     /// clean checkout.
     pub vcs: Option<Spanned<String>>,
 

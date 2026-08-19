@@ -5,8 +5,8 @@
 //! **bridges**. Until now the CLI never said the word: `baml generate` was a
 //! bare top-level verb with nowhere to hang related operations.
 //!
-//! `baml generate` and `baml generate add` keep working as hidden aliases,
-//! because they appear in existing scripts and CI jobs.
+//! `baml generate` remains the primary generation command. `baml bridge`
+//! groups the related add, install, list, and freshness operations.
 
 pub(crate) mod fingerprint;
 pub(crate) mod install;
@@ -178,14 +178,14 @@ fn report_invalid(resolved: &Resolved) {
     if resolved.invalid > 0 {
         crate::reporter::print_warning(format_args!(
             "{} `[generator]` section(s) in baml.toml are invalid and were skipped; \
-             run `baml bridge generate` to see why",
+             run `baml generate` to see why",
             resolved.invalid
         ));
     }
 }
 
 /// `bridge generate --check`: compare inputs, write nothing, never compile.
-fn check(from: Option<&Path>) -> Result<ExitCode> {
+pub(crate) fn check(from: Option<&Path>) -> Result<ExitCode> {
     let resolved = resolve(from)?;
     if resolved.generators.is_empty() {
         report_invalid(&resolved);
@@ -214,7 +214,7 @@ fn check(from: Option<&Path>) -> Result<ExitCode> {
             status::Status::NeverGenerated => {
                 stale = true;
                 crate::reporter::print_error(format_args!(
-                    "bridge `{}` has never been generated; run `baml bridge generate`",
+                    "bridge `{}` has never been generated; run `baml generate`",
                     generator.name
                 ));
             }
