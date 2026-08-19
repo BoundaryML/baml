@@ -144,10 +144,6 @@ pub(crate) struct GeneratorManifest {
     /// union. Larger unions use `any`. Go-only; defaults to 3.
     pub max_typed_union_arity: Option<Spanned<i64>>,
 
-    /// Render nullable Python model fields with `= None`. Python-only;
-    /// defaults to false so existing generated model semantics do not change.
-    pub nullable_fields_default_none: Option<Spanned<bool>>,
-
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
 }
@@ -305,8 +301,7 @@ mod tests {
              output_type = \"python/pydantic\"\n\
              naming_convention = \"preserve-case\"\n\
              output_dir = \"../python\"\n\
-             sdk_import_path = \"example.com/project/baml_sdk\"\n\
-             nullable_fields_default_none = true\n",
+             sdk_import_path = \"example.com/project/baml_sdk\"\n",
         )
         .unwrap();
         let g = &m.generator["lang_python"];
@@ -318,13 +313,6 @@ mod tests {
         assert_eq!(
             g.get_ref().sdk_import_path.as_ref().unwrap().get_ref(),
             "example.com/project/baml_sdk"
-        );
-        assert!(
-            *g.get_ref()
-                .nullable_fields_default_none
-                .as_ref()
-                .unwrap()
-                .get_ref()
         );
     }
 

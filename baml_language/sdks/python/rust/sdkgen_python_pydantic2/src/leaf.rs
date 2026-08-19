@@ -1216,7 +1216,7 @@ fn build_method_line_views(
 }
 
 /// Render one symbol into its `.py` source block, including trailing `\n`.
-fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath, nullable_fields_default_none: bool) -> String {
+fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
     use askama::Template;
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
@@ -1247,7 +1247,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath, nullable_fields_default_non
                 .map(|prop| ClassPropertyView {
                     name: prop.name.clone(),
                     ty_py: translate_ty(&prop.ty, &ctx),
-                    default_none: nullable_fields_default_none && prop.nullable,
+                    default_none: prop.nullable,
                 })
                 .collect();
             let attrs: Vec<(String, Option<String>)> = c
@@ -1571,7 +1571,6 @@ fn required_positional_count(
 pub(crate) fn render_leaf_body(
     body: &LeafBody,
     callable_child_names: &BTreeSet<String>,
-    nullable_fields_default_none: bool,
 ) -> String {
     if body.is_empty() {
         return String::new();
@@ -1706,7 +1705,7 @@ pub(crate) fn render_leaf_body(
 
     let mut prev: Option<(&SortKey, &EmittedSymbol)> = None;
     for (sym, key) in &body.symbols {
-        let body_text = render_symbol(sym, &body.leaf, nullable_fields_default_none);
+        let body_text = render_symbol(sym, &body.leaf);
         if body_text.is_empty() {
             continue;
         }
@@ -2038,7 +2037,6 @@ fn render_symbol_pyi(
     s: &EmittedSymbol,
     leaf: &LeafPath,
     callback_protocols: Option<&std::rc::Rc<IndexMap<Ty, String>>>,
-    nullable_fields_default_none: bool,
 ) -> String {
     use askama::Template;
     let ctx = TranslateCtx {
@@ -2064,7 +2062,7 @@ fn render_symbol_pyi(
                 .map(|prop| ClassPropertyView {
                     name: prop.name.clone(),
                     ty_py: translate_ty(&prop.ty, &ctx),
-                    default_none: nullable_fields_default_none && prop.nullable,
+                    default_none: prop.nullable,
                 })
                 .collect();
             let mut out = ClassBodyPyi {
@@ -2404,7 +2402,6 @@ fn render_literal_default(lit: &Literal) -> String {
 pub(crate) fn render_leaf_body_pyi(
     body: &LeafBody,
     callable_child_bodies: &BTreeMap<String, &LeafBody>,
-    nullable_fields_default_none: bool,
 ) -> String {
     if body.is_empty() {
         return String::new();
@@ -2564,12 +2561,7 @@ pub(crate) fn render_leaf_body_pyi(
         {
             continue;
         }
-        let body_text = render_symbol_pyi(
-            sym,
-            &body.leaf,
-            callback_protocols.as_ref(),
-            nullable_fields_default_none,
-        );
+        let body_text = render_symbol_pyi(sym, &body.leaf, callback_protocols.as_ref());
         if body_text.is_empty() {
             continue;
         }

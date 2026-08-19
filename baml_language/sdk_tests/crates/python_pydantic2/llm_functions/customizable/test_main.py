@@ -32,8 +32,8 @@ def test_main_lorem_resume_class_shape():
     assert set(fields) == {"name", "email"}
 
 
-# SDK_PARITY_LINT(skip): validates the Python-only nullable_fields_default_none generator option
-def test_main_nullable_model_field_can_be_omitted_when_generator_option_is_enabled():
+# SDK_PARITY_LINT(skip): pins the Python generator's nullable-field `= None` default
+def test_main_nullable_model_field_can_be_omitted():
     from baml_sdk.lorem import Resume
 
     resume = Resume(name="Ada")

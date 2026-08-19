@@ -31,7 +31,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use sdkgen_python_pydantic2::{NamingConvention, PythonGenOptions};
+use sdkgen_python_pydantic2::NamingConvention;
 
 use crate::{
     BuildDiagnostics, discover_fixtures, emit_cargo_line, fixtures_root_from_manifest,
@@ -117,15 +117,10 @@ fn codegen_fixture(
     let pool = loaded.pool;
     let baml_bytecode = loaded.baml_bytecode;
     let codegen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        // Exercise the opt-in model behavior across the Python runtime suite;
-        // generator unit tests separately pin the default-off output.
-        sdkgen_python_pydantic2::to_source_code_with_bytecode_and_options(
+        sdkgen_python_pydantic2::to_source_code_with_bytecode(
             &pool,
             &baml_bytecode,
-            &PythonGenOptions {
-                naming_convention: NamingConvention::PreserveCase,
-                nullable_fields_default_none: true,
-            },
+            NamingConvention::PreserveCase,
         )
     }));
     match codegen_result {

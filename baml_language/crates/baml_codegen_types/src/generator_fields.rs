@@ -98,8 +98,6 @@ pub struct Generator {
     pub sdk_import_path: Option<String>,
     /// Maximum typed union arity for Go output.
     pub max_typed_union_arity: Option<usize>,
-    /// Whether nullable Python model fields default to `None`.
-    pub nullable_fields_default_none: bool,
 }
 
 impl From<OutputType> for Generator {
@@ -115,7 +113,6 @@ impl From<OutputType> for Generator {
             naming_convention,
             sdk_import_path: None,
             max_typed_union_arity: None,
-            nullable_fields_default_none: false,
         }
     }
 }
@@ -150,6 +147,5 @@ mod tests {
             Generator::from(OutputType::PythonPydantic).naming_convention,
             NamingConvention::PreserveCase
         );
-        assert!(!Generator::from(OutputType::PythonPydantic).nullable_fields_default_none);
     }
 }

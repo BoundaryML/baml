@@ -220,24 +220,6 @@ const HEADER: &str = concat!(
 /// `rel_path` is relative to the `baml_src/` root (e.g. `"lorem/foo.baml"`).
 pub type UserBamlFile = (PathBuf, String);
 
-/// Python SDK generation policy. The opt-in nullable-field default is kept
-/// here rather than on the shared type IR so other language generators and
-/// function parameter semantics remain unchanged.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PythonGenOptions {
-    pub naming_convention: NamingConvention,
-    pub nullable_fields_default_none: bool,
-}
-
-impl PythonGenOptions {
-    pub const fn new(naming_convention: NamingConvention) -> Self {
-        Self {
-            naming_convention,
-            nullable_fields_default_none: false,
-        }
-    }
-}
-
 #[derive(Clone, Copy)]
 enum RuntimePayload<'a> {
     SourceFiles(&'a [UserBamlFile]),
@@ -262,19 +244,11 @@ pub fn to_source_code(
     user_baml_files: &[UserBamlFile],
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
-    to_source_code_with_options(
+    to_source_code_internal(
         pool,
-        user_baml_files,
-        &PythonGenOptions::new(naming_convention),
+        RuntimePayload::SourceFiles(user_baml_files),
+        naming_convention,
     )
-}
-
-pub fn to_source_code_with_options(
-    pool: &SymbolPool,
-    user_baml_files: &[UserBamlFile],
-    options: &PythonGenOptions,
-) -> HashMap<PathBuf, String> {
-    to_source_code_internal(pool, RuntimePayload::SourceFiles(user_baml_files), *options)
 }
 
 /// Build the Python SDK output tree using precompiled BAML bytecode as the
@@ -284,22 +258,10 @@ pub fn to_source_code_with_bytecode(
     baml_bytecode: &[u8],
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
-    to_source_code_with_bytecode_and_options(
-        pool,
-        baml_bytecode,
-        &PythonGenOptions::new(naming_convention),
-    )
-}
-
-pub fn to_source_code_with_bytecode_and_options(
-    pool: &SymbolPool,
-    baml_bytecode: &[u8],
-    options: &PythonGenOptions,
-) -> HashMap<PathBuf, String> {
     to_source_code_internal(
         pool,
         RuntimePayload::Bytecode(baml_bytecode, None, &[]),
-        *options,
+        naming_convention,
     )
 }
 
@@ -309,55 +271,41 @@ pub fn to_source_code_with_bytecode_and_metadata(
     embedded_baml_toml: &str,
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
-    to_source_code_with_bytecode_and_metadata_and_options(
-        pool,
-        baml_bytecode,
-        embedded_baml_toml,
-        &PythonGenOptions::new(naming_convention),
-    )
-}
-
-pub fn to_source_code_with_bytecode_and_metadata_and_options(
-    pool: &SymbolPool,
-    baml_bytecode: &[u8],
-    embedded_baml_toml: &str,
-    options: &PythonGenOptions,
-) -> HashMap<PathBuf, String> {
-    to_source_code_with_bytecode_and_metadata_and_source_files_and_options(
+    to_source_code_with_bytecode_and_metadata_and_source_files(
         pool,
         baml_bytecode,
         embedded_baml_toml,
         &[],
-        options,
+        naming_convention,
     )
 }
 
-pub fn to_source_code_with_bytecode_and_metadata_and_source_files_and_options(
+pub fn to_source_code_with_bytecode_and_metadata_and_source_files(
     pool: &SymbolPool,
     baml_bytecode: &[u8],
     embedded_baml_toml: &str,
     user_baml_files: &[UserBamlFile],
-    options: &PythonGenOptions,
+    naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
     to_source_code_internal(
         pool,
         RuntimePayload::Bytecode(baml_bytecode, Some(embedded_baml_toml), user_baml_files),
-        *options,
+        naming_convention,
     )
 }
 
 fn to_source_code_internal(
     pool: &SymbolPool,
     runtime_payload: RuntimePayload<'_>,
-    options: PythonGenOptions,
+    naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
     // Only `PreserveCase` is wired up so far; `Language`-mode rewriting
     // is the next piece of work and panics loudly until then.
     assert!(
-        matches!(options.naming_convention, NamingConvention::PreserveCase),
+        matches!(naming_convention, NamingConvention::PreserveCase),
         "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase \
          (got {})",
-        options.naming_convention,
+        naming_convention,
     );
     let mut out: HashMap<PathBuf, String> = HashMap::new();
 
@@ -433,11 +381,7 @@ fn to_source_code_internal(
         } else {
             render_package_init(&kids)
         };
-        content.push_str(&render_leaf_body(
-            body,
-            &callable_child_names,
-            options.nullable_fields_default_none,
-        ));
+        content.push_str(&render_leaf_body(body, &callable_child_names));
         content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
@@ -468,7 +412,6 @@ fn to_source_code_internal(
         pyi_content.push_str(&render_leaf_body_pyi(
             body,
             &callable_child_bodies,
-            options.nullable_fields_default_none,
         ));
         pyi_content.push_str(&render_interface_tokens(
             interface_tokens
@@ -2060,12 +2003,12 @@ mod tests {
                 "function a() -> int { 2 }\n".to_string(),
             ),
         ];
-        let out = to_source_code_with_bytecode_and_metadata_and_source_files_and_options(
+        let out = to_source_code_with_bytecode_and_metadata_and_source_files(
             &pool,
             b"bytecode",
             "[package]\nname = \"test\"\n",
             &files,
-            &PythonGenOptions::new(NamingConvention::PreserveCase),
+            NamingConvention::PreserveCase,
         );
 
         let inlined = &out[&PathBuf::from("_inlinedbaml.py")];
@@ -2165,13 +2108,13 @@ mod tests {
         let expected = "class Resume(pydantic.BaseModel):\n\
                         \x20   model_config = pydantic.ConfigDict(extra=\"ignore\")\n\
                         \x20   name: str\n\
-                        \x20   email: typing.Optional[str]\n\
+                        \x20   email: typing.Optional[str] = None\n\
                         \x20   tags: typing.List[str]\n";
         assert!(leaf.contains(expected), "leaf missing class body:\n{leaf}");
     }
 
     #[test]
-    fn nullable_field_defaults_are_opt_in_and_do_not_change_function_parameters() {
+    fn nullable_fields_default_none_without_changing_function_parameters() {
         let mut pool: SymbolPool = HashMap::new();
         let nullable_string = union(vec![
             Ty::String {
@@ -2231,19 +2174,7 @@ mod tests {
         function.arguments[0].ty = nullable_string;
         pool.insert(function_name, Symbol::Function(function));
 
-        let default_output = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let default_py = &default_output[&PathBuf::from("lorem/__init__.py")];
-        assert!(default_py.contains("    nullable: typing.Optional[str]\n"));
-        assert!(!default_py.contains("    nullable: typing.Optional[str] = None\n"));
-
-        let output = to_source_code_with_options(
-            &pool,
-            &[],
-            &PythonGenOptions {
-                naming_convention: NamingConvention::PreserveCase,
-                nullable_fields_default_none: true,
-            },
-        );
+        let output = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         for path in ["lorem/__init__.py", "lorem/__init__.pyi"] {
             let leaf = &output[&PathBuf::from(path)];
             assert!(leaf.contains("    required: str\n"), "{path}:\n{leaf}");
@@ -2488,7 +2419,7 @@ mod tests {
         let stream_leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
         let expected = "class Resume(pydantic.BaseModel):\n\
                         \x20   model_config = pydantic.ConfigDict(extra=\"ignore\")\n\
-                        \x20   summary: typing.Optional[str]\n\
+                        \x20   summary: typing.Optional[str] = None\n\
                         \x20   origin: lorem.Resume\n";
         assert!(
             stream_leaf.contains(expected),
@@ -3253,7 +3184,7 @@ mod tests {
         // checkers can see the public Pydantic surface.
         let expected = "class Resume(pydantic.BaseModel):\n\
                         \x20   name: str\n\
-                        \x20   email: typing.Optional[str]\n";
+                        \x20   email: typing.Optional[str] = None\n";
         assert!(leaf.contains(expected), "pyi missing class body:\n{leaf}");
         // The collapsed `class Foo(...): ...` form must not appear here.
         assert!(!leaf.contains("class Resume(pydantic.BaseModel): ..."));
