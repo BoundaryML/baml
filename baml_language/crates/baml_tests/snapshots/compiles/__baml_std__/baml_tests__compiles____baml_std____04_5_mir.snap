@@ -12077,6 +12077,26 @@ fn baml.String.length = builtin(vm)
 
 fn baml.String.char_count = builtin(vm)
 
+fn baml.String.is_empty(self: baml.String) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.String // self // param
+    let _2: int
+
+    bb0: {
+        _2 = call const fn baml.String.byte_length(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = copy _2 == const 0_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.String.byte_length = builtin(vm)
 
 fn baml.String.to_lower_case = builtin(vm)

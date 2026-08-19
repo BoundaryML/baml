@@ -1159,6 +1159,14 @@ function baml.String.is_ascii_whitespace(self: baml.String) -> bool {
 function baml.String.is_control(self: baml.String) -> bool {
 }
 
+function baml.String.is_empty(self: baml.String) -> bool {
+    load_var self
+    call baml.String.byte_length
+    load_const 0
+    cmp_int_op ==
+    return
+}
+
 function baml.String.is_graphic(self: baml.String) -> bool {
 }
 

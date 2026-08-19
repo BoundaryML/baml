@@ -1484,6 +1484,7 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::CannotConstructBuiltinCompanion
         }
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
+        TirTypeError::ConditionAlwaysConstant { .. } => DiagnosticId::ConditionAlwaysConstant,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
         TirTypeError::SpawnWithNotATransformer { .. } => DiagnosticId::TypeMismatch,

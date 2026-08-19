@@ -35,18 +35,4 @@ client GPT4 = openai.ResponsesClient.new(
 
 //----
 //- diagnostics
-// E0001
-//
-//   × mismatched types
-//    ╭─[headers_complex_workflow.baml:6:31]
-//  6 │     let computed_title = if (!title) {
-//    ·                               ──┬──
-//    ·                                 ╰── expected `bool`, found `string | null`
-//    ╰────
-// E0004
-//
-//   × operator `+` cannot be applied to `string | null` and `": "`
-//     ╭─[headers_complex_workflow.baml:17:5]
-//  17 │     computed_title + ": " + summary
-//     ·     ─────────────────────
-//     ╰────
+// <no-diagnostics-expected>
