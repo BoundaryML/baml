@@ -21,8 +21,9 @@ fn serde_json_dependency_does_not_force_semantic_features() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let metadata: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("cargo metadata should emit JSON");
+    let metadata: serde_json_feature_free::Value =
+        serde_json_feature_free::from_slice(&output.stdout)
+            .expect("cargo metadata should emit JSON");
     let bridge = metadata["packages"]
         .as_array()
         .expect("metadata packages should be an array")
@@ -33,8 +34,10 @@ fn serde_json_dependency_does_not_force_semantic_features() {
         .as_array()
         .expect("package dependencies should be an array")
         .iter()
-        .find(|dependency| dependency["name"] == "serde_json")
-        .expect("baml_bridge should depend on serde_json");
+        .find(|dependency| {
+            dependency["name"] == "serde_json" && dependency["rename"] == "serde_json_feature_free"
+        })
+        .expect("baml_bridge should use the feature-free serde_json alias");
     let features = serde_json["features"]
         .as_array()
         .expect("dependency features should be an array");

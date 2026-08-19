@@ -57,7 +57,7 @@ pub fn initialize_from_files(
     let api = capi::api()?;
     let root = CString::new(root_path)
         .map_err(|_| SdkError::new("root path contains an interior NUL byte"))?;
-    let files_json = serde_json::to_string(files)
+    let files_json = serde_json_feature_free::to_string(files)
         .map_err(|e| SdkError::new(format!("failed to encode source files: {e}")))?;
     let files_json = CString::new(files_json)
         .map_err(|_| SdkError::new("source contents contain an interior NUL byte"))?;
