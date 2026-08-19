@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.namespaces_nested.CallOpenAI(cfg: fixtures.namespaces_nested.AppConfig) -> fixtures.namespaces_nested.llm.openai.OpenAIResponse {
+    // Locals:
+    let _0: fixtures.namespaces_nested.llm.openai.OpenAIResponse // _0 // return
+    let _1: fixtures.namespaces_nested.AppConfig // cfg // param
+
+    bb0: {
+        _0 = user.fixtures.namespaces_nested.llm.openai.OpenAIResponse { const "response", const "gpt-4" };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

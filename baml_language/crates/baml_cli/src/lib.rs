@@ -11,6 +11,7 @@
 
 pub(crate) mod agent_command;
 pub(crate) mod auth;
+pub(crate) mod bridge;
 pub(crate) mod bytecode_cache;
 #[cfg(test)]
 mod cache_test_support;
@@ -76,6 +77,10 @@ pub enum ExitCode {
     // same conditions); BEP-027 §"Exit codes" only mandates non-zero,
     // so we pick the conventional code and keep the two runtimes aligned.
     TargetError,
+    // `baml generate --check` found a bridge that is out of date.
+    // Distinct from `Other` so CI can tell a stale bridge apart from a
+    // project that does not compile without scraping stderr.
+    BridgeStale,
 }
 
 impl From<ExitCode> for i32 {
@@ -94,6 +99,8 @@ impl From<ExitCode> for i32 {
             ExitCode::Other | ExitCode::InvalidArgs => 4,
             // No tests were found
             ExitCode::NoTestsRun => 5,
+            // A generated bridge is out of date
+            ExitCode::BridgeStale => 6,
         }
     }
 }
@@ -114,6 +121,8 @@ impl From<ExitCode> for u32 {
             ExitCode::Other | ExitCode::InvalidArgs => 4,
             // No tests were found
             ExitCode::NoTestsRun => 5,
+            // A generated bridge is out of date
+            ExitCode::BridgeStale => 6,
         }
     }
 }

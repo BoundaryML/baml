@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.namespaces_root_fallback.Config {
+  key: string
+}
+class user.fixtures.namespaces_root_fallback.Config$stream {
+  key: string | null
+}

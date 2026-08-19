@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.bigint_cmp.EqDistinctAllocs() -> bool {
+    load_const "42"
+    call baml.Bigint.parse
+    store_var b
+    load_const 42n
+    load_var b
+    cmp_bigint_op ==
+    return
+}
+
+function fixtures.bigint_cmp.EqSameAlloc() -> bool {
+    load_const true
+    return
+}
+
+function fixtures.bigint_cmp.OrderingGtEq() -> bool {
+    load_const true
+    return
+}
+
+function fixtures.bigint_cmp.OrderingLt() -> bool {
+    load_const true
+    return
+}

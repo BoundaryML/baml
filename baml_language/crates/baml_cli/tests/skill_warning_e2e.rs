@@ -68,7 +68,7 @@ impl TestHome {
         fs::write(self.root.join("config.toml"), "").unwrap();
     }
 
-    /// Run `baml-cli generate` (a warning-whitelisted command) from `cwd`.
+    /// Run `baml-cli bridge generate` (a warning-whitelisted command) from `cwd`.
     /// `$HOME` is pointed at the cwd's parent so the project-skills walk
     /// stays inside the temp tree.
     fn run_from(&self, cwd: &Path, extra_env: &[(&str, &str)]) -> Output {
@@ -191,11 +191,11 @@ fn agent_command_never_nags() {
     let home = TestHome::new();
     // A skill-less project would normally prompt to install; `baml agent …`
     // is the remedy itself, so it must stay quiet. (The install itself fails
-    // on the bogus --from source, which is fine: the warning would have
+    // on the bogus --source, which is fine: the warning would have
     // printed before dispatch.)
     let empty = tempfile::tempdir().unwrap();
     let stderr = stderr_of(&home.run_args_from(
-        &["agent", "install", "--from", "/nonexistent-skill-source"],
+        &["agent", "install", "--source", "/nonexistent-skill-source"],
         empty.path(),
         &[],
     ));

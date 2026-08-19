@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.testset_nested.$init_test_ns_fixtures_ns_testset_nested_main(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.fixtures.testset_nested"
+    load_const "all evals"
+    make_closure .<lambda($init_test_ns_fixtures_ns_testset_nested_main, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_set_at
+    pop 1
+    load_const null
+    return
+}

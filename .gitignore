@@ -196,3 +196,6 @@ rpi/
 !baml_language/sdks/typescript/bridge_typescript/dist/
 !baml_language/sdks/typescript/bridge_typescript/dist/**
 baml_language/sdks/typescript/bridge_typescript/dist/*.node
+
+# insta writes these beside the accepted snapshot on a failing assertion.
+*.snap.new

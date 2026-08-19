@@ -271,7 +271,7 @@ elif ((use_llm == 1)); then
 fi
 
 cd "${tool_repo}"
-if ! "${baml_bin}" run --output-format json --from tools/stdlib-matrix "${target}" -- \
+if ! "${baml_bin}" run --output-format json --project tools/stdlib-matrix "${target}" -- \
     --baml_surface_file "${data_dir}/baml_surface.json" \
     --ts_surface_file "${data_dir}/ts_surface.json" \
     --output_file "${output_file}" \

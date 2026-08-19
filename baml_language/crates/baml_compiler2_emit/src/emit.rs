@@ -1964,6 +1964,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 function: gidx,
                 type_args: type_args.to_vec().into_boxed_slice(),
                 runtime_package: bex_vm_types::HeapPtr::null(),
+                exact_type_values: None,
             })),
         };
         let const_idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(pool_idx)));
@@ -3056,6 +3057,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         match op {
             UnaryOp::Not => Instruction::UnaryOp(VmUnaryOp::Not),
             UnaryOp::Neg => Instruction::UnaryOp(VmUnaryOp::Neg),
+            UnaryOp::Truthy => Instruction::UnaryOp(VmUnaryOp::Truthy),
         }
     }
 

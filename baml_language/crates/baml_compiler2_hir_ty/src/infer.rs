@@ -19,10 +19,12 @@
 pub(crate) mod flow;
 pub(crate) mod obligations;
 pub(crate) mod pat;
+pub(crate) mod truthy;
 pub mod unify;
 
 use std::{cell::RefCell, path::PathBuf, sync::Arc};
 
+use baml_compiler_diagnostics::runtime_type::RuntimeTypeEscape;
 use baml_compiler2_ast::{
     Expr, ExprBody, ExprId, ObjectExprField, PatId, Pattern, PropertySyntax, Stmt, StmtId,
     traverse::BodyNode,
@@ -470,6 +472,10 @@ pub enum Adjust {
     /// or optional-parameter names drift), so lowering synthesizes an
     /// adapter closure (TIR's `function_coercion_for` rule).
     FunctionAdapter,
+    /// A condition position holding a non-`bool` value (B-1563): lowering
+    /// synthesizes the truthiness test (`null`/`false`/zero/empty are
+    /// falsy) so the branch itself stays strict-bool.
+    Truthy,
 }
 
 /// One call's argument-to-parameter matching and solved instantiation -
@@ -724,6 +730,13 @@ enum PendingDiag<'db> {
     RuntimeTypeArgumentOnIndirectCall {
         expr: ExprId,
     },
+    /// An inline `unreflect(carrier)` slot whose rigid parameter survives into
+    /// `enclosing`'s published type — as its value or as its error.
+    RuntimeTypeMustBeNamed {
+        carrier: ExprId,
+        enclosing: ExprId,
+        escape: RuntimeTypeEscape,
+    },
     CannotConstructReflectionKind {
         expr: ExprId,
         class_name: baml_type::QualifiedTypeName,
@@ -893,6 +906,14 @@ enum PendingDiag<'db> {
     InterpolatedMaybeNull {
         expr: ExprId,
         ty: Ty,
+    },
+    /// B-1563 truthiness: a NON-literal condition whose static type
+    /// decides the branch (`if (some_fn)`, `if (instance)`) - a likely
+    /// bug, warned like TS 5.6's 2872/2873.
+    ConditionAlwaysConst {
+        expr: ExprId,
+        ty: Ty,
+        always_true: bool,
     },
     GenericDestructureNoArgs {
         pat: PatId,
@@ -1614,6 +1635,10 @@ struct InferenceContext<'db> {
     /// Ground values that checked against then-open expectations by
     /// depositing bounds; re-judged once the vars solve.
     provisional_checks: Vec<(ExprId, Ty, Ty)>,
+    /// Conditions and `!` operands whose type still carried an inference
+    /// variable at check time (B-1563 truthiness); decided at finish on
+    /// the final type.
+    pending_truthy_conditions: Vec<crate::infer::truthy::PendingCondition>,
     diverges: Diverges,
     /// The body's file, for package-scoped lookups (the overlap oracle's
     /// alias map enumerates the owning package plus its dependency closure).
@@ -1632,6 +1657,13 @@ struct InferenceContext<'db> {
     /// consumes it into durable `CallPlan::deferred_checks`, so defaults and
     /// sibling bodies cannot observe it.
     runtime_dependent_call_params: FxHashMap<ExprId, FxHashMap<usize, Ty>>,
+    /// Carriers already reported as escaping their call (E0168), so a callee
+    /// road walked twice reports once.
+    reported_runtime_escapes: rustc_hash::FxHashSet<ExprId>,
+    /// Inline `unreflect(...)` carriers whose call publishes the parameter in
+    /// its RESULT — the bare `-> T` included. The `?.` check consults this at
+    /// the chain boundary, where the callee's signature is no longer reachable.
+    runtime_slots_named_by_result: rustc_hash::FxHashSet<ExprId>,
     result: InferenceResult<'db>,
 }
 
@@ -1686,11 +1718,14 @@ impl<'db> InferenceContext<'db> {
             loop_depth: 0,
             body_root: None,
             provisional_checks: Vec::new(),
+            pending_truthy_conditions: Vec::new(),
             diverges: Diverges::Maybe,
             owner_file: None,
             overlap_aliases: std::cell::OnceCell::new(),
             wf_scope_env: std::cell::OnceCell::new(),
             runtime_dependent_call_params: FxHashMap::default(),
+            reported_runtime_escapes: rustc_hash::FxHashSet::default(),
+            runtime_slots_named_by_result: rustc_hash::FxHashSet::default(),
             result: InferenceResult::default(),
         }
     }
@@ -1994,7 +2029,7 @@ impl<'db> InferenceContext<'db> {
                 then_branch,
                 else_branch,
             } => {
-                self.check_expr(body, *condition, &Ty::bool());
+                self.check_condition(body, *condition);
                 let facts = self.condition_facts(body, *condition);
                 let condition_diverges = self.diverges;
                 let branch_expectation = expected.adjust_for_branches(&mut self.table);
@@ -2458,6 +2493,7 @@ impl<'db> InferenceContext<'db> {
                 let ty = self.infer_expr(body, *inner, &Expectation::None);
                 let nullable = self.chain_nullable.pop().expect("pushed above");
                 if nullable {
+                    self.report_chain_null_escape(body, *inner);
                     self.union_of(&[ty, Ty::null()])
                 } else {
                     ty
@@ -2604,7 +2640,7 @@ impl<'db> InferenceContext<'db> {
                 for binding in self.assigned_bindings(body, *loop_body) {
                     self.flow.remove(&binding);
                 }
-                let condition_ty = self.check_expr(body, *condition, &Ty::bool());
+                let condition_ty = self.check_condition(body, *condition);
                 let facts = self.condition_facts(body, *condition);
                 let entry_flow = self.flow.clone();
                 self.apply_facts(&facts.when_true);
@@ -2738,9 +2774,12 @@ impl<'db> InferenceContext<'db> {
         ) {
             return true;
         }
+        // Truthiness (B-1563) widens "statically true" beyond the literal
+        // `true` type: any always-truthy condition (`while ("x")`, an
+        // instance, a closure) has no exit edge either.
         matches!(
-            self.table.resolve_completely(condition_ty).kind(),
-            TyKind::Literal(baml_type::Literal::Bool(true), ..)
+            crate::infer::truthy::truthiness(&self.table.resolve_completely(condition_ty)),
+            crate::infer::truthy::Truthiness::AlwaysTruthy
         )
     }
 
@@ -2778,6 +2817,38 @@ impl<'db> InferenceContext<'db> {
             block_ty = replace_rigid_param(&block_ty, &binding.parameter, &binding.occurrence_ty);
             for ty in self.flow.values_mut() {
                 *ty = replace_rigid_param(ty, &binding.parameter, &binding.occurrence_ty);
+            }
+            // The effect channel leaves the block exactly as the value does.
+            // An undeclared `throws` is assembled from these contributions at
+            // finalize, so a rigid parameter left in one becomes part of the
+            // OWNER's published effect — a type naming a parameter that stops
+            // existing at the closing brace, which reaches lowering with no
+            // type argument to bind it to.
+            for channel in &mut self.throws_channels {
+                for (_, contribution) in channel.iter_mut() {
+                    *contribution = replace_rigid_param(
+                        contribution,
+                        &binding.parameter,
+                        &binding.occurrence_ty,
+                    );
+                }
+            }
+            // A contract violation stashed inside the block quotes the effect
+            // it saw. `extra` is a COPY of a contribution — compiler-derived,
+            // and quoted in a report about what the enclosing function may
+            // throw — so it is erased for the same reason the contribution is.
+            //
+            // `declared` deliberately is NOT. It is the clause an author WROTE
+            // at that site: only a lambda's own clause can name a block-scoped
+            // binding, its violation is anchored inside that block, and the
+            // line one row above the caret reads `throws Boom<Out>`. Erasing
+            // it would print `Boom<unknown>` next to the user's own `Out` —
+            // `a_lambda_clause_inside_the_block_is_quoted_as_written` pins
+            // both halves of that asymmetry.
+            for pending in &mut self.pending_diags {
+                if let PendingDiag::ThrowsViolation { extra, .. } = pending {
+                    *extra = replace_rigid_param(extra, &binding.parameter, &binding.occurrence_ty);
+                }
             }
         }
         self.scoped_type_bindings.truncate(checkpoint);
@@ -3575,8 +3646,8 @@ impl<'db> InferenceContext<'db> {
         use baml_compiler2_ast::BinaryOp;
         match op {
             BinaryOp::And | BinaryOp::Or => {
-                let lhs_ty = self.check_expr(body, lhs, &Ty::bool());
-                let rhs_ty = self.check_expr(body, rhs, &Ty::bool());
+                let lhs_ty = self.check_condition(body, lhs);
+                let rhs_ty = self.check_condition(body, rhs);
                 let lhs_ty = self.table.resolve_completely(&lhs_ty);
                 let rhs_ty = self.table.resolve_completely(&rhs_ty);
                 const_fold_binary(op, &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool)
@@ -4083,13 +4154,19 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         match op {
             baml_compiler2_ast::UnaryOp::Not => {
-                let ty = self.check_expr(body, operand, &Ty::bool());
-                // `!` on a literal bool constant-FOLDS (TIR's
-                // `try_fold_unary`), freshness preserved.
+                let ty = self.check_not_operand(body, operand);
+                // `!` on a LITERAL constant-FOLDS through its truthiness
+                // (TIR's `try_fold_unary`, extended to the non-bool
+                // literals truthiness admits), freshness preserved.
                 let resolved = self.table.resolve_completely(&ty);
-                if let TyKind::Literal(Literal::Bool(value), freshness, _) = resolved.kind() {
+                if let TyKind::Literal(_, freshness, _) = resolved.kind() {
+                    let negated = match crate::infer::truthy::truthiness(&resolved) {
+                        crate::infer::truthy::Truthiness::AlwaysTruthy => false,
+                        crate::infer::truthy::Truthiness::AlwaysFalsy => true,
+                        crate::infer::truthy::Truthiness::Runtime => return Ty::bool(),
+                    };
                     return Ty::intern(TyKind::Literal(
-                        Literal::Bool(!value),
+                        Literal::Bool(negated),
                         *freshness,
                         TyAttr::default(),
                     ));
@@ -6018,6 +6095,14 @@ impl<'db> InferenceContext<'db> {
                 && let Some(root) = body.root_expr
                 && let Some(root_ty) = inference.type_of_expr.get(&root).cloned()
             {
+                // The initializer's own type is the EXPRESSION type, so a
+                // fresh literal arrives unwidened - `let n = 5` would bind `5`
+                // and `n.to_string()` would be E0007 on a type with no
+                // members. A top-level let is a binding site like any other
+                // (`let` in a body applies this before recording the
+                // binding), and a session cannot annotate one to opt out, so
+                // the widening is unconditional here.
+                let root_ty = self.widen_fresh(&root_ty);
                 let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[1..]);
                 self.write_resolved_path(expr, steps);
                 return ty;
@@ -7032,6 +7117,16 @@ impl<'db> InferenceContext<'db> {
         if runtime_params.is_empty() {
             return;
         }
+        self.report_runtime_type_escape(
+            call,
+            &Ty::from_plain(&function.return_type),
+            RuntimeTypeEscape::Value,
+        );
+        self.report_runtime_type_escape(
+            call,
+            &Ty::from_plain(&function.callable_throws),
+            RuntimeTypeEscape::Error,
+        );
         let mut dependent = FxHashMap::default();
         for (param_index, param) in function
             .params
@@ -7214,6 +7309,126 @@ impl<'db> InferenceContext<'db> {
             .collect()
     }
 
+    /// BEP-066 ruling (A): an inline `unreflect(value)` type argument is legal
+    /// only while the runtime type stays out of the expression's published
+    /// type. The parameter is rigid for this call alone — the call site
+    /// publishes `occurrence_ty` in its place — so a published type that still
+    /// mentions the parameter would be typed by a substitution the value does
+    /// not actually satisfy afterwards, and every later dispatch re-derives
+    /// the receiver's arguments from that published type.
+    ///
+    /// The exception, and the reason this is an occurs-check on the published
+    /// type rather than a ban on the spelling, is a type that IS the parameter
+    /// (`parse<T>(..) -> T`): occurrence-substitution then types a VALUE, the
+    /// runtime tag rides on the value itself, and nothing static claims more
+    /// than `unknown`. That is the supported dynamic path and stays legal.
+    /// One position deeper — `Wrapper<T>`, `T[]`, `T?`, a constructed `C<T>` —
+    /// the occurrence substitutes into a type CONSTRUCTOR, and the published
+    /// type starts asserting something about the value.
+    ///
+    /// A call publishes two types, and the rule reads the same in both: the
+    /// result the caller binds, and the [`RuntimeTypeEscape::Error`] a
+    /// `throws` clause hands to the caller's handler — which is just as
+    /// visible after the call returns, and just as often written `Boom<T>`.
+    fn report_runtime_type_escape(
+        &mut self,
+        call: ExprId,
+        published: &Ty,
+        escape: RuntimeTypeEscape,
+    ) {
+        if escape == RuntimeTypeEscape::Value {
+            // The `?.` check runs later, at the chain boundary, where the
+            // callee's signature is long out of reach — so the one fact it
+            // needs is recorded here: does this call's RESULT name the
+            // parameter at all? A result that never mentions it (`-> bool`,
+            // `-> Wrapper<unknown>`) publishes nothing about the runtime type,
+            // and wrapping nothing in `| null` is still nothing.
+            self.runtime_slots_named_by_result.extend(
+                self.escaping_carriers(call, |parameter| ty_mentions_param(published, parameter)),
+            );
+        }
+        let escaping = self.escaping_carriers(call, |parameter| {
+            runtime_param_escapes(published, parameter)
+        });
+        self.report_escaping_carriers(call, escaping, escape);
+    }
+
+    /// The carrier expressions of `call`'s inline `unreflect(...)` slots whose
+    /// parameter `escapes`.
+    fn escaping_carriers(
+        &self,
+        call: ExprId,
+        escapes: impl Fn(&baml_type::ParamTy) -> bool,
+    ) -> Vec<ExprId> {
+        self.result
+            .call_plans
+            .get(&call)
+            .into_iter()
+            .flat_map(|plan| &plan.slots)
+            .filter_map(|slot| match slot {
+                CallTypeArgPlan::Runtime {
+                    operand, parameter, ..
+                } => escapes(parameter).then_some(*operand),
+                CallTypeArgPlan::Static { .. } => None,
+            })
+            .collect()
+    }
+
+    fn report_escaping_carriers(
+        &mut self,
+        enclosing: ExprId,
+        carriers: Vec<ExprId>,
+        escape: RuntimeTypeEscape,
+    ) {
+        for carrier in carriers {
+            // A callee can be typed more than once (the interface probe
+            // re-runs the member road), and a slot can escape through more
+            // than one published type; the slot is reported once.
+            if self.reported_runtime_escapes.insert(carrier) {
+                self.pending_diags
+                    .push(PendingDiag::RuntimeTypeMustBeNamed {
+                        carrier,
+                        enclosing,
+                        escape,
+                    });
+            }
+        }
+    }
+
+    /// The `?.` arm of the same rule, reported at the chain BOUNDARY because
+    /// that is where the wrapper appears: a short-circuiting chain republishes
+    /// its tail's result as `T | null`, so a call whose bare `-> T` result was
+    /// legal on its own stops being legal once `?.` wraps it. This is the
+    /// spelling half of the declared `-> T?` refusal — both publish `unknown?`
+    /// and both now say the same thing.
+    ///
+    /// It is still the published type that decides, never the punctuation: a
+    /// tail whose result never mentions the parameter (`-> bool`, or the
+    /// declared-erased `-> Wrapper<unknown>`) publishes nothing about the
+    /// runtime type, so the chain's `| null` has nothing to wrap and the call
+    /// stays legal. [`Self::report_runtime_type_escape`] recorded that fact
+    /// while the callee's signature was still in hand.
+    ///
+    /// Only the chain's TAIL is affected: it is the expression whose value the
+    /// chain republishes. A call in argument position, or one whose result is
+    /// consumed further along the chain (`a?.b.m<unreflect(t)>().field`),
+    /// publishes its own result unchanged and keeps whatever verdict its
+    /// signature earned.
+    fn report_chain_null_escape(&mut self, body: &ExprBody, tail: ExprId) {
+        if !matches!(
+            body.exprs[tail],
+            Expr::Call { .. } | Expr::OptionalCall { .. }
+        ) {
+            return;
+        }
+        let escaping = self.escaping_carriers(tail, |_| true);
+        let escaping: Vec<ExprId> = escaping
+            .into_iter()
+            .filter(|carrier| self.runtime_slots_named_by_result.contains(carrier))
+            .collect();
+        self.report_escaping_carriers(tail, escaping, RuntimeTypeEscape::Value);
+    }
+
     fn record_runtime_dependent_arguments(
         &mut self,
         call: ExprId,
@@ -7227,6 +7442,12 @@ impl<'db> InferenceContext<'db> {
         }) {
             return;
         }
+        self.report_runtime_type_escape(call, &signature.ret, RuntimeTypeEscape::Value);
+        // `signature.throws` is the DECLARED clause when the author wrote one
+        // and the inferred effect otherwise (S12). Both are published to the
+        // caller, so both are checked — the note is worded for a clause the
+        // author may never have spelled.
+        self.report_runtime_type_escape(call, &signature.throws, RuntimeTypeEscape::Error);
         let runtime_params = self.runtime_call_params(call);
         if runtime_params.is_empty() {
             return;
@@ -9068,6 +9289,11 @@ impl<'db> InferenceContext<'db> {
         {
             *ty = self.finalize_ty(ty);
         }
+        // Truthiness decisions deferred past the fixpoint (B-1563): a
+        // condition still carrying an inference variable at check time
+        // decides here, on its FINAL type, so `if (identity(0))` records
+        // the same coercion `if (0)` does.
+        self.decide_deferred_conditions(&mut result);
         // Provisional checks re-judge now that their expectations solved:
         // a definite failure joins the mismatch table (first writer per
         // expr wins - a direct mismatch is the better message).
@@ -9439,6 +9665,19 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::RuntimeTypeArgumentOnIndirectCall { expr } => {
                         (TirTypeError::RuntimeTypeArgumentOnIndirectCall, expr)
                     }
+                    PendingDiag::RuntimeTypeMustBeNamed {
+                        carrier,
+                        enclosing,
+                        escape,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::RuntimeTypeMustBeNamed { escape },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::UnreflectArg { carrier, enclosing },
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::CannotConstructReflectionKind { expr, class_name } => (
                         TirTypeError::CannotConstructReflectionKind { class_name },
                         expr,
@@ -9518,6 +9757,22 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::ConditionAlwaysConst {
+                        expr,
+                        ty,
+                        always_true,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::ConditionAlwaysConstant {
+                                ty: self.finalize_ty(&ty).to_plain(),
+                                always_true,
+                            },
+                            severity: DiagnosticSeverity::Warning,
+                            primary: DiagnosticLocation::Expr(expr),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::UnnecessaryOptionalChain {
                         expr,
                         expr_text,
@@ -9923,6 +10178,9 @@ impl<'db> InferenceContext<'db> {
                 DiagnosticLocation::TypeAnnot(id) => (2, u32::from(id.into_raw())),
                 DiagnosticLocation::Pat(id) => (4, u32::from(id.into_raw())),
                 DiagnosticLocation::TypeRef(id) => (5, u32::from(id.into_raw())),
+                DiagnosticLocation::UnreflectArg { carrier, .. } => {
+                    (6, u32::from(carrier.into_raw()))
+                }
                 DiagnosticLocation::Span(range) => (3, u32::from(range.start())),
             });
             diags.dedup();
@@ -10923,6 +11181,17 @@ fn interface_mentions_param(interface: &InterfaceRef, param: &baml_type::ParamTy
         .any(|ty| ty_mentions_param(ty, param))
 }
 
+/// Does a call-scoped runtime parameter survive into a type the call
+/// `published` (its result, or the error it can throw) as more than that type
+/// itself? See [`InferCtx::report_runtime_type_escape`] for why the bare
+/// parameter is the one shape that does not escape.
+fn runtime_param_escapes(published: &Ty, param: &baml_type::ParamTy) -> bool {
+    if matches!(published.kind(), TyKind::TypeVar(candidate, _) if candidate == param) {
+        return false;
+    }
+    ty_mentions_param(published, param)
+}
+
 fn interface_occurrence_ty(interface: &InterfaceRef) -> Ty {
     Ty::intern(TyKind::Interface(
         interface.name.clone(),
@@ -11144,5 +11413,49 @@ mod syntactic_union_tests {
         let nested = union(&[Ty::int(), Ty::string()]);
         let flat = syntactic_union(&[nested, Ty::int()]);
         assert_eq!(flat, union(&[Ty::int(), Ty::string()]));
+    }
+}
+
+#[cfg(test)]
+mod runtime_param_escape_tests {
+    use super::*;
+
+    fn param() -> baml_type::ParamTy {
+        baml_type::ParamTy::new(0x8000_0001, baml_type::Name::new("Out"))
+    }
+
+    fn var(param: &baml_type::ParamTy) -> Ty {
+        Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default()))
+    }
+
+    /// The whole rule is one boundary: the parameter ITSELF is a value's type
+    /// and does not escape; one constructor deeper it is an assertion about a
+    /// value, and does.
+    #[test]
+    fn the_bare_parameter_is_the_only_shape_that_does_not_escape() {
+        let param = param();
+        assert!(!runtime_param_escapes(&var(&param), &param));
+        assert!(!runtime_param_escapes(&Ty::int(), &param));
+        assert!(!runtime_param_escapes(&Ty::never(), &param));
+        assert!(runtime_param_escapes(
+            &Ty::intern(TyKind::List(var(&param), TyAttr::default())),
+            &param
+        ));
+        assert!(runtime_param_escapes(
+            &syntactic_union(&[var(&param), Ty::null()]),
+            &param
+        ));
+    }
+
+    /// A different parameter is a different name: an occurs-check that keyed on
+    /// shape alone would refuse every generic result.
+    #[test]
+    fn another_parameter_is_not_this_one() {
+        let other = baml_type::ParamTy::new(0x8000_0002, baml_type::Name::new("Other"));
+        assert!(!runtime_param_escapes(&var(&other), &param()));
+        assert!(!runtime_param_escapes(
+            &Ty::intern(TyKind::List(var(&other), TyAttr::default())),
+            &param()
+        ));
     }
 }

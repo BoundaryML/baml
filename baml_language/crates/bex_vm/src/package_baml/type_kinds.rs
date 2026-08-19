@@ -7,11 +7,14 @@ use baml_compiler_diagnostics::{
     runtime_type::{self, DuplicateMemberKind, InvalidIdentifierKind, SerializedKeyContainer},
 };
 use bex_heap::TlabHolder;
-use bex_vm_types::types::{
-    Class, ClassField, DynTypeDefs, DynWitnessDef, Enum, EnumVariant, InterfaceDef, MethodImpl,
-    MintId, Object, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
-    PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeImplRule,
-    RuntimeTypeProvenance, TypeValue, Value,
+use bex_vm_types::{
+    HeapPtr,
+    types::{
+        Class, ClassField, DynTypeDefs, DynWitnessDef, Enum, EnumVariant, InterfaceDef, MethodImpl,
+        MintId, Object, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
+        PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeImplRule,
+        RuntimeTypeProvenance, TypeValue, Value,
+    },
 };
 use indexmap::IndexMap;
 
@@ -1017,9 +1020,23 @@ impl BamlNamespaceReflectUnion for PackageBamlImpl {
     }
 }
 
-fn reflected_ty(vm: &BexVm, value: Value) -> baml_type::RealizedTy {
-    super::type_class::type_value_ty(vm, value)
-        .unwrap_or_else(|| unreachable!("kind method receiver must be Object::Type"))
+/// Hand back a type nested inside `parent`, keeping `parent`'s runtime
+/// definition overlay.
+///
+/// A minted `type` value gives its nominal names meaning through the
+/// [`DynTypeDefs`] it carries (BEP-066): `user.$dyn.2.Choice` is only a name
+/// until the overlay maps it to a definition. Every decomposing view accessor
+/// (`element_type`, `key_type`, `value_type`, `member_types`, `params`,
+/// `return_type`, and a class field's type) hands back a type that was written
+/// *inside* that overlay, so allocating it as a plain static value strands the
+/// definitions it names and the next `values()`/`fields()` call cannot find
+/// them. Carrying the overlay forward is the same thing `LoadType` does for a
+/// type materialized inside a frame that has one.
+fn nested_type_value(vm: &mut BexVm, inner: baml_type::RealizedTy, parent: &TypeValue) -> HeapPtr {
+    if parent.defs().is_empty() {
+        return vm.alloc_static_type(inner);
+    }
+    vm.alloc_static_type_with_defs(inner, parent.defs().clone())
 }
 
 /// Realize an interface field declaration against the exact interface
@@ -1191,7 +1208,7 @@ fn substitute_witness_field_type(
     }
 }
 
-fn reflected_type_value(vm: &BexVm, value: Value) -> TypeValue {
+pub(super) fn reflected_type_value(vm: &BexVm, value: Value) -> TypeValue {
     let ptr = value
         .as_object_ptr()
         .unwrap_or_else(|| unreachable!("type argument must be Object::Type"));
@@ -1217,63 +1234,89 @@ pub(super) struct ReflectedTypeRow {
     pub(super) other: IndexMap<String, String>,
 }
 
-pub(super) fn reflected_type_row(vm: &BexVm, value: Value) -> Result<ReflectedTypeRow, String> {
-    let Some(ptr) = value.as_object_ptr() else {
-        return Err("class fields must be type values or reflect.WithMeta<type> rows".into());
+/// A `reflect.WithMeta<T>` row read without interpreting its payload.
+///
+/// `T` is `type` for an ordinary field and `reflect.class.PendingType` for a
+/// recursive one, so the payload stays a raw `Value` and each caller decides
+/// what it accepts.
+pub(super) struct WithMetaRow {
+    pub(super) payload: Value,
+    pub(super) alias: Option<String>,
+    pub(super) description: Option<String>,
+    pub(super) docstring: Option<String>,
+    pub(super) other: IndexMap<String, String>,
+}
+
+/// Read `value` as a `reflect.WithMeta` wrapper. `None` when it is not one.
+pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaRow, String>> {
+    let Object::Instance(instance) = vm.get_object(value.as_object_ptr()?) else {
+        return None;
     };
-    match vm.get_object(ptr) {
-        Object::Type(type_value) => Ok(ReflectedTypeRow {
+    let Object::Class(class) = vm.get_object(instance.class) else {
+        unreachable!("Instance.class must point to Object::Class")
+    };
+    if class.name.to_string() != "baml.reflect.WithMeta" {
+        return None;
+    }
+    let optional_string = |index| {
+        let value = instance.load_field(index);
+        if value.is_null() {
+            Ok(None)
+        } else {
+            vm.as_string(&value)
+                .map(|value| Some(value.to_string()))
+                .map_err(|_| "reflect.WithMeta string field has an invalid value".to_string())
+        }
+    };
+    let read = || {
+        let other = vm
+            .as_map(&instance.load_field(4))
+            .map_err(|_| "reflect.WithMeta.other must be map<string, string>".to_string())?
+            .to_index_map()
+            .iter()
+            .map(|(key, value)| {
+                vm.as_string(value)
+                    .map(|value| (key.to_string(), value.to_string()))
+                    .map_err(|_| "reflect.WithMeta.other must be map<string, string>".to_string())
+            })
+            .collect::<Result<IndexMap<_, _>, _>>()?;
+        Ok(WithMetaRow {
+            payload: instance.load_field(0),
+            alias: optional_string(1)?,
+            description: optional_string(2)?,
+            docstring: optional_string(3)?,
+            other,
+        })
+    };
+    Some(read())
+}
+
+pub(super) fn reflected_type_row(vm: &BexVm, value: Value) -> Result<ReflectedTypeRow, String> {
+    const EXPECTED: &str = "class fields must be type values or reflect.WithMeta<type> rows";
+    let Some(ptr) = value.as_object_ptr() else {
+        return Err(EXPECTED.into());
+    };
+    if let Object::Type(type_value) = vm.get_object(ptr) {
+        return Ok(ReflectedTypeRow {
             type_value: (**type_value).clone(),
             alias: None,
             description: None,
             docstring: None,
             other: IndexMap::new(),
-        }),
-        Object::Instance(instance) => {
-            let Object::Class(class) = vm.get_object(instance.class) else {
-                unreachable!("Instance.class must point to Object::Class")
-            };
-            if class.name.to_string() != "baml.reflect.WithMeta" {
-                return Err(
-                    "class fields must be type values or reflect.WithMeta<type> rows".into(),
-                );
-            }
-            let type_value = reflected_type_value(vm, instance.load_field(0));
-            let optional_string = |index| {
-                let value = instance.load_field(index);
-                if value.is_null() {
-                    Ok(None)
-                } else {
-                    vm.as_string(&value)
-                        .map(|value| Some(value.to_string()))
-                        .map_err(|_| {
-                            "reflect.WithMeta string field has an invalid value".to_string()
-                        })
-                }
-            };
-            let other = vm
-                .as_map(&instance.load_field(4))
-                .map_err(|_| "reflect.WithMeta.other must be map<string, string>".to_string())?
-                .to_index_map()
-                .iter()
-                .map(|(key, value)| {
-                    vm.as_string(value)
-                        .map(|value| (key.to_string(), value.to_string()))
-                        .map_err(|_| {
-                            "reflect.WithMeta.other must be map<string, string>".to_string()
-                        })
-                })
-                .collect::<Result<IndexMap<_, _>, _>>()?;
-            Ok(ReflectedTypeRow {
-                type_value,
-                alias: optional_string(1)?,
-                description: optional_string(2)?,
-                docstring: optional_string(3)?,
-                other,
-            })
-        }
-        _ => Err("class fields must be type values or reflect.WithMeta<type> rows".into()),
+        });
     }
+    let row = with_meta_row(vm, value).ok_or_else(|| EXPECTED.to_string())??;
+    let Some(Object::Type(type_value)) = row.payload.as_object_ptr().map(|ptr| vm.get_object(ptr))
+    else {
+        return Err(EXPECTED.into());
+    };
+    Ok(ReflectedTypeRow {
+        type_value: (**type_value).clone(),
+        alias: row.alias,
+        description: row.description,
+        docstring: row.docstring,
+        other: row.other,
+    })
 }
 
 fn reflected_class(vm: &BexVm, value: Value) -> (bex_vm_types::Class, Vec<baml_type::RealizedTy>) {
@@ -1336,6 +1379,59 @@ fn reflected_enum(vm: &BexVm, value: Value) -> bex_vm_types::Enum {
 
 fn opt_string(vm: &mut BexVm, value: Option<&str>) -> Value {
     value.map_or(Value::NULL, |s| Value::object(vm.alloc_string(s)))
+}
+
+/// Read a native `map<string, string>` argument into owned rows.
+pub(super) fn string_map_rows(
+    vm: &BexVm,
+    other: Option<&IndexMap<bex_str::BexStr, Value>>,
+) -> IndexMap<String, String> {
+    other
+        .into_iter()
+        .flatten()
+        .map(|(key, value)| {
+            let value = vm
+                .as_string(value)
+                .expect("map<string, string> value checked by native glue");
+            (key.to_string(), value.to_string())
+        })
+        .collect()
+}
+
+/// Pair `payload` with schema metadata as a `reflect.WithMeta` row. `payload`
+/// is a `type` value for `type.meta` and a pending reference for
+/// `reflect.class.PendingType.meta`.
+pub(super) fn alloc_with_meta(
+    vm: &mut BexVm,
+    payload: Value,
+    alias: Option<&str>,
+    description: Option<&str>,
+    docstring: Option<&str>,
+    other: &IndexMap<String, String>,
+) -> Value {
+    let mut entries = IndexMap::with_capacity(other.len());
+    for (key, value) in other {
+        entries.insert(
+            bex_str::BexStr::from(key.as_str()),
+            Value::object(vm.alloc_string(value.as_str())),
+        );
+    }
+    let other = Value::object(vm.alloc_map(
+        baml_type::RealizedTy::string(),
+        baml_type::RealizedTy::string(),
+        entries,
+    ));
+    let alias = opt_string(vm, alias);
+    let description = opt_string(vm, description);
+    let docstring = opt_string(vm, docstring);
+    copy::reflect::WithMeta {
+        ty: payload,
+        alias,
+        description,
+        docstring,
+        other,
+    }
+    .to_value(vm)
 }
 
 fn alloc_meta(
@@ -1534,6 +1630,7 @@ impl BamlClassReflectClassType for PackageBamlImpl {
     impl_as_type!(BamlClassReflectClassType);
 
     fn fields(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
+        let parent = reflected_type_value(vm, *r#type);
         let (class, args) = reflected_class(vm, *r#type);
         class
             .fields
@@ -1549,7 +1646,7 @@ impl BamlClassReflectClassType for PackageBamlImpl {
                         .unwrap_or_else(|err| {
                             unreachable!("emitted class field template must realize: {err}")
                         });
-                    Value::object(vm.alloc_static_type(ty))
+                    Value::object(nested_type_value(vm, ty, &parent))
                 };
                 let meta = alloc_meta(
                     vm,
@@ -1618,12 +1715,13 @@ impl BamlClassReflectUnionType for PackageBamlImpl {
     impl_as_type!(BamlClassReflectUnionType);
 
     fn member_types(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
-        let baml_type::RealizedTy::Union(members, _) = reflected_ty(vm, *r#type) else {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::Union(members, _) = parent.ty.clone() else {
             unreachable!("union.Type receiver must wrap a union type")
         };
         members
             .into_iter()
-            .map(|ty| Value::object(vm.alloc_static_type(ty)))
+            .map(|ty| Value::object(nested_type_value(vm, ty, &parent)))
             .collect()
     }
 }
@@ -1632,10 +1730,11 @@ impl BamlClassReflectArrayType for PackageBamlImpl {
     impl_as_type!(BamlClassReflectArrayType);
 
     fn element_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let baml_type::RealizedTy::List(element, _) = reflected_ty(vm, *r#type) else {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::List(element, _) = parent.ty.clone() else {
             unreachable!("array.Type receiver must wrap an array type")
         };
-        Value::object(vm.alloc_static_type(*element))
+        Value::object(nested_type_value(vm, *element, &parent))
     }
 }
 
@@ -1643,33 +1742,38 @@ impl BamlClassReflectMapType for PackageBamlImpl {
     impl_as_type!(BamlClassReflectMapType);
 
     fn key_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let baml_type::RealizedTy::Map { key, .. } = reflected_ty(vm, *r#type) else {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::Map { key, .. } = parent.ty.clone() else {
             unreachable!("map.Type receiver must wrap a map type")
         };
-        Value::object(vm.alloc_static_type(*key))
+        Value::object(nested_type_value(vm, *key, &parent))
     }
 
     fn value_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let baml_type::RealizedTy::Map { value, .. } = reflected_ty(vm, *r#type) else {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::Map { value, .. } = parent.ty.clone() else {
             unreachable!("map.Type receiver must wrap a map type")
         };
-        Value::object(vm.alloc_static_type(*value))
+        Value::object(nested_type_value(vm, *value, &parent))
     }
 }
 
 impl BamlClassReflectFunctionType for PackageBamlImpl {
     impl_as_type!(BamlClassReflectFunctionType);
 
-    fn params(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
-        let baml_type::RealizedTy::Function { params, .. } = reflected_ty(vm, *r#type) else {
-            unreachable!("function.Type receiver must wrap a function type")
+    fn params(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::Function { params, .. } = parent.ty.clone() else {
+            return Err(unspecialized_descriptor_read(vm, *r#type));
         };
-        params
+        let exact = super::reflect::descriptor_exact_positions(vm, *r#type);
+        Ok(params
             .into_iter()
-            .map(|param| {
+            .enumerate()
+            .map(|(index, param)| {
                 let name = opt_string(vm, param.name.as_ref().map(baml_type::Name::as_str));
                 let optional = param.is_optional();
-                let r#type = Value::object(vm.alloc_static_type(param.ty));
+                let r#type = signature_type_value(vm, param.ty, &parent, exact.param(index));
                 copy::reflect::function::Parameter {
                     name,
                     r#type,
@@ -1677,15 +1781,69 @@ impl BamlClassReflectFunctionType for PackageBamlImpl {
                 }
                 .to_value(vm)
             })
-            .collect()
+            .collect())
     }
 
-    fn return_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let baml_type::RealizedTy::Function { ret, .. } = reflected_ty(vm, *r#type) else {
-            unreachable!("function.Type receiver must wrap a function type")
+    fn return_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+        let parent = reflected_type_value(vm, *r#type);
+        let baml_type::RealizedTy::Function { ret, .. } = parent.ty.clone() else {
+            return Err(unspecialized_descriptor_read(vm, *r#type));
         };
-        Value::object(vm.alloc_static_type(*ret))
+        let exact = super::reflect::descriptor_exact_positions(vm, *r#type);
+        Ok(signature_type_value(vm, *ret, &parent, exact.ret()))
     }
+
+    fn is_generic(vm: &BexVm, r#type: &Value) -> bool {
+        super::reflect::descriptor_is_generic(vm, *r#type)
+    }
+
+    fn generic_params(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
+        super::reflect::descriptor_generic_params(vm, *r#type)
+    }
+
+    fn specialize(
+        vm: &mut BexVm,
+        r#type: &Value,
+        args: &[Value],
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        super::reflect::descriptor_specialize(vm, *r#type, args)
+    }
+
+    fn get(vm: &mut BexVm, r#type: &Value) -> Result<Option<Value>, crate::errors::VmRustFnError> {
+        super::reflect::descriptor_get(vm, *r#type)
+    }
+}
+
+/// One type read out of a descriptor's signature.
+///
+/// `exact` is the value this *position* was specialized with, resolved
+/// positionally by `descriptor_exact_positions`; when it is set the caller's
+/// own value is handed back so a runtime-minted argument keeps its identity.
+/// Everything else decomposes normally, keeping the parent's overlay.
+fn signature_type_value(
+    vm: &mut BexVm,
+    ty: baml_type::RealizedTy,
+    parent: &TypeValue,
+    exact: Option<TypeValue>,
+) -> Value {
+    match exact {
+        Some(value) => Value::object(vm.tlab.alloc_type(value)),
+        None => Value::object(nested_type_value(vm, ty, parent)),
+    }
+}
+
+/// A signature-shaped read of a descriptor whose type is not a function type.
+///
+/// In practice that is the unspecialized generic state `Package.functions()`
+/// now publishes — its declared surface mentions its own type parameters, and
+/// the realized type family has no way to spell those. Any other non-function
+/// receiver (a `function.Type` view forced onto an unrelated type value) lands
+/// here too, with the same message: there is no signature to read.
+fn unspecialized_descriptor_read(vm: &mut BexVm, r#type: Value) -> crate::errors::VmRustFnError {
+    let name = super::reflect::descriptor_callable_name(vm, r#type)
+        .unwrap_or_else(|| "<anonymous>".to_string());
+    let diagnostic = runtime_type::unspecialized_reflected_generic_signature(&name);
+    crate::errors::VmRustFnError::Thrown(alloc_compilation_error(vm, &[diagnostic]))
 }
 
 impl BamlClassReflectInterfaceType for PackageBamlImpl {

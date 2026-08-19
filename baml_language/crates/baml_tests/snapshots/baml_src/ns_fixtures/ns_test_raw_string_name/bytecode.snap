@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.test_raw_string_name.$init_test_ns_fixtures_ns_test_raw_string_name_main(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.fixtures.test_raw_string_name"
+    load_const "raw string name"
+    make_closure .<lambda($init_test_ns_fixtures_ns_test_raw_string_name_main, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.fixtures.test_raw_string_name"
+    load_const "has \"quotes\" inside"
+    make_closure .<lambda($init_test_ns_fixtures_ns_test_raw_string_name_main, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.fixtures.test_raw_string_name"
+    load_const "raw testset name"
+    make_closure .<lambda($init_test_ns_fixtures_ns_test_raw_string_name_main, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_set_at
+    pop 1
+    load_const null
+    return
+}

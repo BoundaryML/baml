@@ -77,3 +77,58 @@ test "messages_yields_promptmessage_instances" {
     assert.equal(paa_single_message_fn().length(), 1)
     assert.equal(paa_single_message_fn()[0].content, "Just a system prompt.")
 }
+
+// ── Ported from tests/promptast_accessors.rs ────────────────────────────────
+
+// `ai.Role.metadata` is the per-message channel providers read for directives
+// like Anthropic `cache_control`. `collect_structured_messages` used to drop
+// it; it must reach `ai.PromptMessage.metadata` intact, and a message that
+// carried none must read as an empty map (never null).
+function pa_message_metadata_survives_assembly() -> string {
+    let cc = ai.ContextClient { name: "c", provider: "anthropic", default_role: "user", allowed_roles: ["system", "user"] };
+    let ctx = ai.Context { client: cc, tags: {} };
+    let cached = ai.Role { name: "system", metadata: { "cache_control": { "type": "ephemeral" } } };
+    let render = prompt`${cached}Long shared preamble.${role("user")}Hi World!`;
+    let out: string[] = [];
+    for (let m in render(ctx).messages()) {
+        out.push(`${m.role}=${baml.json.stringify(baml.json.to_json(m.metadata))}`)
+    }
+    out.join(";")
+}
+
+test "message_metadata_survives_prompt_assembly" {
+    assert.equal(
+        pa_message_metadata_survives_assembly(),
+        "system={\"cache_control\":{\"type\":\"ephemeral\"}};user={}",
+    )
+}
+
+// Every media kind interpolated into a prompt must survive as its own
+// structural part, interleaved with the surrounding text runs.
+function pa_message_parts_preserve_media() -> string {
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] };
+    let ctx = ai.Context { client: cc, tags: {} };
+    let img = image.from_url("https://example.com/photo.png", "image/png");
+    let sound = audio.from_url("https://example.com/sound.mp3", "audio/mpeg");
+    let movie = video.from_url("https://example.com/movie.mp4", "video/mp4");
+    let document = pdf.from_url("https://example.com/document.pdf", "application/pdf");
+    let render = prompt`before:${img}:${sound}:${movie}:${document}:after`;
+    let kinds: string[] = [];
+    for (let part in render(ctx).messages()[0].parts) {
+        match (part) {
+            let text: string => kinds.push(`text=${text}`),
+            let image: baml.media.Image => kinds.push(`image=${image.url() ?? ""}`),
+            let audio: baml.media.Audio => kinds.push(`audio=${audio.url() ?? ""}`),
+            let video: baml.media.Video => kinds.push(`video=${video.url() ?? ""}`),
+            let pdf: baml.media.Pdf => kinds.push(`pdf=${pdf.url() ?? ""}`),
+        }
+    }
+    kinds.join("|")
+}
+
+test "message_parts_preserve_all_media_structurally" {
+    assert.equal(
+        pa_message_parts_preserve_media(),
+        "text=before:|image=https://example.com/photo.png|text=:|audio=https://example.com/sound.mp3|text=:|video=https://example.com/movie.mp4|text=:|pdf=https://example.com/document.pdf|text=:after",
+    )
+}

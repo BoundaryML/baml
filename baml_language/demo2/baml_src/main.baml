@@ -4,7 +4,7 @@
 //   GOOGLE_GENAI_USE_VERTEXAI=1 \
 //   GOOGLE_CLOUD_PROJECT=<project> \
 //   GOOGLE_CLOUD_LOCATION=<location> \
-//   baml run --from demo2 main
+//   baml run --project demo2 main
 //
 // No api_key: with GOOGLE_GENAI_USE_VERTEXAI=1 the request routes to the
 // Vertex AI backend and authenticates with application-default credentials

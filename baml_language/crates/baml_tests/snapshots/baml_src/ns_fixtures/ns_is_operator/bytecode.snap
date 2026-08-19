@@ -1,0 +1,137 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.is_operator.both_ints(a: int | string, b: int | string) -> bool {
+    load_var a
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    jump_if_false L5
+    pop 1
+    load_var b
+    is_type int
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    jump L5
+
+  L4:
+    load_const true
+
+  L5:
+    return
+}
+
+function fixtures.is_operator.classify(v: int | string) -> string {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "text"
+    jump L5
+
+  L4:
+    load_const "number"
+
+  L5:
+    return
+}
+
+function fixtures.is_operator.is_int(v: int | string) -> bool {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function fixtures.is_operator.is_int_or_bool(v: int | string | bool) -> bool {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var v
+    is_type bool
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const false
+    jump L3
+
+  L2:
+    load_const true
+
+  L3:
+    return
+}
+
+function fixtures.is_operator.is_not_string(v: int | string) -> bool {
+    load_var v
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    unary_op !
+    return
+}
+
+function fixtures.is_operator.is_zero(n: int) -> bool {
+    load_var n
+    is_type 0
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}

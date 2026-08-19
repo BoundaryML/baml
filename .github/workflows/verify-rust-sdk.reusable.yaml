@@ -180,7 +180,7 @@ jobs:
           rm -rf "$RUNNER_TEMP/verify"
           mkdir -p "$RUNNER_TEMP/verify"
           cp -r sdks/rust/verify/baml.toml sdks/rust/verify/baml_src "$RUNNER_TEMP/verify/"
-          "${{ steps.cli.outputs.baml_cli }}" generate --from "$RUNNER_TEMP/verify"
+          "${{ steps.cli.outputs.baml_cli }}" bridge generate --project "$RUNNER_TEMP/verify"
           test -f "$RUNNER_TEMP/verify/gen/baml_sdk/Cargo.toml"
           grep -q "baml_bridge = \"=${CANONICAL}\"" "$RUNNER_TEMP/verify/gen/baml_sdk/Cargo.toml"
 

@@ -655,6 +655,20 @@ impl BexHeap {
         Generation::Gen0
     }
 
+    /// Narrow a set of GC edges to the young-generation ones a minor
+    /// collection has to trace.
+    ///
+    /// Pairs with the `gc_edges()` methods on the type-value payloads, so a
+    /// minor-collection arm reads exactly like its major-collection twin plus
+    /// this filter, instead of open-coding the same walk a third time.
+    #[inline]
+    pub fn young_edges<'a>(
+        &'a self,
+        edges: impl Iterator<Item = HeapPtr> + 'a,
+    ) -> impl Iterator<Item = HeapPtr> + 'a {
+        edges.filter(|ptr| self.generation_of(*ptr).is_young())
+    }
+
     /// Check whether a raw pointer falls within any chunk of a `ChunkedVec`.
     ///
     /// # Safety

@@ -94,6 +94,7 @@ impl ProjectSession {
                 db.set_project_root(&root);
                 Ok(Self {
                     resolved: ResolvedProject {
+                        source_root: root.clone(),
                         root,
                         manifest: None,
                         files: Vec::new(),

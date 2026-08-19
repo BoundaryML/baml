@@ -1,6 +1,6 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::{Context, Result};
 use baml_db::baml_compiler2_hir;
@@ -40,19 +40,12 @@ Examples:
   Search for something by what it does:
     baml describe --search 'read a file'")]
 pub struct DescribeArgs {
-    #[command(flatten)]
-    pub compiler: crate::commands::CompilerArgs,
-
     /// Symbol, namespace, package, or keyword. Omit to list project symbols.
     pub name: Option<String>,
 
     /// Deprecated alias for invoking `baml describe` without a name.
     #[arg(long, hide_short_help = true)]
     pub symbols: bool,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
 
     /// Soft maximum number of output lines.
     #[arg(long, default_value_t = 30, help_heading = "Output options")]
@@ -317,14 +310,14 @@ fn search_symbols_by_name<'db>(
 
 impl DescribeArgs {
     /// Run the describe command and return the CLI exit code.
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
         // Introspection never requires a `baml.toml`: with no project, we
         // fall back to a stdlib-only "default state" so `baml describe
         // baml.String` works anywhere. An empty user-file set is therefore
         // expected, not an error — unresolved names still surface through
         // the per-target "No symbol found" + did-you-mean paths below.
         let mut session = crate::project_session::ProjectSession::open_lenient(
-            self.from.as_deref(),
+            project,
             crate::project_session::CacheUse::ReadOnly,
         )?;
         // Warm seeds (no-delta only) + parallel index prime: describe queries

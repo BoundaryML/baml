@@ -1,0 +1,47 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.bigint_literal.GetBigint() -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+    let _1: bigint // x
+
+    bb0: {
+        _1 = const 42n;
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.bigint_literal.GetLargeBigint() -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+
+    bb0: {
+        _0 = const 99999999999999999999n;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.bigint_literal.GetNegativeBigint() -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+
+    bb0: {
+        _0 = const -7n;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

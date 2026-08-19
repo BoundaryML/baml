@@ -33,10 +33,6 @@ pub struct FormatArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
-
     #[arg(
         short = 'n',
         long = "dry-run",
@@ -48,14 +44,14 @@ pub struct FormatArgs {
 }
 
 impl FormatArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
         // Cargo-style default: with no positional paths, discover every
         // `.baml` file under the project root and format the lot. The
         // project-marker rule keeps `baml fmt` from silently rewriting
         // every `.baml` under cwd from an unrelated directory; with no
         // marker there's simply nothing to format (a no-op success).
         let paths = if self.paths.is_empty() {
-            match discover_project_files(self.from.as_deref())? {
+            match discover_project_files(project)? {
                 Some(files) => files,
                 None => {
                     // No `baml.toml` / `baml_src/` here — there's nothing to
@@ -72,8 +68,7 @@ impl FormatArgs {
 
         if paths.is_empty() {
             let search_root = if self.paths.is_empty() {
-                self.from
-                    .as_deref()
+                project
                     .unwrap_or_else(|| Path::new("."))
                     .display()
                     .to_string()
@@ -185,9 +180,9 @@ fn expand_explicit_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
 }
 
 /// Walk a resolved source root and return every `.baml` file inside it.
-/// Omitted `--from` requires a `baml.toml` or `baml_src/` marker so `baml fmt`
+/// Omitted `--project` requires a `baml.toml` or `baml_src/` marker so `baml fmt`
 /// doesn't accidentally rewrite every `.baml` below an unrelated cwd.
-/// An explicit `--from` is itself a safe opt-in to format that source tree.
+/// An explicit `--project` is itself a safe opt-in to format that source tree.
 ///
 /// Returns `Ok(None)` when neither marker is present. The caller turns `None`
 /// into a no-op success rather than a hard error.
@@ -224,10 +219,9 @@ mod tests {
 
         let args = FormatArgs {
             paths: vec![baml_src],
-            from: Some(tmp.path().to_path_buf()),
             dry_run: false,
         };
-        let exit_code = args.run().unwrap();
+        let exit_code = args.run(Some(tmp.path())).unwrap();
 
         assert!(matches!(exit_code, crate::ExitCode::Success));
         assert_eq!(

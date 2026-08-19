@@ -37,11 +37,6 @@ Arguments:
 
           With `--function`, the first value is the target subcommand name.
 
-Compiler options:
-  -F, --features <FEATURES>
-          Enable compiler features; repeatable or comma-separated [possible values: beta,
-          display_all_warnings]
-
 Target options:
   -f, --function <NAME>
           Add a function to the generated target CLI. Repeatable.

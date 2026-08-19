@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.testset_nested.$init_test_ns_fixtures_ns_testset_nested_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_set_at("root.fixtures.tes...", "all evals", (testset: testing.TestCollector) -> void { { testset.register_test_set("normal cases", (testset: testing.TestCollector) -> { { testset.register_test("case one", () -> { {  } assert.is_true(true) }, null) } null }, null); testset.register_test_set("hard cases", (testset: testing.TestCollector) -> { { testset.register_test("case two", () -> { {  } assert.is_true(true) }, null) } null }, null) } null }, null) } null
+}

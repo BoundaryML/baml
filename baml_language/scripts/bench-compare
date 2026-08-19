@@ -221,7 +221,7 @@ BAML
 
     echo "==> Recording with samply..."
     samply record --save-only --rate 10000 -o "$output" \
-        ./target/profiling/baml-cli run --function main --from "$project_dir"
+        ./target/profiling/baml-cli run --function main --project "$project_dir"
 
     echo ""
     echo "==> Profile saved to $output"

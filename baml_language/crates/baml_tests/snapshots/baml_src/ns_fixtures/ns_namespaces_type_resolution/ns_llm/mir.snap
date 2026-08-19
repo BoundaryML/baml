@@ -1,0 +1,378 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.namespaces_type_resolution.llm.LlmIdentity(cfg: fixtures.namespaces_type_resolution.llm.Config) -> fixtures.namespaces_type_resolution.llm.Config {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.llm.Config // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmConstruct(model: string) -> fixtures.namespaces_type_resolution.llm.Config {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.llm.Config // _0 // return
+    let _1: string // model // param
+
+    bb0: {
+        _0 = user.fixtures.namespaces_type_resolution.llm.Config { copy _1, const 0.7_f64 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmEnumReturn() -> fixtures.namespaces_type_resolution.llm.Status {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.llm.Status // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.llm.Status.Ready;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmEnumMatch(s: fixtures.namespaces_type_resolution.llm.Status) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ready: bb4, Status.Generating: bb3, Status.Done: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "done";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "generating";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ready";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmAliasParam(cfg: fixtures.namespaces_type_resolution.llm.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmThrowClass(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: fixtures.namespaces_type_resolution.llm.Error
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        _2 = user.fixtures.namespaces_type_resolution.llm.Error { const "llm failed", const true };
+        throw copy _2;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmThrowEnum(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const user.fixtures.namespaces_type_resolution.llm.Status.Done;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmResponseConstruct(text: string) -> fixtures.namespaces_type_resolution.llm.Response {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.llm.Response // _0 // return
+    let _1: string // text // param
+
+    bb0: {
+        _0 = user.fixtures.namespaces_type_resolution.llm.Response { copy _1, const 42_i64 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmUsesRootConfig(cfg: fixtures.namespaces_type_resolution.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmUsesRootError(e: fixtures.namespaces_type_resolution.Error) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Error // e // param
+
+    bb0: {
+        _0 = copy _1.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmUsesRootStatus() -> fixtures.namespaces_type_resolution.Status {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.Status // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.Status.Ok;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmMatchesRootStatus(s: fixtures.namespaces_type_resolution.Status) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "pending";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "failed";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ok";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmUsesRootAlias(cfg: fixtures.namespaces_type_resolution.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmThrowsRootError(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: fixtures.namespaces_type_resolution.Error
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        _2 = user.fixtures.namespaces_type_resolution.Error { const 404_i64, const "not found" };
+        throw copy _2;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmThrowsRootEnum(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const user.fixtures.namespaces_type_resolution.Status.Failed;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmUsesAuthConfig(cfg: fixtures.namespaces_type_resolution.auth.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.auth.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmUsesAuthError(e: fixtures.namespaces_type_resolution.auth.Error) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.auth.Error // e // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmUsesAuthRole() -> fixtures.namespaces_type_resolution.auth.Role {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.auth.Role // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.auth.Role.Admin;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmUsesNestedClient(c: fixtures.namespaces_type_resolution.llm.openai.Client) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.openai.Client // c // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.LlmMixedConfigs(llm_cfg: fixtures.namespaces_type_resolution.llm.Config, root_cfg: fixtures.namespaces_type_resolution.Config, auth_cfg: fixtures.namespaces_type_resolution.auth.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Config // llm_cfg // param
+    let _2: fixtures.namespaces_type_resolution.Config // root_cfg // param
+    let _3: fixtures.namespaces_type_resolution.auth.Config // auth_cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

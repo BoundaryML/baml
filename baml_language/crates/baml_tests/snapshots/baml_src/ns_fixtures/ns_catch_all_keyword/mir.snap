@@ -1,0 +1,160 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.catch_all_keyword.MayFailIntOrString(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        switch copy _1 [0: bb4, 1: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const 42_i64;
+    }
+
+    bb4: {
+        throw const "string error";
+    }
+}
+
+fn user.fixtures.catch_all_keyword.PartialCatch(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: unknown // e
+    let _3: bool
+
+    bb0: {
+        _0 = call const fn user.fixtures.catch_all_keyword.MayFailIntOrString(copy _1) -> [bb4, unwind: bb1];
+    }
+
+    bb1: {
+        _3 = is_type(copy _2, string);
+        branch copy _3 -> [bb3, bb2];
+    }
+
+    bb2: {
+        rethrow copy _2;
+    }
+
+    bb3: {
+        _0 = const "caught string";
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.catch_all_keyword.CatchAllWildcard(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: unknown // e
+
+    bb0: {
+        _0 = call const fn user.fixtures.catch_all_keyword.MayFailIntOrString(copy _1) -> [bb3, unwind: bb1];
+    }
+
+    bb1: {
+        throw_if_panic copy _2 -> bb2;
+    }
+
+    bb2: {
+        _0 = const "caught all";
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.fixtures.catch_all_keyword.CatchAllTyped(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: unknown // e
+    let _3: bool
+    let _4: bool
+
+    bb0: {
+        _0 = call const fn user.fixtures.catch_all_keyword.MayFailIntOrString(copy _1) -> [bb6, unwind: bb1];
+    }
+
+    bb1: {
+        _3 = is_type(copy _2, string);
+        branch copy _3 -> [bb5, bb2];
+    }
+
+    bb2: {
+        _4 = is_type(copy _2, int);
+        branch copy _4 -> [bb4, bb3];
+    }
+
+    bb3: {
+        rethrow copy _2;
+    }
+
+    bb4: {
+        _0 = const "caught int";
+        goto -> bb6;
+    }
+
+    bb5: {
+        _0 = const "caught string";
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.catch_all_keyword.CatchThenCatchAll(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: unknown
+    let _3: bool
+
+    bb0: {
+        _0 = call const fn user.fixtures.catch_all_keyword.MayFailIntOrString(copy _1) -> [bb5, unwind: bb1];
+    }
+
+    bb1: {
+        _3 = is_type(copy _2, string);
+        branch copy _3 -> [bb4, bb2];
+    }
+
+    bb2: {
+        throw_if_panic copy _2 -> bb3;
+    }
+
+    bb3: {
+        _0 = const "caught rest";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "caught string";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}

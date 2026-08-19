@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.226.0",
+  "version": "0.226.1",
   "description": "BAML v0 — Node.js runtime for baml_client",
   "repository": {
     "type": "git",

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::Result;
 use baml_db::baml_compiler_diagnostics::{Diagnostic, Severity, render};
@@ -19,20 +19,13 @@ Examples:
 
   Check a specific project:
     baml check --project ./my-project")]
-pub struct CheckArgs {
-    #[command(flatten)]
-    pub compiler: crate::commands::CompilerArgs,
-
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
-}
+pub struct CheckArgs {}
 
 impl CheckArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub fn run(&self, project: Option<&Path>) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         let mut session = crate::project_session::ProjectSession::open(
-            self.from.as_deref(),
+            project,
             crate::project_session::CacheUse::ReadWrite,
         )?;
         if session.is_empty() {

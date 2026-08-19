@@ -186,7 +186,7 @@ fn init_warns_then_default_install_sets_up_skills_and_silences() {
 
     // Step 3: the installed, up-to-date skill keeps later authoring commands
     // quiet.
-    let output = run(&["generate"]);
+    let output = run(&["bridge", "generate"]);
     assert!(
         output.status.success(),
         "generate failed: {}",

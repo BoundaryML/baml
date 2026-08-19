@@ -44,10 +44,6 @@ Examples:
   Install skills from a local archive:
     baml agent install --source ./skills.tar.gz")]
 pub(crate) struct AgentInstallArgs {
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub dir: Option<PathBuf>,
-
     /// Install skills from a tar.gz URL, local tar.gz archive, or local directory.
     #[arg(
         long,
@@ -78,16 +74,16 @@ enum SkillArchivePath {
 }
 
 impl AgentArgs {
-    pub fn run(&self) -> Result<ExitCode> {
+    pub fn run(&self, project: Option<&Path>) -> Result<ExitCode> {
         match &self.command {
-            AgentCommand::Install(args) => args.run(),
+            AgentCommand::Install(args) => args.run(project),
         }
     }
 }
 
 impl AgentInstallArgs {
-    pub fn run(&self) -> Result<ExitCode> {
-        let root = match &self.dir {
+    pub fn run(&self, project: Option<&Path>) -> Result<ExitCode> {
+        let root = match project {
             Some(dir) => explicit_install_root(dir)?,
             None => detect_install_root()?,
         };

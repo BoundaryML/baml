@@ -281,14 +281,19 @@ fn package_interface_type(
     Value::object(vm.alloc_static_type(ty))
 }
 
-fn allocate_runtime_declaration_types(
-    vm: &mut BexVm,
-    package_ptr: HeapPtr,
+/// The definition overlay a package's own declarations form.
+///
+/// A statically compiled package needs none: its declarations live in the
+/// engine image and resolve by name. A runtime package's do not, so every
+/// `type` value reflection hands out of one has to carry this overlay or the
+/// name it mentions is unresolvable — the BEP-066 rule that a minted type and
+/// its definitions travel together.
+fn declaration_defs(
+    vm: &BexVm,
     classes: &IndexMap<LocalName, HeapPtr>,
     enums: &IndexMap<LocalName, HeapPtr>,
-    interfaces: &IndexMap<LocalName, HeapPtr>,
-) -> IndexMap<String, HeapPtr> {
-    let source_defs = DynTypeDefs {
+) -> DynTypeDefs {
+    DynTypeDefs {
         classes: classes
             .values()
             .filter_map(|ptr| match vm.get_object(*ptr) {
@@ -306,7 +311,38 @@ fn allocate_runtime_declaration_types(
             })
             .collect(),
         witnesses: Vec::new(),
+    }
+}
+
+/// [`declaration_defs`] for an already-populated package object. Empty for a
+/// null pointer, which is what a statically compiled callable reports.
+fn package_defs(vm: &BexVm, package_ptr: HeapPtr) -> DynTypeDefs {
+    if package_ptr.is_null() {
+        return DynTypeDefs::default();
+    }
+    let Object::Package(package) = vm.get_object(package_ptr) else {
+        return DynTypeDefs::default();
     };
+    declaration_defs(vm, &package.classes, &package.enums)
+}
+
+/// Allocate a `type` value inside a definition overlay, keeping the memoized
+/// static path when there is nothing to carry.
+fn alloc_type_in(vm: &mut BexVm, ty: RealizedTy, defs: &DynTypeDefs) -> Value {
+    if defs.is_empty() {
+        return Value::object(vm.alloc_static_type(ty));
+    }
+    Value::object(vm.alloc_static_type_with_defs(ty, defs.clone()))
+}
+
+fn allocate_runtime_declaration_types(
+    vm: &mut BexVm,
+    package_ptr: HeapPtr,
+    classes: &IndexMap<LocalName, HeapPtr>,
+    enums: &IndexMap<LocalName, HeapPtr>,
+    interfaces: &IndexMap<LocalName, HeapPtr>,
+) -> IndexMap<String, HeapPtr> {
+    let source_defs = declaration_defs(vm, classes, enums);
     let class_rows = classes
         .iter()
         .filter_map(|(name, &class_ptr)| match vm.get_object(class_ptr) {
@@ -428,15 +464,472 @@ fn package_function_value(vm: &mut BexVm, package_ptr: HeapPtr, name: &LocalName
             function: slot,
             type_args: Box::new([]),
             runtime_package,
+            exact_type_values: None,
         },
     ))))
 }
 
-fn function_type(vm: &mut BexVm, package: HeapPtr, name: &LocalName) -> Option<Value> {
+/// The descriptor `Package.functions()` hands out for one exported function.
+///
+/// A reconstructible signature becomes the descriptor's type, exactly as
+/// before. A generic function whose declared surface still mentions its own
+/// type parameters has no [`RealizedTy`] at all — the realized family excludes
+/// type variables — so its descriptor denotes `unknown` and refuses
+/// signature-shaped reads until it is specialized. Either way the callable
+/// travels with the value, which is what `is_generic`, `generic_params`,
+/// `specialize` and `get` read.
+fn function_descriptor(vm: &mut BexVm, package: HeapPtr, name: &LocalName) -> Option<Value> {
     let callable = package_function_value(vm, package, name)?;
-    let signature = vm.callable_signature(callable)?;
+    let ty = match vm.callable_signature(callable) {
+        Some(signature) => callee_fn_ty(&signature),
+        // Anything else that fails to reconstruct is not a callable this
+        // package can describe, and stays out of the listing as it always has.
+        None if vm.unspecialized_generic_callable_name(callable).is_some() => RealizedTy::unknown(),
+        None => return None,
+    };
+    let defs = package_defs(vm, package);
+    Some(alloc_descriptor(vm, ty, defs, callable))
+}
+
+/// Allocate a descriptor `type` value for `callable`. A non-object callable
+/// cannot happen (every function value is a heap wrapper) but degrades to a
+/// plain `type` value rather than asserting.
+fn alloc_descriptor(vm: &mut BexVm, ty: RealizedTy, defs: DynTypeDefs, callable: Value) -> Value {
+    match callable.as_object_ptr() {
+        Some(ptr) => Value::object(vm.alloc_function_descriptor(ty, defs, ptr)),
+        None => alloc_type_in(vm, ty, &defs),
+    }
+}
+
+/// The callable a function descriptor was reflected from, or `None` for an
+/// ordinary function type value.
+fn descriptor_callable(vm: &BexVm, r#type: Value) -> Option<Value> {
+    let ptr = r#type.as_object_ptr()?;
+    let Object::Type(type_value) = vm.get_object(ptr) else {
+        return None;
+    };
+    (!type_value.callable.is_null()).then(|| Value::object(type_value.callable))
+}
+
+/// A descriptor's callable together with its declared type-parameter arity and
+/// the arguments it already carries.
+struct DescriptorCallable {
+    value: Value,
+    /// De Bruijn arity: how many type arguments a complete frame needs.
+    declared: usize,
+    /// How many the callable already carries.
+    supplied: usize,
+}
+
+impl DescriptorCallable {
+    /// Type parameters still awaiting an argument.
+    fn remaining(&self) -> usize {
+        self.declared.saturating_sub(self.supplied)
+    }
+
+    /// The callable's declared name, for a diagnostic. Deliberately not part of
+    /// the struct: `is_generic` asks the arity question on every listed entry
+    /// and must not allocate a `String` to answer it.
+    fn name(&self, vm: &BexVm) -> String {
+        vm.callable_diagnostic_name(self.value)
+            .unwrap_or_else(|| "<anonymous>".to_string())
+    }
+}
+
+/// The declared name of the callable behind a descriptor, for diagnostics.
+pub(super) fn descriptor_callable_name(vm: &BexVm, r#type: Value) -> Option<String> {
+    vm.callable_diagnostic_name(descriptor_callable(vm, r#type)?)
+}
+
+/// Which signature positions of a specialized descriptor report the exact
+/// `type` value they were specialized with, by position.
+///
+/// A decomposing read (`params`, `return_type`) rebuilds the types it hands
+/// back out of the descriptor's `RealizedTy`, which re-mints them statically
+/// and so loses a runtime-minted argument's identity. A specialized descriptor
+/// hands the caller's own value back instead — the same rule `LoadType` applies
+/// to a frame's type-argument slots.
+///
+/// The mapping is **positional**, read off the callable's own
+/// [`baml_type::TyTemplate`]s: a position reports an exact value only when it
+/// is written as exactly one of the callable's type parameters. Matching on
+/// the realized type instead would be wrong — a parameter the caller wrote as
+/// a concrete type that happens to equal the supplied argument structurally
+/// (`f<T>(a: T, b: SomeClass)` specialized at `SomeClass`) is not that type
+/// parameter, and must keep its own identity. A nested occurrence (`T[]`,
+/// `map<string, T>`) has no single value to hand back and decomposes normally;
+/// the overlay it carries still resolves the name.
+#[derive(Default)]
+pub(super) struct DescriptorExactPositions {
+    params: Vec<Option<TypeValue>>,
+    ret: Option<TypeValue>,
+}
+
+impl DescriptorExactPositions {
+    pub(super) fn param(&self, index: usize) -> Option<TypeValue> {
+        self.params.get(index).cloned().flatten()
+    }
+
+    pub(super) fn ret(&self) -> Option<TypeValue> {
+        self.ret.clone()
+    }
+}
+
+pub(super) fn descriptor_exact_positions(vm: &BexVm, r#type: Value) -> DescriptorExactPositions {
+    let Some(callable) = descriptor_callable(vm, r#type) else {
+        return DescriptorExactPositions::default();
+    };
+    let Some(ptr) = callable.as_object_ptr() else {
+        return DescriptorExactPositions::default();
+    };
+    let Object::GenericFunction(generic) = vm.get_object(ptr) else {
+        return DescriptorExactPositions::default();
+    };
+    let Some(exact) = generic.exact_type_values.as_ref() else {
+        return DescriptorExactPositions::default();
+    };
+    let Some((function, _)) = vm.callable_function_and_type_args(callable) else {
+        return DescriptorExactPositions::default();
+    };
+    let at = |template: &baml_type::TyTemplate| match template {
+        baml_type::TyTemplate::TypeArgRef(slot) => exact.get(*slot as usize).cloned().flatten(),
+        _ => None,
+    };
+    DescriptorExactPositions {
+        params: function.param_types.iter().map(at).collect(),
+        ret: at(&function.return_type),
+    }
+}
+
+fn descriptor_callable_info(vm: &BexVm, r#type: Value) -> Option<DescriptorCallable> {
+    let value = descriptor_callable(vm, r#type)?;
+    let (function, supplied) = vm.callable_function_and_type_args(value)?;
+    Some(DescriptorCallable {
+        value,
+        declared: function.generic_param_bounds.len(),
+        supplied: supplied.len(),
+    })
+}
+
+/// Whether a descriptor still expects type arguments. The same arity question
+/// [`BexVm::unspecialized_generic_callable_name`] asks, phrased for a value
+/// that may not be a descriptor at all.
+pub(super) fn descriptor_is_generic(vm: &BexVm, r#type: Value) -> bool {
+    descriptor_callable_info(vm, r#type).is_some_and(|callable| callable.remaining() > 0)
+}
+
+/// The type parameters a descriptor still expects, in declaration order.
+///
+/// Names come from the callable's `display_type_params`, which render a bound
+/// inline (`T extends Shape`); the bound is stripped here — `specialize`
+/// enforces bounds, `generic_params` only names them.
+pub(super) fn descriptor_generic_params(vm: &mut BexVm, r#type: Value) -> Vec<Value> {
+    let Some(callable) = descriptor_callable_info(vm, r#type) else {
+        return Vec::new();
+    };
+    let Some((function, _)) = vm.callable_function_and_type_args(callable.value) else {
+        return Vec::new();
+    };
+    let names = function
+        .display_type_params
+        .iter()
+        .enumerate()
+        .skip(callable.supplied)
+        .map(|(index, display)| {
+            let name = display
+                .split_once(" extends ")
+                .map_or(display.as_str(), |(name, _)| name)
+                .trim();
+            // A synthesized frame slot can be nameless; report its De Bruijn
+            // position rather than an empty string.
+            if name.is_empty() {
+                format!("#{index}")
+            } else {
+                name.to_string()
+            }
+        })
+        .collect::<Vec<_>>();
+    names
+        .into_iter()
+        .map(|name| {
+            let name = Value::object(vm.alloc_string(name.as_str()));
+            copy::reflect::function::GenericParam { name }.to_value(vm)
+        })
+        .collect()
+}
+
+fn throw_diagnostic(
+    vm: &mut BexVm,
+    diagnostic: baml_compiler_diagnostics::Diagnostic,
+) -> VmRustFnError {
+    VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+        vm,
+        &[diagnostic],
+    ))
+}
+
+/// `Shaped` / `Container<int>` — how a violated bound is named in a diagnostic.
+/// Rendered as the interface *type* it denotes so it reads the same way as the
+/// supplied type argument beside it, rather than as a raw qualified name.
+fn render_bound(
+    interface: &baml_type::TypeName,
+    args: &[RealizedTy],
+    assoc: &[(baml_type::Name, RealizedTy)],
+) -> String {
+    RealizedTy::Interface(
+        interface.clone(),
+        args.to_vec(),
+        assoc.to_vec(),
+        TyAttr::default(),
+    )
+    .to_string()
+}
+
+/// Bind a descriptor's remaining type parameters and return a specialized
+/// descriptor.
+///
+/// The supplied `type` values are carried by reference onto the new callable
+/// (`GenericFunction::exact_type_values`), never re-minted: a runtime type
+/// keeps its identity and its definition overlay all the way into the callee's
+/// frame, which is what lets the specialized body render its schema.
+pub(super) fn descriptor_specialize(
+    vm: &mut BexVm,
+    r#type: Value,
+    args: &[Value],
+) -> Result<Value, VmRustFnError> {
+    let Some(callable) = descriptor_callable_info(vm, r#type) else {
+        return Err(throw_diagnostic(
+            vm,
+            runtime_type::specialize_without_descriptor(),
+        ));
+    };
+    let bound_slot = callable.supplied;
+    let remaining = callable.remaining();
+    if remaining == 0 {
+        // Two different mistakes reach here, and telling a caller that an
+        // already-bound generic "is not generic" sends them the wrong way.
+        let name = callable.name(vm);
+        let diagnostic = if callable.declared == 0 {
+            runtime_type::specialize_non_generic(&name)
+        } else {
+            runtime_type::specialize_already_specialized(&name)
+        };
+        return Err(throw_diagnostic(vm, diagnostic));
+    }
+    if args.len() != remaining {
+        let name = callable.name(vm);
+        return Err(throw_diagnostic(
+            vm,
+            runtime_type::specialize_arity_mismatch(&name, remaining, args.len()),
+        ));
+    }
+    // A specialized callable has to be re-wrappable, and only a
+    // `GenericFunction` addresses its target by global slot. Every descriptor
+    // this module hands out is one; a closure or bound method reaching here
+    // would be a value reflection never produced.
+    let Some(Object::GenericFunction(generic)) =
+        callable.value.as_object_ptr().map(|ptr| vm.get_object(ptr))
+    else {
+        return Err(throw_diagnostic(
+            vm,
+            runtime_type::specialize_without_descriptor(),
+        ));
+    };
+    let (slot, runtime_package) = (generic.function, generic.runtime_package);
+
+    let supplied = args
+        .iter()
+        .map(|value| super::type_kinds::reflected_type_value(vm, *value))
+        .collect::<Vec<_>>();
+
+    let (bounds, param_names, mut type_args) = {
+        let Some((function, already_bound)) = vm.callable_function_and_type_args(callable.value)
+        else {
+            return Err(throw_diagnostic(
+                vm,
+                runtime_type::specialize_without_descriptor(),
+            ));
+        };
+        (
+            function.generic_param_bounds.clone(),
+            function.display_type_params.clone(),
+            already_bound.to_vec(),
+        )
+    };
+    type_args.extend(supplied.iter().map(|value| value.ty.clone()));
+    // The same proof the VM runs before entering a runtime-checked generic
+    // call (`validate_runtime_generic_bounds`), reported as a typed diagnostic
+    // instead of a bare "mismatched types".
+    //
+    // It is rooted at the *descriptor's* package, not the calling frame's: a
+    // bound declared inside a `Package.compile`d package is local to it, and
+    // resolving the interface against whoever happens to be calling `specialize`
+    // finds nothing — every such bound would fail closed. A statically compiled
+    // descriptor has no runtime package and keeps the lexical world.
+    let resolver_root = vm.callable_runtime_package(callable.value);
+    for (index, param_bounds) in bounds.iter().enumerate().skip(bound_slot) {
+        let Some(actual) = type_args.get(index).cloned() else {
+            continue;
+        };
+        let param_name = param_names.get(index).map_or_else(
+            || format!("#{index}"),
+            |display| {
+                display
+                    .split_once(" extends ")
+                    .map_or(display.as_str(), |(name, _)| name)
+                    .trim()
+                    .to_string()
+            },
+        );
+        for bound in param_bounds {
+            let requested_args = bound
+                .args
+                .iter()
+                .map(|arg| arg.substitute(&type_args, vm).ok())
+                .collect::<Option<Vec<_>>>();
+            let requested_assoc = bound
+                .assoc
+                .iter()
+                .map(|(name, ty)| {
+                    ty.substitute(&type_args, vm)
+                        .ok()
+                        .map(|ty| (name.clone(), ty))
+                })
+                .collect::<Option<Vec<_>>>();
+            let satisfied = match (requested_args, requested_assoc) {
+                (Some(bound_args), Some(bound_assoc)) => {
+                    let resolver = if resolver_root.is_null() {
+                        ImplResolver::new(vm)
+                    } else {
+                        ImplResolver::for_package(vm, resolver_root)
+                    };
+                    let holds = resolver.type_implements(
+                        &actual,
+                        &bound.interface,
+                        &bound_args,
+                        &bound_assoc,
+                    );
+                    if holds {
+                        continue;
+                    }
+                    render_bound(&bound.interface, &bound_args, &bound_assoc)
+                }
+                // A bound that cannot be realized against a complete frame is
+                // a bound this specialization cannot discharge. Report it as
+                // the failure it is rather than raising an internal error.
+                _ => bound.interface.to_string(),
+            };
+            let supplied_ty = actual.to_string();
+            let name = callable.name(vm);
+            return Err(throw_diagnostic(
+                vm,
+                runtime_type::specialize_bound_violation(
+                    &name,
+                    &param_name,
+                    &satisfied,
+                    &supplied_ty,
+                ),
+            ));
+        }
+    }
+
+    let mut exact = vec![None; bound_slot];
+    exact.extend(supplied.iter().cloned().map(Some));
+    let specialized = Value::object(vm.alloc(Object::GenericFunction(
+        bex_vm_types::GenericFunction {
+            function: slot,
+            type_args: type_args.into_boxed_slice(),
+            runtime_package,
+            exact_type_values: Some(exact.into_boxed_slice()),
+        },
+    )));
+
+    // With every slot supplied the templates realize, so this is the whole of
+    // "specialize" from the signature's point of view. If it still does not,
+    // the descriptor would be unreadable in a way `is_generic` reports as
+    // *not* generic — a dead end worse than the one this API removes. Say so.
+    let Some(signature) = vm.callable_signature(specialized) else {
+        let name = callable.name(vm);
+        return Err(throw_diagnostic(
+            vm,
+            runtime_type::specialize_signature_unreconstructible(&name),
+        ));
+    };
     let ty = callee_fn_ty(&signature);
-    Some(Value::object(vm.alloc_static_type(ty)))
+    let mut defs = super::type_kinds::reflected_type_value(vm, r#type)
+        .defs()
+        .clone();
+    for value in &supplied {
+        defs.merge_from(value.defs());
+    }
+    Ok(alloc_descriptor(vm, ty, defs, specialized))
+}
+
+/// Extract a descriptor's callable through the caller's `F` contract — the
+/// descriptor-side twin of `Package.get_function`, for the specialized
+/// descriptors that have no name to look up.
+pub(super) fn descriptor_get(
+    vm: &mut BexVm,
+    r#type: Value,
+) -> Result<Option<Value>, VmRustFnError> {
+    let Some(callable) = descriptor_callable_info(vm, r#type) else {
+        return Ok(None);
+    };
+    let Some(signature) = vm.callable_signature(callable.value) else {
+        let name = callable.name(vm);
+        return Err(throw_diagnostic(
+            vm,
+            runtime_type::unspecialized_reflected_generic(&name),
+        ));
+    };
+    if let Some(name) = vm.generic_callable_body_needs_type_args(callable.value) {
+        return Err(throw_diagnostic(
+            vm,
+            runtime_type::unspecialized_reflected_generic_call(&name),
+        ));
+    }
+    let package = vm.callable_runtime_package(callable.value);
+    let name = callable.name(vm);
+    check_function_contract(vm, package, &name, &signature)?;
+    Ok(Some(callable.value))
+}
+
+/// The `F` contract check shared by `Package.get_function` and a descriptor's
+/// `get`: the callable's reconstructed function type must be a subtype of the
+/// contract the caller asked for.
+///
+/// A runtime package roots the subtype context at itself so its own impls are
+/// visible; a statically compiled callable has no such root and uses the VM's
+/// lexical world.
+fn check_function_contract(
+    vm: &mut BexVm,
+    package: HeapPtr,
+    name: &str,
+    signature: &CallableSignature,
+) -> Result<(), VmRustFnError> {
+    let actual = callee_fn_ty(signature);
+    let expected = vm
+        .current_call_type_args()
+        .first()
+        .cloned()
+        .unwrap_or_else(RealizedTy::unknown);
+    let sub = Ty::from(actual.clone());
+    let sup = Ty::from(expected.clone());
+    let matches = if package.is_null() {
+        normalize::is_subtype(&sub, &sup, vm)
+    } else {
+        normalize::is_subtype(&sub, &sup, &PackageSubtypeContext { vm, package })
+    };
+    if matches {
+        return Ok(());
+    }
+    Err(compilation_error(
+        vm,
+        DiagnosticId::TypeMismatch,
+        format!(
+            "function `{name}` has type `{actual}`, which is not a subtype of requested contract `{expected}`"
+        ),
+    ))
 }
 
 fn dependency_object(vm: &BexVm, package: HeapPtr, local: &str) -> Option<HeapPtr> {
@@ -1108,33 +1601,18 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             }
             return Ok(None);
         };
-        let actual = callee_fn_ty(&signature);
-        let expected = vm
-            .current_call_type_args()
-            .first()
-            .cloned()
-            .unwrap_or_else(RealizedTy::unknown);
-        let context = PackageSubtypeContext {
-            vm,
-            package: package_ptr,
-        };
-        let matches = normalize::is_subtype(
-            &Ty::from(actual.clone()),
-            &Ty::from(expected.clone()),
-            &context,
-        );
-        if !matches {
-            let diagnostic = super::type_kinds::compiler_diagnostic(
-                DiagnosticId::TypeMismatch,
-                format!(
-                    "function `{}` has type `{actual}`, which is not a subtype of requested contract `{expected}`",
-                    name.as_str()
-                ),
-            );
+        // Signature reconstruction only sees the declared surface. A companion
+        // whose surface is free of its parent's `T` gets this far and would be
+        // handed out as an ordinary function value — and calling one directly
+        // fails inside its body as a VM internal error no `catch` can see. Refuse
+        // it here, where the caller still has a diagnostic channel.
+        if let Some(name) = vm.generic_callable_body_needs_type_args(function_value) {
+            let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
             return Err(VmRustFnError::Thrown(
                 super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
             ));
         }
+        check_function_contract(vm, package_ptr, name.as_str(), &signature)?;
         Ok(Some(function_value))
     }
 
@@ -1219,8 +1697,8 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         functions
             .into_iter()
             .filter_map(|name| {
-                function_type(vm, ptr, &name)
-                    .map(|r#type| (display_local_name(&name).into(), r#type))
+                function_descriptor(vm, ptr, &name)
+                    .map(|descriptor| (display_local_name(&name).into(), descriptor))
             })
             .collect()
     }
@@ -1963,12 +2441,13 @@ fn alloc_arg(
     name: Option<&baml_type::Name>,
     position: usize,
     ty: RealizedTy,
+    defs: &DynTypeDefs,
 ) -> Value {
     let name = match name {
         Some(n) => Value::object(vm.alloc_string(n.as_str())),
         None => Value::object(vm.alloc_string(format!("$arg{position}"))),
     };
-    let ty = Value::object(vm.alloc_static_type(ty));
+    let ty = alloc_type_in(vm, ty, defs);
     copy::reflect::Arg { name, r#type: ty }.to_value(vm)
 }
 
@@ -1986,13 +2465,17 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
     let Some(sig) = vm.callable_signature(f_val) else {
         return Err(non_callable_error("reflect.signature"));
     };
+    // A signature reconstructed off a runtime package's function names that
+    // package's classes and enums; the reported types have to carry its
+    // declarations or nothing downstream can resolve them.
+    let defs = package_defs(vm, vm.callable_runtime_package(f_val));
     let mut positional = Vec::new();
     let mut opts: IndexMap<bex_str::BexStr, Value> = IndexMap::new();
     for param in &sig.params {
         match param.mode {
             FunctionParamMode::Required => {
                 let position = positional.len();
-                let arg = alloc_arg(vm, param.name.as_ref(), position, param.ty.clone());
+                let arg = alloc_arg(vm, param.name.as_ref(), position, param.ty.clone(), &defs);
                 positional.push(arg);
             }
             FunctionParamMode::Optional => {
@@ -2001,7 +2484,7 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
                 // it by), so it is simply absent from `opts`. Placeholders
                 // are for positionals only and never enter by-name matching.
                 if let Some(name) = &param.name {
-                    let arg = alloc_arg(vm, Some(name), positional.len(), param.ty.clone());
+                    let arg = alloc_arg(vm, Some(name), positional.len(), param.ty.clone(), &defs);
                     opts.insert(bex_str::BexStr::from(name.as_str()), arg);
                 }
             }
@@ -2009,8 +2492,8 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
     }
     let args = Value::object(vm.tlab.alloc_array(ty_arg(), positional));
     let opts = Value::object(vm.tlab.alloc_map(RealizedTy::string(), ty_arg(), opts));
-    let returns = Value::object(vm.alloc_static_type(sig.ret.clone()));
-    let errors = Value::object(vm.alloc_static_type(sig.throws));
+    let returns = alloc_type_in(vm, sig.ret.clone(), &defs);
+    let errors = alloc_type_in(vm, sig.throws, &defs);
     let docstring = opt_string(vm, sig.docstring.as_ref());
     let name = opt_string(vm, sig.name.as_ref());
     Ok(copy::reflect::Signature {
@@ -2145,6 +2628,17 @@ fn call_any_impl(
         }
         return non_callable_error("reflect.call_any").into();
     };
+    // A generic whose signature happens to be free of its own type parameters
+    // reconstructs above and would otherwise be entered with an empty frame,
+    // failing inside its body as a VM internal error.
+    if let Some(name) = vm.generic_callable_body_needs_type_args(f_val) {
+        let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
+        return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+            vm,
+            &[diagnostic],
+        ))
+        .into();
+    }
 
     // Walk the parameters in declaration order, resolving each from the map
     // by its addressable name and assembling the callee's frame as we go.

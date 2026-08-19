@@ -4,18 +4,21 @@
 //! `baml-cli generate`.
 
 /// Code-generation target. Surfaces as `output_type = "python/pydantic"`.
+///
+/// [`std::fmt::Display`] is the single spelling authority: it produces the
+/// canonical name written into `baml.toml`, and every canonical name parses
+/// back through [`std::str::FromStr`]. The two `serialize` aliases (`python`,
+/// `typescript`) are additionally accepted on input but are never written.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::Display, strum::VariantArray,
 )]
 pub enum OutputType {
-    /// Python with Pydantic v2 models.
-    #[strum(serialize = "python/pydantic")]
+    /// Python with Pydantic v2 models. There is only one Python target, so
+    /// the name carries no Pydantic version.
+    #[strum(to_string = "python/pydantic", serialize = "python")]
     PythonPydantic,
-    /// Python with Pydantic v1 models.
-    #[strum(serialize = "python/pydantic/v1")]
-    PythonPydanticV1,
     /// TypeScript + Node.js SDK (`@boundaryml/baml-bridge` runtime).
-    #[strum(serialize = "typescript/node")]
+    #[strum(to_string = "typescript/node", serialize = "typescript")]
     TypescriptNode,
     /// Swift SDK (`BamlBridge` `SwiftPM` runtime).
     #[strum(serialize = "swift")]
@@ -46,11 +49,15 @@ impl OutputType {
         <Self as strum::VariantArray>::VARIANTS
     }
 
-    /// User-facing name accepted by `baml generate add`.
-    pub const fn add_name(self) -> &'static str {
+    /// The canonical name, as a `'static` string.
+    ///
+    /// Identical to [`std::fmt::Display`] (asserted by a test); this exists
+    /// only for callers that need a `'static` lifetime, such as clap's
+    /// `PossibleValue` (this crate does not depend on clap, so that type is
+    /// named here rather than linked).
+    pub const fn canonical(self) -> &'static str {
         match self {
-            Self::PythonPydantic => "python/pydantic2",
-            Self::PythonPydanticV1 => "python/pydantic/v1",
+            Self::PythonPydantic => "python/pydantic",
             Self::TypescriptNode => "typescript/node",
             Self::TypescriptWeb => "typescript/web",
             Self::Swift => "swift",
@@ -59,6 +66,16 @@ impl OutputType {
             Self::Java => "java",
             Self::Cpp => "cpp",
             Self::CSharp => "csharp",
+        }
+    }
+
+    /// Additional spellings accepted on input but never written to
+    /// `baml.toml`. Surfaced as hidden clap possible values.
+    pub const fn aliases(self) -> &'static [&'static str] {
+        match self {
+            Self::PythonPydantic => &["python"],
+            Self::TypescriptNode => &["typescript"],
+            _ => &[],
         }
     }
 
@@ -131,12 +148,59 @@ mod tests {
         assert_eq!(OutputType::Rust.generated_directory(), "baml_sdk");
     }
 
+    /// `Display` writes `baml.toml`; `FromStr` reads it back. A canonical
+    /// name that could not round-trip would silently corrupt the manifest.
+    #[test]
+    fn canonical_names_round_trip_through_display_and_from_str() {
+        for &output_type in OutputType::all() {
+            let displayed = output_type.to_string();
+            assert_eq!(
+                OutputType::from_str(&displayed),
+                Ok(output_type),
+                "`{displayed}` does not parse back"
+            );
+        }
+    }
+
+    /// `canonical()` exists only to hand `Display`'s spelling to callers
+    /// needing `'static`; the two must never drift.
+    #[test]
+    fn canonical_matches_display() {
+        for &output_type in OutputType::all() {
+            assert_eq!(output_type.canonical(), output_type.to_string());
+        }
+    }
+
+    #[test]
+    fn aliases_parse_and_are_never_the_canonical_spelling() {
+        assert_eq!(
+            OutputType::from_str("python"),
+            Ok(OutputType::PythonPydantic)
+        );
+        assert_eq!(
+            OutputType::from_str("typescript"),
+            Ok(OutputType::TypescriptNode)
+        );
+        // The deleted Pydantic-v1 target silently emitted v2 output; the
+        // spelling must now be an unknown value rather than a wrong one.
+        assert!(OutputType::from_str("python/pydantic/v1").is_err());
+        // `generate add`'s old spelling disagreed with `baml.toml`'s.
+        assert!(OutputType::from_str("python/pydantic2").is_err());
+
+        for &output_type in OutputType::all() {
+            for alias in output_type.aliases() {
+                assert_eq!(OutputType::from_str(alias), Ok(output_type));
+                assert_ne!(*alias, output_type.canonical());
+            }
+        }
+    }
+
     #[test]
     fn every_output_type_has_add_defaults() {
         for &output_type in OutputType::all() {
             let generator = Generator::from(output_type);
             assert_eq!(generator.output_type, output_type);
-            assert!(!output_type.add_name().is_empty());
+            assert!(!output_type.canonical().is_empty());
         }
 
         assert_eq!(

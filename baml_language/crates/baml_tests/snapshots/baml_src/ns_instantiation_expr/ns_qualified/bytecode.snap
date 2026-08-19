@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function instantiation_expr.qualified.q_describe() -> string {
+    load_type #0
+    call baml.TypeValue.baml.ToString.to_string
+    return
+}
+
+function instantiation_expr.qualified.q_id(x: #0) -> #0 {
+    load_var x
+    return
+}

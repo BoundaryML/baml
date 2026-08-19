@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+// BEP-049 backtick string literals in prompt and expression positions compile
+// cleanly and format without error.
+//
+// `baml fmt` re-indents a multi-line backtick interior to sit one level past the
+// surrounding block (like a raw string), but only when that preserves the
+// string's auto-dedented (BEP-049 §12) runtime value. This file is already in
+// canonical form, so `baml fmt` leaves it unchanged.
+
+client Fast = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+);
+
+// Backtick value in `prompt:` position (the originally reported crash).
+function Greet(name: string) -> string {
+    client: Fast
+    prompt: `
+        Say hello to ${name}.
+    `
+}
+
+// Backtick value in expression position.
+function Header(title: string) -> string {
+    `
+        # ${title}
+    `
+}

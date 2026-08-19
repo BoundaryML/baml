@@ -1,0 +1,93 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.string_methods.Upper(s: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // s // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.String.to_upper_case(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(string);
+        _0 = call const fn baml.String.from<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.fixtures.string_methods.StartsWith(s: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // s // param
+    let _2: bool
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.String.starts_with(copy _1, const "hello") -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(bool);
+        _0 = call const fn baml.String.from<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.fixtures.string_methods.SplitCount(s: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // s // param
+    let _2: int
+    let _3: string[]
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.String.split(copy _1, const ",") -> [bb1];
+    }
+
+    bb1: {
+        _2 = len(_3);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = load_type(int);
+        _0 = call const fn baml.String.from<copy _4>(copy _2) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.fixtures.string_methods.Trimmed(s: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // s // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.String.trim(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(string);
+        _0 = call const fn baml.String.from<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}

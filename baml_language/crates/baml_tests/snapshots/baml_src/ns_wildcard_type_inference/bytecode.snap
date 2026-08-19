@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function wildcard_type_inference.$init_test_ns_wildcard_type_inference_wildcard_type_inference(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.wildcard_type_inference"
+    load_const "json_to_json_is_serialize_only"
+    make_closure .<lambda($init_test_ns_wildcard_type_inference_wildcard_type_inference, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function wildcard_type_inference.wildcard_json_dump(x: int) -> baml.json.json {
+    load_type int
+    load_var x
+    call baml.json.to_json
+    return
+}
+
+function wildcard_type_inference.wildcard_json_main() -> int {
+    load_const 0
+    return
+}

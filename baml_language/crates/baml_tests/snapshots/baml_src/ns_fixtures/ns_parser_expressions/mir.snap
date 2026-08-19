@@ -1,0 +1,135 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.parser_expressions.Calculate() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // a
+    let _2: int // b
+    let _3: int
+    let _4: int // c
+    let _5: int
+    let _6: int
+    let _7: int // d
+    let _8: int
+    let _9: int
+    let _10: int
+    let _11: int
+
+    bb0: {
+        _1 = const 3_i64;
+        _3 = copy _1;
+        _2 = copy _3 * const 3_i64;
+        _6 = copy _2;
+        _5 = copy _6 / const 2_i64;
+        _4 = copy _5 - const 1_i64;
+        _9 = copy _1;
+        _10 = copy _2;
+        _8 = copy _9 + copy _10;
+        _11 = copy _4;
+        _7 = copy _8 * copy _11;
+        _0 = copy _7;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.parser_expressions.FieldAccess(user: fixtures.parser_expressions.User) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.parser_expressions.User // user // param
+    let _2: string // theme
+    let _3: string[]
+    let _4: 0
+
+    bb0: {
+        _2 = copy _1.1.1.0;
+        _3 = copy _1.2;
+        _4 = const 0_i64;
+        _0 = copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.parser_expressions.IndexAccess(users: fixtures.parser_expressions.IndexUser[]) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.parser_expressions.IndexUser[] // users // param
+    let _2: fixtures.parser_expressions.IndexUser[]
+    let _3: 0
+    let _4: int // idx
+    let _5: fixtures.parser_expressions.IndexUser[]
+    let _6: int
+    let _7: string // firstName
+    let _8: fixtures.parser_expressions.IndexUser
+    let _9: fixtures.parser_expressions.IndexUser[]
+    let _10: 0
+    let _11: string[]
+    let _12: fixtures.parser_expressions.IndexUser
+    let _13: fixtures.parser_expressions.IndexUser[]
+    let _14: 0
+    let _15: 0
+
+    bb0: {
+        _2 = copy _1;
+        _3 = const 0_i64;
+        _4 = const 1_i64;
+        _5 = copy _1;
+        _6 = copy _4;
+        _9 = copy _1;
+        _10 = const 0_i64;
+        _8 = copy _9[_10];
+        _7 = copy _8.0;
+        _13 = copy _1;
+        _14 = const 0_i64;
+        _12 = copy _13[_14];
+        _11 = copy _12.2;
+        _15 = const 0_i64;
+        _0 = copy _7;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.parser_expressions.TestPrecedence() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: int // a
+    let _2: int
+    let _3: bool // d
+
+    bb0: {
+        _1 = const 14_i64;
+        _2 = copy _1;
+        _3 = short_circuit(||) const true -> [eval: bb1, join: bb3];
+    }
+
+    bb1: {
+        _3 = short_circuit(&&) const false -> [eval: bb2, join: bb3];
+    }
+
+    bb2: {
+        _3 = const false;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _0 = copy _3;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}

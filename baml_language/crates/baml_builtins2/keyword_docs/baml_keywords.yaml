@@ -276,9 +276,8 @@ generator:
 
     Accepted `output_type` values:
 
-    - `"python/pydantic"` — Python with Pydantic v2 models
-    - `"python/pydantic/v1"` — Python with Pydantic v1 models
-    - `"typescript/node"` — TypeScript for Node.js
+    - `"python/pydantic"` — Python with Pydantic v2 models (alias: `"python"`)
+    - `"typescript/node"` — TypeScript for Node.js (alias: `"typescript"`)
     - `"typescript/web"` — TypeScript for web/WASM
     - `"swift"` — Swift
     - `"go"` — Go
@@ -946,7 +945,7 @@ baml_sdk:
   syntax: |
     # 1. declare a generator in baml.toml
     [generator.app]
-    output_type = "python/pydantic"   # python/pydantic | python/pydantic/v1 | typescript/node
+    output_type = "python/pydantic"   # run `baml generate add --help` for every target
     output_dir  = "../app"
     naming_convention = "preserve-case"   # preserve-case | language
 
@@ -968,7 +967,7 @@ python:
 
     # baml.toml — declare a generator:
     [generator.app]
-    output_type = "python/pydantic"        # or "python/pydantic/v1"
+    output_type = "python/pydantic"        # `python` is accepted as an alias
     output_dir  = "../app"
     naming_convention = "preserve-case"
 

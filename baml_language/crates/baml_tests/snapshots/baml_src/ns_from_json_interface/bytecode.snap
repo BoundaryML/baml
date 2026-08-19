@@ -1,0 +1,178 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function from_json_interface.$init_test_ns_from_json_interface_from_json_interface(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.from_json_interface"
+    load_const "to_dispatches_fromjson_override"
+    make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.from_json_interface"
+    load_const "to_decodes_non_implementor_structurally"
+    make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.from_json_interface"
+    load_const "to_decodes_primitive"
+    make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.from_json_interface"
+    load_const "from_to_roundtrip_with_override"
+    make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.from_json_interface"
+    load_const "nested_field_override_is_honored"
+    make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.from_json_interface"
+    load_const "static_from_json_decodes_non_implementor"
+    make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.from_json_interface"
+    load_const "static_from_json_dispatches_override"
+    make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.from_json_interface"
+    load_const "static_from_json_threads_generic_type_arg"
+    make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function from_json_interface.Inner.baml.FromJson.from_json(j: baml.json.json) -> from_json_interface.Inner {
+    load_var j
+    load_const "wrapped"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.to
+    init_instance user.from_json_interface.Inner .v
+    return
+}
+
+function from_json_interface.Temp.baml.FromJson.from_json(j: baml.json.json) -> from_json_interface.Temp {
+    load_var j
+    load_const "c"
+    call baml.json.field
+    store_var _3
+    load_type float
+    load_var _3
+    call baml.json.to
+    init_instance user.from_json_interface.Temp .celsius
+    return
+}
+
+function from_json_interface.TempCelsius.baml.FromJson.from_json(j: baml.json.json) -> from_json_interface.TempCelsius {
+    load_var j
+    load_const "celsius"
+    call baml.json.field
+    store_var _3
+    load_type float
+    load_var _3
+    call baml.json.to
+    init_instance user.from_json_interface.TempCelsius .celsius
+    return
+}
+
+function from_json_interface.from_to_roundtrip_with_override_fn() -> bool {
+    load_type from_json_interface.TempCelsius
+    load_const 36.6
+    init_instance user.from_json_interface.TempCelsius .celsius
+    call baml.json.from
+    store_var j
+    load_type from_json_interface.TempCelsius
+    load_var j
+    call baml.json.to
+    load_field .celsius
+    load_const 36.6
+    cmp_float_op ==
+    return
+}
+
+function from_json_interface.nested_field_override_is_honored_fn() -> int {
+    load_const "{\"inner\": {\"wrapped\": 7}, \"tag\": \"x\"}"
+    call baml.json.parse
+    store_var j
+    load_type from_json_interface.Outer
+    load_var j
+    call baml.json.to
+    load_field .inner
+    load_field .v
+    return
+}
+
+function from_json_interface.static_from_json_decodes_non_implementor_fn() -> string {
+    load_const "{\"name\": \"Ada\", \"age\": 30}"
+    call baml.json.parse
+    store_var j
+    load_type from_json_interface.User
+    load_var j
+    call baml.json.to
+    load_field .name
+    return
+}
+
+function from_json_interface.static_from_json_dispatches_override_fn() -> float {
+    load_const "{\"c\": 20.5}"
+    call baml.json.parse
+    call user.from_json_interface.Temp.baml.FromJson.from_json
+    load_field .celsius
+    return
+}
+
+function from_json_interface.static_from_json_threads_generic_type_arg_fn() -> int {
+    load_const "{\"value\": 42}"
+    call baml.json.parse
+    store_var j
+    load_type from_json_interface.Box<int>
+    load_var j
+    call baml.json.to
+    load_field .value
+    return
+}
+
+function from_json_interface.to_decodes_non_implementor_structurally_fn() -> string {
+    load_const "{\"name\": \"Ada\", \"age\": 30}"
+    call baml.json.parse
+    store_var j
+    load_type from_json_interface.User
+    load_var j
+    call baml.json.to
+    load_field .name
+    return
+}
+
+function from_json_interface.to_dispatches_fromjson_override_fn() -> float {
+    load_const "{\"c\": 20.5}"
+    call baml.json.parse
+    store_var j
+    load_type from_json_interface.Temp
+    load_var j
+    call baml.json.to
+    load_field .celsius
+    return
+}

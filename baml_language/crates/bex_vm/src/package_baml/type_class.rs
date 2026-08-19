@@ -1,8 +1,7 @@
-use bex_heap::TlabHolder;
 use bex_vm_types::types::{DynTypeDefs, DynWitnessDef, Object, TypeValue, Value};
 use indexmap::IndexMap;
 
-use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, copy, resolve};
+use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, resolve};
 use crate::{BexVm, errors::VmRustFnError};
 
 impl BamlNamespaceType for PackageBamlImpl {
@@ -18,46 +17,14 @@ impl BamlNamespaceType for PackageBamlImpl {
     fn of_value(vm: &mut BexVm, v: &Value) -> Result<Value, VmRustFnError> {
         if let Some(ptr) = v.as_object_ptr() {
             let nominal = match vm.get_object(ptr) {
-                Object::Instance(instance) => Some((instance.class, true)),
-                Object::Variant(variant) => Some((variant.enm, false)),
+                Object::Instance(instance) => Some(instance.class),
+                Object::Variant(variant) => Some(variant.enm),
                 _ => None,
             };
-            if let Some((definition_ptr, is_class)) = nominal {
-                let reconstructed = match vm.get_object(definition_ptr) {
-                    Object::Class(class) if is_class => {
-                        class.runtime_type.as_ref().map(|runtime| {
-                            let mut defs = runtime.defs.clone();
-                            defs.classes.insert(class.name.clone(), definition_ptr);
-                            let ty = baml_type::RealizedTy::Class(
-                                class.name.clone(),
-                                Vec::new(),
-                                baml_type::TyAttr::default(),
-                            );
-                            if runtime.owner.is_null() {
-                                TypeValue::from_parts_with_defs(ty, runtime.mint, defs)
-                            } else {
-                                TypeValue::runtime_with_defs(ty, runtime.mint, defs, runtime.owner)
-                            }
-                        })
-                    }
-                    Object::Enum(enm) if !is_class => enm.runtime_type.as_ref().map(|runtime| {
-                        let mut defs = runtime.defs.clone();
-                        defs.enums.insert(enm.name.clone(), definition_ptr);
-                        let ty = baml_type::RealizedTy::Enum(
-                            enm.name.clone(),
-                            baml_type::TyAttr::default(),
-                        );
-                        if runtime.owner.is_null() {
-                            TypeValue::from_parts_with_defs(ty, runtime.mint, defs)
-                        } else {
-                            TypeValue::runtime_with_defs(ty, runtime.mint, defs, runtime.owner)
-                        }
-                    }),
-                    _ => None,
-                };
-                if let Some(type_value) = reconstructed {
-                    return Ok(Value::object(vm.tlab.alloc_type(type_value)));
-                }
+            if let Some(definition_ptr) = nominal
+                && let Some(type_value) = vm.runtime_declaration_identity(definition_ptr)
+            {
+                return Ok(Value::object(vm.tlab.alloc_type(type_value)));
             }
         }
         let ty = vm
@@ -111,37 +78,15 @@ impl BamlClassTypeValue for PackageBamlImpl {
         docstring: Option<&bex_str::BexStr>,
         other: Option<&IndexMap<bex_str::BexStr, Value>>,
     ) -> Value {
-        fn opt_string(vm: &mut BexVm, value: Option<&bex_str::BexStr>) -> Value {
-            value.map_or(Value::NULL, |s| Value::object(vm.alloc_string(s.clone())))
-        }
-
-        let entries = other
-            .into_iter()
-            .flatten()
-            .map(|(key, value)| {
-                let value = vm
-                    .as_string(value)
-                    .expect("map<string, string> value checked by native glue")
-                    .clone();
-                (key.clone(), Value::object(vm.alloc_string(value)))
-            })
-            .collect();
-        let other = Value::object(vm.alloc_map(
-            baml_type::RealizedTy::string(),
-            baml_type::RealizedTy::string(),
-            entries,
-        ));
-        let alias = opt_string(vm, alias);
-        let description = opt_string(vm, description);
-        let docstring = opt_string(vm, docstring);
-        copy::reflect::WithMeta {
-            ty: *self_value,
-            alias,
-            description,
-            docstring,
-            other,
-        }
-        .to_value(vm)
+        let other = super::type_kinds::string_map_rows(vm, other);
+        super::type_kinds::alloc_with_meta(
+            vm,
+            *self_value,
+            alias.map(bex_str::BexStr::as_str),
+            description.map(bex_str::BexStr::as_str),
+            docstring.map(bex_str::BexStr::as_str),
+            &other,
+        )
     }
 
     fn kind(_vm: &BexVm, self_value: &Value) -> Value {

@@ -466,7 +466,7 @@ async fn call_any_reports_unspecialized_generic_function() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `ident` cannot be extracted through reflection: reflected packages cannot supply type arguments yet".into()
+            "E0165|generic function `ident` cannot be extracted by name through reflection: look it up in `Package.functions()` and `specialize` it first".into()
         ))
     );
 }
@@ -494,7 +494,7 @@ async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `ident` cannot be extracted through reflection: reflected packages cannot supply type arguments yet".into()
+            "E0165|generic function `ident` cannot be extracted by name through reflection: look it up in `Package.functions()` and `specialize` it first".into()
         ))
     );
 }
@@ -779,4 +779,190 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
             )),
         "missing streaming firewall diagnostic: {diagnostics:#?}"
     );
+}
+
+/// B-1582 item 3: a generic LLM function's `$render_prompt` companion has a
+/// signature free of `T` (it takes the parent's value arguments and returns an
+/// `ai.Prompt`), so it reconstructs and `Package.get_function` used to hand it
+/// out. Its *body* still materializes `T` for the output-format schema, and
+/// entering it with an empty frame died as a VM internal error ("template
+/// references frame type-arg slot 0 but the frame has 0 type args"). Until
+/// reflection can supply type arguments, that is a normal E0165 — refused at
+/// extraction, through the `AnyFunction` contract as well as a concrete one.
+#[tokio::test]
+async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
+    let output = baml_test!(
+        r#"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        type AnyCallable = baml.AnyFunction<Returns = unknown, Throws = unknown>;
+
+        function GenericList<T>(topic: string) -> T[] {
+            client: TestClient
+            prompt: `
+                Return an empty list of ${topic}.
+                ${ctx.output_format}
+            `
+        }
+
+        function main() -> string throws never {
+            let package = reflect.Package.current()
+            let callable: AnyCallable = package.get_function<AnyCallable>(
+                "GenericList$render_prompt",
+            ) catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    return e.diagnostics[0].code + "|" + e.diagnostics[0].message
+                },
+                _ => return "wrong error",
+            } else {
+                return "get_function returned null"
+            }
+            // Unreachable: extraction throws above. `reflect.call_any` keeps the
+            // same check for any callable that reaches it by another door.
+            reflect.call_any<unknown, unknown>(callable, { "topic": "items" }) catch_all (e) {
+                _ => return "call_any threw",
+            }
+            "get_function did not throw"
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
+             reflection until it is specialized: its body needs type arguments — look it up in \
+             `Package.functions()` and `specialize` it first"
+                .into()
+        ))
+    );
+}
+
+/// The floor is gated on the callable actually being an under-supplied generic:
+/// a non-generic companion of an ordinary LLM function still invokes.
+#[tokio::test]
+async fn call_any_still_invokes_a_non_generic_companion() {
+    let output = baml_test!(
+        r#"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        type AnyCallable = baml.AnyFunction<Returns = unknown, Throws = unknown>;
+
+        function Plain(topic: string) -> string {
+            client: TestClient
+            prompt: `
+                Say ${topic}.
+                ${ctx.output_format}
+            `
+        }
+
+        function main() -> bool throws unknown {
+            let package = reflect.Package.current()
+            let callable = package.get_function<AnyCallable>("Plain$render_prompt")
+                ?? throw "expected the companion"
+            let rendered = reflect.call_any<unknown, unknown>(callable, { "topic": "hello" })
+            rendered is ai.Prompt
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// The floor has to sit at *extraction*, not only at `reflect.call_any`: a
+/// caller can ask for the companion through an ordinary function-type contract
+/// and then call the value directly, which enters the body with an empty frame
+/// and fails as a VM internal error no `catch` can see. `Package.get_function`
+/// refuses it while the caller still has a diagnostic channel.
+#[tokio::test]
+async fn get_function_refuses_an_unspecialized_generic_companion() {
+    let output = baml_test!(
+        r#"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        type PromptFn = (topic: string) -> ai.Prompt throws unknown;
+
+        function GenericList<T>(topic: string) -> T[] {
+            client: TestClient
+            prompt: `
+                Return an empty list of ${topic}.
+                ${ctx.output_format}
+            `
+        }
+
+        function main() -> string throws never {
+            let package = reflect.Package.current()
+            let callable: PromptFn = package.get_function<PromptFn>(
+                "GenericList$render_prompt",
+            ) catch (e) {
+                baml.reflect.errors.CompilationError => {
+                    return e.diagnostics[0].code + "|" + e.diagnostics[0].message
+                },
+                _ => return "wrong error",
+            } else {
+                return "get_function returned null"
+            }
+            // Unreachable: the extraction above throws. Calling it directly is
+            // what used to die inside the body as an uncatchable internal error.
+            callable("items") catch_all (e) {
+                _ => return "direct call threw",
+            }
+            "get_function did not throw"
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
+             reflection until it is specialized: its body needs type arguments — look it up in \
+             `Package.functions()` and `specialize` it first"
+                .into()
+        ))
+    );
+}
+
+/// Extraction of an ordinary non-generic companion through the same contract
+/// still works — the refusal is gated on the callable being an under-supplied
+/// generic whose body needs the missing arguments.
+#[tokio::test]
+async fn get_function_still_extracts_a_non_generic_companion() {
+    let output = baml_test!(
+        r#"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        type PromptFn = (topic: string) -> ai.Prompt throws unknown;
+
+        function Plain(topic: string) -> string {
+            client: TestClient
+            prompt: `
+                Say ${topic}.
+                ${ctx.output_format}
+            `
+        }
+
+        function main() -> bool throws unknown {
+            let package = reflect.Package.current()
+            let callable = package.get_function<PromptFn>("Plain$render_prompt")
+                ?? throw "expected the companion"
+            let rendered = callable("hello")
+            rendered.text().length() > 0
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

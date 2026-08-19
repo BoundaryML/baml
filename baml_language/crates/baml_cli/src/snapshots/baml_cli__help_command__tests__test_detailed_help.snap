@@ -20,11 +20,6 @@ Examples:
   Run integration tests except slow tests:
     baml test -i "*::integration::*" -x "slow"
 
-Compiler options:
-  -F, --features <FEATURES>
-          Enable compiler features; repeatable or comma-separated [possible values: beta,
-          display_all_warnings]
-
 Profile options:
       --profile <NAME>
           Apply a named test profile from `baml.toml`.
@@ -101,5 +96,5 @@ PROFILES:
   Profile includes establish the initial candidates; direct CLI includes narrow
   them. Excludes accumulate and always win. Direct scalar options override
   profile scalar options. Profile args cannot contain --profile, --no-profile,
-  --project, --directory, --from, --features, or --help. With no default profile,
+  --project, --directory, or --help. With no default profile,
   all tests are selected.

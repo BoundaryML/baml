@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.226.1](https://github.com/boundaryml/baml/compare/0.226.0..0.226.1) - 2026-08-18
+
+### Bug Fixes
+
+- **(openai)** accept both Chat Completions and Responses API token-detail fields ([#4503](https://github.com/BoundaryML/baml/pull/4503)) - ([378cdcc](https://github.com/BoundaryML/baml/commit/378cdcce3c60706cef603b2d7c9b23d4e536d52e)) - Sam Lijin
+
 ## [0.226.0](https://github.com/boundaryml/baml/compare/0.225.0..0.226.0) - 2026-08-17
 
 ### Features

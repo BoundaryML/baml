@@ -1,0 +1,407 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function classes.$init_test_ns_classes_classes(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.classes"
+    load_const "class_constructor"
+    make_closure .<lambda($init_test_ns_classes_classes, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "class_constructor_return_directly"
+    make_closure .<lambda($init_test_ns_classes_classes, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "constructor_with_preceding_variables"
+    make_closure .<lambda($init_test_ns_classes_classes, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "nested_construction_dead_store"
+    make_closure .<lambda($init_test_ns_classes_classes, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "nested_construction_field_access"
+    make_closure .<lambda($init_test_ns_classes_classes, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "nested_construction_inner_field_access"
+    make_closure .<lambda($init_test_ns_classes_classes, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "nested_field_read"
+    make_closure .<lambda($init_test_ns_classes_classes, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "nested_field_read_separate_construction"
+    make_closure .<lambda($init_test_ns_classes_classes, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "nested_constructor_with_preceding_variables"
+    make_closure .<lambda($init_test_ns_classes_classes, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "spread_before_named_fields"
+    make_closure .<lambda($init_test_ns_classes_classes, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "spread_after_named_fields"
+    make_closure .<lambda($init_test_ns_classes_classes, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "multiple_spreads"
+    make_closure .<lambda($init_test_ns_classes_classes, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "spread_does_not_break_locals"
+    make_closure .<lambda($init_test_ns_classes_classes, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "field_assignment"
+    make_closure .<lambda($init_test_ns_classes_classes, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "field_compound_assignment"
+    make_closure .<lambda($init_test_ns_classes_classes, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "nested_field_assignment"
+    make_closure .<lambda($init_test_ns_classes_classes, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "nested_field_compound_assignment"
+    make_closure .<lambda($init_test_ns_classes_classes, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "method_call"
+    make_closure .<lambda($init_test_ns_classes_classes, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.classes"
+    load_const "mutable_self_method"
+    make_closure .<lambda($init_test_ns_classes_classes, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function classes.MutableNumber.add(self: classes.MutableNumber, other: classes.MutableNumber) -> bool {
+    load_var self
+    copy 0
+    load_field .value
+    load_var other
+    load_field .value
+    bin_op +
+    store_field .value
+    load_const true
+    return
+}
+
+function classes.Number.add(self: classes.Number, other: classes.Number) -> classes.Number {
+    load_var self
+    load_field .value
+    load_var other
+    load_field .value
+    add_int
+    init_instance user.classes.Number .value
+    return
+}
+
+function classes.class_constructor_fn() -> classes.Point {
+    load_const 1
+    load_const 2
+    init_instance user.classes.Point .x, .y
+    return
+}
+
+function classes.class_constructor_return_directly_fn() -> classes.Point {
+    load_const 1
+    load_const 2
+    init_instance user.classes.Point .x, .y
+    return
+}
+
+function classes.constructor_with_preceding_variables_fn() -> int {
+    load_const 100
+    load_const 200
+    init_instance user.classes.MyClass .x, .y
+    store_var_load_var obj
+    load_field .x
+    load_var obj
+    load_field .y
+    add_int
+    load_const 10
+    add_int
+    load_const 20
+    add_int
+    load_const 30
+    add_int
+    return
+}
+
+function classes.default_point() -> classes.PointXYZW {
+    load_const 0
+    load_const 0
+    load_const 0
+    load_const 0
+    init_instance user.classes.PointXYZW .x, .y, .z, .w
+    return
+}
+
+function classes.field_assignment_fn() -> int {
+    load_const 0
+    init_instance user.classes.Data .value
+    store_var d
+    load_var d
+    load_const 42
+    store_field .value
+    load_var d
+    load_field .value
+    return
+}
+
+function classes.field_compound_assignment_fn() -> int {
+    load_const 5
+    init_instance user.classes.Counter .value
+    store_var c
+    load_var c
+    copy 0
+    load_field .value
+    load_const 10
+    bin_op +
+    store_field .value
+    load_var c
+    load_field .value
+    return
+}
+
+function classes.method_call_fn() -> int {
+    load_const 1
+    init_instance user.classes.Number .value
+    load_const 2
+    init_instance user.classes.Number .value
+    call user.classes.Number.add
+    load_field .value
+    return
+}
+
+function classes.multiple_spreads_fn() -> classes.PointXYZW {
+    call user.classes.x_one
+    pop 1
+    call user.classes.xy_one
+    store_var _3
+    alloc_instance user.classes.PointXYZW
+    load_var _3
+    init_spread .x, .y, .z, .w
+    return
+}
+
+function classes.mutable_self_method_fn() -> int {
+    load_const 1
+    init_instance user.classes.MutableNumber .value
+    store_var a
+    load_var a
+    load_const 2
+    init_instance user.classes.MutableNumber .value
+    call user.classes.MutableNumber.add
+    pop 1
+    load_var a
+    load_field .value
+    return
+}
+
+function classes.nested_construction_dead_store_fn() -> int {
+    load_const 42
+    return
+}
+
+function classes.nested_construction_field_access_fn() -> int {
+    load_const 10
+    load_const 20
+    init_instance user.classes.CInnerXY .x, .y
+    load_const 30
+    init_instance user.classes.COuterXY .inner, .value
+    load_field .value
+    return
+}
+
+function classes.nested_construction_inner_field_access_fn() -> int {
+    load_const 10
+    load_const 20
+    init_instance user.classes.CInnerXY .x, .y
+    load_const 30
+    init_instance user.classes.COuterXY .inner, .value
+    load_field .inner
+    load_field .y
+    return
+}
+
+function classes.nested_constructor_with_preceding_variables_fn() -> int {
+    load_const 100
+    init_instance user.classes.CInnerVal .val
+    load_const 50
+    init_instance user.classes.COuterXI .inner, .x
+    store_var_load_var obj
+    load_field .inner
+    load_field .val
+    load_var obj
+    load_field .x
+    add_int
+    load_const 5
+    add_int
+    load_const 10
+    add_int
+    return
+}
+
+function classes.nested_field_assignment_fn() -> int {
+    load_const 0
+    init_instance user.classes.CInner .value
+    init_instance user.classes.COuter .inner
+    store_var o
+    load_var o
+    load_field .inner
+    load_const 99
+    store_field .value
+    load_var o
+    load_field .inner
+    load_field .value
+    return
+}
+
+function classes.nested_field_compound_assignment_fn() -> int {
+    load_const 5
+    init_instance user.classes.CInner .value
+    init_instance user.classes.COuter .inner
+    store_var o
+    load_var o
+    load_field .inner
+    copy 0
+    load_field .value
+    load_const 10
+    bin_op +
+    store_field .value
+    load_var o
+    load_field .inner
+    load_field .value
+    return
+}
+
+function classes.nested_field_read_fn() -> int {
+    load_const 42
+    init_instance user.classes.CInner .value
+    init_instance user.classes.COuter .inner
+    load_field .inner
+    load_field .value
+    return
+}
+
+function classes.nested_field_read_separate_construction_fn() -> int {
+    load_const 42
+    init_instance user.classes.CInner .value
+    init_instance user.classes.COuter .inner
+    load_field .inner
+    load_field .value
+    return
+}
+
+function classes.spread_after_named_fields_fn() -> classes.PointXYZW {
+    call user.classes.default_point
+    store_var _2
+    alloc_instance user.classes.PointXYZW
+    load_var _2
+    init_spread .x, .y, .z, .w
+    return
+}
+
+function classes.spread_before_named_fields_fn() -> classes.PointXYZW {
+    call user.classes.default_point
+    store_var _2
+    alloc_instance user.classes.PointXYZW
+    load_const 1
+    init_field .x
+    load_const 2
+    init_field .y
+    load_var _2
+    init_spread .z, .w
+    return
+}
+
+function classes.spread_does_not_break_locals_fn() -> int {
+    call user.classes.default_point
+    pop 1
+    load_const 0
+    return
+}
+
+function classes.x_one() -> classes.PointXYZW {
+    load_const 1
+    load_const 0
+    load_const 0
+    load_const 0
+    init_instance user.classes.PointXYZW .x, .y, .z, .w
+    return
+}
+
+function classes.xy_one() -> classes.PointXYZW {
+    load_const 1
+    load_const 1
+    load_const 0
+    load_const 0
+    init_instance user.classes.PointXYZW .x, .y, .z, .w
+    return
+}
