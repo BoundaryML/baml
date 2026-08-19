@@ -290,6 +290,48 @@ fn generate_valid_project_returns_zero_exit_code() {
 }
 
 #[test]
+fn generate_rust_language_naming_convention_returns_diagnostic() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.rust_client]\n\
+         output_type = \"rust\"\n\
+         output_dir = \".\"\n\
+         naming_convention = \"language\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(4),
+        "Expected exit code 4, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.lines().any(|line| line.trim() == "E0019"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains(
+            "generator `rust_client` with `output_type = \"rust\"` requires `naming_convention = \"preserve-case\"`"
+        ),
+        "stderr: {stderr}"
+    );
+    assert!(!stderr.contains("panicked at"), "stderr: {stderr}");
+}
+
+#[test]
 fn generate_go_writes_sdk_through_cli() {
     if !gofmt_is_available() {
         return;
