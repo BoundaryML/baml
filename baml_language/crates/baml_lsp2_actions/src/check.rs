@@ -1212,13 +1212,14 @@ fn new_tir_diagnostic(
             .with_primary_span(span)
             .with_phase(DiagnosticPhase::Type);
     }
-    if matches!(error, TirTypeError::RuntimeTypeMustBeNamed) {
+    if let TirTypeError::RuntimeTypeMustBeNamed { escape } = error {
         // The headline says what is wrong; the label at the `unreflect(...)`
-        // slot says why the inline spelling cannot reach past this call. The
-        // rewrite rides along as related info, built from the file text in
-        // `render_with_type_refs`.
+        // slot says why the inline spelling cannot reach past this call —
+        // naming whichever published type the runtime parameter reached, the
+        // value or the error. The rewrite rides along as related info, built
+        // from the file text in `render_with_type_refs`.
         return runtime_type::runtime_type_must_be_named()
-            .with_primary(span, runtime_type::RUNTIME_TYPE_MUST_BE_NAMED_NOTE)
+            .with_primary(span, escape.note())
             .with_phase(DiagnosticPhase::Type);
     }
     if let TirTypeError::CannotConstructReflectionKind { class_name } = error {
@@ -1485,7 +1486,9 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
             runtime_type::computed_generic_argument_requires_unreflect(name.as_str()).id
         }
-        TirTypeError::RuntimeTypeMustBeNamed => runtime_type::runtime_type_must_be_named().id,
+        TirTypeError::RuntimeTypeMustBeNamed { .. } => {
+            runtime_type::runtime_type_must_be_named().id
+        }
         TirTypeError::MountedPackageCallUnsupported { path } => {
             runtime_type::mounted_package_call_unsupported(path.as_str()).id
         }
