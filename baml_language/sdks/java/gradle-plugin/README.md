@@ -58,7 +58,7 @@ The optional `baml { … }` block:
 
 | Option               | Type                 | Default                | Meaning                                                                                                              |
 | -------------------- | -------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `srcDir`             | `DirectoryProperty`  | the project directory  | Directory containing `baml.toml` and `baml_src/`; passed to the CLI as `--from`.                                      |
+| `srcDir`             | `DirectoryProperty`  | the project directory  | Directory containing `baml.toml` and `baml_src/`; passed to the CLI as `--project`.                                   |
 | `bamlExecutable`     | `Property<String>`   | `"baml"`               | The CLI to run — a bare name resolved on `PATH`, or an absolute path to a specific binary.                            |
 | `outputType`         | `Property<String>`   | `"java"`               | Informational only. The real generator config lives in `baml.toml` `[generator.<name>]`.                             |
 | `nativePlatforms`    | `ListProperty<String>` | *(empty → detect host)* | Which native-jar classifiers to depend on. Empty auto-detects the build machine; an explicit list **replaces** detection; `["all"]` adds every known platform. |
@@ -108,7 +108,7 @@ dependencies {
   --version`).
 - **Output** — `build/generated/sources/baml/java/main`. The generated files
   declare `package baml_sdk.*`, so the emitter writes them under a `baml_sdk/`
-  subdirectory (`baml generate --from <srcDir> -o <outputDir>/baml_sdk`) and that
+  subdirectory (`baml bridge generate --project <srcDir> -o <outputDir>/baml_sdk`) and that
   `<outputDir>` is registered as the Java source root. The output directory is
   cleaned before every run so a renamed or deleted BAML class never leaves a
   stale `.java` behind.
