@@ -325,8 +325,19 @@ pub async fn call_and_encode(
     args: BexArgs,
     call_ctx: FunctionCallContext,
 ) -> Vec<u8> {
+    let _route =
+        crate::register_active_call_route(call_ctx.host_call_id.0, call_ctx.cancel.clone());
+    call_and_encode_registered(runtime, function_name, args, call_ctx).await
+}
+
+/// Named-call encoding for callers that already own an active-call route.
+pub(crate) async fn call_and_encode_registered(
+    runtime: Arc<dyn Bex>,
+    function_name: String,
+    args: BexArgs,
+    call_ctx: FunctionCallContext,
+) -> Vec<u8> {
     let options = CffiHandleTableOptions::for_in_process();
-    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
 
     let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
         .catch_unwind()
@@ -374,6 +385,18 @@ fn partition_callable_args(
 pub async fn call_handle_and_encode(
     runtime: Arc<dyn Bex>,
     handle_key: u64,
+    args: BexArgs,
+    call_ctx: FunctionCallContext,
+) -> Vec<u8> {
+    let _route =
+        crate::register_active_call_route(call_ctx.host_call_id.0, call_ctx.cancel.clone());
+    call_handle_and_encode_registered(runtime, handle_key, args, call_ctx).await
+}
+
+/// Handle-call encoding for callers that already own an active-call route.
+pub(crate) async fn call_handle_and_encode_registered(
+    runtime: Arc<dyn Bex>,
+    handle_key: u64,
     BexArgs { required, optional }: BexArgs,
     call_ctx: FunctionCallContext,
 ) -> Vec<u8> {
@@ -414,7 +437,6 @@ pub async fn call_handle_and_encode(
     };
 
     let options = CffiHandleTableOptions::for_in_process();
-    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
     let caught = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx))
         .catch_unwind()
         .await;

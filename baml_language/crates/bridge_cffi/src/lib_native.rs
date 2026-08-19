@@ -14,8 +14,8 @@ use sys_native::SysOpsExt;
 use tokio::runtime::Runtime;
 
 use crate::{
-    BridgeError, baml_to_host, call_and_encode, call_handle_and_encode, error_to_outbound,
-    function_call_context_builder,
+    BridgeError, baml_to_host, error_to_outbound, function_call_context_builder,
+    register_active_call_route,
 };
 
 #[path = "api.rs"]
@@ -159,19 +159,38 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
     }
     let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
+    let cancel = bex_project::CancellationToken::new();
     let call_ctx = function_call_context_builder(call_id)
+        .with_cancel_token(cancel.clone())
         .with_type_args(type_args.type_args)
-        .with_type_defs(type_args.type_defs);
+        .with_type_defs(type_args.type_defs)
+        .build();
+    // Install the cancellation route before returning control to the caller.
+    // The guard stays alive through synchronous callback delivery, closing
+    // both the pre-start and completed-before-delivery races.
+    let route = register_active_call_route(call_id.0, cancel);
 
     get_tokio_runtime()?.spawn(async move {
+        let _route = route;
         let encoded = AssertUnwindSafe(async move {
             match target {
                 CallTarget::FunctionName(function_name) => {
-                    call_and_encode(runtime, function_name, kwargs.into(), call_ctx.build()).await
+                    baml_to_host::call_and_encode_registered(
+                        runtime,
+                        function_name,
+                        kwargs.into(),
+                        call_ctx,
+                    )
+                    .await
                 }
                 CallTarget::FunctionHandle(handle_key) => {
-                    call_handle_and_encode(runtime, handle_key, kwargs.into(), call_ctx.build())
-                        .await
+                    baml_to_host::call_handle_and_encode_registered(
+                        runtime,
+                        handle_key,
+                        kwargs.into(),
+                        call_ctx,
+                    )
+                    .await
                 }
             }
         })
