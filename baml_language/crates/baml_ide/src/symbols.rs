@@ -354,15 +354,15 @@ mod tests {
         let mut db = make_db();
         db.file(
             std::path::Path::new("/tmp/main.baml"),
-            "function RootMain() -> int { 1 }",
+            "function root_main() -> int { 1 }",
         );
         db.file(
             std::path::Path::new("/tmp/ns_demo/demo.baml"),
-            "function DemoFunc() -> int { 2 }",
+            "function demo_func() -> int { 2 }",
         );
         db.file(
             std::path::Path::new("/tmp/ns_demo/ns_inner/inner.baml"),
-            "function InnerFunc() -> int { 3 }",
+            "function inner_func() -> int { 3 }",
         );
 
         let names = list_functions_with_metadata(&db)
@@ -374,9 +374,9 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                "RootMain".to_string(),
-                "demo.DemoFunc".to_string(),
-                "demo.inner.InnerFunc".to_string(),
+                "demo.demo_func".to_string(),
+                "demo.inner.inner_func".to_string(),
+                "root_main".to_string(),
             ]
         );
     }
@@ -389,18 +389,18 @@ mod tests {
             .unwrap_or_else(|_| "/tmp".into());
         db.file(
             &root.join("ns_demo/main.baml"),
-            "\n\nfunction Transform<T extends string>(value: T, count: int) -> T throws Error {\n  value\n}",
+            "\n\nfunction transform<T extends string>(value: T, count: int) -> T throws Error {\n  value\n}",
         );
 
         let functions = list_functions_with_metadata(&db).functions;
         let function = functions
             .iter()
-            .find(|function| function.name == "demo.Transform")
-            .expect("Transform should be listed");
+            .find(|function| function.name == "demo.transform")
+            .expect("transform should be listed");
 
         assert_eq!(
             function.signature,
-            "function Transform<T extends string>(value: T, count: int) -> T throws Error"
+            "function transform<T extends string>(value: T, count: int) -> T throws Error"
         );
         assert_eq!(
             function.source_position,
@@ -418,7 +418,7 @@ mod tests {
         db.file(
             std::path::Path::new("/tmp/main.baml"),
             r##"
-function Preview(
+function preview(
   text: string,
   raw_text: string,
   count: int,
@@ -432,7 +432,7 @@ function Preview(
 }
 
 test PreviewCase {
-  functions [Preview]
+  functions [preview]
   args {
     text "hello world\nnext"
     raw_text #"raw value with spaces"#
@@ -452,7 +452,7 @@ test PreviewCase {
         let tests = list_tests_with_metadata(&db);
         assert_eq!(tests.len(), 1);
         assert_eq!(tests[0].name, "PreviewCase");
-        assert_eq!(tests[0].function_name, "Preview");
+        assert_eq!(tests[0].function_name, "preview");
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&tests[0].args_json).unwrap(),
             serde_json::json!({
@@ -474,11 +474,11 @@ test PreviewCase {
         db.file(
             std::path::Path::new("/tmp/main.baml"),
             r#"
-function Alpha(value: string) -> string { value }
-function Beta(value: string) -> string { value }
+function alpha(value: string) -> string { value }
+function beta(value: string) -> string { value }
 
 test SharedCase {
-  functions [Alpha, Beta]
+  functions [alpha, beta]
   args { value "same" }
 }
 "#,
@@ -490,7 +490,7 @@ test SharedCase {
                 .iter()
                 .map(|test| (test.name.as_str(), test.function_name.as_str()))
                 .collect::<Vec<_>>(),
-            vec![("SharedCase", "Alpha"), ("SharedCase", "Beta")],
+            vec![("SharedCase", "alpha"), ("SharedCase", "beta")],
         );
         assert!(
             tests
@@ -505,10 +505,10 @@ test SharedCase {
         db.file(
             std::path::Path::new("/tmp/ns_demo/main.baml"),
             r#"
-function Preview(value: string) -> string { value }
+function preview(value: string) -> string { value }
 
 test PreviewCase {
-  functions [Preview]
+  functions [preview]
   args { value "namespaced" }
 }
 "#,
@@ -516,7 +516,7 @@ test PreviewCase {
 
         let tests = list_tests_with_metadata(&db);
         assert_eq!(tests.len(), 1);
-        assert_eq!(tests[0].function_name, "demo.Preview");
+        assert_eq!(tests[0].function_name, "demo.preview");
     }
 
     #[test]
@@ -524,13 +524,13 @@ test PreviewCase {
         let mut db = make_db();
         db.file(
             std::path::Path::new("/tmp/ns_demo/preview.baml"),
-            "function Preview(value: string) -> string { value }",
+            "function preview(value: string) -> string { value }",
         );
         db.file(
             std::path::Path::new("/tmp/main.baml"),
             r#"
 test PreviewCase {
-  functions [demo.Preview]
+  functions [demo.preview]
   args { value "namespaced" }
 }
 "#,
@@ -538,6 +538,6 @@ test PreviewCase {
 
         let tests = list_tests_with_metadata(&db);
         assert_eq!(tests.len(), 1);
-        assert_eq!(tests[0].function_name, "demo.Preview");
+        assert_eq!(tests[0].function_name, "demo.preview");
     }
 }

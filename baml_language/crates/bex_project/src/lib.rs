@@ -174,6 +174,11 @@ pub fn new(
             log::error!("unhandled spawned task failed: {error}");
         }
     })));
+    // Deferred construction exists so the handler above lands before any
+    // profiling event fires; the engine is live from here, so activate now —
+    // without this, `BAML_PROFILE` runs record nothing and the drop-time
+    // unhandled-spawn drain warning is never armed.
+    engine.activate_profiling();
     Ok(Arc::new(engine))
 }
 

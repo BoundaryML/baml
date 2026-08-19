@@ -54,7 +54,7 @@ fn lower_codegen_default(
 }
 
 /// If `name` contains a `$`, return `(parent_part, suffix_after_dollar)`.
-/// For example `"ExtractResume$build_request"` → `Some(("ExtractResume", "build_request"))`.
+/// For example `"extract_resume$build_request"` → `Some(("extract_resume", "build_request"))`.
 /// If there's no `$`, returns `None`.
 #[cfg(test)]
 fn split_companion(name: &str) -> Option<(&str, &str)> {
@@ -780,19 +780,19 @@ mod tests {
     #[test]
     fn test_split_companion_with_dollar() {
         assert_eq!(
-            split_companion("ExtractResume$build_request"),
-            Some(("ExtractResume", "build_request"))
+            split_companion("extract_resume$build_request"),
+            Some(("extract_resume", "build_request"))
         );
         assert_eq!(split_companion("Foo$parse"), Some(("Foo", "parse")));
         assert_eq!(
-            split_companion("ExtractResume$render_prompt"),
-            Some(("ExtractResume", "render_prompt"))
+            split_companion("extract_resume$render_prompt"),
+            Some(("extract_resume", "render_prompt"))
         );
     }
 
     #[test]
     fn test_split_companion_no_dollar() {
-        assert_eq!(split_companion("ExtractResume"), None);
+        assert_eq!(split_companion("extract_resume"), None);
         assert_eq!(split_companion("Foo"), None);
         assert_eq!(split_companion(""), None);
     }
@@ -844,7 +844,7 @@ mod tests {
         db.workspace(root);
         db.file(
             root.join("main.baml").as_path(),
-            "class Resume { name string }\nfunction ExtractResume(resume: string) -> Resume {\n    client: \"openai/gpt-4o\"\n    prompt: `Extract resume from ${resume} ${ctx.output_format}`\n}\n",
+            "class Resume { name string }\nfunction extract_resume(resume: string) -> Resume {\n    client: \"openai/gpt-4o\"\n    prompt: `extract resume from ${resume} ${ctx.output_format}`\n}\n",
         );
 
         let pool = build_symbol_pool(&db);
@@ -853,9 +853,9 @@ mod tests {
         // own `Symbol::Function` entry, keyed on the suffixed name. `$spec` is
         // deliberately absent — it returns a BAML-side `ai.FunctionSpec`.
         for expected in [
-            "ExtractResume",
-            "ExtractResume$render_prompt",
-            "ExtractResume$parse",
+            "extract_resume",
+            "extract_resume$render_prompt",
+            "extract_resume$parse",
         ] {
             let key = pool
                 .keys()
@@ -878,9 +878,9 @@ mod tests {
             r##"
 class Resume { name string }
 
-function ExtractResume(resume: string) -> Resume {
+function extract_resume(resume: string) -> Resume {
   client: "openai/gpt-4o"
-  prompt: `Extract resume from ${resume} ${ctx.output_format}`
+  prompt: `extract resume from ${resume} ${ctx.output_format}`
 }
 "##,
         );
@@ -893,9 +893,9 @@ function ExtractResume(resume: string) -> Resume {
         // classify the function as unsupported and drop it entirely. The pool
         // must expose the user's own parameters only.
         for (bare, expected) in [
-            ("ExtractResume", &["resume"][..]),
-            ("ExtractResume$render_prompt", &["resume"][..]),
-            ("ExtractResume$parse", &["json"][..]),
+            ("extract_resume", &["resume"][..]),
+            ("extract_resume$render_prompt", &["resume"][..]),
+            ("extract_resume$parse", &["json"][..]),
         ] {
             let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
             let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
@@ -922,7 +922,7 @@ client<llm> GPT4 {
   }
 }
 
-function Extract(client: string, text: string) -> string {
+function extract(client: string, text: string) -> string {
   client: GPT4
   prompt: `${text}`
 }
@@ -1030,10 +1030,10 @@ function Extract(client: string, text: string) -> string {
             concat!(
                 "class E1 { message string }\n",
                 "class E2 { code int }\n\n",
-                "function F() -> int throws E1 | E2 {\n",
+                "function f() -> int throws E1 | E2 {\n",
                 "  throw E1 { message: \"x\" }\n",
                 "}\n\n",
-                "function G() -> int {\n",
+                "function g() -> int {\n",
                 "  throw E1 { message: \"y\" }\n",
                 "}\n",
             ),
@@ -1058,14 +1058,14 @@ function Extract(client: string, text: string) -> string {
 
         // Declared union throws → both names, in declaration order.
         assert_eq!(
-            throws_names("F"),
+            throws_names("f"),
             vec!["E1".to_string(), "E2".to_string()],
             "declared union throws must reach pool in order",
         );
         // No `throws` clause but a throwing body → the inferred contract still
         // surfaces E1.
         assert_eq!(
-            throws_names("G"),
+            throws_names("g"),
             vec!["E1".to_string()],
             "inferred throws (no clause) must reach pool",
         );
@@ -1352,18 +1352,18 @@ class GenericMirror<T> {
         db.workspace(root);
         db.file(
             root.join("main.baml").as_path(),
-            "function ReturnInt() -> int { 42 }\n",
+            "function return_int() -> int { 42 }\n",
         );
 
         let pool = build_symbol_pool(&db);
 
         let key = pool
             .keys()
-            .find(|k| k.name().as_str() == "ReturnInt")
-            .expect("ReturnInt must be in the pool");
+            .find(|k| k.name().as_str() == "return_int")
+            .expect("return_int must be in the pool");
         assert!(
             matches!(pool.get(key), Some(cg::Symbol::Function(_))),
-            "ReturnInt must be a Function symbol",
+            "return_int must be a Function symbol",
         );
     }
 

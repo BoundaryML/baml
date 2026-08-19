@@ -35,7 +35,7 @@ pub use check::{
     collect_compiler2_diagnostics, collect_compiler2_diagnostics_narrowed, collect_diagnostics,
     collect_package_level_diagnostics, prime_file_indexes_parallel,
 };
-pub use db::{EventCallback, ProjectDatabase, SourceRootError, SourceRootSpec};
+pub use db::{EventCallback, ProjectDatabase, SourceRootError, SourceRootSpec, canonicalize_lossy};
 pub use discovery::discover_baml_files;
 pub use project_resolution::{
     BAML_SRC_DIR, BAML_TOML, find_baml_project_root, find_baml_project_root_from_ancestors,

@@ -114,6 +114,8 @@ baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_ide = { path = "crates/baml_ide" }
+baml_lsp = { path = "crates/baml_lsp" }
+baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_release = { path = "crates/baml_release" }
 baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }

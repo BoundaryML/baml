@@ -194,6 +194,9 @@ pub(crate) enum Commands {
     )]
     Agent(crate::agent_command::AgentArgs),
 
+    #[command(about = "Start a language server", name = "lsp")]
+    LanguageServer(crate::lsp::LanguageServerArgs),
+
     #[command(about = "Display documentation for a command")]
     Help(crate::help_command::HelpArgs),
 
@@ -367,6 +370,13 @@ impl RuntimeCli {
             Commands::Agent(args) => args.run(),
             Commands::Generate(args) => args.run(),
             Commands::Test(args) => args.run(),
+            Commands::LanguageServer(args) => match args.run() {
+                Ok(()) => Ok(crate::ExitCode::Success),
+                Err(e) => {
+                    crate::reporter::print_error(e);
+                    Ok(crate::ExitCode::Other)
+                }
+            },
             Commands::Auth(args) => args.run(),
             Commands::Feedback(args) => args.run(),
             // Handled before telemetry and command-side effects above.
@@ -469,6 +479,7 @@ mod tests {
         &["ide", "install"],
         &["agent"],
         &["agent", "install"],
+        &["lsp"],
         &["help"],
     ];
 
@@ -834,6 +845,8 @@ mod tests {
             &["baml", "agent", "install"],
             &["baml", "agent", "install", "--project", "./my-project"],
             &["baml", "agent", "install", "--source", "./skills.tar.gz"],
+            &["baml", "lsp"],
+            &["baml", "lsp", "--workspace", "./my-project"],
             &["baml", "help", "run"],
             &["baml", "help", "test"],
         ];

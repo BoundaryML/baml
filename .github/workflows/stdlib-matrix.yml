@@ -91,20 +91,38 @@ jobs:
       - name: "Build the BAML CLI"
         run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
 
+      # `baml describe` is deleted while the IDE layer is rebuilt on the new
+      # database foundation; the whole matrix is describe-based, so skip
+      # cleanly (report simply not refreshed) instead of dying on an unknown
+      # subcommand. Remove this gate when describe returns.
+      - name: "Describe available?"
+        id: describe
+        run: |
+          set -euo pipefail
+          if baml_language/target/debug/baml-cli describe --help >/dev/null 2>&1; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::baml describe unavailable (IDE layer rebuild in progress); skipping the stdlib matrix refresh"
+          fi
+
       # Two workspaces, deliberately. The extractor reads the repo-pinned
       # `typescript` and `@types/node` resolved against the ROOT package.json,
       # while the web app lives in typescript2's separate pnpm workspace.
       - name: "Setup Node for the root workspace"
+        if: steps.describe.outputs.have == 'true'
         uses: ./.github/actions/setup-node
         with:
           enable-turbo-cache: "false"
 
       - name: "Setup Node for the web app"
+        if: steps.describe.outputs.have == 'true'
         uses: ./.github/actions/setup-node2
 
       # A 404 is the expected first run, not a failure: there is nothing
       # deployed to carry forward yet.
       - name: "Fetch the deployed report"
+        if: steps.describe.outputs.have == 'true'
         id: previous
         env:
           SITE: ${{ vars.STDLIB_MATRIX_URL || 'https://boundaryml.github.io/baml' }}
@@ -136,6 +154,7 @@ jobs:
       # The ratchet compares the inputs the deployed report was built from. A
       # release that did not move the stdlib stops here, before any model call.
       - name: "Has the surface moved?"
+        if: steps.describe.outputs.have == 'true'
         id: ratchet
         env:
           FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
@@ -169,7 +188,7 @@ jobs:
           fi
 
       - name: "Build the matrix"
-        if: steps.ratchet.outputs.changed == 'true'
+        if: steps.describe.outputs.have == 'true' && (steps.ratchet.outputs.changed == 'true')
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -208,7 +227,7 @@ jobs:
       # again. What must not happen is publishing a report with less coverage
       # than the one it replaces.
       - name: "Refuse to publish a thinner report"
-        if: steps.ratchet.outputs.changed == 'true'
+        if: steps.describe.outputs.have == 'true' && (steps.ratchet.outputs.changed == 'true')
         run: |
           set -euo pipefail
           report=typescript2/app-stdlib-matrix/public/matrix.json
@@ -246,7 +265,7 @@ jobs:
 
       # The report is fetched by the page at runtime, so it ships beside it.
       - name: "Build the site"
-        if: steps.ratchet.outputs.changed == 'true'
+        if: steps.describe.outputs.have == 'true' && (steps.ratchet.outputs.changed == 'true')
         working-directory: typescript2/app-stdlib-matrix
         run: |
           set -euo pipefail
@@ -257,7 +276,7 @@ jobs:
           cp "${GITHUB_WORKSPACE}/tools/stdlib-matrix/report/matrix.md" dist/matrix.md
 
       - name: "Upload the site"
-        if: steps.ratchet.outputs.changed == 'true'
+        if: steps.describe.outputs.have == 'true' && (steps.ratchet.outputs.changed == 'true')
         uses: actions/upload-pages-artifact@v3
         with:
           path: typescript2/app-stdlib-matrix/dist

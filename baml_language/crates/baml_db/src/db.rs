@@ -206,16 +206,24 @@ impl baml_compiler2_emit::Db for ProjectDatabase {
 /// (an unsaved editor buffer) must normalize to the same prefix. Virtual
 /// paths (`<builtin>/...`, test fixtures that never touch the filesystem)
 /// have no existing ancestor and are stored and looked up exactly as
-/// spelled.
-fn canonicalize_lossy(path: &Path) -> PathBuf {
+/// spelled (lexically normalized).
+///
+/// Exported so path producers (the LSP boundary) apply the identical rule
+/// instead of maintaining a copy that could drift.
+pub fn canonicalize_lossy(path: &Path) -> PathBuf {
     if let Ok(canonical) = path.canonicalize() {
         return canonical;
     }
-    let mut ancestor = path;
+    // The tail beyond the existing prefix can only be normalized lexically:
+    // resolve `.`/`..` up front so the ancestor walk never meets a `..`
+    // component (whose `file_name()` is `None` — appending it verbatim would
+    // silently drop it from the key).
+    let normalized = lexically_normalize(path);
+    let mut ancestor = normalized.as_path();
     let mut remainder = Vec::new();
     while let Some(parent) = ancestor.parent() {
         if let Some(name) = ancestor.file_name() {
-            remainder.push(name);
+            remainder.push(name.to_os_string());
         }
         if let Ok(canonical) = parent.canonicalize() {
             let mut out = canonical;
@@ -226,7 +234,27 @@ fn canonicalize_lossy(path: &Path) -> PathBuf {
         }
         ancestor = parent;
     }
-    path.to_path_buf()
+    normalized
+}
+
+/// Drop `.` components and resolve `..` lexically (popping at a root or
+/// prefix is a no-op, matching `..` at `/`).
+fn lexically_normalize(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            std::path::Component::Prefix(_)
+            | std::path::Component::RootDir
+            | std::path::Component::Normal(_) => {
+                out.push(component.as_os_str());
+            }
+        }
+    }
+    out
 }
 
 impl ProjectDatabase {
@@ -606,12 +634,16 @@ impl ProjectDatabase {
                 next.push(file);
             }
         }
-        for file in previous {
-            if !kept.contains(&file) {
-                self.park_file(file);
+        for file in &previous {
+            if !kept.contains(file) {
+                self.park_file(*file);
             }
         }
-        root.set_files(self).to(next);
+        // A no-op replacement must not bump the `files` revision: dependents
+        // of the file *set* would re-run for a change that isn't one.
+        if next != previous {
+            root.set_files(self).to(next);
+        }
     }
 
     /// Remove a file from the database.
