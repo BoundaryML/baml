@@ -160,6 +160,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             function: GlobalIndex::from_raw(0),
             type_args: Box::new([]),
             runtime_package: package_ptr,
+            exact_type_values: None,
         }));
         // SAFETY: this TLAB exclusively owns both fresh Gen0 objects and no GC
         // can run concurrently in this single-threaded test.

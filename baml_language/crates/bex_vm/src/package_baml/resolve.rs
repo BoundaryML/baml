@@ -98,7 +98,26 @@ impl<'vm> ImplResolver<'vm> {
     /// type's docs for why a per-package search cannot be narrowed correctly. An
     /// unknown interface (not loaded) has no impls anywhere.
     fn rules_for(self, iface: &TypeName) -> Vec<RuntimeImplRuleCandidate<'vm>> {
-        let Some(iface_ptr) = self.vm.lookup_interface(iface) else {
+        // Resolve the interface *name* in the same world the rules are looked
+        // up in, then fall back to the lexical one.
+        //
+        // An explicitly rooted resolver is inspecting a package it is not
+        // running in, and a goal can name an interface from either side: one
+        // the inspected package declares itself (`Local` to it, invisible from
+        // the executing frame — every bound naming one would fail closed), or
+        // one it borrowed from a mounted dependency, which is `Local` to
+        // *that* package and only resolvable the lexical way. Try the root
+        // first so the inspected package wins a same-name collision, then fall
+        // back. Resolution only chooses which interface object to key the rule
+        // lookup on; it grants no access of its own.
+        let iface_ptr = match self.root_package {
+            Some(root) => self
+                .vm
+                .lookup_interface_in(root, iface)
+                .or_else(|| self.vm.lookup_interface(iface)),
+            None => self.vm.lookup_interface(iface),
+        };
+        let Some(iface_ptr) = iface_ptr else {
             return Vec::new();
         };
         let mut pointers = Vec::new();

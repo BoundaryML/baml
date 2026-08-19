@@ -6,6 +6,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Features
 
+- Added reflection specialization for generic functions: `baml.reflect.Package.functions()` lists every declared function, and `baml.reflect.function.Type` gained `is_generic()`, `generic_params()`, `specialize(args)`, and `get<F>()`, so a generic function or one of its generated companions can be bound to runtime-minted type arguments and invoked through reflection. ([#4519](https://github.com/BoundaryML/baml/pull/4519)) - Antonio Sarosi
 - Accepted an infinite `while` loop as a divergence form: a loop whose condition is statically `true` and whose body holds no `break` bound to it now satisfies E0113, so `let … else { while (true) {} }` compiles. ([#4493](https://github.com/BoundaryML/baml/pull/4493)) - Antonio Sarosi
 - Added read-only `baml.AnyClass` narrowing and reflection for static and runtime-minted class values, with value-bound field handles and catchable typed reads. ([#4491](https://github.com/BoundaryML/baml/pull/4491)) - Antonio Sarosi
 - Added runtime reflection and type construction, including compiling and mounting packages, invoking reflected callables, and isolating dynamic work in sessions. ([#4325](https://github.com/BoundaryML/baml/pull/4325)) - Antonio Sarosi
@@ -20,6 +21,7 @@ This changelog covers the independent `baml_language` release line. It does not 
 
 ### Breaking and compatibility changes
 
+- `baml.reflect.Package.functions()` now lists unspecialized generic functions, which it previously omitted, and `baml.reflect.function.Type.params()` / `return_type()` now declare `throws baml.reflect.errors.CompilationError`: a generic descriptor has no signature to report until `specialize` supplies its type arguments. ([#4519](https://github.com/BoundaryML/baml/pull/4519)) - Antonio Sarosi
 - Renamed `baml.reflect.class.Field.read<T>()` to `value<T>()`. ([#4493](https://github.com/BoundaryML/baml/pull/4493)) - Antonio Sarosi
 - Renamed `openai.OpenAiClient` to `openai.ResponsesClient`. ([#4430](https://github.com/BoundaryML/baml/pull/4430)) - aaronvg
 - Improved the string stdlib APIs: renamed `String.char_at` to `String.at`, kept negative indexing, and made out-of-range access return `null`; made `String.code_point_at` return `null` out of range; removed `String.matches` in favor of `String.includes`; renamed `String.substring` to `String.slice`; and added `String.last_index_of`. ([#4433](https://github.com/BoundaryML/baml/pull/4433)) - 2kai2kai2
