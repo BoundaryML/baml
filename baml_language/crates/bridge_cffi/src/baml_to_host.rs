@@ -328,10 +328,7 @@ impl PreparedCall {
     pub(crate) fn register_active_call_route(
         &self,
     ) -> Result<crate::ActiveCallRouteGuard, BridgeError> {
-        crate::register_active_call_route(
-            self.context.host_call_id.0,
-            self.context.cancel.clone(),
-        )
+        crate::register_active_call_route(self.context.host_call_id.0, self.context.cancel.clone())
     }
 }
 

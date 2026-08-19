@@ -154,9 +154,11 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
 
     get_tokio_runtime()?.spawn(async move {
         let _route = route;
-        let encoded = AssertUnwindSafe(crate::invoke_prepared_registered(runtime, prepared))
-            .catch_unwind()
-            .await;
+        let encoded = AssertUnwindSafe(crate::baml_to_host::invoke_prepared_registered(
+            runtime, prepared,
+        ))
+        .catch_unwind()
+        .await;
 
         let bytes = match encoded {
             Ok(bytes) => bytes,
