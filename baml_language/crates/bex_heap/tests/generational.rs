@@ -7,14 +7,14 @@
 
 use std::sync::Arc;
 
-use baml_type::{Name, QualifiedTypeName, RealizedTy, TyAttr};
+use baml_type::{Name, QualifiedTypeName, TyAttr};
 use bex_external_types::WeakHeapRef;
 use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
-    Class, ClassField, GenericFunction, GlobalIndex, Object,
+    Class, ClassField, GenericFunction, GlobalIndex, Object, RealizedTy,
     types::{
-        DynTypeDefs, InterfaceDef, LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage,
-        RuntimeTypeProvenance, TypeAliasDef, TypeValue,
+        InterfaceDef, LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage,
+        TypeAliasDef, TypeValue,
     },
 };
 use indexmap::IndexMap;
@@ -133,13 +133,8 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             session: None,
         };
         let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
-        let ty = RealizedTy::Class(
-            QualifiedTypeName::local(Name::new("RuntimeClass")),
-            Vec::new(),
-            TyAttr::default(),
-        );
-        let type_ptr = tlab.alloc_type(TypeValue::owned(ty, DynTypeDefs::default(), package_ptr));
         let class_name = QualifiedTypeName::local(Name::new("RuntimeClass"));
+        let type_tag = baml_type::typetag::TypeTag::of_head("RuntimeClass");
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             name: class_name.clone(),
             fields: Vec::new(),
@@ -147,15 +142,18 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             alias: None,
             docstring: None,
             other: IndexMap::new(),
-            type_tag: baml_type::typetag::TypeTag::of_head("RuntimeClass"),
+            type_tag,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: Some(RuntimeTypeProvenance {
-                defs: DynTypeDefs::default(),
-                owner: package_ptr,
-            }),
+            owner: package_ptr,
         })));
+        let ty = RealizedTy::Class(
+            bex_vm_types::TypeHead::new(class_ptr, type_tag),
+            Vec::new(),
+            TyAttr::default(),
+        );
+        let type_ptr = tlab.alloc_type(TypeValue::new(ty));
         let function_ptr = tlab.alloc(Object::GenericFunction(GenericFunction {
             function: GlobalIndex::from_raw(0),
             type_args: Box::new([]),
@@ -175,9 +173,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         );
         let runtime = package.runtime.as_mut().expect("runtime image");
         runtime.objects = vec![type_ptr, function_ptr, class_ptr].into_boxed_slice();
-        runtime
-            .type_values
-            .insert("RuntimeClass".to_string(), type_ptr);
+        runtime.type_values.insert(class_ptr, type_ptr);
         (tlab, package_ptr, function_ptr)
     }
 
@@ -196,16 +192,23 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
     let Object::Package(package) = (unsafe { moved_package.get() }) else {
         panic!("root ceased to be a package")
     };
-    let moved_type = package.runtime.as_ref().unwrap().type_values["RuntimeClass"];
-    let Object::Type(type_value) = (unsafe { moved_type.get() }) else {
-        panic!("package mint ceased to be a type")
-    };
-    assert_eq!(type_value.owner, moved_package);
     let moved_class = package.classes.values().next().copied().unwrap();
+    let moved_type = package.runtime.as_ref().unwrap().type_values[&moved_class];
+    let Object::Type(type_value) = (unsafe { moved_type.get() }) else {
+        panic!("package type value ceased to be a type")
+    };
+    let RealizedTy::Class(head, _, _) = &type_value.ty else {
+        panic!("package type value ceased to wrap a class type")
+    };
+    assert_eq!(
+        head.ptr(),
+        moved_class,
+        "the type's head must follow its declaration"
+    );
     let Object::Class(class) = (unsafe { moved_class.get() }) else {
         panic!("package class ceased to be a class")
     };
-    assert_eq!(class.runtime_type.as_ref().unwrap().owner, moved_package);
+    assert_eq!(class.owner, moved_package);
     assert_eq!(forwarding.get(&package_ptr), Some(&moved_package));
 
     let dropped_heap = BexHeap::new(vec![]);
@@ -1102,31 +1105,43 @@ fn package_type_aliases_are_traced_and_forwarded() {
     assert_eq!(alias.name, alias_name);
 }
 
-/// A field-level exact-operand `TypeValue` carries an `owner` package edge; the
-/// collector must trace and forward it like the class-level provenance owner.
+/// A field's exact-operand `TypeValue` reaches its declaration through a head,
+/// and that declaration's `owner` is what keeps the package alive. The
+/// collector must walk the whole chain — field type, head, owner — and repoint
+/// each link.
 #[test]
-fn field_level_type_value_owner_is_traced_and_forwarded() {
+fn a_field_type_value_keeps_its_declaration_and_package_alive() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
     let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
+    let enum_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+    let enum_ptr = tlab.alloc(Object::Enum(Box::new(bex_vm_types::Enum {
+        name: QualifiedTypeName::runtime_local(Name::new("FieldEnum"), 7),
+        variants: Vec::new(),
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+        type_tag: enum_tag,
+        ty_attr: TyAttr::default(),
+        owner: package_ptr,
+    })));
+    let field_ty = RealizedTy::Enum(
+        bex_vm_types::TypeHead::new(enum_ptr, enum_tag),
+        TyAttr::default(),
+    );
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
         name: QualifiedTypeName::local(Name::new("FieldOwner")),
         fields: vec![ClassField {
             name: "value".to_string(),
-            field_type: baml_type::RuntimeTy::Int {
-                attr: TyAttr::default(),
-            },
-            field_template: baml_type::TyTemplate::from(RealizedTy::int()),
+            field_type: bex_vm_types::RuntimeTy::from(field_ty.clone()),
+            field_template: bex_vm_types::TyTemplate::from(field_ty.clone()),
             description: None,
             alias: None,
             docstring: None,
             other: IndexMap::new(),
             skip: false,
-            runtime_type: Some(TypeValue::owned(
-                RealizedTy::int(),
-                DynTypeDefs::default(),
-                package_ptr,
-            )),
+            runtime_type: Some(TypeValue::new(field_ty)),
         }],
         description: None,
         alias: None,
@@ -1136,11 +1151,12 @@ fn field_level_type_value_owner_is_traced_and_forwarded() {
         ty_attr: TyAttr::default(),
         has_cleanup: false,
         generic_param_count: 0,
-        runtime_type: None,
+        owner: bex_vm_types::HeapPtr::null(),
     })));
 
-    // Root only the class: the package must stay alive purely through the
-    // field-level TypeValue.owner edge, across moves and a compaction.
+    // Root only the outer class: the enum survives through the field type's
+    // head, and the package survives through the enum's owner — across moves
+    // and a compaction.
     let (_, roots, _) =
         unsafe { heap.collect_garbage_generational(&[class_ptr], CollectionLevel::Minor) };
     let (_, roots, _) =
@@ -1149,24 +1165,35 @@ fn field_level_type_value_owner_is_traced_and_forwarded() {
         unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
 
     assert_eq!(
-        stats.live_count, 2,
-        "class and owner package should both survive"
+        stats.live_count, 3,
+        "class, field enum, and owner package should all survive"
     );
     let Object::Class(class) = (unsafe { roots[0].get() }) else {
         panic!("root was not the class")
     };
-    let owner = class.fields[0]
+    let exact = class.fields[0]
         .runtime_type
         .as_ref()
-        .expect("field runtime type was lost")
-        .owner;
+        .expect("field runtime type was lost");
+    let RealizedTy::Enum(head, _) = &exact.ty else {
+        panic!("field runtime type ceased to wrap an enum")
+    };
+    assert_eq!(head.tag(), enum_tag, "a move must not change identity");
     assert_ne!(
-        owner, package_ptr,
+        head.ptr(),
+        enum_ptr,
+        "the enum moved, so the head must be repointed"
+    );
+    let Object::Enum(enm) = (unsafe { head.ptr().get() }) else {
+        panic!("the field type's head does not point at an enum")
+    };
+    assert_ne!(
+        enm.owner, package_ptr,
         "the package moved, so owner must be repointed"
     );
     assert!(
-        matches!(unsafe { owner.get() }, Object::Package(_)),
-        "field-level owner does not point at the package"
+        matches!(unsafe { enm.owner.get() }, Object::Package(_)),
+        "the declaration's owner does not point at the package"
     );
 }
 

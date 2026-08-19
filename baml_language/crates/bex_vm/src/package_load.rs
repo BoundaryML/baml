@@ -540,11 +540,11 @@ mod tests {
 
     use super::*;
 
-    fn empty_rule(interface: HeapPtr, class_name: baml_type::TypeName) -> RuntimeImplRule {
+    fn empty_rule(interface: HeapPtr, class: bex_vm_types::TypeHead) -> RuntimeImplRule {
         RuntimeImplRule {
             interface_head: interface,
             for_ty_pattern: bex_vm_types::TyTemplate::Class(
-                class_name,
+                class,
                 Vec::new(),
                 baml_type::TyAttr::default(),
             ),
@@ -575,8 +575,10 @@ mod tests {
                 baml_type::Name::new(format!("RuntimeClass{index}")),
                 index,
             );
-            tables.register_class(name.clone(), owner);
-            let rule = tlab.alloc(Object::ImplRule(Box::new(empty_rule(interface, name))));
+            tables.register_class(name, owner);
+            let head =
+                bex_vm_types::TypeHead::new(owner, baml_type::typetag::TypeTag::fresh_dynamic());
+            let rule = tlab.alloc(Object::ImplRule(Box::new(empty_rule(interface, head))));
             tables.register_rule(interface, DynRuleEntry { class: owner, rule });
             owners.push(owner);
         }

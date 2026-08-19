@@ -636,7 +636,7 @@ mod tests {
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
 
         // Allocate an instance of that class
@@ -697,7 +697,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: baml_type::TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
 
         // Allocate a variant (Color::Green = index 1)

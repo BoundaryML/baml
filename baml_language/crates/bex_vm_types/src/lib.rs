@@ -70,6 +70,10 @@ pub type TyTemplate = baml_type::TyTemplate<TypeHead>;
 /// [`baml_type::RuntimeInterface`] at the runtime's head.
 pub type RuntimeInterface = baml_type::RuntimeInterface<TypeHead>;
 
+/// [`baml_type::Interface`] at the runtime's head. An interface *instantiation*
+/// — which interface, at which args and associated bindings.
+pub type Interface = baml_type::Interface<TypeHead>;
+
 /// [`baml_type::Ty`] at the runtime's head. The algebra's own spelling — the
 /// widest member, admitting every position the others rule out.
 pub type Ty = baml_type::Ty<TypeHead>;

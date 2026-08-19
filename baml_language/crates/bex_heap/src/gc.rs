@@ -946,11 +946,19 @@ impl BexHeap {
                             *ptr = new_ptr;
                         }
                     }
-                    for ptr in runtime.type_values.values_mut() {
-                        if let Some(&new_ptr) = forwarding.get(ptr) {
-                            *ptr = new_ptr;
-                        }
-                    }
+                    // Keyed by the declaration each value names, so the keys
+                    // move too — rebuilt through the forwarding map rather than
+                    // mutated in place, as `impl_rules` above is.
+                    let old_type_values = std::mem::take(&mut runtime.type_values);
+                    runtime.type_values = old_type_values
+                        .into_iter()
+                        .map(|(declaration, value)| {
+                            (
+                                forwarding.get(&declaration).copied().unwrap_or(declaration),
+                                forwarding.get(&value).copied().unwrap_or(value),
+                            )
+                        })
+                        .collect();
                     for ptr in runtime.dependencies.iter_mut() {
                         if let Some(&new_ptr) = forwarding.get(ptr) {
                             *ptr = new_ptr;
@@ -1735,7 +1743,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: baml_type::TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -1788,7 +1796,7 @@ mod tests {
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -2432,7 +2440,7 @@ mod tests {
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
         let inst_ptr =
@@ -2476,7 +2484,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
         let var_ptr = tlab.alloc_variant(enum_ptr, 1);
 
@@ -2707,7 +2715,7 @@ mod tests {
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2734,7 +2742,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2759,17 +2767,17 @@ mod tests {
         assert_eq!(tv.ty, value.ty);
     }
 
+    /// A runtime enum reached only through a `type` value's head survives, and
+    /// the head is repointed as both objects move.
     #[test]
-    fn test_gc_traces_runtime_enum_definition_owned_by_type_value() {
+    fn test_gc_traces_runtime_enum_definition_reached_through_a_head() {
         use baml_type::{Name, QualifiedTypeName, TyAttr};
-        use bex_vm_types::{
-            Enum, EnumVariant,
-            types::{DynTypeDefs, TypeValue},
-        };
+        use bex_vm_types::{Enum, EnumVariant, TypeHead, types::TypeValue};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let type_name = QualifiedTypeName::runtime_local(Name::new("Category"), 41);
+        let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             name: type_name.clone(),
             variants: vec![EnumVariant {
@@ -2784,18 +2792,18 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            type_tag: baml_type::typetag::TypeTag::of_head(&type_name.render_dotted(false)),
+            type_tag,
             ty_attr: TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
-        let type_ptr = tlab.alloc_type(TypeValue::with_defs(
-            RealizedTy::Enum(type_name.clone(), TyAttr::default()),
-            DynTypeDefs::with_enum(type_name.clone(), enum_ptr),
-        ));
+        let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Enum(
+            TypeHead::new(enum_ptr, type_tag),
+            TyAttr::default(),
+        )));
 
-        // Root only the type. Its side-table edge must keep the authoritative
-        // enum alive and be fixed up as both objects move Gen0 → Gen1 → Gen2,
-        // then once more through a compacting major collection.
+        // Root only the type. Its head is the sole edge keeping the enum alive,
+        // and must be traced and repointed as both objects move Gen0 → Gen1 →
+        // Gen2, then once more through a compacting major collection.
         let (_, roots, _) =
             unsafe { heap.collect_garbage_generational(&[type_ptr], CollectionLevel::Minor) };
         let (_, roots, _) =
@@ -2807,42 +2815,36 @@ mod tests {
         let Object::Type(type_value) = (unsafe { roots[0].get() }) else {
             panic!("root was not the runtime type value")
         };
-        assert_eq!(
-            type_value.ty,
-            RealizedTy::Enum(type_name.clone(), TyAttr::default())
-        );
-        let enum_ptr = *type_value
-            .defs()
-            .enums
-            .get(&type_name)
-            .expect("runtime definition side table was lost");
-        let Object::Enum(enm) = (unsafe { enum_ptr.get() }) else {
-            panic!("runtime definition did not land on an enum")
+        let RealizedTy::Enum(head, _) = &type_value.ty else {
+            panic!("the type value no longer wraps an enum type")
+        };
+        assert_eq!(head.tag(), type_tag, "a move must not change identity");
+        let Object::Enum(enm) = (unsafe { head.ptr().get() }) else {
+            panic!("the head did not land on an enum")
         };
         assert_eq!(enm.name, type_name);
         assert_eq!(enm.variants[0].name, "RED");
         assert_eq!(enm.variants[0].alias.as_deref(), Some("k7"));
     }
 
+    /// The same for a class, whose fields carry heads of their own.
     #[test]
-    fn test_gc_traces_runtime_class_definition_owned_only_by_type_value() {
+    fn test_gc_traces_runtime_class_definition_reached_through_a_head() {
         use baml_type::{Name, QualifiedTypeName, TyAttr};
-        use bex_vm_types::{
-            Class, ClassField,
-            types::{DynTypeDefs, RuntimeTypeProvenance, TypeValue},
-        };
+        use bex_vm_types::{Class, ClassField, TypeHead, types::TypeValue};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let type_name = QualifiedTypeName::runtime_local(Name::new("VisitNote"), 42);
+        let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             name: type_name.clone(),
             fields: vec![ClassField {
                 name: "height_cm".to_string(),
-                field_type: baml_type::RuntimeTy::Int {
+                field_type: bex_vm_types::RuntimeTy::Int {
                     attr: TyAttr::default(),
                 },
-                field_template: baml_type::TyTemplate::from(RealizedTy::int()),
+                field_template: bex_vm_types::TyTemplate::from(RealizedTy::int()),
                 description: Some("height in centimeters".to_string()),
                 alias: None,
                 docstring: None,
@@ -2854,22 +2856,20 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            type_tag: baml_type::typetag::TypeTag::from_i64(142),
+            type_tag,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: Some(RuntimeTypeProvenance {
-                defs: DynTypeDefs::default(),
-                owner: bex_vm_types::HeapPtr::null(),
-            }),
+            owner: bex_vm_types::HeapPtr::null(),
         })));
-        let type_ptr = tlab.alloc_type(TypeValue::with_defs(
-            RealizedTy::Class(type_name.clone(), vec![], TyAttr::default()),
-            DynTypeDefs::with_class(type_name.clone(), class_ptr),
-        ));
+        let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Class(
+            TypeHead::new(class_ptr, type_tag),
+            vec![],
+            TyAttr::default(),
+        )));
 
-        // No instance and no independently-rooted class exist: the sole edge
-        // keeping the authoritative definition alive is Object::Type.defs.
+        // No instance and no independently-rooted class exists: the sole edge
+        // keeping the declaration alive is the type's head.
         let (_, roots, _) =
             unsafe { heap.collect_garbage_generational(&[type_ptr], CollectionLevel::Minor) };
         let (_, roots, _) =
@@ -2884,13 +2884,12 @@ mod tests {
         let Object::Type(type_value) = (unsafe { roots[0].get() }) else {
             panic!("root was not the runtime type value")
         };
-        let class_ptr = *type_value
-            .defs()
-            .classes
-            .get(&type_name)
-            .expect("runtime class definition side table was lost");
-        let Object::Class(class) = (unsafe { class_ptr.get() }) else {
-            panic!("runtime definition did not land on a class")
+        let RealizedTy::Class(head, _, _) = &type_value.ty else {
+            panic!("the type value no longer wraps a class type")
+        };
+        assert_eq!(head.tag(), type_tag, "a move must not change identity");
+        let Object::Class(class) = (unsafe { head.ptr().get() }) else {
+            panic!("the head did not land on a class")
         };
         assert_eq!(class.name, type_name);
         assert_eq!(class.fields[0].name, "height_cm");
@@ -3302,7 +3301,7 @@ mod tests {
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance::new(
             class_ptr,
@@ -3320,7 +3319,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
         let variant_container = tlab.alloc(Object::Variant(Variant {
             enm: enum_ptr,

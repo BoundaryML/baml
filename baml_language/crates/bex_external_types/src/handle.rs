@@ -94,6 +94,27 @@ impl Handle {
         }
     }
 
+    /// Rebuild a handle from shared inner state.
+    ///
+    /// The heap's one-key-per-object index hands back the `Arc` behind a live
+    /// handle rather than minting a second key; sharing it is what counts the
+    /// new reference, so the object is released only once the last holder
+    /// drops.
+    #[must_use]
+    pub fn from_inner(inner: Arc<HandleInner>) -> Self {
+        Self { inner }
+    }
+
+    /// A weak reference to this handle's inner state.
+    ///
+    /// For the heap's reverse index, which must observe a handle without
+    /// keeping it alive: holding it strongly would prevent the very drop that
+    /// releases the slab key.
+    #[must_use]
+    pub fn downgrade_inner(&self) -> std::sync::Weak<HandleInner> {
+        Arc::downgrade(&self.inner)
+    }
+
     /// Get the slab key for this handle.
     ///
     /// This is primarily for internal use by `bex_heap`.

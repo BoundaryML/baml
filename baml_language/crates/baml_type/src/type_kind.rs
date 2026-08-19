@@ -85,6 +85,19 @@ pub fn is_type_kind_class(name: &QualifiedTypeName) -> bool {
         && name.name().as_str() == "Type"
 }
 
+/// Whether `tag` identifies one of the sealed reflection kind classes.
+///
+/// A compiled declaration's tag is content-addressed from its fully-qualified
+/// name, so this is an integer compare against the nine known names — no
+/// lookup, and no runtime declaration can collide with one, since counter tags
+/// are drawn from a disjoint range.
+#[must_use]
+pub fn is_type_kind_tag(tag: crate::typetag::TypeTag) -> bool {
+    TypeKind::ALL.iter().any(|kind| {
+        tag == crate::typetag::TypeTag::of_head(&kind.class_name().render_dotted(false))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

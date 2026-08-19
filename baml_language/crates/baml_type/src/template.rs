@@ -32,7 +32,7 @@ use std::fmt;
 
 use crate::{
     Interface, Name, RealizedFunctionParamTy, RealizedTy, RuntimeFunctionParamTy, RuntimeInterface,
-    RuntimeTy, Ty, TyAttr, TyTemplate, TyTemplateInterface, TypeName,
+    RuntimeTy, Ty, TyAttr, TyTemplate, TyTemplateInterface,
     normalize::{ProjectionStep, TypeContext},
 };
 
@@ -116,16 +116,20 @@ impl fmt::Display for SubstituteError {
 
 impl std::error::Error for SubstituteError {}
 
-impl TyTemplate {
+impl<N: Clone> TyTemplate<N> {
     // --- Ergonomic constructors (default TyAttr) ---
+    //
+    // Head-generic: a constructor only *places* a head, it never reads one, so
+    // pinning these to the compiler's head would leave the runtime hand-rolling
+    // the same variants.
 
     /// `T[]` (list) with default attributes.
-    pub fn list(inner: TyTemplate) -> Self {
+    pub fn list(inner: Self) -> Self {
         TyTemplate::List(Box::new(inner), TyAttr::default())
     }
 
     /// `map<K, V>` with default attributes.
-    pub fn map(key: TyTemplate, value: TyTemplate) -> Self {
+    pub fn map(key: Self, value: Self) -> Self {
         TyTemplate::Map {
             key: Box::new(key),
             value: Box::new(value),
@@ -134,36 +138,32 @@ impl TyTemplate {
     }
 
     /// `A | B | ...` (union) with default attributes.
-    pub fn union(members: impl IntoIterator<Item = TyTemplate>) -> Self {
+    pub fn union(members: impl IntoIterator<Item = Self>) -> Self {
         TyTemplate::Union(members.into_iter().collect(), TyAttr::default())
     }
 
     /// `Class<A1, A2, ...>` (generic class instantiation) with default attributes.
-    pub fn class(name: TypeName, args: Vec<TyTemplate>) -> Self {
-        TyTemplate::Class(name, args, TyAttr::default())
+    pub fn class(head: N, args: Vec<Self>) -> Self {
+        TyTemplate::Class(head, args, TyAttr::default())
     }
 
     /// `Interface<A1, Assoc = A2, ...>` with default attributes.
     pub fn interface(
-        name: TypeName,
-        args: Vec<TyTemplate>,
-        associated_bindings: Vec<(Name, TyTemplate)>,
+        head: N,
+        args: Vec<Self>,
+        associated_bindings: Vec<(Name, Self)>,
     ) -> Self {
-        TyTemplate::Interface(name, args, associated_bindings, TyAttr::default())
+        TyTemplate::Interface(head, args, associated_bindings, TyAttr::default())
     }
+}
+
+impl TyTemplate {
 
     /// Materialize this template against a frame's fully realized `type_args`,
     /// producing a [`RealizedTy`] — every `TypeArgRef(n)` replaced by
     /// `type_args[n]`, every associated-type projection reduced through `ctx` to
     /// its impl binding.
     ///
-
-    /// Returns `true` when the template contains no template-only leaf
-    /// (`TypeArgRef` or an unresolved projection) at any depth — i.e. it is a
-    /// fully realized type that narrows to a [`RealizedTy`].
-    pub fn is_fully_concrete(&self) -> bool {
-        <&RealizedTy>::try_from(self).is_ok()
-    }
 
     /// Compile-time counterpart to [`Self::substitute`]: resolve each
     /// `TypeArgRef(n)` against `type_args` but leave every unresolved position
@@ -508,6 +508,17 @@ impl<N: Clone + crate::HeadDisplay> fmt::Display for TyTemplate<N> {
 }
 
 impl<N: Clone> TyTemplate<N> {
+    /// Returns `true` when the template contains no template-only leaf
+    /// (`TypeArgRef` or an unresolved projection) at any depth — i.e. it is a
+    /// fully realized type that narrows to a [`RealizedTy`].
+    ///
+    /// Narrowing is a family conversion and never inspects a head, so this
+    /// answers the same at either head.
+    pub fn is_fully_concrete(&self) -> bool {
+        <&RealizedTy<N>>::try_from(self).is_ok()
+    }
+
+
     /// A lossy [`Ty`] view for rendering only: frame refs become
     /// `TypeVar("#n")`. Every other node maps structurally, so
     /// [`fmt::Display`] can delegate to `Ty`'s renderer.
@@ -706,7 +717,7 @@ mod tests {
         TyTemplate::AssociatedTypeProjection {
             base: Box::new(TyTemplate::TypeArgRef(0)),
             interface: Box::new(TyTemplateInterface {
-                name: TypeName::local(crate::Name::new("Cyclic")),
+                name: crate::TypeName::local(crate::Name::new("Cyclic")),
                 generics: vec![],
                 associated_types: vec![],
             }),
@@ -785,13 +796,13 @@ mod tests {
 
     #[test]
     fn concrete_array_is_fully_concrete() {
-        let tmpl = TyTemplate::list(TyTemplate::from(RealizedTy::int()));
+        let tmpl: TyTemplate = TyTemplate::list(TyTemplate::from(RealizedTy::int()));
         assert!(tmpl.is_fully_concrete());
     }
 
     #[test]
     fn union_of_concrete_is_fully_concrete() {
-        let tmpl = TyTemplate::union([
+        let tmpl: TyTemplate = TyTemplate::union([
             TyTemplate::from(RealizedTy::int()),
             TyTemplate::from(RealizedTy::string()),
         ]);
@@ -804,7 +815,7 @@ mod tests {
 
     #[test]
     fn union_containing_type_arg_ref_not_concrete() {
-        let tmpl = TyTemplate::union([
+        let tmpl: TyTemplate = TyTemplate::union([
             TyTemplate::from(RealizedTy::int()),
             TyTemplate::TypeArgRef(0),
         ]);
@@ -814,25 +825,25 @@ mod tests {
     #[test]
     fn class_with_type_arg_ref_substitution() {
         let tmpl = TyTemplate::class(
-            TypeName::local(crate::Name::new("Container")),
+            crate::TypeName::local(crate::Name::new("Container")),
             vec![TyTemplate::TypeArgRef(0)],
         );
         let user = RuntimeTy::user_class("User");
         assert_eq!(
             sub(&tmpl, &[r(user.clone())]),
-            RuntimeTy::class_with_args(TypeName::local(crate::Name::new("Container")), vec![user])
+            RuntimeTy::class_with_args(crate::TypeName::local(crate::Name::new("Container")), vec![user])
         );
         assert!(!tmpl.is_fully_concrete());
     }
 
     #[test]
     fn class_no_args_is_fully_concrete() {
-        let tmpl = TyTemplate::class(TypeName::local(crate::Name::new("User")), vec![]);
+        let tmpl = TyTemplate::class(crate::TypeName::local(crate::Name::new("User")), vec![]);
         assert!(tmpl.is_fully_concrete());
         assert_eq!(
             sub(&tmpl, &[]),
             RuntimeTy::Class(
-                TypeName::local(crate::Name::new("User")),
+                crate::TypeName::local(crate::Name::new("User")),
                 vec![],
                 crate::TyAttr::default()
             )

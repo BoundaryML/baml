@@ -1147,8 +1147,12 @@ fn alloc_compilation_error_with_span(
             .to_value(vm)
         })
         .collect();
+    let diagnostic_qtn =
+        baml_type::QualifiedTypeName::from_dotted_path("baml.reflect.Diagnostic");
     let diagnostic_ty = bex_vm_types::RealizedTy::Class(
-        baml_type::QualifiedTypeName::from_dotted_path("baml.reflect.Diagnostic"),
+        vm.declaration_head(&diagnostic_qtn).unwrap_or_else(|| {
+            unreachable!("`baml.reflect.Diagnostic` is declared by the stdlib")
+        }),
         vec![],
         baml_type::TyAttr::default(),
     );

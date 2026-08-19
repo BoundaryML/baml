@@ -384,12 +384,6 @@ fn find_render_class(vm: &BexVm, head: bex_vm_types::TypeHead) -> Option<&bex_vm
     }
 }
 
-fn find_render_enum(vm: &BexVm, head: bex_vm_types::TypeHead) -> Option<&bex_vm_types::Enum> {
-    match vm.get_object(head.ptr()) {
-        Object::Enum(enm) => Some(enm),
-        _ => None,
-    }
-}
 
 fn render_definitions_equivalent(
     vm: &BexVm,

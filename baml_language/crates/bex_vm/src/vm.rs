@@ -681,7 +681,7 @@ pub(crate) mod tests {
             description: None,
             alias: None,
             docstring: None,
-            other: IndexMap::new(),
+            other: indexmap::IndexMap::new(),
             type_tag: tag,
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
@@ -1410,11 +1410,11 @@ fn function_callable_signature<C: baml_type::normalize::TypeContext<bex_vm_types
 /// declarations, creation-unique for runtime ones (`user.$dyn.<n>.<Name>`).
 fn nominal_identity(
     ty: &bex_vm_types::RealizedTy,
-) -> Option<(&baml_type::QualifiedTypeName, &[bex_vm_types::RealizedTy])> {
+) -> Option<(bex_vm_types::TypeHead, &[bex_vm_types::RealizedTy])> {
     use bex_vm_types::RealizedTy as T;
     match ty {
-        T::Class(name, args, _) => Some((name, args.as_slice())),
-        T::Enum(name, _) => Some((name, &[])),
+        T::Class(head, args, _) => Some((*head, args.as_slice())),
+        T::Enum(head, _) => Some((*head, &[])),
         // Structural, abstract, and literal types name no declaration. An
         // enum *variant* names one but is a proper subset of it, so it is not
         // that declaration's identity.
@@ -2647,7 +2647,7 @@ impl BexVm {
                         // realized (`Box<int>` ⇒ `T = int`), so they are exactly the
                         // `ConcreteRealizedTy::Class` argument list.
                         ConcreteRealizedTy::Class(
-                            class.name.clone(),
+                            bex_vm_types::TypeHead::new(inst.class, class.type_tag),
                             inst.class_type_args.to_vec(),
                             TyAttr::default(),
                         )
@@ -2659,7 +2659,10 @@ impl BexVm {
                 ),
             },
             Object::Variant(v) => match self.get_object(v.enm) {
-                Object::Enum(e) => ConcreteRealizedTy::Enum(e.name.clone(), TyAttr::default()),
+                Object::Enum(e) => ConcreteRealizedTy::Enum(
+                    bex_vm_types::TypeHead::new(v.enm, e.type_tag),
+                    TyAttr::default(),
+                ),
                 other => unreachable!(
                     "Variant.enm must point to an Enum, found {:?}",
                     ObjectType::of(other)
@@ -2668,7 +2671,12 @@ impl BexVm {
             // A `type` value reports its precise sealed reflection-kind class.
             // Each kind class is a subtype of the `type` carrier.
             Object::Type(type_value) => {
-                baml_type::type_kind::classify_type(&type_value.ty).concrete_class_ty()
+                let kind = baml_type::type_kind::classify_type(&type_value.ty);
+                let name = kind.class_name();
+                let head = self.declaration_head(&name).unwrap_or_else(|| {
+                    unreachable!("reflection kind class `{name}` is declared by the stdlib")
+                });
+                ConcreteRealizedTy::Class(head, Vec::new(), TyAttr::default())
             }
             // Arrays/maps carry their element/key/value types, so the faithful
             // `list<T>` / `map<K, V>` is reconstructed from the value itself.
@@ -2868,20 +2876,32 @@ impl BexVm {
         };
         match self.get_object(ptr) {
             Object::Instance(instance) => match self.get_object(instance.class) {
-                Object::Class(class) => class
-                    .runtime_type
-                    .as_ref()
-                    .map_or_else(HeapPtr::null, |runtime| runtime.owner),
+                Object::Class(class) => class.owner,
                 _ => HeapPtr::null(),
             },
             Object::Variant(variant) => match self.get_object(variant.enm) {
-                Object::Enum(enm) => enm
-                    .runtime_type
-                    .as_ref()
-                    .map_or_else(HeapPtr::null, |runtime| runtime.owner),
+                Object::Enum(enm) => enm.owner,
                 _ => HeapPtr::null(),
             },
-            Object::Type(value) => value.owner,
+            // A type value has no owner of its own: it owns nothing, it *names*
+            // things. The package is whichever one declared the type's head.
+            Object::Type(value) => match &value.ty {
+                bex_vm_types::RealizedTy::Class(head, ..)
+                | bex_vm_types::RealizedTy::Enum(head, ..)
+                | bex_vm_types::RealizedTy::Interface(head, ..)
+                | bex_vm_types::RealizedTy::TypeAlias(head, ..)
+                    if head.is_resolved() =>
+                {
+                    match self.get_object(head.ptr()) {
+                        Object::Class(class) => class.owner,
+                        Object::Enum(enm) => enm.owner,
+                        Object::Interface(interface) => interface.owner,
+                        Object::TypeAlias(alias) => alias.owner,
+                        _ => HeapPtr::null(),
+                    }
+                }
+                _ => HeapPtr::null(),
+            },
             Object::Function(function) => function.runtime_package,
             Object::GenericFunction(function) => function.runtime_package,
             Object::Closure(closure) => match unsafe { closure.function.get() } {
@@ -4199,12 +4219,12 @@ impl BexVm {
     fn pop_interface_operand(
         &mut self,
         iface_value: Value,
-    ) -> Result<(baml_type::TypeName, Vec<bex_vm_types::RealizedTy>), VmError> {
+    ) -> Result<(bex_vm_types::TypeHead, Vec<bex_vm_types::RealizedTy>), VmError> {
         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
         match self.get_object(iface_ptr) {
             Object::Type(type_value) => match &type_value.ty {
-                bex_vm_types::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
-                    Ok((qtn.clone(), args.clone()))
+                bex_vm_types::RealizedTy::Interface(head, args, _assoc, _attr) => {
+                    Ok((*head, args.clone()))
                 }
                 other => unreachable!(
                     "virtual field access interface operand must be an Interface type, \
@@ -4230,7 +4250,7 @@ impl BexVm {
     fn resolve_virtual_field_slot(
         &mut self,
         receiver: Value,
-        iface_qtn: &baml_type::TypeName,
+        iface_head: bex_vm_types::TypeHead,
         iface_args: &[bex_vm_types::RealizedTy],
         field_index: usize,
     ) -> Result<usize, VmError> {
@@ -4242,10 +4262,10 @@ impl BexVm {
                 )
             }));
         let slot = crate::package_baml::ImplResolver::for_value(self, receiver)
-            .resolve_implements_rule(&self_ty, iface_qtn, iface_args)
+            .resolve_implements_rule(&self_ty, iface_head, iface_args)
             .and_then(|(rule, _bound_args)| rule.field_links.get(field_index).copied());
         let slot = slot.ok_or_else(|| VmInternalError::UnresolvedVirtualFieldAccess {
-            interface: iface_qtn.to_string(),
+            interface: baml_type::HeadDisplay::head_display_name(&iface_head),
             field_index,
         })?;
         Ok(slot as usize)
@@ -5817,7 +5837,7 @@ impl BexVm {
                     .collect::<Result<Vec<_>, _>>()?;
                 if crate::package_baml::ImplResolver::new(self).type_implements(
                     actual,
-                    &bound.interface,
+                    bound.interface,
                     &requested_args,
                     &requested_assoc,
                 ) {
@@ -6927,7 +6947,7 @@ impl BexVm {
                     let receiver = self.stack.ensure_pop();
                     let slot = self.resolve_virtual_field_slot(
                         receiver,
-                        &iface_qtn,
+                        iface_qtn,
                         &iface_args,
                         field_index,
                     )?;
@@ -6959,7 +6979,7 @@ impl BexVm {
                     let receiver = self.stack.ensure_pop();
                     let slot = self.resolve_virtual_field_slot(
                         receiver,
-                        &iface_qtn,
+                        iface_qtn,
                         &iface_args,
                         field_index,
                     )?;
@@ -7407,7 +7427,7 @@ impl BexVm {
                         );
                         let resolver = crate::package_baml::ImplResolver::for_value(self, receiver);
                         let (rule, bound_args) = resolver
-                            .resolve_implements_rule(&self_ty, &iface_qtn, &iface_args)
+                            .resolve_implements_rule(&self_ty, iface_qtn, &iface_args)
                             .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
                             })?;
@@ -8223,7 +8243,7 @@ impl BexVm {
                     let (function_ptr, type_args) = {
                         let resolver = crate::package_baml::ImplResolver::for_value(self, receiver);
                         let (rule, bound_args) = resolver
-                            .resolve_implements_rule(&self_ty, &iface_qtn, &iface_args)
+                            .resolve_implements_rule(&self_ty, iface_qtn, &iface_args)
                             .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
                             })?;

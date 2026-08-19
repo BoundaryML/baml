@@ -16,7 +16,7 @@ use std::{
     cell::UnsafeCell,
     collections::HashMap,
     sync::{
-        Arc, Mutex, RwLock,
+        Arc, Mutex, RwLock, Weak,
         atomic::{AtomicU64, AtomicUsize, Ordering},
     },
 };
@@ -178,6 +178,21 @@ pub struct BexHeap {
     /// updates after GC moves objects.
     pub(crate) handles: RwLock<HashMap<usize, HeapPtr>>,
 
+    /// The live handle for each held object, so one object has one key.
+    ///
+    /// [`Handle`]'s `Eq` is its slab key plus its issuing heap, so a key that
+    /// is unique *per object* rather than per call makes handle equality mean
+    /// "the same object" — which is what lets a host compare two references to
+    /// one runtime declaration. Minting per call instead would make a type
+    /// mentioning the same class twice look like two classes.
+    ///
+    /// Held weakly: the entry must not keep alive the very [`HandleInner`]
+    /// whose drop releases it. A [`Weak`] that fails to upgrade is a handle
+    /// mid-drop, and the mint path treats it as absent.
+    ///
+    /// [`HandleInner`]: bex_external_types::HandleInner
+    handles_by_ptr: RwLock<HashMap<HeapPtr, (usize, Weak<bex_external_types::HandleInner>)>>,
+
     /// Next handle key to allocate.
     next_handle_key: AtomicUsize,
 
@@ -279,7 +294,19 @@ impl WriteBarrier for BexHeap {
 impl WeakHeapRef for BexHeap {
     fn release_handle(&self, handle_key: usize) {
         let mut handles = self.handles.write().expect("handles lock poisoned");
-        handles.remove(&handle_key);
+        let Some(ptr) = handles.remove(&handle_key) else {
+            return;
+        };
+        // Only clear the reverse entry if it still names *this* key: a handle
+        // for the same object may already have been re-minted between the last
+        // clone dropping and this release running.
+        let mut by_ptr = self
+            .handles_by_ptr
+            .write()
+            .expect("handles lock poisoned");
+        if by_ptr.get(&ptr).is_some_and(|(key, _)| *key == handle_key) {
+            by_ptr.remove(&ptr);
+        }
     }
 
     fn resolve_handle_ptr(&self, slab_key: usize) -> Option<HeapPtr> {
@@ -353,6 +380,7 @@ impl BexHeap {
             gen0_next_chunk: AtomicUsize::new(0),
             gen2_cards: UnsafeCell::new(CardTable::new()),
             handles: RwLock::new(HashMap::new()),
+            handles_by_ptr: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
             next_synthetic_name_id: AtomicU64::new(0),
             pending_finalizers: Mutex::new(Vec::new()),
@@ -1044,6 +1072,17 @@ impl BexHeap {
         for ptr in handles.values_mut() {
             *ptr = forwarding[ptr];
         }
+        // The reverse index is keyed by the pointers that just moved, so it is
+        // rebuilt rather than mutated in place. Keys are untouched: a handle's
+        // identity does not change when its object does.
+        let mut by_ptr = self
+            .handles_by_ptr
+            .write()
+            .expect("handles lock poisoned");
+        *by_ptr = std::mem::take(&mut *by_ptr)
+            .into_iter()
+            .map(|(ptr, entry)| (forwarding[&ptr], entry))
+            .collect();
     }
 
     /// BEP-042: record an instance (by its post-copy `HeapPtr`) and its resolved
@@ -1091,17 +1130,30 @@ impl BexHeap {
     /// access to heap objects. Handles are GC roots - objects reachable
     /// from handles will not be collected.
     pub fn create_handle(self: &Arc<Self>, ptr: HeapPtr) -> Handle {
-        // Get a unique key for this handle
-        let handle_key = self.next_handle_key.fetch_add(1, Ordering::Relaxed);
+        // One key per object, not per call — see `handles_by_ptr`. The write
+        // lock spans the check and the mint so a concurrent release cannot
+        // retire the entry in between and leave two keys for one object.
+        let mut by_ptr = self
+            .handles_by_ptr
+            .write()
+            .expect("handles lock poisoned");
+        if let Some((_, weak)) = by_ptr.get(&ptr)
+            && let Some(inner) = weak.upgrade()
+        {
+            // A live handle already names this object; sharing its `Arc` is
+            // what counts the new reference.
+            return Handle::from_inner(inner);
+        }
 
-        // Insert into the handle table
+        let handle_key = self.next_handle_key.fetch_add(1, Ordering::Relaxed);
         {
             let mut handles = self.handles.write().expect("handles lock poisoned");
             handles.insert(handle_key, ptr);
         }
-
         // Handle no longer stores idx - always resolves through table
-        Handle::new(handle_key, Arc::clone(self) as Arc<dyn WeakHeapRef>)
+        let handle = Handle::new(handle_key, Arc::clone(self) as Arc<dyn WeakHeapRef>);
+        by_ptr.insert(ptr, (handle_key, handle.downgrade_inner()));
+        handle
     }
 
     /// Whether `handle` was issued by this heap.
@@ -1187,6 +1239,69 @@ const _: () = {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One object, one key — so a host comparing two references to the same
+    /// declaration sees one identity.
+    #[test]
+    fn handles_to_one_object_share_a_key() {
+        let heap = BexHeap::new(vec![Object::String("shared".into())]);
+        let ptr = heap.compile_time_ptr(0);
+
+        let first = heap.create_handle(ptr);
+        let second = heap.create_handle(ptr);
+        assert_eq!(first, second, "one object must yield one handle identity");
+        assert_eq!(
+            heap.handles.read().unwrap().len(),
+            1,
+            "a shared handle occupies one slot, not one per request"
+        );
+    }
+
+    /// The shared key outlives any single holder, and retires with the last.
+    #[test]
+    fn a_shared_handle_releases_once_every_holder_drops() {
+        let heap = BexHeap::new(vec![Object::String("shared".into())]);
+        let ptr = heap.compile_time_ptr(0);
+
+        let first = heap.create_handle(ptr);
+        let second = heap.create_handle(ptr);
+        let key = first.slab_key();
+
+        drop(first);
+        assert_eq!(
+            heap.resolve_handle_ptr(key),
+            Some(ptr),
+            "the object is still held by `second`"
+        );
+
+        drop(second);
+        assert_eq!(
+            heap.resolve_handle_ptr(key),
+            None,
+            "the last holder releases the object"
+        );
+        assert!(heap.handles_by_ptr.read().unwrap().is_empty());
+    }
+
+    /// A key retired by its last holder is not resurrected: the next request
+    /// mints a fresh one rather than handing back a released slot.
+    #[test]
+    fn a_released_object_mints_a_new_handle() {
+        let heap = BexHeap::new(vec![Object::String("shared".into())]);
+        let ptr = heap.compile_time_ptr(0);
+
+        let first = heap.create_handle(ptr);
+        let first_key = first.slab_key();
+        drop(first);
+
+        let second = heap.create_handle(ptr);
+        assert_ne!(
+            second.slab_key(),
+            first_key,
+            "a fresh handle must not reuse a released key"
+        );
+        assert_eq!(heap.resolve_handle_ptr(second.slab_key()), Some(ptr));
+    }
 
     #[test]
     fn test_new_heap_empty() {

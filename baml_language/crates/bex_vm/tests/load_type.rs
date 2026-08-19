@@ -13,7 +13,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_project::testing::compile_source;
-use baml_type::{RealizedTy, TyTemplate};
+use bex_vm_types::{RealizedTy, TyTemplate};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     ConstValue, FunctionCaptureProps, GlobalIndex, Instruction, Object, ObjectIndex, Value,

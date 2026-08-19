@@ -14,7 +14,7 @@
 
 use std::borrow::Cow;
 
-use baml_type::{Literal, Name, normalize::TypeContext, type_kind::is_type_kind_class};
+use baml_type::{Literal, Name, normalize::TypeContext, type_kind::is_type_kind_tag};
 use bex_vm_types::{
     RealizedTy, TyTemplate, TypeHead, errors::VmInternalError, types::RuntimeImplRule,
 };
@@ -401,7 +401,7 @@ impl<'vm> ImplResolver<'vm> {
                 // the interface's `requires` closure; not handled here.)
                 if self.interface_existential_satisfies_bound(
                     &type_args[param],
-                    &bound.interface,
+                    bound.interface,
                     &req_args,
                     &req_assoc,
                 ) {
@@ -409,7 +409,7 @@ impl<'vm> ImplResolver<'vm> {
                 }
                 if !self.prove(
                     &type_args[param],
-                    &bound.interface,
+                    bound.interface,
                     &req_args,
                     &req_assoc,
                     stack,
@@ -455,7 +455,7 @@ impl<'vm> ImplResolver<'vm> {
         // Keep `implement I for type` rules applicable when the dynamic receiver
         // is one of those refinements (notably TypeValue's tostring override).
         if matches!(pattern, TyTemplate::Type { .. })
-            && matches!(concrete, RealizedTy::Class(name, _, _) if is_type_kind_class(name))
+            && matches!(concrete, RealizedTy::Class(head, _, _) if is_type_kind_tag(head.tag()))
         {
             return true;
         }

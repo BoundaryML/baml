@@ -21,7 +21,8 @@ use baml_compiler_diagnostics::{
     DiagnosticId, DiagnosticPhase,
     runtime_type::{self, InvalidIdentifierKind},
 };
-use baml_type::{RealizedTy, Ty, TyAttr, normalize, normalize::TypeContext};
+use baml_type::{TyAttr, normalize, normalize::TypeContext};
+use bex_vm_types::{Interface, RealizedTy, Ty};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     AtomicValueSlot, HeapPtr, Object, RuntimeCompileArtifact, RuntimeSessionCompileArtifact,
@@ -174,21 +175,22 @@ struct PackageSubtypeContext<'a> {
     package: HeapPtr,
 }
 
-impl TypeContext for PackageSubtypeContext<'_> {
-    /// A name-based context represents a declaration by its own name, so this
-    /// is the identity — no resolution step, and never `None`.
+impl TypeContext<bex_vm_types::TypeHead> for PackageSubtypeContext<'_> {
+    /// Resolution is the VM's: a head is a pointer into the one heap this
+    /// package lives on, so scoping the *facts* to a package does not change
+    /// how a name becomes a head.
     fn head_lookup(
         &self,
         qtn: &baml_type::QualifiedTypeName,
-    ) -> Option<baml_type::QualifiedTypeName> {
-        Some(qtn.clone())
+    ) -> Option<bex_vm_types::TypeHead> {
+        TypeContext::head_lookup(self.vm, qtn)
     }
 
-    fn alias_def(&self, name: &baml_type::QualifiedTypeName) -> Option<Ty> {
-        TypeContext::alias_def(self.vm, name)
+    fn alias_def(&self, head: &bex_vm_types::TypeHead) -> Option<Ty> {
+        TypeContext::alias_def(self.vm, head)
     }
 
-    fn implements_interface(&self, concrete: &Ty, interface: &baml_type::Interface) -> bool {
+    fn implements_interface(&self, concrete: &Ty, interface: &Interface) -> bool {
         let Ok(concrete) = RealizedTy::try_from(concrete) else {
             return false;
         };
@@ -210,39 +212,39 @@ impl TypeContext for PackageSubtypeContext<'_> {
         };
         ImplResolver::for_package(self.vm, self.package).type_implements(
             &concrete,
-            &interface.name,
+            interface.name,
             &args,
             &assoc,
         )
     }
 
-    fn type_var_bound(&self, param: &baml_type::ParamTy) -> Vec<baml_type::Interface> {
+    fn type_var_bound(&self, param: &baml_type::ParamTy) -> Vec<Interface> {
         TypeContext::type_var_bound(self.vm, param)
     }
 
-    fn interface_requires(&self, sub: &baml_type::Interface, sup: &baml_type::Interface) -> bool {
+    fn interface_requires(&self, sub: &Interface, sup: &Interface) -> bool {
         TypeContext::interface_requires(self.vm, sub, sup)
     }
 
-    fn enum_variants(&self, name: &baml_type::QualifiedTypeName) -> Option<Vec<baml_type::Name>> {
-        TypeContext::enum_variants(self.vm, name)
+    fn enum_variants(&self, head: &bex_vm_types::TypeHead) -> Option<Vec<baml_type::Name>> {
+        TypeContext::enum_variants(self.vm, head)
     }
 
     fn associated_type_bound(
         &self,
-        interface: &baml_type::Interface,
+        interface: &Interface,
         assoc: baml_type::Name,
-    ) -> Vec<baml_type::Interface> {
+    ) -> Vec<Interface> {
         TypeContext::associated_type_bound(self.vm, interface, assoc)
     }
 
     fn project(
         &self,
         base: &Ty,
-        interface: &baml_type::Interface,
+        interface: &Interface,
         member: &baml_type::Name,
         fuel: u32,
-    ) -> baml_type::normalize::ProjectionStep {
+    ) -> baml_type::normalize::ProjectionStep<bex_vm_types::TypeHead> {
         TypeContext::project(self.vm, base, interface, member, fuel)
     }
 }
@@ -254,10 +256,12 @@ fn package_class_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, class_ptr: 
     let Object::Class(class) = vm.get_object(class_ptr) else {
         unreachable!("Package.classes only contains class pointers")
     };
-    let ty = RealizedTy::Class(class.name.clone(), Vec::new(), class.ty_attr.clone());
-    let mut defs = DynTypeDefs::default();
-    defs.classes.insert(class.name.clone(), class_ptr);
-    Value::object(vm.alloc_static_type_with_defs(ty, defs))
+    let ty = RealizedTy::Class(
+        bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
+        Vec::new(),
+        class.ty_attr.clone(),
+    );
+    Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
 }
 
 fn package_enum_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, enum_ptr: HeapPtr) -> Value {
@@ -267,9 +271,11 @@ fn package_enum_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, enum_ptr: He
     let Object::Enum(enm) = vm.get_object(enum_ptr) else {
         unreachable!("Package.enums only contains enum pointers")
     };
-    let ty = RealizedTy::Enum(enm.name.clone(), enm.ty_attr.clone());
-    let defs = DynTypeDefs::with_enum(enm.name.clone(), enum_ptr);
-    Value::object(vm.alloc_static_type_with_defs(ty, defs))
+    let ty = RealizedTy::Enum(
+        bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag),
+        enm.ty_attr.clone(),
+    );
+    Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
 }
 
 fn package_interface_type(
@@ -284,12 +290,12 @@ fn package_interface_type(
         unreachable!("Package.interfaces only contains interface pointers")
     };
     let ty = RealizedTy::Interface(
-        interface.name.clone(),
+        bex_vm_types::TypeHead::new(interface_ptr, interface.type_tag),
         Vec::new(),
         Vec::new(),
         TyAttr::default(),
     );
-    Value::object(vm.alloc_static_type(ty))
+    Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
 }
 
 fn allocate_runtime_declaration_types(
@@ -298,10 +304,10 @@ fn allocate_runtime_declaration_types(
     classes: &IndexMap<LocalName, HeapPtr>,
     enums: &IndexMap<LocalName, HeapPtr>,
     interfaces: &IndexMap<LocalName, HeapPtr>,
-) -> IndexMap<String, HeapPtr> {
+) -> IndexMap<HeapPtr, HeapPtr> {
     let class_rows = classes
-        .iter()
-        .filter_map(|(name, &class_ptr)| match vm.get_object(class_ptr) {
+        .values()
+        .filter_map(|&class_ptr| match vm.get_object(class_ptr) {
             Object::Class(class) => Some((
                 class_ptr,
                 RealizedTy::Class(
@@ -314,8 +320,8 @@ fn allocate_runtime_declaration_types(
         })
         .collect::<Vec<_>>();
     let enum_rows = enums
-        .iter()
-        .filter_map(|(name, &enum_ptr)| match vm.get_object(enum_ptr) {
+        .values()
+        .filter_map(|&enum_ptr| match vm.get_object(enum_ptr) {
             Object::Enum(enm) => Some((
                 enum_ptr,
                 RealizedTy::Enum(
@@ -327,9 +333,9 @@ fn allocate_runtime_declaration_types(
         })
         .collect::<Vec<_>>();
     let interface_rows = interfaces
-        .iter()
+        .values()
         .filter_map(
-            |(name, &interface_ptr)| match vm.get_object(interface_ptr) {
+            |&interface_ptr| match vm.get_object(interface_ptr) {
                 Object::Interface(interface) => Some((
                     interface_ptr,
                     RealizedTy::Interface(
@@ -689,12 +695,16 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                                 let Object::Type(value) = vm.get_object(*type_ptr) else {
                                     return None;
                                 };
-                                value
-                                    .defs()
-                                    .classes
-                                    .get(&qtn)
-                                    .or_else(|| value.defs().enums.get(&qtn))
-                                    .copied()
+                                // A mounted type's head is the declaration it
+                                // exports; this is the linker resolving an FQN,
+                                // one of the sanctioned name boundaries.
+                                let (RealizedTy::Class(head, ..) | RealizedTy::Enum(head, ..)) =
+                                    &value.ty
+                                else {
+                                    return None;
+                                };
+                                (head.declared_name().as_ref() == Some(&qtn))
+                                    .then(|| head.ptr())
                             })
                         })
                     })
@@ -1018,36 +1028,18 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                     format!("with_types value for `{export}` must be a type"),
                 ));
             };
+            // The head is the declaration being mounted — no lookup, no
+            // owner-package scan, and no name that could resolve to a
+            // same-named declaration from somewhere else.
             match &type_value.ty {
-                RealizedTy::Class(qtn, _, _) => {
-                    if let Some(class) = type_value
-                        .defs()
-                        .classes
-                        .get(qtn)
-                        .copied()
-                        .or_else(|| vm.dynamic_dispatch.class_ptr(qtn))
-                    {
-                        derived.classes.insert(local.clone(), class);
-                    }
+                RealizedTy::Class(head, _, _) => {
+                    derived.classes.insert(local.clone(), head.ptr());
                 }
-                RealizedTy::Enum(qtn, _) => {
-                    if let Some(enm) = type_value.defs().enums.get(qtn).copied() {
-                        derived.enums.insert(local.clone(), enm);
-                    }
+                RealizedTy::Enum(head, _) => {
+                    derived.enums.insert(local.clone(), head.ptr());
                 }
-                RealizedTy::Interface(qtn, _, _, _) => {
-                    let owned_interface = (!type_value.owner.is_null())
-                        .then(|| match vm.get_object(type_value.owner) {
-                            Object::Package(owner) => owner.interfaces.values().find_map(|ptr| {
-                                matches!(vm.get_object(*ptr), Object::Interface(interface) if interface.name == *qtn)
-                                    .then_some(*ptr)
-                            }),
-                            _ => None,
-                        })
-                        .flatten();
-                    if let Some(interface) = owned_interface.or_else(|| vm.lookup_interface(qtn)) {
-                        derived.interfaces.insert(local.clone(), interface);
-                    }
+                RealizedTy::Interface(head, _, _, _) => {
+                    derived.interfaces.insert(local.clone(), head.ptr());
                 }
                 _ => {}
             }
@@ -1960,12 +1952,15 @@ fn non_callable_error(what: &str) -> VmRustFnError {
 }
 
 /// The `reflect.Arg` class type, for array/map element tags.
-fn ty_arg() -> RealizedTy {
-    RealizedTy::Class(
-        baml_type::QualifiedTypeName::from_dotted_path(ARG_FQN),
-        vec![],
-        TyAttr::default(),
-    )
+///
+/// A stdlib FQN constant resolving to a head — one of the sanctioned name
+/// boundaries; the head comes off the declaration, never from the name's hash.
+fn ty_arg(vm: &BexVm) -> RealizedTy {
+    let qtn = baml_type::QualifiedTypeName::from_dotted_path(ARG_FQN);
+    let head = vm
+        .declaration_head(&qtn)
+        .unwrap_or_else(|| unreachable!("`{ARG_FQN}` is declared by the stdlib"));
+    RealizedTy::Class(head, vec![], TyAttr::default())
 }
 
 /// Build one `reflect.Arg`. A nameless positional (a host callable from a
@@ -2022,8 +2017,9 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
             }
         }
     }
-    let args = Value::object(vm.tlab.alloc_array(ty_arg(), positional));
-    let opts = Value::object(vm.tlab.alloc_map(RealizedTy::string(), ty_arg(), opts));
+    let arg_ty = ty_arg(vm);
+    let args = Value::object(vm.tlab.alloc_array(arg_ty.clone(), positional));
+    let opts = Value::object(vm.tlab.alloc_map(RealizedTy::string(), arg_ty, opts));
     let returns = Value::object(vm.alloc_static_type(sig.ret.clone()));
     let errors = Value::object(vm.alloc_static_type(sig.throws));
     let docstring = opt_string(vm, sig.docstring.as_ref());

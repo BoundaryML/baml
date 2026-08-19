@@ -85,8 +85,9 @@ struct ClassPlan {
     ty: bex_vm_types::RealizedTy,
 }
 
+/// A group member's identity once its declaration exists: the type headed at
+/// it, which is what every reference to the member resolves to.
 struct ClassIdentityPlan {
-    name: baml_type::QualifiedTypeName,
     ty: bex_vm_types::RealizedTy,
 }
 
@@ -776,13 +777,7 @@ fn build_group(
             Vec::new(),
             baml_type::TyAttr::default(),
         );
-        identities.insert(
-            node.id,
-            ClassIdentityPlan {
-                name: name.clone(),
-                ty: ty.clone(),
-            },
-        );
+        identities.insert(node.id, ClassIdentityPlan { ty: ty.clone() });
         plans.insert(node.id, ClassPlan { name, ptr, ty });
     }
 
