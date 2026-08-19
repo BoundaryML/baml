@@ -1660,6 +1660,10 @@ struct InferenceContext<'db> {
     /// Carriers already reported as escaping their call (E0168), so a callee
     /// road walked twice reports once.
     reported_runtime_escapes: rustc_hash::FxHashSet<ExprId>,
+    /// Inline `unreflect(...)` carriers whose call publishes the parameter in
+    /// its RESULT — the bare `-> T` included. The `?.` check consults this at
+    /// the chain boundary, where the callee's signature is no longer reachable.
+    runtime_slots_named_by_result: rustc_hash::FxHashSet<ExprId>,
     result: InferenceResult<'db>,
 }
 
@@ -1721,6 +1725,7 @@ impl<'db> InferenceContext<'db> {
             wf_scope_env: std::cell::OnceCell::new(),
             runtime_dependent_call_params: FxHashMap::default(),
             reported_runtime_escapes: rustc_hash::FxHashSet::default(),
+            runtime_slots_named_by_result: rustc_hash::FxHashSet::default(),
             result: InferenceResult::default(),
         }
     }
@@ -2812,6 +2817,29 @@ impl<'db> InferenceContext<'db> {
             block_ty = replace_rigid_param(&block_ty, &binding.parameter, &binding.occurrence_ty);
             for ty in self.flow.values_mut() {
                 *ty = replace_rigid_param(ty, &binding.parameter, &binding.occurrence_ty);
+            }
+            // The effect channel leaves the block exactly as the value does.
+            // An undeclared `throws` is assembled from these contributions at
+            // finalize, so a rigid parameter left in one becomes part of the
+            // OWNER's published effect — a type naming a parameter that stops
+            // existing at the closing brace, which reaches lowering with no
+            // type argument to bind it to.
+            for channel in &mut self.throws_channels {
+                for (_, contribution) in channel.iter_mut() {
+                    *contribution = replace_rigid_param(
+                        contribution,
+                        &binding.parameter,
+                        &binding.occurrence_ty,
+                    );
+                }
+            }
+            // A contract violation stashed inside the block quotes the effect
+            // it saw. Erase there too, or E0096 prints a name (`Boom<Out>`)
+            // that means nothing outside the block it was read in.
+            for pending in &mut self.pending_diags {
+                if let PendingDiag::ThrowsViolation { extra, .. } = pending {
+                    *extra = replace_rigid_param(extra, &binding.parameter, &binding.occurrence_ty);
+                }
             }
         }
         self.scoped_type_bindings.truncate(checkpoint);
@@ -7299,6 +7327,17 @@ impl<'db> InferenceContext<'db> {
         published: &Ty,
         escape: RuntimeTypeEscape,
     ) {
+        if escape == RuntimeTypeEscape::Value {
+            // The `?.` check runs later, at the chain boundary, where the
+            // callee's signature is long out of reach — so the one fact it
+            // needs is recorded here: does this call's RESULT name the
+            // parameter at all? A result that never mentions it (`-> bool`,
+            // `-> Wrapper<unknown>`) publishes nothing about the runtime type,
+            // and wrapping nothing in `| null` is still nothing.
+            self.runtime_slots_named_by_result.extend(
+                self.escaping_carriers(call, |parameter| ty_mentions_param(published, parameter)),
+            );
+        }
         let escaping = self.escaping_carriers(call, |parameter| {
             runtime_param_escapes(published, parameter)
         });
@@ -7354,6 +7393,13 @@ impl<'db> InferenceContext<'db> {
     /// spelling half of the declared `-> T?` refusal — both publish `unknown?`
     /// and both now say the same thing.
     ///
+    /// It is still the published type that decides, never the punctuation: a
+    /// tail whose result never mentions the parameter (`-> bool`, or the
+    /// declared-erased `-> Wrapper<unknown>`) publishes nothing about the
+    /// runtime type, so the chain's `| null` has nothing to wrap and the call
+    /// stays legal. [`Self::report_runtime_type_escape`] recorded that fact
+    /// while the callee's signature was still in hand.
+    ///
     /// Only the chain's TAIL is affected: it is the expression whose value the
     /// chain republishes. A call in argument position, or one whose result is
     /// consumed further along the chain (`a?.b.m<unreflect(t)>().field`),
@@ -7367,6 +7413,10 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         let escaping = self.escaping_carriers(tail, |_| true);
+        let escaping: Vec<ExprId> = escaping
+            .into_iter()
+            .filter(|carrier| self.runtime_slots_named_by_result.contains(carrier))
+            .collect();
         self.report_escaping_carriers(tail, escaping, RuntimeTypeEscape::Value);
     }
 
@@ -11354,5 +11404,49 @@ mod syntactic_union_tests {
         let nested = union(&[Ty::int(), Ty::string()]);
         let flat = syntactic_union(&[nested, Ty::int()]);
         assert_eq!(flat, union(&[Ty::int(), Ty::string()]));
+    }
+}
+
+#[cfg(test)]
+mod runtime_param_escape_tests {
+    use super::*;
+
+    fn param() -> baml_type::ParamTy {
+        baml_type::ParamTy::new(0x8000_0001, baml_type::Name::new("Out"))
+    }
+
+    fn var(param: &baml_type::ParamTy) -> Ty {
+        Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default()))
+    }
+
+    /// The whole rule is one boundary: the parameter ITSELF is a value's type
+    /// and does not escape; one constructor deeper it is an assertion about a
+    /// value, and does.
+    #[test]
+    fn the_bare_parameter_is_the_only_shape_that_does_not_escape() {
+        let param = param();
+        assert!(!runtime_param_escapes(&var(&param), &param));
+        assert!(!runtime_param_escapes(&Ty::int(), &param));
+        assert!(!runtime_param_escapes(&Ty::never(), &param));
+        assert!(runtime_param_escapes(
+            &Ty::intern(TyKind::List(var(&param), TyAttr::default())),
+            &param
+        ));
+        assert!(runtime_param_escapes(
+            &syntactic_union(&[var(&param), Ty::null()]),
+            &param
+        ));
+    }
+
+    /// A different parameter is a different name: an occurs-check that keyed on
+    /// shape alone would refuse every generic result.
+    #[test]
+    fn another_parameter_is_not_this_one() {
+        let other = baml_type::ParamTy::new(0x8000_0002, baml_type::Name::new("Other"));
+        assert!(!runtime_param_escapes(&var(&other), &param()));
+        assert!(!runtime_param_escapes(
+            &Ty::intern(TyKind::List(var(&other), TyAttr::default())),
+            &param()
+        ));
     }
 }

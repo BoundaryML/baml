@@ -13,9 +13,12 @@
 //! A call publishes three things, and the rule reads the same in all three:
 //! the RESULT it returns, the ERROR its `throws` clause hands the caller —
 //! written or inferred — and, when a `?.` chain short-circuits it, the
-//! `| null` the chain wraps around the result. The last section sweeps every
-//! other construct that transports a call's result and pins where it lands,
-//! because the bar is that no spelling reaches a runtime failure.
+//! `| null` the chain wraps around the result. All three read the published
+//! TYPE, never the spelling: a chained call whose result never mentions the
+//! parameter (`-> bool`, `-> Wrapper<unknown>`) has nothing for the `| null`
+//! to wrap and stays legal. The last section sweeps every other construct that
+//! transports a call's result and pins where it lands, because the bar is that
+//! no spelling reaches a runtime failure.
 
 use baml_compiler_diagnostics::Severity;
 use baml_project::{collect_diagnostics, testing::setup_test_db};
@@ -308,7 +311,7 @@ class Boom<T> { payload T }
 
 function risky<T>(v: T) -> int throws Boom<T> { throw Boom<T> { payload: v } }
 
-function main(t: type) -> unknown throws unknown { risky<unreflect(t)>(1) }
+function main(t: type) -> unknown { risky<unreflect(t)>(1) }
 "#,
     );
 }
@@ -330,7 +333,7 @@ function risky<T>(v: T, fail: bool) -> int {
     0
 }
 
-function main(t: type) -> unknown throws unknown { risky<unreflect(t)>(1, true) }
+function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
 "#,
     );
 }
@@ -349,24 +352,24 @@ function risky<T>(v: T, fail: bool) -> int {
     0
 }
 
-function main(t: type) -> unknown throws unknown { risky<unreflect(t)>(1, true) }
+function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
 "#
         ),
         @"
     E0168
 
       × this runtime type must be given a name before it can be used here
-       ╭─[test.baml:9:58]
-     9 │ function main(t: type) -> unknown throws unknown { risky<unreflect(t)>(1, true) }
-       ·                                                          ──────┬─────
-       ·                                                                ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the error this call can throw would still need it afterwards
+       ╭─[test.baml:9:43]
+     9 │ function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
+       ·                                           ──────┬─────
+       ·                                                 ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the error this call can throw would still need it afterwards
        ╰────
       ╰─▶   ☞ name the type first, then use the name:
             │     type Out = unreflect(t);
             │     risky<Out>(1, true)
-             ╭─[test.baml:9:58]
-           9 │ function main(t: type) -> unknown throws unknown { risky<unreflect(t)>(1, true) }
-             ·                                                          ────────────
+             ╭─[test.baml:9:43]
+           9 │ function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
+             ·                                           ────────────
              ╰────
     "
     );
@@ -382,7 +385,7 @@ class Boom<T> { payload T }
 
 function risky<T>(v: T) -> int throws Boom<T> { throw Boom<T> { payload: v } }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: type) -> unknown {
     risky<unreflect(t)>(1) catch (e) { _ => 0 }
 }
 "#,
@@ -403,7 +406,7 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source?) -> unknown throws unknown { s?.pick<unreflect(t)>(1) }
+function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
 "#,
     );
 }
@@ -421,7 +424,7 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source?) -> unknown throws unknown {
+function main(t: type, s: Source?) -> unknown {
     s?.again().pick<unreflect(t)>(1)
 }
 "#,
@@ -438,7 +441,7 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, xs: Source[]?) -> unknown throws unknown {
+function main(t: type, xs: Source[]?) -> unknown {
     xs?.[0].pick<unreflect(t)>(1)
 }
 "#,
@@ -458,7 +461,7 @@ class Source {
     function wrapit<T>(self, v: T) -> Wrapper<T> throws never { Wrapper<T> { inner: v } }
 }
 
-function main(t: type, s: Source?) -> unknown throws unknown { s?.wrapit<unreflect(t)>(1) }
+function main(t: type, s: Source?) -> unknown { s?.wrapit<unreflect(t)>(1) }
 "#,
     );
 }
@@ -475,24 +478,24 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source?) -> unknown throws unknown { s?.pick<unreflect(t)>(1) }
+function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
 "#
         ),
         @"
     E0168
 
       × this runtime type must be given a name before it can be used here
-       ╭─[test.baml:6:72]
-     6 │ function main(t: type, s: Source?) -> unknown throws unknown { s?.pick<unreflect(t)>(1) }
-       ·                                                                        ──────┬─────
-       ·                                                                              ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the value this expression creates would still need it afterwards
+       ╭─[test.baml:6:57]
+     6 │ function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
+       ·                                                         ──────┬─────
+       ·                                                               ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the value this expression creates would still need it afterwards
        ╰────
       ╰─▶   ☞ name the type first, then use the name:
             │     type Out = unreflect(t);
             │     s?.pick<Out>(1)
-             ╭─[test.baml:6:72]
-           6 │ function main(t: type, s: Source?) -> unknown throws unknown { s?.pick<unreflect(t)>(1) }
-             ·                                                                        ────────────
+             ╭─[test.baml:6:57]
+           6 │ function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
+             ·                                                         ────────────
              ╰────
     "
     );
@@ -590,7 +593,7 @@ fn a_throws_that_is_the_parameter_stays_legal() {
         r#"
 function fail<T>(v: T) -> int throws T { throw v }
 
-function main(t: type) -> unknown throws unknown { fail<unreflect(t)>(1) }
+function main(t: type) -> unknown { fail<unreflect(t)>(1) }
 "#,
     );
 }
@@ -608,7 +611,7 @@ function risky<T>(v: T, fail: bool) -> T throws Boom {
     v
 }
 
-function main(t: type) -> unknown throws unknown { risky<unreflect(t)>(1, false) }
+function main(t: type) -> unknown { risky<unreflect(t)>(1, false) }
 "#,
     );
 }
@@ -625,7 +628,45 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source) -> unknown throws unknown { s?.pick<unreflect(t)>(1) }
+function main(t: type, s: Source) -> unknown { s?.pick<unreflect(t)>(1) }
+"#,
+    );
+}
+
+/// The chain rule reads the published type too, not the punctuation. A tail
+/// whose result never mentions the parameter publishes nothing about the
+/// runtime type, so there is nothing for the chain's `| null` to wrap — and no
+/// honest note to write, since the value this expression creates does not need
+/// the type afterwards.
+#[test]
+fn a_chain_tail_whose_result_never_mentions_the_parameter_stays_legal() {
+    assert_accepted(
+        r#"
+class Source {
+    function put<T>(self, v: T) -> bool throws never { true }
+}
+
+function main(t: type, s: Source?) -> unknown { s?.put<unreflect(t)>(1) }
+"#,
+    );
+}
+
+/// The `?.` spelling of #4518's declared-erasure row: `-> Wrapper<unknown>` is
+/// the author's own contract that nothing about `T` is published, and a chain
+/// around it does not change that. Accepted straight, accepted chained.
+#[test]
+fn a_chain_tail_with_a_declared_erased_result_stays_legal() {
+    assert_accepted(
+        r#"
+class Wrapper<T> { inner T }
+
+class Source {
+    function erase<T>(self, v: T) -> Wrapper<unknown> throws never {
+        Wrapper<unknown> { inner: v }
+    }
+}
+
+function main(t: type, s: Source?) -> unknown { s?.erase<unreflect(t)>(1) }
 "#,
     );
 }
@@ -643,7 +684,7 @@ class Source {
 
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type, s: Source?) -> unknown throws unknown {
+function main(t: type, s: Source?) -> unknown {
     s?.keep(ident<unreflect(t)>(1))
 }
 "#,
@@ -790,6 +831,38 @@ function main(t: type) -> unknown throws unknown {
     );
 }
 
+/// An array spread has no spelling in the grammar at all, so there is no road
+/// for a result to travel that way. Pinned because the audit's answer is again
+/// "this shape does not exist", and a grammar that grew one should come back
+/// through this rule.
+#[test]
+fn an_array_spread_is_not_a_spelling_this_rule_has_to_cover() {
+    assert_error_codes(
+        r#"
+function listed<T>(v: T) -> T[] throws never { [v] }
+
+function main(t: type) -> unknown { [...listed<unreflect(t)>(1)] }
+"#,
+        &["E0010"],
+    );
+}
+
+/// An annotation cannot name a call-scoped parameter — there is no spelling
+/// for it — so a binding's declared type can only ever hold the erased one.
+#[test]
+fn an_annotated_binding_of_the_result_stays_legal() {
+    assert_accepted(
+        r#"
+function ident<T>(v: T) -> T throws never { v }
+
+function main(t: type) -> unknown {
+    let held: unknown = ident<unreflect(t)>(1)
+    held
+}
+"#,
+    );
+}
+
 /// A container literal built from the result is typed from the erased element,
 /// never from the parameter.
 #[test]
@@ -881,22 +954,81 @@ async fn applying_the_suggestion_compiles_and_runs() {
     assert_eq!(output.result, Ok(BexExternalValue::String("Pixel".into())));
 }
 
+/// The suggestion has to work for the OTHER escape too, and this is the shape
+/// that caught a real defect: with the caller's own `throws` clause omitted,
+/// the named rewrite used to reach MIR still carrying the block-scoped
+/// parameter in the effect channel and abort with "type variable not found in
+/// type args: Out". The inline spelling was refused, so the only road out of
+/// E0168 was the one that crashed.
+///
+/// Now the block erases its parameter from the effect channel exactly as it
+/// does from the value: the program compiles, runs, and publishes
+/// `Boom<unknown>` — which the third case reads back out of the contract
+/// violation, the one place that prints the effect a body may throw.
+#[tokio::test]
+async fn applying_the_suggestion_to_a_throws_escape_compiles_and_runs() {
+    let scenario = |bind: &str, slot: &str, clause: &str| {
+        format!(
+            r#"
+class Boom<T> {{ payload T }}
+
+function risky<T>(v: T, fail: bool) -> int throws Boom<T> {{
+    if (fail) {{ throw Boom<T> {{ payload: v }} }}
+    0
+}}
+
+function main() -> int{clause} {{
+    let t = type.of<string>()
+    {bind}
+    risky<{slot}>("x", false)
+}}
+"#
+        )
+    };
+
+    assert_single_escape(&scenario("", "unreflect(t)", ""));
+
+    // Exactly the rewrite E0168 prints, on a caller that declares no clause of
+    // its own — the effect is inferred, which is what used to leak.
+    let applied = scenario("type Out = unreflect(t)", "Out", "");
+    assert_accepted(&applied);
+    let output = baml_test!(&applied);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
+
+    // The effect the caller publishes, quoted back by the contract check: the
+    // erased `Boom<unknown>`, never the block-scoped `Boom<Out>`.
+    assert_eq!(
+        compile_errors(&scenario("type Out = unreflect(t)", "Out", " throws never")),
+        vec![(
+            "E0096".to_string(),
+            "declared throws is `never`, but this function may also throw `Boom<unknown>`"
+                .to_string(),
+        )],
+    );
+}
+
 /// The bar the audit is held to: a shape that compiles must also RUN. Every
 /// accepted transport above, on one runtime type, asking each value what class
-/// it actually carries — the tag rides on the value, so all four agree, and
+/// it actually carries — the tag rides on the value, so all five agree, and
 /// none of them reaches a runtime failure.
 #[tokio::test]
 async fn the_accepted_transports_run_and_keep_the_runtime_type() {
     let program = r#"
+class Source {
+    function pick<T>(self, v: T) -> T throws never { v }
+}
+
 function ident<T>(v: T) -> T throws string { v }
 
 function main() -> string throws unknown {
     let t = type.of<string>()
+    let src = Source {}
     let direct = ident<unreflect(t)>("a")
     let awaited = await spawn { ident<unreflect(t)>("b") }
     let caught = ident<unreflect(t)>("c") catch (e) { _ => 0 }
     let collected = [ident<unreflect(t)>("d")]
-    `${type.of_value(direct).to_string()} ${type.of_value(awaited).to_string()} ${type.of_value(caught).to_string()} ${type.of_value(collected[0]).to_string()}`
+    let chained = src?.pick<unreflect(t)>("e")
+    `${type.of_value(direct).to_string()} ${type.of_value(awaited).to_string()} ${type.of_value(caught).to_string()} ${type.of_value(collected[0]).to_string()} ${type.of_value(chained).to_string()}`
 }
 "#;
     assert_accepted(program);
@@ -904,7 +1036,7 @@ function main() -> string throws unknown {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "string string string string".into()
+            "string string string string string".into()
         ))
     );
 }
