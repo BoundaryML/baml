@@ -723,7 +723,7 @@ mod tests {
             baml_base::TyAttr::EMPTY,
         );
         let mut pick_fn = nullary_string_fn(&pick);
-        pick_fn.return_type = Ty::Class(route.clone(), Vec::new(), baml_base::TyAttr::EMPTY);
+        pick_fn.return_type = Ty::Class(route.clone(), Vec::new().into(), baml_base::TyAttr::EMPTY);
         let pool = SymbolPool::from([
             (
                 route.clone(),
