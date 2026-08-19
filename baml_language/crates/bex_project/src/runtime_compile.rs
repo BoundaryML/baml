@@ -1297,7 +1297,13 @@ fn lower_session_submission(
                 // parentheses, so `n += 1.5` on an `int` binding would be
                 // refused here while ordinary code accepts it), and the whole
                 // point is that the two roads agree.
-                let target_local = format!("__baml_session_{sequence}_target_{index}");
+                // The local's name must be one `internal()` can never mint: a
+                // user binding called `target_1` in submission N would mint
+                // `__baml_session_N_target_1`, and a block-local of that name
+                // shadows the global the rewritten value reads — the
+                // assignment would silently read itself. A different root
+                // prefix is outside `internal()`'s range entirely.
+                let target_local = format!("__baml_assign_{sequence}_{index}");
                 let assign = if operator == "=" {
                     format!("{target_local} = {rhs}")
                 } else {

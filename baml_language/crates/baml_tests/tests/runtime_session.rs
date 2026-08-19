@@ -1052,6 +1052,25 @@ function main() -> string throws unknown {
 }
 "####;
 
+/// The rewrite introduces one name of its own, and a name is a collision
+/// waiting to happen: a user binding called `target_1` mints
+/// `__baml_session_N_target_1`, which is exactly what a per-statement local
+/// named after the target and the statement index would have been called. A
+/// block-local wins over the global, so the assignment would have read its own
+/// copy of `n` instead of the user's `target_1` — no diagnostic, just the
+/// wrong answer. The submission below is the collision: `let target_1` is
+/// statement 0 and the assignment that reads it is statement 1.
+const SESSION_ASSIGNMENT_NAME_COLLISION: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(#"let n = 5"#)
+  s.eval(#"let target_1 = 99
+n = target_1"#)
+  let after = s.eval<int>(#"n"#)
+  `${after}`
+}
+"####;
+
 /// Values whose spelling could have been broken by wrapping: a map literal, a
 /// template literal, a value that reads the binding it writes.
 const SESSION_ASSIGNMENT_VALUE_SHAPES: &str = r####"
@@ -1167,6 +1186,21 @@ function main() -> string throws unknown {
         "the ordinary spelling is expected to compile; if it no longer does, this pair needs a \
          new operand rather than a new verdict",
     );
+    // The half that makes the tripwire a tripwire: the SAME line refuses to
+    // compile once the value is parenthesized, which is what the rewrite used
+    // to do to every value it spliced.
+    assert_eq!(
+        ordinary_compile_errors(&ordinary.replace("n += 1.5", "n += (1.5)")),
+        vec!["E0001: mismatched types: expected `int`, found `float`".to_string()],
+    );
+    // Ordinary code compiles this line and dies on it. The Session reaches the
+    // same place — that is what "no stricter" means here, hole included.
+    let ordinary_run = baml_test!(ordinary);
+    assert!(
+        ordinary_run.result.is_err(),
+        "ordinary code is expected to fail at RUNTIME here, not compile-time: {:?}",
+        ordinary_run.result,
+    );
     let program = session_program(SESSION_ASSIGN_PROBE, SESSION_COMPOUND_WITH_A_WIDER_OPERAND);
     let output = baml_test!(&program);
     assert_eq!(
@@ -1175,6 +1209,16 @@ function main() -> string throws unknown {
             "compiled, panicked at runtime".into()
         ))
     );
+}
+
+/// A user binding whose name could collide with the local the rewrite
+/// introduces must not shadow the global the value reads: `n = target_1` binds
+/// the user's `99`, not `n`'s own copy of itself.
+#[tokio::test]
+async fn a_session_assignment_does_not_shadow_a_user_binding() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_ASSIGNMENT_NAME_COLLISION);
+    let output = baml_test!(&program);
+    assert_eq!(output.result, Ok(BexExternalValue::String("99".into())));
 }
 
 /// The value keeps its own spelling, whatever shape it has.
