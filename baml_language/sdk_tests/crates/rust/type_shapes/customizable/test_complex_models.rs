@@ -8,10 +8,34 @@
 use baml_bridge::Map;
 use baml_sdk::complex_models::{
     AccountTier, AuditEvent, CardPayment, CardPaymentOrWirePayment, ComplexProfile, ContactMethod,
-    CreatedOrUpdatedOrApproved, DraftOrSentOrPaid, GeoPoint, IntOrStringOrBool, Invoice,
-    InvoiceOrPostalAddressOrString, LineItem, PostalAddress, ProfileOwner, WirePayment,
-    round_trip_complex_profile,
+    CreatedOrUpdatedOrApproved, DraftOrSentOrPaid, GeoPoint, GraphQueryOrGraphDiff,
+    IntOrStringOrBool, Invoice, InvoiceOrPostalAddressOrString, LineItem,
+    LiteralUnionIdentifierEdges, PostalAddress, ProfileOwner, Utf8LossyOrUtf8Strict, WirePayment,
+    round_trip_complex_profile, round_trip_literal_union_identifier_edges,
 };
+
+// SDK_PARITY_LINT(skip): exercises Rust identifier synthesis for string-literal union arms
+#[test]
+fn test_complex_models_round_trip_non_identifier_string_literal_union_arms() {
+    for command in [
+        GraphQueryOrGraphDiff::GraphQuery,
+        GraphQueryOrGraphDiff::GraphDiff,
+    ] {
+        for encoding in [
+            Utf8LossyOrUtf8Strict::Utf8Lossy,
+            Utf8LossyOrUtf8Strict::Utf8Strict,
+        ] {
+            let value = LiteralUnionIdentifierEdges {
+                command: command.clone(),
+                encoding,
+            };
+            assert_eq!(
+                round_trip_literal_union_identifier_edges(value.clone()).unwrap(),
+                value
+            );
+        }
+    }
+}
 
 #[test]
 fn test_complex_models_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
