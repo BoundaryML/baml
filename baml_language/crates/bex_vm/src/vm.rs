@@ -138,16 +138,16 @@ struct TakenTypeArgs {
 fn append_virtual_method_type_args(
     frame_type_args: &mut Vec<baml_type::RealizedTy>,
     method_type_args: &TakenTypeArgs,
+    mut owner_type_values: Vec<Option<TypeValue>>,
 ) -> Vec<Option<TypeValue>> {
-    let mut type_values = Vec::new();
-    if !method_type_args.values.is_empty() {
+    if !method_type_args.values.is_empty() || !owner_type_values.is_empty() {
         // The resolver-provided owner/impl slots precede method-level slots in
         // the callee frame. Preserve that sparse alignment for exact values.
-        type_values.resize(frame_type_args.len(), None);
-        type_values.extend_from_slice(&method_type_args.values);
+        owner_type_values.resize(frame_type_args.len(), None);
+        owner_type_values.extend_from_slice(&method_type_args.values);
     }
     frame_type_args.extend_from_slice(&method_type_args.tys);
-    type_values
+    owner_type_values
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -728,7 +728,7 @@ pub(crate) mod tests {
         };
         let mut frame_type_args = vec![baml_type::RealizedTy::int()];
 
-        let values = append_virtual_method_type_args(&mut frame_type_args, &method);
+        let values = append_virtual_method_type_args(&mut frame_type_args, &method, Vec::new());
 
         assert_eq!(
             frame_type_args,
@@ -738,8 +738,58 @@ pub(crate) mod tests {
             ]
         );
         assert_eq!(values.len(), 2);
-        assert!(values[0].is_none(), "owner slot must remain reconstructed");
+        assert!(
+            values[0].is_none(),
+            "an owner slot with no recovered identity stays reconstructed"
+        );
         assert_eq!(values[1].as_ref().map(TypeValue::mint), Some(exact.mint()));
+    }
+
+    /// Owner slots recovered from the interface operand keep their positions
+    /// when method-level slots are appended after them.
+    #[test]
+    fn recovered_owner_type_values_precede_method_slots() {
+        let owner = TypeValue::from_parts(baml_type::RealizedTy::int(), MintId::Runtime(3));
+        let method_exact =
+            TypeValue::from_parts(baml_type::RealizedTy::string(), MintId::Runtime(7));
+        let method = TakenTypeArgs {
+            tys: vec![baml_type::RealizedTy::string()],
+            values: vec![Some(method_exact.clone())],
+            defs: DynTypeDefs::default(),
+        };
+        let mut frame_type_args = vec![baml_type::RealizedTy::int()];
+
+        let values = append_virtual_method_type_args(
+            &mut frame_type_args,
+            &method,
+            vec![Some(owner.clone())],
+        );
+
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0].as_ref().map(TypeValue::mint), Some(owner.mint()));
+        assert_eq!(
+            values[1].as_ref().map(TypeValue::mint),
+            Some(method_exact.mint())
+        );
+    }
+
+    /// A method with no type arguments of its own still hands the owner slots
+    /// down — the value lane is not gated on the method being generic.
+    #[test]
+    fn recovered_owner_type_values_survive_a_non_generic_method() {
+        let owner = TypeValue::from_parts(baml_type::RealizedTy::int(), MintId::Runtime(3));
+        let method = TakenTypeArgs::default();
+        let mut frame_type_args = vec![baml_type::RealizedTy::int()];
+
+        let values = append_virtual_method_type_args(
+            &mut frame_type_args,
+            &method,
+            vec![Some(owner.clone())],
+        );
+
+        assert_eq!(frame_type_args, vec![baml_type::RealizedTy::int()]);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].as_ref().map(TypeValue::mint), Some(owner.mint()));
     }
 }
 
@@ -2180,6 +2230,90 @@ impl BexVm {
             Object::Type(value) if &value.ty == ty => Some(ptr),
             _ => None,
         }
+    }
+
+    /// Rebuild the `type` value a runtime nominal declaration was created as.
+    ///
+    /// A runtime definition records the mint it was created with, so its
+    /// identity is *read back* here rather than derived afresh — deriving would
+    /// hand out a different value for the same type (BEP-066 I-1). Provenance
+    /// deliberately excludes the definition's own pointer (nothing can name
+    /// itself through its own dependencies), so it is added back.
+    ///
+    /// `None` for a static declaration: its mint is the deterministic digest of
+    /// its spelling, so every materialization already agrees.
+    pub(crate) fn runtime_declaration_identity(
+        &self,
+        definition_ptr: HeapPtr,
+    ) -> Option<TypeValue> {
+        let (ty, defs, runtime) = match self.get_object(definition_ptr) {
+            Object::Class(class) => {
+                let runtime = class.runtime_type.as_ref()?;
+                let mut defs = runtime.defs.clone();
+                defs.classes.insert(class.name.clone(), definition_ptr);
+                let ty = baml_type::RealizedTy::Class(
+                    class.name.clone(),
+                    Vec::new(),
+                    baml_type::TyAttr::default(),
+                );
+                (ty, defs, runtime)
+            }
+            Object::Enum(enm) => {
+                let runtime = enm.runtime_type.as_ref()?;
+                let mut defs = runtime.defs.clone();
+                defs.enums.insert(enm.name.clone(), definition_ptr);
+                let ty =
+                    baml_type::RealizedTy::Enum(enm.name.clone(), baml_type::TyAttr::default());
+                (ty, defs, runtime)
+            }
+            _ => return None,
+        };
+        Some(if runtime.owner.is_null() {
+            TypeValue::from_parts_with_defs(ty, runtime.mint, defs)
+        } else {
+            TypeValue::runtime_with_defs(ty, runtime.mint, defs, runtime.owner)
+        })
+    }
+
+    /// The exact minted value for `ty`, when `ty` is the bare spelling of a
+    /// runtime declaration `defs` carries.
+    ///
+    /// **The name has to be mint-unique.** A `DynTypeDefs` is keyed by
+    /// `QualifiedTypeName`, and only a `runtime_local` name (`user.$dyn.N.Foo`
+    /// — `reflect.class.new` / `reflect.enum.new`) has its mint *in* the name.
+    /// A static declaration and a runtime *package*'s declaration are both
+    /// plain `user.Foo`, and an overlay reaches a frame whether or not the
+    /// spelling that pulled it in is the one being recovered — `LoadType`
+    /// staples the whole frame overlay onto anything materialized there. So
+    /// matching an ordinary name against the overlay would answer a *different*
+    /// definition's mint: a static `Holder<Item>` in a frame that also touched a
+    /// runtime package's `Item` would report `type.of<T>() != type.of<Item>()`,
+    /// and two compiled packages that both declare `Item` would cross-match.
+    /// Handing back a wrong identity is worse than handing back none, so
+    /// everything but a mint-unique name declines and re-derives normally.
+    ///
+    /// A decorated or parameterized spelling is a *different* type value than
+    /// the definition was minted as, so the recovered value must also describe
+    /// the same type to be usable — the equality check below is that guard, and
+    /// it keeps the rule out of the attribute-by-attribute business.
+    fn minted_declaration_value(
+        &self,
+        ty: &baml_type::RealizedTy,
+        defs: &DynTypeDefs,
+    ) -> Option<TypeValue> {
+        let definition_ptr = match ty {
+            baml_type::RealizedTy::Class(name, args, _)
+                if args.is_empty() && name.is_runtime_minted() =>
+            {
+                defs.classes.get(name)
+            }
+            baml_type::RealizedTy::Enum(name, _) if name.is_runtime_minted() => {
+                defs.enums.get(name)
+            }
+            _ => None,
+        }?;
+        let value = self.runtime_declaration_identity(*definition_ptr)?;
+        (value.ty == *ty).then_some(value)
     }
 
     fn load_global_in(&self, package: HeapPtr, index: GlobalIndex) -> Value {
@@ -6025,6 +6159,17 @@ impl BexVm {
         );
         self.pending_call_type_args = previous_type_args;
         self.pending_call_type_values = previous_type_values;
+        // FOLLOW-UP (not a defect today): the rooted copy of the values is
+        // dropped one line above, and the writes below read `options`, which
+        // borrows a caller *local* that no GC root covers. A collection between
+        // the two would forward the rooted copy and leave these pointers stale.
+        // It is unreachable as written — `execute_call_from_locals_offset` only
+        // pushes a frame and sizes the eval stack, with no TLAB allocation, and
+        // the native path that can allocate pushes no bytecode frame, so the
+        // guard below declines. Recorded because this lane now carries recovered
+        // identities as well as method-level ones, so the day something on that
+        // path starts allocating, this is where it bites.
+        //
         // A definition overlay can arrive without any type-argument slots of its
         // own — interface dispatch hands one down for a method that declares no
         // generics — so the metadata lane is written whenever any of the three
@@ -7454,6 +7599,15 @@ impl BexVm {
                     // `user.$dyn.N.Out` as a name nothing defines — reflection,
                     // rendering and SAP inside an interface method would fail on
                     // a type the caller can use fine.
+                    //
+                    // The clone is `O(defs)` on every dispatch that carries any
+                    // (a static interface operand short-circuits on `is_empty`).
+                    // `Arc<DynTypeDefs>` would make it a refcount bump, but it
+                    // is not a drop-in: GC forwarding rewrites the pointers
+                    // *inside* a `DynTypeDefs` in place, so sharing would have
+                    // to be unshared again (`Arc::make_mut`) exactly where it
+                    // pays off. It stays the lever if an interface-heavy
+                    // profile ever asks for it.
                     let iface_defs =
                         iface_value
                             .as_object_ptr()
@@ -7584,9 +7738,36 @@ impl BexVm {
                         }
                         (callee, frame)
                     };
-                    let type_values = method_type_args.as_ref().map_or_else(Vec::new, |method| {
-                        append_virtual_method_type_args(&mut type_args, method)
+                    // Exact runtime identity for the receiver's class-level
+                    // slots. The resolver realizes those slots off `Self`,
+                    // which is realized types only, so `type.of<T>()` in an
+                    // impl or default-method body would derive a *fresh* mint
+                    // for a type the caller minted — structurally right,
+                    // `==`-wrong, which breaks every identity-keyed pattern
+                    // (BEP-066 I-1). The interface operand already carries the
+                    // definitions those slots name, and each runtime definition
+                    // records the mint it was created with, so the caller's
+                    // value is read back rather than re-derived. Only the
+                    // definition-carrying operand pays: a static interface
+                    // leaves `iface_defs` empty and skips the walk entirely.
+                    let owner_type_values = iface_defs.as_ref().map_or_else(Vec::new, |defs| {
+                        let mut values: Vec<Option<TypeValue>> = type_args
+                            .iter()
+                            .map(|ty| self.minted_declaration_value(ty, defs))
+                            .collect();
+                        if values.iter().all(Option::is_none) {
+                            values.clear();
+                        }
+                        values
                     });
+                    let type_values = match method_type_args.as_ref() {
+                        Some(method) => append_virtual_method_type_args(
+                            &mut type_args,
+                            method,
+                            owner_type_values,
+                        ),
+                        None => owner_type_values,
+                    };
 
                     let locals_offset = StackIndex::from_raw(args_offset);
 

@@ -354,3 +354,412 @@ async fn agent_run_parses_a_reflected_output_type() {
         Ok(BexExternalValue::String("Pixel|Pixel".into()))
     );
 }
+
+/// B-1582 follow-up: definitions crossed dispatch, but *identity* did not.
+/// The resolver realizes an impl frame off the receiver's `Self`, which carries
+/// realized types only, so `type.of<T>()` in the body derived a fresh mint —
+/// structurally the right type, `==`-wrong against the value the caller minted.
+/// Every identity-keyed pattern (a registry, a stored type compared with `==`)
+/// silently missed. Covered here: an implements-block method, an inherited
+/// default method, and a second dispatch out of an impl body.
+#[tokio::test]
+async fn minted_type_identity_survives_interface_dispatch() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+            function same_from_default(self, t: type) -> bool throws never {
+                type.of<Out>() == t
+            }
+        }
+
+        interface Relay<Out> {
+            function relay(self, t: type) -> bool throws unknown
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+
+            implements Relay<T> {
+                function relay(self, t: type) -> bool throws unknown {
+                    // Two-hop: the second interface operand is materialized
+                    // inside this frame, so it has to carry the identity on.
+                    Holder<T>.new().same(t)
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let output_type = reflect.class.new("RuntimeOutput", {
+                "name": type.of<string>(),
+            }).as_type()
+            type Out = unreflect(output_type)
+
+            let holder = Holder<Out>.new()
+            let impl_method = holder.same(output_type)
+            let default_method = holder.same_from_default(output_type)
+            let two_hop = holder.relay(output_type)
+            `${impl_method}|${default_method}|${two_hop}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|true|true".into()))
+    );
+}
+
+/// The pattern the identity is *for*: a registry keyed by the type value at the
+/// call site, looked up by `==` inside the impl. The second entry is the
+/// control — a separately minted class of the same shape and source name must
+/// stay a miss, so a passing lookup cannot be `==` degenerating to `true`.
+#[tokio::test]
+async fn interface_impl_methods_look_up_a_type_keyed_registry() {
+    let output = baml_test!(
+        r##"
+        class Entry {
+            key: type,
+            label: string,
+        }
+
+        interface Named<Out> {
+            function label(self, first: Entry, second: Entry) -> string throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Named<T> {
+                function label(self, first: Entry, second: Entry) -> string throws never {
+                    let wanted = type.of<T>()
+                    if (first.key == wanted) {
+                        first.label
+                    } else if (second.key == wanted) {
+                        second.label
+                    } else {
+                        "missing"
+                    }
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let first_type = reflect.class.new("Shape", {
+                "name": type.of<string>(),
+            }).as_type()
+            let second_type = reflect.class.new("Shape", {
+                "name": type.of<string>(),
+            }).as_type()
+            type First = unreflect(first_type)
+            type Second = unreflect(second_type)
+
+            let first_entry = Entry { key: first_type, label: "first" }
+            let second_entry = Entry { key: second_type, label: "second" }
+
+            let first_hit = Holder<First>.new().label(first_entry, second_entry)
+            let second_hit = Holder<Second>.new().label(first_entry, second_entry)
+            `${first_hit}|${second_hit}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("first|second".into()))
+    );
+}
+
+/// Negative control: recovery reads the mint a definition records, so two
+/// separate mints of the same shape stay distinct inside the impl, and a
+/// statically instantiated type parameter keeps deriving its static digest —
+/// the path is not taken at all when the interface operand carries no runtime
+/// definitions.
+#[tokio::test]
+async fn dispatch_identity_separates_distinct_mints_and_leaves_static_generics_alone() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let mine = reflect.class.new("Shape", {
+                "name": type.of<string>(),
+            }).as_type()
+            let other = reflect.class.new("Shape", {
+                "name": type.of<string>(),
+            }).as_type()
+            type Mine = unreflect(mine)
+
+            let holder = Holder<Mine>.new()
+            let own_mint = holder.same(mine)
+            let foreign_mint = holder.same(other)
+
+            let static_holder = Holder<string>.new()
+            let static_match = static_holder.same(type.of<string>())
+            let static_miss = static_holder.same(type.of<int>())
+            `${own_mint}|${foreign_mint}|${static_match}|${static_miss}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|false|true|false".into()))
+    );
+}
+
+/// A runtime *package*'s declarations do NOT keep identity across dispatch, and
+/// that is deliberate. Recovery reads a definition back out of the interface
+/// operand's overlay, which is keyed by qualified name — and a compiled
+/// package's `Item` is plain `user.Item`, exactly like a static `Item` and like
+/// every other package's `Item`. Answering from a name that several definitions
+/// can spell would hand back a *wrong* mint (see the two regressions below), so
+/// the recovery declines and the body re-derives a static value. Definitions
+/// still travel (#4501), which is what `name()` pins: the impl body can still
+/// read the type, it just does not hold the caller's identity token for it.
+#[tokio::test]
+async fn runtime_package_declarations_keep_definitions_but_not_identity() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+            function name(self) -> string throws never {
+                type.of<Out>().to_string()
+            }
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let pkg = reflect.Package.compile({ "items.baml": #"
+class Item { value string }
+              "# })
+            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            type Item = unreflect(item_type)
+
+            let holder = Holder<Item>.new()
+            `${holder.same(item_type)}|${holder.name()}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("false|Item".into()))
+    );
+}
+
+/// A STATIC class must not be answered from an overlay that happens to carry a
+/// runtime definition of the same name. `LoadType` staples the whole frame
+/// overlay onto anything materialized in a frame that touched a runtime type,
+/// so binding a compiled package's `Item` puts `user.Item` in this frame's
+/// overlay — and the static `Holder<Item>` dispatch below then sees it. Reading
+/// the overlay by plain name reported `type.of<T>() != type.of<Item>()` and
+/// `== ` the *package's* mint, which no `$dyn`-named type can reproduce.
+#[tokio::test]
+async fn static_class_slots_are_not_answered_from_a_same_named_runtime_definition() {
+    let output = baml_test!(
+        r##"
+        class Item {
+            value: string,
+        }
+
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let pkg = reflect.Package.compile({ "items.baml": #"
+class Item { value string }
+              "# })
+            let runtime_item = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            // Binding it merges `user.Item` into this frame's overlay, which is
+            // what every type materialized here from now on carries.
+            type Shadow = unreflect(runtime_item)
+            let _shadow_holder = Holder<Shadow>.new()
+
+            let holder = Holder<Item>.new()
+            `${holder.same(type.of<Item>())}|${holder.same(runtime_item)}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|false".into()))
+    );
+}
+
+/// Two compiled packages that each declare `Item` produce two distinct mints
+/// under one qualified name. An overlay keeps the first pointer it sees per
+/// name, so a by-name recovery answered `Holder<B>` with A's mint — `==` true
+/// against a type it is not, and false against the one it is. Declining is the
+/// only honest answer available from a name alone.
+#[tokio::test]
+async fn same_named_declarations_from_two_packages_do_not_cross_match() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let first = reflect.Package.compile({ "a.baml": #"
+class Item { value string }
+              "# })
+            let second = reflect.Package.compile({ "b.baml": #"
+class Item { value string }
+              "# })
+            let first_item = (first.get_class("root.Item") ?? throw "missing A").as_type()
+            let second_item = (second.get_class("root.Item") ?? throw "missing B").as_type()
+            type First = unreflect(first_item)
+            type Second = unreflect(second_item)
+
+            let _first_holder = Holder<First>.new()
+            let holder = Holder<Second>.new()
+            // Neither is claimed. The failure this guards is the SECOND value
+            // being `true` — answering with a foreign package's identity.
+            `${holder.same(second_item)}|${holder.same(first_item)}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("false|false".into()))
+    );
+}
+
+/// Owner slots and method-level slots share one lane, and the owner slots are
+/// recovered while the method slots arrive as operands. End-to-end cover for the
+/// alignment the unit tests pin: a generic method on a generic impl, each slot a
+/// different runtime mint.
+#[tokio::test]
+async fn dispatch_identity_covers_owner_and_method_slots_together() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function pair<M>(self, own: type, method: type) -> string throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function pair<M>(self, own: type, method: type) -> string throws never {
+                    `${type.of<T>() == own}|${type.of<M>() == method}|${type.of<T>() == method}`
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let owner_type = reflect.class.new("Owner", {
+                "name": type.of<string>(),
+            }).as_type()
+            let method_type = reflect.class.new("Method", {
+                "name": type.of<string>(),
+            }).as_type()
+            type Owner = unreflect(owner_type)
+            type Method = unreflect(method_type)
+
+            Holder<Owner>.new().pair<Method>(owner_type, method_type)
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|true|false".into()))
+    );
+}
+
+/// A runtime *enum* in a class-level slot takes the same road as a runtime
+/// class — the recovery has an enum arm, and nothing else exercises it.
+#[tokio::test]
+async fn dispatch_identity_covers_a_runtime_enum_slot() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
+            let other = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
+            type Choice = unreflect(choice)
+
+            let holder = Holder<Choice>.new()
+            `${holder.same(choice)}|${holder.same(other)}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|false".into()))
+    );
+}
