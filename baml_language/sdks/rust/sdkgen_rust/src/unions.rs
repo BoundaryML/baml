@@ -201,9 +201,15 @@ pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
     let mut has_bare_string_arm = false;
     let mut has_string_literal_arm = false;
     let mut seen_payload_variants = HashSet::new();
+    let mut seen_string_literals = HashSet::new();
     for arm in arms {
         match arm {
-            Ty::Literal(baml_base::Literal::String(_), ..) => has_string_literal_arm = true,
+            Ty::Literal(baml_base::Literal::String(value), ..) => {
+                has_string_literal_arm = true;
+                if !seen_string_literals.insert(value.as_str()) {
+                    return Some(format!("union contains duplicate string literal {value:?}"));
+                }
+            }
             // Non-string literal arms have no variant-name story yet.
             Ty::Literal(lit, ..) => {
                 return Some(format!(
@@ -426,7 +432,7 @@ fn string_literal_variant_name(value: &str) -> String {
         && first.is_ascii_alphabetic()
     {
         let rest: String = chars.collect();
-        if rest.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        if rest.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             let mut variant = format!("{}{rest}", first.to_ascii_uppercase());
             if variant == "Self" {
                 variant.push('_');
@@ -479,6 +485,7 @@ mod tests {
     #[test]
     fn string_literal_variants_are_identifier_safe_and_unique() {
         assert_eq!(string_literal_variant_name("self!"), "Self_");
+        assert_eq!(string_literal_variant_name("a²"), "A");
         let arms = [
             string_literal("graph.query"),
             string_literal("graph-query"),
@@ -537,5 +544,15 @@ mod tests {
 
         assert_eq!(shape_error(&arms), None);
         assert_eq!(unique_variant_names(&arms).unwrap(), ["Int", "Int_"]);
+    }
+
+    #[test]
+    fn duplicate_string_literal_wire_values_are_rejected() {
+        let arms = [string_literal("draft"), string_literal("draft")];
+
+        assert_eq!(
+            shape_error(&arms).as_deref(),
+            Some("union contains duplicate string literal \"draft\"")
+        );
     }
 }

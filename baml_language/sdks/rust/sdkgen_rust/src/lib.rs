@@ -752,10 +752,25 @@ mod tests {
         );
         assert!(flat.contains("pubstructRoute{"), "{lib}");
         assert!(flat.contains("pubfnpick()"), "{lib}");
-        for wire_value in ["graph.query", "graph.diff", "utf8-lossy", "self"] {
+        for (variant, wire_value) in [
+            ("GraphQuery", "graph.query"),
+            ("GraphDiff", "graph.diff"),
+            ("Utf8Lossy", "utf8-lossy"),
+            ("Self_", "self"),
+        ] {
             assert!(
                 lib.contains(wire_value),
                 "missing wire value {wire_value}:\n{lib}"
+            );
+            let marker = format!("Self::{variant}=>");
+            let tail = flat
+                .split_once(&marker)
+                .unwrap_or_else(|| panic!("missing encode arm {marker}:\n{lib}"))
+                .1;
+            let arm = tail.split_once("Self::").map_or(tail, |(arm, _)| arm);
+            assert!(
+                arm.contains(&format!("from({wire_value:?})")),
+                "encode arm {variant} is not associated with {wire_value:?}:\n{lib}"
             );
         }
     }
