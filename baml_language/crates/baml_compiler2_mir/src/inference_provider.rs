@@ -238,6 +238,10 @@ pub(crate) struct ConvertedTables<'db> {
     type_bindings: FxHashMap<AstStmtId, ScopedTypeBinding>,
     runtime_checks: Vec<RuntimeCheck>,
     function_coercions: FxHashMap<AstExprId, FunctionCoercion>,
+    /// Condition expressions the checker marked for truthiness coercion
+    /// (`Adjust::Truthy`, B-1563): lowering wraps the operand in the
+    /// truthy test so the branch itself stays strict-bool.
+    truthy_conditions: FxHashSet<AstExprId>,
     exhaustiveness: MatchExhaustiveness,
 }
 
@@ -300,6 +304,9 @@ impl<'db> ConvertedTables<'db> {
     }
     pub(crate) fn function_coercion(&self, expr: AstExprId) -> Option<&FunctionCoercion> {
         self.function_coercions.get(&expr)
+    }
+    pub(crate) fn truthy_condition(&self, expr: AstExprId) -> bool {
+        self.truthy_conditions.contains(&expr)
     }
     pub(crate) fn is_exhaustive_match(&self, expr: AstExprId) -> bool {
         self.exhaustiveness.is_exhaustive(expr)
@@ -435,7 +442,13 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         .collect();
     for (&expr, adjustments) in &result.expr_adjustments {
         for adjustment in adjustments {
-            let hir_infer::Adjust::FunctionAdapter = adjustment.kind;
+            match adjustment.kind {
+                hir_infer::Adjust::Truthy => {
+                    out.truthy_conditions.insert(expr);
+                    continue;
+                }
+                hir_infer::Adjust::FunctionAdapter => {}
+            }
             let (
                 Some(Tir2Ty::Function {
                     params: source_params,

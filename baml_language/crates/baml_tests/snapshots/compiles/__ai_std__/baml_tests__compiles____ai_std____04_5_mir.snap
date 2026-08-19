@@ -1515,62 +1515,62 @@ fn ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     }
 
     bb9: {
-        _12 = copy _5 == const "openai";
+        _12 = is_type(copy _5, "openai");
         branch copy _12 -> [bb33, bb10];
     }
 
     bb10: {
-        _14 = copy _5 == const "openai-chat";
+        _14 = is_type(copy _5, "openai-chat");
         branch copy _14 -> [bb32, bb11];
     }
 
     bb11: {
-        _16 = copy _5 == const "openai-images";
+        _16 = is_type(copy _5, "openai-images");
         branch copy _16 -> [bb31, bb12];
     }
 
     bb12: {
-        _18 = copy _5 == const "azure";
+        _18 = is_type(copy _5, "azure");
         branch copy _18 -> [bb30, bb13];
     }
 
     bb13: {
-        _20 = copy _5 == const "ollama";
+        _20 = is_type(copy _5, "ollama");
         branch copy _20 -> [bb29, bb14];
     }
 
     bb14: {
-        _22 = copy _5 == const "openrouter";
+        _22 = is_type(copy _5, "openrouter");
         branch copy _22 -> [bb28, bb15];
     }
 
     bb15: {
-        _24 = copy _5 == const "anthropic";
+        _24 = is_type(copy _5, "anthropic");
         branch copy _24 -> [bb27, bb16];
     }
 
     bb16: {
-        _26 = copy _5 == const "google";
+        _26 = is_type(copy _5, "google");
         branch copy _26 -> [bb26, bb17];
     }
 
     bb17: {
-        _28 = copy _5 == const "vertex";
+        _28 = is_type(copy _5, "vertex");
         branch copy _28 -> [bb25, bb18];
     }
 
     bb18: {
-        _30 = copy _5 == const "bedrock";
+        _30 = is_type(copy _5, "bedrock");
         branch copy _30 -> [bb24, bb19];
     }
 
     bb19: {
-        _32 = copy _5 == const "ai-gateway-images";
+        _32 = is_type(copy _5, "ai-gateway-images");
         branch copy _32 -> [bb23, bb20];
     }
 
     bb20: {
-        _34 = copy _5 == const "claude-code";
+        _34 = is_type(copy _5, "claude-code");
         branch copy _34 -> [bb22, bb21];
     }
 
@@ -7977,17 +7977,17 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
 
     bb10: {
         _13 = copy _14;
-        _20 = copy _7 == const "mixedlist";
+        _20 = is_type(copy _7, "mixedlist");
         branch copy _20 -> [bb55, bb11];
     }
 
     bb11: {
-        _22 = copy _7 == const "mixed";
+        _22 = is_type(copy _7, "mixed");
         branch copy _22 -> [bb39, bb12];
     }
 
     bb12: {
-        _47 = copy _7 == const "list";
+        _47 = is_type(copy _7, "list");
         branch copy _47 -> [bb36, bb13];
     }
 

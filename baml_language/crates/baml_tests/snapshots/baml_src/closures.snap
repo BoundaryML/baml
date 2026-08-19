@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
-assertion_line: 149
 ---
 function closures.$init_test_ns_closures_closures(registry: testing.TestCollector) -> null {
     load_var registry
@@ -239,8 +238,7 @@ function closures.closures_bound_throwing_method_reference_catches_error() -> in
     call_indirect
     jump L2
     load_var e
-    load_const "negative"
-    cmp_op ==
+    is_type "negative"
     pop_jump_if_false L0
     jump L1
 

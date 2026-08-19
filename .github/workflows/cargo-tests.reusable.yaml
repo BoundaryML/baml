@@ -526,6 +526,17 @@ jobs:
                 "timeout": 30,
               },
               {
+                "sdk-label": "ruby-sorbet",
+                "sdk-dir": "ruby",
+                "package-name": "sdk_test_ruby_sorbet",
+                "sdk-path": "ruby_sorbet",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
                 "sdk-label": "typescript",
                 "sdk-dir": "typescript",
                 "package-name": "sdk_test_typescript",
@@ -617,6 +628,17 @@ jobs:
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
                 "install-args": "sccache direnv python uv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "ruby-sorbet",
+                "sdk-dir": "ruby",
+                "package-name": "sdk_test_ruby_sorbet",
+                "sdk-path": "ruby_sorbet",
+                "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
                 "rust-cache-key": "macos-cargo",
@@ -719,6 +741,17 @@ jobs:
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
                 "install-args": "sccache direnv python uv cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "ruby-sorbet",
+                "sdk-dir": "ruby",
+                "package-name": "sdk_test_ruby_sorbet",
+                "sdk-path": "ruby_sorbet",
+                "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
                 "rust-cache-key": "windows-cargo",
@@ -847,12 +880,13 @@ jobs:
               core.setFailed(`SDK directories without an sdk-test-matrix entry: ${missingSdkDirs.join(", ")}`);
             }
 
-  # SDK tests (codegen end-to-end). The `sdk_test_*` generator crates emit
-  # generated Go/Python/TypeScript projects from `.baml` sources via build.rs,
-  # then run their language-specific checks under nextest. Their setup scripts
-  # do the expensive package-manager/native-build work (`uv sync` + `maturin`
-  # for Python, a NAPI build for Node TypeScript, and a Web/Wasm build plus
-  # Chromium for Web TypeScript). Run the generated
+  # SDK tests (codegen end-to-end). The `sdk_test_*` crates run bridge and
+  # generated-language checks under nextest. Most emit fixture projects from
+  # `.baml` sources via build.rs; the initial Ruby/Sorbet entry exercises its
+  # loader directly until its generator lands. Their setup scripts do the
+  # expensive package-manager/native-build work (`uv sync` + `maturin` for
+  # Python, Bundler + bridge_cffi for Ruby, a NAPI build for Node TypeScript,
+  # and a Web/Wasm build plus Chromium for Web TypeScript). Run the generated
   # setup guards first so CI exposes setup cost/failures as a separate step; the
   # full test step re-runs the setup scripts, but the warm path should be cheap.
   # Keep each SDK as a separate matrix entry so setup/test timing
@@ -882,6 +916,12 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           install_args: ${{ matrix.install-args }}
+
+      - name: "Install Ruby"
+        if: matrix.sdk-label == 'ruby-sorbet'
+        uses: ./.github/actions/setup-ruby
+        with:
+          ruby-version: "3.2.2"
 
       - name: "Install .NET SDK"
         if: matrix.sdk-label == 'csharp'
