@@ -85,7 +85,10 @@ env:
   # the one-slot typescript-web-workers nextest group in
   # baml_language/.config/nextest.toml, so peak workerd equals this dial;
   # if the lane ever OOMs, step down to 4.
-  VITEST_MAX_WORKERS: "12"
+  # 4 is the measured production value on 64-vCPU elastic machines: peak
+  # workerd count tracks this dial 1:1, and 12 was A/B-marginal under the
+  # guest memory-reclaim race. Raise only after the platform memory floor.
+  VITEST_MAX_WORKERS: "4"
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
@@ -205,6 +208,10 @@ jobs:
     timeout-minutes: 45
     env:
       CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
+      # The ix machine image ships musl-gcc (a real musl cross compiler);
+      # setup-musl-cross is skipped there, so wire the cargo linker
+      # explicitly. Identical to what the action exports on hosted runners.
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
     steps:
       - uses: actions/checkout@v6
         with:
