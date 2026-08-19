@@ -58,7 +58,9 @@ impl TypeKind {
 }
 
 /// Classify every realized runtime type into exactly one reflection kind.
-pub fn classify_type(ty: &RealizedTy) -> TypeKind {
+///
+/// Shape only — no head is inspected — so this answers the same at either head.
+pub fn classify_type<N: Clone>(ty: &RealizedTy<N>) -> TypeKind {
     match ty {
         RealizedTy::Class(..) => TypeKind::Class,
         RealizedTy::Enum(..) => TypeKind::Enum,

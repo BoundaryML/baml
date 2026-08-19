@@ -84,6 +84,25 @@ impl DynDispatchTables {
             .collect()
     }
 
+    /// The witness rules registered *for* `class`, as pointers to their heap
+    /// `Object::ImplRule`s.
+    ///
+    /// The forward direction (interface → rules) is what dispatch needs; this
+    /// is the reverse, and only reflection asks it — to render a runtime class
+    /// back as source. Reading the rules themselves is what keeps the rendered
+    /// `implements` blocks and the dispatched ones the same thing: a separate
+    /// description of the witness could drift from the witness.
+    pub fn rules_for_class(&self, class: HeapPtr) -> Vec<HeapPtr> {
+        self.impl_rules
+            .read()
+            .expect("dynamic-impl table lock poisoned")
+            .values()
+            .flatten()
+            .filter(|entry| entry.class == class)
+            .map(|entry| entry.rule)
+            .collect()
+    }
+
     pub fn class_ptr(&self, name: &baml_type::TypeName) -> Option<HeapPtr> {
         self.classes
             .read()
@@ -207,7 +226,7 @@ struct PackageSlots {
 fn placeholder() -> Object {
     Object::ImplRule(Box::new(RuntimeImplRule {
         interface_head: HeapPtr::null(),
-        for_ty_pattern: baml_type::TyTemplate::TypeArgRef(0),
+        for_ty_pattern: bex_vm_types::TyTemplate::TypeArgRef(0),
         generic_param_bounds: Vec::new(),
         interface_args: Vec::new(),
         interface_assoc: Vec::new(),
@@ -472,7 +491,7 @@ pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr>
 /// rendering), reconstructing each qualified name from its package + `LocalName`.
 pub fn all_recursive_type_aliases(
     packages: &PackageIndex,
-) -> IndexMap<baml_type::TypeName, baml_type::RealizedTy> {
+) -> IndexMap<baml_type::TypeName, bex_vm_types::RealizedTy> {
     let mut out = IndexMap::new();
     for (pkg_name, pkg_ptr) in packages.iter() {
         // SAFETY: `packages` only ever holds compile-time `Object::Package`
@@ -524,7 +543,7 @@ mod tests {
     fn empty_rule(interface: HeapPtr, class_name: baml_type::TypeName) -> RuntimeImplRule {
         RuntimeImplRule {
             interface_head: interface,
-            for_ty_pattern: baml_type::TyTemplate::Class(
+            for_ty_pattern: bex_vm_types::TyTemplate::Class(
                 class_name,
                 Vec::new(),
                 baml_type::TyAttr::default(),

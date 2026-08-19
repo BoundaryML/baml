@@ -8,17 +8,16 @@
 //! impl applies (the caller decides the fallback).
 //!
 //! This mirrors the compiler's selection (`match_ty_pattern` + bound validation
-//! in `baml_compiler2_hir_ty::interfaces`), run on `baml_type::RealizedTy`: unify the rule's
+//! in `baml_compiler2_hir_ty::interfaces`), run on `bex_vm_types::RealizedTy`: unify the rule's
 //! `for_ty_pattern` against the concrete type (binding the impl's generic
 //! params), then discharge each param's declared bound as a nested obligation.
 
 use std::borrow::Cow;
 
-use baml_type::{
-    Literal, Name, RealizedTy, TyTemplate, TypeName, normalize::TypeContext,
-    type_kind::is_type_kind_class,
+use baml_type::{Literal, Name, normalize::TypeContext, type_kind::is_type_kind_class};
+use bex_vm_types::{
+    RealizedTy, TyTemplate, TypeHead, errors::VmInternalError, types::RuntimeImplRule,
 };
-use bex_vm_types::{errors::VmInternalError, types::RuntimeImplRule};
 
 use crate::{BexVm, type_context::StructuralEquivCtx};
 
@@ -96,10 +95,10 @@ impl<'vm> ImplResolver<'vm> {
     /// one O(1) lookup over a table that already spans every package — see that
     /// type's docs for why a per-package search cannot be narrowed correctly. An
     /// unknown interface (not loaded) has no impls anywhere.
-    fn rules_for(self, iface: &TypeName) -> Vec<RuntimeImplRuleCandidate<'vm>> {
-        let Some(iface_ptr) = self.vm.lookup_interface(iface) else {
-            return Vec::new();
-        };
+    fn rules_for(self, iface: TypeHead) -> Vec<RuntimeImplRuleCandidate<'vm>> {
+        // The head *is* the canonical `Object::Interface` pointer that keys
+        // every package's `impl_rules` — no name lookup on the dispatch path.
+        let iface_ptr = iface.ptr();
         let mut pointers = Vec::new();
         pointers.extend(self.vm.packages.impl_rules_of(iface_ptr));
         let mut packages = vec![
@@ -160,12 +159,7 @@ const MAX_OBLIGATION_DEPTH: usize = 128;
 /// at these args / associated bindings? Tracked on a stack so a goal that
 /// recurses back to itself (an inductive cycle, with no concrete-impl base case)
 /// is detected and rejected rather than spun on until the depth backstop.
-type Obligation = (
-    RealizedTy,
-    TypeName,
-    Vec<RealizedTy>,
-    Vec<(Name, RealizedTy)>,
-);
+type Obligation = (RealizedTy, TypeHead, Vec<RealizedTy>, Vec<(Name, RealizedTy)>);
 
 /// A literal or enum-variant type behaves as its underlying concrete type for
 /// impl resolution: `1` uses `int`'s impls and `Color.Red` uses `Color`'s (a
@@ -222,14 +216,15 @@ impl<'vm> ImplResolver<'vm> {
     pub(crate) fn resolve_implements_rule(
         self,
         concrete_ty: &RealizedTy,
-        iface: &TypeName,
+        iface: TypeHead,
         iface_args: &[RealizedTy],
     ) -> Option<(RuntimeImplRuleCandidate<'vm>, Vec<RealizedTy>)> {
         // Static/package-image rules are immutable and already indexed by the
         // canonical interface pointer. Try that slice directly: this is the
         // overwhelmingly common virtual-call path and avoids candidate Vecs,
         // runtime-package graph walks, and dynamic-table locking.
-        if let Some(iface_ptr) = self.vm.lookup_interface(iface) {
+        {
+            let iface_ptr = iface.ptr();
             for &rule_ptr in self.vm.packages.impl_rules_of(iface_ptr) {
                 let Some(rule) = self.vm.get_object(rule_ptr).as_impl_rule() else {
                     continue;
@@ -300,7 +295,7 @@ impl<'vm> ImplResolver<'vm> {
     pub(crate) fn type_implements(
         self,
         concrete_ty: &RealizedTy,
-        iface: &TypeName,
+        iface: TypeHead,
         requested_args: &[RealizedTy],
         requested_assoc: &[(Name, RealizedTy)],
     ) -> bool {
@@ -321,7 +316,7 @@ impl<'vm> ImplResolver<'vm> {
     fn prove(
         self,
         concrete_ty: &RealizedTy,
-        iface: &TypeName,
+        iface: TypeHead,
         requested_args: &[RealizedTy],
         requested_assoc: &[(Name, RealizedTy)],
         stack: &mut Vec<Obligation>,
@@ -330,7 +325,7 @@ impl<'vm> ImplResolver<'vm> {
         // are the same goal for cycle purposes.
         let goal: Obligation = (
             concrete_base(concrete_ty).into_owned(),
-            iface.clone(),
+            iface,
             requested_args.to_vec(),
             requested_assoc.to_vec(),
         );
@@ -435,7 +430,7 @@ impl<'vm> ImplResolver<'vm> {
     fn interface_existential_satisfies_bound(
         self,
         concrete_ty: &RealizedTy,
-        iface: &TypeName,
+        iface: TypeHead,
         requested_args: &[RealizedTy],
         requested_assoc: &[(Name, RealizedTy)],
     ) -> bool {
@@ -443,7 +438,7 @@ impl<'vm> ImplResolver<'vm> {
         let RealizedTy::Interface(ex_qtn, ex_args, ex_assoc, _) = base.as_ref() else {
             return false;
         };
-        ex_qtn == iface
+        *ex_qtn == iface
             && (requested_args.is_empty() || self.ty_args_equivalent(ex_args, requested_args))
             && self.associated_bindings_equivalent(ex_assoc, requested_assoc)
     }

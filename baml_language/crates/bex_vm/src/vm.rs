@@ -31,12 +31,12 @@ use smallvec::SmallVec;
 /// fallback, matching the host's De Bruijn send order.
 fn lower_named_type_args(
     param_names: &[String],
-    type_args: IndexMap<String, baml_type::RealizedTy>,
-) -> Vec<baml_type::RealizedTy> {
+    type_args: IndexMap<String, bex_vm_types::RealizedTy>,
+) -> Vec<bex_vm_types::RealizedTy> {
     if param_names.is_empty() {
         return type_args.into_iter().map(|(_, ty)| ty).collect();
     }
-    let mut positional = vec![baml_type::RealizedTy::unknown(); param_names.len()];
+    let mut positional = vec![bex_vm_types::RealizedTy::unknown(); param_names.len()];
     for (name, ty) in type_args {
         if let Some(idx) = param_names.iter().position(|p| *p == name) {
             positional[idx] = ty;
@@ -122,21 +122,19 @@ pub const MAX_FRAMES: usize = 256;
 #[derive(Clone, Copy)]
 struct CallOptions<'a> {
     runtime_id: Option<Value>,
-    type_args: &'a [baml_type::RealizedTy],
-    type_defs: &'a DynTypeDefs,
+    type_args: &'a [bex_vm_types::RealizedTy],
     type_values: &'a [Option<TypeValue>],
     runtime_type_check: bool,
 }
 
 #[derive(Clone, Debug, Default)]
 struct TakenTypeArgs {
-    tys: Vec<baml_type::RealizedTy>,
+    tys: Vec<bex_vm_types::RealizedTy>,
     values: Vec<Option<TypeValue>>,
-    defs: DynTypeDefs,
 }
 
 fn append_virtual_method_type_args(
-    frame_type_args: &mut Vec<baml_type::RealizedTy>,
+    frame_type_args: &mut Vec<bex_vm_types::RealizedTy>,
     method_type_args: &TakenTypeArgs,
 ) -> Vec<Option<TypeValue>> {
     let mut type_values = Vec::new();
@@ -185,7 +183,7 @@ enum StaticVirtualReceiverKey {
 #[derive(Clone, Debug)]
 struct StaticVirtualCallTarget {
     callee: HeapPtr,
-    frame_type_args: Vec<baml_type::RealizedTy>,
+    frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -284,7 +282,7 @@ pub struct BytecodeFrame {
     /// concrete type, seeded from the callee's realized `Object` type args
     /// (`GenericFunction`/`BoundMethod`/`Closure`/`Instance`), so a `LoadType`
     /// substitutes them into a fully realized type.
-    pub type_args: Vec<baml_type::RealizedTy>,
+    pub type_args: Vec<bex_vm_types::RealizedTy>,
     /// Exact BEP-066 runtime-type metadata. Ordinary calls have no dynamic
     /// definitions or exact values, so keep the comparatively large pair of
     /// side lanes boxed and absent from their hot call frames.
@@ -310,13 +308,30 @@ pub struct BytecodeFrame {
 
 #[derive(Clone, Debug, Default)]
 struct FrameTypeMetadata {
-    /// Dynamic definitions reachable from the frame's runtime type arguments.
-    /// This preserves the realized-type substitution ABI while allowing
-    /// reified `type.of<T>()` values to carry their overlay.
-    defs: DynTypeDefs,
     /// Exact runtime type values for explicitly supplied slots. Wrapper-
     /// supplied static slots use `None` and are reconstructed normally.
+    ///
+    /// A value's declarations are its heads, so this is also the frame's whole
+    /// definition footprint — there is nothing to carry beside it.
     values: Vec<Option<TypeValue>>,
+}
+
+impl FrameTypeMetadata {
+    /// Whether any type bound into this frame names a runtime declaration.
+    ///
+    /// A frame that binds only compiled declarations cannot change what a
+    /// `LoadType` constant means, so such frames share the program-wide cache.
+    /// One that binds a runtime declaration must not: the same constant
+    /// resolves to a different type per binding.
+    fn binds_runtime_declaration(&self, heap: &BexHeap) -> bool {
+        self.values.iter().flatten().any(|value| {
+            let mut runtime = false;
+            value.ty.visit_heads(&mut |head| {
+                runtime |= head.is_resolved() && !heap.is_compile_time_ptr(head.ptr());
+            });
+            runtime
+        })
+    }
 }
 
 impl RootHaver for BytecodeFrame {
@@ -325,50 +340,27 @@ impl RootHaver for BytecodeFrame {
         let Some(metadata) = &self.type_metadata else {
             return;
         };
-        roots.extend(metadata.defs.classes.values().copied());
-        roots.extend(metadata.defs.enums.values().copied());
-        roots.extend(
-            metadata
-                .values
-                .iter()
-                .flatten()
-                .map(|value| value.owner)
-                .filter(|owner| !(*owner).is_null()),
-        );
-        roots.extend(
-            metadata
-                .values
-                .iter()
-                .flatten()
-                .flat_map(|value| value.defs().enums.values().copied()),
-        );
-        roots.extend(
-            metadata
-                .values
-                .iter()
-                .flatten()
-                .flat_map(|value| value.defs().classes.values().copied()),
-        );
+        for value in metadata.values.iter().flatten() {
+            value.ty.visit_heads(&mut |head| {
+                if head.is_resolved() {
+                    roots.push(head.ptr());
+                }
+            });
+        }
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
         let Some(metadata) = &mut self.type_metadata else {
             return;
         };
-        for ptr in metadata.defs.classes.values_mut() {
-            *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-        }
-        for ptr in metadata.defs.enums.values_mut() {
-            *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-        }
         for value in metadata.values.iter_mut().flatten() {
-            value.owner = roots.get(&value.owner).copied().unwrap_or(value.owner);
-            for ptr in value.defs_mut().enums.values_mut() {
-                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-            }
-            for ptr in value.defs_mut().classes.values_mut() {
-                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-            }
+            value.ty.visit_heads_mut(&mut |head| {
+                if head.is_resolved()
+                    && let Some(&moved) = roots.get(&head.ptr())
+                {
+                    head.forward_to(moved);
+                }
+            });
         }
     }
 }
@@ -503,7 +495,7 @@ pub(crate) mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
-            return_type: baml_type::TyTemplate::Int {
+            return_type: bex_vm_types::TyTemplate::Int {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),
@@ -513,7 +505,7 @@ pub(crate) mod tests {
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "int".to_string(),
-            throws_type: baml_type::TyTemplate::Never {
+            throws_type: bex_vm_types::TyTemplate::Never {
                 attr: baml_type::TyAttr::default(),
             },
             origin: FunctionOrigin::Internal,
@@ -675,34 +667,52 @@ pub(crate) mod tests {
         );
     }
 
+    /// A declaration is reachable from a frame's bound types through the type's
+    /// own head, so it is rooted and repointed with no table to keep in step.
     #[test]
     fn frame_type_metadata_is_included_in_vm_gc_roots() {
         let (mut vm, native_ptr) = vm_with_native_entry();
         vm.set_entry_point(native_ptr, &[]);
 
-        let metadata_ptr = vm.tlab.alloc(native_function_object());
-        let metadata_name = baml_type::QualifiedTypeName::from_dotted_path("test.Metadata");
+        let tag = baml_type::typetag::TypeTag::fresh_dynamic();
+        let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
+            name: baml_type::QualifiedTypeName::from_dotted_path("test.Metadata"),
+            fields: Vec::new(),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::new(),
+            type_tag: tag,
+            ty_attr: baml_type::TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
+            owner: HeapPtr::null(),
+        })));
+        let bound = TypeValue::new(bex_vm_types::RealizedTy::Class(
+            bex_vm_types::TypeHead::new(class_ptr, tag),
+            Vec::new(),
+            baml_type::TyAttr::default(),
+        ));
         let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
             panic!("expected trampoline bytecode frame");
         };
         frame.type_metadata = Some(Box::new(FrameTypeMetadata {
-            defs: DynTypeDefs::with_class(metadata_name.clone(), metadata_ptr),
-            values: Vec::new(),
+            values: vec![Some(bound)],
         }));
 
         let mut roots = Vec::new();
         vm.collect_roots(&mut roots);
         assert!(
-            roots.contains(&metadata_ptr),
-            "active frame metadata must root referenced definitions"
+            roots.contains(&class_ptr),
+            "active frame metadata must root the declarations its types name"
         );
 
         let (_stats, _remapped_roots, forwarding) = unsafe {
             vm.heap
                 .collect_garbage_generational(&roots, CollectionLevel::Major)
         };
-        let moved_metadata = forwarding
-            .get(&metadata_ptr)
+        let moved = forwarding
+            .get(&class_ptr)
             .copied()
             .expect("frame metadata definition must survive collection");
         vm.forward_roots(&forwarding);
@@ -710,31 +720,36 @@ pub(crate) mod tests {
         let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
             panic!("expected trampoline bytecode frame");
         };
-        let forwarded_metadata = frame
+        let mut repointed = Vec::new();
+        for value in frame
             .type_metadata
             .as_ref()
-            .and_then(|metadata| metadata.defs.classes.get(&metadata_name))
-            .copied();
-        assert_eq!(forwarded_metadata, Some(moved_metadata));
+            .expect("frame keeps its metadata")
+            .values
+            .iter()
+            .flatten()
+        {
+            value.ty.visit_heads(&mut |head| repointed.push(head.ptr()));
+        }
+        assert_eq!(repointed, vec![moved]);
     }
 
     #[test]
     fn virtual_method_exact_type_values_follow_owner_slots() {
-        let exact = TypeValue::new(baml_type::RealizedTy::string());
+        let exact = TypeValue::new(bex_vm_types::RealizedTy::string());
         let method = TakenTypeArgs {
-            tys: vec![baml_type::RealizedTy::string()],
+            tys: vec![bex_vm_types::RealizedTy::string()],
             values: vec![Some(exact.clone())],
-            defs: DynTypeDefs::default(),
         };
-        let mut frame_type_args = vec![baml_type::RealizedTy::int()];
+        let mut frame_type_args = vec![bex_vm_types::RealizedTy::int()];
 
         let values = append_virtual_method_type_args(&mut frame_type_args, &method);
 
         assert_eq!(
             frame_type_args,
             vec![
-                baml_type::RealizedTy::int(),
-                baml_type::RealizedTy::string()
+                bex_vm_types::RealizedTy::int(),
+                bex_vm_types::RealizedTy::string()
             ]
         );
         assert_eq!(values.len(), 2);
@@ -1021,7 +1036,7 @@ pub struct BexVm {
     /// Saved/restored across nested `Call` instructions; native handlers that
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
-    pending_call_type_args: Vec<baml_type::RealizedTy>,
+    pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
 
     /// Created-once immutable type objects for fully realized `LoadType`
@@ -1288,15 +1303,16 @@ fn value_as_float(value: Value) -> Option<f64> {
 /// its function's type with the receiver already applied.
 ///
 /// [`ConcreteRealizedTy::Function`]: baml_type::ConcreteRealizedTy::Function
-fn function_object_ty<C: baml_type::normalize::TypeContext>(
+fn function_object_ty<C: baml_type::normalize::TypeContext<bex_vm_types::TypeHead>>(
     ctx: &C,
     f: &bex_vm_types::types::Function,
-    type_args: &[baml_type::RealizedTy],
+    type_args: &[bex_vm_types::RealizedTy],
     drop_receiver: bool,
-) -> Result<baml_type::ConcreteRealizedTy, VmInternalError> {
-    use baml_type::{ConcreteRealizedTy, FunctionParamMode, RealizedFunctionParamTy, TyAttr};
+) -> Result<bex_vm_types::ConcreteRealizedTy, VmInternalError> {
+    use baml_type::{FunctionParamMode, TyAttr};
+    use bex_vm_types::{ConcreteRealizedTy, RealizedFunctionParamTy};
     let materialize =
-        |t: &baml_type::TyTemplate| -> Result<baml_type::RealizedTy, VmInternalError> {
+        |t: &bex_vm_types::TyTemplate| -> Result<bex_vm_types::RealizedTy, VmInternalError> {
             t.substitute(type_args, ctx)
                 .map_err(|e| VmInternalError::TypeSubstitution {
                     message: e.to_string(),
@@ -1340,12 +1356,12 @@ pub(crate) struct CallableSignature {
     /// The declaration's fully qualified name; `None` for host closures and
     /// compiler-synthesized callables (lambda names are `<lambda(...)>`).
     pub(crate) name: Option<String>,
-    pub(crate) params: Vec<baml_type::RealizedFunctionParamTy>,
-    pub(crate) ret: baml_type::RealizedTy,
+    pub(crate) params: Vec<bex_vm_types::RealizedFunctionParamTy>,
+    pub(crate) ret: bex_vm_types::RealizedTy,
     /// The error type; `never` when the callable cannot throw — the same
     /// spelling a function *type* uses, so a value's reconstructed signature
     /// and its written type agree.
-    pub(crate) throws: baml_type::RealizedTy,
+    pub(crate) throws: bex_vm_types::RealizedTy,
     /// The declaration's joined `///` doc-comment lines, if any.
     pub(crate) docstring: Option<String>,
 }
@@ -1358,13 +1374,13 @@ pub(crate) struct CallableSignature {
 /// Shares [`function_object_ty`]'s contract: substitution realizes fully or the
 /// frame layout is broken, so there is no coarse fallback. Reflection reports
 /// the same type the matcher tests against.
-fn function_callable_signature<C: baml_type::normalize::TypeContext>(
+fn function_callable_signature<C: baml_type::normalize::TypeContext<bex_vm_types::TypeHead>>(
     ctx: &C,
     f: &bex_vm_types::types::Function,
-    type_args: &[baml_type::RealizedTy],
+    type_args: &[bex_vm_types::RealizedTy],
     drop_receiver: bool,
 ) -> Result<CallableSignature, VmInternalError> {
-    use baml_type::ConcreteRealizedTy;
+    use bex_vm_types::ConcreteRealizedTy;
     let ConcreteRealizedTy::Function {
         params,
         ret,
@@ -1393,9 +1409,9 @@ fn function_callable_signature<C: baml_type::normalize::TypeContext>(
 /// Nominal identity is the qualified name: program-unique for compiled
 /// declarations, creation-unique for runtime ones (`user.$dyn.<n>.<Name>`).
 fn nominal_identity(
-    ty: &baml_type::RealizedTy,
-) -> Option<(&baml_type::QualifiedTypeName, &[baml_type::RealizedTy])> {
-    use baml_type::RealizedTy as T;
+    ty: &bex_vm_types::RealizedTy,
+) -> Option<(&baml_type::QualifiedTypeName, &[bex_vm_types::RealizedTy])> {
+    use bex_vm_types::RealizedTy as T;
     match ty {
         T::Class(name, args, _) => Some((name, args.as_slice())),
         T::Enum(name, _) => Some((name, &[])),
@@ -1609,7 +1625,7 @@ impl BexVm {
     ///
     /// Returns an empty slice for calls with `ntypeargs == 0` and from outside
     /// any call dispatch context.
-    pub fn current_call_type_args(&self) -> &[baml_type::RealizedTy] {
+    pub fn current_call_type_args(&self) -> &[bex_vm_types::RealizedTy] {
         &self.pending_call_type_args
     }
 
@@ -1618,16 +1634,12 @@ impl BexVm {
     /// "Static" means the type refers only to declarations the program already
     /// knows, so the value needs no runtime-definition overlay and no owning
     /// package. All VM-side static type producers route through this method.
-    pub fn alloc_static_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
-        self.alloc_static_type_with_defs(ty::default())
-    }
-
-    pub fn alloc_static_type_with_defs(
-        &mut self,
-        ty: baml_type::RealizedTy,
-        defs: DynTypeDefs,
-    ) -> HeapPtr {
-        self.tlab.alloc_type(TypeValue::with_defs(ty, defs))
+    pub fn alloc_static_type(&mut self, ty: bex_vm_types::RealizedTy) -> HeapPtr {
+        debug_assert!(
+            crate::reachable::is_statically_declared(self, &ty),
+            "alloc_static_type is for types that name only compiled declarations"
+        );
+        self.tlab.alloc_type(TypeValue::new(ty))
     }
 
     fn take_type_args(&mut self, start: usize, count: usize) -> Result<TakenTypeArgs, VmError> {
@@ -1638,11 +1650,15 @@ impl BexVm {
         if count == 0 {
             return Ok(TakenTypeArgs::default());
         }
+        // A type built only from compiled declarations needs no per-frame
+        // carrier: every consumer can find those declarations from the program
+        // index, and they never move. Anything naming a runtime declaration
+        // must ride along as an exact value so the callee reaches it.
         let all_plain_static = (start..end).all(|slot| {
             let value = self.stack[StackIndex::from_raw(slot)];
             value.as_object_ptr().is_some_and(|ptr| {
                 matches!(self.get_object(ptr), Object::Type(type_value)
-                    if type_value.defs().is_empty() && type_value.owner.is_null())
+                    if crate::reachable::is_statically_declared(self, &type_value.ty))
             })
         });
         if all_plain_static {
@@ -1665,13 +1681,11 @@ impl BexVm {
             return Ok(TakenTypeArgs {
                 tys,
                 values: Vec::new(),
-                defs: DynTypeDefs::default(),
             });
         }
         let mut type_args = TakenTypeArgs {
             tys: Vec::with_capacity(count),
             values: Vec::with_capacity(count),
-            defs: DynTypeDefs::default(),
         };
         for slot in start..end {
             let value = self.stack[StackIndex::from_raw(slot)];
@@ -1695,8 +1709,7 @@ impl BexVm {
                 .into());
             };
             type_args.tys.push(type_value.ty.clone());
-            type_args.values.push(Some(type_value.clone()));
-            type_args.defs.merge_from(type_value.defs());
+            type_args.values.push(Some(type_value));
         }
         drop(
             self.stack
@@ -1953,14 +1966,14 @@ impl BexVm {
     /// `unknown`. The generated array-receiver glue calls this to build the
     /// [`ArrayView`](crate::package_baml::ArrayView) it hands a builtin, so a
     /// type-preserving builtin (e.g. `filter`) can tag its result array.
-    pub fn array_element_ty(&self, value: &Value) -> baml_type::RealizedTy {
+    pub fn array_element_ty(&self, value: &Value) -> bex_vm_types::RealizedTy {
         value
             .as_object_ptr()
             .and_then(|ptr| match self.get_object(ptr) {
                 Object::Array(arr) => Some((*arr.element_ty).clone()),
                 _ => None,
             })
-            .unwrap_or_else(baml_type::RealizedTy::unknown)
+            .unwrap_or_else(bex_vm_types::RealizedTy::unknown)
     }
 
     /// The declared key type of `value` when it is an `Object::Map`, else
@@ -1968,27 +1981,27 @@ impl BexVm {
     /// [`Self::map_value_ty`]) to build the
     /// [`MapView`](crate::package_baml::MapView) it hands a builtin, so a
     /// type-preserving builtin can tag its result map.
-    pub fn map_key_ty(&self, value: &Value) -> baml_type::RealizedTy {
+    pub fn map_key_ty(&self, value: &Value) -> bex_vm_types::RealizedTy {
         value
             .as_object_ptr()
             .and_then(|ptr| match self.get_object(ptr) {
                 Object::Map(map) => Some((*map.key_ty).clone()),
                 _ => None,
             })
-            .unwrap_or_else(baml_type::RealizedTy::unknown)
+            .unwrap_or_else(bex_vm_types::RealizedTy::unknown)
     }
 
     /// The declared value type of `value` when it is an `Object::Map`, else
     /// `unknown`. The map analogue of [`Self::array_element_ty`]; see
     /// [`Self::map_key_ty`].
-    pub fn map_value_ty(&self, value: &Value) -> baml_type::RealizedTy {
+    pub fn map_value_ty(&self, value: &Value) -> bex_vm_types::RealizedTy {
         value
             .as_object_ptr()
             .and_then(|ptr| match self.get_object(ptr) {
                 Object::Map(map) => Some((*map.value_ty).clone()),
                 _ => None,
             })
-            .unwrap_or_else(baml_type::RealizedTy::unknown)
+            .unwrap_or_else(bex_vm_types::RealizedTy::unknown)
     }
 
     /// Realize a class field's type template against an instance's realized class
@@ -2000,9 +2013,9 @@ impl BexVm {
     /// surfaced as a panic rather than a silent `unknown`.
     pub(crate) fn realize_field_ty(
         &self,
-        template: &baml_type::TyTemplate,
-        class_type_args: &[baml_type::RealizedTy],
-    ) -> baml_type::RealizedTy {
+        template: &bex_vm_types::TyTemplate,
+        class_type_args: &[bex_vm_types::RealizedTy],
+    ) -> bex_vm_types::RealizedTy {
         template
             .substitute(class_type_args, self)
             .unwrap_or_else(|e| {
@@ -2142,7 +2155,7 @@ impl BexVm {
     pub fn recursive_type_alias(
         &self,
         qtn: &baml_type::TypeName,
-    ) -> Option<&baml_type::RealizedTy> {
+    ) -> Option<&bex_vm_types::RealizedTy> {
         let local = bex_vm_types::types::LocalName {
             namespace: qtn.namespace().clone(),
             name: qtn.name().clone(),
@@ -2153,6 +2166,18 @@ impl BexVm {
         #[expect(unsafe_code, reason = "deref a compile-time alias pointer")]
         let object = unsafe { alias_ptr.get() };
         match object {
+            Object::TypeAlias(alias) => Some(&alias.definition),
+            _ => None,
+        }
+    }
+
+    /// The definition behind a type alias, given the declaration pointer its
+    /// head carries.
+    ///
+    /// A deref rather than a lookup — and unlike a name-keyed one it works for
+    /// a runtime-declared alias, which no package index can name.
+    pub fn type_alias_definition(&self, alias: HeapPtr) -> Option<&bex_vm_types::RealizedTy> {
+        match self.get_object(alias) {
             Object::TypeAlias(alias) => Some(&alias.definition),
             _ => None,
         }
@@ -2220,14 +2245,14 @@ impl BexVm {
     /// package load — that value carries the definition overlay and owner edge
     /// the type needs to stay meaningful. Imported and composite types
     /// deliberately miss this lookup and retain the static path.
-    fn current_runtime_declaration_type(&self, ty: &baml_type::RealizedTy) -> Option<HeapPtr> {
-        let (baml_type::RealizedTy::Class(name, ..)
-        | baml_type::RealizedTy::Enum(name, ..)
-        | baml_type::RealizedTy::Interface(name, ..)) = ty
+    fn current_runtime_declaration_type(&self, ty: &bex_vm_types::RealizedTy) -> Option<HeapPtr> {
+        let (bex_vm_types::RealizedTy::Class(head, ..)
+        | bex_vm_types::RealizedTy::Enum(head, ..)
+        | bex_vm_types::RealizedTy::Interface(head, ..)) = ty
         else {
             return None;
         };
-        if !name.is_local() {
+        if !head.is_resolved() {
             return None;
         }
 
@@ -2238,14 +2263,15 @@ impl BexVm {
         let Object::Package(package) = self.get_object(package_ptr) else {
             unreachable!("runtime function owner does not point to Object::Package")
         };
-        let key = name
-            .namespace()
-            .iter()
-            .map(baml_type::Name::as_str)
-            .chain(std::iter::once(name.name().as_str()))
-            .collect::<Vec<_>>()
-            .join(".");
-        let ptr = package.runtime.as_ref()?.type_values.get(&key).copied()?;
+        // The head *is* the key: a declaration this package created has an
+        // entry, and one it merely imported or composed does not — which is
+        // exactly the set that must reuse the created-once value.
+        let ptr = package
+            .runtime
+            .as_ref()?
+            .type_values
+            .get(&head.ptr())
+            .copied()?;
         match self.get_object(ptr) {
             Object::Type(value) if &value.ty == ty => Some(ptr),
             _ => None,
@@ -2338,7 +2364,7 @@ impl BexVm {
     /// resolved against the frame's type args. Opcodes whose type operands ride
     /// the stack rather than the instruction stream (`AllocArray`, `AllocMap`,
     /// `Spawn`) consume them this way.
-    fn ensure_pop_type(&mut self) -> Result<baml_type::RealizedTy, VmInternalError> {
+    fn ensure_pop_type(&mut self) -> Result<bex_vm_types::RealizedTy, VmInternalError> {
         let value = self.stack.ensure_pop();
         let ptr = self.as_object_ptr(value, ObjectType::Type)?;
         match self.get_object(ptr) {
@@ -2574,8 +2600,9 @@ impl BexVm {
     /// The interface resolver wants the loose `RuntimeTy`, so the sole such caller
     /// widens the result back; the `IsType` value matcher wants the invariant made
     /// explicit and uses it directly.
-    pub(crate) fn value_concrete_ty(&self, value: Value) -> Option<baml_type::ConcreteRealizedTy> {
-        use baml_type::{ConcreteRealizedTy, TyAttr};
+    pub(crate) fn value_concrete_ty(&self, value: Value) -> Option<bex_vm_types::ConcreteRealizedTy> {
+        use baml_type::TyAttr;
+        use bex_vm_types::ConcreteRealizedTy;
         if value.as_int().is_some() {
             return Some(ConcreteRealizedTy::Int {
                 attr: TyAttr::default(),
@@ -2757,7 +2784,7 @@ impl BexVm {
             });
         }
         self.value_concrete_ty(value)
-            .map(baml_type::RealizedTy::from)
+            .map(bex_vm_types::RealizedTy::from)
             .map(StaticVirtualReceiverKey::Other)
     }
 
@@ -2816,14 +2843,14 @@ impl BexVm {
     fn runtime_load_type_cache_key(
         &self,
         frame_idx: usize,
-        template: &baml_type::TyTemplate,
+        template: &bex_vm_types::TyTemplate,
         constant: usize,
     ) -> Option<(usize, usize)> {
-        if <&baml_type::RealizedTy>::try_from(template).is_err()
+        if <&bex_vm_types::RealizedTy>::try_from(template).is_err()
             || !matches!(&self.frames[frame_idx],
                 Frame::Bytecode(frame)
                     if frame.type_metadata.as_ref()
-                        .is_none_or(|metadata| metadata.defs.is_empty()))
+                        .is_none_or(|metadata| !metadata.binds_runtime_declaration(&self.heap)))
         {
             return None;
         }
@@ -3050,7 +3077,7 @@ impl BexVm {
         // inherited positional slots — so fall back to the index as a key; the
         // named lowering then emits the unnamed bindings in order.
         let param_names = self.entry_point_generic_param_names(function);
-        let type_args: IndexMap<String, baml_type::RealizedTy> = positional
+        let type_args: IndexMap<String, bex_vm_types::RealizedTy> = positional
             .into_iter()
             .enumerate()
             .map(|(i, ty)| {
@@ -3085,7 +3112,7 @@ impl BexVm {
         &mut self,
         function: HeapPtr,
         args: &[Value],
-        type_args: IndexMap<String, baml_type::RealizedTy>,
+        type_args: IndexMap<String, bex_vm_types::RealizedTy>,
     ) {
         self.set_entry_point_with_type_values(function, args, type_args, IndexMap::new());
     }
@@ -3097,7 +3124,7 @@ impl BexVm {
         &mut self,
         function: HeapPtr,
         args: &[Value],
-        type_args: IndexMap<String, baml_type::RealizedTy>,
+        type_args: IndexMap<String, bex_vm_types::RealizedTy>,
         type_values: IndexMap<String, TypeValue>,
     ) {
         debug_assert!(
@@ -3165,19 +3192,13 @@ impl BexVm {
                 self.pending_call_type_args.clone_from(&effective_type_args);
                 self.pending_call_type_values
                     .clone_from(&effective_type_values);
-                let mut type_defs = DynTypeDefs::default();
-                for value in effective_type_values.iter().flatten() {
-                    type_defs.merge_from(value.defs());
-                }
-                let type_metadata =
-                    if type_defs.is_empty() && effective_type_values.iter().all(Option::is_none) {
-                        None
-                    } else {
-                        Some(Box::new(FrameTypeMetadata {
-                            defs: type_defs,
-                            values: effective_type_values,
-                        }))
-                    };
+                let type_metadata = if effective_type_values.iter().all(Option::is_none) {
+                    None
+                } else {
+                    Some(Box::new(FrameTypeMetadata {
+                        values: effective_type_values,
+                    }))
+                };
                 self.stack.extend(args.iter().copied());
                 // The thread-root call: parent_call_id is 0 on a fresh VM.
                 let (call_id, parent_call_id) = self.prof_enter_call(entry_function_id, None);
@@ -3258,7 +3279,7 @@ impl BexVm {
         &mut self,
         function: HeapPtr,
         args: &[Value],
-        type_args: Vec<baml_type::RealizedTy>,
+        type_args: Vec<bex_vm_types::RealizedTy>,
         type_values: &[Option<TypeValue>],
         callable_kind: FunctionKind,
     ) {
@@ -3369,8 +3390,8 @@ impl BexVm {
                 // args, so nothing is left to substitute.
                 (
                     hc.arity,
-                    baml_type::TyTemplate::from((*hc.ret_ty).clone()),
-                    baml_type::TyTemplate::from((*hc.throws_ty).clone()),
+                    bex_vm_types::TyTemplate::from((*hc.ret_ty).clone()),
+                    bex_vm_types::TyTemplate::from((*hc.throws_ty).clone()),
                 )
             }
             other => unreachable!("expect host closure as entry point, got {other:?}"),
@@ -4054,7 +4075,7 @@ impl BexVm {
         // element type.
         let frames_array = Value::object(
             self.tlab
-                .alloc_array(baml_type::RealizedTy::unknown(), frames),
+                .alloc_array(bex_vm_types::RealizedTy::unknown(), frames),
         );
         self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
     }
@@ -4178,11 +4199,11 @@ impl BexVm {
     fn pop_interface_operand(
         &mut self,
         iface_value: Value,
-    ) -> Result<(baml_type::TypeName, Vec<baml_type::RealizedTy>), VmError> {
+    ) -> Result<(baml_type::TypeName, Vec<bex_vm_types::RealizedTy>), VmError> {
         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
         match self.get_object(iface_ptr) {
             Object::Type(type_value) => match &type_value.ty {
-                baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
+                bex_vm_types::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
                     Ok((qtn.clone(), args.clone()))
                 }
                 other => unreachable!(
@@ -4210,11 +4231,11 @@ impl BexVm {
         &mut self,
         receiver: Value,
         iface_qtn: &baml_type::TypeName,
-        iface_args: &[baml_type::RealizedTy],
+        iface_args: &[bex_vm_types::RealizedTy],
         field_index: usize,
     ) -> Result<usize, VmError> {
         let self_ty =
-            baml_type::RealizedTy::from(self.value_concrete_ty(receiver).unwrap_or_else(|| {
+            bex_vm_types::RealizedTy::from(self.value_concrete_ty(receiver).unwrap_or_else(|| {
                 unreachable!(
                     "value of kind {:?} cannot be a virtual field-access receiver",
                     self.type_of(&receiver)
@@ -4735,7 +4756,7 @@ impl BexVm {
     pub(crate) fn bound_method_curried_type_args(
         &self,
         receiver: Value,
-    ) -> Box<[baml_type::RealizedTy]> {
+    ) -> Box<[bex_vm_types::RealizedTy]> {
         match receiver.as_object_ptr() {
             Some(ptr) => match self.get_object(ptr) {
                 Object::Instance(inst) => inst.class_type_args.clone(),
@@ -5148,14 +5169,14 @@ impl BexVm {
         // a host callable accepts arbitrary argument types.
         let positional_ptr = self
             .tlab
-            .alloc_array(baml_type::RealizedTy::unknown(), positional);
+            .alloc_array(bex_vm_types::RealizedTy::unknown(), positional);
         let optional_ptr = self.tlab.alloc_map(
-            baml_type::RealizedTy::string(),
-            baml_type::RealizedTy::unknown(),
+            bex_vm_types::RealizedTy::string(),
+            bex_vm_types::RealizedTy::unknown(),
             optional,
         );
         let args_array_ptr = self.tlab.alloc_array(
-            baml_type::RealizedTy::unknown(),
+            bex_vm_types::RealizedTy::unknown(),
             vec![Value::object(positional_ptr), Value::object(optional_ptr)],
         );
         let ret_ty_ptr = self.alloc_static_type(ret_ty);
@@ -5300,8 +5321,8 @@ impl BexVm {
         // BytecodeFrame after it is created.
         let (is_host, closure_type_args, bound_method_class_type_args): (
             bool,
-            Box<[baml_type::RealizedTy]>,
-            Box<[baml_type::RealizedTy]>,
+            Box<[bex_vm_types::RealizedTy]>,
+            Box<[bex_vm_types::RealizedTy]>,
         ) = match self.get_object(callee_ptr) {
             Object::HostClosure(_) => (true, Box::new([]), Box::new([])),
             Object::Closure(c) => (false, c.captured_type_args.clone(), Box::new([])),
@@ -5339,7 +5360,7 @@ impl BexVm {
         // (type.of<T>, json natives) resolve T at runtime. (The
         // Closure/BoundMethod type args are classified in the consolidated match
         // above; GenericFunction is specific to generic instantiation values.)
-        let gf_type_args: Box<[baml_type::RealizedTy]> = match self.get_object(callee_ptr) {
+        let gf_type_args: Box<[bex_vm_types::RealizedTy]> = match self.get_object(callee_ptr) {
             Object::GenericFunction(gf) => gf.type_args.clone(),
             _ => Box::new([]),
         };
@@ -5505,7 +5526,7 @@ impl BexVm {
                 // `gf_type_args`; a closure-wrapped value
                 // (`let g = baml.json.from_string; let f = g<User>`) carries them
                 // on the closure's `captured_type_args`. Use whichever is set.
-                let native_type_args: &[baml_type::RealizedTy] = if !gf_type_args.is_empty() {
+                let native_type_args: &[bex_vm_types::RealizedTy] = if !gf_type_args.is_empty() {
                     &gf_type_args
                 } else {
                     &closure_type_args
@@ -5603,7 +5624,6 @@ impl BexVm {
                             CallOptions {
                                 runtime_id: None,
                                 type_args: &callback_type_args,
-                                type_defs: &DynTypeDefs::default(),
                                 type_values: &[],
                                 runtime_type_check: false,
                             },
@@ -5758,7 +5778,7 @@ impl BexVm {
         &mut self,
         callee_name: &str,
         generic_param_bounds: &[Vec<bex_vm_types::types::InterfaceBound>],
-        type_args: &[baml_type::RealizedTy],
+        type_args: &[bex_vm_types::RealizedTy],
     ) -> Result<(), VmError> {
         for (index, bounds) in generic_param_bounds.iter().enumerate() {
             let Some(actual) = type_args.get(index) else {
@@ -5819,8 +5839,8 @@ impl BexVm {
     /// the first time here (M-5), before the callee body can run.
     fn validate_runtime_call_arguments(
         &mut self,
-        param_types: &[baml_type::TyTemplate],
-        type_args: &[baml_type::RealizedTy],
+        param_types: &[bex_vm_types::TyTemplate],
+        type_args: &[bex_vm_types::RealizedTy],
         locals_offset: StackIndex,
     ) -> Result<(), VmError> {
         for (index, param) in param_types.iter().enumerate() {
@@ -5892,12 +5912,11 @@ impl BexVm {
         {
             let initial_type_arg_count = frame.type_args.len();
             frame.type_args.extend_from_slice(options.type_args);
-            if !options.type_defs.is_empty() || !options.type_values.is_empty() {
+            if !options.type_values.is_empty() {
                 let metadata = frame
                     .type_metadata
                     .get_or_insert_with(|| Box::new(FrameTypeMetadata::default()));
                 metadata.values.resize(initial_type_arg_count, None);
-                metadata.defs.merge_from(options.type_defs);
                 metadata.values.extend(
                     (0..options.type_args.len())
                         .map(|slot| options.type_values.get(slot).cloned().flatten()),
@@ -5996,7 +6015,7 @@ impl BexVm {
             .checked_sub(total_inputs)
             .ok_or(VmInternalError::NotEnoughItemsOnStack(total_inputs))?;
 
-        let class_type_args: Box<[baml_type::RealizedTy]> = if ntypeargs == 0 {
+        let class_type_args: Box<[bex_vm_types::RealizedTy]> = if ntypeargs == 0 {
             Box::default()
         } else {
             self.take_type_args(base + field_value_count, ntypeargs)?
@@ -6498,7 +6517,6 @@ impl BexVm {
                             CallOptions {
                                 runtime_id: None,
                                 type_args: &callback_type_args,
-                                type_defs: &DynTypeDefs::default(),
                                 type_values: &[],
                                 runtime_type_check: false,
                             },
@@ -7067,7 +7085,7 @@ impl BexVm {
                     let ntypeargs = { read_u16_unchecked(code, pc) } as usize;
                     let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
 
-                    let class_type_args: Box<[baml_type::RealizedTy]> = if ntypeargs == 0 {
+                    let class_type_args: Box<[bex_vm_types::RealizedTy]> = if ntypeargs == 0 {
                         Box::default()
                     } else {
                         self.pop_type_args(ntypeargs)?.tys.into()
@@ -7269,7 +7287,6 @@ impl BexVm {
                             CallOptions {
                                 runtime_id,
                                 type_args: &type_args.tys,
-                                type_defs: &type_args.defs,
                                 type_values: &type_args.values,
                                 runtime_type_check,
                             },
@@ -7366,7 +7383,7 @@ impl BexVm {
                                 // instantiations. Associated types are outputs,
                                 // not part of the resolver key.
                                 Object::Type(type_value) => match &type_value.ty {
-                                    baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
+                                    bex_vm_types::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
                                         (qtn.clone(), args.clone())
                                     }
                                     other => unreachable!(
@@ -7380,7 +7397,7 @@ impl BexVm {
                             }
                         };
                         // `Self` is the receiver value's realized concrete type.
-                        let self_ty = baml_type::RealizedTy::from(
+                        let self_ty = bex_vm_types::RealizedTy::from(
                             self.value_concrete_ty(receiver).unwrap_or_else(|| {
                                 unreachable!(
                                     "value of kind {:?} cannot be a virtual-call receiver",
@@ -7447,10 +7464,6 @@ impl BexVm {
                             function,
                         )
                     } else {
-                        let empty_defs = DynTypeDefs::default();
-                        let type_defs = method_type_args
-                            .as_ref()
-                            .map_or(&empty_defs, |args| &args.defs);
                         self.execute_call_from_locals_offset_with_type_args(
                             callee_ptr,
                             locals_offset,
@@ -7458,7 +7471,6 @@ impl BexVm {
                             CallOptions {
                                 runtime_id,
                                 type_args: &type_args,
-                                type_defs,
                                 type_values: &type_values,
                                 runtime_type_check,
                             },
@@ -7876,7 +7888,7 @@ impl BexVm {
                         .and_then(nominal_identity);
                     let actual_nominal = self
                         .value_concrete_ty(value)
-                        .map(baml_type::RealizedTy::from);
+                        .map(bex_vm_types::RealizedTy::from);
                     let matched = expected_nominal.is_some()
                         && expected_nominal == actual_nominal.as_ref().and_then(nominal_identity);
                     self.stack.push(Value::bool(matched));
@@ -8023,11 +8035,11 @@ impl BexVm {
                     let static_cache_key = match &function.bytecode.constants[idx] {
                         ConstValue::Type(template)
                             if function.runtime_package.is_null()
-                                && <&baml_type::RealizedTy>::try_from(template).is_ok()
+                                && <&bex_vm_types::RealizedTy>::try_from(template).is_ok()
                                 && matches!(&self.frames[*frame_idx],
                                     Frame::Bytecode(frame)
                                         if frame.type_metadata.as_ref()
-                                            .is_none_or(|metadata| metadata.defs.is_empty())) =>
+                                            .is_none_or(|metadata| !metadata.binds_runtime_declaration(&self.heap))) =>
                         {
                             Some((std::ptr::from_ref(*function) as usize, idx))
                         }
@@ -8050,7 +8062,7 @@ impl BexVm {
                         };
 
                         let exact_dynamic =
-                            if let baml_type::TyTemplate::TypeArgRef(slot) = &template {
+                            if let bex_vm_types::TyTemplate::TypeArgRef(slot) = &template {
                                 match &self.frames[*frame_idx] {
                                     Frame::Bytecode(frame) => frame
                                         .type_metadata
@@ -8065,14 +8077,14 @@ impl BexVm {
                         let value = if let Some(type_value) = exact_dynamic {
                             Value::object(self.tlab.alloc_type(type_value))
                         } else {
-                            let ty: baml_type::RealizedTy = {
+                            let ty: bex_vm_types::RealizedTy = {
                                 // A fully-realized template narrows to `RealizedTy` in a
                                 // single validation walk — no substitution environment
                                 // needed. Otherwise resolve its frame refs (and reduce any
                                 // projection) against the frame's realized type args; the
                                 // result must be realized or it is an internal error, never
                                 // a `unknown` erasure.
-                                if let Ok(realized) = <&baml_type::RealizedTy>::try_from(&template)
+                                if let Ok(realized) = <&bex_vm_types::RealizedTy>::try_from(&template)
                                 {
                                     realized.clone()
                                 } else {
@@ -8089,20 +8101,10 @@ impl BexVm {
                                     })?
                                 }
                             };
-                            let defs = if let Frame::Bytecode(frame) = &self.frames[*frame_idx] {
-                                frame
-                                    .type_metadata
-                                    .as_ref()
-                                    .map_or_else(DynTypeDefs::default, |metadata| {
-                                        metadata.defs.clone()
-                                    })
-                            } else {
-                                DynTypeDefs::default()
-                            };
                             if let Some(type_ptr) = self.current_runtime_declaration_type(&ty) {
                                 Value::object(type_ptr)
                             } else {
-                                Value::object(self.alloc_static_type_with_defs(ty, defs))
+                                Value::object(self.tlab.alloc_type(TypeValue::new(ty)))
                             }
                         };
                         if let Some(cache_key) = static_cache_key
@@ -8129,13 +8131,12 @@ impl BexVm {
                     };
                     frame
                         .type_args
-                        .resize(slot + 1, baml_type::RealizedTy::unknown());
+                        .resize(slot + 1, bex_vm_types::RealizedTy::unknown());
                     frame.type_args[slot] = type_value.ty.clone();
                     let metadata = frame
                         .type_metadata
                         .get_or_insert_with(|| Box::new(FrameTypeMetadata::default()));
                     metadata.values.resize(slot + 1, None);
-                    metadata.defs.merge_from(type_value.defs());
                     metadata.values[slot] = Some(type_value);
                 }
                 // ── Package.current() ───────────────────────────────────────
@@ -8191,7 +8192,7 @@ impl BexVm {
                         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
                         match self.get_object(iface_ptr) {
                             Object::Type(type_value) => match &type_value.ty {
-                                baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
+                                bex_vm_types::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
                                     (qtn.clone(), args.clone())
                                 }
                                 other => unreachable!(
@@ -8211,7 +8212,7 @@ impl BexVm {
                     let method_type_args = self.pop_type_args(ntypeargs)?;
                     let receiver = self.stack.ensure_pop();
                     // `Self` is the receiver value's realized concrete type.
-                    let self_ty = baml_type::RealizedTy::from(
+                    let self_ty = bex_vm_types::RealizedTy::from(
                         self.value_concrete_ty(receiver).unwrap_or_else(|| {
                             unreachable!(
                                 "value of kind {:?} cannot be a virtual bound-method receiver",
@@ -8289,7 +8290,7 @@ impl BexVm {
                     // `T` at runtime, and — unlike closure-wrapping it — never
                     // crashes. (`GenericFunction` does not reach here: TIR rejects
                     // type args on an already-specialized value.)
-                    let wrap: Option<(HeapPtr, Vec<Value>, Vec<baml_type::RealizedTy>)> =
+                    let wrap: Option<(HeapPtr, Vec<Value>, Vec<bex_vm_types::RealizedTy>)> =
                         match self.get_object(callable_ptr) {
                             Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
                             Object::Closure(c) => Some((
@@ -9048,25 +9049,13 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 .iter()
                 .filter_map(|event| event.value.as_object_ptr()),
         );
-        roots.extend(
-            self.pending_call_type_values
-                .iter()
-                .flatten()
-                .map(|value| value.owner)
-                .filter(|owner| !owner.is_null()),
-        );
-        roots.extend(
-            self.pending_call_type_values
-                .iter()
-                .flatten()
-                .flat_map(|value| value.defs().enums.values().copied()),
-        );
-        roots.extend(
-            self.pending_call_type_values
-                .iter()
-                .flatten()
-                .flat_map(|value| value.defs().classes.values().copied()),
-        );
+        for value in self.pending_call_type_values.iter().flatten() {
+            value.ty.visit_heads(&mut |head| {
+                if head.is_resolved() {
+                    roots.push(head.ptr());
+                }
+            });
+        }
         roots.extend(
             self.seen_throw_values
                 .iter()
@@ -9111,13 +9100,13 @@ impl ::bex_vm_types::RootHaver for BexVm {
             }
         }
         for value in self.pending_call_type_values.iter_mut().flatten() {
-            value.owner = roots.get(&value.owner).copied().unwrap_or(value.owner);
-            for ptr in value.defs_mut().enums.values_mut() {
-                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-            }
-            for ptr in value.defs_mut().classes.values_mut() {
-                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-            }
+            value.ty.visit_heads_mut(&mut |head| {
+                if head.is_resolved()
+                    && let Some(&moved) = roots.get(&head.ptr())
+                {
+                    head.forward_to(moved);
+                }
+            });
         }
         for value in &mut self.seen_throw_values {
             if let Some(ptr) = value.as_object_ptr()

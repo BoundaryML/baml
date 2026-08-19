@@ -141,25 +141,27 @@ fn display_local_name(name: &LocalName) -> String {
         .join(".")
 }
 
-fn runtime_type_key(name: &LocalName) -> String {
-    name.namespace
-        .iter()
-        .map(baml_type::Name::as_str)
-        .chain(std::iter::once(name.name.as_str()))
-        .collect::<Vec<_>>()
-        .join(".")
-}
-
 fn stored_package_type(package: &Package, name: &LocalName) -> Option<HeapPtr> {
     name.namespace
         .is_empty()
         .then(|| package.mounted_types.get(name.name.as_str()).copied())
         .flatten()
         .or_else(|| {
+            // Two hops, each keyed by what it is actually indexed on: the
+            // package's export namespace resolves the source-visible name to a
+            // declaration, and the created-once table is keyed by that
+            // declaration.
+            let declaration = package
+                .classes
+                .get(name)
+                .or_else(|| package.enums.get(name))
+                .or_else(|| package.interfaces.get(name))?;
             package
                 .runtime
-                .as_ref()
-                .and_then(|runtime| runtime.type_values.get(&runtime_type_key(name)).copied())
+                .as_ref()?
+                .type_values
+                .get(declaration)
+                .copied()
         })
 }
 
@@ -297,32 +299,16 @@ fn allocate_runtime_declaration_types(
     enums: &IndexMap<LocalName, HeapPtr>,
     interfaces: &IndexMap<LocalName, HeapPtr>,
 ) -> IndexMap<String, HeapPtr> {
-    let source_defs = DynTypeDefs {
-        classes: classes
-            .values()
-            .filter_map(|ptr| match vm.get_object(*ptr) {
-                Object::Class(class) if !class.name.name().as_str().ends_with("$stream") => {
-                    Some((class.name.clone(), *ptr))
-                }
-                _ => None,
-            })
-            .collect(),
-        enums: enums
-            .values()
-            .filter_map(|ptr| match vm.get_object(*ptr) {
-                Object::Enum(enm) => Some((enm.name.clone(), *ptr)),
-                _ => None,
-            })
-            .collect(),
-        witnesses: Vec::new(),
-    };
     let class_rows = classes
         .iter()
         .filter_map(|(name, &class_ptr)| match vm.get_object(class_ptr) {
             Object::Class(class) => Some((
-                runtime_type_key(name),
                 class_ptr,
-                RealizedTy::Class(class.name.clone(), Vec::new(), class.ty_attr.clone()),
+                RealizedTy::Class(
+                    bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
+                    Vec::new(),
+                    class.ty_attr.clone(),
+                ),
             )),
             _ => None,
         })
@@ -331,9 +317,11 @@ fn allocate_runtime_declaration_types(
         .iter()
         .filter_map(|(name, &enum_ptr)| match vm.get_object(enum_ptr) {
             Object::Enum(enm) => Some((
-                runtime_type_key(name),
                 enum_ptr,
-                RealizedTy::Enum(enm.name.clone(), enm.ty_attr.clone()),
+                RealizedTy::Enum(
+                    bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag),
+                    enm.ty_attr.clone(),
+                ),
             )),
             _ => None,
         })
@@ -343,9 +331,9 @@ fn allocate_runtime_declaration_types(
         .filter_map(
             |(name, &interface_ptr)| match vm.get_object(interface_ptr) {
                 Object::Interface(interface) => Some((
-                    runtime_type_key(name),
+                    interface_ptr,
                     RealizedTy::Interface(
-                        interface.name.clone(),
+                        bex_vm_types::TypeHead::new(interface_ptr, interface.type_tag),
                         Vec::new(),
                         Vec::new(),
                         TyAttr::default(),
@@ -357,31 +345,28 @@ fn allocate_runtime_declaration_types(
         .collect::<Vec<_>>();
 
     let mut type_values = IndexMap::new();
-    for (name, class_ptr, ty) in class_rows {
-        let type_ptr = vm.alloc_type(TypeValue::owned(ty, source_defs.clone(), package_ptr));
+    // Each type value's head points at the declaration it names, so the value
+    // reaches its definition without a side table; the declaration's own `owner`
+    // is what keeps the package (and so its globals and dependencies) alive.
+    for (class_ptr, ty) in class_rows {
+        let type_ptr = vm.alloc_type(TypeValue::new(ty));
         let Object::Class(class) = vm.get_object_mut(class_ptr) else {
             unreachable!("runtime package class pointer changed kind")
         };
-        class.runtime_type = Some(RuntimeTypeProvenance {
-            defs: source_defs.clone(),
-            owner: package_ptr,
-        });
-        type_values.insert(name, type_ptr);
+        class.owner = package_ptr;
+        type_values.insert(class_ptr, type_ptr);
     }
-    for (name, enum_ptr, ty) in enum_rows {
-        let type_ptr = vm.alloc_type(TypeValue::owned(ty, source_defs.clone(), package_ptr));
+    for (enum_ptr, ty) in enum_rows {
+        let type_ptr = vm.alloc_type(TypeValue::new(ty));
         let Object::Enum(enm) = vm.get_object_mut(enum_ptr) else {
             unreachable!("runtime package enum pointer changed kind")
         };
-        enm.runtime_type = Some(RuntimeTypeProvenance {
-            defs: source_defs.clone(),
-            owner: package_ptr,
-        });
-        type_values.insert(name, type_ptr);
+        enm.owner = package_ptr;
+        type_values.insert(enum_ptr, type_ptr);
     }
-    for (name, ty) in interface_rows {
-        let type_ptr = vm.alloc_type(TypeValue::owned(ty, source_defs.clone(), package_ptr));
-        type_values.insert(name, type_ptr);
+    for (interface_ptr, ty) in interface_rows {
+        let type_ptr = vm.alloc_type(TypeValue::new(ty));
+        type_values.insert(interface_ptr, type_ptr);
     }
     type_values
 }

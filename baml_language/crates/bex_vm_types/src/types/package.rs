@@ -83,8 +83,16 @@ pub struct RuntimePackage {
     /// Fully-qualified function/let name to this image's local global slot.
     pub global_names: IndexMap<String, usize>,
     /// Created-once reflected class, enum, and interface type values, keyed by
-    /// source-visible FQN.
-    pub type_values: IndexMap<String, HeapPtr>,
+    /// the declaration each one names.
+    ///
+    /// A runtime declaration is not in the program image, so a `LoadType` that
+    /// names one must reach the value allocated at package load rather than
+    /// build a fresh equal-looking one — same declaration, same `type` object.
+    /// The declaration pointer is that identity, and it is exactly what the
+    /// type's head already carries, so the lookup is the head itself. (Keying
+    /// by rendered FQN made two declarations that merely printed alike
+    /// indistinguishable.)
+    pub type_values: IndexMap<HeapPtr, HeapPtr>,
     /// Compiler warnings retained on a successful package.
     pub diagnostics: Vec<RuntimeCompileDiagnostic>,
     /// Runtime package objects imported by this image.

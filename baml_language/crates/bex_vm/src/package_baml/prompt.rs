@@ -231,7 +231,7 @@ impl BamlClassPrompt for PackageAiImpl {
                 let role = Value::object(vm.alloc_string(role));
                 let readable = Value::object(vm.alloc_string(content.to_text()));
                 let parts = prompt_content_values(vm, content.as_ref());
-                let parts = Value::object(vm.alloc_array(baml_type::RealizedTy::unknown(), parts));
+                let parts = Value::object(vm.alloc_array(bex_vm_types::RealizedTy::unknown(), parts));
                 let metadata = prompt_metadata_value(vm, metadata);
                 Value::object(
                     vm.alloc_instance(message_class, vec![role, readable, parts, metadata]),

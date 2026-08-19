@@ -16,7 +16,8 @@
 
 use std::sync::Arc;
 
-use baml_type::{MediaKind, RealizedTy, TyTemplate, TypeName};
+use baml_type::{MediaKind, TypeName};
+use bex_vm_types::{RealizedTy, TyTemplate};
 
 /// FQN of the recursive `json` type alias declared in `baml.json`.
 /// Mirrors `baml_base::qualified_name::BAML_JSON_JSON`; inlined here to
@@ -27,11 +28,17 @@ const BAML_JSON_JSON: &str = "baml.json.json";
 /// alias (`null | bool | int | float | string | json[] | map<string, json>`).
 /// Recursive aliases stay opaque in `RealizedTy`, so this is the most precise
 /// element/value type available for containers parsed from untyped JSON.
-pub(super) fn json_alias_ty() -> RealizedTy {
-    RealizedTy::TypeAlias(
-        TypeName::from_dotted_path(BAML_JSON_JSON),
-        baml_type::TyAttr::default(),
-    )
+/// The `baml.json.json` alias type, headed at its declaration.
+///
+/// A stdlib FQN constant resolving to a head — one of the three sanctioned
+/// name-to-head boundaries. The alias is compiled, so the tag is
+/// content-addressed and the pointer comes off the declaration itself.
+pub(super) fn json_alias_ty(vm: &BexVm) -> RealizedTy {
+    let qtn = TypeName::from_dotted_path(BAML_JSON_JSON);
+    let head = vm
+        .declaration_head(&qtn)
+        .unwrap_or_else(|| unreachable!("`{BAML_JSON_JSON}` is declared by the stdlib"));
+    RealizedTy::TypeAlias(head, baml_type::TyAttr::default())
 }
 
 /// Run `f` with `seg` appended to `path`, then restore `path` to its prior
@@ -641,7 +648,7 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
             // Untyped JSON: elements are `json` values.
             Value::object(
                 vm.tlab
-                    .alloc(Object::Array(Array::new(json_alias_ty(), items))),
+                    .alloc(Object::Array(Array::new(json_alias_ty(vm), items))),
             )
         }
         serde_json::Value::Object(map) => {
@@ -657,7 +664,7 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
             // Untyped JSON object: string keys, `json` values.
             Value::object(vm.tlab.alloc(Object::Map(Map::new(
                 RealizedTy::string(),
-                json_alias_ty(),
+                json_alias_ty(vm),
                 entries,
             ))))
         }
@@ -819,17 +826,15 @@ fn ty_value_to_serde(
             Ok(serde_json::Value::Object(out))
         }
 
-        RealizedTy::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
-            Ok(value_to_serde(vm, value))
-        }
+        RealizedTy::TypeAlias(head, _) if is_json_alias(*head) => Ok(value_to_serde(vm, value)),
 
         RealizedTy::TypeAlias(_, _) => {
             // Unknown / cross-package recursive aliases: fall back to untyped.
             Ok(value_to_serde(vm, value))
         }
 
-        RealizedTy::Class(qtn, _type_args, _) | RealizedTy::Interface(qtn, _type_args, _, _) => {
-            serialize_class_instance(vm, value, qtn, path)
+        RealizedTy::Class(head, _type_args, _) | RealizedTy::Interface(head, _type_args, _, _) => {
+            serialize_class_instance(vm, value, *head, path)
         }
 
         RealizedTy::Enum(_, _) => match value.as_object_ptr() {
@@ -954,15 +959,16 @@ fn ty_value_to_serde(
 fn serialize_class_instance(
     vm: &mut BexVm,
     value: Value,
-    qtn: &TypeName,
+    head: bex_vm_types::TypeHead,
     path: &mut String,
 ) -> Result<serde_json::Value, VmRustFnError> {
+    let named = baml_type::HeadDisplay::head_display_name(&head);
     let inst_ptr = match value.as_object_ptr() {
         Some(ptr) => ptr,
         None => {
             return Err(raise_serialize(
                 vm,
-                format!("expected class instance for `{qtn}`"),
+                format!("expected class instance for `{named}`"),
                 path,
                 "class",
             ));
@@ -977,14 +983,14 @@ fn serialize_class_instance(
         _ => {
             return Err(raise_serialize(
                 vm,
-                format!("expected class instance for `{qtn}`"),
+                format!("expected class instance for `{named}`"),
                 path,
                 "class",
             ));
         }
     };
 
-    if let Some(kind) = media_kind_from_fqn(qtn.display_name().as_str()) {
+    if let Some(kind) = media_kind_from_head(head) {
         return serialize_media(vm, value, kind, path);
     }
 
@@ -993,7 +999,7 @@ fn serialize_class_instance(
         _ => {
             return Err(raise_serialize(
                 vm,
-                format!("instance class pointer for `{qtn}` is not a class"),
+                format!("instance class pointer for `{named}` is not a class"),
                 path,
                 "class",
             ));
@@ -1009,7 +1015,7 @@ fn serialize_class_instance(
         let Some(field_value) = field_values.get(i).copied() else {
             return Err(raise_serialize(
                 vm,
-                format!("class `{qtn}` has fewer fields than declared"),
+                format!("class `{named}` has fewer fields than declared"),
                 path,
                 "class",
             ));
@@ -1031,6 +1037,31 @@ fn serialize_class_instance(
 /// (carrying a `$rust_type` `_data` field); there is no `Generic` media *value*.
 pub(crate) fn media_kind_from_fqn(fqn: &str) -> Option<MediaKind> {
     MediaKind::from_wrapper_class_name(fqn)
+}
+
+/// Which media wrapper class a head names, if any.
+///
+/// Compiled declarations carry content-addressed tags, so recognizing one of
+/// the stdlib media classes is an integer compare against the tag its FQN
+/// hashes to — no name rendered per value.
+pub(crate) fn media_kind_from_head(head: bex_vm_types::TypeHead) -> Option<MediaKind> {
+    [
+        MediaKind::Image,
+        MediaKind::Audio,
+        MediaKind::Video,
+        MediaKind::Pdf,
+        MediaKind::Generic,
+    ]
+    .into_iter()
+    .find(|kind| {
+        kind.wrapper_class_name()
+            .is_some_and(|fqn| head.tag() == baml_type::typetag::TypeTag::of_head(fqn))
+    })
+}
+
+/// Whether `head` names the recursive `baml.json.json` alias.
+fn is_json_alias(head: bex_vm_types::TypeHead) -> bool {
+    head.tag() == baml_type::typetag::TypeTag::of_head(BAML_JSON_JSON)
 }
 
 /// Emit a tagged JSON object for a media value.
@@ -1207,34 +1238,32 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected object", path)),
         },
 
-        RealizedTy::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
-            Ok(serde_to_value(vm, json))
-        }
+        RealizedTy::TypeAlias(head, _) if is_json_alias(*head) => Ok(serde_to_value(vm, json)),
 
         RealizedTy::TypeAlias(_, _) => {
             // Unknown / cross-package recursive aliases: fall back to untyped.
             Ok(serde_to_value(vm, json))
         }
 
-        RealizedTy::Class(qtn, type_args, _) => {
-            if let Some(kind) = media_kind_from_fqn(qtn.display_name().as_str()) {
-                return deserialize_media(vm, json, kind, qtn, path);
+        RealizedTy::Class(head, type_args, _) => {
+            if let Some(kind) = media_kind_from_head(*head) {
+                return deserialize_media(vm, json, kind, *head, path);
             }
-            deserialize_class_instance(vm, json, qtn, type_args, path)
+            deserialize_class_instance(vm, json, *head, type_args, path)
         }
 
-        RealizedTy::Interface(qtn, type_args, _, _) => {
-            deserialize_class_instance(vm, json, qtn, type_args, path)
+        RealizedTy::Interface(head, type_args, _, _) => {
+            deserialize_class_instance(vm, json, *head, type_args, path)
         }
 
-        RealizedTy::Enum(qtn, _) => match json {
-            serde_json::Value::String(s) => deserialize_enum_variant(vm, qtn, s, path),
+        RealizedTy::Enum(head, _) => match json {
+            serde_json::Value::String(s) => deserialize_enum_variant(vm, *head, s, path),
             _ => Err(raise_decode(vm, "expected enum variant string", path)),
         },
 
-        RealizedTy::EnumVariant(qtn, name, _) => match json {
+        RealizedTy::EnumVariant(head, name, _) => match json {
             serde_json::Value::String(s) if s == name.as_str() => {
-                deserialize_enum_variant(vm, qtn, s, path)
+                deserialize_enum_variant(vm, *head, s, path)
             }
             _ => Err(raise_decode(
                 vm,
@@ -1320,28 +1349,27 @@ fn ty_serde_to_value(
 fn deserialize_class_instance(
     vm: &mut BexVm,
     json: &serde_json::Value,
-    qtn: &TypeName,
+    head: bex_vm_types::TypeHead,
     type_args: &[RealizedTy],
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
+    let named = baml_type::HeadDisplay::head_display_name(&head);
     let map = match json {
         serde_json::Value::Object(m) => m,
         _ => {
             return Err(raise_decode(
                 vm,
-                format!("expected JSON object for class `{qtn}`"),
+                format!("expected JSON object for class `{named}`"),
                 path,
             ));
         }
     };
 
-    let class_ptr = vm
-        .lookup_type(qtn)
-        .ok_or_else(|| raise_decode(vm, format!("class `{qtn}` not found"), path))?;
+    let class_ptr = head.ptr();
     let class_fields = match vm.get_object(class_ptr) {
         Object::Class(c) => c.fields.clone(),
         _ => {
-            return Err(raise_decode(vm, format!("`{qtn}` is not a class"), path));
+            return Err(raise_decode(vm, format!("`{named}` is not a class"), path));
         }
     };
 
@@ -1382,24 +1410,23 @@ fn deserialize_class_instance(
 
 fn deserialize_enum_variant(
     vm: &mut BexVm,
-    qtn: &TypeName,
+    head: bex_vm_types::TypeHead,
     variant_name: &str,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
-    let enm_ptr = vm
-        .lookup_type(qtn)
-        .ok_or_else(|| raise_decode(vm, format!("enum `{qtn}` not found"), path))?;
+    let named = baml_type::HeadDisplay::head_display_name(&head);
+    let enm_ptr = head.ptr();
     let idx = match vm.get_object(enm_ptr) {
         Object::Enum(e) => e.variants.iter().position(|v| v.name == variant_name),
         _ => {
-            return Err(raise_decode(vm, format!("`{qtn}` is not an enum"), path));
+            return Err(raise_decode(vm, format!("`{named}` is not an enum"), path));
         }
     };
     match idx {
         Some(i) => Ok(Value::object(vm.alloc_variant(enm_ptr, i))),
         None => Err(raise_decode(
             vm,
-            format!("unknown variant `{variant_name}` for enum `{qtn}`"),
+            format!("unknown variant `{variant_name}` for enum `{named}`"),
             path,
         )),
     }
@@ -1419,14 +1446,17 @@ fn deserialize_media_by_kind(
         ));
     };
     let qtn = TypeName::from_dotted_path(fqn);
-    deserialize_media(vm, json, kind, &qtn, path)
+    let head = vm
+        .declaration_head(&qtn)
+        .ok_or_else(|| raise_decode(vm, format!("media class `{qtn}` not found"), path))?;
+    deserialize_media(vm, json, kind, head, path)
 }
 
 fn deserialize_media(
     vm: &mut BexVm,
     json: &serde_json::Value,
     kind: MediaKind,
-    qtn: &TypeName,
+    head: bex_vm_types::TypeHead,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
     let map = match json {
@@ -1476,9 +1506,7 @@ fn deserialize_media(
         }
     };
 
-    let class_ptr = vm
-        .lookup_type(qtn)
-        .ok_or_else(|| raise_decode(vm, format!("media class `{qtn}` not found"), path))?;
+    let class_ptr = head.ptr();
     let data_val = Value::object(vm.alloc_rust_data(media_arc));
     Ok(Value::object(vm.alloc_instance(class_ptr, vec![data_val])))
 }
@@ -1559,12 +1587,12 @@ fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResu
         }
         RealizedTy::List(elem, _) => list_from_json_start(vm, j, elem),
         RealizedTy::Map { value: vty, .. } => map_from_json_start(vm, j, vty),
-        RealizedTy::Class(qtn, type_args, _) | RealizedTy::Interface(qtn, type_args, _, _)
-            if media_kind_from_fqn(qtn.display_name().as_str()).is_none() =>
+        RealizedTy::Class(head, type_args, _) | RealizedTy::Interface(head, type_args, _, _)
+            if media_kind_from_head(*head).is_none() =>
         {
             match try_yield_interface_from_json(vm, j, ty) {
                 Some(yld) => yld,
-                None => class_from_json_start(vm, j, qtn, type_args),
+                None => class_from_json_start(vm, j, *head, type_args),
             }
         }
         _ => structural_decode_value(vm, j, ty),
@@ -1581,16 +1609,17 @@ fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResu
 fn class_from_json_start(
     vm: &mut BexVm,
     j: Value,
-    qtn: &TypeName,
+    head: bex_vm_types::TypeHead,
     type_args: &[RealizedTy],
 ) -> NativeCallResult {
+    let named = baml_type::HeadDisplay::head_display_name(&head);
     let map: IndexMap<bex_vm_types::BexStr, Value> = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
             Object::Map(m) => m.lock().iter().map(|(k, v)| (k.clone(), *v)).collect(),
             _ => {
                 return NativeCallResult::Error(raise_decode(
                     vm,
-                    format!("expected JSON object for class `{qtn}`"),
+                    format!("expected JSON object for class `{named}`"),
                     "",
                 ));
             }
@@ -1598,27 +1627,18 @@ fn class_from_json_start(
         None => {
             return NativeCallResult::Error(raise_decode(
                 vm,
-                format!("expected JSON object for class `{qtn}`"),
+                format!("expected JSON object for class `{named}`"),
                 "",
             ));
         }
     };
-    let class_ptr = match vm.lookup_type(qtn) {
-        Some(p) => p,
-        None => {
-            return NativeCallResult::Error(raise_decode(
-                vm,
-                format!("class `{qtn}` not found"),
-                "",
-            ));
-        }
-    };
+    let class_ptr = head.ptr();
     let class_fields = match vm.get_object(class_ptr) {
         Object::Class(c) => c.fields.clone(),
         _ => {
             return NativeCallResult::Error(raise_decode(
                 vm,
-                format!("`{qtn}` is not a class"),
+                format!("`{named}` is not a class"),
                 "",
             ));
         }
@@ -1758,16 +1778,24 @@ fn try_yield_interface_from_json(
     j: Value,
     ty: &RealizedTy,
 ) -> Option<NativeCallResult> {
-    let (qtn, type_args) = match ty {
-        RealizedTy::Class(qtn, type_args, _) | RealizedTy::Interface(qtn, type_args, _, _) => {
-            (qtn, type_args)
+    let (head, type_args) = match ty {
+        RealizedTy::Class(head, type_args, _) | RealizedTy::Interface(head, type_args, _, _) => {
+            (head, type_args)
         }
         _ => return None,
     };
-    if media_kind_from_fqn(qtn.display_name().as_str()).is_some() {
+    if media_kind_from_head(*head).is_some() {
         return None;
     }
-    let from_json_name = format!("{}.baml.FromJson.from_json", class_lookup_key(qtn));
+    // BUG: this reaches the override by building its mangled global name and
+    // scanning for it, so it sees only an inherent `implements baml.FromJson`
+    // block on the class itself — a blanket or out-of-body impl that the
+    // resolver would find is invisible here, and a runtime-declared class has
+    // no such global at all. The fix is to ask `ImplResolver` for the
+    // `baml.FromJson` rule and take its `from_json` method, exactly as
+    // `dispatch_op` does; that also drops the string round-trip.
+    let qtn = head.declared_name()?;
+    let from_json_name = format!("{}.baml.FromJson.from_json", class_lookup_key(&qtn));
     let callee = vm.find_function_by_name(&from_json_name)?;
     Some(NativeCallResult::YieldToCall {
         callee,

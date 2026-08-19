@@ -82,12 +82,12 @@ struct BuilderNode {
 struct ClassPlan {
     name: baml_type::QualifiedTypeName,
     ptr: HeapPtr,
-    ty: baml_type::RealizedTy,
+    ty: bex_vm_types::RealizedTy,
 }
 
 struct ClassIdentityPlan {
     name: baml_type::QualifiedTypeName,
-    ty: baml_type::RealizedTy,
+    ty: bex_vm_types::RealizedTy,
 }
 
 enum PreparedFieldType {
@@ -199,7 +199,7 @@ fn replace_array_field(
 ) -> Result<(), String> {
     let array = Value::object(
         vm.tlab
-            .alloc_array(baml_type::RealizedTy::unknown(), values),
+            .alloc_array(bex_vm_types::RealizedTy::unknown(), values),
     );
     store_instance_field(vm, value, index, array)
 }
@@ -223,7 +223,7 @@ fn append_unique_neighbor(vm: &mut BexVm, builder: Value, neighbor: Value) -> Re
 fn alloc_pending(vm: &mut BexVm, op: PendingOp, roots: Vec<Value>) -> Value {
     let class = vm.resolve_class(PENDING_FQN);
     let handle = Value::object(vm.alloc_rust_data(Arc::new(PendingHandle { op })));
-    let roots = Value::object(vm.tlab.alloc_array(baml_type::RealizedTy::unknown(), roots));
+    let roots = Value::object(vm.tlab.alloc_array(bex_vm_types::RealizedTy::unknown(), roots));
     Value::object(vm.alloc_instance(class, vec![handle, roots, Value::NULL]))
 }
 
@@ -240,11 +240,11 @@ pub(crate) fn alloc_builder(vm: &mut BexVm, name: &str) -> Value {
     let handle = Value::object(vm.alloc_rust_data(Arc::new(handle)));
     let roots = Value::object(
         vm.tlab
-            .alloc_array(baml_type::RealizedTy::unknown(), Vec::new()),
+            .alloc_array(bex_vm_types::RealizedTy::unknown(), Vec::new()),
     );
     let neighbors = Value::object(
         vm.tlab
-            .alloc_array(baml_type::RealizedTy::unknown(), Vec::new()),
+            .alloc_array(bex_vm_types::RealizedTy::unknown(), Vec::new()),
     );
     Value::object(vm.alloc_instance(class, vec![handle, roots, neighbors, Value::NULL]))
 }
@@ -608,55 +608,11 @@ fn validate_pending(
     walk(vm, pending, group, &mut HashSet::new())
 }
 
-fn collect_external_defs(
-    vm: &BexVm,
-    prepared: &IndexMap<u64, Vec<PreparedField>>,
-) -> Result<String> {
-    fn from_pending(
-        vm: &BexVm,
-        pending: Value,
-        defs: &mut DynTypeDefs,
-        seen: &mut HashSet<HeapPtr>,
-    ) -> Result<(), String> {
-        let (ptr, _) = pending_parts(vm, pending)?;
-        if !seen.insert(ptr) {
-            return Ok(());
-        }
-        for root in instance_array_field(vm, pending, 1)? {
-            if class_name(vm, root).as_deref() == Some(PENDING_FQN) {
-                from_pending(vm, root, defs, seen)?;
-            } else if class_name(vm, root).as_deref() == Some(BUILDER_FQN) {
-                let resolved = instance_field(vm, root, 3)?;
-                if !resolved.is_null() {
-                    defs.merge_from(reflected_type_row(vm, resolved)?.type_value.defs());
-                }
-            } else {
-                defs.merge_from(reflected_type_row(vm, root)?.type_value.defs());
-            }
-        }
-        Ok(())
-    }
-
-    let mut defs = DynTypeDefs::default();
-    let mut seen = HashSet::new();
-    for fields in prepared.values() {
-        for field in fields {
-            match &field.field_type {
-                PreparedFieldType::Concrete(value) => defs.merge_from(value.defs()),
-                PreparedFieldType::Pending(value) => {
-                    from_pending(vm, *value, &mut defs, &mut seen)?;
-                }
-            }
-        }
-    }
-    Ok(defs)
-}
-
 fn planned_pending_type(
     vm: &BexVm,
     pending: Value,
     plans: &IndexMap<u64, ClassIdentityPlan>,
-) -> Result<baml_type::RealizedTy, String> {
+) -> Result<bex_vm_types::RealizedTy, String> {
     let prior = instance_field(vm, pending, 2)?;
     if !prior.is_null() {
         return cloned_type_value(vm, prior)
@@ -688,7 +644,7 @@ fn planned_pending_type(
             if roots.len() != 1 || class_name(vm, roots[0]).as_deref() != Some(PENDING_FQN) {
                 return Err("a pending type composite has invalid native state".into());
             }
-            Ok(baml_type::RealizedTy::List(
+            Ok(bex_vm_types::RealizedTy::List(
                 Box::new(planned_pending_type(vm, roots[0], plans)?),
                 baml_type::TyAttr::default(),
             ))
@@ -699,13 +655,13 @@ fn planned_pending_type(
             }
             let base = planned_pending_type(vm, roots[0], plans)?;
             let mut members = match base {
-                baml_type::RealizedTy::Union(members, _) => members,
+                bex_vm_types::RealizedTy::Union(members, _) => members,
                 other => vec![other],
             };
-            if !members.iter().any(baml_type::RealizedTy::is_null) {
-                members.push(baml_type::RealizedTy::null());
+            if !members.iter().any(bex_vm_types::RealizedTy::is_null) {
+                members.push(bex_vm_types::RealizedTy::null());
             }
-            Ok(baml_type::RealizedTy::Union(
+            Ok(bex_vm_types::RealizedTy::Union(
                 members,
                 baml_type::TyAttr::default(),
             ))
@@ -724,7 +680,7 @@ fn planned_pending_type(
                     }
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            Ok(baml_type::RealizedTy::Union(
+            Ok(bex_vm_types::RealizedTy::Union(
                 members,
                 baml_type::TyAttr::default(),
             ))
@@ -787,18 +743,47 @@ fn build_group(
             )));
         }
     };
-    let mut defs = collect_external_defs(vm, &prepared)
-        .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
-
+    // A class's type is headed at its own declaration, so the declarations come
+    // first — as field-less placeholders. A recursive group needs that order
+    // anyway: members name each other, and only a pointer can be handed out
+    // before the thing it points at is complete.
+    let mut plans = IndexMap::new();
     let mut identities = IndexMap::new();
     for node in group.values() {
         let name = baml_type::QualifiedTypeName::runtime_local(
             baml_type::Name::new(node.name.as_str()),
             vm.tlab.heap().next_synthetic_name_id(),
         );
-        let ty =
-            baml_type::RealizedTy::Class(name.clone(), Vec::new(), baml_type::TyAttr::default());
-        identities.insert(node.id, ClassIdentityPlan { name, ty });
+        // Counter tag: runtime-created declarations are identified by their
+        // heap object, and by this tag across a serialization boundary; the
+        // synthesized `$dyn` name is display data only.
+        let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+        let ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
+            name: name.clone(),
+            fields: Vec::new(),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::new(),
+            type_tag,
+            ty_attr: baml_type::TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
+            owner: HeapPtr::null(),
+        })));
+        let ty = bex_vm_types::RealizedTy::Class(
+            bex_vm_types::TypeHead::new(ptr, type_tag),
+            Vec::new(),
+            baml_type::TyAttr::default(),
+        );
+        identities.insert(
+            node.id,
+            ClassIdentityPlan {
+                name: name.clone(),
+                ty: ty.clone(),
+            },
+        );
+        plans.insert(node.id, ClassPlan { name, ptr, ty });
     }
 
     let witness_fields = planned_witness_fields(vm, &prepared[&start_id], &identities)
@@ -816,47 +801,9 @@ fn build_group(
             &witness_diagnostics,
         )));
     }
-    defs.witnesses = witnesses
-        .iter()
-        .map(|witness| witness.definition.clone())
-        .collect();
-
-    let mut plans = IndexMap::new();
-    for node in group.values() {
-        let identity = &identities[&node.id];
-        let ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
-            name: identity.name.clone(),
-            fields: Vec::new(),
-            description: None,
-            alias: None,
-            docstring: None,
-            other: IndexMap::new(),
-            // Counter tag: runtime-created declarations are identified by their
-            // heap object, and by this tag across a serialization boundary; the
-            // synthesized `$dyn` name is display data only.
-            type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
-            ty_attr: baml_type::TyAttr::default(),
-            has_cleanup: false,
-            generic_param_count: 0,
-            runtime_type: None,
-        })));
-        defs.classes.insert(identity.name.clone(), ptr);
-        plans.insert(
-            node.id,
-            ClassPlan {
-                name: identity.name.clone(),
-                ptr,
-                ty: identity.ty.clone(),
-            },
-        );
-    }
-
     for node in group.values() {
         let plan = &plans[&node.id];
-        let value = Value::object(
-            vm.tlab
-                .alloc_type(TypeValue::with_defs(plan.ty.clone(), defs.clone())),
-        );
+        let value = Value::object(vm.tlab.alloc_type(TypeValue::new(plan.ty.clone())));
         store_instance_field(vm, node.value, 3, value)
             .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
     }
@@ -882,7 +829,7 @@ fn build_group(
             class_fields.push(ClassField {
                 name: field.name.clone(),
                 field_type: type_value.ty.clone().into(),
-                field_template: baml_type::TyTemplate::from(type_value.ty.clone()),
+                field_template: bex_vm_types::TyTemplate::from(type_value.ty.clone()),
                 description: field.description.clone(),
                 alias: field.alias.clone(),
                 docstring: field.docstring.clone(),
@@ -896,15 +843,6 @@ fn build_group(
             unreachable!("builder class placeholder changed variant")
         };
         class.fields = class_fields;
-        let mut provenance_defs = defs.clone();
-        provenance_defs.classes.shift_remove(&plan.name);
-        class.runtime_type = Some(RuntimeTypeProvenance {
-            // A definition cannot own itself through provenance. `type.of_value`
-            // adds this class pointer back while the other recursively-linked
-            // group members remain available as dependencies.
-            defs: provenance_defs,
-            owner: HeapPtr::null(),
-        });
     }
 
     for plan in plans.values() {
@@ -963,14 +901,11 @@ fn resolve_pending_if_ready(vm: &mut BexVm, pending: Value) -> Result<Option<Val
             .ok_or_else(|| "a direct pending type has invalid native state".to_string())?,
         PendingOp::Array | PendingOp::Optional | PendingOp::Union => {
             let mut values = Vec::with_capacity(resolved_roots.len());
-            let mut defs = DynTypeDefs::default();
             for root in resolved_roots {
-                let value = reflected_type_row(vm, root)?.type_value;
-                defs.merge_from(value.defs());
-                values.push(value.ty);
+                values.push(reflected_type_row(vm, root)?.type_value.ty);
             }
             let ty = match handle.op {
-                PendingOp::Array => baml_type::RealizedTy::List(
+                PendingOp::Array => bex_vm_types::RealizedTy::List(
                     Box::new(
                         values
                             .into_iter()
@@ -985,20 +920,20 @@ fn resolve_pending_if_ready(vm: &mut BexVm, pending: Value) -> Result<Option<Val
                         .next()
                         .ok_or_else(|| "a pending optional has no base".to_string())?;
                     let mut members = match value {
-                        baml_type::RealizedTy::Union(members, _) => members,
+                        bex_vm_types::RealizedTy::Union(members, _) => members,
                         other => vec![other],
                     };
-                    if !members.iter().any(baml_type::RealizedTy::is_null) {
-                        members.push(baml_type::RealizedTy::null());
+                    if !members.iter().any(bex_vm_types::RealizedTy::is_null) {
+                        members.push(bex_vm_types::RealizedTy::null());
                     }
-                    baml_type::RealizedTy::Union(members, baml_type::TyAttr::default())
+                    bex_vm_types::RealizedTy::Union(members, baml_type::TyAttr::default())
                 }
                 PendingOp::Union => {
-                    baml_type::RealizedTy::Union(values, baml_type::TyAttr::default())
+                    bex_vm_types::RealizedTy::Union(values, baml_type::TyAttr::default())
                 }
                 PendingOp::Direct => unreachable!(),
             };
-            Value::object(vm.tlab.alloc_type(TypeValue::with_defs(ty, defs)))
+            Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
         }
     };
     store_instance_field(vm, pending, 2, resolved)?;

@@ -70,6 +70,17 @@ pub type TyTemplate = baml_type::TyTemplate<TypeHead>;
 /// [`baml_type::RuntimeInterface`] at the runtime's head.
 pub type RuntimeInterface = baml_type::RuntimeInterface<TypeHead>;
 
+/// [`baml_type::Ty`] at the runtime's head. The algebra's own spelling — the
+/// widest member, admitting every position the others rule out.
+pub type Ty = baml_type::Ty<TypeHead>;
+
+/// [`baml_type::ConcreteRealizedTy`] at the runtime's head. What a live value's
+/// type narrows to once it is known to name no abstract position.
+pub type ConcreteRealizedTy = baml_type::ConcreteRealizedTy<TypeHead>;
+
+/// [`baml_type::RealizedFunctionParamTy`] at the runtime's head.
+pub type RealizedFunctionParamTy = baml_type::RealizedFunctionParamTy<TypeHead>;
+
 // ── Crossing between the two heads ───────────────────────────────────────────
 //
 // Emit is the one legitimate producer of runtime types without a heap: it mints

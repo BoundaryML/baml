@@ -15,8 +15,8 @@
 //! per argument via [`class_type_arg_matches`] — invariantly, since BAML
 //! generics are invariant.
 
-use baml_type::{RealizedTy, Ty, TyTemplate, normalize};
-use bex_vm_types::{Value, errors::VmInternalError};
+use baml_type::normalize;
+use bex_vm_types::{RealizedTy, Ty, TyTemplate, Value, errors::VmInternalError};
 
 use crate::BexVm;
 
@@ -66,7 +66,7 @@ pub(crate) fn value_matches_template(
 /// `ClassWithTypeArgs` check. BAML generics are invariant, so the relation is
 /// canonical equivalence, not membership. A substitution failure is a broken
 /// invariant, exactly as in [`value_matches_template`].
-pub(crate) fn class_type_arg_matches<C: normalize::TypeContext>(
+pub(crate) fn class_type_arg_matches<C: normalize::TypeContext<bex_vm_types::TypeHead>>(
     ctx: &C,
     template: &TyTemplate,
     frame_type_args: &[RealizedTy],
