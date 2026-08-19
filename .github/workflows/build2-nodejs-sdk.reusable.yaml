@@ -70,19 +70,31 @@ jobs:
           - target: x86_64-unknown-linux-musl
             host: ubuntu-22.04
             before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              cat >>$GITHUB_ENV <<EOF
-              CC_x86_64_unknown_linux_musl=musl-gcc
+              set -euo pipefail
+              curl --fail --location --remote-name https://github.com/musl-cc/musl.cc/releases/download/v0.0.1/x86_64-linux-musl-cross.tgz
+              echo "c5d410d9f82a4f24c549fe5d24f988f85b2679b452413a9f7e5f7b956f2fe7ea  x86_64-linux-musl-cross.tgz" | sha256sum --check --strict
+              tar -xzf x86_64-linux-musl-cross.tgz
+              echo "$PWD/x86_64-linux-musl-cross/bin" >> "$GITHUB_PATH"
+              cat >>"$GITHUB_ENV" <<EOF
+              CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc
+              CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++
+              AR_x86_64_unknown_linux_musl=x86_64-linux-musl-ar
+              CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc
               RUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable
               EOF
           - target: aarch64-unknown-linux-musl
             host: ubuntu-22.04
             before: |
-              curl -LO https://musl.cc.timfish.dev/aarch64-linux-musl-cross.tgz
+              set -euo pipefail
+              curl --fail --location --remote-name https://github.com/musl-cc/musl.cc/releases/download/v0.0.1/aarch64-linux-musl-cross.tgz
+              echo "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38  aarch64-linux-musl-cross.tgz" | sha256sum --check --strict
               tar -xzf aarch64-linux-musl-cross.tgz
               echo "$PWD/aarch64-linux-musl-cross/bin" >> "$GITHUB_PATH"
-              cat >>$GITHUB_ENV <<EOF
+              cat >>"$GITHUB_ENV" <<EOF
+              CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc
+              CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++
+              AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar
+              CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc
               RUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable
               EOF
             napi_args: --use-napi-cross
@@ -203,6 +215,42 @@ jobs:
           find npm -mindepth 1 -maxdepth 1 -type d ! -path "$keep_dir" -exec rm -rf {} +
           echo "Assembled $keep_dir:"
           ls -l "$keep_dir"
+
+      - name: Verify musl native addon ABI
+        if: contains(matrix._.target, 'musl')
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+        run: |
+          set -euo pipefail
+          native="$(find npm -name 'baml_node.*-musl.node' -print -quit)"
+          test -n "$native"
+          dynamic="$(readelf --dynamic "$native")"
+          versions="$(readelf --version-info "$native")"
+          printf '%s\n' "$dynamic"
+          if grep -q 'GLIBC_' <<<"$versions"; then
+            echo "::error::$native contains GLIBC-versioned symbols"
+            exit 1
+          fi
+          glibc_sonames=(
+            'libc\.so\.6'
+            'libpthread\.so\.0'
+            'libm\.so\.6'
+            'libdl\.so\.2'
+            'librt\.so\.1'
+            'libresolv\.so\.2'
+            'libutil\.so\.1'
+            'libanl\.so\.1'
+            'libBrokenLocale\.so\.1'
+            'libcrypt\.so\.1'
+            'libnsl\.so\.1'
+            'libnss_[^]]*\.so\.2'
+            'ld-linux[^]]*\.so[^]]*'
+          )
+          for soname in "${glibc_sonames[@]}"; do
+            if grep -Eq "\[${soname}\]" <<<"$dynamic"; then
+              echo "::error::$native depends on glibc runtime soname matching $soname"
+              exit 1
+            fi
+          done
 
       - name: Upload per-platform npm package
         uses: actions/upload-artifact@v7
