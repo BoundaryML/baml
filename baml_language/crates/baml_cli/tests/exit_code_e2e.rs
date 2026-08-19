@@ -332,7 +332,11 @@ fn generate_csharp_warns_and_preserves_legacy_output() {
             && stderr.contains("C# now generates into"),
         "Expected a legacy C# output warning, got: {stderr}",
     );
-    assert!(tmp.path().join("baml_sdk").is_dir());
+    assert!(
+        tmp.path()
+            .join("baml_sdk/Baml/Generated/BamlProgram.g.cs")
+            .is_file()
+    );
     assert_eq!(std::fs::read_to_string(user_file).unwrap(), "// keep me\n");
 }
 
