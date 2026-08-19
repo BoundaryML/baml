@@ -75,8 +75,8 @@ Run output options:
       --log-file <LOG_FILE>
           Write BAML `log.*` events to a file.
 
-          Captures every level by default. When `--log` or `BAML_LOG` enables terminal logs, the file
-          uses the same threshold. File logging does not enable terminal log output by itself.
+          Captures all levels by default. If terminal logs are enabled, it uses that threshold. It
+          does not enable terminal output.
 
       --include-generated
           Include compiler-synthesized functions in `--list` output
