@@ -1258,6 +1258,7 @@ pub fn display_compact_bytecode(
             | OpCode::CallIndirectWithRuntimeId
             | OpCode::Discriminant
             | OpCode::TypeTag
+            | OpCode::Truthy
             | OpCode::RuntimeIsType
             | OpCode::ThrowIfPanic
             | OpCode::Unreachable

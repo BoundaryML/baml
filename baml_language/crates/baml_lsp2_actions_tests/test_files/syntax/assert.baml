@@ -11,21 +11,12 @@ function assertNotOk() -> int {
 	2
 }
 
-// should yield error
 function assertBool() -> int {
 
 	assert "string";
 
 	1
 }
-
-// error: Expected a bool value, but received string value `"string"`.
-//   -->  assert.baml:17
-//    |
-// 16 |
-// 17 | assert "string";
-// 18 |
-//    |
 
 //----
 //- diagnostics
@@ -46,7 +37,7 @@ function assertBool() -> int {
 // E0003
 //
 //   × unresolved name: `assert`
-//     ╭─[assert.baml:17:2]
-//  17 │     assert "string";
+//     ╭─[assert.baml:16:2]
+//  16 │     assert "string";
 //     ·     ──────
 //     ╰────

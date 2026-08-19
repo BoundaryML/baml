@@ -379,6 +379,9 @@ pub enum DiagnosticId {
     /// (`baml.Int`, `baml.Map`, …). They exist to hang methods on a builtin
     /// type, never to be instantiated.
     CannotConstructBuiltinCompanion,
+    /// A condition whose static type decides the branch (always truthy /
+    /// always falsy) - B-1563 truthiness.
+    ConditionAlwaysConstant,
 }
 
 impl DiagnosticId {
@@ -558,6 +561,7 @@ impl DiagnosticId {
             DiagnosticId::ConflictingTypeDefinitionAtRender => "E0162",
             DiagnosticId::InitIoNotAllowed => "E0163",
             DiagnosticId::NonDataTypeAtRender => "E0164",
+            DiagnosticId::ConditionAlwaysConstant => "E0167",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 

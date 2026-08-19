@@ -466,6 +466,9 @@ pub enum TirTypeError {
     /// BEP-049 §11: an untagged `${expr}` interpolates a value whose type has
     /// no `to_string` method, so it can't be implicitly stringified.
     TypeNotInterpolatable { ty: Ty },
+    /// B-1563 truthiness: a non-literal condition whose static type decides
+    /// the branch - the test is constant, so one arm is dead.
+    ConditionAlwaysConstant { ty: Ty, always_true: bool },
 
     /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
     /// a method declared by two or more interfaces — the receiver carries
@@ -1468,6 +1471,18 @@ impl fmt::Display for TirTypeError {
                 "cannot interpolate a value of type `{}` — it may be null; coalesce with `?? \"…\"` or unwrap it first",
                 ty.render_user_facing()
             ),
+            TirTypeError::ConditionAlwaysConstant { ty, always_true } => {
+                let (always, never) = if *always_true {
+                    ("truthy", "falsy")
+                } else {
+                    ("falsy", "truthy")
+                };
+                write!(
+                    f,
+                    "this condition is always {always}: a value of type `{}` can never be {never}",
+                    ty.render_user_facing()
+                )
+            }
             TirTypeError::TypeNotInterpolatable { ty } => write!(
                 f,
                 "cannot interpolate a value of type `{}` — it has no `to_string` method",
