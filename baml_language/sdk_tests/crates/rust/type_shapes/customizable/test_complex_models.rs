@@ -5,7 +5,9 @@
 // arms as unit variants from their value, class/primitive arms wrapping
 // their payload — and a trailing `| null` lowering to `Option<...>`
 // around the enum.
-use baml_bridge::Map;
+use baml_bridge::{
+    Map, baml_value::internal::__BamlValuePrivate, wire::inbound_value::Value as WireValue,
+};
 use baml_sdk::complex_models::{
     AccountTier, AuditEvent, CardPayment, CardPaymentOrWirePayment, ComplexProfile, ContactMethod,
     CreatedOrUpdatedOrApproved, DraftOrSentOrPaid, GeoPoint, GraphQueryOrGraphDiff,
@@ -17,14 +19,16 @@ use baml_sdk::complex_models::{
 // SDK_PARITY_LINT(skip): exercises Rust identifier synthesis for string-literal union arms
 #[test]
 fn test_complex_models_round_trip_non_identifier_string_literal_union_arms() {
-    for command in [
-        GraphQueryOrGraphDiff::GraphQuery,
-        GraphQueryOrGraphDiff::GraphDiff,
+    for (command, command_wire_value) in [
+        (GraphQueryOrGraphDiff::GraphQuery, "graph.query"),
+        (GraphQueryOrGraphDiff::GraphDiff, "graph.diff"),
     ] {
-        for encoding in [
-            Utf8LossyOrUtf8Strict::Utf8Lossy,
-            Utf8LossyOrUtf8Strict::Utf8Strict,
+        assert_string_wire_value(&command, command_wire_value);
+        for (encoding, encoding_wire_value) in [
+            (Utf8LossyOrUtf8Strict::Utf8Lossy, "utf8-lossy"),
+            (Utf8LossyOrUtf8Strict::Utf8Strict, "utf8-strict"),
         ] {
+            assert_string_wire_value(&encoding, encoding_wire_value);
             let value = LiteralUnionIdentifierEdges {
                 command: command.clone(),
                 encoding,
@@ -34,6 +38,13 @@ fn test_complex_models_round_trip_non_identifier_string_literal_union_arms() {
                 value
             );
         }
+    }
+}
+
+fn assert_string_wire_value<T: __BamlValuePrivate>(value: &T, expected: &str) {
+    match value.to_baml().value {
+        Some(WireValue::StringValue(actual)) => assert_eq!(actual, expected),
+        other => panic!("expected string wire value {expected:?}, got {other:?}"),
     }
 }
 
