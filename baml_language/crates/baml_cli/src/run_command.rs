@@ -233,9 +233,10 @@ pub struct RunArgs {
     )]
     pub log: RunLogLevel,
 
-    /// Write CLI diagnostic logs to a file.
+    /// Write BAML `log.*` events to a file.
     ///
-    /// Unrelated to `--log`, which prints BAML `log.*` events to stdout.
+    /// Captures all levels by default. If terminal logs are enabled, it uses
+    /// that threshold. It does not enable terminal output.
     #[arg(long, help_heading = "Run output options")]
     pub log_file: Option<PathBuf>,
 
