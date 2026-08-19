@@ -194,12 +194,13 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
 
 /// The pure (emitted-set-independent) reasons a null-stripped arm list
 /// cannot become a Rust enum: undecodable arm kinds, wire-ambiguous arm
-/// combinations, or underivable variant names. Shared by the
+/// combinations, or underivable/duplicate payload variant names. Shared by the
 /// class-fixpoint checks in `analyze` and [`collect`] so the two can
 /// never disagree.
 pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
     let mut has_bare_string_arm = false;
     let mut has_string_literal_arm = false;
+    let mut seen_payload_variants = HashSet::new();
     for arm in arms {
         match arm {
             Ty::Literal(baml_base::Literal::String(_), ..) => has_string_literal_arm = true,
@@ -212,8 +213,20 @@ pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
             Ty::String { .. } => has_bare_string_arm = true,
             _ => {}
         }
-        if variant_name(arm).is_none() {
+        let Some(variant) = variant_name(arm) else {
             return Some(format!("unsupported union arm: {arm}"));
+        };
+        // Two payload arms with the same derived name can erase to the same
+        // Rust type (for example `Status.A | Status.B`) and would emit
+        // conflicting `From<Status>` implementations. String literals are
+        // unit variants with distinct wire values, so their naming collisions
+        // are safe to resolve during synthesis.
+        if !matches!(arm, Ty::Literal(baml_base::Literal::String(_), ..))
+            && !seen_payload_variants.insert(variant.clone())
+        {
+            return Some(format!(
+                "union payload arms produce a duplicate variant name `{variant}`"
+            ));
         }
     }
     // A bare `string` arm makes string-literal arms indistinguishable on
@@ -264,9 +277,9 @@ fn synthesize(arms: &[Ty], analysis: &Analysis) -> Option<UnionEnum> {
 
 /// Derive one distinct Rust variant name per arm. Different wire values can
 /// normalize to the same identifier (`"graph.query"` and `"graph-query"`),
-/// and nominal arms from different namespaces can share a leaf name. Trailing
-/// underscores keep all of those shapes representable without changing their
-/// wire identities.
+/// or collide with a payload arm's name. Trailing underscores keep those
+/// variants distinct without changing their wire identities. Duplicate payload
+/// names are rejected by [`shape_error`] because they may erase to one Rust type.
 fn unique_variant_names(arms: &[Ty]) -> Option<Vec<String>> {
     let mut names = Vec::with_capacity(arms.len());
     let mut seen = HashSet::new();
@@ -477,5 +490,40 @@ mod tests {
                 "Value_",
             ]
         );
+    }
+
+    #[test]
+    fn payload_arms_with_the_same_rust_type_are_rejected() {
+        let status = baml_codegen_types::Name::new(
+            baml_base::Name::new("user"),
+            Vec::new(),
+            baml_base::Name::new("Status"),
+        );
+        let arms = [
+            Ty::EnumVariant(
+                status.clone(),
+                baml_base::Name::new("A"),
+                baml_base::TyAttr::EMPTY,
+            ),
+            Ty::EnumVariant(status, baml_base::Name::new("B"), baml_base::TyAttr::EMPTY),
+        ];
+
+        assert_eq!(
+            shape_error(&arms).as_deref(),
+            Some("union payload arms produce a duplicate variant name `Status`")
+        );
+    }
+
+    #[test]
+    fn string_literal_name_can_be_deconflicted_from_a_payload_arm() {
+        let arms = [
+            Ty::Int {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            string_literal("int"),
+        ];
+
+        assert_eq!(shape_error(&arms), None);
+        assert_eq!(unique_variant_names(&arms).unwrap(), ["Int", "Int_"]);
     }
 }
