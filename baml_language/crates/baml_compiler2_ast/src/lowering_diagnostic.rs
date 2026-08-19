@@ -7,6 +7,18 @@ use baml_base::{ClientOptionsValidationError, FileId, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity};
 use text_size::TextRange;
 
+/// Why a declared name is reserved - which message family E0164 renders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReservedNameKind {
+    /// The builtin type scope's names (`string`, `int`, `json`, ...), the
+    /// type-position intrinsics (`void`, `never`, `unknown`), and `Self`.
+    BuiltinType,
+    /// A contextual keyword the lexer rejects as an identifier (`true`,
+    /// `map`, `type`, ...) - the same set the runtime type constructors
+    /// enforce, so static and runtime validation agree.
+    Keyword,
+}
+
 /// Diagnostic emitted during CST → AST lowering.
 ///
 /// These are structural problems ("missing name token", "unparseable type")
@@ -162,6 +174,17 @@ pub enum LoweringDiagnostic {
     /// `baml.id.current()`, writes to `baml.id.set(...)`); a binding named
     /// `$id` would be silently dead, so it is rejected.
     ReservedRuntimeIdBindingName { span: TextRange },
+
+    /// A declaration introduces a reserved name: a builtin type name (which
+    /// always denotes the builtin, so the declaration could never be referred
+    /// to unqualified) or a keyword.
+    ReservedDeclarationName {
+        /// Includes its article: "a class", "an enum", ...
+        decl_kind: &'static str,
+        name: String,
+        reserved: ReservedNameKind,
+        span: TextRange,
+    },
 
     /// An assignment operator (`=`, `+=`, …) appeared in expression position,
     /// e.g. `(x = 5)`. Assignment is statement-only in BAML, so the expression
@@ -599,6 +622,28 @@ impl LoweringDiagnostic {
                 "`$id` is the runtime identity and cannot be used as a binding name".to_string(),
                 *span,
                 "`$id` is reserved here",
+            ),
+            LoweringDiagnostic::ReservedDeclarationName {
+                decl_kind,
+                name,
+                reserved,
+                span,
+            } => (
+                DiagnosticId::ReservedName,
+                Severity::Error,
+                match reserved {
+                    ReservedNameKind::BuiltinType => format!(
+                        "`{name}` is a reserved type name and cannot be used as {decl_kind} name"
+                    ),
+                    ReservedNameKind::Keyword => {
+                        format!("`{name}` is a keyword and cannot be used as {decl_kind} name")
+                    }
+                },
+                *span,
+                match reserved {
+                    ReservedNameKind::BuiltinType => "always refers to the builtin type",
+                    ReservedNameKind::Keyword => "keywords cannot name declarations",
+                },
             ),
             LoweringDiagnostic::AssignmentInExpressionPosition { span } => (
                 DiagnosticId::InvalidSyntax,

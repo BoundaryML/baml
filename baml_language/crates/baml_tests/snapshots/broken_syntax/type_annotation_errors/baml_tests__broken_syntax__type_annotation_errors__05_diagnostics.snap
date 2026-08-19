@@ -2,6 +2,15 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [hir] E0164
+
+  × `type` is a keyword and cannot be used as a type alias name
+   ╭─[type_malformed.baml:7:1]
+ 7 │ type Foo
+   · ──┬─
+   ·   ╰── keywords cannot name declarations
+   ╰────
+
   [parse] E0010
 
   × unexpected token

@@ -153,8 +153,17 @@ fn extract_scoped(
         }
         let cst_root = SyntaxNode::new_root(green);
 
-        // Lower CST → AST items.
-        let (items, diags, _) = baml_compiler2_ast::lower_file(&cst_root);
+        // Lower CST → AST items. This extractor only ever lowers the builtin
+        // stdlib packages, which define the builtin names themselves
+        // (`type json = ...`), so the reserved-declaration-name check is off.
+        let (items, diags, _) = baml_compiler2_ast::lower_file_with_path_and_test_owner(
+            &cst_root,
+            None,
+            baml_compiler2_ast::LowerFileOpts {
+                test_owner: None,
+                in_builtin_package: true,
+            },
+        );
         for ld in &diags {
             let d = ld.to_diagnostic(FileId::new(0));
             let location = d

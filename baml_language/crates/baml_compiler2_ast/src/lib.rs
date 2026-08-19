@@ -27,11 +27,11 @@ pub use baml_base::escape::unescape_string_literal;
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
 pub use lower_cst::{
-    lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,
+    LowerFileOpts, lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,
     lower_session_file_with_path_and_test_owner,
 };
 pub use lower_expr_body::{EnvVarRef, synthesize_spec_stream_body};
-pub use lowering_diagnostic::LoweringDiagnostic;
+pub use lowering_diagnostic::{LoweringDiagnostic, ReservedNameKind};
 // Re-exported so callers of `TypeExprKind::at(span)` can name the span type
 // without depending on `text_size` directly.
 pub use text_size::TextRange;
@@ -421,7 +421,7 @@ mod tests {
     }
 
     /// Parse BAML source text and return the CST root.
-    fn parse(source: &str) -> SyntaxNode {
+    pub(super) fn parse(source: &str) -> SyntaxNode {
         let tokens = lex_lossless(source, FileId::new(0));
         let (green, errors) = parse_file(&tokens);
         assert!(
@@ -2777,6 +2777,114 @@ mod lambda_arena_tests {
             body.reachable_excluding_lambdas(lambda_root)
                 .contains(&crate::traverse::BodyNode::Stmt(throw_stmts[0])),
             "walking from the lambda's own root must reach its `throw`"
+        );
+    }
+}
+
+#[cfg(test)]
+mod reserved_name_tests {
+    use super::{
+        ReservedNameKind,
+        tests::{parse, parse_and_lower},
+    };
+
+    fn reserved_diags(source: &str) -> Vec<(String, String, ReservedNameKind)> {
+        let root = parse(source);
+        let (_items, diags, _env) = super::lower_file(&root);
+        diags
+            .iter()
+            .filter_map(|d| match d {
+                super::LoweringDiagnostic::ReservedDeclarationName {
+                    decl_kind,
+                    name,
+                    reserved,
+                    ..
+                } => Some((decl_kind.to_string(), name.clone(), *reserved)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The ticket's table-driven negative matrix: the FULL registry (driven
+    /// off `PrimitiveType::ALL` plus `json` plus the intrinsics and `Self`)
+    /// is rejected across every name-introducing declaration kind.
+    #[test]
+    fn every_registry_name_is_rejected_across_declaration_kinds() {
+        let mut reserved_type_names: Vec<String> = baml_type::PrimitiveType::ALL
+            .iter()
+            .map(|p| p.alias().to_string())
+            .collect();
+        reserved_type_names.extend(["json", "void", "never", "unknown", "Self"].map(String::from));
+
+        for name in &reserved_type_names {
+            for (decl_kind, source) in [
+                ("a class", format!("class {name} {{ v int }}\n")),
+                ("an enum", format!("enum {name} {{ A }}\n")),
+                ("a type alias", format!("type {name} = int\n")),
+                (
+                    "an interface",
+                    format!("interface {name} {{ function f(self) -> int }}\n"),
+                ),
+                ("a function", format!("function {name}() -> int {{ 1 }}\n")),
+                (
+                    "a generic parameter",
+                    format!("class Box<{name}> {{ v int }}\n"),
+                ),
+            ] {
+                let found = reserved_diags(&source);
+                assert!(
+                    found.iter().any(|(kind, n, r)| {
+                        kind == decl_kind && n == name && *r == ReservedNameKind::BuiltinType
+                    }),
+                    "`{name}` as {decl_kind} must be a reserved-type-name error, got {found:?}",
+                );
+            }
+        }
+    }
+
+    /// Contextual keywords are rejected as declaration names with the keyword
+    /// flavor of E0164 - the same set the runtime constructors enforce.
+    #[test]
+    fn contextual_keywords_are_rejected_as_declaration_names() {
+        for name in ["true", "false", "map", "const", "with", "as", "unreflect"] {
+            let found = reserved_diags(&format!("class {name} {{ v int }}\n"));
+            assert!(
+                found
+                    .iter()
+                    .any(|(_, n, r)| n == name && *r == ReservedNameKind::Keyword),
+                "`{name}` as a class must be a keyword error, got {found:?}",
+            );
+        }
+    }
+
+    /// What stays legal: capitalized companion-class spellings (`String` is
+    /// an ordinary name), member names (receiver-qualified, no ambiguity -
+    /// the stdlib itself has methods named `map`), and body-local bindings.
+    #[test]
+    fn non_reserved_positions_stay_legal() {
+        parse_and_lower("class String { v int }\n");
+        parse_and_lower("class Int { v int }\n");
+        parse_and_lower("class Foo { string int }\n");
+        parse_and_lower("class Foo {\n  x int\n  function map(self) -> int { self.x }\n}\n");
+        parse_and_lower("function f() -> int {\n  let string = 1\n  string\n}\n");
+    }
+
+    /// The builtin `baml` package defines the builtin names (`type json`),
+    /// so lowering with the builtin-package flag set skips the check.
+    #[test]
+    fn builtin_package_is_exempt() {
+        let root = parse("type json = int\n");
+        let (_items, diags, _env) = super::lower_file_with_path_and_test_owner(
+            &root,
+            None,
+            super::LowerFileOpts {
+                test_owner: None,
+                in_builtin_package: true,
+            },
+        );
+        assert!(
+            diags.is_empty(),
+            "builtin package must be exempt, got {diags:#?}"
         );
     }
 }

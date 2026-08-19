@@ -847,6 +847,7 @@ dependencies = [
  "baml_compiler_lexer",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_type",
  "borsh",
  "la-arena",
  "num-bigint",

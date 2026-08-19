@@ -392,6 +392,8 @@ pub enum DiagnosticId {
     /// declared interface bound, or any at all for a callable with nothing
     /// left to bind.
     ReflectSpecializationFailed,
+    /// A declaration uses a reserved name (builtin type name or keyword).
+    ReservedName,
 }
 
 impl DiagnosticId {
@@ -572,6 +574,7 @@ impl DiagnosticId {
             DiagnosticId::InitIoNotAllowed => "E0163",
             DiagnosticId::NonDataTypeAtRender => "E0164",
             DiagnosticId::ConditionAlwaysConstant => "E0167",
+            DiagnosticId::ReservedName => "E0170",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 

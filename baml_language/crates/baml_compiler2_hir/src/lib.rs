@@ -165,7 +165,13 @@ pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
     } else {
         baml_compiler2_ast::lower_file_with_path_and_test_owner
     };
-    let (items, diagnostics, env_var_refs) = lower(&tree, Some(path.as_path()), Some(&test_owner));
+    let opts = baml_compiler2_ast::LowerFileOpts {
+        test_owner: Some(&test_owner),
+        // The reserved `baml` package defines the builtin names themselves
+        // (`type json = ...`), so it is exempt from the reserved-name check.
+        in_builtin_package: package.package.as_str() == "baml",
+    };
+    let (items, diagnostics, env_var_refs) = lower(&tree, Some(path.as_path()), opts);
     FileAst {
         items,
         diagnostics,

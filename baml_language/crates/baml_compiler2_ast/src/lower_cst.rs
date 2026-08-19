@@ -68,11 +68,22 @@ pub fn lower_file(
     lower_file_with_path(root, None)
 }
 
+/// Options for file lowering that only project-aware callers can decide.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LowerFileOpts<'a> {
+    /// The exact BAML namespace derived from the project root, when known.
+    pub test_owner: Option<&'a str>,
+    /// Whether this file belongs to the reserved builtin `baml` package,
+    /// which DEFINES the builtin names (`type json = ...`) and is therefore
+    /// exempt from the reserved-declaration-name check.
+    pub in_builtin_package: bool,
+}
+
 pub fn lower_file_with_path(
     root: &SyntaxNode,
     file_path: Option<&std::path::Path>,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
-    lower_file_with_path_and_test_owner(root, file_path, None)
+    lower_file_with_path_and_test_owner(root, file_path, LowerFileOpts::default())
 }
 
 /// Variant used by project-aware lowering, where the HIR layer already knows
@@ -82,9 +93,9 @@ pub fn lower_file_with_path(
 pub fn lower_file_with_path_and_test_owner(
     root: &SyntaxNode,
     file_path: Option<&std::path::Path>,
-    test_owner: Option<&str>,
+    opts: LowerFileOpts<'_>,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
-    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, false)
+    lower_file_with_path_and_test_owner_impl(root, file_path, opts, false)
 }
 
 /// Lower compiler-generated source for a `Session.eval` submission.
@@ -95,17 +106,18 @@ pub fn lower_file_with_path_and_test_owner(
 pub fn lower_session_file_with_path_and_test_owner(
     root: &SyntaxNode,
     file_path: Option<&std::path::Path>,
-    test_owner: Option<&str>,
+    opts: LowerFileOpts<'_>,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
-    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, true)
+    lower_file_with_path_and_test_owner_impl(root, file_path, opts, true)
 }
 
 fn lower_file_with_path_and_test_owner_impl(
     root: &SyntaxNode,
     file_path: Option<&std::path::Path>,
-    test_owner: Option<&str>,
+    opts: LowerFileOpts<'_>,
     is_session_submission: bool,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    let test_owner = opts.test_owner;
     let mut diags = Vec::new();
     let mut env_var_refs = Vec::new();
     let mut items = Vec::new();
@@ -302,7 +314,133 @@ fn lower_file_with_path_and_test_owner_impl(
         diags.push(LoweringDiagnostic::FieldAttributeInTypePosition { attr_name, span });
     }
 
+    if !opts.in_builtin_package {
+        check_reserved_declaration_names(&items, &mut diags);
+    }
+
     (items, diags, env_var_refs)
+}
+
+// ── Reserved declaration names (E0164) ─────────────────────────
+
+/// Why `name` may not be introduced by a declaration, if it may not be.
+///
+/// One predicate, composed of the two single-source vocabularies the rest of
+/// the compiler already answers to:
+///
+/// * the builtin type registry (`BuiltinTypeName::from_alias` - the same
+///   registry the resolution chain's builtin scope filters, plus the
+///   `void`/`never`/`unknown` intrinsics it deliberately excludes) and
+///   `Self`: these names have an unconditional meaning in type position that
+///   OUTRANKS declarations, so a declaration could never be referred to by
+///   its own name;
+/// * the lexer's identifier rule (`is_baml_identifier`) - contextual
+///   keywords like `true`/`map`/`type`. The runtime type constructors
+///   (`reflect.class.new`) already reject these, so checking them here makes
+///   static and runtime validation agree.
+fn reserved_declaration_name(name: &str) -> Option<crate::lowering_diagnostic::ReservedNameKind> {
+    if baml_type::BuiltinTypeName::from_alias(name).is_some() || name == "Self" {
+        return Some(crate::lowering_diagnostic::ReservedNameKind::BuiltinType);
+    }
+    if !baml_compiler_diagnostics::runtime_type::is_baml_identifier(name) {
+        return Some(crate::lowering_diagnostic::ReservedNameKind::Keyword);
+    }
+    None
+}
+
+/// The declaration-site half of B-849: reject reserved names where the
+/// declaration could never win the name (TypeScript's TS2414 family; Rust
+/// instead allows the shadow and patched in `core::primitive` years later).
+///
+/// The matrix:
+///
+/// * type declarations (class, enum, type alias, interface), value
+///   declarations (function, client, top-level let), and generic parameters
+///   reject the FULL reserved set - a generic parameter is checked because
+///   it shadows builtins lexically (params resolve ahead of the chain), and
+///   a value named `string` captures the head of `string.from(...)`;
+/// * member names (fields, methods, enum variants) are NOT checked: member
+///   access is always receiver-qualified, so no ambiguity exists (Rust
+///   likewise allows `struct S { u8: u8 }`) - and the stdlib itself declares
+///   methods named `map` and `implements`.
+///
+/// The builtin `baml` package is exempt (it defines `type json = ...`).
+/// Synthesized items (companions, auto-derives) are skipped: they derive
+/// from already-validated user names.
+fn check_reserved_declaration_names(items: &[Item], diags: &mut Vec<LoweringDiagnostic>) {
+    fn check_full(
+        diags: &mut Vec<LoweringDiagnostic>,
+        decl_kind: &'static str,
+        name: &Name,
+        span: text_size::TextRange,
+    ) {
+        if let Some(reserved) = reserved_declaration_name(name.as_str()) {
+            diags.push(LoweringDiagnostic::ReservedDeclarationName {
+                decl_kind,
+                name: name.to_string(),
+                reserved,
+                span,
+            });
+        }
+    }
+    // Generic params carry no span of their own; anchor at the owner's name.
+    fn check_generics(
+        diags: &mut Vec<LoweringDiagnostic>,
+        params: &[crate::ast::GenericParam],
+        owner_name_span: text_size::TextRange,
+    ) {
+        for param in params {
+            if let Some(reserved) = reserved_declaration_name(param.name.as_str()) {
+                diags.push(LoweringDiagnostic::ReservedDeclarationName {
+                    decl_kind: "a generic parameter",
+                    name: param.name.to_string(),
+                    reserved,
+                    span: owner_name_span,
+                });
+            }
+        }
+    }
+
+    for item in items {
+        match item {
+            Item::Class(class) => {
+                check_full(diags, "a class", &class.name, class.name_span);
+                check_generics(diags, &class.generic_params, class.name_span);
+                for method in &class.methods {
+                    check_generics(diags, &method.generic_params, method.name_span);
+                }
+            }
+            Item::Enum(enum_def) => {
+                check_full(diags, "an enum", &enum_def.name, enum_def.name_span);
+            }
+            Item::TypeAlias(alias) => {
+                check_full(diags, "a type alias", &alias.name, alias.name_span);
+            }
+            Item::Interface(interface) => {
+                check_full(diags, "an interface", &interface.name, interface.name_span);
+                check_generics(diags, &interface.generic_params, interface.name_span);
+            }
+            Item::Function(func) => {
+                if func.metadata.origin == crate::ast::FunctionOrigin::UserDefined {
+                    check_full(diags, "a function", &func.name, func.name_span);
+                    check_generics(diags, &func.generic_params, func.name_span);
+                }
+            }
+            Item::Client(client) => {
+                check_full(diags, "a client", &client.name, client.name_span);
+            }
+            Item::Let(let_def) => {
+                check_full(diags, "a value", &let_def.name, let_def.name_span);
+            }
+            // Test names are quoted strings; template strings and retry
+            // policies are removed syntax with their own migration errors;
+            // `implement ... for ...` introduces no name.
+            Item::Test(_)
+            | Item::TemplateString(_)
+            | Item::RetryPolicy(_)
+            | Item::ImplementsFor(_) => {}
+        }
+    }
 }
 
 /// Check if a just-lowered type expression contains `TypeExprKind::Unknown` at the root.
