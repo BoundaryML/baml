@@ -1,0 +1,1611 @@
+# ix preview copy of .github/workflows/cargo-tests.reusable.yaml - the
+# same jobs pointed at the ix runner pool (runs-on labels, parallelism
+# env pins, and per-lane timeout adjustments). It runs side by side with
+# the original via ix-ci.yml, is never a required check, and changes
+# nothing about how the original runs. Promote or delete after the
+# trial; do not evolve both copies.
+#
+# sccache strategy
+# ================
+#
+# This workflow uses sccache for Rust compilation artifacts and
+# Swatinem/rust-cache for Cargo registry/git state — i.e. everything cargo
+# downloads before it compiles: the crates.io index, the `.crate` tarballs, and
+# the git checkouts of our forks (minijinja, aws-sdk-rust, google-cloud-rust).
+# `cache-all-crates: true` keeps all of those (the git forks in particular,
+# which are large and otherwise re-cloned on every runner); `cache-targets:
+# false` leaves the compiled `target/` tree to sccache so the two caches don't
+# compete.
+#
+# Because `target/` is excluded, rust-cache's payload is small (registry + git,
+# no build output). As on canary, only canary writes the cache
+# (`save-if: ${{ github.ref == 'refs/heads/canary' }}`); PR branches read the
+# shared entry instead of each saving a fresh one, so cache usage doesn't blow
+# out. rust-cache keys are content-addressed on Cargo.lock, so jobs sharing a
+# `shared-key` reuse the same entry.
+#
+# mise installs sccache and direnv, then each cargo job loads .envrc via
+# `direnv export gha` so CI uses the exact same sccache config as local shells:
+# .envrc is the single source of truth. The R2 credentials are passed through
+# GitHub Actions secrets using the same BAML_SCCACHE_R2_* names that the
+# RUSTC_WRAPPER maps to AWS_* before exec'ing sccache — the `tools/baml-sccache`
+# script on POSIX, and the native `tools_sccache` crate's binary on Windows
+# (built per-job; see the "Build native sccache wrapper" step).
+#
+# Secretless runs (e.g. fork PRs) still install sccache, but .envrc sees no R2
+# credentials and falls back to the runner-local cache.
+name: Cargo Tests (Reusable)
+
+on:
+  workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
+
+# Read-only by design: these jobs run PR-controlled cargo build/test code, so
+# they should not need elevated repository permissions.
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
+  # .envrc itself so it stays the single source of truth across CI and local.
+  # The R2 credentials .envrc maps to AWS_* for sccache (mapped to AWS_*).
+  # Native Cargo linker overrides live in baml_language/.cargo/config.toml.
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  # CI executes the compiler thousands of times per job — in-process in
+  # `baml_tests`, and as a spawned debug `baml-cli` in the CLI e2e suites — so
+  # test runtime dwarfs compile time here (opt-level 0 test execution was
+  # ~55min of CPU per run across the linux jobs alone). opt-level 1 keeps
+  # debug-assertions on and costs one sccache-cold rebuild after this change
+  # lands; per-package overrides in Cargo.toml (e.g. salsa) still apply on
+  # top. Pinned on both `dev` (dependencies) and `test` (the `--test`
+  # binaries) so the setting is unambiguous, mirroring the DEBUG pins in the
+  # windows job.
+  CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+  CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+  # cargo defaults -j to the machine's 64 cores; concurrent machines all
+  # doing that oversubscribe the host they share. Hosted fallback runners
+  # have <=16 vCPUs, so this changes nothing there.
+  CARGO_BUILD_JOBS: "16"
+  # vitest otherwise sizes its worker pool from the 64 visible cores, and
+  # each worker is a workerd process: enough of them OOM the typescript-web
+  # lane. Set here, not in the machine image, so the value is deterministic
+  # per commit.
+  VITEST_MAX_WORKERS: "4"
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+
+  cargo-test-linux:
+    name: "cargo test (x86_64-unknown-linux-gnu)"
+    # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    # 40, not 25: a machine without a warm seed compiles cold and can
+    # exceed 25 minutes; the cap is a hang backstop, not a perf gate.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Keep the warm seed's ignored files (target/, node_modules);
+          # tracked files still hard-reset to the SHA. No-op on hosted runners.
+          clean: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      # mise installs sccache/direnv AND cargo-nextest (cargo: backend ->
+      # cargo-binstall prebuilt), replacing taiki-e/install-action.
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv cargo:cargo-nextest"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-cargo"
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      # `baml_tests`, `baml_cli`, and `baml_lsp2_actions` already run on linux
+      # with `--all-features` in the dedicated `snapshot-tests` job, so this
+      # job neither builds nor runs them — their test binaries are also the
+      # heaviest links in the workspace. (A nextest `-E` filter would only
+      # skip *running* them; the cargo-level `--exclude` skips building them
+      # too.) The `sdk_test_*` crates need uv and run in the dedicated
+      # `sdk-tests` matrix below.
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_lsp2_actions --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      - name: "Run tests with nextest"
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_lsp2_actions --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      - name: "Upload test results on failure"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-failures-linux
+          path: |
+            baml_language/**/*.snap.new
+            baml_language/**/target/nextest/
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-test-linux.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-test-linux
+          path: sccache-stats-test-linux.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-test-linux
+          path: baml_language/target/cargo-timings/cargo-timing-test-linux.html
+          if-no-files-found: ignore
+
+  cargo-test-linux-musl:
+    name: "cargo test (x86_64-unknown-linux-musl)"
+    # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-musl"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    # 45, not 35: same reasoning as the gnu lane above.
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
+      # The ix machine image ships musl-gcc (a real musl cross compiler);
+      # setup-musl-cross is skipped there, so wire the cargo linker
+      # explicitly. Identical to what the action exports on hosted runners.
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Keep the warm seed's ignored files (target/, node_modules);
+          # tracked files still hard-reset to the SHA. No-op on hosted runners.
+          clean: false
+
+      - name: "Install Rust toolchain"
+        run: |
+          set -euo pipefail
+          rustup show
+          rustup target add x86_64-unknown-linux-musl
+        working-directory: baml_language
+
+      - name: "Setup musl cross toolchain"
+        # The ix machine image bakes the musl toolchain (and has no sudo for
+        # this action's package installs); hosted fallback still needs it.
+        if: runner.environment != 'self-hosted'
+        uses: ./.github/actions/setup-musl-cross
+        with:
+          target: x86_64-unknown-linux-musl
+
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv cargo:cargo-nextest"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-cargo"
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      # Enabling every feature turns on the optional native-tls backend, which
+      # needs a separate target-specific OpenSSL build. Default features match
+      # the rustls-based musl artifacts we ship.
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      - name: "Run tests with nextest"
+        run: cargo nextest run --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e)'
+        working-directory: baml_language
+
+      - name: "Run pack end-to-end tests"
+        run: cargo test -p baml_cli --test pack_e2e
+        working-directory: baml_language
+
+      - name: "Upload test results on failure"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-failures-linux-musl
+          path: |
+            baml_language/**/*.snap.new
+            baml_language/**/target/nextest/
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-test-linux-musl.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-test-linux-musl
+          path: sccache-stats-test-linux-musl.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux-musl.html
+        working-directory: baml_language
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-test-linux-musl
+          path: baml_language/target/cargo-timings/cargo-timing-test-linux-musl.html
+          if-no-files-found: ignore
+
+  # TODO(B-1545): Temporarily disabled due to flakiness; re-enable via https://linear.app/boundaryml2/issue/B-1545/investigate-flakiness-in-cargo-test-aarch64-apple-darwin-ci-job
+  # cargo-test-macos:
+  #   name: "cargo test (aarch64-apple-darwin)"
+  #   # Skip in the merge queue: macos already ran on the PR. The merge_group
+  #   # event is inherited from ci.yaml through the workflow_call boundary.
+  #   if: ${{ github.event_name != 'merge_group' }}
+  #   runs-on: blacksmith-6vcpu-macos-latest
+  #   timeout-minutes: 35
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #       with:
+  #         persist-credentials: false
+
+  #     - name: "Install Rust toolchain"
+  #       run: rustup show
+  #       working-directory: baml_language
+
+  #     - name: "Install tools (mise)"
+  #       uses: ./.github/actions/setup-mise
+  #       with:
+  #         install_args: "sccache direnv cargo:cargo-nextest"
+
+  #     - name: "Verify sccache"
+  #       run: sccache --version
+
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         workspaces: "baml_language -> target"
+  #         cache-all-crates: true
+  #         cache-targets: false
+  #         save-if: ${{ github.ref == 'refs/heads/canary' }}
+  #         shared-key: "macos-cargo"
+
+  #     - name: "Load .envrc with direnv"
+  #       run: |
+  #         set -euo pipefail
+
+  #         direnv allow .envrc
+  #         direnv export gha >> "$GITHUB_ENV"
+
+  #     # Separate step so if fetch is slow, build is fast.
+  #     - name: "Fetch cargo dependencies"
+  #       run: cargo fetch
+  #       working-directory: baml_language
+
+  #     # Snapshot tests live in `baml_tests` and are exercised end-to-end by
+  #     # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
+  #     # and run in the dedicated `sdk-tests` matrix below. Skip both here —
+  #     # at the cargo level (`--exclude`), not a nextest `-E` filter, so their
+  #     # test binaries (the heaviest links in the workspace) aren't built.
+  #     - name: "Build tests with --timings"
+  #       run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+  #       working-directory: baml_language
+
+  #     - name: "Run tests with nextest"
+  #       run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+  #       working-directory: baml_language
+
+  #     - name: "Show sccache stats"
+  #       if: always()
+  #       run: sccache --show-stats
+
+  #     - name: "Dump sccache stats (json)"
+  #       if: always()
+  #       run: sccache --show-stats --stats-format json > sccache-stats-test-macos.json
+
+  #     - name: "Upload sccache stats"
+  #       if: always()
+  #       uses: actions/upload-artifact@v7
+  #       with:
+  #         name: sccache-stats-test-macos
+  #         path: sccache-stats-test-macos.json
+  #         if-no-files-found: ignore
+
+  #     - name: "Rename cargo timings"
+  #       if: always()
+  #       run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-macos.html
+  #       working-directory: baml_language
+  #     - name: "Upload cargo timings"
+  #       if: always()
+  #       uses: actions/upload-artifact@v7
+  #       with:
+  #         name: cargo-timings-test-macos
+  #         path: baml_language/target/cargo-timings/cargo-timing-test-macos.html
+  #         if-no-files-found: ignore
+
+  cargo-test-windows:
+    name: "cargo test (x86_64-pc-windows-msvc)"
+    # Skip in the merge queue (windows already ran on the PR) and outside
+    # the upstream repo (forks have no Blacksmith Windows runners).
+    if: ${{ github.event_name != 'merge_group' && github.repository == 'BoundaryML/baml' }}
+    # 8-vCPU + CARGO_BUILD_JOBS=16 (2x cores) was the value sweet spot for the
+    # native Windows Rust builds (build-caching/04 Exp 7/9).
+    runs-on: blacksmith-8vcpu-windows-2025
+    env:
+      CARGO_BUILD_JOBS: "16"
+      # Windows debug builds emit very large PDBs; full debuginfo across the
+      # whole `--all-features` test build overruns the runner's ~130 GB disk
+      # ("no space on device" during codegen, before any test runs).
+      # `line-tables-only` keeps file:line backtraces for test failures while
+      # dropping the bulk of the debug-info size (variable/type DIEs). Pinned on
+      # both `dev` (dependencies) and `test` (the `--test` binaries, which
+      # inherit `dev` but are pinned explicitly so the reduction is unambiguous).
+      # Drop to "0" if this is still too tight.
+      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+      CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
+    # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
+    # Right now it needs to download our repo every time which is very slow
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install sccache, direnv, and cargo-nextest"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv cargo:cargo-nextest"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "windows-cargo"
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: "Build native sccache wrapper"
+        run: |
+          set -euo pipefail
+          # The native RUSTC_WRAPPER (tools_sccache crate) maps the R2 creds and
+          # execs sccache; cargo launches it via CreateProcess (32767-char
+          # limit), avoiding cmd.exe's ~8191-char limit that windows-sys' huge
+          # `--check-cfg cfg(feature, values(...))` line blows past. The binary
+          # lives in the build tree, so build it first — .envrc leaves
+          # RUSTC_WRAPPER unset until it exists, so this bootstrap compiles with
+          # plain rustc — then point RUSTC_WRAPPER at it for the cargo steps
+          # below.
+          cargo build -p tools_sccache
+          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
+        working-directory: baml_language
+
+      # Snapshot tests live in `baml_tests` and are covered by the dedicated
+      # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
+      # dedicated `sdk-tests` matrix below. Skip both here — at the cargo
+      # level (`--exclude`), not a nextest `-E` filter, so their test binaries
+      # (the heaviest links, and on Windows the largest PDBs) aren't built.
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      # Profiling-specific test binaries opt in explicitly; keeping
+      # BAML_PROFILE off for the general suite avoids filling the Windows
+      # runner with incidental `.bamlprof` files. Run the two binaries that
+      # need `baml-pack-host` separately so their process-global OnceLocks
+      # build and share it instead of relinking it for every nextest case.
+      - name: "Run tests"
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e)'
+        working-directory: baml_language
+        env:
+          BAML_PROFILE: "0"
+
+      - name: "Free disk for CLI binary e2e tests"
+        run: |
+          set -euo pipefail
+          mv target/cargo-timings/cargo-timing.html cargo-timing-test-windows.html
+          cp target/debug/baml-sccache.exe baml-sccache.exe
+          echo "RUSTC_WRAPPER=$(pwd -W)/baml-sccache.exe" >> "$GITHUB_ENV"
+          cargo clean
+        working-directory: baml_language
+
+      - name: "Run CLI binary e2e tests (windows)"
+        run: cargo test -p baml_cli --test pack_e2e --test exit_code_e2e --all-features
+        working-directory: baml_language
+        env:
+          BAML_PROFILE: "0"
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-test-windows.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-test-windows
+          path: sccache-stats-test-windows.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-test-windows
+          path: baml_language/cargo-timing-test-windows.html
+          if-no-files-found: ignore
+
+  sdk-test-matrix:
+    name: "sdk test matrix"
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      sdk-dirs: ${{ steps.matrix.outputs.sdk-dirs }}
+      temporarily-disabled-sdk-dirs: ${{ steps.matrix.outputs.temporarily-disabled-sdk-dirs }}
+    steps:
+      - name: "Build matrix"
+        id: matrix
+        uses: actions/github-script@v8
+        with:
+          script: |
+            // Fork PRs stay on the hosted runners; untrusted code never
+            // lands on ix. Read off `context`, not workflow interpolation,
+            // so no event data is spliced into this script. Same-repo test
+            // rather than head.repo.fork: `fork` is true for every PR on any
+            // fork of upstream, which would route same-repo PRs to runner
+            // labels that do not exist there.
+            const poolOk =
+              (context.eventName !== 'pull_request' && context.eventName !== 'pull_request_target') ||
+              context.payload.pull_request?.head?.repo?.full_name ===
+                `${context.repo.owner}/${context.repo.repo}`;
+            // One constant covers every linux SDK entry: the jobs share
+            // the same Rust build underneath, so they share one seed.
+            const LINUX_RUNNER = poolOk ? ["ix", "ix-sdk"] : "blacksmith-16vcpu-ubuntu-2404";
+
+            const baseMatrix = [
+              {
+                "sdk-label": "go",
+                "sdk-dir": "go",
+                "package-name": "sdk_test_go",
+                "sdk-path": "go",
+                "install-args": "sccache direnv go cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": LINUX_RUNNER,
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "python-pydantic2",
+                "sdk-dir": "python",
+                "package-name": "sdk_test_python_pydantic2",
+                "sdk-path": "python_pydantic2",
+                "install-args": "sccache direnv python uv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": LINUX_RUNNER,
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "ruby-sorbet",
+                "sdk-dir": "ruby",
+                "package-name": "sdk_test_ruby_sorbet",
+                "sdk-path": "ruby_sorbet",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": LINUX_RUNNER,
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "typescript",
+                "sdk-dir": "typescript",
+                "package-name": "sdk_test_typescript",
+                "sdk-path": "typescript",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": LINUX_RUNNER,
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "typescript-web",
+                "sdk-dir": "typescript",
+                "package-name": "sdk_test_typescript_web",
+                "sdk-path": "typescript_web",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
+                "os-label": "linux",
+                "runs-on": LINUX_RUNNER,
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                // The C++ sdk-test crate needs the host C++ toolchain and
+                // CMake (preinstalled on the runners) plus nextest; its
+                // setup.sh builds the bridge_cffi cdylib with cargo and
+                // pre-clones the pinned protobuf sources. Windows joins
+                // once the MSVC test driver lands (test.sh is bash).
+                "sdk-label": "cpp",
+                "sdk-dir": "cpp",
+                "package-name": "sdk_test_cpp",
+                "sdk-path": "cpp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": LINUX_RUNNER,
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "csharp",
+                "sdk-dir": "csharp",
+                "package-name": "sdk_test_csharp",
+                "sdk-path": "csharp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": LINUX_RUNNER,
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "rust",
+                "sdk-dir": "rust",
+                "package-name": "sdk_test_rust",
+                "sdk-path": "rust",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": LINUX_RUNNER,
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                // The Java sdk-test crate needs the mise-pinned JDK and
+                // Gradle (setup script builds the bridge_java cdylib and
+                // the baml_bridge jar; test time spawns `gradle` from
+                // PATH, so `java` + `gradle` must be in install-args).
+                "sdk-label": "java",
+                "sdk-dir": "java",
+                "package-name": "sdk_test_java",
+                "sdk-path": "java",
+                "install-args": "sccache direnv java gradle cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": LINUX_RUNNER,
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "go",
+                "sdk-dir": "go",
+                "package-name": "sdk_test_go",
+                "sdk-path": "go",
+                "install-args": "sccache direnv go cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "python-pydantic2",
+                "sdk-dir": "python",
+                "package-name": "sdk_test_python_pydantic2",
+                "sdk-path": "python_pydantic2",
+                "install-args": "sccache direnv python uv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "ruby-sorbet",
+                "sdk-dir": "ruby",
+                "package-name": "sdk_test_ruby_sorbet",
+                "sdk-path": "ruby_sorbet",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "cpp",
+                "sdk-dir": "cpp",
+                "package-name": "sdk_test_cpp",
+                "sdk-path": "cpp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "typescript",
+                "sdk-dir": "typescript",
+                "package-name": "sdk_test_typescript",
+                "sdk-path": "typescript",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "typescript-web",
+                "sdk-dir": "typescript",
+                "package-name": "sdk_test_typescript_web",
+                "sdk-path": "typescript_web",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "csharp",
+                "sdk-dir": "csharp",
+                "package-name": "sdk_test_csharp",
+                "sdk-path": "csharp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "rust",
+                "sdk-dir": "rust",
+                "package-name": "sdk_test_rust",
+                "sdk-path": "rust",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "java",
+                "sdk-dir": "java",
+                "package-name": "sdk_test_java",
+                "sdk-path": "java",
+                "install-args": "sccache direnv java gradle cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                // Swift is macOS-only: the fixtures need SwiftPM/XCTest,
+                // and the nextest-bound setup script assembles the
+                // BamlBridgeFFI xcframework (host slice) before the run.
+                "sdk-label": "swift",
+                "sdk-dir": "swift",
+                "package-name": "sdk_test_swift",
+                "sdk-path": "swift",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "go",
+                "sdk-dir": "go",
+                "package-name": "sdk_test_go",
+                "sdk-path": "go",
+                "install-args": "sccache direnv go cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "python-pydantic2",
+                "sdk-dir": "python",
+                "package-name": "sdk_test_python_pydantic2",
+                "sdk-path": "python_pydantic2",
+                "install-args": "sccache direnv python uv cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "ruby-sorbet",
+                "sdk-dir": "ruby",
+                "package-name": "sdk_test_ruby_sorbet",
+                "sdk-path": "ruby_sorbet",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "typescript",
+                "sdk-dir": "typescript",
+                "package-name": "sdk_test_typescript",
+                "sdk-path": "typescript",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "typescript-web",
+                "sdk-dir": "typescript",
+                "package-name": "sdk_test_typescript_web",
+                "sdk-path": "typescript_web",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "csharp",
+                "sdk-dir": "csharp",
+                "package-name": "sdk_test_csharp",
+                "sdk-path": "csharp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "rust",
+                "sdk-dir": "rust",
+                "package-name": "sdk_test_rust",
+                "sdk-path": "rust",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "java",
+                "sdk-dir": "java",
+                "package-name": "sdk_test_java",
+                "sdk-path": "java",
+                "install-args": "sccache direnv java gradle cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+            ];
+
+            // TODO(B-1545): Re-enable macOS SDK tests after the SIGABRT flakiness is fixed: https://linear.app/boundaryml2/issue/B-1545/investigate-flakiness-in-cargo-test-aarch64-apple-darwin-ci-job
+            const enabledMatrix = baseMatrix.filter((entry) => entry["os-label"] !== "macos");
+            // Linux-only in the merge queue (mac/win already ran on the PR)
+            // and on forks (no Blacksmith mac/win runners; the jobs would
+            // queue forever). Case-insensitive so a differently-cased
+            // repository name cannot silently drop the mac/win legs upstream.
+            const linuxOnly =
+              context.eventName === "merge_group" ||
+              process.env.GITHUB_REPOSITORY.toLowerCase() !== "boundaryml/baml";
+            const matrix = linuxOnly
+              ? enabledMatrix.filter((entry) => entry["os-label"] === "linux")
+              : enabledMatrix;
+            const enabledSdkDirs = new Set(enabledMatrix.map((entry) => entry["sdk-dir"]));
+            const temporarilyDisabledSdkDirs = [...new Set(
+              baseMatrix
+                .map((entry) => entry["sdk-dir"])
+                .filter((sdkDir) => !enabledSdkDirs.has(sdkDir)),
+            )].sort();
+
+            core.setOutput("matrix", JSON.stringify(matrix, null, 2));
+            core.setOutput("sdk-dirs", JSON.stringify([...enabledSdkDirs].sort()));
+            core.setOutput("temporarily-disabled-sdk-dirs", JSON.stringify(temporarilyDisabledSdkDirs));
+
+  sdk-test-coverage:
+    name: "sdk test coverage"
+    runs-on: ubuntu-latest
+    needs: sdk-test-matrix
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: "Assert every SDK directory has a matrix entry"
+        uses: actions/github-script@v8
+        env:
+          MATRIX_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.sdk-dirs }}
+          TEMPORARILY_DISABLED_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.temporarily-disabled-sdk-dirs }}
+        with:
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+
+            const sdkRoot = path.join(process.env.GITHUB_WORKSPACE, "baml_language", "sdks");
+            const sdkDirs = fs.readdirSync(sdkRoot, { withFileTypes: true })
+              .filter((entry) => entry.isDirectory())
+              .map((entry) => entry.name)
+              .filter((sdkDir) => sdkDir !== "agent-docs")
+              .sort();
+            const coveredSdkDirs = new Set(JSON.parse(process.env.MATRIX_SDK_DIRS));
+            const temporarilyDisabledSdkDirs = new Set(JSON.parse(process.env.TEMPORARILY_DISABLED_SDK_DIRS));
+            const missingSdkDirs = sdkDirs.filter(
+              (sdkDir) => !coveredSdkDirs.has(sdkDir) && !temporarilyDisabledSdkDirs.has(sdkDir),
+            );
+
+            await core.summary
+              .addHeading("SDK test matrix coverage")
+              .addTable([
+                [{ data: "SDK directory", header: true }, { data: "Matrix entry", header: true }],
+                ...sdkDirs.map((sdkDir) => [
+                  sdkDir,
+                  coveredSdkDirs.has(sdkDir)
+                    ? "yes"
+                    : temporarilyDisabledSdkDirs.has(sdkDir)
+                      ? "temporarily disabled (B-1545)"
+                      : "no",
+                ]),
+              ])
+              .write();
+
+            if (missingSdkDirs.length > 0) {
+              core.setFailed(`SDK directories without an sdk-test-matrix entry: ${missingSdkDirs.join(", ")}`);
+            }
+
+  # SDK tests (codegen end-to-end). The `sdk_test_*` crates run bridge and
+  # generated-language checks under nextest. Most emit fixture projects from
+  # `.baml` sources via build.rs; the initial Ruby/Sorbet entry exercises its
+  # loader directly until its generator lands. Their setup scripts do the
+  # expensive package-manager/native-build work (`uv sync` + `maturin` for
+  # Python, Bundler + bridge_cffi for Ruby, a NAPI build for Node TypeScript,
+  # and a Web/Wasm build plus Chromium for Web TypeScript). Run the generated
+  # setup guards first so CI exposes setup cost/failures as a separate step; the
+  # full test step re-runs the setup scripts, but the warm path should be cheap.
+  # Keep each SDK as a separate matrix entry so setup/test timing
+  # and failures are attributed to the specific SDK generator.
+  sdk-tests:
+    name: "sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
+    needs: sdk-test-matrix
+    strategy:
+      fail-fast: false
+      # In the merge queue (`merge_group`) only the linux leg runs — the
+      # macos/windows legs already ran on the PR. Keep these entries in sync
+      # with the standalone platform cargo-test jobs above.
+      matrix:
+        include: ${{ fromJSON(needs.sdk-test-matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: ${{ matrix.timeout }}
+    env:
+      # The machine image defaults these to 16; 32 runs clean on the
+      # 64-vCPU machines.
+      NEXTEST_TEST_THREADS: "32"
+      RUST_TEST_THREADS: "32"
+      # Same reasoning as CARGO_BUILD_JOBS: the go fixture gates run
+      # `go test ./...` on a machine shared with concurrent runners.
+      GOMAXPROCS: "16"
+      # The fixture test binaries are only ever run, never debugged; skip
+      # DWARF on their links (GOFLAGS cannot carry a value containing a
+      # space, so -w alone, not -s -w).
+      GOFLAGS: "-ldflags=-w"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Keep the warm seed's ignored files (target/, node_modules);
+          # tracked files still hard-reset to the SHA. No-op on hosted runners.
+          clean: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install sdk test tools"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: ${{ matrix.install-args }}
+
+      - name: "Install Ruby"
+        # setup-ruby refuses self-hosted non-Ubuntu-image runners by design;
+        # the ix machine image ships ruby. Hosted fallback still installs it.
+        if: matrix.sdk-label == 'ruby-sorbet' && runner.environment != 'self-hosted'
+        uses: ./.github/actions/setup-ruby
+        with:
+          ruby-version: "3.2.2"
+
+      - name: "Install .NET SDK"
+        if: matrix.sdk-label == 'csharp'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.301
+
+      - name: "Test C# NuGet payload comparison"
+        if: matrix.sdk-label == 'csharp'
+        run: |
+          dotnet run --project \
+            baml_language/sdks/csharp/bridge_csharp/tools/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj \
+            -- --self-test
+
+      - name: "Test nightly C# package version"
+        if: matrix.sdk-label == 'csharp' && matrix.os-label == 'linux'
+        env:
+          BAML_LANGUAGE_RELEASED_AT: "2026-07-23T12:34:56Z"
+          BAML_LANGUAGE_VERSION_DATE: "20260723"
+          BAML_LANGUAGE_VERSION_NIGHTLY_LETTER: "h"
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          scripts/baml-language-version plan \
+            --channel nightly \
+            --out "$work/release-plan.json"
+          canonical="$(jq -r .canonical_version "$work/release-plan.json")"
+          nuget="$(jq -r .registry_versions.nuget "$work/release-plan.json")"
+          test "$nuget" = "$canonical"
+
+          scripts/baml-csharp-release-contract matrix \
+            | jq -r '.include[]
+              | "runtimes/\(.rid)/native/\(.canonical)"' \
+            | while IFS= read -r runtime_path; do
+                mkdir -p "$work/native/$(dirname "$runtime_path")"
+                printf 'version-only fixture\n' \
+                  > "$work/native/$runtime_path"
+              done
+          printf '<Project />\n' > "$work/baml-bridge.targets"
+          expected_count="$(scripts/baml-csharp-release-contract matrix \
+            | jq '.include | length')"
+          project=baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj
+          dotnet build "$project" --configuration Release --nologo \
+            -p:NuGetAudit=false \
+            -p:Version="$canonical" \
+            -p:InformationalVersion="$canonical" \
+            -p:PackageVersion="$nuget"
+          dotnet pack "$project" --configuration Release --nologo \
+            --no-build --no-restore \
+            --output "$work/package" \
+            -p:NuGetAudit=false \
+            -p:Version="$canonical" \
+            -p:InformationalVersion="$canonical" \
+            -p:PackageVersion="$nuget" \
+            -p:BamlExpectedNativeAssetCount="$expected_count" \
+            -p:BamlNativeAssetRoot="$work/native" \
+            -p:BamlGeneratedTargetsPath="$work/baml-bridge.targets"
+          package="$work/package/baml-bridge.$nuget.nupkg"
+          test -f "$package"
+          test "$(unzip -p "$package" baml-bridge.nuspec \
+            | sed -n 's#.*<version>\([^<]*\)</version>.*#\1#p')" = "$nuget"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: false
+          shared-key: ${{ matrix.rust-cache-key }}
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      # Windows-only: swap the .cmd RUSTC_WRAPPER for the native tools_sccache
+      # .exe. See the matching step in `cargo-test-windows` for why.
+      - name: "Build native sccache wrapper"
+        if: matrix.os-label == 'windows'
+        run: |
+          set -euo pipefail
+          cargo build -p tools_sccache
+          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
+          # CARGO_BUILD_JOBS oversubscription only matters for the Windows build.
+          echo "CARGO_BUILD_JOBS=16" >> "$GITHUB_ENV"
+        working-directory: baml_language
+
+      # Windows Python only: setup.ps1 builds one baml_bridge wheel and strips
+      # the editable source block from each fixture so `uv sync` installs that
+      # prebuilt wheel instead of rebuilding baml_bridge per fixture. The later
+      # test-time `uv run` processes also need this wheelhouse.
+      - name: "Configure Python wheelhouse"
+        if: matrix.os-label == 'windows' && matrix.sdk-label == 'python-pydantic2'
+        run: echo "UV_FIND_LINKS=$(pwd -W)/target/wheels" >> "$GITHUB_ENV"
+        working-directory: baml_language
+
+      - name: "Build tests with --timings"
+        run: cargo test --no-run -p ${{ matrix.package-name }} --all-features --timings
+        working-directory: baml_language
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Run sdk test setup"
+        # The C# crate uses nextest's setup-script hook directly and has no
+        # generated setup_guard test. Its setup still runs before the full suite.
+        if: matrix.sdk-label != 'csharp'
+        run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }}) and test(setup_guard::ran)'
+        working-directory: baml_language
+
+      - name: "Run sdk tests"
+        if: matrix.sdk-label != 'csharp'
+        run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
+        working-directory: baml_language
+
+      - name: "Run C# sdk tests"
+        if: matrix.sdk-label == 'csharp'
+        run: cargo nextest run -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
+        working-directory: baml_language
+
+      # The Rust bridge runtime crate (baml_bridge). Its tests load the engine
+      # cdylib at run time, and its lib test binary mixes pure (loader/encode)
+      # with engine-dependent (completion, live-engine) tests, so the whole
+      # package runs here — where sdk_test_rust's setup already built the engine
+      # into the main target dir — instead of in the general cargo-test lane
+      # (where the non-cacheable cdylib build ran as a silent nextest setup
+      # script and stalled the Windows job).
+      - name: "Run rust bridge tests"
+        if: matrix.sdk-label == 'rust'
+        run: cargo nextest run -p baml_bridge --all-features
+        working-directory: baml_language
+
+      - name: "Upload test results on failure"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-test-failures-${{ matrix.sdk-label }}-${{ matrix.os-label }}
+          path: |
+            baml_language/sdk_tests/crates/${{ matrix.sdk-path }}/*/generated/
+            baml_language/target/nextest/
+          if-no-files-found: ignore
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}
+          path: sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}
+          path: baml_language/target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.html
+          if-no-files-found: ignore
+
+  cargo-test-wasm:
+    name: "cargo test (wasm32-unknown-unknown)"
+    # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Keep the warm seed's ignored files (target/, node_modules);
+          # tracked files still hard-reset to the SHA. No-op on hosted runners.
+          clean: false
+
+      - name: "Install Rust toolchain"
+        run: |
+          set -euo pipefail
+          rustup show
+          # `rustup target add wasm32` fetches a small (~20MB) std component that
+          # normally installs in seconds. A multi-minute duration means a stalled
+          # download (rustup has no idle timeout), which otherwise burns the whole
+          # job timeout and dequeues the PR from the merge queue. Cap each attempt
+          # well above the normal time and retry on a fresh connection; surface a
+          # genuine outage after 3 tries instead of hanging.
+          for attempt in 1 2 3; do
+            if timeout 300 rustup target add wasm32-unknown-unknown; then
+              break
+            fi
+            echo "::warning::rustup target add wasm32 attempt $attempt stalled/failed; retrying" >&2
+            [ "$attempt" = 3 ] && { echo "::error::rustup target add wasm32 failed after 3 attempts"; exit 1; }
+            sleep 5
+          done
+        working-directory: baml_language
+
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-wasm"
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Build for WASM"
+        run: |
+          set -euo pipefail
+          readarray -t wasm_packages < <(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | .name')
+          if [[ ${#wasm_packages[@]} -eq 0 ]]; then
+            echo "Error: no WASM packages discovered; cargo metadata or jq may have failed" >&2
+            exit 1
+          fi
+          package_args=()
+          for package in "${wasm_packages[@]}"; do
+            package_args+=(-p "$package")
+          done
+          cargo build "${package_args[@]}" --target wasm32-unknown-unknown --no-default-features --release --timings
+        working-directory: baml_language
+
+      - name: "List WASM artifacts"
+        run: ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
+        working-directory: baml_language
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-test-wasm.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-test-wasm
+          path: sccache-stats-test-wasm.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: |
+          if [[ -f target/cargo-timings/cargo-timing.html ]]; then
+            mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-wasm.html
+          fi
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-test-wasm
+          path: baml_language/target/cargo-timings/cargo-timing-test-wasm.html
+          if-no-files-found: ignore
+
+  # Size-gate jobs live in size-gate.reusable.yaml — they are intentionally
+  # decoupled from cargo-tests so a violation never blocks the test workflow.
+
+  cargo-build-msrv:
+    name: "cargo build (msrv)"
+    # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-msrv"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    # 40, not 25: the MSRV toolchain is unique to this job, so a machine
+    # without a warm seed rebuilds everything from cold and can exceed 25
+    # minutes. Warm runs sit far inside the old budget.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Keep the warm seed's ignored files (target/, node_modules);
+          # tracked files still hard-reset to the SHA. No-op on hosted runners.
+          clean: false
+
+      - uses: SebRollen/toml-action@v1.2.0
+        id: msrv
+        with:
+          file: "baml_language/Cargo.toml"
+          field: "workspace.package.rust-version"
+
+      - name: "Install Rust toolchain (MSRV)"
+        env:
+          MSRV: ${{ steps.msrv.outputs.value }}
+        run: |
+          rustup toolchain install "${MSRV}"
+          rustup default "${MSRV}"
+        working-directory: baml_language
+
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-msrv"
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        env:
+          MSRV: ${{ steps.msrv.outputs.value }}
+        run: cargo "+${MSRV}" fetch
+        working-directory: baml_language
+
+      - name: "Build with MSRV"
+        env:
+          MSRV: ${{ steps.msrv.outputs.value }}
+        run: cargo "+${MSRV}" test --no-run --all-features --timings
+        working-directory: baml_language
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-msrv.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-msrv
+          path: sccache-stats-msrv.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-msrv.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-msrv
+          path: baml_language/target/cargo-timings/cargo-timing-msrv.html
+          if-no-files-found: ignore
+
+  cargo-doc:
+    name: "cargo doc"
+    # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Keep the warm seed's ignored files (target/, node_modules);
+          # tracked files still hard-reset to the SHA. No-op on hosted runners.
+          clean: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: false
+          shared-key: "linux-cargo"
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: "Generate documentation"
+        run: cargo doc --all --no-deps --timings
+        working-directory: baml_language
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-doc.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-doc
+          path: sccache-stats-doc.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-doc.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-doc
+          path: baml_language/target/cargo-timings/cargo-timing-doc.html
+          if-no-files-found: ignore
+
+  snapshot-tests:
+    name: "snapshot tests"
+    # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    # 45, not 30: cold headroom, same reasoning as the gnu lane above.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Keep the warm seed's ignored files (target/, node_modules);
+          # tracked files still hard-reset to the SHA. No-op on hosted runners.
+          clean: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: false
+          shared-key: "linux-cargo"
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: "Build tests with --timings"
+        run: cargo test --no-run -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --timings
+        working-directory: baml_language
+
+      # This job provides glibc coverage of `baml_tests`, `baml_cli`, and
+      # `baml_lsp2_actions`. The x86_64 GNU job excludes all three to avoid
+      # running them twice; keep its `--exclude` list in sync with the package
+      # list here. The musl job separately runs `baml_cli`, including
+      # `pack_e2e`, so both Linux libc variants exercise the ELF pack path.
+      - name: "Run snapshot tests"
+        run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --unreferenced=reject
+        working-directory: baml_language
+
+      - name: "Check for snapshot changes"
+        run: |
+          pathspecs=(
+            ':(glob)baml_language/**/*.snap'
+            ':(glob)baml_language/**/*.snap.new'
+          )
+          if [ -n "$(git status --porcelain -- "${pathspecs[@]}")" ]; then
+            echo "::error::Snapshot tests have uncommitted changes"
+            git diff -- "${pathspecs[@]}"
+            exit 1
+          fi
+
+      - name: "Upload snapshot failures"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: snapshot-failures
+          path: |
+            baml_language/**/*.snap
+            baml_language/**/*.snap.new
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-snapshot.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-snapshot
+          path: sccache-stats-snapshot.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-snapshot.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-snapshot
+          path: baml_language/target/cargo-timings/cargo-timing-snapshot.html
+          if-no-files-found: ignore
+
+  cargo-timings:
+    name: "cargo timings (merged)"
+    runs-on: ubuntu-latest
+    needs:
+      - cargo-test-linux
+      - cargo-test-linux-musl
+      - cargo-test-windows
+      - sdk-tests
+      - cargo-test-wasm
+      - cargo-build-msrv
+      - cargo-doc
+      - snapshot-tests
+    steps:
+      - name: "Merge cargo timings artifacts"
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: cargo-timings
+          pattern: cargo-timings-*
+          delete-merged: true
+  sccache-stats:
+    name: "sccache stats (merged)"
+    runs-on: ubuntu-latest
+    needs:
+      - cargo-test-linux
+      - cargo-test-linux-musl
+      - cargo-test-windows
+      - sdk-tests
+      - cargo-test-wasm
+      - cargo-build-msrv
+      - cargo-doc
+      - snapshot-tests
+    steps:
+      - name: "Merge sccache stats artifacts"
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: sccache-stats
+          pattern: sccache-stats-*
+          delete-merged: true
