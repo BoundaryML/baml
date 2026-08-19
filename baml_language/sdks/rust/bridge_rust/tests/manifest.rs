@@ -30,22 +30,28 @@ fn serde_json_dependency_does_not_force_semantic_features() {
         .iter()
         .find(|package| package["name"] == "baml_bridge")
         .expect("metadata should contain baml_bridge");
-    let serde_json = bridge["dependencies"]
+    let serde_json_dependencies = bridge["dependencies"]
         .as_array()
         .expect("package dependencies should be an array")
         .iter()
-        .find(|dependency| {
-            dependency["name"] == "serde_json" && dependency["rename"] == "serde_json_feature_free"
-        })
-        .expect("baml_bridge should use the feature-free serde_json alias");
-    let features = serde_json["features"]
-        .as_array()
-        .expect("dependency features should be an array");
+        .filter(|dependency| dependency["name"] == "serde_json")
+        .collect::<Vec<_>>();
+    assert!(
+        serde_json_dependencies
+            .iter()
+            .any(|dependency| dependency["rename"] == "serde_json_feature_free"),
+        "baml_bridge should use the feature-free serde_json alias"
+    );
 
-    for unwanted in ["arbitrary_precision", "preserve_order"] {
-        assert!(
-            !features.iter().any(|feature| feature == unwanted),
-            "baml_bridge must not enable serde_json/{unwanted}; Cargo unifies dependency features across consumers"
-        );
+    for dependency in serde_json_dependencies {
+        let features = dependency["features"]
+            .as_array()
+            .expect("dependency features should be an array");
+        for unwanted in ["arbitrary_precision", "preserve_order"] {
+            assert!(
+                !features.iter().any(|feature| feature == unwanted),
+                "baml_bridge must not enable serde_json/{unwanted}; Cargo unifies dependency features across consumers"
+            );
+        }
     }
 }
