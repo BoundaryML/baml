@@ -1,0 +1,194 @@
+# ix preview copy of .github/workflows/webview-tests.reusable.yaml -
+# the same jobs pointed at the ix runner pool (runs-on labels and the
+# warm-seed checkout). It runs side by side with the original
+# via ix-ci.yml, is never a required check, and changes nothing about
+# how the original runs. Promote or delete after the trial; do not
+# evolve both copies.
+name: Webview Tests (Reusable)
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-webview-tests
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  typecheck:
+    name: "Typecheck"
+    # Fork PRs never run on ix machines; untrusted events fall back to the
+    # GitHub-hosted runner this job used before the migration.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-web"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Warm-seed checkout: the ix machine is forked from a warm seed, so
+          # keep its IGNORED files (target/, node_modules); tracked files
+          # still hard-reset to the new SHA. A no-op on hosted runners.
+          clean: false
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux WASM jobs for better hit rates
+          shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # node + pnpm come from setup-node2 above; we only need mise for
+      # wasm-pack here.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "github:rustwasm/wasm-pack"
+
+      # Path-mapped imports from app-vscode-webview resolve into pkg-playground/wasm
+      # and pkg-proto/src/generated, so both must be present before tsc runs.
+      - name: "Build WASM"
+        run: pnpm --filter pkg-playground build:wasm
+        working-directory: typescript2
+
+      - name: "Generate proto types"
+        run: pnpm --filter @b/pkg-proto generate
+        working-directory: typescript2
+
+      - name: "Typecheck pkg-proto"
+        run: pnpm --filter @b/pkg-proto typecheck
+        working-directory: typescript2
+
+      - name: "Typecheck app-vscode-webview"
+        run: pnpm --filter app-vscode-webview typecheck
+        working-directory: typescript2
+
+  unit-tests:
+    name: "Unit Tests (jsdom)"
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-web"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Warm-seed checkout: the ix machine is forked from a warm seed, so
+          # keep its IGNORED files (target/, node_modules); tracked files
+          # still hard-reset to the new SHA. A no-op on hosted runners.
+          clean: false
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux WASM jobs for better hit rates
+          shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # node + pnpm come from setup-node2 above; we only need mise for
+      # wasm-pack here.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "github:rustwasm/wasm-pack"
+
+      - name: "Build WASM"
+        run: pnpm --filter pkg-playground build:wasm
+        working-directory: typescript2
+
+      - name: "Run unit tests"
+        run: pnpm --filter app-vscode-webview test:unit:run
+        working-directory: typescript2
+
+  browser-tests:
+    name: "Browser Tests (Playwright)"
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "ix", "ix-web"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Warm-seed checkout: the ix machine is forked from a warm seed, so
+          # keep its IGNORED files (target/, node_modules); tracked files
+          # still hard-reset to the new SHA. A no-op on hosted runners.
+          clean: false
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux WASM jobs for better hit rates
+          shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # node + pnpm come from setup-node2 above; we only need mise for
+      # wasm-pack here.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "github:rustwasm/wasm-pack"
+
+      - name: "Build WASM"
+        run: pnpm --filter pkg-playground build:wasm
+        working-directory: typescript2
+
+      - name: "Install Playwright browsers"
+        run: npx playwright install chromium
+        working-directory: typescript2/app-vscode-webview
+
+      - name: "Run browser tests"
+        run: pnpm --filter app-vscode-webview test:browser:run
+        working-directory: typescript2
