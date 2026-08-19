@@ -124,6 +124,9 @@ pub(crate) fn register_active_call_route(
     call_id: u64,
     cancel: bex_project::CancellationToken,
 ) -> Result<ActiveCallRouteGuard, BridgeError> {
+    if call_id == 0 {
+        return Err(BridgeError::InvalidCallId);
+    }
     let route = Arc::new(ActiveCallRoute { cancel });
     let mut routes = active_call_routes();
     if routes.contains_key(&call_id) {
@@ -476,6 +479,21 @@ mod cancellation_route_tests {
         assert!(first_cancel.is_cancelled());
         assert!(!second_cancel.is_cancelled());
         drop(first_route);
+    }
+
+    #[test]
+    fn zero_route_is_rejected_without_registration() {
+        let cancel = bex_project::CancellationToken::new();
+
+        let error = match register_active_call_route(0, cancel.clone()) {
+            Ok(_) => panic!("zero route unexpectedly registered"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(error, BridgeError::InvalidCallId));
+        assert!(!active_call_routes().contains_key(&0));
+        assert!(!cancel.is_cancelled());
+        assert!(!cancel_function_call_by_id(0));
     }
 }
 
