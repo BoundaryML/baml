@@ -1279,16 +1279,40 @@ fn lower_session_submission(
                     &HashSet::new(),
                     &local_names,
                 );
-                let value = if operator == "=" {
-                    rhs
+                // An assignment to a visible binding IS an ordinary
+                // assignment, so it is written as one. The binding lives in a
+                // global and a global cannot be assigned in place, which is
+                // why this road exists at all — but binding a local to the
+                // global first and assigning THAT gives the ordinary
+                // assignment road everything it needs: the local carries the
+                // binding's type, so the value checks against it and a
+                // mismatch is the same diagnostic ordinary BAML gives. The
+                // local's final value is what `commit_global` writes back, and
+                // a compound operator dispatches through the same road it does
+                // anywhere else.
+                //
+                // The value is spliced in exactly as it was written, with no
+                // wrapping parentheses: parenthesizing it would change the
+                // verdict (a fresh literal loses its freshness inside
+                // parentheses, so `n += 1.5` on an `int` binding would be
+                // refused here while ordinary code accepts it), and the whole
+                // point is that the two roads agree.
+                // The local's name must be one `internal()` can never mint: a
+                // user binding called `target_1` in submission N would mint
+                // `__baml_session_N_target_1`, and a block-local of that name
+                // shadows the global the rewritten value reads — the
+                // assignment would silently read itself. A different root
+                // prefix is outside `internal()`'s range entirely.
+                let target_local = format!("__baml_assign_{sequence}_{index}");
+                let assign = if operator == "=" {
+                    format!("{target_local} = {rhs}")
                 } else {
-                    format!("{} {operator} ({rhs})", target.internal)
+                    format!("{target_local} {operator}= {rhs}")
                 };
-                let source = if prelude.is_empty() {
-                    format!("let {generated_name} = ({value})\n")
-                } else {
-                    format!("let {generated_name} = {{\n{prelude}({value})\n}}\n")
-                };
+                let source = format!(
+                    "let {generated_name} = {{\n{prelude}let {target_local} = {}\n{assign}\n{target_local}\n}}\n",
+                    target.internal
+                );
                 (source, Some(format!("user.{}", target.internal)))
             } else {
                 let rewritten = rewrite_identifiers(

@@ -1,0 +1,89 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.catch_all_panics.CatchAllPanicsTyped(x: int) -> string {
+    load_var x
+    call user.fixtures.catch_all_panics.MayFailIntOrString
+    jump L4
+    load_var e
+    is_type string
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var e
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    rethrow
+
+  L2:
+    load_const "caught int"
+    jump L4
+
+  L3:
+    load_const "caught string"
+
+  L4:
+    return
+}
+
+function fixtures.catch_all_panics.CatchAllPanicsWildcard(x: int) -> string {
+    load_var x
+    call user.fixtures.catch_all_panics.MayFailIntOrString
+    jump L0
+    load_const "caught all"
+
+  L0:
+    return
+}
+
+function fixtures.catch_all_panics.CatchThenCatchAllPanics(x: int) -> string {
+    load_var x
+    call user.fixtures.catch_all_panics.MayFailIntOrString
+    jump L2
+    load_var _2
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "caught rest"
+    jump L2
+
+  L1:
+    load_const "caught string"
+
+  L2:
+    return
+}
+
+function fixtures.catch_all_panics.MayFailIntOrString(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var x
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "ok"
+    return
+
+  L2:
+    load_const 42
+    throw
+
+  L3:
+    load_const "string error"
+    throw
+}

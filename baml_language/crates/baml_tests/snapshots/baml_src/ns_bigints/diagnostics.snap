@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0004
+
+  ⚠ `5` and `5n` share no value, so this comparison is always false
+     ╭─[bigints.baml:637:21]
+ 637 │     assert.is_true((5 == 5n) == false)
+     ·                     ───────
+     ╰────

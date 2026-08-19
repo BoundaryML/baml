@@ -1,0 +1,6 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+class Config {
+    key: string,
+}

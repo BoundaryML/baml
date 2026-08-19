@@ -1,0 +1,49 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.type_annotation.test_let_binding(function_name: string) -> string {
+    load_var function_name
+    sys_op ai.internal.get_return_type
+    store_var t
+    load_const "ok"
+    return
+}
+
+function fixtures.type_annotation.test_list(function_name: string) -> string {
+    load_const "ok"
+    return
+}
+
+function fixtures.type_annotation.test_map(function_name: string) -> string {
+    load_const "ok"
+    return
+}
+
+function fixtures.type_annotation.test_optional(function_name: string) -> string {
+    load_const "ok"
+    return
+}
+
+function fixtures.type_annotation.test_param(t: type) -> string {
+    load_const "ok"
+    return
+}
+
+function fixtures.type_annotation.test_return_type(function_name: string) -> type {
+    load_var function_name
+    sys_op ai.internal.get_return_type
+    return
+}
+
+function fixtures.type_annotation.test_type_annotation(function_name: string) -> string {
+    load_var function_name
+    sys_op ai.internal.get_return_type
+    store_var t
+    load_const "ok"
+    return
+}
+
+function fixtures.type_annotation.test_union(function_name: string) -> string {
+    load_const "ok"
+    return
+}

@@ -1208,7 +1208,7 @@ fn substitute_witness_field_type(
     }
 }
 
-fn reflected_type_value(vm: &BexVm, value: Value) -> TypeValue {
+pub(super) fn reflected_type_value(vm: &BexVm, value: Value) -> TypeValue {
     let ptr = value
         .as_object_ptr()
         .unwrap_or_else(|| unreachable!("type argument must be Object::Type"));
@@ -1761,17 +1761,19 @@ impl BamlClassReflectMapType for PackageBamlImpl {
 impl BamlClassReflectFunctionType for PackageBamlImpl {
     impl_as_type!(BamlClassReflectFunctionType);
 
-    fn params(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
+    fn params(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let parent = reflected_type_value(vm, *r#type);
         let baml_type::RealizedTy::Function { params, .. } = parent.ty.clone() else {
-            unreachable!("function.Type receiver must wrap a function type")
+            return Err(unspecialized_descriptor_read(vm, *r#type));
         };
-        params
+        let exact = super::reflect::descriptor_exact_positions(vm, *r#type);
+        Ok(params
             .into_iter()
-            .map(|param| {
+            .enumerate()
+            .map(|(index, param)| {
                 let name = opt_string(vm, param.name.as_ref().map(baml_type::Name::as_str));
                 let optional = param.is_optional();
-                let r#type = Value::object(nested_type_value(vm, param.ty, &parent));
+                let r#type = signature_type_value(vm, param.ty, &parent, exact.param(index));
                 copy::reflect::function::Parameter {
                     name,
                     r#type,
@@ -1779,16 +1781,69 @@ impl BamlClassReflectFunctionType for PackageBamlImpl {
                 }
                 .to_value(vm)
             })
-            .collect()
+            .collect())
     }
 
-    fn return_type(vm: &mut BexVm, r#type: &Value) -> Value {
+    fn return_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
         let parent = reflected_type_value(vm, *r#type);
         let baml_type::RealizedTy::Function { ret, .. } = parent.ty.clone() else {
-            unreachable!("function.Type receiver must wrap a function type")
+            return Err(unspecialized_descriptor_read(vm, *r#type));
         };
-        Value::object(nested_type_value(vm, *ret, &parent))
+        let exact = super::reflect::descriptor_exact_positions(vm, *r#type);
+        Ok(signature_type_value(vm, *ret, &parent, exact.ret()))
     }
+
+    fn is_generic(vm: &BexVm, r#type: &Value) -> bool {
+        super::reflect::descriptor_is_generic(vm, *r#type)
+    }
+
+    fn generic_params(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
+        super::reflect::descriptor_generic_params(vm, *r#type)
+    }
+
+    fn specialize(
+        vm: &mut BexVm,
+        r#type: &Value,
+        args: &[Value],
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        super::reflect::descriptor_specialize(vm, *r#type, args)
+    }
+
+    fn get(vm: &mut BexVm, r#type: &Value) -> Result<Option<Value>, crate::errors::VmRustFnError> {
+        super::reflect::descriptor_get(vm, *r#type)
+    }
+}
+
+/// One type read out of a descriptor's signature.
+///
+/// `exact` is the value this *position* was specialized with, resolved
+/// positionally by `descriptor_exact_positions`; when it is set the caller's
+/// own value is handed back so a runtime-minted argument keeps its identity.
+/// Everything else decomposes normally, keeping the parent's overlay.
+fn signature_type_value(
+    vm: &mut BexVm,
+    ty: baml_type::RealizedTy,
+    parent: &TypeValue,
+    exact: Option<TypeValue>,
+) -> Value {
+    match exact {
+        Some(value) => Value::object(vm.tlab.alloc_type(value)),
+        None => Value::object(nested_type_value(vm, ty, parent)),
+    }
+}
+
+/// A signature-shaped read of a descriptor whose type is not a function type.
+///
+/// In practice that is the unspecialized generic state `Package.functions()`
+/// now publishes — its declared surface mentions its own type parameters, and
+/// the realized type family has no way to spell those. Any other non-function
+/// receiver (a `function.Type` view forced onto an unrelated type value) lands
+/// here too, with the same message: there is no signature to read.
+fn unspecialized_descriptor_read(vm: &mut BexVm, r#type: Value) -> crate::errors::VmRustFnError {
+    let name = super::reflect::descriptor_callable_name(vm, r#type)
+        .unwrap_or_else(|| "<anonymous>".to_string());
+    let diagnostic = runtime_type::unspecialized_reflected_generic_signature(&name);
+    crate::errors::VmRustFnError::Thrown(alloc_compilation_error(vm, &[diagnostic]))
 }
 
 impl BamlClassReflectInterfaceType for PackageBamlImpl {

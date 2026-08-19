@@ -1,0 +1,66 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.generic_field_chain.test_generic_chain(box: fixtures.generic_field_chain.Box<fixtures.generic_field_chain.User>) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.generic_field_chain.Box<fixtures.generic_field_chain.User> // box // param
+
+    bb0: {
+        _0 = copy _1.0.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_field_chain.test_nested_generic_chain(box: fixtures.generic_field_chain.Box<fixtures.generic_field_chain.Box<fixtures.generic_field_chain.User>>) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.generic_field_chain.Box<fixtures.generic_field_chain.Box<fixtures.generic_field_chain.User>> // box // param
+
+    bb0: {
+        _0 = copy _1.0.0.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_field_chain.test_generic_capture(box: fixtures.generic_field_chain.Box<fixtures.generic_field_chain.User>) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.generic_field_chain.Box<fixtures.generic_field_chain.User> // box // param [captured]
+    let _2: () -> string throws never // get_name
+    let _3: () -> string throws never
+
+    bb0: {
+        _2 = make_closure lambda[0](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_generic_capture, 0)>() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = copy capture[0].0.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

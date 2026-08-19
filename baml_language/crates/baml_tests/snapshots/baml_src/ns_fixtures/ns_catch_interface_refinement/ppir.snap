@@ -1,0 +1,32 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.catch_interface_refinement.QuotaExceeded {
+  quota_name: string
+}
+class user.fixtures.catch_interface_refinement.QuotaExceeded$stream {
+  quota_name: string | null
+}
+class user.fixtures.catch_interface_refinement.Throttled {
+  retry_after_ms: int
+}
+class user.fixtures.catch_interface_refinement.Throttled$stream {
+  retry_after_ms: int | null
+}
+function user.fixtures.catch_interface_refinement.app(mode: int) -> string  [expr] {
+  {  } provider_call(mode) catch (e) { q: user.fixtures.catch_interface_refinement.QuotaExceeded => "quota: " Add q.quota_name, f: Failure => if (f.is_transient()) {  } "retry" else {  } "fail", u: baml.errors.UnknownError => "unknown" }
+}
+function user.fixtures.catch_interface_refinement.is_transient(self: ?) -> bool  [missing]
+function user.fixtures.catch_interface_refinement.is_transient(self: ?) -> bool  [expr] {
+  {  } false
+}
+function user.fixtures.catch_interface_refinement.is_transient(self: ?) -> bool  [expr] {
+  {  } true
+}
+function user.fixtures.catch_interface_refinement.local_throw() -> string  [expr] {
+  { let r: string = throw user.fixtures.catch_interface_refinement.Throttled { retry_after_ms: 1 } catch (e) { f: Failure => "classified" } } r
+}
+function user.fixtures.catch_interface_refinement.provider_call(mode: int) -> string  [expr] {
+  { if (mode Eq 0) { throw user.fixtures.catch_interface_refinement.Throttled { retry_after_ms: 250 } }; if (mode Eq 1) { throw user.fixtures.catch_interface_refinement.QuotaExceeded { quota_name: "daily" } }; throw baml.errors.UnknownError { data: "socket reset", message: ["transport"] } }
+}

@@ -1,0 +1,369 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function deep_copy.$init_test_ns_deep_copy_deep_copy(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "deep_copy_object"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "deep_copy_independence"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "deep_copy_nested_arrays_in_class"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "deep_copy_map_in_class"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "deep_copy_complex_nested_structure"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "deep_copy_circular_reference"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "eq_primitives"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "eq_different_primitives"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "eq_simple_objects"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "eq_different_objects"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "eq_nested_objects"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "eq_nested_objects_different"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "eq_with_arrays"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "eq_with_maps"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "eq_same_reference"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.deep_copy"
+    load_const "eq_circular_structure"
+    make_closure .<lambda($init_test_ns_deep_copy_deep_copy, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function deep_copy.deep_copy_circular_helper() -> int {
+    load_const 1
+    load_type deep_copy.Node
+    alloc_array 0
+    init_instance user.deep_copy.Node .value, .children
+    store_var a
+    load_var a
+    load_const 2
+    load_var a
+    load_type deep_copy.Node
+    alloc_array 1
+    init_instance user.deep_copy.Node .value, .children
+    load_type deep_copy.Node
+    alloc_array 1
+    store_field .children
+    load_type deep_copy.Node
+    load_var a
+    call baml.deep_copy
+    load_var a
+    load_const 99
+    store_field .value
+    load_field .value
+    return
+}
+
+function deep_copy.deep_copy_complex_helper() -> int {
+    load_const 1
+    init_instance user.deep_copy.DeepInner .value
+    load_const 2
+    init_instance user.deep_copy.DeepInner .value
+    load_const 3
+    init_instance user.deep_copy.DeepInner .value
+    load_type deep_copy.DeepInner
+    alloc_array 2
+    init_instance user.deep_copy.DeepMiddle .inner, .list
+    load_const 4
+    init_instance user.deep_copy.DeepInner .value
+    load_const 5
+    init_instance user.deep_copy.DeepInner .value
+    load_const "first"
+    load_const "second"
+    load_type string
+    load_type deep_copy.DeepInner
+    alloc_map 2
+    init_instance user.deep_copy.DeepOuter .middle, .data
+    store_var original
+    load_type deep_copy.DeepOuter
+    load_var original
+    call baml.deep_copy
+    store_var copy
+    load_var original
+    load_field .middle
+    load_field .inner
+    load_const 100
+    store_field .value
+    load_var original
+    load_field .middle
+    load_field .list
+    load_const 0
+    load_array_element
+    load_const 200
+    store_field .value
+    load_var original
+    load_field .data
+    load_const "first"
+    load_map_element
+    load_const 300
+    store_field .value
+    load_var copy
+    load_field .middle
+    load_field .inner
+    load_field .value
+    load_var copy
+    load_field .middle
+    load_field .list
+    load_const 0
+    load_array_element
+    load_field .value
+    add_int
+    load_var copy
+    load_field .data
+    load_const "first"
+    load_map_element
+    load_field .value
+    add_int
+    return
+}
+
+function deep_copy.deep_copy_independence_helper() -> int {
+    load_const 1
+    load_const 2
+    load_type deep_copy.Node
+    alloc_array 0
+    init_instance user.deep_copy.Node .value, .children
+    load_const 3
+    load_type deep_copy.Node
+    alloc_array 0
+    init_instance user.deep_copy.Node .value, .children
+    load_type deep_copy.Node
+    alloc_array 2
+    init_instance user.deep_copy.Node .value, .children
+    store_var original
+    load_type deep_copy.Node
+    load_var original
+    call baml.deep_copy
+    load_var original
+    load_field .children
+    load_const 0
+    load_array_element
+    load_const 99
+    store_field .value
+    load_field .children
+    load_const 0
+    load_array_element
+    load_field .value
+    return
+}
+
+function deep_copy.deep_copy_map_helper() -> int {
+    load_const 1
+    load_const 2
+    load_const "a"
+    load_const "b"
+    load_type string
+    load_type int
+    alloc_map 2
+    init_instance user.deep_copy.Container .values
+    store_var original
+    load_type deep_copy.Container
+    load_var original
+    call baml.deep_copy
+    load_var original
+    load_field .values
+    load_const "a"
+    load_const 99
+    store_map_element
+    load_field .values
+    load_const "a"
+    load_map_element
+    return
+}
+
+function deep_copy.deep_copy_nested_arrays_helper() -> int {
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    load_const 3
+    load_const 4
+    load_type int
+    alloc_array 2
+    load_type int[]
+    alloc_array 2
+    init_instance user.deep_copy.Matrix .data
+    store_var original
+    load_type deep_copy.Matrix
+    load_var original
+    call baml.deep_copy
+    load_var original
+    load_field .data
+    load_const 0
+    load_array_element
+    load_const 0
+    load_const 99
+    store_array_element
+    load_field .data
+    load_const 0
+    load_array_element
+    load_const 0
+    load_array_element
+    return
+}
+
+function deep_copy.deep_copy_object_helper() -> deep_copy.Tree {
+    load_type deep_copy.Tree
+    load_const "1"
+    load_const "2"
+    load_type deep_copy.Tree
+    alloc_array 0
+    init_instance user.deep_copy.Tree .value, .children
+    load_const "3"
+    load_type deep_copy.Tree
+    alloc_array 0
+    init_instance user.deep_copy.Tree .value, .children
+    load_type deep_copy.Tree
+    alloc_array 2
+    init_instance user.deep_copy.Tree .value, .children
+    call baml.deep_copy
+    return
+}
+
+function deep_copy.eq_circular_helper() -> bool {
+    load_const 1
+    load_type deep_copy.Node
+    alloc_array 0
+    init_instance user.deep_copy.Node .value, .children
+    store_var a1
+    load_var a1
+    load_const 2
+    load_var a1
+    load_type deep_copy.Node
+    alloc_array 1
+    init_instance user.deep_copy.Node .value, .children
+    load_type deep_copy.Node
+    alloc_array 1
+    store_field .children
+    load_const 1
+    load_type deep_copy.Node
+    alloc_array 0
+    init_instance user.deep_copy.Node .value, .children
+    store_var a2
+    load_var a2
+    load_const 2
+    load_var a2
+    load_type deep_copy.Node
+    alloc_array 1
+    init_instance user.deep_copy.Node .value, .children
+    load_type deep_copy.Node
+    alloc_array 1
+    store_field .children
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function deep_copy.eq_different_primitives_helper() -> bool {
+    load_const 42
+    load_const 43
+    cmp_int_op ==
+    return
+}
+
+function deep_copy.eq_primitives_helper() -> bool {
+    load_const 42
+    load_const 42
+    cmp_int_op ==
+    return
+}
+
+function deep_copy.eq_same_reference_helper() -> bool {
+    load_const 1
+    load_type deep_copy.Node
+    alloc_array 0
+    init_instance user.deep_copy.Node .value, .children
+    store_var_load_var n
+    load_var n
+    call baml.ops.equals_equals
+    return
+}

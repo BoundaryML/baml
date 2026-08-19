@@ -166,7 +166,7 @@ async fn nested_type_walker_and_kind_specific_readback_work_end_to_end() {
             map_view: baml.reflect.map.Type,
             interface_view: baml.reflect.interface.Type,
             function_view: baml.reflect.function.Type
-        ) -> bool throws never {
+        ) -> bool throws baml.reflect.errors.CompilationError {
             let params = function_view.params();
             let function_schema = match (type.of<baml.reflect.function.Type>().kind()) {
                 let class_view: baml.reflect.class.Type => class_view,

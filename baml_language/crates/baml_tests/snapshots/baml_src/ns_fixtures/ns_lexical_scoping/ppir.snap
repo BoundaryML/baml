@@ -1,0 +1,42 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.lexical_scoping.branch_locals(b: bool) -> int  [expr] {
+  {  } if (b) { let a = 1 } a else { let a = 2 } a
+}
+function user.fixtures.lexical_scoping.capture_before_after_shadow() -> int  [expr] {
+  { let x = 1; let g = () -> int { {  } x }; let x = 2; let f = () -> int { {  } x } } g() Mul 10 Add f()
+}
+function user.fixtures.lexical_scoping.declared_type_restored() -> string  [expr] {
+  { let x: string = "outer"; { let x: int = 1 } } x
+}
+function user.fixtures.lexical_scoping.for_loop_restores_outer() -> int  [expr] {
+  { let x = 1; for x in [2, 3] { x } } x
+}
+function user.fixtures.lexical_scoping.initializer_uses_previous() -> int  [expr] {
+  { let x = 1; let x = x Add 1 } x
+}
+function user.fixtures.lexical_scoping.nested_lambda_capture() -> int  [expr] {
+  { let x = 7; let outer = () -> int { { let inner = () -> int { {  } x } } inner() } } outer()
+}
+function user.fixtures.lexical_scoping.nested_outer_restored() -> int  [expr] {
+  { let x = 1; { let x = 2; { let x = 3; x }; x } } x
+}
+function user.fixtures.lexical_scoping.outer_restored() -> int  [expr] {
+  { let x = 1; { let x = 2 } } x
+}
+function user.fixtures.lexical_scoping.same_scope_shadow() -> int  [expr] {
+  { let x = 1; let x = 2 } x
+}
+function user.fixtures.lexical_scoping.shadow_param(x: int) -> int  [expr] {
+  { let x = x Add 1 } x
+}
+function user.fixtures.lexical_scoping.while_body_restores_outer() -> int  [expr] {
+  { let x = 1; let once = true; while once { let x = 99; once = false } } x
+}
+
+--- captures ---
+lambda () in capture_before_after_shadow: captures [x]
+lambda () in capture_before_after_shadow: captures [x]
+lambda () in ?: captures [x]

@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.numeric_invariance_ok.BigintCounter {
+  count: bigint
+}
+class user.fixtures.numeric_invariance_ok.BigintCounter$stream {
+  count: bigint | null
+}
+function user.fixtures.numeric_invariance_ok.BigintFieldOk() -> user.fixtures.numeric_invariance_ok.BigintCounter  [expr] {
+  {  } user.fixtures.numeric_invariance_ok.BigintCounter { count: 1n }
+}
+function user.fixtures.numeric_invariance_ok.BigintLiteralArray() -> bigint[]  [expr] {
+  {  } [1n, 2n]
+}
+function user.fixtures.numeric_invariance_ok.BigintMapLiteral() -> map<string, bigint>  [expr] {
+  {  } map { "a": 1n }
+}
+function user.fixtures.numeric_invariance_ok.EmptyBigintArray() -> bigint[]  [expr] {
+  {  } []
+}
+function user.fixtures.numeric_invariance_ok.EvolvingRetype() -> bigint[]  [expr] {
+  { let a = [] } a
+}
+function user.fixtures.numeric_invariance_ok.IntArrayIdentity() -> int[]  [expr] {
+  { let a = [1, 2] } a
+}

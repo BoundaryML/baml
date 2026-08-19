@@ -1,0 +1,167 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.generic_intersection_bounds.Both.Sized.size(self: fixtures.generic_intersection_bounds.Both) -> int {
+    load_const 7
+    return
+}
+
+function fixtures.generic_intersection_bounds.Both.Tagged.tag(self: fixtures.generic_intersection_bounds.Both) -> string {
+    load_var self
+    load_field .name
+    return
+}
+
+function fixtures.generic_intersection_bounds.Printable$for$T.display(self: #0) -> string {
+    load_type #0
+    load_var self
+    call user.fixtures.generic_intersection_bounds.describe
+    return
+}
+
+function fixtures.generic_intersection_bounds.Registered.Registry<Both>.put(self: fixtures.generic_intersection_bounds.Registered, item: fixtures.generic_intersection_bounds.Both) -> void {
+    load_const null
+    return
+}
+
+function fixtures.generic_intersection_bounds.Registered.Registry<Both>.summarize(self: fixtures.generic_intersection_bounds.Registered, other: #0) -> string {
+    load_type #0
+    load_var other
+    call user.fixtures.generic_intersection_bounds.describe
+    return
+}
+
+function fixtures.generic_intersection_bounds.describe(item: #0) -> string {
+    load_var item
+    load_type fixtures.generic_intersection_bounds.Sized
+    load_const "size"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_type int
+    load_var _5
+    call baml.String.from
+    store_var _4
+    load_var item
+    load_type fixtures.generic_intersection_bounds.Named
+    virtual_load_field .name
+    load_const ":"
+    bin_op +
+    load_var _4
+    bin_op +
+    return
+}
+
+function fixtures.generic_intersection_bounds.field_into_call_arg(item: #0) -> string {
+    load_var item
+    load_type fixtures.generic_intersection_bounds.Named
+    virtual_load_field .name
+    call user.fixtures.generic_intersection_bounds.shout
+    return
+}
+
+function fixtures.generic_intersection_bounds.field_into_switch(item: #0) -> int {
+    load_var item
+    load_type fixtures.generic_intersection_bounds.Named
+    virtual_load_field .name
+    is_type "a"
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function fixtures.generic_intersection_bounds.label_of(item: #0) -> string {
+    load_var item
+    load_type fixtures.generic_intersection_bounds.Tagged<Label = string>
+    load_const "tag"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function fixtures.generic_intersection_bounds.main() -> string {
+    load_const "b"
+    init_instance user.fixtures.generic_intersection_bounds.Both .name
+    store_var both
+    load_type fixtures.generic_intersection_bounds.Both
+    load_var both
+    call user.fixtures.generic_intersection_bounds.describe
+    store_var _19
+    load_type fixtures.generic_intersection_bounds.Both
+    load_var both
+    call user.fixtures.generic_intersection_bounds.field_into_call_arg
+    store_var _22
+    load_type fixtures.generic_intersection_bounds.Both
+    load_var both
+    call user.fixtures.generic_intersection_bounds.field_into_switch
+    store_var _26
+    load_type int
+    load_var _26
+    call baml.String.from
+    store_var _25
+    load_type fixtures.generic_intersection_bounds.Both
+    load_var both
+    call user.fixtures.generic_intersection_bounds.label_of
+    store_var _30
+    load_var both
+    load_type fixtures.generic_intersection_bounds.Printable
+    load_const "display"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _34
+    load_type fixtures.generic_intersection_bounds.Both
+    load_var both
+    load_type fixtures.generic_intersection_bounds.Both
+    alloc_array 1
+    init_instance user.fixtures.generic_intersection_bounds.Registered .items
+    load_var both
+    load_type fixtures.generic_intersection_bounds.Registry<fixtures.generic_intersection_bounds.Both>
+    load_const "summarize"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _35
+    load_var _19
+    load_const "/"
+    bin_op +
+    load_var _22
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var _25
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var _30
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var both
+    load_type fixtures.generic_intersection_bounds.Both
+    init_instance<1> user.fixtures.generic_intersection_bounds.Holder .item
+    load_field .item
+    load_field .0
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var _34
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var _35
+    bin_op +
+    return
+}
+
+function fixtures.generic_intersection_bounds.shout(text: string) -> string {
+    load_var text
+    load_const "!"
+    bin_op +
+    return
+}

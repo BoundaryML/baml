@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.testset_with_setup.$init_test_ns_fixtures_ns_testset_with_setup_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_set_at("root.fixtures.tes...", "with shared setup", (testset: testing.TestCollector) -> void { { let base_url = "https://api.examp..."; let timeout = 5000; testset.register_test("uses setup vars", () -> { { assert.not_null(base_url) } assert.equal(timeout, 5000) }, null); testset.register_test("also uses setup", () -> { {  } assert.contains(base_url, "example") }, null) } null }, null) } null
+}
+
+--- captures ---
+lambda () in ?: captures [base_url, timeout]
+lambda () in ?: captures [base_url]

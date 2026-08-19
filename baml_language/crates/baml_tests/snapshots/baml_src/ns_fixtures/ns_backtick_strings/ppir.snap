@@ -1,0 +1,79 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.backtick_strings.BacktickEquality() -> bool  [expr] {
+  {  } `...` Eq `...`
+}
+function user.fixtures.backtick_strings.BacktickEscapedBacktick() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickEscapedDollar() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickEscapedInterpStaysLiteral() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickInCondition() -> int  [expr] {
+  {  } if (`...`.length() Gt 0) {  } 1 else {  } 0
+}
+function user.fixtures.backtick_strings.BacktickInterpBlockBody(items: int[]) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickInterpBool(b: bool) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickInterpCallsFn() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickInterpFloat(x: float) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickInterpInt(n: int) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickInterpMultiline(name: string, count: int) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickInterpMultiple(first: string, last: string) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickInterpSimple(name: string) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickLiteralAsArg() -> string  [expr] {
+  {  } BacktickPassThrough(`...`)
+}
+function user.fixtures.backtick_strings.BacktickM3ForLoop(xs: string[]) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickM3IfBlock(show: bool) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickM3IfElseChain(n: int) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickMultiTickThree() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickMultiTickTwo() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickMultiline() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickMultilineWithBlankLines() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickOneLiner() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.BacktickPassThrough(s: string) -> string  [expr] {
+  {  } s
+}
+function user.fixtures.backtick_strings.BacktickStandardEscapes() -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.backtick_strings.bangs(n: int) -> string  [expr] {
+  {  } if (n Le 0) {  } "" else {  } "!" Add bangs(n Sub 1)
+}

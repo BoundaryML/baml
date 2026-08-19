@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== PPIR ===
-function user.call_with_callback(callback: (int) -> string, x: int) -> string  [expr] {
-  {  } callback(x)
-}

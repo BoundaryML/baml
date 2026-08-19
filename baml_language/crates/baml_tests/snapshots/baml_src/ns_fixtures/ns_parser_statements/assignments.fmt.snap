@@ -1,0 +1,111 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+// Simple assignment
+function simple_assign() -> int {
+    let x = 1;
+    x = 5;
+    return x;
+}
+
+// Compound add assignment
+function add_assign() -> int {
+    let x = 10;
+    x += 5;
+    return x;
+}
+
+// Compound sub assignment
+function sub_assign() -> int {
+    let x = 10;
+    x -= 3;
+    return x;
+}
+
+// Compound mul assignment
+function mul_assign() -> int {
+    let x = 3;
+    x *= 4;
+    return x;
+}
+
+// Multiple assignments
+function multi_assign() -> int {
+    let a = 1;
+    let b = 2;
+    a = 10;
+    b = 20;
+    return a + b;
+}
+
+// Assignment in loop (uses break/continue we just implemented)
+function assign_in_loop() -> int {
+    let sum = 0;
+    let i = 0;
+    while (i < 5) {
+        sum += i;
+        i += 1;
+    }
+    ;
+    return sum;
+}
+
+// Block expression with tail - tests PopReplace
+function block_with_tail() -> int {
+    let x = {
+        let y = 1;
+        let z = 2;
+        y + z
+    };
+    return x;
+}
+
+// Let without semicolons (formatter synthesizes them)
+function let_no_semicolons() -> int {
+    let x = 1;
+    let y = 2;
+    return x + y;
+}
+
+// Mixed semicolons on let statements
+function let_mixed_semicolons() -> int {
+    let a = 1;
+    let b = 2;
+    let c = 3;
+    let d = 4;
+    return a + b + c + d;
+}
+
+// Edge case: call followed by parens on next line - parses as foo()(1) (chained call)
+function edge_call_then_parens(foo: () -> ((int) -> int throws never)) -> int {
+    foo()(1);
+    2
+}
+
+// Edge case: call followed by bracket on next line - parses as foo()[0] (index into result)
+function edge_call_then_index(foo: () -> int[]) -> int {
+    foo()[0];
+    1
+}
+
+// Edge case: identifier followed by object literal - parses as EdgeFoo{x:1} (constructor)
+class EdgeFoo {
+    x: int,
+}
+
+function edge_type_then_object() -> int {
+    EdgeFoo { x: 1 }.x
+}
+
+// Edge case: let with function call, then index on next line - parses as bar()[0]
+function edge_let_call_then_index(bar: () -> int[]) -> int {
+    let x = bar()[0];
+    x
+}
+
+// Edge case: semicolon forces statement boundary - [0] is separate expression
+function edge_semicolon_forces_boundary(bar: () -> int[]) -> int {
+    bar();
+    [0];
+    1
+}

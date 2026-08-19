@@ -17,46 +17,14 @@ impl BamlNamespaceType for PackageBamlImpl {
     fn of_value(vm: &mut BexVm, v: &Value) -> Result<Value, VmRustFnError> {
         if let Some(ptr) = v.as_object_ptr() {
             let nominal = match vm.get_object(ptr) {
-                Object::Instance(instance) => Some((instance.class, true)),
-                Object::Variant(variant) => Some((variant.enm, false)),
+                Object::Instance(instance) => Some(instance.class),
+                Object::Variant(variant) => Some(variant.enm),
                 _ => None,
             };
-            if let Some((definition_ptr, is_class)) = nominal {
-                let reconstructed = match vm.get_object(definition_ptr) {
-                    Object::Class(class) if is_class => {
-                        class.runtime_type.as_ref().map(|runtime| {
-                            let mut defs = runtime.defs.clone();
-                            defs.classes.insert(class.name.clone(), definition_ptr);
-                            let ty = baml_type::RealizedTy::Class(
-                                class.name.clone(),
-                                Vec::new(),
-                                baml_type::TyAttr::default(),
-                            );
-                            if runtime.owner.is_null() {
-                                TypeValue::from_parts_with_defs(ty, runtime.mint, defs)
-                            } else {
-                                TypeValue::runtime_with_defs(ty, runtime.mint, defs, runtime.owner)
-                            }
-                        })
-                    }
-                    Object::Enum(enm) if !is_class => enm.runtime_type.as_ref().map(|runtime| {
-                        let mut defs = runtime.defs.clone();
-                        defs.enums.insert(enm.name.clone(), definition_ptr);
-                        let ty = baml_type::RealizedTy::Enum(
-                            enm.name.clone(),
-                            baml_type::TyAttr::default(),
-                        );
-                        if runtime.owner.is_null() {
-                            TypeValue::from_parts_with_defs(ty, runtime.mint, defs)
-                        } else {
-                            TypeValue::runtime_with_defs(ty, runtime.mint, defs, runtime.owner)
-                        }
-                    }),
-                    _ => None,
-                };
-                if let Some(type_value) = reconstructed {
-                    return Ok(Value::object(vm.tlab.alloc_type(type_value)));
-                }
+            if let Some(definition_ptr) = nominal
+                && let Some(type_value) = vm.runtime_declaration_identity(definition_ptr)
+            {
+                return Ok(Value::object(vm.tlab.alloc_type(type_value)));
             }
         }
         let ty = vm
