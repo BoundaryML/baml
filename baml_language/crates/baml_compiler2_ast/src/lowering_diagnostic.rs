@@ -28,6 +28,24 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
+    /// A class-literal turbofish supplied an inline `unreflect(value)` type
+    /// argument (`Holder<unreflect(t)> { .. }`). The constructed value's type
+    /// is `Holder<T>` — it mentions the call-scoped runtime parameter, which
+    /// stops existing the moment the literal finishes — so the runtime type
+    /// has to be named with a `type` binding first. The literal is the one
+    /// shape whose answer never depends on a callee signature, so it is
+    /// decided here, where the written source is still at hand.
+    RuntimeTypeMustBeNamed {
+        /// The carrier expression inside `unreflect(...)`, when it prints
+        /// cleanly on one line.
+        carrier: Option<String>,
+        /// The written literal with the inline slot replaced by the suggested
+        /// name, when it prints cleanly on one line.
+        named: Option<String>,
+        /// The `unreflect(...)` slot itself.
+        span: TextRange,
+    },
+
     /// A function parameter has no name token.
     MissingParamName {
         function_name: String,
@@ -307,6 +325,32 @@ impl LoweringDiagnostic {
                 *span,
                 "unparseable type",
             ),
+            LoweringDiagnostic::RuntimeTypeMustBeNamed {
+                carrier,
+                named,
+                span,
+            } => {
+                let span = Span {
+                    file_id,
+                    range: *span,
+                };
+                let rewrite = baml_compiler_diagnostics::runtime_type::RuntimeTypeNameRewrite {
+                    carrier: carrier.clone(),
+                    named: named.clone(),
+                };
+                return baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named()
+                    .with_primary(
+                        span,
+                        baml_compiler_diagnostics::runtime_type::RUNTIME_TYPE_MUST_BE_NAMED_NOTE,
+                    )
+                    .with_related(
+                        span,
+                        baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named_help(
+                            &rewrite,
+                        ),
+                    )
+                    .with_phase(DiagnosticPhase::Hir);
+            }
             LoweringDiagnostic::MissingParamName {
                 function_name,
                 span,

@@ -90,14 +90,6 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //  11 │     let video = GetVideo(video_id);
 //     ·                 ────────
 //     ╰────
-// E0001
-//
-//   × mismatched types
-//     ╭─[headers_ai_content_pipeline.baml:17:23]
-//  17 │     let summary = if (transcript) {
-//     ·                       ─────┬────
-//     ·                            ╰── expected `bool`, found `string | null`
-//     ╰────
 // E0003
 //
 //   × unresolved name: `SummarizeVideo`

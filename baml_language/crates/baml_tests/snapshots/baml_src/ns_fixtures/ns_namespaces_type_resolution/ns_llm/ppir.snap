@@ -1,0 +1,124 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.namespaces_type_resolution.llm.Config {
+  model: string
+  temperature: float
+}
+class user.fixtures.namespaces_type_resolution.llm.Config$stream {
+  model: string | null
+  temperature: float | null
+}
+class user.fixtures.namespaces_type_resolution.llm.Error {
+  reason: string
+  retryable: bool
+}
+class user.fixtures.namespaces_type_resolution.llm.Error$stream {
+  reason: string | null
+  retryable: bool | null
+}
+class user.fixtures.namespaces_type_resolution.llm.LlmWithCrossNsFields {
+  own_config: user.fixtures.namespaces_type_resolution.llm.Config
+  own_response: user.fixtures.namespaces_type_resolution.llm.Response
+  root_config: root.fixtures.namespaces_type_resolution.Config
+  root_error: root.fixtures.namespaces_type_resolution.Error
+  auth_config: root.fixtures.namespaces_type_resolution.auth.Config
+  nested_client: root.fixtures.namespaces_type_resolution.llm.openai.Client
+  own_status: user.fixtures.namespaces_type_resolution.llm.Status
+  own_alias: user.fixtures.namespaces_type_resolution.llm.ConfigAlias
+  root_alias: root.fixtures.namespaces_type_resolution.ConfigAlias
+}
+class user.fixtures.namespaces_type_resolution.llm.LlmWithCrossNsFields$stream {
+  own_config: user.fixtures.namespaces_type_resolution.llm.Config$stream | null
+  own_response: user.fixtures.namespaces_type_resolution.llm.Response$stream | null
+  root_config: root.fixtures.namespaces_type_resolution.Config$stream | null
+  root_error: root.fixtures.namespaces_type_resolution.Error$stream | null
+  auth_config: root.fixtures.namespaces_type_resolution.auth.Config$stream | null
+  nested_client: root.fixtures.namespaces_type_resolution.llm.openai.Client$stream | null
+  own_status: user.fixtures.namespaces_type_resolution.llm.Status | null
+  own_alias: user.fixtures.namespaces_type_resolution.llm.Config$stream | null
+  root_alias: root.fixtures.namespaces_type_resolution.Config$stream | null
+}
+class user.fixtures.namespaces_type_resolution.llm.LlmWithRootAlias {
+  root_alias: root.fixtures.namespaces_type_resolution.ConfigAlias
+  own_alias: user.fixtures.namespaces_type_resolution.llm.ResponseAlias
+}
+class user.fixtures.namespaces_type_resolution.llm.LlmWithRootAlias$stream {
+  root_alias: root.fixtures.namespaces_type_resolution.Config$stream | null
+  own_alias: user.fixtures.namespaces_type_resolution.llm.Response$stream | null
+}
+class user.fixtures.namespaces_type_resolution.llm.Response {
+  text: string
+  tokens: int
+}
+class user.fixtures.namespaces_type_resolution.llm.Response$stream {
+  text: string | null
+  tokens: int | null
+}
+enum user.fixtures.namespaces_type_resolution.llm.Model {GPT4, Claude}
+enum user.fixtures.namespaces_type_resolution.llm.Status {Ready, Generating, Done}
+type user.fixtures.namespaces_type_resolution.llm.ConfigAlias = user.fixtures.namespaces_type_resolution.llm.Config
+type user.fixtures.namespaces_type_resolution.llm.ConfigAlias$stream = user.fixtures.namespaces_type_resolution.llm.Config$stream
+type user.fixtures.namespaces_type_resolution.llm.ResponseAlias = user.fixtures.namespaces_type_resolution.llm.Response
+type user.fixtures.namespaces_type_resolution.llm.ResponseAlias$stream = user.fixtures.namespaces_type_resolution.llm.Response$stream
+function user.fixtures.namespaces_type_resolution.llm.LlmAliasParam(cfg: user.fixtures.namespaces_type_resolution.llm.ConfigAlias) -> string  [expr] {
+  {  } cfg.model
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmConstruct(model: string) -> user.fixtures.namespaces_type_resolution.llm.Config  [expr] {
+  {  } user.fixtures.namespaces_type_resolution.llm.Config { model: model, temperature: 0.7 }
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmEnumMatch(s: user.fixtures.namespaces_type_resolution.llm.Status) -> string  [expr] {
+  {  } match (s) { user.fixtures.namespaces_type_resolution.llm.Status.Ready => "ready", user.fixtures.namespaces_type_resolution.llm.Status.Generating => "generating", user.fixtures.namespaces_type_resolution.llm.Status.Done => "done" }
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmEnumReturn() -> user.fixtures.namespaces_type_resolution.llm.Status  [expr] {
+  {  } Status.Ready
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmIdentity(cfg: user.fixtures.namespaces_type_resolution.llm.Config) -> user.fixtures.namespaces_type_resolution.llm.Config  [expr] {
+  {  } cfg
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmMatchesRootStatus(s: root.fixtures.namespaces_type_resolution.Status) -> string  [expr] {
+  {  } match (s) { root.fixtures.namespaces_type_resolution.Status.Ok => "ok", root.fixtures.namespaces_type_resolution.Status.Failed => "failed", root.fixtures.namespaces_type_resolution.Status.Pending => "pending" }
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmMixedConfigs(llm_cfg: user.fixtures.namespaces_type_resolution.llm.Config, root_cfg: root.fixtures.namespaces_type_resolution.Config, auth_cfg: root.fixtures.namespaces_type_resolution.auth.Config) -> string  [expr] {
+  {  } llm_cfg.model
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmResponseConstruct(text: string) -> user.fixtures.namespaces_type_resolution.llm.Response  [expr] {
+  {  } user.fixtures.namespaces_type_resolution.llm.Response { text: text, tokens: 42 }
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmThrowClass(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw user.fixtures.namespaces_type_resolution.llm.Error { reason: "llm failed", retryable: true }, _ => "ok" }
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmThrowEnum(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw Status.Done, _ => "ok" }
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmThrowsRootEnum(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw root.fixtures.namespaces_type_resolution.Status.Failed, _ => "ok" }
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmThrowsRootError(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw root.fixtures.namespaces_type_resolution.Error { code: 404, message: "not found" }, _ => "ok" }
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmUsesAuthConfig(cfg: root.fixtures.namespaces_type_resolution.auth.Config) -> string  [expr] {
+  {  } cfg.provider
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmUsesAuthError(e: root.fixtures.namespaces_type_resolution.auth.Error) -> string  [expr] {
+  {  } e.realm
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmUsesAuthRole() -> root.fixtures.namespaces_type_resolution.auth.Role  [expr] {
+  {  } root.fixtures.namespaces_type_resolution.auth.Role.Admin
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmUsesNestedClient(c: root.fixtures.namespaces_type_resolution.llm.openai.Client) -> string  [expr] {
+  {  } c.api_key
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmUsesRootAlias(cfg: root.fixtures.namespaces_type_resolution.ConfigAlias) -> string  [expr] {
+  {  } cfg.key
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmUsesRootConfig(cfg: root.fixtures.namespaces_type_resolution.Config) -> string  [expr] {
+  {  } cfg.key
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmUsesRootError(e: root.fixtures.namespaces_type_resolution.Error) -> string  [expr] {
+  {  } e.message
+}
+function user.fixtures.namespaces_type_resolution.llm.LlmUsesRootStatus() -> root.fixtures.namespaces_type_resolution.Status  [expr] {
+  {  } root.fixtures.namespaces_type_resolution.Status.Ok
+}

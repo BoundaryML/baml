@@ -1,0 +1,55 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.anyfunction_reflect.Doc {
+  title: string
+}
+class user.fixtures.anyfunction_reflect.Doc$stream {
+  title: string | null
+}
+class user.fixtures.anyfunction_reflect.ToolError {
+  message: string
+}
+class user.fixtures.anyfunction_reflect.ToolError$stream {
+  message: string | null
+}
+function user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.Client? = null) -> T  [llm] {
+  ai.Agent.new(client = client).run(RuntimeClassify$spec(input)).value
+}
+function user.fixtures.anyfunction_reflect.RuntimeClassify$parse(json: string) -> T  [expr] {
+  baml.sap.parse(json)
+}
+function user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: string) -> ai.Prompt  [expr] {
+  RuntimeClassify$spec(input).prompt(output_format = ai.wire.render_output_format(type.of()))
+}
+function user.fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<T>  [expr] {
+  ai.FunctionSpec { spec_name: "RuntimeClassify", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Choose a category...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_cur =  __tt_cur Add ".\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(RuntimeEnumClient) }
+}
+function user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<T | null, T>  [expr] {
+  ai.stream.from_spec(RuntimeClassify$spec(input), client = client)
+}
+function user.fixtures.anyfunction_reflect.bare_and_pinned() -> int  [expr] {
+  { let f: baml.AnyFunction = web_search; let g: baml.AnyFunction<Returns = user.fixtures.anyfunction_reflect.Doc[] | string, Throws = user.fixtures.anyfunction_reflect.ToolError> = web_search; let widened: baml.AnyFunction<Returns = user.fixtures.anyfunction_reflect.Doc[] | string | int, Throws = user.fixtures.anyfunction_reflect.ToolError> = g; let bare: baml.AnyFunction = g; return 0 }
+}
+function user.fixtures.anyfunction_reflect.current_time() -> string  [expr] {
+  { return "now" }
+}
+function user.fixtures.anyfunction_reflect.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns = user.fixtures.anyfunction_reflect.Doc[] | string, Throws = user.fixtures.anyfunction_reflect.ToolError>>  [expr] {
+  { return map { "search": web_search, "now": current_time } }
+}
+function user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> string  [expr] {
+  { let category = reflect.enum.new("Category", [reflect.enum.value("RED", alias = "k7", description = "warm"), "BLUE"]); let prompt = RuntimeClassify$render_prompt("sample").text(); let parsed = RuntimeClassify$parse(`...`); return prompt Add reflect.enum.get_value(parsed) }
+}
+function user.fixtures.anyfunction_reflect.signature_access(f: baml.AnyFunction) -> string  [expr] {
+  { let sig = reflect.signature(f); let parts = sig.returns.to_string() Add sig.errors.to_string() Add sig.args.length().to_string(); for arg in sig.args { parts = parts Add arg.name Add arg.type.to_string() }; for key in sig.opts.keys() { let opt = sig.opts.get(key) } if (opt Ne null) { parts = parts Add key Add opt.type.to_string() }; return parts }
+}
+function user.fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<string, unknown>) -> user.fixtures.anyfunction_reflect.Doc[] | string  [expr] {
+  { let tools = heterogeneous_tool_map(); let f = tools.get(name); if (f is null) { return "no-such-tool" }; return reflect.call_any(f, args) catch (e) { user.fixtures.anyfunction_reflect.ToolError => "tool-error:" Add e.message, reflect.InvalidArgumentError => "bad-args", reflect.errors.CompilationError => "uncompiled-generic" } }
+}
+function user.fixtures.anyfunction_reflect.web_search(q: string) -> user.fixtures.anyfunction_reflect.Doc[]  [expr] {
+  { if (q Eq "boom") { throw user.fixtures.anyfunction_reflect.ToolError { message: "no results" } }; return [user.fixtures.anyfunction_reflect.Doc { title: q }] }
+}
+
+--- captures ---
+lambda ( __spec_output_format) in RuntimeClassify$spec: captures [input]

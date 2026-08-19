@@ -195,6 +195,10 @@ fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[FixtureTests]) {
     buffer.push_str(&format!(
         "::sdk_test_harness_runner::setup_guard!({SETUP_ENV_VAR:?});\n"
     ));
+    // Runs through the bridge's own `attw` package script rather than
+    // `pnpm exec attw` so a local `pnpm attw` and this test stay the same
+    // check — the script stages the pack without the native addon
+    // (`typescript_src/attw-check.js` explains why).
     buffer.push_str(&format!(
         r#"
 mod bridge_typescript {{
@@ -202,7 +206,7 @@ mod bridge_typescript {{
     fn attw() {{
         ::sdk_test_harness_runner::run_workspace_cmd(
             "sdks/typescript/bridge_typescript",
-            "pnpm exec attw --pack --profile esm-only",
+            "pnpm run attw",
             "{CACHE_SUBDIR}",
             "{CACHE_ENV_VAR}",
         );

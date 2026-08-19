@@ -368,6 +368,30 @@ pub enum DiagnosticId {
     ConflictingTypeDefinitionAtRender,
     /// A top-level declaration ($init) can reach a yielding io sysop.
     InitIoNotAllowed,
+
+    /// A non-data type reached an LLM output schema renderer. These types are
+    /// valid in BAML's type system but have no output-format representation.
+    NonDataTypeAtRender,
+    /// Reflection attempted to extract or dynamically invoke a generic
+    /// callable without a complete runtime type-argument frame.
+    UnspecializedReflectedGeneric,
+    /// A class literal named one of the builtin companion carriers
+    /// (`baml.Int`, `baml.Map`, …). They exist to hang methods on a builtin
+    /// type, never to be instantiated.
+    CannotConstructBuiltinCompanion,
+    /// A condition whose static type decides the branch (always truthy /
+    /// always falsy) - B-1563 truthiness.
+    ConditionAlwaysConstant,
+    /// An inline `unreflect(value)` type argument would escape its call: the
+    /// runtime type parameter is rigid for that one call, but the expression's
+    /// published type still mentions it. The lexical `type T = unreflect(v)`
+    /// binding is the spelling that outlives the call.
+    RuntimeTypeMustBeNamed,
+    /// `baml.reflect.function.Type.specialize` was given type arguments the
+    /// callable cannot accept: the wrong number of them, one that fails a
+    /// declared interface bound, or any at all for a callable with nothing
+    /// left to bind.
+    ReflectSpecializationFailed,
 }
 
 impl DiagnosticId {
@@ -546,6 +570,8 @@ impl DiagnosticId {
             DiagnosticId::OpenInterfaceAtRender => "E0161",
             DiagnosticId::ConflictingTypeDefinitionAtRender => "E0162",
             DiagnosticId::InitIoNotAllowed => "E0163",
+            DiagnosticId::NonDataTypeAtRender => "E0164",
+            DiagnosticId::ConditionAlwaysConstant => "E0167",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 
@@ -569,6 +595,12 @@ impl DiagnosticId {
             DiagnosticId::InterfaceProjectionBase => "E0156",
             DiagnosticId::MountedPackageCallUnsupported => "E0158",
             DiagnosticId::EmptyEnumAtRender => "E0159",
+            // E0164 is owned by the non-data output-format diagnostic in #4470.
+            DiagnosticId::UnspecializedReflectedGeneric => "E0165",
+            DiagnosticId::CannotConstructBuiltinCompanion => "E0166",
+            // E0167 is owned by the always-constant-condition lint in #4498.
+            DiagnosticId::RuntimeTypeMustBeNamed => "E0168",
+            DiagnosticId::ReflectSpecializationFailed => "E0169",
         }
     }
 }

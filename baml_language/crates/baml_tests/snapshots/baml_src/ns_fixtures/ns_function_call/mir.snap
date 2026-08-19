@@ -1,0 +1,114 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.function_call.array_length() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int[] // array
+    let _2: int[]
+
+    bb0: {
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
+        _2 = copy _1;
+        _0 = len(_2);
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.function_call.Bar() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+
+    bb0: {
+        _1 = call const fn user.fixtures.function_call.Foo(const 1_i64) -> [bb1];
+    }
+
+    bb1: {
+        _0 = copy _1;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.fixtures.function_call.Foo(x: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1 + const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.function_call.GreetBaz(n: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // n // param
+    let _2: fixtures.function_call.Baz // baz
+
+    bb0: {
+        _2 = user.fixtures.function_call.Baz { copy _1 };
+        _0 = call const fn user.fixtures.function_call.Baz.Greeting(copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.function_call.Baz.Greeting(self: fixtures.function_call.Baz) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.function_call.Baz // self // param
+    let _2: string
+    let _3: string
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = const "Hello, " + copy _3;
+        _0 = copy _2 + const "!";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.function_call.param_in_if_statement(b: bool) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: bool // b // param
+
+    bb0: {
+        branch copy _1 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const 2_i64;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = const 1_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}

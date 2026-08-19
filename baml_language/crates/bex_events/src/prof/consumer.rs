@@ -1015,6 +1015,22 @@ mod tests {
         const ENGINE: u64 = 0x50AC_0001;
         let rounds: u64 = if cfg!(miri) { 4 } else { 64 };
         let per_round: u64 = if cfg!(miri) { 20 } else { 500 };
+        // Per-round wedge bound, not a latency assertion. Under Miri's
+        // interpreter a 1 s wall-clock bound is machine-marginal and failed
+        // deterministically on some hosts, so allow a minute there. Natively
+        // that same minute across 64 rounds would let a wedge burn an hour as
+        // a bare job timeout instead of failing fast with the named panic.
+        let round_ack_timeout = if cfg!(miri) {
+            Duration::from_secs(60)
+        } else {
+            // 5 s was measured insufficient natively: under a full-fleet CI
+            // fan-out one round's ack took >15 s of wall clock (the whole
+            // suite ran ~50x slower than idle). 30 s keeps the fail-fast
+            // property - a wedged consumer still dies with this named panic
+            // inside the job timeout (64 rounds x 30 s = 32 min < 45 min) -
+            // with real headroom over the worst load observed.
+            Duration::from_secs(30)
+        };
 
         let dir = temp_dir("soak");
         let registry: &'static Registry = leak(Registry::new());
@@ -1063,7 +1079,9 @@ mod tests {
             ctl_tx.send(ControlMsg::Flush(ack_tx)).unwrap();
             ctx.wake().force_wake();
             ack_rx
-                .recv_timeout(Duration::from_secs(1))
+                // The guarantee this test needs is the ack: the consumer
+                // pooled the dead ring before the next acquire.
+                .recv_timeout(round_ack_timeout)
                 .expect("soak consumer did not flush before the next churn round");
         }
 

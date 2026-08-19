@@ -468,6 +468,9 @@ function sc_session(session: reflect.Session) -> null throws unknown {
 function sc_sealed() -> baml.reflect.class.Type throws never {
     baml.reflect.class.Type {}
 }
+function sc_companion() -> baml.Map<string, int> throws never {
+    baml.Map {}
+}
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
     let file = db.add_file("test.baml", source);
@@ -527,6 +530,11 @@ function sc_sealed() -> baml.reflect.class.Type throws never {
         error,
         TirTypeError::CannotConstructReflectionKind { class_name }
             if class_name.render_user_facing() == "baml.reflect.class.Type"
+    )));
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        TirTypeError::CannotConstructBuiltinCompanion { class_name, companion }
+            if class_name.render_user_facing() == "baml.Map" && companion.builtin == "map"
     )));
     assert!(errors.iter().any(|error| matches!(
         error,

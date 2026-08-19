@@ -1405,6 +1405,54 @@ fn equal_requires_singleton_with_unoverridable_eq() {
     assert!(!definitely_equal(&class("Dog"), &class("Dog"), &ctx));
 }
 
+// ── baml.AnyClass ──────────────────────────────────────────────────────────
+
+fn any_class() -> Ty {
+    Ty::Interface(
+        QualifiedTypeName::new(Name::new("baml"), vec![], Name::new("AnyClass")),
+        vec![],
+        vec![],
+        TyAttr::default(),
+    )
+}
+
+#[test]
+fn any_class_membership_is_derived_for_classes_only() {
+    let ctx = Ctx::default();
+    let target = any_class();
+    assert!(is_subtype(&class("Record"), &target, &ctx));
+    assert!(!is_subtype(&Ty::int(), &target, &ctx));
+    assert!(!is_subtype(&Ty::string(), &target, &ctx));
+    assert!(!is_subtype(
+        &Ty::List(Box::new(Ty::int()), TyAttr::default()),
+        &target,
+        &ctx
+    ));
+    assert!(!is_subtype(
+        &Ty::Map {
+            key: Box::new(Ty::string()),
+            value: Box::new(Ty::int()),
+            attr: TyAttr::default(),
+        },
+        &target,
+        &ctx
+    ));
+}
+
+#[test]
+fn any_class_admits_only_the_class_reflection_kind_view() {
+    let ctx = Ctx::default();
+    let target = any_class();
+    for kind in crate::type_kind::TypeKind::ALL {
+        let view = Ty::Class(kind.class_name(), vec![], TyAttr::default());
+        assert_eq!(
+            is_subtype(&view, &target, &ctx),
+            kind == crate::type_kind::TypeKind::Class,
+            "unexpected AnyClass membership for {kind:?}"
+        );
+    }
+}
+
 // ── BEP-062: baml.AnyFunction ──────────────────────────────────────────────
 
 /// `baml.AnyFunction<...pins>` with the given associated-type pins. An empty

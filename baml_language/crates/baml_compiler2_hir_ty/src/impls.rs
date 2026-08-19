@@ -36,6 +36,7 @@ use baml_type::{
     Name, ParamTy, TypeName,
     interned::{InterfaceRef, Ty, TyKind},
     normalize::{TypeContext, equivalent_interned},
+    type_kind::class_inhabits_any_class,
 };
 use rustc_hash::FxHashMap;
 
@@ -255,23 +256,40 @@ pub fn package_impl_locs<'db>(
 /// termination argument (a fact-rich context would let the matcher
 /// re-enter the resolver that called it).
 pub(crate) struct AliasOnlyFacts<'db> {
-    facts: crate::facts::Facts<'db>,
+    db: &'db dyn baml_compiler2_ppir::Db,
+    memoized: Option<crate::facts::Facts<'db>>,
 }
 
 impl<'db> AliasOnlyFacts<'db> {
+    /// A one-shot alias/enum context. Use [`Self::memoized`] when the same
+    /// context spans a candidate scan and will see repeated type heads.
     pub(crate) fn new(db: &'db dyn baml_compiler2_ppir::Db) -> AliasOnlyFacts<'db> {
+        AliasOnlyFacts { db, memoized: None }
+    }
+
+    /// A scan-local alias/enum context. A memo must not outlive one query
+    /// execution - it would serve rows from a stale revision and suppress the
+    /// dependency reads a later execution needs.
+    fn memoized(db: &'db dyn baml_compiler2_ppir::Db) -> AliasOnlyFacts<'db> {
         AliasOnlyFacts {
-            facts: crate::facts::Facts::new(db),
+            db,
+            memoized: Some(crate::facts::Facts::new(db)),
         }
     }
 }
 
 impl TypeContext for AliasOnlyFacts<'_> {
     fn alias_def(&self, name: &TypeName) -> Option<baml_type::Ty> {
-        self.facts.alias_def(name)
+        self.memoized.as_ref().map_or_else(
+            || crate::facts::uncached_alias_def(self.db, name),
+            |facts| facts.alias_def(name),
+        )
     }
     fn enum_variants(&self, name: &TypeName) -> Option<Vec<Name>> {
-        self.facts.enum_variants(name)
+        self.memoized.as_ref().map_or_else(
+            || crate::facts::uncached_enum_variants(self.db, name),
+            |facts| facts.enum_variants(name),
+        )
     }
     fn implements_interface(&self, _: &baml_type::Ty, _: &baml_type::Interface) -> bool {
         false
@@ -777,7 +795,45 @@ pub fn impls_for_type<'db>(
                 }
             }
         })
+        .filter(|resolved| {
+            let implemented = resolved.implemented();
+            // `AnyClass` is an explicit narrowing surface, not another
+            // concrete-member provider. Keep its blanket witness out of the
+            // concrete receiver lookup tier so established fields and methods
+            // named `get`, `name`, `type`, and so on retain their resolution.
+            // Explicit `baml.AnyClass` receivers dispatch through
+            // `resolve_impl`, where the witness remains available.
+            provides_concrete_members(&implemented.name)
+        })
         .collect()
+}
+
+/// Whether an implemented interface contributes members to an unqualified
+/// concrete-receiver lookup. `AnyClass` is reachable only after explicit
+/// narrowing, so its blanket default methods must stay out of both the ground
+/// registry and the inference-variable method probe.
+pub(crate) fn provides_concrete_members(interface: &TypeName) -> bool {
+    !interface.is_builtin_root_type("AnyClass")
+}
+
+/// Compiler-derived interfaces may deliberately narrow a blanket stdlib impl.
+/// Keep impl enumeration and direct goal resolution on the same membership
+/// surface as normalization; otherwise their default methods leak onto values
+/// the derived interface excludes (for example, `map.get` resolving to
+/// `AnyClass.get`).
+fn derived_impl_allows(
+    db: &dyn baml_compiler2_ppir::Db,
+    concrete: &Ty,
+    interface: &TypeName,
+) -> bool {
+    if !interface.is_builtin_root_type("AnyClass") {
+        return true;
+    }
+    let normalized = baml_type::normalize::normalize_interned(concrete, &AliasOnlyFacts::new(db));
+    matches!(
+        normalized.kind(),
+        TyKind::Class(name, _, _) if class_inhabits_any_class(name)
+    )
 }
 
 #[salsa::interned]
@@ -807,7 +863,7 @@ fn impls_for_type_cached<'db>(
     type_key: ImplTypeKey<'db>,
 ) -> Vec<CachedResolvedImpl<'db>> {
     let concrete = type_key.concrete(db);
-    let eq = AliasOnlyFacts::new(db);
+    let eq = AliasOnlyFacts::memoized(db);
     let mut out = Vec::new();
     for &package in all_packages(db) {
         // Do not short-circuit this iterator: `impl_facts` dependencies are
@@ -1112,8 +1168,13 @@ fn resolve_within_depth<'db>(
     {
         return None;
     }
+    // Every selection path, including nested blanket-bound discharge, must
+    // apply compiler-derived membership before consulting the blanket rule.
+    if !derived_impl_allows(db, concrete, &interface.name) {
+        return None;
+    }
     in_progress.push((concrete.clone(), interface.clone()));
-    let eq = AliasOnlyFacts::new(db);
+    let eq = AliasOnlyFacts::memoized(db);
     let mut resolved = None;
     'search: for package in search_roots(db, concrete, interface) {
         for (origin, facts) in package_impl_candidates(db, package) {

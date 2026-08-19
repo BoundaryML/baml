@@ -1,0 +1,104 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.byte_string_literals.ByteStringBasic() -> int {
+    load_const b"\x68\x65\x6c\x6c\x6f"
+    call baml.deep_copy
+    container_len
+    return
+}
+
+function fixtures.byte_string_literals.ByteStringDirectIndexRead() -> int {
+    load_const b"\x41\x42\x43"
+    call baml.deep_copy
+    load_const 0
+    load_array_element
+    return
+}
+
+function fixtures.byte_string_literals.ByteStringEmpty() -> int {
+    load_const b""
+    call baml.deep_copy
+    container_len
+    return
+}
+
+function fixtures.byte_string_literals.ByteStringEquality() -> bool {
+    load_const b"\x61\x62\x63"
+    call baml.deep_copy
+    load_const b"\x61\x62\x63"
+    call baml.deep_copy
+    call baml.ops.equals_equals
+    return
+}
+
+function fixtures.byte_string_literals.ByteStringHexEscapes() -> int {
+    load_const b"\x48\x65\x6c\x6c\x6f"
+    call baml.deep_copy
+    container_len
+    return
+}
+
+function fixtures.byte_string_literals.ByteStringInCondition() -> int {
+    load_const b"\x61\x62\x63"
+    call baml.deep_copy
+    container_len
+    store_var _2
+    load_var _2
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function fixtures.byte_string_literals.ByteStringIndexAccess() -> int | null {
+    load_const b"\x41\x42\x43"
+    call baml.deep_copy
+    load_const 0
+    call baml.Uint8Array.at
+    return
+}
+
+function fixtures.byte_string_literals.ByteStringLiteralAsArg() -> int {
+    load_const b"\x61\x62\x63"
+    call baml.deep_copy
+    call user.fixtures.byte_string_literals.ByteStringPassAndReturn
+    return
+}
+
+function fixtures.byte_string_literals.ByteStringMutate() -> int | null {
+    load_const b"\x00\x00\x00"
+    call baml.deep_copy
+    store_var data
+    load_var data
+    load_const 0
+    load_const 42
+    store_array_element
+    load_var data
+    load_const 0
+    call baml.Uint8Array.at
+    return
+}
+
+function fixtures.byte_string_literals.ByteStringPassAndReturn(data: uint8array) -> int {
+    load_var data
+    container_len
+    return
+}
+
+function fixtures.byte_string_literals.ByteStringStandardEscapes() -> int {
+    load_const b"\x0a\x09\x0d\x00\x5c\x22"
+    call baml.deep_copy
+    container_len
+    return
+}

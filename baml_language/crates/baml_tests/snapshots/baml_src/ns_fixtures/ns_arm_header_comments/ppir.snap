@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.arm_header_comments._thrower() -> int  [expr] {
+  {  } int.parse("nope")
+}
+function user.fixtures.arm_header_comments.catch_with_headers() -> int  [expr] {
+  {  } _thrower() catch (e) { p: baml.errors.ParseError => 1, _ => 0 }
+}
+function user.fixtures.arm_header_comments.match_with_headers(x: int) -> int  [expr] {
+  {  } match (x) { 0 => 1, _ => 2 }
+}

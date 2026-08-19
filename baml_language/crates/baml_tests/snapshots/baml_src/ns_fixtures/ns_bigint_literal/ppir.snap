@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.bigint_literal.GetBigint() -> bigint  [expr] {
+  { let x: bigint = 42n } x
+}
+function user.fixtures.bigint_literal.GetLargeBigint() -> bigint  [expr] {
+  {  } 99999999999999999999n
+}
+function user.fixtures.bigint_literal.GetNegativeBigint() -> bigint  [expr] {
+  {  } Neg 7n
+}

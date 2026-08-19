@@ -1,0 +1,188 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function streaming_parsing.ExtractDoc(input: string, client: ai.Client | null) -> streaming_parsing.Doc {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type streaming_parsing.Doc
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var input
+    call user.streaming_parsing.ExtractDoc$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<streaming_parsing.Doc, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<streaming_parsing.Doc>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function streaming_parsing.ExtractDoc$parse(json: string) -> streaming_parsing.Doc {
+    load_type streaming_parsing.Doc
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function streaming_parsing.ExtractDoc$render_prompt(input: string) -> ai.Prompt {
+    load_var input
+    call user.streaming_parsing.ExtractDoc$spec
+    store_var _2
+    load_type streaming_parsing.Doc
+    call ai.wire.render_output_format
+    store_var _3
+    load_type streaming_parsing.Doc
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function streaming_parsing.ExtractDoc$spec(input: string) -> ai.FunctionSpec<streaming_parsing.Doc> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_global user.streaming_parsing.StreamParseClient
+    call ai.clients.resolve
+    store_var _6
+    load_const "ExtractDoc"
+    load_deref ?1
+    load_const "input"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var input
+    make_closure .<lambda(ExtractDoc$spec, 0)>, 1
+    load_var2 2 3
+    load_type streaming_parsing.Doc
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function streaming_parsing.ExtractDoc$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<streaming_parsing.Doc$stream | null, streaming_parsing.Doc> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var input
+    call user.streaming_parsing.ExtractDoc$spec
+    store_var _4
+    load_type streaming_parsing.Doc$stream | null
+    load_type streaming_parsing.Doc
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function streaming_parsing.SayHello(input: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var input
+    call user.streaming_parsing.SayHello$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function streaming_parsing.SayHello$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function streaming_parsing.SayHello$render_prompt(input: string) -> ai.Prompt {
+    load_var input
+    call user.streaming_parsing.SayHello$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function streaming_parsing.SayHello$spec(input: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_global user.streaming_parsing.StreamParseClient
+    call ai.clients.resolve
+    store_var _6
+    load_const "SayHello"
+    load_deref ?1
+    load_const "input"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var input
+    make_closure .<lambda(SayHello$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function streaming_parsing.SayHello$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var input
+    call user.streaming_parsing.SayHello$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}

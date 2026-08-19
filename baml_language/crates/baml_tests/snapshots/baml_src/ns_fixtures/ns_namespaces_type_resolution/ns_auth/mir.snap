@@ -1,0 +1,377 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.namespaces_type_resolution.auth.AuthIdentity(cfg: fixtures.namespaces_type_resolution.auth.Config) -> fixtures.namespaces_type_resolution.auth.Config {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.auth.Config // _0 // return
+    let _1: fixtures.namespaces_type_resolution.auth.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthConstruct(provider: string) -> fixtures.namespaces_type_resolution.auth.Config {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.auth.Config // _0 // return
+    let _1: string // provider // param
+
+    bb0: {
+        _0 = user.fixtures.namespaces_type_resolution.auth.Config { copy _1, const "s3cret" };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthEnumReturn() -> fixtures.namespaces_type_resolution.auth.Role {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.auth.Role // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.auth.Role.Admin;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthEnumMatch(r: fixtures.namespaces_type_resolution.auth.Role) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.auth.Role // r // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Role.Admin: bb4, Role.User: bb3, Role.Guest: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "guest";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "user";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "admin";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthAliasParam(t: fixtures.namespaces_type_resolution.auth.Token) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.auth.Token // t // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthThrowClass(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: fixtures.namespaces_type_resolution.auth.Error
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        _2 = user.fixtures.namespaces_type_resolution.auth.Error { const "auth failed", const true };
+        throw copy _2;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthThrowEnum(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const user.fixtures.namespaces_type_resolution.auth.Role.Guest;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthMakeToken(v: string) -> fixtures.namespaces_type_resolution.auth.Token {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.auth.Token // _0 // return
+    let _1: string // v // param
+
+    bb0: {
+        _0 = user.fixtures.namespaces_type_resolution.auth.Token { copy _1, const user.fixtures.namespaces_type_resolution.auth.Role.User };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthUsesRootConfig(cfg: fixtures.namespaces_type_resolution.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthUsesRootStatus() -> fixtures.namespaces_type_resolution.Status {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.Status // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.Status.Pending;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthMatchesRootStatus(s: fixtures.namespaces_type_resolution.Status) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "pending";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "failed";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ok";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthThrowsRootError(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: fixtures.namespaces_type_resolution.Error
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        _2 = user.fixtures.namespaces_type_resolution.Error { const 403_i64, const "forbidden" };
+        throw copy _2;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthUsesLlmConfig(cfg: fixtures.namespaces_type_resolution.llm.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthUsesLlmResponse(r: fixtures.namespaces_type_resolution.llm.Response) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Response // r // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthUsesLlmStatus() -> fixtures.namespaces_type_resolution.llm.Status {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.llm.Status // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.llm.Status.Ready;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthMatchesLlmStatus(s: fixtures.namespaces_type_resolution.llm.Status) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ready: bb4, Status.Generating: bb3, Status.Done: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "done";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "generating";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ready";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthUsesNestedClient(c: fixtures.namespaces_type_resolution.llm.openai.Client) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.openai.Client // c // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthMixedConfigs(auth_cfg: fixtures.namespaces_type_resolution.auth.Config, root_cfg: fixtures.namespaces_type_resolution.Config, llm_cfg: fixtures.namespaces_type_resolution.llm.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.auth.Config // auth_cfg // param
+    let _2: fixtures.namespaces_type_resolution.Config // root_cfg // param
+    let _3: fixtures.namespaces_type_resolution.llm.Config // llm_cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.auth.AuthMixedErrors(auth_err: fixtures.namespaces_type_resolution.auth.Error, root_err: fixtures.namespaces_type_resolution.Error, llm_err: fixtures.namespaces_type_resolution.llm.Error) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.auth.Error // auth_err // param
+    let _2: fixtures.namespaces_type_resolution.Error // root_err // param
+    let _3: fixtures.namespaces_type_resolution.llm.Error // llm_err // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

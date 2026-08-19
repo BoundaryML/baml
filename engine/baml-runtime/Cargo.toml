@@ -147,6 +147,7 @@ reqwest = { version = "0.12.12", default-features = false, features = [
   "http2",
   "stream",
   "json",
+  "multipart",
   "rustls-tls",
 ] }
 #
@@ -233,3 +234,6 @@ wasm-logger = "0.2.0"
 serial_test = "3.2.0"
 console_error_panic_hook = "0.1.7"
 insta = { version = "1.43.2", features = ["yaml", "glob"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+wiremock = "=0.6.2"

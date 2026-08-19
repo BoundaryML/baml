@@ -14,6 +14,7 @@
 // for it in the host binary.
 
 pub mod auto_cli;
+mod call_context;
 pub mod clap_target;
 pub mod diag_print;
 pub mod dispatch;
@@ -22,6 +23,7 @@ pub mod json_coerce;
 pub mod output;
 
 pub use auto_cli::{is_auto_cli_primitive, parse_cli_value};
+pub use call_context::CallContextCapture;
 pub use clap_target::{CLAP_STYLING, ParsedTargetArgs, parse_multi_target_argv, parse_target_argv};
 pub use diag_print::{print_anyhow_error, print_error, print_warning};
 
@@ -33,8 +35,8 @@ pub mod clap_reexport {
 }
 pub use dispatch::{
     DispatchResult, build_args_from_signature, clamp_exit_code, dispatch_target,
-    validate_help_param,
+    dispatch_target_with_context, validate_help_param,
 };
 pub use envelope::{PACK_SECTION_NAME, PackEnvelope, PackMode, TargetEntry};
 pub use json_coerce::load_json_source;
-pub use output::{OutputFormat, format_value, write_output};
+pub use output::{OutputFormat, format_value, write_output, write_output_with_context};

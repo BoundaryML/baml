@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.226.1](https://github.com/boundaryml/baml/compare/0.226.0..0.226.1) - 2026-08-18
+
+### Bug Fixes
+
+- **(openai)** accept both Chat Completions and Responses API token-detail fields ([#4503](https://github.com/BoundaryML/baml/pull/4503)) - ([378cdcc](https://github.com/BoundaryML/baml/commit/378cdcce3c60706cef603b2d7c9b23d4e536d52e)) - Sam Lijin
+
+## [0.226.0](https://github.com/boundaryml/baml/compare/0.225.0..0.226.0) - 2026-08-17
+
+### Features
+
+- **(runtime)** make connection pooling configurable ([#3975](https://github.com/BoundaryML/baml/pull/3975)) - ([521919c](https://github.com/BoundaryML/baml/commit/521919c7f58b0b930ae1709df1882651db8ca865)) - Dex Hunter
+- **(openai)** add `/v1/audio/transcriptions` endpoint support ([#4202](https://github.com/BoundaryML/baml/pull/4202)) - ([79b8705](https://github.com/BoundaryML/baml/commit/79b87056604730012066633fb0fdcb0f93c07bb7)) - Maceo
+
 ## [0.225.0](https://github.com/boundaryml/baml/compare/0.224.0..0.225.0) - 2026-07-31
 
 ### Docs

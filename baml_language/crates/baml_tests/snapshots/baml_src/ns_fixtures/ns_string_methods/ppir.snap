@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.string_methods.SplitCount(s: string) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.string_methods.StartsWith(s: string) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.string_methods.Trimmed(s: string) -> string  [expr] {
+  {  } `...`
+}
+function user.fixtures.string_methods.Upper(s: string) -> string  [expr] {
+  {  } `...`
+}
