@@ -1075,5 +1075,4 @@ mod tests {
             "{diagnostics:?}"
         );
     }
-
 }

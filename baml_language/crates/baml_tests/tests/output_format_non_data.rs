@@ -301,8 +301,14 @@ async fn generic_data_class_output_renders() {
     );
     let output = baml_test!(&source);
     let rendered = result_string(output);
-    assert!(rendered.contains("name"), "schema missing Item field: {rendered}");
-    assert!(rendered.contains("value"), "schema missing Wrapper field: {rendered}");
+    assert!(
+        rendered.contains("name"),
+        "schema missing Item field: {rendered}"
+    );
+    assert!(
+        rendered.contains("value"),
+        "schema missing Wrapper field: {rendered}"
+    );
 }
 
 /// A generic instantiation whose argument is genuinely non-data still fails

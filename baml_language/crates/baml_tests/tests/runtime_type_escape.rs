@@ -96,6 +96,11 @@ class ProbeClient {
             "probe"
         }
 
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            let _ = input;
+            baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: "{}" }
+        }
+
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn {

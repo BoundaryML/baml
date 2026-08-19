@@ -1568,10 +1568,7 @@ fn required_positional_count(
 ///     ...
 /// ]
 /// ```
-pub(crate) fn render_leaf_body(
-    body: &LeafBody,
-    callable_child_names: &BTreeSet<String>,
-) -> String {
+pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<String>) -> String {
     if body.is_empty() {
         return String::new();
     }

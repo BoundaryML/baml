@@ -409,10 +409,7 @@ fn to_source_code_internal(
             render_package_init_pyi(&kids, &callable_child_names)
         };
         let callable_child_bodies = callable_child_bodies(dir, &callable_child_names, &bodies);
-        pyi_content.push_str(&render_leaf_body_pyi(
-            body,
-            &callable_child_bodies,
-        ));
+        pyi_content.push_str(&render_leaf_body_pyi(body, &callable_child_bodies));
         pyi_content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
