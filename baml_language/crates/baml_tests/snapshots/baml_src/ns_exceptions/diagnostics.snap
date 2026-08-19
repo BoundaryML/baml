@@ -185,3 +185,13 @@ source: crates/baml_tests/src/corpus.rs
  1446 │         _ => 3
       ·              ─
       ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.errors.ParseError
+      ╭─[exceptions.baml:1552:89]
+ 1552 │ ╭─▶ function s20_may_throw(n: int) -> string throws baml.errors.Io | baml.errors.ParseError {
+ 1553 │ │       if (n == 42) { throw baml.errors.Io { message: "io" } }
+ 1554 │ │       "ok"
+ 1555 │ ╰─▶ }
+      ╰────

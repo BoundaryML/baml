@@ -3223,8 +3223,7 @@ function exceptions.s20_div_panic_beside_call_fn(n: int) -> int {
     call user.exceptions.s20_may_throw
     pop 1
     jump L1
-    load_const 1
-    unary_op -
+    load_const -1
     jump L3
 
   L1:
@@ -3320,8 +3319,7 @@ function exceptions.s20_index_panic_beside_call_fn(n: int) -> int {
     call user.exceptions.s20_may_throw
     pop 1
     jump L1
-    load_const 1
-    unary_op -
+    load_const -1
     jump L3
 
   L1:
