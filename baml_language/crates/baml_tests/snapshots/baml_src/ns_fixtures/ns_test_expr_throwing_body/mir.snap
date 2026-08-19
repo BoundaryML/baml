@@ -1,0 +1,48 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.test_expr_throwing_body.$init_test_ns_fixtures_ns_test_expr_throwing_body_main(registry: testing.TestCollector) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.TestCollector // registry // param
+    let _2: void
+    let _3: () -> void throws string
+
+    bb0: {
+        _3 = make_closure lambda[0]();
+        _2 = call const fn testing.TestCollector.register_test_at(copy _1, const "root.fixtures.test_expr_throwing_body", const "throwing body becomes failure", copy _3, const null) -> [bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda($init_test_ns_fixtures_ns_test_expr_throwing_body_main, 0)>() -> void {
+    // Locals:
+    let _0: void // _0 // return
+
+    bb0: {
+        _0 = call const fn user.fixtures.test_expr_throwing_body.risky() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.test_expr_throwing_body.risky() -> void {
+    // Locals:
+    let _0: void // _0 // return
+
+    bb0: {
+        throw const "boom";
+    }
+}

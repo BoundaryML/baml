@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.json_to_from_string_three_level.level1(s: string) -> #0 {
+    load_type #0
+    load_var s
+    call baml.json.from_string
+    return
+}
+
+function fixtures.json_to_from_string_three_level.level2(s: string) -> #0 {
+    load_type #0
+    load_var s
+    call user.fixtures.json_to_from_string_three_level.level1
+    return
+}
+
+function fixtures.json_to_from_string_three_level.level3(s: string) -> #0 {
+    load_type #0
+    load_var s
+    call user.fixtures.json_to_from_string_three_level.level2
+    return
+}

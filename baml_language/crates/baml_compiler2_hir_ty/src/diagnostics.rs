@@ -17,7 +17,7 @@ use std::fmt;
 
 use baml_base::{FileId, Name, SourceFile};
 use baml_compiler_diagnostics::runtime_type::{
-    RuntimeTypeNameRewrite, runtime_type_must_be_named_help,
+    RuntimeTypeEscape, RuntimeTypeNameRewrite, runtime_type_must_be_named_help,
 };
 use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId, TypeAnnotId};
 use baml_compiler2_hir::{
@@ -137,11 +137,13 @@ pub enum TirTypeError {
     /// slots require the whole-slot `unreflect(value)` marker.
     ComputedGenericArgumentRequiresUnreflect { name: Name },
     /// An inline `unreflect(value)` type argument would escape its call: the
-    /// runtime parameter is rigid for that one call, but the callee's result
-    /// type still mentions it, so the value the call produces would carry a
-    /// name that no longer means anything. The lexical `type T = unreflect(v)`
-    /// binding is the spelling that outlives a call.
-    RuntimeTypeMustBeNamed,
+    /// runtime parameter is rigid for that one call, but a type the call
+    /// publishes still mentions it, so the value or error that comes back
+    /// would carry a name that no longer means anything. The lexical
+    /// `type T = unreflect(v)` binding is the spelling that outlives a call.
+    /// `escape` picks the note; the headline and the fix are the same either
+    /// way.
+    RuntimeTypeMustBeNamed { escape: RuntimeTypeEscape },
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
@@ -892,7 +894,7 @@ impl fmt::Display for TirTypeError {
                     );
                 f.write_str(diagnostic.message.as_str())
             }
-            TirTypeError::RuntimeTypeMustBeNamed => {
+            TirTypeError::RuntimeTypeMustBeNamed { .. } => {
                 let diagnostic =
                     baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named();
                 f.write_str(diagnostic.message.as_str())

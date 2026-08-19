@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.is_operator.both_ints(a: int | string, b: int | string) -> bool  [expr] {
+  {  } a is int And b is int
+}
+function user.fixtures.is_operator.classify(v: int | string) -> string  [expr] {
+  {  } if (v is int) {  } "number" else {  } "text"
+}
+function user.fixtures.is_operator.is_int(v: int | string) -> bool  [expr] {
+  {  } v is int
+}
+function user.fixtures.is_operator.is_int_or_bool(v: int | string | bool) -> bool  [expr] {
+  {  } v is int | bool
+}
+function user.fixtures.is_operator.is_not_string(v: int | string) -> bool  [expr] {
+  {  } Not v is string
+}
+function user.fixtures.is_operator.is_zero(n: int) -> bool  [expr] {
+  {  } n is 0
+}

@@ -453,9 +453,9 @@ mod tests {
 
         let root = TempDir::new().unwrap();
         let (_, files) = validate_and_collect(&tree).unwrap();
-        write_generated_output(&root.path().join("baml_client"), files).unwrap();
-        assert!(root.path().join("baml_client/BamlProgram.g.cs").is_file());
-        assert!(!root.path().join("baml_client/program.baml").exists());
+        write_generated_output(&root.path().join("baml_sdk"), files).unwrap();
+        assert!(root.path().join("baml_sdk/BamlProgram.g.cs").is_file());
+        assert!(!root.path().join("baml_sdk/program.baml").exists());
     }
 
     #[test]

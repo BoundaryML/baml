@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.test_expr_throwing_body.$init_test_ns_fixtures_ns_test_expr_throwing_body_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_at("root.fixtures.tes...", "throwing body bec...", () -> void { {  } risky() }, null) } null
+}
+function user.fixtures.test_expr_throwing_body.risky() -> void  [expr] {
+  { throw "boom" }
+}

@@ -21,11 +21,11 @@ feed="$work/feed"
 consumer="$work/consumer"
 packages="$work/packages"
 publish="$work/publish"
-mkdir -p "$feed" "$consumer/baml_client" "$packages" "$publish"
+mkdir -p "$feed" "$consumer/baml_sdk" "$packages" "$publish"
 cp "$package" "$feed/baml-bridge.$version.nupkg"
 cp "$test_dir/Baml.Bridge.DocumentationConsumer.csproj" "$consumer/"
 cp "$test_dir/Program.cs" "$consumer/"
-cp -R "$generated_source_root/." "$consumer/baml_client/"
+cp -R "$generated_source_root/." "$consumer/baml_sdk/"
 printf '%s\n' \
   '<?xml version="1.0" encoding="utf-8"?>' \
   '<configuration>' \
@@ -48,7 +48,7 @@ NUGET_PACKAGES="$packages" dotnet restore "$project" \
   --configfile "$consumer/NuGet.Config" \
   -p:NuGetAudit=false \
   -p:BamlBridgePackageVersion="$version" \
-  -p:BamlGeneratedSourceRoot="$consumer/baml_client"
+  -p:BamlGeneratedSourceRoot="$consumer/baml_sdk"
 NUGET_PACKAGES="$packages" dotnet publish "$project" \
   --configuration Release \
   --runtime "$rid" \
@@ -57,7 +57,7 @@ NUGET_PACKAGES="$packages" dotnet publish "$project" \
   --output "$publish" \
   -p:NuGetAudit=false \
   -p:BamlBridgePackageVersion="$version" \
-  -p:BamlGeneratedSourceRoot="$consumer/baml_client"
+  -p:BamlGeneratedSourceRoot="$consumer/baml_sdk"
 test -f "$publish/$canonical_native"
 env -u BAML_BRIDGE_CSHARP_NATIVE_LIBRARY \
   dotnet "$publish/Baml.Bridge.DocumentationConsumer.dll" \

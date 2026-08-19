@@ -180,20 +180,20 @@ copy_fixture() {
     cp "$source_file" "$destination/$relative"
   done < <(
     find "$source" -type f \( -name '*.cs' -o -name '*.csproj' \) \
-      ! -path '*/baml_client/*' ! -path '*/bin/*' ! -path '*/obj/*' \
+      ! -path '*/baml_sdk/*' ! -path '*/bin/*' ! -path '*/obj/*' \
       -print0
   )
   while IFS= read -r -d '' source_file; do
-    relative="${source_file#"$generation/baml_client/"}"
-    mkdir -p "$destination/baml_client/$(dirname "$relative")"
-    cp "$source_file" "$destination/baml_client/$relative"
+    relative="${source_file#"$generation/baml_sdk/"}"
+    mkdir -p "$destination/baml_sdk/$(dirname "$relative")"
+    cp "$source_file" "$destination/baml_sdk/$relative"
   done < <(
-    find "$generation/baml_client" -type f -name '*.g.cs' -print0
+    find "$generation/baml_sdk" -type f -name '*.g.cs' -print0
   )
   cp "$test_dir/NuGet.Config" "$destination/"
 
   mapfile -t generated_sources < <(
-    find "$destination/baml_client" -type f -name '*.g.cs' \
+    find "$destination/baml_sdk" -type f -name '*.g.cs' \
       -printf '%P\n' | LC_ALL=C sort
   )
   if [[ "${#generated_sources[@]}" -eq 0 ]]; then
@@ -201,7 +201,7 @@ copy_fixture() {
     return 1
   fi
   (
-    cd "$generation/baml_client"
+    cd "$generation/baml_sdk"
     find . -type f -name '*.g.cs' -printf '%P\n' | LC_ALL=C sort
   ) | diff -u - <(printf '%s\n' "${generated_sources[@]}")
 

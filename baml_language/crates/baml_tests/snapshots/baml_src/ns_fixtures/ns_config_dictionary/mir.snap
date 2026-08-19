@@ -1,0 +1,99 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.config_dictionary.StringConfig() -> map<string, string> {
+    // Locals:
+    let _0: map<string, string> // _0 // return
+
+    bb0: {
+        _0 = { const "key2": const "some random value", const "hello": const "world", const "thing": const "hello", const "block_string": const "hello there my frien\n                d", const "inline_raw_string": const "inline \"raw\" string,,", const "string key": const "value with spaces", const "stringKey": const "true", const "oneMoreValueToTestBrokenness": const "value" }: map<string, string>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.config_dictionary.NumberConfig() -> map<string, int> {
+    // Locals:
+    let _0: map<string, int> // _0 // return
+
+    bb0: {
+        _0 = { const "max_tokens": const 100_i64, const "myInteger": const 100_i64 }: map<string, int>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.config_dictionary.BoolConfig() -> map<string, bool> {
+    // Locals:
+    let _0: map<string, bool> // _0 // return
+
+    bb0: {
+        _0 = { const "booleanValue": const true }: map<string, bool>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.config_dictionary.ArrayConfig() -> map<string, string[]> {
+    // Locals:
+    let _0: map<string, string[]> // _0 // return
+    let _1: string[]
+    let _2: string[]
+    let _3: string[]
+
+    bb0: {
+        _1 = [const "abc", const "abc", const "ccc"]: string[];
+        _2 = [const "one", const "two"]: string[];
+        _3 = [const "one", const "two"]: string[];
+        _0 = { const "array_key_with_quoted_unquoted": copy _1, const "array1": copy _2, const "array2": copy _3 }: map<string, string[]>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.config_dictionary.NumberArrayConfig() -> map<string, int[]> {
+    // Locals:
+    let _0: map<string, int[]> // _0 // return
+    let _1: int[]
+
+    bb0: {
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
+        _0 = { const "array3Numbers": copy _1 }: map<string, int[]>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.config_dictionary.NestedConfig() -> map<string, map<string, string>> {
+    // Locals:
+    let _0: map<string, map<string, string>> // _0 // return
+    let _1: map<string, string>
+    let _2: map<string, string>
+
+    bb0: {
+        _1 = { const "key": const "value", const "key2": const "value2" }: map<string, string>;
+        _2 = { const "x-api-key": const "myapikey", const "authorization": const "Bearer token" }: map<string, string>;
+        _0 = { const "nestedKey": copy _1, const "headers": copy _2 }: map<string, map<string, string>>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

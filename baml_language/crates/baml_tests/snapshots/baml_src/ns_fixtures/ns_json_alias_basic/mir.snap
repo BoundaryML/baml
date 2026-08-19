@@ -1,0 +1,196 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.json_alias_basic.MakeWrapper() -> fixtures.json_alias_basic.Wrapper {
+    // Locals:
+    let _0: fixtures.json_alias_basic.Wrapper // _0 // return
+
+    bb0: {
+        _0 = user.fixtures.json_alias_basic.Wrapper { const null };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.json_alias_basic.ReturnNull() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.json_alias_basic.ReturnBool() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.json_alias_basic.ReturnInt() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.json_alias_basic.ReturnFloat() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = const 3.14_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.json_alias_basic.ReturnString() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = const "hello";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.json_alias_basic.ReturnArray() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = [const 1_i64, const 2_i64, const 3_i64]: baml.json.json[];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.json_alias_basic.ReturnMap() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = { const "key": const "value" }: map<string, baml.json.json>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.json_alias_basic.MatchJson(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
+    let _2: bool
+    let _3: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _4: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _5: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _6: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _7: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+
+    bb0: {
+        _2 = copy _1 == const null;
+        branch copy _2 -> [bb12, bb1];
+    }
+
+    bb1: {
+        _3 = copy _1;
+        _3 = narrow_bind copy _3 as Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb11, bb2];
+    }
+
+    bb2: {
+        _4 = copy _1;
+        _4 = narrow_bind copy _4 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb10, bb3];
+    }
+
+    bb3: {
+        _5 = copy _1;
+        _5 = narrow_bind copy _5 as Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb9, bb4];
+    }
+
+    bb4: {
+        _6 = copy _1;
+        _6 = narrow_bind copy _6 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb8, bb5];
+    }
+
+    bb5: {
+        _7 = copy _1;
+        _7 = narrow_bind copy _7 as List(TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb7, bb6];
+    }
+
+    bb6: {
+        _0 = const "map";
+        goto -> bb13;
+    }
+
+    bb7: {
+        _0 = const "array";
+        goto -> bb13;
+    }
+
+    bb8: {
+        _0 = const "string";
+        goto -> bb13;
+    }
+
+    bb9: {
+        _0 = const "float";
+        goto -> bb13;
+    }
+
+    bb10: {
+        _0 = const "int";
+        goto -> bb13;
+    }
+
+    bb11: {
+        _0 = const "bool";
+        goto -> bb13;
+    }
+
+    bb12: {
+        _0 = const "null";
+        goto -> bb13;
+    }
+
+    bb13: {
+        return;
+    }
+}

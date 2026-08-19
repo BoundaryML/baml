@@ -63,27 +63,27 @@ expression: outcome.dump
 1727..1735 'self.idx': int
 1739..1740 '1': 1
 1753..1757 'item': T
-1785..1792 'pk_main': throws unknown
-1819..2029 '{\n   ...out\n}': int[]
-1825..1830 'let p': user.PkPeekable<int, never>
-1833..1852 'PkArra...or.new': (arr: int[]) -> user.PkArrayIterator<int> throws never
-1833..1860 'PkArra...4, 5])': user.PkArrayIterator<int>
-1833..1869 'PkArra...ekable': (self: user.PkArrayIterator<int>) -> user.PkPeekable<int, never> throws never
-1833..1871 'PkArra...able()': user.PkPeekable<int, never>
-1853..1859 '[4, 5]': int[]
-1854..1855 '4': 4
-1857..1858 '5': 5
-1914..1928 'let out: int[]': int[]
-1923..1928 'int[]': int[]
-1931..1933 '[]': int[]
-1938..2019 'match ...n    }': int | void
-1945..1951 'p.peek': (self: user.PkPeekable<int, never>) -> int | user.PkDone throws never
-1945..1953 'p.peek()': int | user.PkDone
-1965..1971 'PkDone': user.PkDone
-1975..1977 '{}': void
-1987..1997 'let x: int': int
-1994..1997 'int': int
-2001..2009 'out.push': (self: int[], item: int) -> int throws never
-2001..2012 'out.push(x)': int
-2010..2011 'x': int
-2024..2027 'out': int[]
+1785..1792 'pk_main': throws never
+1804..2014 '{\n   ...out\n}': int[]
+1810..1815 'let p': user.PkPeekable<int, never>
+1818..1837 'PkArra...or.new': (arr: int[]) -> user.PkArrayIterator<int> throws never
+1818..1845 'PkArra...4, 5])': user.PkArrayIterator<int>
+1818..1854 'PkArra...ekable': (self: user.PkArrayIterator<int>) -> user.PkPeekable<int, never> throws never
+1818..1856 'PkArra...able()': user.PkPeekable<int, never>
+1838..1844 '[4, 5]': int[]
+1839..1840 '4': 4
+1842..1843 '5': 5
+1899..1913 'let out: int[]': int[]
+1908..1913 'int[]': int[]
+1916..1918 '[]': int[]
+1923..2004 'match ...n    }': int | void
+1930..1936 'p.peek': (self: user.PkPeekable<int, never>) -> int | user.PkDone throws never
+1930..1938 'p.peek()': int | user.PkDone
+1950..1956 'PkDone': user.PkDone
+1960..1962 '{}': void
+1972..1982 'let x: int': int
+1979..1982 'int': int
+1986..1994 'out.push': (self: int[], item: int) -> int throws never
+1986..1997 'out.push(x)': int
+1995..1996 'x': int
+2009..2012 'out': int[]

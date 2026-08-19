@@ -1,280 +1,85 @@
 //! Provider request builders consume the structural `ai.Prompt` produced by an
-//! LLM spec. These tests stay offline and inspect only the serialized body.
+//! LLM spec. The offline request-shape suite lives in
+//! `baml_src/ns_structured_prompt_requests/` as native BAML tests; this file
+//! keeps only the test that must control the host environment (a late-bound
+//! `env.NAME` reference resolved during preview), which needs a re-exec'd
+//! child process for isolation.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
-async fn request_body(expr: &str) -> serde_json::Value {
-    let source = format!(
-        r#"
-function RequestShape() -> string {{
-  client: "openai/gpt-4o-mini"
-  prompt: `${{role("system")}}Follow the rules.${{role("user")}}Answer this.${{ctx.output_format}}`
-}}
-
-function main() -> string {{
-  let spec = RequestShape$spec()
-  let input = ai.ModelTurnInput {{
-    prompt: spec.prompt_template,
-    journal: ai.Journal {{ log: [] }},
-    toolbox: ai.tools.Toolbox.new([]),
-    output_type: type.of<string>(),
-  }}
-  {expr}.body
-}}
-"#
-    );
-    let output = baml_test!(&source);
-    let body = match output.result {
-        Ok(BexExternalValue::String(body)) => body.to_string(),
-        other => panic!("expected a request body string, got {other:?}"),
-    };
-    serde_json::from_str(&body).expect("provider request body should be valid JSON")
-}
-
-async fn media_request_body(
-    expr: &str,
-    include_video: bool,
-    include_audio: bool,
-) -> serde_json::Value {
-    let video_parameter = if include_video { ", movie: video" } else { "" };
-    let video_prompt = if include_video { "${movie}" } else { "" };
-    let video_argument = if include_video {
-        r#", video.from_base64("video-data", "video/mp4")"#
-    } else {
-        ""
-    };
-    // Anthropic's Messages API has no audio input block; its lowering rejects
-    // audio parts, so that provider's shape test opts out of the audio param.
-    let audio_parameter = if include_audio { ", sound: audio" } else { "" };
-    let audio_prompt = if include_audio { "${sound}:" } else { "" };
-    let audio_argument = if include_audio {
-        r#"audio.from_base64("audio-data", "audio/mpeg"),"#
-    } else {
-        ""
-    };
-    let source = format!(
-        r#"
-function MediaShape(photo: image{audio_parameter}, document: pdf{video_parameter}) -> string {{
-  client: "google/gemini-2.5-flash"
-  tools: []
-  prompt: `${{role("user")}}Inspect:${{photo}}:{audio_prompt}${{document}}:{video_prompt}`
-}}
-
-function main() -> string {{
-  let spec = MediaShape$spec(
-    image.from_base64("image-data", "image/png"),
-    {audio_argument}
-    pdf.from_base64("pdf-data", "application/pdf")
-    {video_argument}
-  )
-  let input = ai.ModelTurnInput {{
-    prompt: spec.prompt_template,
-    journal: ai.Journal {{ log: [] }},
-    toolbox: ai.tools.Toolbox.new([]),
-    output_type: type.of<string>(),
-  }}
-  {expr}.body
-}}
-"#
-    );
-    let output = baml_test!(&source);
-    let body = match output.result {
-        Ok(BexExternalValue::String(body)) => body.to_string(),
-        other => panic!("expected a media request body string, got {other:?}"),
-    };
-    serde_json::from_str(&body).expect("provider media request body should be valid JSON")
-}
-
 #[tokio::test]
-async fn openai_preserves_prompt_message_roles() {
-    let body = request_body(
-        r#"openai.internal.openai_render(
-    openai.ResponsesClient.new(model = "gpt-test", api_key = "test-key"),
-    input,
-  )"#,
-    )
-    .await;
-    let input = body["input"].as_array().expect("OpenAI input array");
-    assert_eq!(input.len(), 2);
-    assert_eq!(input[0]["role"], "system");
-    assert_eq!(input[0]["content"][0]["type"], "input_text");
-    assert_eq!(input[0]["content"][0]["text"], "Follow the rules.");
-    assert_eq!(input[1]["role"], "user");
-    assert!(
-        input[1]["content"][0]["text"]
-            .as_str()
-            .expect("user prompt text")
-            .starts_with("Answer this.")
-    );
-    assert!(body.get("instructions").is_none());
-}
+async fn vertex_project_id_accepts_late_bound_env_ref_in_preview() {
+    const CHILD_MARKER: &str = "BAML_VERTEX_PROJECT_PREVIEW_CHILD";
+    if std::env::var(CHILD_MARKER).as_deref() != Ok("1") {
+        let status = std::process::Command::new(
+            std::env::current_exe().expect("test binary path should be available"),
+        )
+        .arg("--exact")
+        .arg("vertex_project_id_accepts_late_bound_env_ref_in_preview")
+        .arg("--nocapture")
+        .env(CHILD_MARKER, "1")
+        .env("VERTEX_PROJECT_ID", "test-project")
+        .status()
+        .expect("isolated preview test process should start");
+        assert!(status.success(), "isolated preview test failed: {status}");
+        return;
+    }
 
-#[tokio::test]
-async fn anthropic_splits_system_from_prompt_messages() {
-    let body = request_body(
-        r#"anthropic.internal._anthropic_request(
-    anthropic.AnthropicClient.new(model = "claude-test", api_key = "test-key"),
-    input,
-    false,
-  )"#,
-    )
-    .await;
-    assert_eq!(body["system"][0]["type"], "text");
-    assert_eq!(body["system"][0]["text"], "Follow the rules.");
-    assert_eq!(body["messages"][0]["role"], "user");
-    assert!(
-        body["messages"][0]["content"][0]["text"]
-            .as_str()
-            .expect("Anthropic user text")
-            .starts_with("Answer this.")
-    );
-}
-
-#[tokio::test]
-async fn google_splits_system_and_maps_user_prompt() {
-    let body = request_body(
-        r#"google.internal.google_render(
-    google.GoogleClient.new(model = "gemini-test", api_key = "test-key"),
-    input,
-  )"#,
-    )
-    .await;
-    assert_eq!(
-        body["systemInstruction"]["parts"][0]["text"],
-        "Follow the rules."
-    );
-    assert_eq!(body["contents"][0]["role"], "user");
-    assert!(
-        body["contents"][0]["parts"][0]["text"]
-            .as_str()
-            .expect("Gemini user text")
-            .starts_with("Answer this.")
-    );
-}
-
-#[tokio::test]
-async fn openai_lowers_image_audio_and_pdf_parts() {
-    let body = media_request_body(
-        r#"openai.internal.openai_render(
-    openai.ResponsesClient.new(model = "gpt-test", api_key = "test-key"),
-    input,
-  )"#,
-        false,
-        true,
-    )
-    .await;
-    let parts = body["input"][0]["content"]
-        .as_array()
-        .expect("OpenAI content parts");
-    let by_type = |kind: &str| {
-        parts
-            .iter()
-            .find(|part| part["type"] == kind)
-            .unwrap_or_else(|| panic!("missing OpenAI {kind} part: {parts:?}"))
-    };
-    assert_eq!(
-        by_type("input_image")["image_url"],
-        "data:image/png;base64,image-data"
-    );
-    assert_eq!(by_type("input_audio")["input_audio"]["data"], "audio-data");
-    assert_eq!(by_type("input_audio")["input_audio"]["format"], "mp3");
-    assert_eq!(
-        by_type("input_file")["file_data"],
-        "data:application/pdf;base64,pdf-data"
-    );
-}
-
-#[tokio::test]
-async fn anthropic_lowers_image_and_pdf_parts() {
-    let body = media_request_body(
-        r#"anthropic.internal._anthropic_request(
-    anthropic.AnthropicClient.new(model = "claude-test", api_key = "test-key"),
-    input,
-    false,
-  )"#,
-        false,
-        false,
-    )
-    .await;
-    let parts = body["messages"][0]["content"]
-        .as_array()
-        .expect("Anthropic content parts");
-    let by_type = |kind: &str| {
-        parts
-            .iter()
-            .find(|part| part["type"] == kind)
-            .unwrap_or_else(|| panic!("missing Anthropic {kind} part: {parts:?}"))
-    };
-    assert_eq!(by_type("image")["source"]["type"], "base64");
-    assert_eq!(by_type("image")["source"]["data"], "image-data");
-    assert_eq!(by_type("document")["source"]["data"], "pdf-data");
-}
-
-// The Messages API has no audio input content block; the lowering rejects it
-// with a typed error instead of inventing a wire shape.
-#[tokio::test]
-async fn anthropic_rejects_audio_parts() {
     let source = r#"
-function AudioShape(sound: audio) -> string {
-  client: "google/gemini-2.5-flash"
-  tools: []
-  prompt: `${role("user")}Listen:${sound}`
+client Vertex = google.VertexClient.new(
+  model = "gemini-test",
+  project_id = env.VERTEX_PROJECT_ID,
+  location = "us-central1",
+  api_key = "test-key",
+  headers = { "x-preview": "yes" },
+  query_params = { "trace": "enabled" },
+  request_body = baml.json.parse(`{"preview_marker":"kept"}`),
+)
+
+function Shape() -> string {
+  client: Vertex
+  prompt: `hello`
 }
 
 function main() -> string {
-  let spec = AudioShape$spec(audio.from_base64("audio-data", "audio/mpeg"))
+  let expected = env.VERTEX_PROJECT_ID.get_or_panic()
   let input = ai.ModelTurnInput {
-    prompt: spec.prompt_template,
+    prompt: Shape$spec().prompt_template,
     journal: ai.Journal { log: [] },
     toolbox: ai.tools.Toolbox.new([]),
     output_type: type.of<string>(),
   }
-  anthropic.internal._anthropic_request(
-    anthropic.AnthropicClient.new(model = "claude-test", api_key = "test-key"),
-    input,
-    false,
-  ).body catch_all (e) {
-    _ => e.to_string(),
-  }
+  let c: ai.Client = Vertex
+  let request = c.render(input)
+  let body = baml.json.parse(request.body)
+  let base_client = google.VertexClient.new(
+    model = "gemini-override",
+    base_url = "https://preview.example/v1/models",
+    api_key = "override-key",
+    headers = { "x-base": "yes" },
+    query_params = { "q": "one" },
+    request_body = baml.json.parse(`{"base_marker":"kept"}`),
+  )
+  let base_request: ai.Client = base_client
+  let override = base_request.render(input)
+  let override_body = baml.json.parse(override.body)
+  if (
+    request.url.includes(expected)
+    && request.url.includes("/locations/us-central1/")
+    && request.url.includes("trace=enabled")
+    && request.headers.get("x-preview") == "yes"
+    && baml.json.path<string>(body, ".preview_marker") == "kept"
+    && override.url.includes("https://preview.example/v1/models/gemini-override")
+    && override.url.includes("q=one")
+    && override.headers.get("x-base") == "yes"
+    && baml.json.path<string>(override_body, ".base_marker") == "kept"
+  ) { "ok" } else { "wrong" }
 }
-"#;
+    "#;
     let output = baml_test!(source);
-    let message = match output.result {
-        Ok(BexExternalValue::String(message)) => message.to_string(),
-        other => panic!("expected the rejection message, got {other:?}"),
-    };
-    assert!(
-        message.contains("audio"),
-        "expected an audio rejection, got: {message}"
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("ok".to_string().into()))
     );
-}
-
-#[tokio::test]
-async fn google_lowers_every_supported_media_part() {
-    let body = media_request_body(
-        r#"google.internal.google_render(
-    google.GoogleClient.new(model = "gemini-test", api_key = "test-key"),
-    input,
-  )"#,
-        true,
-        true,
-    )
-    .await;
-    let parts = body["contents"][0]["parts"]
-        .as_array()
-        .expect("Gemini content parts");
-    let inline_parts: Vec<_> = parts
-        .iter()
-        .filter_map(|part| part.get("inlineData"))
-        .collect();
-    assert_eq!(inline_parts.len(), 4, "Gemini media parts: {parts:?}");
-    assert_eq!(inline_parts[0]["mimeType"], "image/png");
-    assert_eq!(inline_parts[0]["data"], "image-data");
-    assert_eq!(inline_parts[1]["mimeType"], "audio/mpeg");
-    assert_eq!(inline_parts[1]["data"], "audio-data");
-    assert_eq!(inline_parts[2]["mimeType"], "application/pdf");
-    assert_eq!(inline_parts[2]["data"], "pdf-data");
-    assert_eq!(inline_parts[3]["mimeType"], "video/mp4");
-    assert_eq!(inline_parts[3]["data"], "video-data");
 }

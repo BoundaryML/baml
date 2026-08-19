@@ -498,19 +498,23 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         self._send(heap, call_id, req, timeout_nanos, ctx)
     }
 
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         heap: &Arc<BexHeap>,
         call_id: CallId,
         request: owned::http::Request,
+        timeout_nanos: Arc<num_bigint::BigInt>,
+        first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         // Delegate to native implementation — playground doesn't need SSE logging yet.
-        <sys_native::NativeSysOps as io::IoNamespaceHttp>::fetch_sse(
+        <sys_native::NativeSysOps as io::IoNamespaceHttp>::_fetch_sse(
             &sys_native::NativeSysOps,
             heap,
             call_id,
             request,
+            timeout_nanos,
+            first_event_timeout_nanos,
             ctx,
         )
     }

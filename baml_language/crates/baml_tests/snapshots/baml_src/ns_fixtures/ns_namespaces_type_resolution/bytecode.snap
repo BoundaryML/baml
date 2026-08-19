@@ -1,0 +1,134 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.namespaces_type_resolution.RootAliasParam(cfg: fixtures.namespaces_type_resolution.Config) -> string {
+    load_var cfg
+    load_field .key
+    return
+}
+
+function fixtures.namespaces_type_resolution.RootConstruct(key: string) -> fixtures.namespaces_type_resolution.Config {
+    load_var key
+    load_const "prod"
+    init_instance user.fixtures.namespaces_type_resolution.Config .key, .env
+    return
+}
+
+function fixtures.namespaces_type_resolution.RootEnumMatch(s: fixtures.namespaces_type_resolution.Status) -> string {
+    load_var s
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var s
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "pending"
+    jump L4
+
+  L2:
+    load_const "failed"
+    jump L4
+
+  L3:
+    load_const "ok"
+
+  L4:
+    return
+}
+
+function fixtures.namespaces_type_resolution.RootEnumReturn() -> fixtures.namespaces_type_resolution.Status {
+    load_const user.fixtures.namespaces_type_resolution.Status.Ok
+    alloc_variant user.fixtures.namespaces_type_resolution.Status
+    return
+}
+
+function fixtures.namespaces_type_resolution.RootIdentity(cfg: fixtures.namespaces_type_resolution.Config) -> fixtures.namespaces_type_resolution.Config {
+    load_var cfg
+    return
+}
+
+function fixtures.namespaces_type_resolution.RootMixedConfigs(root_cfg: fixtures.namespaces_type_resolution.Config, llm_cfg: fixtures.namespaces_type_resolution.llm.Config) -> string {
+    load_var root_cfg
+    load_field .key
+    return
+}
+
+function fixtures.namespaces_type_resolution.RootThrowClass(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const 500
+    load_const "root error"
+    init_instance user.fixtures.namespaces_type_resolution.Error .code, .message
+    throw
+}
+
+function fixtures.namespaces_type_resolution.RootThrowEnum(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const user.fixtures.namespaces_type_resolution.Status.Failed
+    alloc_variant user.fixtures.namespaces_type_resolution.Status
+    throw
+}
+
+function fixtures.namespaces_type_resolution.RootUsesAuthConfig(cfg: fixtures.namespaces_type_resolution.auth.Config) -> string {
+    load_var cfg
+    load_field .provider
+    return
+}
+
+function fixtures.namespaces_type_resolution.RootUsesAuthError(e: fixtures.namespaces_type_resolution.auth.Error) -> string {
+    load_var e
+    load_field .realm
+    return
+}
+
+function fixtures.namespaces_type_resolution.RootUsesLlmConfig(cfg: fixtures.namespaces_type_resolution.llm.Config) -> string {
+    load_var cfg
+    load_field .model
+    return
+}
+
+function fixtures.namespaces_type_resolution.RootUsesLlmError(e: fixtures.namespaces_type_resolution.llm.Error) -> string {
+    load_var e
+    load_field .reason
+    return
+}
+
+function fixtures.namespaces_type_resolution.RootUsesLlmStatus() -> fixtures.namespaces_type_resolution.llm.Status {
+    load_const user.fixtures.namespaces_type_resolution.llm.Status.Ready
+    alloc_variant user.fixtures.namespaces_type_resolution.llm.Status
+    return
+}
+
+function fixtures.namespaces_type_resolution.RootUsesNestedClient(c: fixtures.namespaces_type_resolution.llm.openai.Client) -> string {
+    load_var c
+    load_field .api_key
+    return
+}

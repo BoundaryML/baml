@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+class Response {
+    text: string,
+}
+
+// Cross-namespace references require an explicit absolute `root.` path.
+function UseConfig(cfg: root.fixtures.namespaces_root_fallback.Config) -> Response {
+    Response { text: cfg.key }
+}
+
+// True-root reference: `RootFallbackProbe` lives at the corpus root package
+// (baml_src/root_probe.baml), not in any namespace — the explicit `root.`
+// path must reach a genuinely root-level definition, not just a different
+// namespace.
+function UseRootProbe(p: root.RootFallbackProbe) -> Response {
+    Response { text: p.tag }
+}

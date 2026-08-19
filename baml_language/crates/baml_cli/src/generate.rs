@@ -257,6 +257,11 @@ impl GenerateArgs {
         let _ = session.warm_prep_seeds_only();
         session.prime();
         let (db, from) = (session.db, session.resolved.root);
+        // `SourceFile` paths are canonicalized by `ProjectDatabase`. Canonicalize
+        // the root too so Windows short paths and `\\?\` paths can be relativized.
+        let from = from
+            .canonicalize()
+            .with_context(|| format!("failed to resolve project root {}", from.display()))?;
         // Compile-time diagnostics — same shape as run/pack: render the
         // diagnostic block after abandoning the spinner so the colored
         // source-snippet output doesn't fight with the lamb. No "Checking"
@@ -340,6 +345,27 @@ impl GenerateArgs {
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         let baml_bytecode = borsh::to_vec(&program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
+        let source_root = from.join("baml_src");
+        let user_baml_files = source_files
+            .iter()
+            .map(|source_file| {
+                let path = source_file.path(&db);
+                let relative_path = path
+                    .strip_prefix(&source_root)
+                    .or_else(|_| path.strip_prefix(&from))
+                    .with_context(|| {
+                        format!(
+                            "BAML source {} is outside project root {}",
+                            path.display(),
+                            from.display()
+                        )
+                    })?;
+                Ok((
+                    relative_path.to_path_buf(),
+                    source_file.text(&db).to_string(),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let mut total_files = 0;
 
@@ -385,10 +411,11 @@ impl GenerateArgs {
             // a binary file.
             let generated: Vec<(PathBuf, Vec<u8>)> = match generator.output_type {
                 OutputType::PythonPydantic | OutputType::PythonPydanticV1 => {
-                    sdkgen_python_pydantic2::to_source_code_with_bytecode_and_metadata(
+                    sdkgen_python_pydantic2::to_source_code_with_bytecode_and_metadata_and_source_files(
                         &pool,
                         &baml_bytecode,
                         &embedded_baml_toml,
+                        &user_baml_files,
                         generator.naming_convention,
                     )
                     .into_iter()
@@ -669,7 +696,6 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             }
             sdkgen_go::DEFAULT_MAX_TYPED_UNION_ARITY
         };
-
         // `output_dir` is resolved relative to the project root and defaults
         // to "..", with the target-owned generated directory appended.
         let raw_output_dir = generator.output_dir.as_deref().unwrap_or("..");
@@ -877,6 +903,39 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         fs::write(directory.path().join("baml.toml"), content).unwrap();
         discover_generators(directory.path())
+    }
+
+    #[test]
+    fn generator_output_directories_use_the_shared_convention() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n[generator.csharp_default]\noutput_type = \"csharp\"\nnaming_convention = \"language\"\n\n[generator.csharp_explicit]\noutput_type = \"csharp\"\noutput_dir = \"generated\"\nnaming_convention = \"language\"\n\n[generator.python]\noutput_type = \"python/pydantic\"\nnaming_convention = \"preserve-case\"\n",
+        )
+        .unwrap();
+
+        let (generators, diagnostics) = discover_generators(directory.path());
+
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let output_for = |name: &str| {
+            &generators
+                .iter()
+                .find(|generator| generator.name == name)
+                .unwrap()
+                .output_dir
+        };
+        assert_eq!(
+            output_for("csharp_default"),
+            &directory.path().join("..").join("baml_sdk")
+        );
+        assert_eq!(
+            output_for("csharp_explicit"),
+            &directory.path().join("generated").join("baml_sdk")
+        );
+        assert_eq!(
+            output_for("python"),
+            &directory.path().join("..").join("baml_sdk")
+        );
     }
 
     #[test]

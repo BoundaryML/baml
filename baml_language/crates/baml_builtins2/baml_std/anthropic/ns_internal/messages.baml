@@ -304,8 +304,16 @@ function _anth_supported_image_mime(mime: string) -> bool {
     m == "image/jpeg" || m == "image/png" || m == "image/gif" || m == "image/webp"
 }
 
-function _anthropic_media_block(media: ai.MediaPart, block_type: string) -> AnthMediaBlock {
-    let resolved = ai.wire.resolve_media(media, false);
+function _anthropic_media_block(
+    media: ai.MediaPart,
+    block_type: string,
+    preview: bool = false,
+) -> AnthMediaBlock {
+    let resolved = if (preview) {
+        ai.wire.resolve_media_preview(media)
+    } else {
+        ai.wire.resolve_media(media, false)
+    };
     let source = if let url: string = resolved.url {
         // A URL source carries no media_type: Anthropic fetches and sniffs the
         // bytes itself, so the guessed mime never reaches the wire.
@@ -326,7 +334,11 @@ function _anthropic_media_block(media: ai.MediaPart, block_type: string) -> Anth
     AnthMediaBlock { type: block_type, source: source, cache_control: null }
 }
 
-function _anthropic_prompt_blocks(message: ai.PromptMessage, role: string) -> AnthBlock[] {
+function _anthropic_prompt_blocks(
+    message: ai.PromptMessage,
+    role: string,
+    preview: bool = false,
+) -> AnthBlock[] {
     let blocks: AnthBlock[] = [];
     for (let part in message.parts) {
         match (part) {
@@ -344,7 +356,7 @@ function _anthropic_prompt_blocks(message: ai.PromptMessage, role: string) -> An
                         `Anthropic only supports image input in user messages, found ${role}`,
                     )
                 }
-                blocks.push(_anthropic_media_block(image, "image"));
+                blocks.push(_anthropic_media_block(image, "image", preview = preview));
                 null
             },
             // The Messages API has NO audio input content block — audio is not
@@ -364,7 +376,7 @@ function _anthropic_prompt_blocks(message: ai.PromptMessage, role: string) -> An
                         `Anthropic only supports PDF input in user messages, found ${role}`,
                     )
                 }
-                blocks.push(_anthropic_media_block(pdf, "document"));
+                blocks.push(_anthropic_media_block(pdf, "document", preview = preview));
                 null
             },
             let video: baml.media.Video => {
@@ -375,13 +387,13 @@ function _anthropic_prompt_blocks(message: ai.PromptMessage, role: string) -> An
     blocks
 }
 
-function _anthropic_lower_prompt(prompt: ai.Prompt) -> AnthropicPrompt {
+function _anthropic_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> AnthropicPrompt {
     let system: AnthBlock[] = [];
     let messages: AnthropicMessage[] = [];
     for (let message in prompt.messages()) {
         let cache_control = message.metadata.get("cache_control");
         if (message.role == "system") {
-            let blocks = _anthropic_prompt_blocks(message, "system");
+            let blocks = _anthropic_prompt_blocks(message, "system", preview = preview);
             _anth_apply_cache_control(blocks, cache_control);
             for (let block in blocks) {
                 system.push(block);
@@ -393,14 +405,12 @@ function _anthropic_lower_prompt(prompt: ai.Prompt) -> AnthropicPrompt {
             } else {
                 "user"
             };
-            let blocks = _anthropic_prompt_blocks(message, role);
+            let blocks = _anthropic_prompt_blocks(message, role, preview = preview);
             _anth_apply_cache_control(blocks, cache_control);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a 400.
             if (blocks.length() > 0) {
-                messages.push(
-                    AnthropicMessage { role: role, tool_results: false, blocks: blocks },
-                );
+                messages.push(AnthropicMessage { role: role, tool_results: false, blocks: blocks });
             }
             null
         };
@@ -484,9 +494,7 @@ function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
                     AnthropicMessage {
                         role: "user",
                         tool_results: false,
-                        blocks: [
-                            AnthTextBlock { type: "text", text: m.content, cache_control: null },
-                        ],
+                        blocks: [AnthTextBlock { type: "text", text: m.content, cache_control: null }],
                     },
                 );
                 null
@@ -499,11 +507,7 @@ function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
                 // these upstream; this is the belt to its braces.
                 if (blocks.length() > 0) {
                     msgs.push(
-                        AnthropicMessage {
-                            role: "assistant",
-                            tool_results: false,
-                            blocks: blocks,
-                        },
+                        AnthropicMessage { role: "assistant", tool_results: false, blocks: blocks },
                     );
                 }
                 null
@@ -626,16 +630,17 @@ function anthropic_messages_request(
     params: AnthropicBodyParams,
     input: ai.ModelTurnInput,
     stream: bool,
+    preview: bool = false,
 ) -> AnthropicMessagesRequest {
     let prompt = input.prompt(ai.wire.render_output_format(input.output_type));
-    let lowered_prompt = _anthropic_lower_prompt(prompt);
+    let lowered_prompt = _anthropic_lower_prompt(prompt, preview = preview);
     let system = lowered_prompt.system;
     let lowered = lowered_prompt.messages;
     // Sanitize BEFORE lowering: foreign-client reasoning, empty turns and
     // orphaned tool calls are repaired once, in ai.wire, for every provider.
-    for (let message in _anthropic_lower_journal(
-        ai.wire.sanitize_for_client(input.journal, params.client_id),
-    )) {
+    for (
+        let message in _anthropic_lower_journal(ai.wire.sanitize_for_client(input.journal, params.client_id))
+    ) {
         lowered.push(message);
     }
 
@@ -660,7 +665,8 @@ function anthropic_messages_request(
                 tool_results: false,
                 blocks: [AnthTextBlock { type: "text", text: "(continue)", cache_control: null }],
             },
-        ].concat(lowered)
+        ]
+            .concat(lowered)
     } else {
         lowered
     };
@@ -719,8 +725,9 @@ function anthropic_messages_body(
     params: AnthropicBodyParams,
     input: ai.ModelTurnInput,
     stream: bool,
+    preview: bool = false,
 ) -> string {
-    let request = anthropic_messages_request(params, input, stream);
+    let request = anthropic_messages_request(params, input, stream, preview = preview);
     let base = _anth_drop_nulls(baml.json.to_json(request));
     baml.json.stringify(ai.wire.merge_request_body(base, params.request_body))
 }
@@ -751,17 +758,16 @@ function _anthropic_query_suffix(query_params: map<string, string>?) -> string {
 // `anthropic-beta` (and `anthropic-dangerous-direct-browser-access`, which the
 // WASM playground needs) are reachable and `anthropic-version` is overridable;
 // `x-api-key` is applied last so a stray header cannot break authentication.
-function _anthropic_headers(c: root.AnthropicClient) -> map<string, string> {
-    let headers: map<string, string> = {
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-    };
+function _anthropic_headers(c: root.AnthropicClient, preview: bool = false) -> map<string, string> {
+    let headers: map<string, string> = { "anthropic-version": "2023-06-01", "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
         for (let key in extra.keys()) {
             let _ = headers.set(key.to_lower_case(), extra.get(key) ?? "");
         }
     }
-    let _ = headers.set("x-api-key", c.resolved_api_key());
+    if (!preview) {
+        let _ = headers.set("x-api-key", c.resolved_api_key());
+    }
     headers
 }
 
@@ -771,19 +777,26 @@ function _anthropic_request(
     c: root.AnthropicClient,
     input: ai.ModelTurnInput,
     stream: bool,
+    preview: bool = false,
 ) -> baml.http.Request {
     let base = c.resolved_base_url() ?? "https://api.anthropic.com";
     baml.http.Request {
         method: "POST",
         url: `${base}/v1/messages${_anthropic_query_suffix(c.query_params)}`,
-        headers: _anthropic_headers(c),
-        body: anthropic_messages_body(_anthropic_body_params(c), input, stream),
+        headers: _anthropic_headers(c, preview = preview),
+        body: anthropic_messages_body(_anthropic_body_params(c), input, stream, preview = preview),
     }
 }
 
 /// The request one `invoke` would send, for tests and for debugging.
 function anthropic_render(c: root.AnthropicClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _anthropic_request(c, input, false)
+    _anthropic_request(c, input, false, preview = false)
+}
+
+/// The request one `render` would send. URL media remains a URL reference;
+/// local files are rejected before any filesystem read.
+function anthropic_preview(c: root.AnthropicClient, input: ai.ModelTurnInput) -> baml.http.Request {
+    _anthropic_request(c, input, false, preview = true)
 }
 
 // One wire stop_reason string -> the canonical stop reason.
@@ -860,8 +873,8 @@ function anthropic_parse(resp: AnthropicResponse) -> ai.ModelTurn {
 
 // The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let req = _anthropic_request(c, input, false);
-    let resp = ai.wire.send_as<AnthropicResponse>(req, "anthropic");
+    let req = _anthropic_request(c, input, false, preview = false);
+    let resp = ai.wire.send_as<AnthropicResponse>(req, "anthropic", request_timeout_ms = c.request_timeout_ms);
     anthropic_parse(resp)
 }
 
@@ -1005,23 +1018,25 @@ function _anth_stream_failure(error: AnthStreamError?, raw: string) -> ai.errors
     let kind = error?.type ?? "";
     let detail = error?.message ?? kind;
     match (kind) {
-        "rate_limit_error" => ai.errors.RateLimited {
-            provider: "anthropic",
-            retry_after_ms: null,
-            raw_body: raw,
+        "rate_limit_error" => {
+            ai.errors.RateLimited { provider: "anthropic", retry_after_ms: null, raw_body: raw }
         },
-        "overloaded_error" | "api_error" | "timeout_error" => ai.errors.NetworkFailure {
-            provider: "anthropic",
-            detail: `${kind}: ${detail}`,
-            raw_body: raw,
+        "overloaded_error" | "api_error" | "timeout_error" => {
+            ai.errors.NetworkFailure {
+                provider: "anthropic",
+                detail: `${kind}: ${detail}`,
+                raw_body: raw,
+            }
         },
         // authentication_error, permission_error, invalid_request_error,
         // not_found_error, request_too_large, billing_error, and anything new.
-        _ => ai.errors.InvalidRequest {
-            provider: "anthropic",
-            status_code: null,
-            detail: `${kind}: ${detail}`,
-            raw_body: raw,
+        _ => {
+            ai.errors.InvalidRequest {
+                provider: "anthropic",
+                status_code: null,
+                detail: `${kind}: ${detail}`,
+                raw_body: raw,
+            }
         },
     }
 }
@@ -1045,13 +1060,13 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
                         if let message: AnthStreamMessage = event.message {
                             state.model = message.model;
                             if let usage: AnthStreamUsage = message.usage {
-                                state.cache_read_input_tokens =
-                                    usage.cache_read_input_tokens ?? state.cache_read_input_tokens;
-                                state.cache_creation_input_tokens =
-                                    usage.cache_creation_input_tokens
+                                state.cache_read_input_tokens
+                                    = usage.cache_read_input_tokens ?? state.cache_read_input_tokens;
+                                state.cache_creation_input_tokens
+                                    = usage.cache_creation_input_tokens
                                         ?? state.cache_creation_input_tokens;
-                                state.reasoning_tokens =
-                                    usage.output_tokens_details?.thinking_tokens
+                                state.reasoning_tokens
+                                    = usage.output_tokens_details?.thinking_tokens
                                         ?? state.reasoning_tokens;
                             }
                             null
@@ -1113,10 +1128,7 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
                                     null
                                 },
                                 "input_json_delta" => {
-                                    if let call: AnthStreamToolCall = _anth_stream_call_at(
-                                        state,
-                                        event.index,
-                                    ) {
+                                    if let call: AnthStreamToolCall = _anth_stream_call_at(state, event.index) {
                                         call.args_json = `${call.args_json}${d.partial_json ?? ""}`;
                                     }
                                     null
@@ -1141,13 +1153,13 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
                     },
                     "message_delta" => {
                         if let usage: AnthStreamUsage = event.usage {
-                            state.cache_read_input_tokens =
-                                usage.cache_read_input_tokens ?? state.cache_read_input_tokens;
-                            state.cache_creation_input_tokens =
-                                usage.cache_creation_input_tokens
+                            state.cache_read_input_tokens
+                                = usage.cache_read_input_tokens ?? state.cache_read_input_tokens;
+                            state.cache_creation_input_tokens
+                                = usage.cache_creation_input_tokens
                                     ?? state.cache_creation_input_tokens;
-                            state.reasoning_tokens =
-                                usage.output_tokens_details?.thinking_tokens
+                            state.reasoning_tokens
+                                = usage.output_tokens_details?.thinking_tokens
                                     ?? state.reasoning_tokens;
                         }
                         let stop: ai.content.StopReason? = match (event.delta?.stop_reason) {
@@ -1214,19 +1226,24 @@ function _anthropic_sse_failure(message: string) -> ai.errors.Failure {
     }
 }
 
+function _anthropic_stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> never {
+    match (error) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        let io: baml.errors.Io => throw _anthropic_sse_failure(io.message),
+    }
+}
+
 // The streaming entry point: the same request as `invoke` with
 // `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-    let req = _anthropic_request(c, input, true);
-    let sse = baml.http.fetch_sse(req) catch (e) {
-        baml.errors.Io => throw _anthropic_sse_failure(e.message),
-        baml.errors.Timeout => {
-            throw ai.errors.NetworkFailure {
-                provider: "anthropic",
-                detail: `the streaming request timed out: ${e.to_string()}`,
-                raw_body: null,
-            }
-        },
+    let req = _anthropic_request(c, input, true, preview = false);
+    let sse = baml.http.fetch_sse(
+        req,
+        timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
+        first_event_timeout = baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
+    ) catch (e) {
+        baml.errors.Io => _anthropic_stream_open_failure(e),
+        baml.errors.Timeout => _anthropic_stream_open_failure(e),
     };
     let state = AnthStreamState.new();
     // `require_terminal`: the Messages stream ends with an explicit
@@ -1237,7 +1254,9 @@ function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.
     ai.stream.TurnStream.from_sse(
         sse,
         (batch: string) -> {
-            anthropic_decode_batch(batch, state)
+            anthropic_decode_batch(batch, state) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
         },
         require_terminal = "anthropic",
     )

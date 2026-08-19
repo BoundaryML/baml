@@ -1,0 +1,91 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.namespaces_type_resolution.Config {
+  key: string
+  env: string
+}
+class user.fixtures.namespaces_type_resolution.Config$stream {
+  key: string | null
+  env: string | null
+}
+class user.fixtures.namespaces_type_resolution.Error {
+  code: int
+  message: string
+}
+class user.fixtures.namespaces_type_resolution.Error$stream {
+  code: int | null
+  message: string | null
+}
+class user.fixtures.namespaces_type_resolution.RootWithCrossNsAlias {
+  llm_alias: root.fixtures.namespaces_type_resolution.llm.ResponseAlias
+  own_alias: user.fixtures.namespaces_type_resolution.ConfigAlias
+}
+class user.fixtures.namespaces_type_resolution.RootWithCrossNsAlias$stream {
+  llm_alias: root.fixtures.namespaces_type_resolution.llm.Response$stream | null
+  own_alias: user.fixtures.namespaces_type_resolution.Config$stream | null
+}
+class user.fixtures.namespaces_type_resolution.RootWithCrossNsFields {
+  own_config: user.fixtures.namespaces_type_resolution.Config
+  llm_config: root.fixtures.namespaces_type_resolution.llm.Config
+  auth_config: root.fixtures.namespaces_type_resolution.auth.Config
+  llm_response: root.fixtures.namespaces_type_resolution.llm.Response
+  nested_client: root.fixtures.namespaces_type_resolution.llm.openai.Client
+  own_status: user.fixtures.namespaces_type_resolution.Status
+  own_alias: user.fixtures.namespaces_type_resolution.ConfigAlias
+}
+class user.fixtures.namespaces_type_resolution.RootWithCrossNsFields$stream {
+  own_config: user.fixtures.namespaces_type_resolution.Config$stream | null
+  llm_config: root.fixtures.namespaces_type_resolution.llm.Config$stream | null
+  auth_config: root.fixtures.namespaces_type_resolution.auth.Config$stream | null
+  llm_response: root.fixtures.namespaces_type_resolution.llm.Response$stream | null
+  nested_client: root.fixtures.namespaces_type_resolution.llm.openai.Client$stream | null
+  own_status: user.fixtures.namespaces_type_resolution.Status | null
+  own_alias: user.fixtures.namespaces_type_resolution.Config$stream | null
+}
+enum user.fixtures.namespaces_type_resolution.Status {Ok, Failed, Pending}
+type user.fixtures.namespaces_type_resolution.ConfigAlias = user.fixtures.namespaces_type_resolution.Config
+type user.fixtures.namespaces_type_resolution.ConfigAlias$stream = user.fixtures.namespaces_type_resolution.Config$stream
+function user.fixtures.namespaces_type_resolution.RootAliasParam(cfg: user.fixtures.namespaces_type_resolution.ConfigAlias) -> string  [expr] {
+  {  } cfg.key
+}
+function user.fixtures.namespaces_type_resolution.RootConstruct(key: string) -> user.fixtures.namespaces_type_resolution.Config  [expr] {
+  {  } user.fixtures.namespaces_type_resolution.Config { key: key, env: "prod" }
+}
+function user.fixtures.namespaces_type_resolution.RootEnumMatch(s: user.fixtures.namespaces_type_resolution.Status) -> string  [expr] {
+  {  } match (s) { user.fixtures.namespaces_type_resolution.Status.Ok => "ok", user.fixtures.namespaces_type_resolution.Status.Failed => "failed", user.fixtures.namespaces_type_resolution.Status.Pending => "pending" }
+}
+function user.fixtures.namespaces_type_resolution.RootEnumReturn() -> user.fixtures.namespaces_type_resolution.Status  [expr] {
+  {  } Status.Ok
+}
+function user.fixtures.namespaces_type_resolution.RootIdentity(cfg: user.fixtures.namespaces_type_resolution.Config) -> user.fixtures.namespaces_type_resolution.Config  [expr] {
+  {  } cfg
+}
+function user.fixtures.namespaces_type_resolution.RootMixedConfigs(root_cfg: user.fixtures.namespaces_type_resolution.Config, llm_cfg: root.fixtures.namespaces_type_resolution.llm.Config) -> string  [expr] {
+  {  } root_cfg.key
+}
+function user.fixtures.namespaces_type_resolution.RootThrowClass(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw user.fixtures.namespaces_type_resolution.Error { code: 500, message: "root error" }, _ => "ok" }
+}
+function user.fixtures.namespaces_type_resolution.RootThrowEnum(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw Status.Failed, _ => "ok" }
+}
+function user.fixtures.namespaces_type_resolution.RootUsesAuthConfig(cfg: root.fixtures.namespaces_type_resolution.auth.Config) -> string  [expr] {
+  {  } cfg.provider
+}
+function user.fixtures.namespaces_type_resolution.RootUsesAuthError(e: root.fixtures.namespaces_type_resolution.auth.Error) -> string  [expr] {
+  {  } e.realm
+}
+function user.fixtures.namespaces_type_resolution.RootUsesLlmConfig(cfg: root.fixtures.namespaces_type_resolution.llm.Config) -> string  [expr] {
+  {  } cfg.model
+}
+function user.fixtures.namespaces_type_resolution.RootUsesLlmError(e: root.fixtures.namespaces_type_resolution.llm.Error) -> string  [expr] {
+  {  } e.reason
+}
+function user.fixtures.namespaces_type_resolution.RootUsesLlmStatus() -> root.fixtures.namespaces_type_resolution.llm.Status  [expr] {
+  {  } root.fixtures.namespaces_type_resolution.llm.Status.Ready
+}
+function user.fixtures.namespaces_type_resolution.RootUsesNestedClient(c: root.fixtures.namespaces_type_resolution.llm.openai.Client) -> string  [expr] {
+  {  } c.api_key
+}

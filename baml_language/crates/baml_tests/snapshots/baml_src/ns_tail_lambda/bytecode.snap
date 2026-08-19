@@ -1,0 +1,49 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function tail_lambda.$init_test_ns_tail_lambda_tail_lambda(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.tail_lambda"
+    load_const "tail_lambda_annotated"
+    make_closure .<lambda($init_test_ns_tail_lambda_tail_lambda, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tail_lambda"
+    load_const "return_lambda_annotated"
+    make_closure .<lambda($init_test_ns_tail_lambda_tail_lambda, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function tail_lambda.return_lambda_annotated() -> int {
+    call user.tail_lambda.return_mk
+    store_var f
+    load_const 41
+    load_var f
+    call_indirect
+    return
+}
+
+function tail_lambda.return_mk() -> (int) -> int throws never {
+    make_closure .<lambda(return_mk, 0)>, 0
+    return
+}
+
+function tail_lambda.tail_lambda_annotated() -> int {
+    call user.tail_lambda.tail_mk
+    store_var f
+    load_const 41
+    load_var f
+    call_indirect
+    return
+}
+
+function tail_lambda.tail_mk() -> (int) -> int throws never {
+    make_closure .<lambda(tail_mk, 0)>, 0
+    return
+}

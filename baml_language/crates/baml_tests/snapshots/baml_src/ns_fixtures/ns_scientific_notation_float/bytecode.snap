@@ -1,0 +1,32 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.scientific_notation_float.DecimalMantissa() -> float {
+    load_const 1500.0
+    return
+}
+
+function fixtures.scientific_notation_float.DecimalMantissaNegativeExponent() -> float {
+    load_const 0.0015
+    return
+}
+
+function fixtures.scientific_notation_float.IntegerMantissa() -> float {
+    load_const 10000000000.0
+    return
+}
+
+function fixtures.scientific_notation_float.NegativeExponent() -> float {
+    load_const 0.001
+    return
+}
+
+function fixtures.scientific_notation_float.PositiveExponent() -> float {
+    load_const 200000.0
+    return
+}
+
+function fixtures.scientific_notation_float.UppercaseExponent() -> float {
+    load_const 1000.0
+    return
+}

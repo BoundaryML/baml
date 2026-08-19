@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.numeric_literal_method_call.BigintToStringBareLiteral() -> string {
+    load_type 42n
+    load_const 42n
+    call baml.String.from
+    return
+}
+
+function fixtures.numeric_literal_method_call.FloatFloorBareLiteral() -> float {
+    load_const 2.5
+    call baml.Float.floor
+    return
+}
+
+function fixtures.numeric_literal_method_call.IntAbsBareLiteral() -> int {
+    load_const 3
+    call baml.Int.abs
+    return
+}
+
+function fixtures.numeric_literal_method_call.IntPowBareLiteral() -> int {
+    load_const 2
+    load_const 3
+    call baml.Int.pow
+    return
+}
+
+function fixtures.numeric_literal_method_call.IntToStringBareLiteral() -> string {
+    load_type 7
+    load_const 7
+    call baml.String.from
+    return
+}

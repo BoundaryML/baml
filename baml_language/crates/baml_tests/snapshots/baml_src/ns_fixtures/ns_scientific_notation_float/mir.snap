@@ -1,0 +1,87 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.scientific_notation_float.IntegerMantissa() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 10000000000_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.scientific_notation_float.UppercaseExponent() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 1000_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.scientific_notation_float.NegativeExponent() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 0.001_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.scientific_notation_float.PositiveExponent() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 200000_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.scientific_notation_float.DecimalMantissa() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 1500_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.scientific_notation_float.DecimalMantissaNegativeExponent() -> float {
+    // Locals:
+    let _0: float // _0 // return
+
+    bb0: {
+        _0 = const 0.0015_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

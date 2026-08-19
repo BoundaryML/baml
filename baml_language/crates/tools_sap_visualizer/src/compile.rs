@@ -111,6 +111,7 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                             .map(|f| sys_types::ClassFieldDefinition {
                                 name: f.name.clone(),
                                 field_type: f.field_type.clone(),
+                                field_template: Some(f.field_template.clone()),
                                 description: f.description.clone(),
                                 alias: f.alias.clone(),
                                 skip: f.skip,

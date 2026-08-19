@@ -1,0 +1,248 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function optional_function_parameters.$init_test_ns_optional_function_parameters_optional_function_parameters(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.optional_function_parameters"
+    load_const "source_defaults_named_overrides_and_required_by_name"
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_function_parameters"
+    load_const "mutable_default_array_is_fresh_per_call"
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_function_parameters"
+    load_const "optional_dropping_adapter_uses_defaults_for_hidden_params"
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_function_parameters"
+    load_const "default_named_call_args_do_not_reuse_body_call_metadata"
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_function_parameters"
+    load_const "host_call_omitted_default_returns_default"
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_function_parameters"
+    load_const "host_call_explicit_null_returns_1"
+    make_closure .<lambda($init_test_ns_optional_function_parameters_optional_function_parameters, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function optional_function_parameters.classify(value: int | null) -> int {
+    load_var value
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 7
+    store_var value
+
+  L0:
+    load_var value
+    load_const null
+    call baml.ops.equals_equals
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var value
+    jump L3
+
+  L2:
+    load_const 1
+
+  L3:
+    return
+}
+
+function optional_function_parameters.combine(x: int, a: int, b: int) -> int {
+    load_var a
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 10
+    store_var a
+
+  L0:
+    load_var b
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const 100
+    store_var b
+
+  L1:
+    load_var x
+    load_const 100
+    mul_int
+    load_var a
+    load_const 10
+    mul_int
+    add_int
+    load_var b
+    add_int
+    return
+}
+
+function optional_function_parameters.ofp_default_named_call_args_do_not_reuse_body_call_metadata(value: int) -> int {
+    load_var value
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 1
+    load_const 2
+    call user.optional_function_parameters.pair
+    store_var value
+
+  L0:
+    load_var value
+    load_const 0
+    call user.optional_function_parameters.pair
+    return
+}
+
+function optional_function_parameters.ofp_mutable_default_array_is_fresh_per_call() -> int {
+    load_const 1
+    load_const <omitted>
+    call user.optional_function_parameters.push_default
+    load_const 10
+    mul_int
+    store_var _1
+    load_const 2
+    load_const <omitted>
+    call user.optional_function_parameters.push_default
+    load_var _1
+    add_int
+    return
+}
+
+function optional_function_parameters.ofp_optional_dropping_adapter_uses_defaults_for_hidden_params() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const user.optional_function_parameters.combine
+    store_deref ?1
+    load_const 1
+    load_const 5
+    load_var _2
+    make_closure .<optional-adapter(ofp_optional_dropping_adapter_uses_defaults_for_hidden_params, 0)>, 1
+    call_indirect
+    return
+}
+
+function optional_function_parameters.ofp_source_defaults_named_overrides_and_required_by_name() -> int[] {
+    load_const "cats"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call user.optional_function_parameters.score
+    load_const "cats"
+    load_const 5
+    load_const "recent"
+    load_const 2
+    call user.optional_function_parameters.score
+    load_const "birds"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call user.optional_function_parameters.score
+    load_type int
+    alloc_array 3
+    return
+}
+
+function optional_function_parameters.pair(a: int, b: int) -> int {
+    load_var a
+    load_const 10
+    mul_int
+    load_var b
+    add_int
+    return
+}
+
+function optional_function_parameters.push_default(value: int, items: int[]) -> int {
+    load_var items
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type int
+    alloc_array 0
+    store_var items
+
+  L0:
+    load_type int
+    load_var2 2 1
+    call baml.Array.push
+    pop 1
+    load_var items
+    container_len
+    return
+}
+
+function optional_function_parameters.score(query: string, max_results: int, filter: string | null, chunk_size: int) -> int {
+    load_var max_results
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 10
+    store_var max_results
+
+  L0:
+    load_var filter
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var filter
+
+  L1:
+    load_var chunk_size
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
+    load_var query
+    call baml.String.length
+    store_var chunk_size
+
+  L2:
+    load_var filter
+    load_const null
+    call baml.ops.equals_equals
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 100
+    store_var filter_bonus
+    jump L5
+
+  L4:
+    load_const 0
+    store_var filter_bonus
+
+  L5:
+    load_var2 2 4
+    add_int
+    load_var filter_bonus
+    add_int
+    return
+}

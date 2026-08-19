@@ -1,0 +1,81 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.testset_vibes_nested.Sentiment {
+  feeling: string
+  confidence: float
+  reasoning: string
+}
+class user.fixtures.testset_vibes_nested.Sentiment$stream {
+  feeling: string | null
+  confidence: float | null
+  reasoning: string | null
+}
+function user.fixtures.testset_vibes_nested.$init_test_ns_fixtures_ns_testset_vibes_nested_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_set_at("root.fixtures.tes...", "test", (testset: testing.TestCollector) -> void { { let topics = ["happy", "sad"]; for sentiments in topics { testset.register_test_set(sentiments, (testset: testing.TestCollector) -> { { let req = baml.http.fetch("http://localhost:..." Add sentiments); let data = req.text(); let tests = GenerateTests$parse(data); for ex in tests { testset.register_test(ex, () -> { { let result = ClassifySentiment("hi"); assert.equal(result.feeling, "positive") } }, null) } } null }, null) }; testset.register_test_set("vibes", (testset: testing.TestCollector) -> { { let topics = ["happy", "sad"]; for sentiments in topics { testset.register_test_set(sentiments, (testset: testing.TestCollector) -> { { let tests = GenerateTests(5, sentiments); for ex in tests { testset.register_test(ex, () -> { { let result = ClassifySentiment("hi"); assert.equal(result.feeling, "positive") } }, null) } } null }, null) } } null }, null) } null }, null) } null
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: ai.Client? = null) -> user.fixtures.testset_vibes_nested.Sentiment  [llm] {
+  ai.Agent.new(client = client).run(ClassifySentiment$spec(text)).value
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment$build_request(text: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  ClassifySentiment$spec(text).build_request(override_client = client)
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment$parse(json: string) -> user.fixtures.testset_vibes_nested.Sentiment  [expr] {
+  baml.sap.parse(json)
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment$render_prompt(text: string) -> ai.Prompt  [expr] {
+  ClassifySentiment$spec(text).prompt(output_format = ai.wire.render_output_format(type.of()))
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<user.fixtures.testset_vibes_nested.Sentiment>  [expr] {
+  ai.FunctionSpec { spec_name: "ClassifySentiment", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "classify ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4o) }
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment$stream(text: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<user.fixtures.testset_vibes_nested.Sentiment$stream | null, user.fixtures.testset_vibes_nested.Sentiment>  [expr] {
+  ai.stream.from_spec(ClassifySentiment$spec(text), client = client)
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(ClassifySentiment2$spec(text)).value
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment2$build_request(text: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  ClassifySentiment2$spec(text).build_request(override_client = client)
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment2$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment2$render_prompt(text: string) -> ai.Prompt  [expr] {
+  ClassifySentiment2$spec(text).prompt(output_format = ai.wire.render_output_format(type.of()))
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "ClassifySentiment2", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "classify ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4o) }
+}
+function user.fixtures.testset_vibes_nested.ClassifySentiment2$stream(text: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(ClassifySentiment2$spec(text), client = client)
+}
+function user.fixtures.testset_vibes_nested.Foo() -> string | image  [expr] {
+  { let x = "foo"; let y = 2; { let i = 0; while i Lt y { x = "hi:  " Add x } } } x
+}
+function user.fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, client: ai.Client? = null) -> string[]  [llm] {
+  ai.Agent.new(client = client).run(GenerateTests$spec(count, topic)).value
+}
+function user.fixtures.testset_vibes_nested.GenerateTests$build_request(count: int, topic: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  GenerateTests$spec(count, topic).build_request(override_client = client)
+}
+function user.fixtures.testset_vibes_nested.GenerateTests$parse(json: string) -> string[]  [expr] {
+  baml.sap.parse(json)
+}
+function user.fixtures.testset_vibes_nested.GenerateTests$render_prompt(count: int, topic: string) -> ai.Prompt  [expr] {
+  GenerateTests$spec(count, topic).prompt(output_format = ai.wire.render_output_format(type.of()))
+}
+function user.fixtures.testset_vibes_nested.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<string[]>  [expr] {
+  ai.FunctionSpec { spec_name: "GenerateTests", args: map { "count": count, "topic": topic }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "generate ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } count);  __tt_cur =  __tt_cur Add " tests about ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } topic);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4o) }
+}
+function user.fixtures.testset_vibes_nested.GenerateTests$stream(count: int, topic: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string[], string[]>  [expr] {
+  ai.stream.from_spec(GenerateTests$spec(count, topic), client = client)
+}
+
+--- captures ---
+lambda ( __spec_output_format) in ClassifySentiment$spec: captures [text]
+lambda ( __spec_output_format) in GenerateTests$spec: captures [count, topic]
+lambda ( __spec_output_format) in ClassifySentiment2$spec: captures [text]
+lambda (testset) in ?: captures [sentiments]
+lambda (testset) in ?: captures [sentiments]

@@ -296,15 +296,15 @@ fn compute_rpo(body: &MirFunctionBody) -> Vec<BlockId> {
 
     // Phase 1: DFS from the entry block. Handlers reachable via CFG edges
     // (Call/Await unwind targets) are visited as descendants of their
-    // try-body entry blocks, so body_entry is a DFS ancestor of handler →
-    // body_entry is pushed AFTER handler in postorder → BEFORE handler in
-    // the reversed RPO. This satisfies start_pc < handler_pc.
+    // try-body entry blocks. Layout order does not affect exception-table
+    // correctness (the table lists each region's protected blocks' exact PC
+    // ranges), so this is purely about code locality and readability.
     rpo_dfs(body, body.entry, &mut visited, &mut postorder);
 
     // Phase 2: Seed handlers NOT reachable from entry (same-frame panics
     // like division-by-zero where there's no Call/Await with an unwind
-    // edge). Prepend their subtrees to the postorder so they appear AFTER
-    // all entry-reachable blocks in the reversed RPO (handler_pc > body_pc).
+    // edge) so they are emitted at all; they land after all entry-reachable
+    // blocks in the reversed RPO.
     let mut handler_postorder = Vec::new();
     for region in &body.catch_regions {
         rpo_dfs(body, region.handler, &mut visited, &mut handler_postorder);

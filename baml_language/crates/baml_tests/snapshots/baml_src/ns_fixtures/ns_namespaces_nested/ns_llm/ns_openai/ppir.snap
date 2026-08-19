@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.namespaces_nested.llm.openai.OpenAIResponse {
+  text: string
+  model: string
+}
+class user.fixtures.namespaces_nested.llm.openai.OpenAIResponse$stream {
+  text: string | null
+  model: string | null
+}
