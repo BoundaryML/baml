@@ -304,8 +304,7 @@ fn to_source_code_internal(
     assert!(
         matches!(naming_convention, NamingConvention::PreserveCase),
         "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase \
-         (got {})",
-        naming_convention,
+         (got {naming_convention})",
     );
     let mut out: HashMap<PathBuf, String> = HashMap::new();
 
