@@ -4613,13 +4613,19 @@ impl BexVm {
             let frame_function = unsafe { self.load_function(depth)? };
 
             // Find the INNERMOST exception table entry covering this PC: the
-            // NARROWEST region — the largest `start_pc`, and among regions that
-            // share a `start_pc` (nested handlers with the same body entry) the
-            // smallest `end_pc`. The innermost handler must win, matching
-            // lexical nesting. Picking the first covering entry would route to
-            // the OUTERMOST handler, mis-routing any throw that reaches the
-            // table (e.g. an exception escaping a called function, or a runtime
-            // panic). Cold path — does not affect the hot per-instruction loop.
+            // NARROWEST range — the largest `start_pc`, then the smallest
+            // `end_pc`, and for byte-identical ranges the LATEST table entry
+            // (`max_by` keeps the last maximal element). A region contributes
+            // one entry per coalesced run of its protected blocks; nested
+            // regions' protected PC sets are subsets of their enclosing
+            // regions', so around any PC the inner region's range is contained
+            // in the outer's (narrowest = innermost), and identical ranges are
+            // emitted outer-first (the emitter's stable sort preserves creation
+            // order), so the last match is the inner handler. Picking the first
+            // covering entry would route to the OUTERMOST handler, mis-routing
+            // any throw that reaches the table (e.g. an exception escaping a
+            // called function, or a runtime panic). Cold path — does not
+            // affect the hot per-instruction loop.
             // Use compact exception table when available (byte-offset PCs),
             // otherwise fall back to the legacy instruction-index table.
             let handler_entry = if let Some(compact) = &frame_function.bytecode.compact {
