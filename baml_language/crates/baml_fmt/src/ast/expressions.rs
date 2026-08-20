@@ -305,7 +305,7 @@ impl Printable for Expression {
             | Expression::OptionalIndex(_)
             | Expression::OptionalCall(_)) => {
                 // These are all chains of postfix expressions
-                let chain = PrintChain::new(chain);
+                let chain = PrintChain::new(chain, printer.trivia);
                 chain.print(shape, printer)
             }
             Expression::GenericApply(ga) => ga.print(shape, printer),
@@ -892,6 +892,85 @@ impl Expression {
         }
         expr
     }
+
+    /// Whether this expression binds at least as tightly as a postfix
+    /// operator, i.e. it can sit directly in a receiver position (`X.f`,
+    /// `X(..)`, `X[i]`) or as a unary operand with no parens around it.
+    ///
+    /// Numeric and keyword literals are excluded: the `.` in `(1).to_string()`
+    /// re-lexes as part of a float once the parens come off. Object and map
+    /// literals are excluded because a bare leading `{` is ambiguous with a
+    /// block, and [`Expression::GenericApply`] because its `<` is ambiguous
+    /// with a comparison.
+    ///
+    /// An optional-chain link anywhere on the spine also disqualifies it —
+    /// see [`Self::has_optional_chain_link`].
+    fn binds_as_postfix_operand(&self) -> bool {
+        match self {
+            Expression::Call(_) | Expression::Index(_) | Expression::FieldAccess(_) => {
+                !self.has_optional_chain_link()
+            }
+            Expression::Path(_)
+            | Expression::EnvAccess(_)
+            | Expression::ArrayInitializer(_)
+            | Expression::RawString(_)
+            | Expression::BacktickString(_)
+            | Expression::ByteString(_) => true,
+            Expression::Literal(lit) => matches!(lit, Literal::String(_)),
+            _ => false,
+        }
+    }
+
+    /// Whether this expression's postfix spine contains a `?.` link.
+    ///
+    /// Parens around such a receiver are load-bearing, not decoration: they
+    /// **end the short-circuit region**. `(a?.b).c` evaluates `(null).c` when
+    /// `a` is null — a `TypeError` — where `a?.b.c` short-circuits to null. So
+    /// peeling them would silently change runtime behavior and these parens
+    /// always stay.
+    ///
+    /// Only the spine counts. A `?.` inside a call argument or index operand
+    /// (`f(a?.b).c`) belongs to a separate chain and is unaffected.
+    fn has_optional_chain_link(&self) -> bool {
+        match self {
+            Expression::OptionalFieldAccess(_)
+            | Expression::OptionalIndex(_)
+            | Expression::OptionalCall(_) => true,
+            Expression::Call(call) => call.callee.has_optional_chain_link(),
+            Expression::Index(index) => index.base.has_optional_chain_link(),
+            Expression::FieldAccess(fa) => fa.base.has_optional_chain_link(),
+            Expression::Paren(paren) => paren.expr.has_optional_chain_link(),
+            _ => false,
+        }
+    }
+
+    /// The expression a postfix-receiver or unary-operand position actually
+    /// prints: transparent parens peel while what they wrap still stands on
+    /// its own here, so the parens delimit nothing.
+    /// `((xs).join(` `)).includes(x)` prints as `xs.join(` `).includes(x)`.
+    ///
+    /// A receiver that binds looser than postfix keeps *one* paren — removing
+    /// it would re-parse against a different base (`(a ?? b).length()`) — but
+    /// the redundant layers around it still peel, so `((a + b)).f()` prints as
+    /// `(a + b).f()` rather than keeping the whole stack.
+    pub(crate) fn effective_postfix_operand(&self, trivia: &TriviaInfo) -> &Expression {
+        let mut expr = self;
+        while let Expression::Paren(paren) = expr {
+            if !paren.is_transparent(trivia) {
+                break;
+            }
+            // Peel only down to the last paren this position still needs: an
+            // inner paren is reconsidered on the next turn, so a stack around
+            // a looser-binding receiver collapses to exactly one.
+            if !(paren.expr.binds_as_postfix_operand()
+                || matches!(&*paren.expr, Expression::Paren(_)))
+            {
+                break;
+            }
+            expr = &paren.expr;
+        }
+        expr
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::BINARY_EXPR`] node.
@@ -1373,7 +1452,10 @@ impl UnaryExpr {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let expr = self.expr.single_line_width(input)?;
+        let expr = self
+            .expr
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         Some(usize::from(self.op.span().len()) + expr)
     }
 }
@@ -1382,7 +1464,8 @@ impl Printable for UnaryExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         multi_lined |= printer.print(&self.op, shape.clone()).multi_lined;
-        multi_lined |= printer.print(&*self.expr, shape).multi_lined;
+        let expr = self.expr.effective_postfix_operand(printer.trivia);
+        multi_lined |= printer.print(expr, shape).multi_lined;
 
         PrintInfo { multi_lined }
     }
@@ -2571,7 +2654,10 @@ impl CallExpr {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let callee = self.callee.single_line_width(input)?;
+        let callee = self
+            .callee
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         let args = self.args.single_line_width(input)?;
         Some(callee + args)
     }
@@ -2582,7 +2668,8 @@ impl Printable for CallExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         let line_len_before = printer.current_line_len();
-        multi_lined |= printer.print(&*self.callee, shape.clone()).multi_lined;
+        let callee = self.callee.effective_postfix_operand(printer.trivia);
+        multi_lined |= printer.print(callee, shape.clone()).multi_lined;
         // Account for the callee on the call line so the args' hug layout
         // (see `CallArgs::try_print_hug`) budgets its first line correctly.
         let args_shape = Shape {
@@ -3162,14 +3249,18 @@ impl IndexExpr {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self.base.single_line_width(input)?;
+        let base = self
+            .base
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         Some(base + self.args().single_line_width(input)?)
     }
 }
 
 impl PrintMultiLine for IndexExpr {
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.base, shape.clone());
+        let base = self.base.effective_postfix_operand(printer.trivia);
+        printer.print(base, shape.clone());
         self.args().print_multi_line(shape, printer)
     }
 }
@@ -3255,7 +3346,10 @@ impl FieldAccessExpr {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self.base.single_line_width(input)?;
+        let base = self
+            .base
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         Some(base + usize::from(self.dot.span().len()) + usize::from(self.field.span().len()))
     }
 }
@@ -3376,7 +3470,8 @@ impl OptionalIndexExpr {
 impl Printable for OptionalIndexExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
-        multi_lined |= printer.print(&*self.base, shape.clone()).multi_lined;
+        let base = self.base.effective_postfix_operand(printer.trivia);
+        multi_lined |= printer.print(base, shape.clone()).multi_lined;
         printer.print_raw_token(&self.question_dot);
         multi_lined |= printer.print(&self.args(), shape).multi_lined;
         PrintInfo { multi_lined }
@@ -3429,7 +3524,10 @@ impl KnownKind for OptionalCallExpr {
 
 impl OptionalCallExpr {
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let callee = self.callee.single_line_width(input)?;
+        let callee = self
+            .callee
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         let args = self.args.single_line_width(input)?;
         Some(callee + usize::from(self.question_dot.span().len()) + args)
     }
@@ -3438,7 +3536,8 @@ impl OptionalCallExpr {
 impl Printable for OptionalCallExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
-        multi_lined |= printer.print(&*self.callee, shape.clone()).multi_lined;
+        let callee = self.callee.effective_postfix_operand(printer.trivia);
+        multi_lined |= printer.print(callee, shape.clone()).multi_lined;
         printer.print_raw_token(&self.question_dot);
         multi_lined |= printer.print(&self.args, shape).multi_lined;
         PrintInfo { multi_lined }
@@ -5507,8 +5606,16 @@ pub struct PrintChain<'a> {
     chain_members: Vec<PrintChainItem<'a>>,
 }
 impl<'a> PrintChain<'a> {
+    /// Builds the flat chain for a postfix spine.
+    ///
+    /// Every receiver is taken through [`Expression::effective_postfix_operand`]
+    /// so redundant parens around it peel and the walk continues through them.
+    /// A paren that survives (looser-binding receiver, or one carrying a
+    /// comment) still terminates the walk and becomes `first`, which is what
+    /// puts it on its own indent level.
     #[must_use]
-    pub fn new(from: &'a Expression) -> Self {
+    pub fn new(from: &'a Expression, trivia: &TriviaInfo) -> Self {
+        let from = from.effective_postfix_operand(trivia);
         match from {
             Expression::Path(path_expr) => {
                 let mut chain_members: Vec<PrintChainItem<'a>> = path_expr
@@ -5525,7 +5632,7 @@ impl<'a> PrintChain<'a> {
                 }
             }
             Expression::Call(call_expr) => {
-                let mut chain = Self::new(&call_expr.callee);
+                let mut chain = Self::new(&call_expr.callee, trivia);
                 if chain.chain_members.is_empty() {
                     // included in `first` if not following a field access
                     Self {
@@ -5540,7 +5647,7 @@ impl<'a> PrintChain<'a> {
                 }
             }
             Expression::Index(index_expr) => {
-                let mut chain = Self::new(&index_expr.base);
+                let mut chain = Self::new(&index_expr.base, trivia);
                 if chain.chain_members.is_empty() {
                     // included in `first` if not following a field access
                     Self {
@@ -5555,7 +5662,7 @@ impl<'a> PrintChain<'a> {
                 }
             }
             Expression::FieldAccess(field_access_expr) => {
-                let mut chain = Self::new(&field_access_expr.base);
+                let mut chain = Self::new(&field_access_expr.base, trivia);
                 chain.chain_members.push(PrintChainItem::FieldAccess(
                     &field_access_expr.dot,
                     &field_access_expr.field,
@@ -5563,7 +5670,7 @@ impl<'a> PrintChain<'a> {
                 chain
             }
             Expression::OptionalFieldAccess(ofa) => {
-                let mut chain = Self::new(&ofa.base);
+                let mut chain = Self::new(&ofa.base, trivia);
                 chain
                     .chain_members
                     .push(PrintChainItem::OptionalFieldAccess(
@@ -5573,14 +5680,14 @@ impl<'a> PrintChain<'a> {
                 chain
             }
             Expression::OptionalIndex(oi) => {
-                let mut chain = Self::new(&oi.base);
+                let mut chain = Self::new(&oi.base, trivia);
                 chain
                     .chain_members
                     .push(PrintChainItem::OptionalIndex(&oi.question_dot, oi.args()));
                 chain
             }
             Expression::OptionalCall(oc) => {
-                let mut chain = Self::new(&oc.callee);
+                let mut chain = Self::new(&oc.callee, trivia);
                 chain
                     .chain_members
                     .push(PrintChainItem::OptionalCall(&oc.question_dot, &oc.args));
