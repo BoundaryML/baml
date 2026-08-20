@@ -253,6 +253,7 @@ pub(crate) fn display_instruction(
         | Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
         | Instruction::MakeVirtualBoundMethod { .. }
+        | Instruction::MakeVirtualFunction { .. }
         | Instruction::MakeCell
         | Instruction::LoadDeref(_)
         | Instruction::StoreDeref(_)
@@ -449,6 +450,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
         | Instruction::MakeVirtualBoundMethod { .. }
+        | Instruction::MakeVirtualFunction { .. }
         | Instruction::MakeGenericFunction { .. }
         | Instruction::MakeGenericFunctionFromValue { .. }
         | Instruction::MakeCell => Style::new().cyan(),
@@ -982,6 +984,9 @@ fn display_instruction_textual(
         Instruction::MakeVirtualBoundMethod { ntypeargs } => {
             format!("make_virtual_bound_method ntypeargs={ntypeargs}")
         }
+        Instruction::MakeVirtualFunction { ntypeargs } => {
+            format!("make_virtual_function ntypeargs={ntypeargs}")
+        }
         Instruction::MakeGenericFunction { ntypeargs, .. } => {
             let name = meta_str(&"");
             format!("make_generic_function {name} ntypeargs={ntypeargs}")
@@ -1412,7 +1417,9 @@ pub fn display_compact_bytecode(
                 writeln!(f, "function={function}  ntypeargs={ntypeargs}")?;
             }
 
-            OpCode::MakeGenericFunctionFromValue | OpCode::MakeVirtualBoundMethod => {
+            OpCode::MakeGenericFunctionFromValue
+            | OpCode::MakeVirtualBoundMethod
+            | OpCode::MakeVirtualFunction => {
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "ntypeargs={ntypeargs}")?;
             }

@@ -542,6 +542,35 @@ pub enum TirTypeError {
         position: SelfCallPosition,
     },
 
+    /// A `self`-less interface method referenced with an erased `Self` (an
+    /// interface-existential or union). There is no receiver value to derive
+    /// a concrete implementor from — dispatch is keyed on the `Self` TYPE —
+    /// and an erased type names no single impl.
+    SelflessMethodNeedsConcreteSelf {
+        interface_name: Name,
+        method_name: Name,
+        self_ty: baml_type::Ty,
+    },
+
+    /// A `self`-less interface method reached through a VALUE receiver
+    /// (`f.make(5)`, `f.as<I>.make()`): an associated function, not an
+    /// instance member — the receiver spellings pass the receiver as `self`,
+    /// which the callee has no slot for. Rust's E0599 split.
+    SelflessInstanceMember {
+        /// The declaring interface, when statically known.
+        interface_name: Option<Name>,
+        method_name: Name,
+    },
+
+    /// A receiver method reified as a VALUE with an erased `Self` (an
+    /// interface-existential or union). A direct call dispatches off the
+    /// receiver argument, but an uncalled value has no resolution moment.
+    ErasedSelfMethodValue {
+        interface_name: Name,
+        method_name: Name,
+        self_ty: baml_type::Ty,
+    },
+
     /// BEP-044 §"default keyword scoping rules": `default.method()` on a
     /// required method (no default body) is a compile error.
     DefaultOnRequiredMethod {
@@ -1562,7 +1591,11 @@ impl fmt::Display for TirTypeError {
                 "interface-qualified field `{field_name}` cannot be used in a class constructor; use class field `{qualified_name}`"
             ),
             TirTypeError::InvalidInterfaceUpcastTarget { target } => {
-                write!(f, "`.as<T>` target must be an interface, got `{target}`")
+                write!(
+                    f,
+                    "`.as<T>` target must be an interface, got `{}`",
+                    target.render_user_facing()
+                )
             }
             TirTypeError::InterfaceMemberRequiresReceiver {
                 interface_name,
@@ -1570,6 +1603,47 @@ impl fmt::Display for TirTypeError {
             } => write!(
                 f,
                 "interface member `{member_name}` on `{interface_name}` must be accessed through a value; use value.as<{interface_name}>.{member_name}"
+            ),
+            TirTypeError::SelflessInstanceMember {
+                interface_name,
+                method_name,
+            } => match interface_name {
+                Some(interface_name) => write!(
+                    f,
+                    "method `{method_name}` on interface `{interface_name}` has no `self` \
+                     receiver, so it cannot be called on a value — qualify the type instead: \
+                     `(SomeImplementor as {interface_name}).{method_name}(...)`"
+                ),
+                // No interface: a class-INHERENT static, whose spelling is the
+                // owning type, not a qualifier.
+                None => write!(
+                    f,
+                    "method `{method_name}` has no `self` receiver, so it cannot be called on \
+                     a value — qualify the type instead: `TypeName.{method_name}(...)`"
+                ),
+            },
+            TirTypeError::ErasedSelfMethodValue {
+                interface_name,
+                method_name,
+                self_ty,
+            } => write!(
+                f,
+                "cannot take `{interface_name}.{method_name}` as a function value with `Self` = \
+                 `{}`: the implementation is only known from a receiver at each call — \
+                 call the method directly, or name a concrete implementor \
+                 (`(SomeImplementor as {interface_name}).{method_name}`)",
+                self_ty.render_user_facing()
+            ),
+            TirTypeError::SelflessMethodNeedsConcreteSelf {
+                interface_name,
+                method_name,
+                self_ty,
+            } => write!(
+                f,
+                "method `{method_name}` on interface `{interface_name}` has no `self` receiver, \
+                 so `Self` must be a concrete implementor type — `{}` does not name one; \
+                 write `(SomeImplementor as {interface_name}).{method_name}`",
+                self_ty.render_user_facing()
             ),
             TirTypeError::InvalidSelfCallThroughInterface {
                 interface_name,

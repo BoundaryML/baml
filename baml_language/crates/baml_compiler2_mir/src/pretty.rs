@@ -615,6 +615,25 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, receiver)?;
             write!(f, ")")
         }
+        Rvalue::MakeVirtualFunction {
+            self_ty,
+            iface,
+            method,
+            type_args,
+        } => {
+            write!(f, "make_virtual_function ({self_ty} as {iface:?}).{method}")?;
+            if !type_args.is_empty() {
+                write!(f, "<")?;
+                for (index, arg) in type_args.iter().enumerate() {
+                    if index > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write_operand(f, arg)?;
+                }
+                write!(f, ">")?;
+            }
+            Ok(())
+        }
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
         }

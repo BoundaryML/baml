@@ -523,25 +523,41 @@ impl<'a> Parser<'a> {
         matches!(kind, TokenKind::Whitespace | TokenKind::Newline)
     }
 
+    /// Token kinds legal as a `.member` name — identifiers plus the contextual
+    /// keywords a declaration may use as a member name (`parse_interface_method`
+    /// accepts the same set, so a method named `implements` must stay reachable
+    /// through every access spelling).
+    ///
+    /// Kind-based so lookahead can test a token at an arbitrary index; see
+    /// [`Self::at_member_name`] for the position-based form.
+    fn kind_is_member_name(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::Word
+                | TokenKind::Class
+                | TokenKind::Enum
+                | TokenKind::Function
+                | TokenKind::Implements
+                | TokenKind::Implement
+                | TokenKind::Extends
+                | TokenKind::Requires
+                | TokenKind::Interface
+                // `client` is a keyword for LLM config/declarations, but stays
+                // valid as a class field name and member-access name so
+                // BEP-049 §10's `ctx.client` (on the `Context` type) parses.
+                // Unambiguous here: class bodies and `.member` access have no
+                // `client` construct.
+                | TokenKind::Client
+        )
+    }
+
     /// True when the current token can serve as a member name after `.`.
     ///
     /// Declaration keywords remain valid as member names — e.g.
     /// `dog_t.implements(animal_t)` on the reflection `type` value.
     fn at_member_name(&self) -> bool {
-        self.at(TokenKind::Word)
-            || self.at(TokenKind::Class)
-            || self.at(TokenKind::Enum)
-            || self.at(TokenKind::Function)
-            || self.at(TokenKind::Implements)
-            || self.at(TokenKind::Implement)
-            || self.at(TokenKind::Extends)
-            || self.at(TokenKind::Requires)
-            || self.at(TokenKind::Interface)
-            // `client` is a keyword for LLM config/declarations, but stays valid
-            // as a class field name and member-access name so BEP-049 §10's
-            // `ctx.client` (on the `Context` type) parses. Unambiguous here:
-            // class bodies and `.member` access have no `client` construct.
-            || self.at(TokenKind::Client)
+        self.current()
+            .is_some_and(|token| Self::kind_is_member_name(token.kind))
     }
 
     /// True for `field as class_field` inside an `implements` block.
@@ -565,6 +581,42 @@ impl<'a> Parser<'a> {
         self.tokens
             .get(second)
             .is_some_and(|t| t.kind == TokenKind::Word && t.text == "as")
+    }
+
+    /// True when `kind` can be the LAST token of a type that could legally
+    /// stand as a qualified projection's `Self`.
+    ///
+    /// [`Self::looks_like_qualified_projection`] uses this to tell the
+    /// separator `as` in `(Base as Iface).item` from an `as` that is merely a
+    /// variable of that name: the separator can only follow a token that ends
+    /// a written type, so `(as).x` and `(1 + as).x` stay ordinary expressions.
+    ///
+    /// The set is deliberately exact rather than "anything that ends an
+    /// operand":
+    /// - `Word` — a named type, including the primitives (`int`, `string`, …),
+    ///   which lex as words rather than keywords.
+    /// - `Greater` / `GreaterGreater` — generic arguments, `Box<int>`,
+    ///   `Box<Box<int>>`.
+    /// - `RBracket` — an array suffix, `int[]`.
+    /// - `Question` — an optional suffix, `T?`.
+    /// - `RParen` — a parenthesized type: `(A | B)`, or a redundantly wrapped
+    ///   base, `((Document) as Codec<F>).Output`.
+    ///
+    /// Literal-ending tokens (`Quote`, the number literals) are excluded on
+    /// purpose: a literal type is a singleton whose values dispatch through
+    /// their base, so it can never implement an interface (E0138) and can
+    /// never be a projection's `Self`. Admitting them would only let a
+    /// guaranteed type error reach the parser in projection shape.
+    fn kind_can_end_projection_self(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::Word
+                | TokenKind::Greater
+                | TokenKind::GreaterGreater
+                | TokenKind::RBracket
+                | TokenKind::Question
+                | TokenKind::RParen
+        )
     }
 
     /// True for the BEP-044 projection operator `.as<T>`.
@@ -592,7 +644,12 @@ impl<'a> Parser<'a> {
     }
 
     /// True for a type-level associated type projection: `(T as I).Item`.
-    fn looks_like_associated_type_projection(&self) -> bool {
+    /// Lookahead for the qualified-projection token shape
+    /// `( … as … ) . WORD`, shared by BOTH namespaces: it denotes an
+    /// associated-type projection in type position and a qualified item
+    /// reference in expression position. One lookahead so the two spellings
+    /// can never drift apart.
+    fn looks_like_qualified_projection(&self) -> bool {
         let mut i = self.skip_trivia_and_comments_from(self.current);
         if self
             .tokens
@@ -607,6 +664,7 @@ impl<'a> Parser<'a> {
         let mut angle_depth = 0_i32;
         let mut saw_as = false;
         let mut rparen_idx = None;
+        let mut previous_significant: Option<TokenKind> = None;
 
         while i < self.tokens.len() {
             let new_i = self.skip_comment_at(i);
@@ -631,11 +689,19 @@ impl<'a> Parser<'a> {
                 TokenKind::Less => angle_depth += 1,
                 TokenKind::Greater => angle_depth -= 1,
                 TokenKind::GreaterGreater => angle_depth -= 2,
+                // `as` is CONTEXTUAL (a legal binding name), so the separator
+                // only counts when the token before it can end a written type
+                // (see `kind_can_end_projection_self`). Without the gate,
+                // expressions like `(as).x` or `(1 + as).x` — where `as` is a
+                // variable — would be hijacked into the projection parse.
                 TokenKind::Word if token.text == "as" && paren_depth == 1 && angle_depth == 0 => {
-                    saw_as = true;
+                    if previous_significant.is_some_and(Self::kind_can_end_projection_self) {
+                        saw_as = true;
+                    }
                 }
                 _ => {}
             }
+            previous_significant = Some(token.kind);
             i += 1;
         }
 
@@ -656,7 +722,7 @@ impl<'a> Parser<'a> {
         let member_idx = self.skip_trivia_and_comments_from(dot_idx + 1);
         self.tokens
             .get(member_idx)
-            .is_some_and(|t| t.kind == TokenKind::Word)
+            .is_some_and(|t| Self::kind_is_member_name(t.kind))
     }
 
     /// True when a postfix `(` must NOT be glued onto the expression parsed so
@@ -2997,8 +3063,8 @@ impl<'a> Parser<'a> {
             //
             // Projections have their own `as` separator and trailing `.Member`,
             // so parse those before the general paren/function path.
-            if self.looks_like_associated_type_projection() {
-                self.parse_associated_type_projection();
+            if self.looks_like_qualified_projection() {
+                self.parse_qualified_projection();
             } else {
                 // We parse the contents as function type parameters (which can be either
                 // `name: type` or just `type`), then check for `->` to determine which case.
@@ -3039,8 +3105,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse `(Base as Interface).Member` inside the surrounding `TYPE_EXPR`.
-    fn parse_associated_type_projection(&mut self) {
+    /// Parse `(Base as Interface).Member` — the token shape itself, without
+    /// the enclosing node. In type position the caller is the surrounding
+    /// `TYPE_EXPR`; in expression position it is `QUALIFIED_PATH_EXPR`.
+    fn parse_qualified_projection(&mut self) {
         self.expect(TokenKind::LParen);
         self.parse_type();
         if self.at_contextual_kw("as") {
@@ -3051,10 +3119,10 @@ impl<'a> Parser<'a> {
         self.parse_type();
         self.expect(TokenKind::RParen);
         self.expect(TokenKind::Dot);
-        if self.at(TokenKind::Word) {
+        if self.at_member_name() {
             self.bump();
         } else {
-            self.error_unexpected_token("associated type name".to_string());
+            self.error_unexpected_token("projected item name".to_string());
         }
     }
 
@@ -4936,7 +5004,7 @@ impl<'a> Parser<'a> {
             // Paren-type-suffix paren consumes `|` because the whole
             // expression is unambiguously one type — `(int | string)[] | float`
             // parses as the union type `(int | string)[] | float`.
-            if self.looks_like_associated_type_projection() {
+            if self.looks_like_qualified_projection() {
                 self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
                     p.parse_type_with(/* consume_union = */ false);
                 });
@@ -6584,6 +6652,14 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::LParen) && self.looks_like_lambda() {
             // Lambda expression: (params) -> [RetType] { body }
             self.parse_lambda_expr();
+        } else if self.at(TokenKind::LParen) && self.looks_like_qualified_projection() {
+            // Fully-qualified item reference: `(Base as Interface).item`. The
+            // same token shape spells an associated-type projection in type
+            // position; only the namespace of the projected item differs, so
+            // the lookahead and the parse are shared with it.
+            self.with_node(SyntaxKind::QUALIFIED_PATH_EXPR, |p| {
+                p.parse_qualified_projection();
+            });
         } else if self.at(TokenKind::LParen) {
             // Parenthesized expression. Parens reset the destructure and
             // object-literal suppression: `if (x is Foo { f })` and

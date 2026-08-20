@@ -892,6 +892,33 @@ pub enum Rvalue {
         type_args: Vec<TyTemplate>,
     },
 
+    /// Resolve an *interface* method to an unbound callable from a `Self`
+    /// TYPE — the type-keyed twin of [`Rvalue::MakeVirtualBoundMethod`],
+    /// where `Self` is PASSED as a template rather than DERIVED from a
+    /// receiver value. The only dispatch form for a method with no `self`
+    /// receiver (`(Widget as Makeable).make`), and the value form of any
+    /// qualified item reference. The VM resolves the impl (coherence
+    /// guarantees at most one) and produces a capture-less closure carrying
+    /// the impl's realized frame.
+    MakeVirtualFunction {
+        /// The `Self` type to resolve on, pushed with `LoadType` — a typevar
+        /// `Self` (`(T as Makeable).make` in a generic caller) lowers to its
+        /// `TypeArgRef` slot and arrives at the resolver realized.
+        self_ty: TyTemplate,
+        /// The interface to resolve against, as a template the emitter pushes
+        /// with `LoadType`.
+        iface: TyTemplateInterface,
+        /// The interface method's name.
+        method: String,
+        /// Method-level type-argument OPERANDS from the reference site,
+        /// appended to the resolved impl frame by the VM. Operands rather
+        /// than templates so a runtime type argument (`m<unreflect(t)>(…)`)
+        /// flows like any other — a written static argument is materialized
+        /// by the producer as a `LoadType` temp. The VM pops each as an
+        /// `Object::Type` either way.
+        type_args: Vec<Operand>,
+    },
+
     /// Read an interface field from a receiver whose concrete type is not known
     /// statically — the field analogue of [`Terminator::VirtualCall`], and the
     /// structural twin of [`Rvalue::MakeVirtualBoundMethod`].

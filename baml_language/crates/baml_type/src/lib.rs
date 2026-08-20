@@ -950,6 +950,16 @@ impl Interface {
     }
 }
 
+// BUG: this is a THIRD rendering, distinct from both `render_canonical` and
+// `render_user_facing`. It elides the reserved `user` package like the
+// user-facing renderer, but diverges from it on `Ty::Error` (`<error>` vs
+// `!error`), `Ty::Future` (`future<..>` vs `Future<..>`), and synthetic effect
+// params (raw `__effect_param_N` vs `callback`). Diagnostics that interpolate
+// a `Ty` directly therefore get *almost* the user-facing string — which is why
+// the divergence keeps going unnoticed until one of those variants shows up.
+// The fix is to converge `Display` onto `render_user_facing` (or delete it and
+// force an explicit renderer at every site); until then, diagnostics must call
+// `render_user_facing()` rather than interpolate.
 impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

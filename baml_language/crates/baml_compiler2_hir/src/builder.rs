@@ -754,6 +754,9 @@ impl<'db> SemanticIndexBuilder<'db> {
             | ast::Expr::ByteStringLiteral(_)
             | ast::Expr::Null
             | ast::Expr::Block { .. }
+            // Both halves are TYPES, so a qualified item reference opens no
+            // scope and names no local: nothing here to walk or resolve.
+            | ast::Expr::QualifiedPath { .. }
             | ast::Expr::Lambda(_)
             | ast::Expr::Missing => {}
         }

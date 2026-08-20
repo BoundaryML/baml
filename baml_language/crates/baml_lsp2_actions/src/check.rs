@@ -1453,8 +1453,10 @@ fn source_aware_tir_type_error_message(
                 )
             }
         }
+        // Both spellings that write an interface qualifier report here:
+        // `x.as<T>` and `(Base as T).item`.
         TirTypeError::InvalidInterfaceUpcastTarget { target } => {
-            format!("`.as<T>` requires an interface target, got {}", ty(target))
+            format!("expected an interface qualifier, got {}", ty(target))
         }
         TirTypeError::RuntimeIdArgumentTypeMismatch { got } => format!(
             "`$id` at a call site expects `boundary.LocalId`, got {}",
@@ -1577,6 +1579,9 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InvalidInterfaceUpcastTarget { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::InterfaceMemberRequiresReceiver { .. } => DiagnosticId::NoSuchField,
         TirTypeError::InvalidSelfCallThroughInterface { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::SelflessMethodNeedsConcreteSelf { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::SelflessInstanceMember { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::ErasedSelfMethodValue { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::DefaultOnRequiredMethod { .. } => DiagnosticId::DefaultOnRequiredMethod,
         TirTypeError::BareDefaultKeyword => DiagnosticId::BareDefaultKeyword,
         TirTypeError::TypeDoesNotImplementInterface { .. } => DiagnosticId::TypeMismatch,

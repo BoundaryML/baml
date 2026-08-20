@@ -922,7 +922,9 @@ fn simulate_rvalue_pull_stack(
     // materialized correctly through `emit_rvalue_pull`.
     if matches!(
         rvalue,
-        Rvalue::MakeVirtualBoundMethod { .. } | Rvalue::VirtualFieldAccess { .. }
+        Rvalue::MakeVirtualBoundMethod { .. }
+            | Rvalue::MakeVirtualFunction { .. }
+            | Rvalue::VirtualFieldAccess { .. }
     ) {
         return false;
     }
@@ -1255,6 +1257,7 @@ impl PullSink for StackCarryPullSink<'_> {
                     def.rvalue,
                     Rvalue::MakeBoundMethod { .. }
                         | Rvalue::MakeVirtualBoundMethod { .. }
+                        | Rvalue::MakeVirtualFunction { .. }
                         | Rvalue::VirtualFieldAccess { .. }
                 ) {
                     return Err(());
