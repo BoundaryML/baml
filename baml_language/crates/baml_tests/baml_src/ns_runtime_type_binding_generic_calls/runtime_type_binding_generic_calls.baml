@@ -47,3 +47,38 @@ function ClosureOverRuntimeBoundElement() -> int {
         })
         .length()
 }
+
+// The user-generic-class receiver path. `Holder<Bound>` puts a runtime-bound
+// type in the receiver's own class type args, which MIR lowers through
+// `inferred_ty_to_template` — a different site from the array-receiver ops
+// above, and the one that reads `receiver_class_type_args`.
+class Holder<T> {
+    items: T[],
+
+    function new(items: T[]) -> Holder<T> {
+        Holder { items: items }
+    }
+
+    function count(self) -> int {
+        self.items.length()
+    }
+
+    function first_or_null(self) -> T? {
+        self.items.at(0)
+    }
+}
+
+test "method calls on a generic class receiver with a runtime-bound argument" {
+    let item_t = reflect.class
+        .new("BoundHeld", { "value": type.of<string>() })
+        .as_type();
+    type Bound = unreflect(item_t);
+    // The empty array must come from `EmptyOf<Bound>()`: a bare `[]` argument
+    // literal does not unify with the runtime-bound `T[]` in the runtime gate
+    // (rejected as E0001 "mismatched types"), the same class of unsolved-slot
+    // answer as the KNOWN GAP on `inferred_ty_to_template`.
+    let holder = Holder<Bound>.new(EmptyOf<Bound>());
+
+    assert.equal(holder.count(), 0);
+    assert.is_true(holder.first_or_null() == null)
+}

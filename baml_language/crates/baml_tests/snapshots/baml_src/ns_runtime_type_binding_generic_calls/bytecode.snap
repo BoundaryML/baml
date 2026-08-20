@@ -9,6 +9,13 @@ function runtime_type_binding_generic_calls.$init_test_ns_runtime_type_binding_g
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.runtime_type_binding_generic_calls"
+    load_const "method calls on a generic class receiver with a runtime-bound argument"
+    make_closure .<lambda($init_test_ns_runtime_type_binding_generic_calls_runtime_type_binding_generic_calls, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -44,5 +51,28 @@ function runtime_type_binding_generic_calls.ClosureOverRuntimeBoundElement() -> 
 function runtime_type_binding_generic_calls.EmptyOf() -> #0[] {
     load_type #0
     alloc_array 0
+    return
+}
+
+function runtime_type_binding_generic_calls.Holder.count(self: runtime_type_binding_generic_calls.Holder<#0>) -> int {
+    load_var self
+    load_field .items
+    container_len
+    return
+}
+
+function runtime_type_binding_generic_calls.Holder.first_or_null(self: runtime_type_binding_generic_calls.Holder<#0>) -> #0 | null {
+    load_type #0
+    load_var self
+    load_field .items
+    load_const 0
+    call baml.Array.at
+    return
+}
+
+function runtime_type_binding_generic_calls.Holder.new(items: #0[]) -> runtime_type_binding_generic_calls.Holder<#0> {
+    load_var items
+    load_type #0
+    init_instance<1> user.runtime_type_binding_generic_calls.Holder .items
     return
 }

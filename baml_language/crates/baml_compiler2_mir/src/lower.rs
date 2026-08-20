@@ -9621,6 +9621,12 @@ impl LoweringContext<'_> {
     /// ICEs, so widen it to the top type first — the same answer the adjacent
     /// out-of-scope-type-variable case already gives.
     ///
+    /// A type variable absent from `generic_params` is widened for the same
+    /// reason: `lower_tir_template` has no slot to point it at, and its
+    /// `TemplateMode::Value` arm treats that as a compiler bug
+    /// (`unreachable!("type variable not found in type args")`). This mirrors
+    /// the guard the inferred-call-argument loop below already applies.
+    ///
     /// KNOWN GAP: the top type is right for a VALUE slot but wrong for an
     /// EFFECT one, where the language's defaulting rule is `never`
     /// (`default_unsolved_effects_to_never`, which only sees params named
@@ -9631,7 +9637,10 @@ impl LoweringContext<'_> {
     /// classification for user-written params in inference; either way it is a
     /// wrong ANSWER rather than the ICE this guard removes.
     fn inferred_ty_to_template(&self, ty: &Tir2Ty, generic_params: &[ParamTy]) -> TyTemplate {
-        let widened = if baml_type_runtime::contains_error_recovery(ty) {
+        let widened = if baml_type_runtime::contains_error_recovery(ty)
+            || baml_type_runtime::contains_typevar_where(ty, &|name| {
+                !generic_params.iter().any(|param| param == name)
+            }) {
             Tir2Ty::BuiltinUnknown {
                 attr: TyAttr::default(),
             }
