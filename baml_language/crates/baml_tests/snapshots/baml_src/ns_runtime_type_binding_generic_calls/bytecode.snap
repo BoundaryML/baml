@@ -1,0 +1,48 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function runtime_type_binding_generic_calls.$init_test_ns_runtime_type_binding_generic_calls_runtime_type_binding_generic_calls(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.runtime_type_binding_generic_calls"
+    load_const "non-closure generic list ops over a runtime-bound element type"
+    make_closure .<lambda($init_test_ns_runtime_type_binding_generic_calls_runtime_type_binding_generic_calls, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function runtime_type_binding_generic_calls.ClosureOverRuntimeBoundElement() -> int {
+    load_const "BoundPredicate"
+    load_type string
+    load_const "value"
+    load_type string
+    load_type type | baml.reflect.WithMeta<type>
+    alloc_map 1
+    load_const <omitted>
+    call baml.reflect.class.new
+    load_type baml.reflect.TypeView
+    load_const "as_type"
+    virtual_call nargs=1 ntypeargs=0
+    store_var item_t
+    load_var item_t
+    bind_type 0
+    load_type #0
+    call user.runtime_type_binding_generic_calls.EmptyOf
+    store_var items
+    load_type #0
+    load_type unknown
+    load_var items
+    load_type #0
+    make_closure .<lambda(ClosureOverRuntimeBoundElement, 0)>, captures=0, ntypeargs=1
+    call baml.Array.filter
+    container_len
+    return
+}
+
+function runtime_type_binding_generic_calls.EmptyOf() -> #0[] {
+    load_type #0
+    alloc_array 0
+    return
+}

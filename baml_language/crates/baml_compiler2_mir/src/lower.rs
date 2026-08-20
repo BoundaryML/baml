@@ -8935,7 +8935,7 @@ impl<'db> LoweringContext<'db> {
             receiver_class_type_args
                 .iter()
                 .map(|ty_arg| {
-                    let template = self.ty_to_template(ty_arg, &generic_params);
+                    let template = self.inferred_ty_to_template(ty_arg, &generic_params);
                     let temp = self.builder.temp(RuntimeTy::type_type());
                     self.builder
                         .assign(Place::local(temp), Rvalue::LoadType(template));
@@ -9609,6 +9609,38 @@ impl LoweringContext<'_> {
             .map(TyTemplate::TypeArgRef)
     }
 
+    /// [`Self::ty_to_template`] for a type read back from inference rather
+    /// than lowered from written syntax.
+    ///
+    /// Inference finalizes a slot it could not solve to an error-recovery
+    /// sentinel (`erase_infer` turns a still-free var into `Error`). That
+    /// happens on well-typed code whenever the call is deferred to a runtime
+    /// gate: a generic method called on a value whose type came from a
+    /// `type T = unreflect(...)` binding never solves its own slots
+    /// statically. Runtime lowering treats a sentinel as a compiler bug and
+    /// ICEs, so widen it to the top type first — the same answer the adjacent
+    /// out-of-scope-type-variable case already gives.
+    ///
+    /// KNOWN GAP: the top type is right for a VALUE slot but wrong for an
+    /// EFFECT one, where the language's defaulting rule is `never`
+    /// (`default_unsolved_effects_to_never`, which only sees params named
+    /// `__effect_param_N` — a user-written `filter<E>(…) throws E` is missed).
+    /// Seeding `unknown` there makes the runtime gate report `mismatched
+    /// types` for e.g. `xs.filter(…)` where `xs: T[]` under such a binding.
+    /// Fixing that needs the callee's declared params here, or effect-position
+    /// classification for user-written params in inference; either way it is a
+    /// wrong ANSWER rather than the ICE this guard removes.
+    fn inferred_ty_to_template(&self, ty: &Tir2Ty, generic_params: &[ParamTy]) -> TyTemplate {
+        let widened = if baml_type_runtime::contains_error_recovery(ty) {
+            Tir2Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            }
+        } else {
+            ty.clone()
+        };
+        self.ty_to_template(&widened, generic_params)
+    }
+
     /// Recursively convert a `Tir2Ty` to a `TyTemplate`.
     ///
     /// `Tir2Ty::TypeVar("T")` whose name appears at position `N` in
@@ -9745,9 +9777,14 @@ impl LoweringContext<'_> {
             .collect();
         let caller_generic_params = self.enclosing_generic_params();
         for ty in &mut inferred_type_args {
-            if baml_type_runtime::contains_typevar_where(ty, &|name| {
-                !caller_generic_params.iter().any(|param| param == name)
-            }) {
+            // An unsolved slot finalizes to an error-recovery sentinel; that
+            // is the same "no static answer" case as an out-of-scope type
+            // variable (see `inferred_ty_to_template`), so widen it here too.
+            if baml_type_runtime::contains_error_recovery(ty)
+                || baml_type_runtime::contains_typevar_where(ty, &|name| {
+                    !caller_generic_params.iter().any(|param| param == name)
+                })
+            {
                 *ty = Tir2Ty::BuiltinUnknown {
                     attr: TyAttr::default(),
                 };
