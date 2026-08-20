@@ -75,6 +75,10 @@ pub struct MethodSig {
     pub is_instance: bool,
 }
 
+/// Hover cap for an interface's rendered member list — see
+/// [`TypeInfo::to_hover_block`].
+const HOVER_MEMBER_CAP: usize = 8;
+
 /// Structured type/signature info at a cursor position.
 ///
 /// Returned by `type_at` and `type_info_for_definition`. Plain serializable
@@ -120,6 +124,27 @@ pub enum TypeInfo {
         name: String,
         variants: Vec<String>,
         owner: Option<String>,
+    },
+    /// An interface definition: header plus its declared member surface.
+    /// Members are stored in full; hover caps the rendered set
+    /// ([`Self::to_hover_block`]) in declaration-priority order —
+    /// associated types, fields, required methods, defaulted methods.
+    Interface {
+        name: String,
+        generic_params: Vec<String>,
+        /// Rendered `requires` targets.
+        requires: Vec<String>,
+        /// Rendered associated-type declarations (`type Item extends Bar`).
+        associated_types: Vec<String>,
+        fields: Vec<(String, String)>,
+        /// Signature-only methods (no body).
+        required_methods: Vec<MethodSig>,
+        /// Methods with default bodies.
+        default_methods: Vec<MethodSig>,
+        docstring: Option<String>,
+        owner: Option<String>,
+        /// Canonical FQN for the hover "Run `baml describe …`" hint.
+        canonical_fqn: String,
     },
     /// A type alias: name + the expansion type string.
     TypeAlias {
@@ -167,6 +192,7 @@ impl TypeInfo {
             | TypeInfo::LocalVar { owner, .. }
             | TypeInfo::Class { owner, .. }
             | TypeInfo::Enum { owner, .. }
+            | TypeInfo::Interface { owner, .. }
             | TypeInfo::TypeAlias { owner, .. }
             | TypeInfo::Symbol { owner, .. } => owner.as_deref(),
             TypeInfo::TemplateString { .. }
@@ -180,6 +206,7 @@ impl TypeInfo {
         match self {
             TypeInfo::Class { docstring, .. }
             | TypeInfo::Function { docstring, .. }
+            | TypeInfo::Interface { docstring, .. }
             | TypeInfo::Symbol { docstring, .. } => docstring.as_deref(),
             TypeInfo::Enum { .. }
             | TypeInfo::TypeAlias { .. }
@@ -188,6 +215,70 @@ impl TypeInfo {
             | TypeInfo::Documentation { .. }
             | TypeInfo::OtherItem { .. } => None,
         }
+    }
+
+    /// The hover form of [`Self::to_describe_block`]: identical except an
+    /// interface's member list is capped (rust-analyzer's `display_limited`
+    /// discipline) — the fence stays a summary and `baml describe` renders
+    /// the full surface.
+    pub fn to_hover_block(&self) -> String {
+        match self {
+            TypeInfo::Interface { .. } => self.render_interface_block(Some(HOVER_MEMBER_CAP)),
+            _ => self.to_describe_block(),
+        }
+    }
+
+    /// The interface body block: header (`interface Foo<T> requires Bar`)
+    /// plus member lines in declaration-priority order — associated types,
+    /// fields, required methods, defaulted methods. `cap` bounds the member
+    /// count, eliding the tail behind a `// … +N more` line.
+    fn render_interface_block(&self, cap: Option<usize>) -> String {
+        let TypeInfo::Interface {
+            name,
+            generic_params,
+            requires,
+            associated_types,
+            fields,
+            required_methods,
+            default_methods,
+            ..
+        } = self
+        else {
+            unreachable!("render_interface_block is only called on Interface");
+        };
+
+        let generics = if generic_params.is_empty() {
+            String::new()
+        } else {
+            format!("<{}>", generic_params.join(", "))
+        };
+        let requires = if requires.is_empty() {
+            String::new()
+        } else {
+            format!(" requires {}", requires.join(", "))
+        };
+        let header = format!("interface {name}{generics}{requires}");
+
+        let mut members: Vec<String> = Vec::new();
+        members.extend(associated_types.iter().map(|assoc| format!("    {assoc};")));
+        members.extend(fields.iter().map(|(n, t)| format!("    {n}: {t},")));
+        members.extend(
+            required_methods
+                .iter()
+                .chain(default_methods.iter())
+                .map(|method| format!("    {}", method.signature)),
+        );
+        if members.is_empty() {
+            return header;
+        }
+        if let Some(cap) = cap
+            && members.len() > cap
+        {
+            let elided = members.len() - cap;
+            members.truncate(cap);
+            members.push(format!("    // … +{elided} more"));
+        }
+        format!("{header} {{\n{}\n}}", members.join("\n"))
     }
 
     /// The canonical BAML block for this item, without code fences, docstring,
@@ -253,6 +344,7 @@ impl TypeInfo {
                     format!("class {name}{generics} {{\n{}\n}}", member_strs.join("\n"))
                 }
             }
+            TypeInfo::Interface { .. } => self.render_interface_block(None),
             TypeInfo::Enum { name, variants, .. } => {
                 let variant_strs: Vec<String> =
                     variants.iter().map(|v| format!("    {v}")).collect();
@@ -320,9 +412,12 @@ pub fn type_at(
         return keyword_type_info(token.text());
     }
 
-    // Only WORD tokens can be names.
+    // Only WORD tokens can be names — but an operator token addresses its
+    // dispatch method through the same layer as go-to-definition, so hover
+    // and navigation provably agree on `+`/`<`/`[` too.
     if token.kind() != SyntaxKind::WORD {
-        return None;
+        let target = crate::resolve::symbol_at(db, file, offset)?;
+        return target_type_info(db, target);
     }
 
     let name_text = token.text();
@@ -422,6 +517,21 @@ fn target_type_info(
                 ),
                 owner: Some(qtn.to_string()),
                 docstring: method.docstring.clone(),
+            })
+        }
+        SymbolTarget::AssociatedType { iface, assoc_index } => {
+            let iface_data = item_data::interface_data(db, iface);
+            let assoc = iface_data.associated_types.get(assoc_index)?;
+            let declaration = render_associated_type(iface_data, assoc);
+            let qtn = baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                Definition::Interface(iface),
+                &iface_data.name,
+            );
+            Some(TypeInfo::Symbol {
+                declaration,
+                owner: Some(qtn.to_string()),
+                docstring: None,
             })
         }
         SymbolTarget::InterfaceField { iface, field_index } => {
@@ -1002,15 +1112,39 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
             let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
             let generic_params =
                 render::render_generic_params(&iface.generic_params, &iface.type_refs);
-            let generics = if generic_params.is_empty() {
-                String::new()
-            } else {
-                format!("<{}>", generic_params.join(", "))
-            };
-            TypeInfo::Symbol {
-                declaration: format!("interface {}{generics}", iface.name.as_str()),
-                owner: Some(owning_path(db, iface_loc.file(db))),
+            let requires = iface
+                .requires
+                .iter()
+                .map(|&id| render::display_type_ref(&iface.type_refs, id))
+                .collect();
+            let associated_types = iface
+                .associated_types
+                .iter()
+                .map(|assoc| render_associated_type(iface, assoc))
+                .collect();
+            let fields = iface
+                .fields
+                .iter()
+                .map(|field| {
+                    (
+                        field.name.as_str().to_string(),
+                        render::display_type_ref(&iface.type_refs, field.type_ref),
+                    )
+                })
+                .collect();
+            let (required_methods, default_methods) = interface_method_sigs(db, iface_loc);
+            let qtn = baml_compiler2_hir_ty::lower::qualify_def(db, def, &iface.name);
+            TypeInfo::Interface {
+                name: iface.name.as_str().to_string(),
+                generic_params,
+                requires,
+                associated_types,
+                fields,
+                required_methods,
+                default_methods,
                 docstring: iface.docstring.clone(),
+                owner: Some(owning_path(db, iface_loc.file(db))),
+                canonical_fqn: render::canonical_fqn_string(&qtn),
             }
         }
 
@@ -1251,6 +1385,16 @@ pub fn resolved_function_sig_parts<'db>(
 ) -> FnSigParts<'db> {
     let data = item_data::function_data(db, func_loc);
     let mut parts = FnSigParts::of_function_data(data);
+    // An omitted `throws` on a bodied function is a real, inferred contract
+    // (`callable_throws`: declared-else-body-inferred) — render it instead
+    // of the `_` hole. Bodyless declarations keep the hole: their `throws`
+    // is mandatory (E0167/E0151), and inventing `never` would hide the
+    // incompleteness.
+    if data.throws.is_none() && item_data::function_has_body(db, func_loc) {
+        parts.throws = SigSlot::ResolvedOwned(
+            baml_compiler2_hir_ty::callable::callable_throws(db, func_loc).0,
+        );
+    }
     let Some(exported) = exported else {
         return parts;
     };
@@ -1273,6 +1417,60 @@ pub fn resolved_function_sig_parts<'db>(
 /// Resolved param/return/throws types come from the package interface, which
 /// lowers class methods 1:1 with `class_data.methods` (same order), so
 /// positional indices line up.
+/// One associated-type declaration line, sans indentation/terminator
+/// (`type Item extends Bar = Baz`). Shared by the interface body block and
+/// the associated-type hover.
+fn render_associated_type(
+    iface_data: &baml_compiler2_ppir::item_data::InterfaceData<'_>,
+    assoc: &baml_compiler2_ppir::item_data::AssociatedTypeData,
+) -> String {
+    let mut line = format!("type {}", assoc.name.as_str());
+    if let Some(bound) = assoc.bound {
+        line.push_str(" extends ");
+        line.push_str(&render::display_type_ref(&iface_data.type_refs, bound));
+    }
+    if let Some(default) = assoc.default {
+        line.push_str(" = ");
+        line.push_str(&render::display_type_ref(&iface_data.type_refs, default));
+    }
+    line
+}
+
+/// An interface's method signatures, split `(required, defaulted)` — the
+/// hover renders signature-only methods ahead of default bodies.
+fn interface_method_sigs(
+    db: &dyn baml_compiler2_ppir::Db,
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
+) -> (Vec<MethodSig>, Vec<MethodSig>) {
+    let file = iface_loc.file(db);
+    let mut required = Vec::new();
+    let mut defaulted = Vec::new();
+    for &method_loc in &item_data::interface_data(db, iface_loc).methods {
+        let method = item_data::function_data(db, method_loc);
+        if method.metadata.is_language_internal {
+            continue;
+        }
+        let sig = MethodSig {
+            name: method.name.as_str().to_string(),
+            signature: resolved_function_sig_parts(db, method_loc, None).render(
+                db,
+                file,
+                method_sig_style(),
+            ),
+            is_instance: method
+                .params
+                .first()
+                .is_some_and(|p| p.name.as_str() == "self"),
+        };
+        if item_data::function_has_body(db, method_loc) {
+            defaulted.push(sig);
+        } else {
+            required.push(sig);
+        }
+    }
+    (required, defaulted)
+}
+
 pub(crate) fn class_method_sigs(
     db: &dyn baml_compiler2_ppir::Db,
     class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
@@ -1812,6 +2010,237 @@ implements<El<[CURSOR]em extends Wrap> Wrap for Elem[] {
         };
         assert_eq!(label, "type parameter Elem extends Wrap");
         assert_eq!(detail, "Declared by `implements for Elem[]`.");
+    }
+
+    #[test]
+    fn associated_type_declaration_hovers_with_its_interface() {
+        let test = CursorTest::new(
+            r#"interface HasItem {
+    type It<[CURSOR]em extends HasItem
+    function take_item(self) -> string throws never
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "type Item extends HasItem");
+        assert_eq!(owner.as_deref(), Some("user.HasItem"));
+    }
+
+    #[test]
+    fn impl_associated_type_binding_addresses_the_interface_declaration() {
+        let test = CursorTest::new(
+            r#"interface Yielding {
+    type Output
+    function yielded(self) -> string throws never
+}
+
+class Widget {
+    label string
+}
+
+implements Yielding for Widget {
+    type Out<[CURSOR]put = string;
+    function yielded(self) -> string throws never {
+        self.label
+    }
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "type Output");
+        assert_eq!(owner.as_deref(), Some("user.Yielding"));
+    }
+
+    #[test]
+    fn arithmetic_operator_hovers_the_receiver_impl_method() {
+        let test = CursorTest::new(
+            r#"function example() -> int {
+    1 <[CURSOR]+ 2
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert!(
+            declaration.starts_with("function add(self"),
+            "the Add impl method, got: {declaration}"
+        );
+        assert_eq!(owner.as_deref(), Some("int"));
+    }
+
+    #[test]
+    fn ordering_operator_hovers_the_compare_declaration() {
+        // Primitive comparability is compiler-derived — no source impl
+        // exists to navigate to — so the honest target is the interface's
+        // own method declaration.
+        let test = CursorTest::new(
+            r#"function example(a: int, b: int) -> bool {
+    a <[CURSOR]< b
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert!(
+            declaration.starts_with("function lt(self"),
+            "ordered comparison dispatches Compare.lt, got: {declaration}"
+        );
+        assert_eq!(owner.as_deref(), Some("baml.ops.Compare"));
+    }
+
+    #[test]
+    fn inclusive_ordering_operator_hovers_its_own_defaulted_method() {
+        let test = CursorTest::new(
+            r#"function example(a: int, b: int) -> bool {
+    a <[CURSOR]<= b
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert!(
+            declaration.starts_with("function le(self"),
+            "`<=` names `Compare.le`, got: {declaration}"
+        );
+        assert_eq!(owner.as_deref(), Some("baml.ops.Compare"));
+    }
+
+    #[test]
+    fn index_operator_hovers_the_container_impl() {
+        let test = CursorTest::new(
+            r#"function example(xs: int[]) -> int? {
+    xs<[CURSOR][0]
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert!(
+            declaration.starts_with("function index(self"),
+            "indexing dispatches Index.index, got: {declaration}"
+        );
+        assert_eq!(owner.as_deref(), Some("T[]"));
+    }
+
+    #[test]
+    fn operator_on_user_impl_hovers_the_user_method() {
+        let test = CursorTest::new(
+            r#"class Meters {
+    value int
+}
+
+implements baml.ops.Add<Meters> for Meters {
+    type Output = Meters;
+    function add(self, rhs: Meters) -> Meters throws never {
+        Meters { value: self.value + rhs.value }
+    }
+}
+
+function example(a: Meters, b: Meters) -> Meters {
+    a <[CURSOR]+ b
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert!(
+            declaration.starts_with("function add(self, rhs: Meters)"),
+            "the user impl's override, got: {declaration}"
+        );
+        assert_eq!(owner.as_deref(), Some("user.Meters"));
+    }
+
+    #[test]
+    fn operator_on_unpinned_receiver_falls_back_to_the_interface_method() {
+        let test = CursorTest::new(
+            r#"function combine<T extends baml.ops.Add<T, Output = T>>(a: T, b: T) -> T {
+    a <[CURSOR]+ b
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert!(
+            declaration.starts_with("function add(self"),
+            "the interface declaration, got: {declaration}"
+        );
+        assert_eq!(owner.as_deref(), Some("baml.ops.Add"));
+    }
+
+    #[test]
+    fn method_declaration_name_hovers_like_its_call_sites() {
+        let test = CursorTest::new(
+            r#"class Widget {
+    label string
+
+    function describe<[CURSOR]_self(self) -> string {
+        self.label
+    }
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert!(
+            declaration.starts_with("function describe_self(self)"),
+            "got: {declaration}"
+        );
+        assert_eq!(owner.as_deref(), Some("user.Widget"));
+    }
+
+    #[test]
+    fn interface_hover_renders_members_in_priority_order() {
+        let test = CursorTest::new(
+            r#"interface Sto<[CURSOR]re {
+    type Item extends Store
+    capacity: int
+    function get(self, key: string) -> string throws never
+    function get_or(self, key: string, fallback: string) -> string throws never {
+        fallback
+    }
+}"#,
+        );
+        let info = info_at(&test);
+        let block = info.to_hover_block();
+        let expected = "interface Store {\n    type Item extends Store;\n    capacity: int,\n    function get(self, key: string) -> string throws never\n    function get_or(self, key: string, fallback: string) -> string throws never\n}";
+        assert_eq!(block, expected);
+        assert_eq!(info.owner_path(), Some("user"));
+    }
+
+    #[test]
+    fn interface_hover_caps_the_member_list() {
+        let test = CursorTest::new(
+            r#"interface Wi<[CURSOR]de {
+    a: int
+    b: int
+    c: int
+    d: int
+    e: int
+    f: int
+    g: int
+    h: int
+    i: int
+    j: int
+}"#,
+        );
+        let info = info_at(&test);
+        let hover = info.to_hover_block();
+        assert!(
+            hover.contains("// … +2 more"),
+            "ten members cap at eight, got:\n{hover}"
+        );
+        assert!(!hover.contains("i: int"), "capped tail elided:\n{hover}");
+        // The describe surface stays complete.
+        assert!(info.to_describe_block().contains("j: int"));
+    }
+
+    #[test]
+    fn impl_method_hover_shows_the_inferred_narrow_throws() {
+        // The interface declares `throws string`; the impl's body throws
+        // nothing. Concrete calls get the narrow contract, so hover shows
+        // the impl's own inferred `throws never`, not `_` and not the
+        // interface's declared top.
+        let test = CursorTest::new(
+            r#"interface Fallible {
+    function act(self) -> string throws string
+}
+
+class Safe {
+    label string
+    implements Fallible {
+        function a<[CURSOR]ct(self) -> string {
+            self.label
+        }
+    }
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "function act(self) -> string throws never");
+        assert_eq!(owner.as_deref(), Some("user.Safe"));
     }
 
     #[test]

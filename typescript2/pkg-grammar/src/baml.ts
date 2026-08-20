@@ -2542,6 +2542,10 @@ export const baml: Grammar = {
     // `semicolon` is their statement terminator, mirroring `blockContents`.
     letStatement,
     semicolon,
+    // `associated-type` re-used at root covers the hover fence for an
+    // associated-type declaration (`type Assoc extends Iface`) — the
+    // `type X = …` alias rule above wins ties for real aliases.
+    associatedTypeItem,
     memberFragment,
     typeFragment,
   ] satisfies Rule[],

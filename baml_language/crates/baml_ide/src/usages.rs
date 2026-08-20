@@ -78,7 +78,8 @@ pub fn usages_at(
         | SymbolTarget::Variant { .. }
         | SymbolTarget::Method { .. }
         | SymbolTarget::InterfaceRequiredMethod { .. }
-        | SymbolTarget::InterfaceField { .. } => find_member_usages(db, file, target),
+        | SymbolTarget::InterfaceField { .. }
+        | SymbolTarget::AssociatedType { .. } => find_member_usages(db, file, target),
     }
 }
 
@@ -475,6 +476,13 @@ fn member_target_name(db: &dyn baml_compiler2_ppir::Db, target: SymbolTarget<'_>
             .fields
             .get(field_index)
             .map(|f| f.name.clone()),
+        // Associated types appear only in TYPE positions, which carry no
+        // inference records — the walker finds no body usages (honest
+        // absence until type-reference resolution is recorded).
+        SymbolTarget::AssociatedType { iface, assoc_index } => item_data::interface_data(db, iface)
+            .associated_types
+            .get(assoc_index)
+            .map(|assoc| assoc.name.clone()),
         // Items and locals are searched by their own strategies.
         SymbolTarget::Item(_) | SymbolTarget::Local { .. } => None,
     }

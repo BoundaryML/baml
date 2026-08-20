@@ -119,7 +119,17 @@ fn build_interface_def(
                        store: &TypeRefStore,
                        id: TypeRefId|
      -> Option<RuntimeInterface> {
-        let lowered = ctx.lower_type_ref(store, id).to_plain();
+        // ConstraintHead, per the contract above: the default (existential)
+        // position eagerly realizes omitted associated defaults and fills
+        // the rest with Error sentinels — a bound like `type A extends
+        // Iface` with unpinned associated types would panic `to_runtime`.
+        let lowered = ctx
+            .lower_type_ref_at(
+                store,
+                id,
+                baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+            )
+            .to_plain();
         let baml_type::Ty::Interface(qtn, args, assoc, _) = lowered else {
             return None;
         };

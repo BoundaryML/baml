@@ -639,4 +639,55 @@ function get(url: string) -> string {
             path.display()
         );
     }
+
+    #[test]
+    fn operator_definition_is_the_receiver_impl_method() {
+        // `+` on ints navigates to `Add for int`'s `add` override in the
+        // stdlib sources — the impl, not the interface declaration.
+        let test = CursorTest::new(
+            r#"
+function example() -> int {
+    1 <[CURSOR]+ 2
+}
+"#,
+        );
+        let loc = test.goto_definition().expect("operator resolves");
+        let path = loc.file.path(&test.db);
+        assert!(
+            path.to_string_lossy().contains("ns_ops"),
+            "the impl method lives in the ops sources, got: {}",
+            path.display()
+        );
+        let text = loc.file.text(&test.db);
+        assert_eq!(&text[loc.range], "add");
+    }
+
+    #[test]
+    fn impl_associated_type_binding_navigates_to_the_interface_declaration() {
+        let test = CursorTest::new(
+            r#"
+interface Yielding {
+    type Output
+    function yielded(self) -> string throws never
+}
+
+class Widget {
+    label string
+}
+
+implements Yielding for Widget {
+    type Out<[CURSOR]put = string;
+    function yielded(self) -> string throws never {
+        self.label
+    }
+}
+"#,
+        );
+        let loc = test.goto_definition().expect("binding resolves");
+        let text = loc.file.text(&test.db);
+        assert_eq!(&text[loc.range], "Output");
+        // The interface's declaration, not the binding's own token.
+        let decl_offset = text.find("type Output").expect("declaration") + "type ".len();
+        assert_eq!(usize::from(loc.range.start()), decl_offset);
+    }
 }

@@ -18,4 +18,7 @@ user.util.Widget<T>
 baml.future.Future<V, E>
 user
 string
+type Assoc
+type Assoc extends Store
+type Assoc extends Store = string
 let turns: int

@@ -55,7 +55,19 @@
 18:24-25     ">"                source.baml meta.type-fragment.baml punctuation.definition.type.baml
 19:1-5       "user"             source.baml
 20:1-7       "string"           source.baml meta.type-fragment.baml support.type.primitive.baml
-21:1-4       "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
-21:5-10      "turns"            source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
-21:10-11     ":"                source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml punctuation.separator.colon.baml
-21:12-15     "int"              source.baml meta.statement.let.baml meta.pattern.statement.baml support.type.primitive.baml
+21:1-5       "type"             source.baml meta.associated-type.baml keyword.declaration.associated-type.baml
+21:6-11      "Assoc"            source.baml meta.associated-type.baml entity.name.type.associated.baml
+22:1-5       "type"             source.baml meta.associated-type.baml keyword.declaration.associated-type.baml
+22:6-11      "Assoc"            source.baml meta.associated-type.baml entity.name.type.associated.baml
+22:12-19     "extends"          source.baml meta.associated-type.baml keyword.operator.extends.baml
+22:20-25     "Store"            source.baml meta.associated-type.baml meta.type-reference.baml entity.name.type.baml
+23:1-5       "type"             source.baml meta.associated-type.baml keyword.declaration.associated-type.baml
+23:6-11      "Assoc"            source.baml meta.associated-type.baml entity.name.type.associated.baml
+23:12-19     "extends"          source.baml meta.associated-type.baml keyword.operator.extends.baml
+23:20-25     "Store"            source.baml meta.associated-type.baml meta.type-reference.baml entity.name.type.baml
+23:26-27     "="                source.baml meta.associated-type.baml keyword.operator.assignment.baml
+23:28-34     "string"           source.baml meta.associated-type.baml support.type.primitive.baml
+24:1-4       "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+24:5-10      "turns"            source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+24:10-11     ":"                source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml punctuation.separator.colon.baml
+24:12-15     "int"              source.baml meta.statement.let.baml meta.pattern.statement.baml support.type.primitive.baml

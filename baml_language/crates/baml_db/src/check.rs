@@ -1983,8 +1983,10 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::AssociatedTypeBindingsOnImplementsTarget { .. }
         | TirTypeError::AssociatedTypeBindingViolatesBound { .. }
         | TirTypeError::AssociatedTypeDefaultViolatesBound { .. }
-        | TirTypeError::CyclicImplHeader
-        | TirTypeError::InterfaceMethodMissingThrows { .. } => DiagnosticId::TypeMismatch,
+        | TirTypeError::CyclicImplHeader => DiagnosticId::TypeMismatch,
+        TirTypeError::InterfaceMethodMissingThrows { .. } => {
+            DiagnosticId::InterfaceMethodMissingThrows
+        }
         TirTypeError::FunctionTypeMissingThrows => DiagnosticId::FunctionTypeMissingThrows,
     }
 }
@@ -2169,6 +2171,55 @@ function demo() -> int throws never {
         // The concrete-type violation carries no callback-provenance related
         // info (that path only fires when the thrown type cannot be named).
         assert!(diag.related_info.is_empty());
+    }
+
+    #[test]
+    fn check_file_reports_interface_method_missing_throws() {
+        // Interface signatures are dispatch contracts: `throws` is never
+        // inferred, for required and default methods alike (E0167).
+        let (db, file) = single_file(
+            r#"interface Store {
+    function get(self, key: string) -> string
+    function get_or(self, key: string, fallback: string) -> string {
+        fallback
+    }
+    function put(self, key: string) -> string throws never
+}
+"#,
+        );
+
+        let diagnostics = check_file(&db, file);
+        let missing: Vec<&str> = diagnostics
+            .iter()
+            .filter(|diag| diag.id == DiagnosticId::InterfaceMethodMissingThrows)
+            .map(|diag| diag.message.as_str())
+            .collect();
+        assert_eq!(missing.len(), 2, "required + default, got: {missing:?}");
+        assert!(missing.iter().any(|m| m.contains("`get`")));
+        assert!(missing.iter().any(|m| m.contains("`get_or`")));
+    }
+
+    #[test]
+    fn self_referential_associated_bound_checks_clean() {
+        // `type Assoc extends Iface` on `Iface` itself is valid (a bound is
+        // a constraint head — it never demands the target's associated
+        // types be pinned). Regression: this used to reach emit as an
+        // unreported Error sentinel and panic the interface registry.
+        let (db, file) = single_file(
+            r#"interface Iface {
+    type Assoc extends Iface
+    fld: string
+    function reqmethod(self) -> string throws never
+}
+"#,
+        );
+
+        let errors: Vec<String> = check_file(&db, file)
+            .into_iter()
+            .filter(|diag| diag.severity == Severity::Error)
+            .map(|diag| diag.message)
+            .collect();
+        assert!(errors.is_empty(), "expected a clean check, got: {errors:?}");
     }
 
     #[test]

@@ -20,8 +20,10 @@
 //!   [`SigStyle`]; the layout itself is written once.
 
 use baml_base::{Name, SourceFile};
-use baml_compiler2_hir::package::PackageItems;
-use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
+use baml_compiler2_hir::{
+    package::PackageItems,
+    type_ref::{TypeRefId, TypeRefStore},
+};
 use baml_compiler2_ppir::item_data::{
     FunctionData, GenericParamData, InterfaceData, InterfaceMethodSigData,
 };
@@ -375,7 +377,7 @@ pub const PENDING_INFERENCE: &str = "_";
 /// One type slot of a signature, kept *typed* until [`FnSigParts::render`]:
 /// strings exist only at the final render, so naming policy and form live in
 /// one place and machine consumers can reach the types themselves.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum SigSlot<'db> {
     /// A resolved semantic type (interface exports, inference). Rendered
     /// with the file-context strategy — shortest unambiguous naming.
@@ -394,6 +396,10 @@ pub enum SigSlot<'db> {
     /// [`PENDING_INFERENCE`]. Never invent a contract the compiler did not
     /// check.
     Inferred,
+    /// A resolved semantic type the caller owns (a by-value query result
+    /// such as `callable_throws`); rendered exactly like
+    /// [`SigSlot::Resolved`].
+    ResolvedOwned(Ty),
 }
 
 impl SigSlot<'_> {
@@ -405,6 +411,13 @@ impl SigSlot<'_> {
     ) -> String {
         match self {
             SigSlot::Resolved(ty) => {
+                if style.canonical_resolved {
+                    display_ty_canonical_for_file(db, file, ty)
+                } else {
+                    display_ty_for_file(db, file, ty)
+                }
+            }
+            SigSlot::ResolvedOwned(ty) => {
                 if style.canonical_resolved {
                     display_ty_canonical_for_file(db, file, ty)
                 } else {

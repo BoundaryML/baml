@@ -81,6 +81,11 @@ pub enum SymbolTarget<'db> {
         iface: InterfaceLoc<'db>,
         field_index: usize,
     },
+    /// An interface's associated-type declaration, by position.
+    AssociatedType {
+        iface: InterfaceLoc<'db>,
+        assoc_index: usize,
+    },
 }
 
 // ── symbol_at ────────────────────────────────────────────────────────────────
@@ -105,6 +110,13 @@ pub fn symbol_at(
 ) -> Option<SymbolTarget<'_>> {
     let token = syntax::find_token_at_offset(db, file, offset)?;
 
+    // A dispatching operator token (`+`, `<`, `[`) addresses the method the
+    // operation invokes: the matching impl's override when the receiver's
+    // static type pins one, else the `baml.ops` interface's declaration.
+    if let Some(target) = operator_target_at(db, file, offset, token.kind()) {
+        return Some(target);
+    }
+
     // WORD tokens and keyword tokens may both be names in member position
     // (`obj.implements()`), so let the resolvers decide whether the text is
     // actually a symbol.
@@ -123,6 +135,15 @@ pub fn symbol_at(
     // beats wrong-name navigation.
     if let Some(member) = member_position_at(db, file, offset) {
         return member.target;
+    }
+
+    // Declaration-position names the scope tree cannot see: a method's own
+    // name token (method names never enter a binding scope), an interface's
+    // associated-type declarations, and an impl block's associated-type
+    // bindings. (Interface fields and required-method names resolve through
+    // the same rung via their recorded source-map spans.)
+    if let Some(target) = declaration_name_at(db, file, offset) {
+        return Some(target);
     }
 
     if let Some(target) = local_at(db, file, offset, &name) {
@@ -415,6 +436,217 @@ fn member_at<'db>(
     }
 }
 
+/// Cursor on a dispatching operator token: the method the operation
+/// invokes, from the compiler's own operator table (`hir_ty::ops`) and impl
+/// resolver. The receiver's *static* type picks the impl (`1 + 2` navigates
+/// to `Add for int`'s `add`); a receiver dispatch cannot pin statically
+/// (union, existential, unbound var) falls back to the `baml.ops`
+/// interface's method declaration — the static truth for dynamic dispatch.
+fn operator_target_at(
+    db: &dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    offset: TextSize,
+    kind: SyntaxKind,
+) -> Option<SymbolTarget<'_>> {
+    use baml_compiler2_ast::Expr;
+    use baml_compiler2_hir_ty::ops;
+
+    // Token kinds that can spell a dispatching operator. Everything else
+    // exits before any body walk. `<`/`>`/`[`/`]` are ambiguous with
+    // generics and array syntax; the enclosing-expression check below
+    // disambiguates (only an operator sits in an operator expression's gap).
+    if !matches!(
+        kind,
+        SyntaxKind::PLUS
+            | SyntaxKind::MINUS
+            | SyntaxKind::STAR
+            | SyntaxKind::SLASH
+            | SyntaxKind::PERCENT
+            | SyntaxKind::AND
+            | SyntaxKind::PIPE
+            | SyntaxKind::CARET
+            | SyntaxKind::LESS_LESS
+            | SyntaxKind::GREATER_GREATER
+            | SyntaxKind::EQUALS_EQUALS
+            | SyntaxKind::NOT_EQUALS
+            | SyntaxKind::LESS
+            | SyntaxKind::GREATER
+            | SyntaxKind::LESS_EQUALS
+            | SyntaxKind::GREATER_EQUALS
+            | SyntaxKind::PLUS_EQUALS
+            | SyntaxKind::MINUS_EQUALS
+            | SyntaxKind::STAR_EQUALS
+            | SyntaxKind::SLASH_EQUALS
+            | SyntaxKind::PERCENT_EQUALS
+            | SyntaxKind::AND_EQUALS
+            | SyntaxKind::PIPE_EQUALS
+            | SyntaxKind::CARET_EQUALS
+            | SyntaxKind::LESS_LESS_EQUALS
+            | SyntaxKind::GREATER_GREATER_EQUALS
+            | SyntaxKind::L_BRACKET
+            | SyntaxKind::R_BRACKET
+    ) {
+        return None;
+    }
+
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let scope_id = index.scope_at_offset(offset, None);
+    let func_scope = enclosing_function_scope(index, scope_id)?;
+    let func_owner = index.scope_ids[func_scope.index() as usize];
+    let item_data::ScopeOwner::Function(func_loc) = item_data::scope_owner(db, func_owner)? else {
+        return None;
+    };
+    let body = baml_compiler2_hir::body::function_body(db, func_loc);
+    let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+        return None;
+    };
+    let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
+
+    // The innermost operator expression whose *operator gap* holds the
+    // cursor: the expression's span contains the offset while no operand
+    // subexpression does. Innermost wins so `a + b * c` addresses `*`.
+    let mut claim: Option<(
+        TextRange,
+        ops::OperatorDispatch,
+        baml_compiler2_ast::ExprId,
+        Option<baml_compiler2_ast::ExprId>,
+    )> = None;
+    let mut narrower = |span: TextRange,
+                        dispatch: ops::OperatorDispatch,
+                        lhs: baml_compiler2_ast::ExprId,
+                        rhs: Option<baml_compiler2_ast::ExprId>| {
+        if claim.is_none_or(|(previous, ..)| span.len() < previous.len()) {
+            claim = Some((span, dispatch, lhs, rhs));
+        }
+    };
+    let inside = |operand: baml_compiler2_ast::ExprId| {
+        let span = source_map.expr_span(operand);
+        span.contains(offset) && span.end() != offset
+    };
+    for (expr_id, expr) in expr_body.exprs.iter() {
+        let span = source_map.expr_span(expr_id);
+        if !(span.contains(offset) || span.end() == offset) {
+            continue;
+        }
+        match expr {
+            Expr::Binary { op, lhs, rhs } => {
+                if let Some(dispatch) = ops::binary_operator(*op)
+                    && !inside(*lhs)
+                    && !inside(*rhs)
+                {
+                    narrower(span, dispatch, *lhs, Some(*rhs));
+                }
+            }
+            Expr::Unary { op, expr: operand } => {
+                if let Some(dispatch) = ops::unary_operator(*op)
+                    && !inside(*operand)
+                {
+                    narrower(span, dispatch, *operand, None);
+                }
+            }
+            Expr::Index { base, index } => {
+                if !inside(*base) && !inside(*index) {
+                    narrower(span, ops::INDEX_DISPATCH, *base, Some(*index));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    for (stmt_id, stmt) in expr_body.stmts.iter() {
+        let baml_compiler2_ast::Stmt::AssignOp { target, op, value } = stmt else {
+            continue;
+        };
+        let span = source_map.stmt_span(stmt_id);
+        if (span.contains(offset) || span.end() == offset) && !inside(*target) && !inside(*value) {
+            narrower(span, ops::assign_operator(*op), *target, Some(*value));
+        }
+    }
+
+    let (_, dispatch, lhs, rhs) = claim?;
+    let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
+    let lhs_ty = inference.type_of_expr.get(&lhs)?;
+    let rhs_ty = rhs.and_then(|rhs| inference.type_of_expr.get(&rhs));
+    let func = ops::operator_method(db, dispatch, lhs_ty, rhs_ty)?;
+    Some(SymbolTarget::Method { func })
+}
+
+/// Cursor on a declaration-position name the scope tree cannot see: a
+/// method's own name token (class, impl, and interface bodies alike), an
+/// interface's associated-type or field declarations, or an impl block's
+/// associated-type binding (which addresses the interface's declaration —
+/// the contract the binding fulfils).
+fn declaration_name_at(
+    db: &dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    offset: TextSize,
+) -> Option<SymbolTarget<'_>> {
+    let hit = |span: TextRange| span.contains(offset) || span.end() == offset;
+
+    // Method names. Free functions keep the ordinary name-resolution road;
+    // methods have no scope entry, so their declarations resolve here.
+    for func in item_data::file_functions(db, file) {
+        if hit(item_data::function_source_map(db, *func).name_span)
+            && item_data::method_owner(db, *func).is_some()
+        {
+            return Some(SymbolTarget::Method { func: *func });
+        }
+    }
+
+    for iface in item_data::file_interfaces(db, file) {
+        let source_map = item_data::interface_source_map(db, *iface);
+        if !hit(source_map.span) {
+            continue;
+        }
+        for (assoc_index, assoc) in source_map.associated_type_spans.iter().enumerate() {
+            if hit(assoc.name_span) {
+                return Some(SymbolTarget::AssociatedType {
+                    iface: *iface,
+                    assoc_index,
+                });
+            }
+        }
+        for (field_index, span) in source_map.field_name_spans.iter().enumerate() {
+            if hit(*span) {
+                return Some(SymbolTarget::InterfaceField {
+                    iface: *iface,
+                    field_index,
+                });
+            }
+        }
+    }
+
+    // `type Assoc = …` in an `implements` block addresses the interface's
+    // own declaration.
+    for block in item_data::file_impls(db, file) {
+        let source_map = item_data::impl_block_source_map(db, *block);
+        if !hit(source_map.span) {
+            continue;
+        }
+        let binding_index = source_map
+            .associated_type_bindings
+            .iter()
+            .position(|binding| hit(binding.name_span))?;
+        let data = item_data::impl_block_data(db, *block);
+        let bound_name = &data.associated_type_bindings.get(binding_index)?.name;
+        let facts = baml_compiler2_hir_ty::impls::impl_facts(db, *block).as_ref()?;
+        let interface = &facts.interface.name;
+        let package = baml_compiler2_hir::package::PackageId::new(db, interface.package().clone());
+        let Some(Definition::Interface(iface)) = baml_compiler2_ppir::package_items(db, package)
+            .lookup_type(interface.namespace(), interface.name())
+        else {
+            return None;
+        };
+        let assoc_index = item_data::interface_data(db, iface)
+            .associated_types
+            .iter()
+            .position(|assoc| &assoc.name == bound_name)?;
+        return Some(SymbolTarget::AssociatedType { iface, assoc_index });
+    }
+
+    None
+}
+
 /// Cursor on a `MemberAccess` expression or a non-root segment of a
 /// multi-segment `Path` (`p.name`, `Status.Active`, `s.celebrate()`).
 fn member_access_at<'db>(
@@ -690,6 +922,16 @@ pub fn target_definition<'db>(
             let range = *item_data::interface_source_map(db, iface)
                 .field_name_spans
                 .get(field_index)?;
+            Some(Location {
+                file: iface.file(db),
+                range,
+            })
+        }
+        SymbolTarget::AssociatedType { iface, assoc_index } => {
+            let range = item_data::interface_source_map(db, iface)
+                .associated_type_spans
+                .get(assoc_index)?
+                .name_span;
             Some(Location {
                 file: iface.file(db),
                 range,

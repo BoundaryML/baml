@@ -40,7 +40,7 @@ pub(super) fn hover_markdown(info: &TypeInfo) -> String {
         out.push_str("\n```\n\n---\n\n");
     }
     out.push_str("```baml\n");
-    out.push_str(&info.to_describe_block());
+    out.push_str(&info.to_hover_block());
     out.push_str("\n```");
     if let Some(docs) = info.docs() {
         out.push_str("\n\n---\n\n");
@@ -55,6 +55,11 @@ pub(super) fn hover_markdown(info: &TypeInfo) -> String {
             out.push_str("\n\nRun `baml describe ");
             out.push_str(canonical_fqn);
             out.push_str("` for methods and details.");
+        }
+        TypeInfo::Interface { canonical_fqn, .. } => {
+            out.push_str("\n\nRun `baml describe ");
+            out.push_str(canonical_fqn);
+            out.push_str("` for the full surface.");
         }
         TypeInfo::Function {
             note: Some(note), ..

@@ -1178,6 +1178,20 @@ fn resolve_type_for_item(
             }
         }
         TypeInfo::Enum { variants, .. } => Some(format!("{{ {} }}", variants.join(", "))),
+        // The one-line type column stays the header; the member surface is
+        // the shape block's job.
+        TypeInfo::Interface {
+            name,
+            generic_params,
+            ..
+        } => {
+            let generics = if generic_params.is_empty() {
+                String::new()
+            } else {
+                format!("<{}>", generic_params.join(", "))
+            };
+            Some(format!("interface {name}{generics}"))
+        }
         TypeInfo::TypeAlias { expansion, .. } => Some(expansion),
         TypeInfo::TemplateString { .. } => Some("template_string".to_string()),
         TypeInfo::LocalVar { ty, .. } => Some(ty),

@@ -55,6 +55,9 @@
       "include": "#semicolon"
     },
     {
+      "include": "#associated-type"
+    },
+    {
       "include": "#member-fragment"
     },
     {

@@ -355,6 +355,8 @@ pub enum DiagnosticId {
     /// Empty enums are legal declarations/constructions, but have no output
     /// representation and therefore fail at render time (BEP-066 R-4).
     EmptyEnumAtRender,
+    /// An interface method (required or default) omits its `throws` clause.
+    InterfaceMethodMissingThrows,
 
     /// A runtime reflection union constructor received no members. Static
     /// source cannot spell this defect, so BEP-066 reserves a surface code.
@@ -584,6 +586,7 @@ impl DiagnosticId {
             // E0164 is owned by the non-data output-format diagnostic in #4470.
             DiagnosticId::UnspecializedReflectedGeneric => "E0165",
             DiagnosticId::CannotConstructBuiltinCompanion => "E0166",
+            DiagnosticId::InterfaceMethodMissingThrows => "E0167",
         }
     }
 }

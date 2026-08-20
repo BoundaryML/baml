@@ -2529,6 +2529,33 @@ pub fn interface_lowering_diagnostics<'db>(
             }
         }
     }
+    // Every interface method — required or default — must declare its
+    // `throws` clause explicitly: the signature is a dispatch contract, so
+    // it is never inferred (`TYPE_SYSTEM.md` rule 1). E0167.
+    for &method in &data.methods {
+        let function = baml_compiler2_ppir::item_data::function_data(db, method);
+        if function.metadata.is_language_internal {
+            continue;
+        }
+        if function.throws.is_none() {
+            out.push((
+                baml_compiler2_ppir::item_data::function_source_map(db, method).name_span,
+                TirTypeError::InterfaceMethodMissingThrows {
+                    interface: interface_qualified_name(db, interface),
+                    method: function.name.clone(),
+                },
+            ));
+        }
+    }
+    // Associated-type BOUNDS re-lower with the sink so unresolved names and
+    // arity mistakes in `type A extends …` surface here (the constraint-head
+    // position keeps written pins only — a bound never demands the target's
+    // associated types be specified).
+    for assoc in &data.associated_types {
+        if let Some(bound) = assoc.bound {
+            let _ = ctx.lower_type_ref_at(&data.type_refs, bound, TypePosition::ConstraintHead);
+        }
+    }
     // A transitive `requires` graph cycling back to this interface (E0118),
     // reported with the full witnessing name chain.
     if let Some(chain) = crate::interfaces::interface_requires_cycle(db, interface) {

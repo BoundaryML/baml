@@ -25,6 +25,7 @@ contexts:
     - include: test
     - include: let-statement
     - include: semicolon
+    - include: associated-type
     - include: member-fragment
     - include: type-fragment
   accessor-dot:
