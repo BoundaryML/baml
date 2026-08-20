@@ -5608,7 +5608,7 @@ pub struct PrintChain<'a> {
 impl<'a> PrintChain<'a> {
     /// Builds the flat chain for a postfix spine.
     ///
-    /// Every receiver is taken through [`Expression::effective_postfix_operand`]
+    /// Every receiver is taken through `Expression::effective_postfix_operand`
     /// so redundant parens around it peel and the walk continues through them.
     /// A paren that survives (looser-binding receiver, or one carrying a
     /// comment) still terminates the walk and becomes `first`, which is what
