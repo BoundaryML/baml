@@ -135,11 +135,14 @@ async def test_cancellation_async_cancel_skips_later_step(tmp_path: Path, mode: 
     later = tmp_path / "later"
     sleep_ms = 2000
 
-    start = time.monotonic()
     task = asyncio.create_task(
         throws_test.SleepThenMarkMs_async(sleep_ms, str(entry), str(later))
     )
     await _wait_for_marker(entry)
+    # measured from the cancellation point: task startup and marker polling are
+    # not cancellation latency, and folding them in makes this flaky on a slow
+    # or loaded runner
+    start = time.monotonic()
 
     if mode == "task_cancel":
         assert task.cancel()
