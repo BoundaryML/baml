@@ -328,6 +328,24 @@ mod redundant_paren_tests {
         assert!(formatted.contains("    (a ?? b)[0]\n"), "{formatted}");
     }
 
+    /// Pins the optional-receiver *width* accounting, not just the printed
+    /// text: at width 15, `o?.length` (13 cols with indent) fits but the raw
+    /// `((o))?.length` (17 cols) does not. If `single_line_width` reverts to
+    /// counting the un-peeled base, the expression wraps and this fails even
+    /// though the wide-width tests above still pass.
+    #[test]
+    fn test_optional_receiver_width_counts_effective_base() {
+        let options = FormatOptions {
+            line_width: 15,
+            ..FormatOptions::default()
+        };
+        let source = "function f(o: string?) -> int? {\n    ((o))?.length\n}\n";
+        let formatted = format(source, &options).expect("source should format");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+        assert!(formatted.contains("    o?.length\n"), "{formatted}");
+    }
+
     /// The literal restriction exists only to stop `(1).to_string()` from
     /// re-lexing its `.` into a float. No `.` follows a unary operand, so
     /// literals peel there — but a literal that *is* a receiver still keeps

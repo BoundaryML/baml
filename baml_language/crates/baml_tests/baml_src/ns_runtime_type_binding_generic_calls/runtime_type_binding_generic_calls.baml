@@ -63,6 +63,10 @@ class Holder<T> {
         self.items.length()
     }
 
+    function matches_type(self, expected: type) -> bool {
+        type.of<T>() == expected
+    }
+
     function first_or_null(self) -> T? {
         self.items.at(0)
     }
@@ -80,5 +84,10 @@ test "method calls on a generic class receiver with a runtime-bound argument" {
     let holder = Holder<Bound>.new(EmptyOf<Bound>());
 
     assert.equal(holder.count(), 0);
+    // Pins the receiver's type argument, not just empty-list behavior: a
+    // regression that widened `Bound` to `unknown` would still return 0 and
+    // null above, but `type.of<T>()` inside the method would no longer equal
+    // the minted `item_t`.
+    assert.is_true(holder.matches_type(item_t));
     assert.is_true(holder.first_or_null() == null)
 }
