@@ -806,6 +806,7 @@ pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'stat
         "azure" => Some(("openai", "AzureClient")),
         "ollama" => Some(("openai", "OllamaClient")),
         "openrouter" => Some(("openai", "OpenRouterClient")),
+        "orcarouter" => Some(("openai", "OrcaRouterClient")),
         "anthropic" => Some(("anthropic", "AnthropicClient")),
         "google" => Some(("google", "GoogleClient")),
         "vertex" => Some(("google", "VertexClient")),

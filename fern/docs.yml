@@ -807,6 +807,9 @@ navigation:
           - page: "OpenRouter"
             slug: openrouter
             path: 03-reference/baml/clients/providers/openrouter.mdx
+          - page: "OrcaRouter"
+            slug: orcarouter
+            path: 03-reference/baml/clients/providers/orcarouter.mdx
           - page: "openai-generic"
             path: 03-reference/baml/clients/providers/openai-generic.mdx
           - page: "Microsoft Foundry (openai-generic)"

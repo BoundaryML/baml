@@ -481,6 +481,43 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         )
     }
 
+    /// Creates an OrcaRouter client with sensible defaults.
+    /// - Default base_url: https://api.orcarouter.ai/v1
+    /// - Default API key from ORCAROUTER_API_KEY environment variable
+    ///
+    /// ```baml
+    /// client<llm> MyClient {
+    ///   provider orcarouter
+    ///   options {
+    ///     model "orcarouter/auto"
+    ///   }
+    /// }
+    /// ```
+    pub fn create_orcarouter(
+        mut properties: PropertyHandler<Meta>,
+    ) -> Result<Self, Vec<Error<Meta>>> {
+        // Default base_url to OrcaRouter
+        let base_url = properties.ensure_base_url_with_default(UnresolvedUrl::new_static(
+            "https://api.orcarouter.ai/v1",
+        ));
+
+        // Default API key env var to ORCAROUTER_API_KEY
+        let api_key = Some(
+            properties
+                .ensure_api_key()
+                .unwrap_or_else(|| StringOr::EnvVar("ORCAROUTER_API_KEY".to_string())),
+        );
+
+        let http_config = properties.ensure_http_config("orcarouter");
+
+        Self::create_common(
+            properties,
+            Some(either::Either::Left(base_url)),
+            api_key,
+            http_config,
+        )
+    }
+
     fn create_common(
         mut properties: PropertyHandler<Meta>,
         base_url: Option<either::Either<UnresolvedUrl, (StringOr, StringOr)>>,

@@ -193,6 +193,9 @@ impl crate::OpenAIClientProviderVariant {
             crate::OpenAIClientProviderVariant::OpenRouter => {
                 openai::UnresolvedOpenAI::create_openrouter(properties)
             }
+            crate::OpenAIClientProviderVariant::OrcaRouter => {
+                openai::UnresolvedOpenAI::create_orcarouter(properties)
+            }
         }
     }
 }

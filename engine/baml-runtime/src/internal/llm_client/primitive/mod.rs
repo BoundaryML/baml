@@ -141,6 +141,9 @@ impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
                     OpenAIClientProviderVariant::OpenRouter => {
                         OpenAIClient::dynamic_new_openrouter(value, ctx).map(Into::into)
                     }
+                    OpenAIClientProviderVariant::OrcaRouter => {
+                        OpenAIClient::dynamic_new_orcarouter(value, ctx).map(Into::into)
+                    }
                 }
             }
             ClientProvider::Anthropic => AnthropicClient::dynamic_new(value, ctx).map(Into::into),
@@ -212,6 +215,9 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                     }
                     OpenAIClientProviderVariant::OpenRouter => {
                         OpenAIClient::new_openrouter(client, ctx).map(Into::into)
+                    }
+                    OpenAIClientProviderVariant::OrcaRouter => {
+                        OpenAIClient::new_orcarouter(client, ctx).map(Into::into)
                     }
                 }
             }

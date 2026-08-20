@@ -289,6 +289,7 @@ fn client_replacement_expr(provider: Option<&str>) -> &'static str {
         }
         Some("ollama") => "openai.OllamaClient.new(model = \"...\")",
         Some("openrouter") => "openai.OpenRouterClient.new(model = \"...\")",
+        Some("orcarouter") => "openai.OrcaRouterClient.new(model = \"...\")",
         Some("openai-generic") => "openai.GenericClient.new(model = \"...\", base_url = \"...\")",
         Some("openai-chat") => "openai.ChatClient.new(model = \"...\")",
         Some("fallback") => "ai.Fallback.new(members = [FirstClient, SecondClient])",

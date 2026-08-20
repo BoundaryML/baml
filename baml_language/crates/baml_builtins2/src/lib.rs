@@ -204,6 +204,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("openai", "azure.baml"),
     builtin!("openai", "ollama.baml"),
     builtin!("openai", "openrouter.baml"),
+    builtin!("openai", "orcarouter.baml"),
     builtin!("openai", "images.baml"),
     builtin!("openai", "ns_internal/chat.baml"),
     builtin!("openai", "ns_internal/images.baml"),

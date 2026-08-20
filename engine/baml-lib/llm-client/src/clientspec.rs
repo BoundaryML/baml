@@ -69,6 +69,8 @@ pub enum OpenAIClientProviderVariant {
     Generic,
     /// The OpenRouter client provider variant
     OpenRouter,
+    /// The OrcaRouter client provider variant
+    OrcaRouter,
 }
 
 /// The strategy client provider variant
@@ -103,6 +105,7 @@ impl std::fmt::Display for OpenAIClientProviderVariant {
             OpenAIClientProviderVariant::Transcriptions => write!(f, "openai-transcriptions"),
             OpenAIClientProviderVariant::Generic => write!(f, "openai-generic"),
             OpenAIClientProviderVariant::OpenRouter => write!(f, "openrouter"),
+            OpenAIClientProviderVariant::OrcaRouter => write!(f, "orcarouter"),
         }
     }
 }
@@ -137,6 +140,9 @@ impl std::str::FromStr for ClientProvider {
             "openrouter" => Ok(ClientProvider::OpenAI(
                 OpenAIClientProviderVariant::OpenRouter,
             )),
+            "orcarouter" => Ok(ClientProvider::OpenAI(
+                OpenAIClientProviderVariant::OrcaRouter,
+            )),
             "anthropic" => Ok(ClientProvider::Anthropic),
             "baml-anthropic-chat" => Ok(ClientProvider::Anthropic),
             "aws-bedrock" => Ok(ClientProvider::AwsBedrock),
@@ -163,6 +169,7 @@ impl std::str::FromStr for OpenAIClientProviderVariant {
             "openai-transcriptions" => Ok(OpenAIClientProviderVariant::Transcriptions),
             "openai-generic" => Ok(OpenAIClientProviderVariant::Generic),
             "openrouter" => Ok(OpenAIClientProviderVariant::OpenRouter),
+            "orcarouter" => Ok(OpenAIClientProviderVariant::OrcaRouter),
             _ => Err(anyhow::anyhow!(
                 "Invalid OpenAI client provider variant: {}",
                 s
@@ -197,6 +204,7 @@ impl ClientProvider {
             "anthropic",
             "ollama",
             "openrouter",
+            "orcarouter",
             "round-robin",
             "fallback",
             "google-ai",
@@ -831,6 +839,53 @@ mod tests {
         };
 
         assert_eq!(string_repr, "openrouter");
+
+        let parsed_back = ClientProvider::from_str(&string_repr).unwrap();
+        assert_eq!(original, parsed_back);
+    }
+
+    #[test]
+    fn test_orcarouter_provider_parsing() {
+        let provider = ClientProvider::from_str("orcarouter");
+        assert!(provider.is_ok());
+
+        let provider = provider.unwrap();
+        match provider {
+            ClientProvider::OpenAI(OpenAIClientProviderVariant::OrcaRouter) => {
+                // Success!
+            }
+            _ => panic!("Expected OrcaRouter variant, got {provider:?}"),
+        }
+    }
+
+    #[test]
+    fn test_orcarouter_variant_parsing() {
+        let variant = OpenAIClientProviderVariant::from_str("orcarouter");
+        assert!(variant.is_ok());
+        assert_eq!(variant.unwrap(), OpenAIClientProviderVariant::OrcaRouter);
+    }
+
+    #[test]
+    fn test_orcarouter_display() {
+        let variant = OpenAIClientProviderVariant::OrcaRouter;
+        assert_eq!(variant.to_string(), "orcarouter");
+    }
+
+    #[test]
+    fn test_orcarouter_in_allowed_providers() {
+        let allowed = ClientProvider::allowed_providers();
+        assert!(allowed.contains(&"orcarouter"));
+    }
+
+    #[test]
+    fn test_orcarouter_roundtrip() {
+        let original = ClientProvider::OpenAI(OpenAIClientProviderVariant::OrcaRouter);
+        let string_repr = match &original {
+            ClientProvider::OpenAI(variant) => variant.to_string(),
+            _ => panic!("Expected OpenAI provider"),
+        };
+
+        assert_eq!(string_repr, "orcarouter");
 
         let parsed_back = ClientProvider::from_str(&string_repr).unwrap();
         assert_eq!(original, parsed_back);

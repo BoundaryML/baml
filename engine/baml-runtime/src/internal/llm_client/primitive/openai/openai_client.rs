@@ -690,6 +690,12 @@ impl OpenAIClient {
         make_openai_client!(client, properties, "openrouter")
     }
 
+    pub fn new_orcarouter(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let properties =
+            properties::resolve_properties(&client.elem().provider, client.options(), ctx)?;
+        make_openai_client!(client, properties, "orcarouter")
+    }
+
     pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties =
             properties::resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
@@ -754,6 +760,19 @@ impl OpenAIClient {
         let properties =
             properties::resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
         make_openai_client!(client, properties, "openrouter", dynamic)
+    }
+
+    /// Creates an OrcaRouter client from a dynamic client definition (e.g., from Python/TypeScript code).
+    ///
+    /// OrcaRouter provides a unified OpenAI-compatible endpoint with gateway-level, zero-trust
+    /// security for AI agents.
+    pub fn dynamic_new_orcarouter(
+        client: &ClientProperty,
+        ctx: &RuntimeContext,
+    ) -> Result<OpenAIClient> {
+        let properties =
+            properties::resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
+        make_openai_client!(client, properties, "orcarouter", dynamic)
     }
 }
 

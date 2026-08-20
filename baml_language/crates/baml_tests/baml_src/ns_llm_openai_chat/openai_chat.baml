@@ -1651,6 +1651,12 @@ function live_openrouter_answers() -> bool {
     result.value.trim().length() > 0
 }
 
+function live_orcarouter_answers() -> bool {
+    let cl = openai.OrcaRouterClient.new(model = "orcarouter/auto", max_tokens = 64);
+    let result = ai.Agent<string>.new(client = cl).run(ChatEcho@spec("Say pong."));
+    result.value.trim().length() > 0
+}
+
 testset "live" with testing.Sequential() {
     // Always registered, so a keyless `--profile live -i openai_chat` still
     // selects something (an empty selection exits 5).
@@ -1675,5 +1681,13 @@ testset "live" with testing.Sequential() {
         }
     } else {
         log.warn("live::openrouter not registered: OPENROUTER_API_KEY is unset")
+    }
+
+    if (baml.env.get("ORCAROUTER_API_KEY") != null) {
+        test "orcarouter" {
+            assert.is_true(live_orcarouter_answers())
+        }
+    } else {
+        log.warn("live::orcarouter not registered: ORCAROUTER_API_KEY is unset")
     }
 }

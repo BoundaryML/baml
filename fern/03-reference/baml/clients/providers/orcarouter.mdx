@@ -1,0 +1,46 @@
+---
+title: orcarouter
+---
+
+The `orcarouter` provider offers native integration with [OrcaRouter](https://www.orcarouter.ai), a unified OpenAI-compatible gateway providing access to 100+ AI models through a single interface. It also runs gateway-level, zero-trust security for AI agents on the same endpoint — screening every prompt/response and governing every tool call on a default-deny basis, with no application code changes.
+
+Example:
+
+```baml BAML
+client<llm> MyClient {
+  provider orcarouter
+  options {
+    model "orcarouter/auto"
+  }
+}
+```
+
+<Note>
+  You can also use [`openai-generic`](openai-generic) with OrcaRouter by manually setting the `base_url`. The `orcarouter` provider simplifies this by providing sensible defaults.
+</Note>
+
+## OrcaRouter-specific options
+
+The `orcarouter` provider extends [`openai-generic`](openai-generic) with OrcaRouter-specific defaults. See [`openai-generic`](openai-generic) for the full list of supported options.
+
+<ParamField path="api_key" type="string">
+  **Default: `env.ORCAROUTER_API_KEY`**
+</ParamField>
+
+<ParamField path="base_url" type="string">
+  **Default: `https://api.orcarouter.ai/v1`**
+</ParamField>
+
+<ParamField path="model" type="string" required>
+  The model to use, in OrcaRouter's `provider/model-name` format.
+
+| Model | Description |
+|-------|-------------|
+| `orcarouter/auto` | Automatically routes to the best available model |
+| `deepseek/deepseek-v4-pro` | DeepSeek V4 Pro |
+| `gemini/gemini-3.1-flash-lite` | Gemini 3.1 Flash Lite |
+
+For the complete list, see the [OrcaRouter models directory](https://www.orcarouter.ai).
+</ParamField>
+
+For all other options (`temperature`, `max_tokens`, `headers`, etc.), see [`openai-generic`](openai-generic) and the [OrcaRouter API documentation](https://www.orcarouter.ai).

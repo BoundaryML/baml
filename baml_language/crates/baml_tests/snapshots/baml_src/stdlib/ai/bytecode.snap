@@ -3454,21 +3454,21 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_type string
     load_var shorthand
     call baml.String.from
-    store_var _62
-    call ai.internal._shorthand_prefixes
-    store_var _65
-    load_type string
-    load_var _65
-    call baml.String.from
     store_var _64
+    call ai.internal._shorthand_prefixes
+    store_var _67
+    load_type string
+    load_var _67
+    call baml.String.from
+    store_var _66
     load_const "ai.clients"
     load_const null
     load_const "client \""
-    load_var _62
+    load_var _64
     bin_op +
     load_const "\" is not a \"provider/model\" string (no \"/\"); valid prefixes are "
     bin_op +
-    load_var _64
+    load_var _66
     bin_op +
     load_const null
     init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
@@ -3496,88 +3496,83 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_var prefix
     is_type "openai"
     pop_jump_if_false L2
-    jump L25
+    jump L27
 
   L2:
     load_var prefix
     is_type "openai-chat"
     pop_jump_if_false L3
-    jump L24
+    jump L26
 
   L3:
     load_var prefix
     is_type "openai-images"
     pop_jump_if_false L4
-    jump L23
+    jump L25
 
   L4:
     load_var prefix
     is_type "azure"
     pop_jump_if_false L5
-    jump L22
+    jump L24
 
   L5:
     load_var prefix
     is_type "ollama"
     pop_jump_if_false L6
-    jump L21
+    jump L23
 
   L6:
     load_var prefix
     is_type "openrouter"
     pop_jump_if_false L7
-    jump L20
+    jump L22
 
   L7:
     load_var prefix
-    is_type "anthropic"
+    is_type "orcarouter"
     pop_jump_if_false L8
-    jump L19
+    jump L21
 
   L8:
     load_var prefix
-    is_type "google"
+    is_type "anthropic"
     pop_jump_if_false L9
-    jump L18
+    jump L20
 
   L9:
     load_var prefix
-    is_type "vertex"
+    is_type "google"
     pop_jump_if_false L10
-    jump L17
+    jump L19
 
   L10:
     load_var prefix
-    is_type "bedrock"
+    is_type "vertex"
     pop_jump_if_false L11
-    jump L16
+    jump L18
 
   L11:
     load_var prefix
-    is_type "ai-gateway-images"
+    is_type "bedrock"
     pop_jump_if_false L12
-    jump L15
+    jump L17
 
   L12:
     load_var prefix
-    is_type "claude-code"
+    is_type "ai-gateway-images"
     pop_jump_if_false L13
-    jump L14
+    jump L16
 
   L13:
-    load_const null
-    jump L26
+    load_var prefix
+    is_type "claude-code"
+    pop_jump_if_false L14
+    jump L15
 
   L14:
-    load_var model
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    call claude_code.ClaudeCodeClient.new
-    jump L26
+    load_const null
+    jump L28
 
   L15:
     load_var model
@@ -3587,11 +3582,8 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    call vercel.AiGatewayImageClient.new
-    jump L26
+    call claude_code.ClaudeCodeClient.new
+    jump L28
 
   L16:
     load_var model
@@ -3604,16 +3596,8 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    call aws.BedrockClient.new
-    jump L26
+    call vercel.AiGatewayImageClient.new
+    jump L28
 
   L17:
     load_var model
@@ -3634,9 +3618,8 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    call google.VertexClient.new
-    jump L26
+    call aws.BedrockClient.new
+    jump L28
 
   L18:
     load_var model
@@ -3652,10 +3635,33 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call google.GoogleClient.new
-    jump L26
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.VertexClient.new
+    jump L28
 
   L19:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.GoogleClient.new
+    jump L28
+
+  L20:
     load_var model
     load_const <omitted>
     load_const <omitted>
@@ -3672,22 +3678,7 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     call anthropic.AnthropicClient.new
-    jump L26
-
-  L20:
-    load_var model
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    call openai.OpenRouterClient.new
-    jump L26
+    jump L28
 
   L21:
     load_var model
@@ -3701,8 +3692,8 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call openai.OllamaClient.new
-    jump L26
+    call openai.OrcaRouterClient.new
+    jump L28
 
   L22:
     load_var model
@@ -3716,12 +3707,8 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    call openai.AzureClient.new
-    jump L26
+    call openai.OpenRouterClient.new
+    jump L28
 
   L23:
     load_var model
@@ -3735,13 +3722,8 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    call openai.ImageClient.new
-    jump L26
+    call openai.OllamaClient.new
+    jump L28
 
   L24:
     load_var model
@@ -3758,8 +3740,9 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call openai.ChatClient.new
-    jump L26
+    load_const <omitted>
+    call openai.AzureClient.new
+    jump L28
 
   L25:
     load_var model
@@ -3778,50 +3761,88 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call openai.ResponsesClient.new
+    call openai.ImageClient.new
+    jump L28
 
   L26:
-    store_var _36
-    load_var _36
-    narrow_bind ai.Client, slot=8
-    pop_jump_if_false L27
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ChatClient.new
     jump L28
 
   L27:
+    load_var model
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+
+  L28:
+    store_var _38
+    load_var _38
+    narrow_bind ai.Client, slot=8
+    pop_jump_if_false L29
+    jump L30
+
+  L29:
     load_type string
     load_var prefix
     call baml.String.from
-    store_var _47
+    store_var _49
     load_type string
     load_var shorthand
     call baml.String.from
-    store_var _50
-    call ai.internal._shorthand_prefixes
-    store_var _53
-    load_type string
-    load_var _53
-    call baml.String.from
     store_var _52
+    call ai.internal._shorthand_prefixes
+    store_var _55
+    load_type string
+    load_var _55
+    call baml.String.from
+    store_var _54
     load_type string
     load_var model
     call baml.String.from
-    store_var _55
+    store_var _57
     load_const "ai.clients"
     load_const null
     load_const "no builtin provider for prefix \""
-    load_var _47
+    load_var _49
     bin_op +
     load_const "\" in client \""
     bin_op +
-    load_var _50
+    load_var _52
     bin_op +
     load_const "\"; valid prefixes are "
     bin_op +
-    load_var _52
+    load_var _54
     bin_op +
     load_const " (for any other OpenAI-compatible endpoint, build openai.GenericClient.new(base_url = ..., model = \""
     bin_op +
-    load_var _55
+    load_var _57
     bin_op +
     load_const "\"))"
     bin_op +
@@ -3829,8 +3850,8 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
     throw
 
-  L28:
-    load_var _36
+  L30:
+    load_var _38
     return
 }
 
@@ -5533,6 +5554,7 @@ function ai.internal._shorthand_prefixes() -> string {
     load_const "azure"
     load_const "ollama"
     load_const "openrouter"
+    load_const "orcarouter"
     load_const "anthropic"
     load_const "google"
     load_const "vertex"
@@ -5540,7 +5562,7 @@ function ai.internal._shorthand_prefixes() -> string {
     load_const "ai-gateway-images"
     load_const "claude-code"
     load_type string
-    alloc_array 12
+    alloc_array 13
     load_const ", "
     call baml.Array.join
     return
