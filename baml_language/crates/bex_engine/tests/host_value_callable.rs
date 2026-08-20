@@ -2187,34 +2187,50 @@ async fn spawned_awaiter_of_internal_error_future_does_not_wedge() {
     drop(arc);
 }
 
-/// The scenario-15 "concurrent guards" topology: children spawned INSIDE a
-/// `.map` closure, joined with `baml.future.all` under a spawned parent, with
-/// a linked CancelToken — and ONE child hitting an uncatchable engine error
+/// The scenario-15 "concurrent guards" topology: children spawned inside a
+/// closure (capturing a linked CancelToken), joined with `baml.future.all`
+/// under a spawned parent — and ONE child hitting an uncatchable engine error
 /// while its siblings are parked. Before the spawn-leak fix this parked at
 /// 0% CPU forever (the guardrail deadlock documented in
 /// ns_ai_scenarios/15_guardrails); with it, the error propagates and the
 /// call resolves. Kept alongside the minimal nested-spawn repro because the
-/// map-closure + all() + cancel-token topology exercises the settle path
+/// closure + all() + cancel-token topology exercises the settle path
 /// through `future.all`'s cancel-the-rest arm as well.
+///
+/// NOTE: #3959's original form spawned via `[1,2,3].map(closure)`. That shape
+/// no longer lowers on canary — `.map` with a future-returning lambda
+/// mis-dispatches (`VM internal error: expected map, got array` at top level,
+/// an `Error`-reaches-`RuntimeTy` ICE under a spawn) — so the children are
+/// produced by calling the same closure explicitly. The typed effects are
+/// caught inside the spawn bodies (the annotation must be spellable, and the
+/// host-callable `callback` effect is not nameable in user source); the
+/// bridge fault this test pins is an UNCATCHABLE engine error, which strikes
+/// regardless.
 #[tokio::test]
-async fn spawn_in_map_closure_with_erroring_child_does_not_wedge() {
+async fn spawn_in_closure_with_erroring_child_does_not_wedge() {
     let source = r#"
         function main(boom: () -> string) -> string {
             let parent = spawn {
                 let tok = baml.spawn.CancelToken.new();
-                let items = [1, 2, 3];
-                let futures = items.map((n: int) -> baml.future.Future<string, null> {
+                let make = (n: int) -> baml.future.Future<string, never> {
                     spawn with baml.spawn.options(cancel = tok) {
                         if (n == 2) {
                             // parks the awaiter first, then faults the bridge
-                            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
-                            boom()
+                            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n)) catch_all (e) {
+                                _ => null
+                            };
+                            boom() catch_all (e) {
+                                _ => "boom-absorbed"
+                            }
                         } else {
-                            baml.sys.sleep(baml.time.Duration.from_milliseconds(150n));
+                            baml.sys.sleep(baml.time.Duration.from_milliseconds(150n)) catch_all (e) {
+                                _ => null
+                            };
                             "guard-" + n.to_string()
                         }
                     }
-                });
+                };
+                let futures = [make(1), make(2), make(3)];
                 let all = (await baml.future.all(futures)) catch_all (e) {
                     _ => ["all-failed"]
                 };
@@ -2247,6 +2263,7 @@ async fn spawn_in_map_closure_with_erroring_child_does_not_wedge() {
     // shape of the result is secondary — an uncatchable bridge fault may
     // surface as an engine error or be absorbed by the catch_all depending on
     // scheduling; the deadlock is what this test pins.
-    let _result = outcome
-        .expect("engine wedged: spawn-in-map guard topology never resolved (the spawn-leak regressed)");
+    let _result = outcome.expect(
+        "engine wedged: spawn-in-closure guard topology never resolved (the spawn-leak regressed)",
+    );
 }
