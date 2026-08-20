@@ -6130,6 +6130,9 @@ function baml.sys.Process.close(self: baml.sys.Process) -> null {
 function baml.sys.Process.kill(self: baml.sys.Process) -> void {
 }
 
+function baml.sys.Process.pid(self: baml.sys.Process) -> int {
+}
+
 function baml.sys.Process.wait(self: baml.sys.Process) -> baml.sys.ProcessExit {
 }
 
@@ -6334,6 +6337,9 @@ function baml.sys.exec(program: string, args: string[] | null, options: baml.sys
 }
 
 function baml.sys.exit(code: int) -> never {
+}
+
+function baml.sys.kill(pid: int) -> null {
 }
 
 function baml.sys.panic(message: string) -> never {

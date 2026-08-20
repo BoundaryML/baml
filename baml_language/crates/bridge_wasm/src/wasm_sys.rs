@@ -167,6 +167,22 @@ impl io::IoClassSysWritePipe for WasmSys {
 }
 
 impl io::IoClassSysProcess for WasmSys {
+    // `Process.pid` declares `throws never`, so the no-live-processes
+    // platform panics with `baml.panics.HostUnavailable` rather than
+    // returning a catchable error (unreachable in practice: `start_process`
+    // below is unsupported, so no `Process` value can exist).
+    fn pid(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process-id".to_string(),
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
     fn wait(
         &self,
         _heap: &Arc<BexHeap>,
@@ -337,6 +353,18 @@ impl IoNamespaceSys for WasmSys {
                 message: "the host JavaScript environment does not provide process.pid".to_string(),
             }),
         }
+    }
+
+    fn kill(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Killing processes by ID is not supported on this platform".to_string(),
+        })
     }
 }
 

@@ -1705,6 +1705,23 @@ impl io::IoNamespaceIo for DefaultIoOps {
 }
 
 impl io::IoClassSysProcess for DefaultIoOps {
+    // `Process.pid` declares `throws never`, so a platform without process
+    // handles cannot report `Unsupported` as a catchable error — it panics
+    // with `baml.panics.HostUnavailable`, like the `baml.sys.pid` fallback
+    // below. (Unreachable in practice: `start_process` is unsupported here,
+    // so no `Process` value can exist.)
+    fn pid(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process-id".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
     fn wait(
         &self,
         _h: &Arc<BexHeap>,
@@ -1878,6 +1895,18 @@ impl io::IoNamespaceSys for DefaultIoOps {
     fn pid(&self, _h: &Arc<BexHeap>, _c: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "process-id".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn kill(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
     }

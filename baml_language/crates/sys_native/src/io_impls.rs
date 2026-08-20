@@ -1223,6 +1223,7 @@ type NativeProcessResult = Result<owned::sys::ProcessExit, String>;
 struct LiveProcessHandle {
     kill_tx: tokio::sync::watch::Sender<bool>,
     exit_rx: tokio::sync::watch::Receiver<Option<NativeProcessResult>>,
+    pid: i64,
     deadline: Option<tokio::time::Instant>,
     timeout_ms: Option<i64>,
     label: String,
@@ -1506,6 +1507,18 @@ impl io::IoClassSysWritePipe for NativeSysOps {
 }
 
 impl io::IoClassSysProcess for NativeSysOps {
+    fn pid(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        process: owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        match downcast_process_handle(&process) {
+            Ok(handle) => SysOpOutput::ok(handle.pid),
+            Err(error) => SysOpOutput::err(error),
+        }
+    }
     fn wait(
         &self,
         _heap: &Arc<BexHeap>,
@@ -1733,6 +1746,9 @@ impl io::IoNamespaceSys for NativeSysOps {
             let mut child = cmd.spawn().map_err(|error| VmBamlError::Io {
                 message: format!("Failed to spawn '{program}': {error}"),
             })?;
+            let pid = i64::from(child.id().ok_or_else(|| VmBamlError::Io {
+                message: format!("Failed to read process ID of '{program}'"),
+            })?);
             let missing_pipe = |stream: &str| VmBamlError::Io {
                 message: format!("Failed to capture {stream} from '{program}'"),
             };
@@ -1807,6 +1823,7 @@ impl io::IoNamespaceSys for NativeSysOps {
                 _handle: Arc::new(LiveProcessHandle {
                     kill_tx,
                     exit_rx,
+                    pid,
                     deadline,
                     timeout_ms,
                     label: program,
@@ -1853,6 +1870,101 @@ impl io::IoNamespaceSys for NativeSysOps {
         // for, so the widening into BAML's i63 `int` is always exact.
         SysOpOutput::ok(i64::from(std::process::id()))
     }
+
+    fn kill(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        match kill_process_by_pid(pid) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(error) => SysOpOutput::err(error),
+        }
+    }
+}
+
+/// Force-kill an arbitrary process by OS process ID: `SIGKILL` on Unix,
+/// `TerminateProcess` on Windows. Backs the free function `baml.sys.kill`;
+/// `std` can only kill a live `Child` handle, not a pid.
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn kill_process_by_pid(pid: i64) -> Result<(), VmBamlError> {
+    // Reject anything that is not a valid positive `pid_t`. In particular
+    // `0` and negative values have process-group semantics in `kill(2)` —
+    // passing them through could signal unrelated processes.
+    let raw_pid = match i32::try_from(pid) {
+        Ok(raw_pid) if raw_pid > 0 => raw_pid,
+        _ => {
+            return Err(VmBamlError::Io {
+                message: format!("Invalid process ID {pid}"),
+            });
+        }
+    };
+    // SAFETY: `kill` takes plain scalar arguments; `raw_pid` is validated
+    // above, so this can only target the single requested process.
+    let result = unsafe { libc::kill(raw_pid, libc::SIGKILL) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(VmBamlError::Io {
+            message: format!(
+                "Failed to kill process {pid}: {}",
+                std::io::Error::last_os_error()
+            ),
+        })
+    }
+}
+
+/// Force-kill an arbitrary process by OS process ID (`TerminateProcess`).
+/// See the Unix implementation above for why this does not use `std`.
+#[cfg(windows)]
+#[allow(unsafe_code)]
+fn kill_process_by_pid(pid: i64) -> Result<(), VmBamlError> {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_TERMINATE, TerminateProcess};
+
+    // Reject anything that is not a valid positive process ID; pid 0 is the
+    // System Idle Process, which `OpenProcess` refuses anyway.
+    let raw_pid = match u32::try_from(pid) {
+        Ok(raw_pid) if raw_pid > 0 => raw_pid,
+        _ => {
+            return Err(VmBamlError::Io {
+                message: format!("Invalid process ID {pid}"),
+            });
+        }
+    };
+    // SAFETY: all handles are checked for validity, and `handle` is closed
+    // exactly once before returning.
+    unsafe {
+        let handle = OpenProcess(PROCESS_TERMINATE, 0, raw_pid);
+        if handle.is_null() {
+            return Err(VmBamlError::Io {
+                message: format!(
+                    "Failed to open process {pid}: {}",
+                    std::io::Error::last_os_error()
+                ),
+            });
+        }
+        let terminated = TerminateProcess(handle, 1);
+        let error = std::io::Error::last_os_error();
+        CloseHandle(handle);
+        if terminated == 0 {
+            Err(VmBamlError::Io {
+                message: format!("Failed to kill process {pid}: {error}"),
+            })
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn kill_process_by_pid(pid: i64) -> Result<(), VmBamlError> {
+    Err(VmBamlError::Unsupported {
+        message: format!("Killing process {pid} by ID is not supported on this platform"),
+    })
 }
 
 fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError> {
