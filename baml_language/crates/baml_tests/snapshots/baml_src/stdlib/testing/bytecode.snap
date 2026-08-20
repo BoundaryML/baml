@@ -2764,21 +2764,25 @@ function testing.pattern_may_match_descendant(pattern: string, prefix: string) -
     load_var _4
     call baml.String.slice
     store_var literal
-    load_var2 3 5
+    load_var2 4 6
     call baml.String.starts_with
     jump_if_false L1
+    store_var _0
     jump L3
 
   L1:
     pop 1
-    load_var2 5 3
+    load_var2 6 4
     call baml.String.starts_with
+    store_var _0
     jump L3
 
   L2:
     load_const true
+    store_var _0
 
   L3:
+    load_var _0
     return
 }
 

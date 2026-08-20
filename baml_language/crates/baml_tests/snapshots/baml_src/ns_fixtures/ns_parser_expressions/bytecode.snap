@@ -37,25 +37,15 @@ function fixtures.parser_expressions.IndexAccess(users: fixtures.parser_expressi
 function fixtures.parser_expressions.TestPrecedence() -> bool {
     load_const true
     jump_if_false L0
-    store_var d
-    jump L3
+    jump L1
 
   L0:
     pop 1
     load_const false
     jump_if_false L1
     pop 1
-    jump L2
+    load_const false
 
   L1:
-    store_var d
-    jump L3
-
-  L2:
-    load_const false
-    store_var d
-
-  L3:
-    load_var d
     return
 }

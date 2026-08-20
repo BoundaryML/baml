@@ -5563,6 +5563,7 @@ function baml.ops.Compare.le(self: baml.ops.Compare, other: #0) -> bool {
     store_var _3
     load_var _3
     jump_if_false L0
+    store_var _0
     jump L1
 
   L0:
@@ -5571,8 +5572,10 @@ function baml.ops.Compare.le(self: baml.ops.Compare, other: #0) -> bool {
     load_type baml.ops.Equals
     load_const "eq"
     virtual_call nargs=2 ntypeargs=0
+    store_var _0
 
   L1:
+    load_var _0
     return
 }
 

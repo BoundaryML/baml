@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.short_circuit_locals.chained_and(a: bool, b: bool, c: bool) -> bool  [expr] {
+  { let ok = a And b And c } ok
+}
+function user.fixtures.short_circuit_locals.conditional_short_circuit(a: bool, b: bool, cond: bool) -> bool  [expr] {
+  { let x = false; if (cond) { x = a And b } } x
+}
+function user.fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: int[], a: bool, b: bool) -> int  [expr] {
+  { let x = false; let hits = 0; for i in items { if (i Gt 0) { x = a And b } } if (x) { hits = hits Add 1 } } hits
+}
+function user.fixtures.short_circuit_locals.initialized_local_in_branch_loop(items: int[]) -> int  [expr] {
+  { let total = 0; for i in items { let x = 0; if (i Gt 0) { x = 1 } else { x = 2 }; total = x Add total } } total
+}
+function user.fixtures.short_circuit_locals.mixed_join(a: bool, b: bool, cond: bool) -> bool  [expr] {
+  { let x = if (cond) {  } a And b else {  } false } x
+}

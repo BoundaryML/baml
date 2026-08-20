@@ -1367,13 +1367,22 @@ function operators.ord_in_short_circuit() -> bool {
     load_var _1
     jump_if_false L0
     pop 1
+    jump L1
+
+  L0:
+    store_var _0
+    jump L2
+
+  L1:
     load_const true
     load_const false
     load_type baml.ops.Compare
     load_const "gt"
     virtual_call nargs=2 ntypeargs=0
+    store_var _0
 
-  L0:
+  L2:
+    load_var _0
     return
 }
 
