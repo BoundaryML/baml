@@ -1,4 +1,8 @@
 //! Dense active-epoch calling-context aggregation.
+//!
+//! The counter and reference types are shared with evidence code on every
+//! target; the active-epoch engine is consumer-side and wasm32 has no consumer.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use rustc_hash::FxHashMap as HashMap;
 
@@ -12,7 +16,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ParentContextRef {
+pub(crate) enum ParentContextRef {
     Root,
     Local(u32),
     External(ContextKey),
@@ -125,7 +129,7 @@ pub enum ContextRef {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ContextAdmission {
+pub(crate) enum ContextAdmission {
     Normal {
         local_id: u32,
         context_ref: ContextRef,
@@ -193,7 +197,7 @@ struct ActiveContext {
 }
 
 #[derive(Debug)]
-pub struct ActiveCctEpoch {
+pub(crate) struct ActiveCctEpoch {
     program_id: ProgramId,
     boundary: BoundaryRef,
     context_charge_bytes: u64,
@@ -207,7 +211,11 @@ pub struct ActiveCctEpoch {
 
 impl ActiveCctEpoch {
     #[must_use]
-    pub fn new(program_id: ProgramId, boundary: BoundaryRef, context_charge_bytes: u64) -> Self {
+    pub(crate) fn new(
+        program_id: ProgramId,
+        boundary: BoundaryRef,
+        context_charge_bytes: u64,
+    ) -> Self {
         Self {
             program_id,
             boundary,
@@ -221,7 +229,7 @@ impl ActiveCctEpoch {
         }
     }
 
-    pub fn record_start(
+    pub(crate) fn record_start(
         &mut self,
         parent: ParentContextRef,
         function_id: FunctionId,
@@ -316,7 +324,7 @@ impl ActiveCctEpoch {
         }
     }
 
-    pub fn record_end(
+    pub(crate) fn record_end(
         &mut self,
         context: ContextAdmission,
         status: FunctionEndStatus,
@@ -366,7 +374,7 @@ impl ActiveCctEpoch {
     /// every normal call so a call that crosses an epoch rollover never
     /// targets a reused dense local id. Same-epoch start/end rows merge by
     /// `ContextKey` exactly like cross-segment deltas.
-    pub fn record_external_end(
+    pub(crate) fn record_external_end(
         &mut self,
         key: ContextKey,
         status: FunctionEndStatus,
@@ -392,7 +400,7 @@ impl ActiveCctEpoch {
         Ok(())
     }
 
-    pub fn record_external_direct_child(
+    pub(crate) fn record_external_direct_child(
         &mut self,
         parent: ContextKey,
         inclusive_ns: u64,
@@ -415,19 +423,19 @@ impl ActiveCctEpoch {
     }
 
     #[must_use]
-    pub fn context_key(&self, local_id: u32) -> Option<ContextKey> {
+    pub(crate) fn context_key(&self, local_id: u32) -> Option<ContextKey> {
         self.contexts
             .get(local_id as usize)
             .map(|context| context.key)
     }
 
     #[must_use]
-    pub fn cardinality(&self) -> usize {
+    pub(crate) fn cardinality(&self) -> usize {
         self.contexts.len()
     }
 
     #[must_use]
-    pub fn seal(mut self) -> SealedCctEpoch {
+    pub(crate) fn seal(mut self) -> SealedCctEpoch {
         let mut contexts: Vec<_> = self
             .contexts
             .drain(..)

@@ -52,7 +52,7 @@ pub trait StorePlatform: Send + Sync + 'static {
 }
 
 #[derive(Debug, Default)]
-pub struct NativeStorePlatform;
+pub(crate) struct NativeStorePlatform;
 
 impl StorePlatform for NativeStorePlatform {
     fn available_space(&self, path: &Path) -> io::Result<u64> {
@@ -992,7 +992,7 @@ pub fn decode_evidence_segment(bytes: &[u8]) -> Result<DecodedEvidenceSegment, S
     })
 }
 
-pub fn decode_cct_segment(bytes: &[u8]) -> Result<DecodedCctSegment, SegmentReadError> {
+pub(crate) fn decode_cct_segment(bytes: &[u8]) -> Result<DecodedCctSegment, SegmentReadError> {
     let checksum_start = validate_checksum(bytes)?;
     let mut cursor = SegmentCursor::new(&bytes[..checksum_start]);
     if cursor.take(8)? != CCT_MAGIC {
@@ -1027,7 +1027,7 @@ pub fn decode_cct_segment(bytes: &[u8]) -> Result<DecodedCctSegment, SegmentRead
     })
 }
 
-pub fn decode_run_meta(bytes: &[u8]) -> Result<BoundaryRunMeta, SegmentReadError> {
+pub(crate) fn decode_run_meta(bytes: &[u8]) -> Result<BoundaryRunMeta, SegmentReadError> {
     let checksum_start = validate_checksum(bytes)?;
     let mut cursor = SegmentCursor::new(&bytes[..checksum_start]);
     if cursor.take(8)? != RUN_META_MAGIC {
@@ -1055,7 +1055,7 @@ pub fn decode_run_meta(bytes: &[u8]) -> Result<BoundaryRunMeta, SegmentReadError
     })
 }
 
-pub fn decode_run_end(bytes: &[u8]) -> Result<DecodedRunEnd, SegmentReadError> {
+pub(crate) fn decode_run_end(bytes: &[u8]) -> Result<DecodedRunEnd, SegmentReadError> {
     let checksum_start = validate_checksum(bytes)?;
     let mut cursor = SegmentCursor::new(&bytes[..checksum_start]);
     if cursor.take(8)? != RUN_END_MAGIC {
@@ -1094,7 +1094,7 @@ pub fn decode_run_end(bytes: &[u8]) -> Result<DecodedRunEnd, SegmentReadError> {
     })
 }
 
-pub fn decode_cas_object(bytes: &[u8]) -> Result<DecodedCasObject, SegmentReadError> {
+pub(crate) fn decode_cas_object(bytes: &[u8]) -> Result<DecodedCasObject, SegmentReadError> {
     let checksum_start = validate_checksum(bytes)?;
     let mut cursor = SegmentCursor::new(&bytes[..checksum_start]);
     if cursor.take(8)? != VALUE_MAGIC {

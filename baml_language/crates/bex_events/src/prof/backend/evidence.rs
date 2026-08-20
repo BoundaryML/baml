@@ -1,4 +1,8 @@
 //! Shared exact-evidence domain types and frozen error-record codecs.
+//!
+//! The fact types are shared with producers on every target; the codecs are
+//! consumer-side and wasm32 has no consumer.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use super::{
     CodecVersion, ContextRef, EdgeKind, OverflowReason, RoleMask, SelectionReasons, ValueCid,
@@ -166,7 +170,7 @@ pub struct SpanEnd {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ErrorCodecError {
+pub(crate) enum ErrorCodecError {
     Truncated,
     InvalidMagic,
     UnsupportedVersion(u16),
@@ -175,7 +179,7 @@ pub enum ErrorCodecError {
 }
 
 #[must_use]
-pub fn encode_error_capture(record: &ErrorCapture) -> Vec<u8> {
+pub(crate) fn encode_error_capture(record: &ErrorCapture) -> Vec<u8> {
     let mut out = Vec::with_capacity(192);
     out.extend_from_slice(ERROR_CAPTURE_MAGIC);
     put_u16(&mut out, ERROR_CODEC_VERSION);
@@ -208,7 +212,7 @@ pub fn encode_error_capture(record: &ErrorCapture) -> Vec<u8> {
     out
 }
 
-pub fn decode_error_capture(bytes: &[u8]) -> Result<ErrorCapture, ErrorCodecError> {
+pub(crate) fn decode_error_capture(bytes: &[u8]) -> Result<ErrorCapture, ErrorCodecError> {
     let mut cursor = Cursor::new(bytes);
     if cursor.array::<8>()? != *ERROR_CAPTURE_MAGIC {
         return Err(ErrorCodecError::InvalidMagic);
@@ -252,7 +256,7 @@ pub fn decode_error_capture(bytes: &[u8]) -> Result<ErrorCapture, ErrorCodecErro
 }
 
 #[must_use]
-pub fn encode_terminal_error_ref(record: &TerminalErrorRef) -> Vec<u8> {
+pub(crate) fn encode_terminal_error_ref(record: &TerminalErrorRef) -> Vec<u8> {
     let mut out = Vec::with_capacity(96);
     out.extend_from_slice(TERMINAL_ERROR_MAGIC);
     put_u16(&mut out, ERROR_CODEC_VERSION);
@@ -270,7 +274,7 @@ pub fn encode_terminal_error_ref(record: &TerminalErrorRef) -> Vec<u8> {
     out
 }
 
-pub fn decode_terminal_error_ref(bytes: &[u8]) -> Result<TerminalErrorRef, ErrorCodecError> {
+pub(crate) fn decode_terminal_error_ref(bytes: &[u8]) -> Result<TerminalErrorRef, ErrorCodecError> {
     let mut cursor = Cursor::new(bytes);
     if cursor.array::<8>()? != *TERMINAL_ERROR_MAGIC {
         return Err(ErrorCodecError::InvalidMagic);

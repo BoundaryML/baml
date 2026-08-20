@@ -580,10 +580,18 @@ impl DirectDecoder {
                 ..
             } if parent_thread_id.0 == 0 => {
                 let thread_ref = thread_ref(resources, thread_id);
-                if let Some(boundary) = find_boundary_by_root(resources.boundaries, thread_ref) {
-                    self.insert_thread(resources, thread_ref, boundary, None, None);
-                    self.resolve_starts_for_thread(resources, thread_ref);
-                }
+                // Root admission publishes the boundary runtime before the VM
+                // can push this record, and a boundary cannot seal before its
+                // rings are drained, so a root start without a runtime is a
+                // broken invariant rather than a reorder. There is no boundary
+                // to charge; the thread's later facts surface as unattributed
+                // pending joins.
+                let Some(boundary) = find_boundary_by_root(resources.boundaries, thread_ref) else {
+                    debug_assert!(false, "root thread start without an admitted boundary");
+                    return;
+                };
+                self.insert_thread(resources, thread_ref, boundary, None, None);
+                self.resolve_starts_for_thread(resources, thread_ref);
             }
             RawRecord::StartThreadSpawn {
                 thread_id,
@@ -1123,6 +1131,11 @@ impl DirectDecoder {
         );
         self.flush_evidence_if_target(resources, boundary);
         self.resolve_threads_for_parent(resources, fact.call_ref);
+        // Same-thread children may have been parked before this start when a
+        // logical thread migrated to an older ring. Resolve them while this
+        // call is still open: consuming this call's pending end below removes
+        // the context key their own starts need.
+        self.resolve_starts_for_thread(resources, thread_ref);
         self.resolve_runtime_ids(resources, fact.call_ref);
         self.resolve_values(resources, fact.call_ref);
         self.refresh_error_dependencies();
@@ -1381,6 +1394,16 @@ impl DirectDecoder {
         // Propagate newly known ownership through any pending descendant
         // threads, then latch it on their unresolved facts. This is a cold
         // reorder path; repeated scans avoid another ungoverned work queue.
+        // FIFO ring registration keeps these maps empty in steady state, so
+        // the per-thread-start cost must be zero when there is nothing parked.
+        if self.pending_threads.is_empty()
+            && self.pending_starts.is_empty()
+            && self.pending_ends.is_empty()
+            && self.pending_thread_ends.is_empty()
+            && self.pending_runtime_ids.is_empty()
+        {
+            return;
+        }
         loop {
             let next = self
                 .pending_threads
@@ -2358,6 +2381,25 @@ fn record_join_capacity_exceeded(
             runtime.health.join_capacity_exceeded =
                 runtime.health.join_capacity_exceeded.saturating_add(1);
         });
+    }
+}
+
+/// A framing error in a ring slice cannot be resynchronised or attributed to
+/// one boundary, so every live boundary of that engine is marked as having a
+/// possibly incomplete structural stream.
+pub(super) fn record_engine_framing_error(
+    boundaries: &[std::sync::Mutex<Option<BoundaryRuntime>>],
+    engine_id: EngineId,
+) {
+    for slot in boundaries {
+        let mut slot = slot
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(runtime) = slot.as_mut()
+            && runtime.publisher.meta().root_thread_ref.engine_id == engine_id
+        {
+            runtime.health.corrupt_records = runtime.health.corrupt_records.saturating_add(1);
+        }
     }
 }
 

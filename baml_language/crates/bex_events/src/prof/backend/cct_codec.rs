@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EncodedCctBatch {
+pub(crate) struct EncodedCctBatch {
     pub record_count: u64,
     pub terminal_health: [u8; 1],
     pub payload: Vec<u8>,
@@ -35,7 +35,7 @@ pub enum CctCodecError {
 }
 
 #[must_use]
-pub fn encode_cct_epoch(epoch: &SealedCctEpoch) -> EncodedCctBatch {
+pub(crate) fn encode_cct_epoch(epoch: &SealedCctEpoch) -> EncodedCctBatch {
     let record_count = u64::try_from(epoch.contexts.len())
         .ok()
         .and_then(|contexts| {
@@ -88,7 +88,7 @@ pub fn encode_cct_epoch(epoch: &SealedCctEpoch) -> EncodedCctBatch {
     }
 }
 
-pub fn decode_cct_payload(
+pub(crate) fn decode_cct_payload(
     payload: &[u8],
     record_count: u64,
     terminal_health: &[u8],

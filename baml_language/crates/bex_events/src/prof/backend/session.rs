@@ -433,7 +433,12 @@ impl ProfilerSession {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         for raw in crate::prof::record::iter(bytes) {
-            let Ok(raw) = raw else { return };
+            let Ok(raw) = raw else {
+                // Records have no resync framing, so the rest of this slice
+                // is unreadable. Account that before abandoning it.
+                super::decoder::record_engine_framing_error(&session.publishers, engine_id);
+                return;
+            };
             decoder.consume(&resources, raw);
         }
     }
@@ -1316,6 +1321,206 @@ mod tests {
                 .map(|context| context.counters.completed_error)
                 .sum::<u64>(),
             1
+        );
+    }
+
+    /// Records from three logical threads arrive in reverse causal order:
+    /// the grandchild's calls first, then the child's, then the root. Every
+    /// fact is parked before its owner thread is known, so this exercises
+    /// pending-join attribution, spawn-parent propagation through two
+    /// levels of parked threads, and final-drain loss accounting for a call
+    /// whose parent never arrives.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn reordered_descendant_facts_resolve_and_attribute_losses_to_their_run() {
+        use crate::{
+            ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid},
+            prof::{
+                backend::{ContextKey, DurableRunReader, EdgeKind},
+                record::{FunctionEndStatus, MAX_RECORD_LEN, RawRecord, ThreadEndStatus},
+            },
+        };
+
+        let temp = tempfile::TempDir::new().unwrap();
+        let root = temp.path().join(".baml/profiles-v1");
+        let boundary_id = BoundaryId::from_bytes([0x66; 16]);
+        let process_euid = ProcessEuid([1; 16]);
+        let engine_id = EngineId(2);
+        let root_thread = BexThreadId(3);
+        let child_thread = BexThreadId(10);
+        let grandchild_thread = BexThreadId(20);
+        let root_thread_ref = ThreadRef {
+            process_euid,
+            engine_id,
+            thread_id: root_thread,
+        };
+        let (session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
+            enabled: true,
+            store_root: root.clone(),
+            process_memory_bytes: 32 * 1024 * 1024,
+            disk: DiskBudget {
+                max_project_bytes: 16 * 1024 * 1024,
+                minimum_free_bytes: 0,
+            },
+        });
+        assert!(diagnostic.is_none());
+        let RootAdmission::Active(admission) = session.register_root(
+            RootProfileIntent::UserBoundary { boundary_id },
+            root_thread_ref,
+            ProgramId([4; 16]),
+            None,
+            None,
+        ) else {
+            panic!("root must be admitted");
+        };
+        let emit = |record: RawRecord<'_>| {
+            let mut bytes = [0; MAX_RECORD_LEN];
+            let len = record.encode(&mut bytes);
+            session.consume_raw_bytes(process_euid, engine_id, &bytes[..len]);
+        };
+        let ordinary =
+            resolve_capture_plan(false, FunctionCaptureClass::Ordinary, None).to_call_flags();
+        let call = |thread_id, call_id, parent_call_id, function_id, flags, ts_ticks| {
+            RawRecord::CallFunction {
+                flags,
+                thread_id,
+                call_id: BexCallId(call_id),
+                parent_call_id: BexCallId(parent_call_id),
+                function_id: FunctionId(function_id),
+                call_site: None,
+                ts_ticks,
+            }
+        };
+        let end = |thread_id, call_id, ts_ticks| RawRecord::EndFunction {
+            status: FunctionEndStatus::Ok,
+            thread_id,
+            call_id: BexCallId(call_id),
+            ts_ticks,
+        };
+        let end_thread = |thread_id, ts_ticks| RawRecord::EndThread {
+            status: ThreadEndStatus::Completed,
+            thread_id,
+            ts_ticks,
+        };
+
+        // Grandchild thread first: nested call, its end, an orphan whose
+        // parent call never exists, then the entry call, then the spawn fact.
+        emit(call(grandchild_thread, 2, 1, 30, ordinary, 300));
+        emit(end(grandchild_thread, 2, 310));
+        emit(call(grandchild_thread, 3, 99, 31, ordinary, 320));
+        emit(call(grandchild_thread, 1, 0, 20, ordinary, 290));
+        emit(end(grandchild_thread, 1, 330));
+        emit(RawRecord::StartThreadSpawn {
+            flags: 0,
+            thread_id: grandchild_thread,
+            parent_thread_id: child_thread,
+            parent_call_id: BexCallId(1),
+            ts_ticks: 280,
+            spawn_site: None,
+            name: b"",
+        });
+        emit(end_thread(grandchild_thread, 340));
+
+        // Child thread: entry call before its own spawn fact.
+        emit(call(child_thread, 1, 0, 10, ordinary, 200));
+        emit(RawRecord::StartThreadSpawn {
+            flags: 0,
+            thread_id: child_thread,
+            parent_thread_id: root_thread,
+            parent_call_id: BexCallId(6),
+            ts_ticks: 190,
+            spawn_site: None,
+            name: b"",
+        });
+        emit(end(child_thread, 1, 350));
+        emit(end_thread(child_thread, 360));
+
+        // Nothing could resolve yet: every parked fact is still unattributed.
+        {
+            let SessionKind::On(on) = &session.kind else {
+                panic!("profiling session must be active");
+            };
+            let decoder = on.decoder.lock().unwrap();
+            assert_eq!(decoder.pending_thread_end_count(), 2);
+        }
+
+        // Root last. Its thread start attributes the whole parked tree; its
+        // call start resolves the child, which resolves the grandchild.
+        emit(RawRecord::StartThread {
+            flags: 0,
+            thread_id: root_thread,
+            parent_thread_id: BexThreadId(0),
+            parent_call_id: BexCallId(0),
+            ts_ticks: 100,
+            name: b"",
+        });
+        emit(call(
+            root_thread,
+            6,
+            0,
+            1,
+            resolve_capture_plan(true, FunctionCaptureClass::Ordinary, None).to_call_flags(),
+            110,
+        ));
+        emit(end(root_thread, 6, 400));
+        emit(end_thread(root_thread, 410));
+        assert!(session.resolve_thread_ends_after_sweep());
+
+        admission.completion.complete(BoundaryEndStatus::Succeeded);
+        assert!(session.maintain_ready_boundaries());
+        assert!(session.maintain_ready_boundaries());
+
+        let run = DurableRunReader::open(root, boundary_id)
+            .unwrap()
+            .load()
+            .unwrap();
+        assert!(run.end.is_some(), "run must seal");
+
+        // Four contexts form one chain: Root -> Spawn -> Spawn -> Call.
+        assert_eq!(run.contexts.len(), 4);
+        let find = |edge: EdgeKind, parent: Option<ContextKey>| {
+            let mut matches = run.contexts.iter().filter(|(_, context)| {
+                context.tuple.is_some_and(|tuple| {
+                    tuple.edge_kind == edge && tuple.parent_context_key == parent
+                })
+            });
+            let (key, context) = matches.next().expect("context exists");
+            assert!(matches.next().is_none(), "context chain is unambiguous");
+            assert_eq!(context.counters.invocations_started, 1);
+            assert_eq!(context.counters.completed_ok, 1);
+            *key
+        };
+        let root_key = find(EdgeKind::Root, None);
+        let child_key = find(EdgeKind::Spawn, Some(root_key));
+        let grandchild_key = find(EdgeKind::Spawn, Some(child_key));
+        let nested_key = find(EdgeKind::Call, Some(grandchild_key));
+        assert_eq!(
+            run.contexts[&nested_key]
+                .tuple
+                .map(|tuple| tuple.function_id),
+            Some(FunctionId(30))
+        );
+
+        // The orphan call start was parked before its thread was known and
+        // its parent never arrived; it must be charged to this run, not leak.
+        assert_eq!(run.terminal_health.unmatched_call_facts, 1);
+        assert_eq!(run.terminal_health.unmatched_thread_facts, 0);
+        assert_eq!(run.terminal_health.join_capacity_exceeded, 0);
+        assert_eq!(run.terminal_health.corrupt_records, 0);
+        assert_eq!(run.terminal_health.structural_transport_exceeded, 0);
+        assert!(run.overflow.is_empty());
+
+        // The root was the only selected span and it closed cleanly.
+        let root_call = CallRef {
+            process_euid,
+            engine_id,
+            thread_id: root_thread,
+            call_id: BexCallId(6),
+        };
+        assert_eq!(run.spans.len(), 1);
+        assert_eq!(
+            run.spans[&root_call].end.map(|end| end.status),
+            Some(FunctionEndStatus::Ok)
         );
     }
 

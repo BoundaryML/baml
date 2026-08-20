@@ -1,5 +1,6 @@
 ---
 source: crates/baml_cli/src/help_command.rs
+assertion_line: 203
 expression: concise
 ---
 Build and run BAML projects.
@@ -8,6 +9,7 @@ Usage: baml [OPTIONS] <COMMAND>
 
 Commands:
   check       Check BAML source files for compiler errors
+  clean       Remove segmented local profiler data
   auth        Manage authentication
   feedback    Report an issue or improvement to Boundary
   fmt         Format BAML source files

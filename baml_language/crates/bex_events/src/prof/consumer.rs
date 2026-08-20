@@ -15,7 +15,7 @@ const WAKE_INTERVAL: Duration = Duration::from_millis(50);
 
 use crate::{
     ids::{EngineId, ProcessEuid},
-    prof::{metadata, registry::Registry, ring::RingCtx},
+    prof::{registry::Registry, ring::RingCtx},
 };
 
 pub(crate) enum ControlMsg {
@@ -66,14 +66,12 @@ pub fn flush_and_join(timeout: Duration) -> bool {
 
 pub fn engine_closed(engine_id: u64) {
     let Some(tx) = CONTROL_TX.get() else {
-        let _ = metadata::remove_engine_metadata(engine_id);
         crate::prof::backend::unregister_engine_session(EngineId(engine_id));
         return;
     };
     if tx.send(ControlMsg::EngineClosed(engine_id)).is_ok() {
         crate::prof::registry::global_ctx().wake().force_wake();
     } else {
-        let _ = metadata::remove_engine_metadata(engine_id);
         crate::prof::backend::unregister_engine_session(EngineId(engine_id));
     }
 }
@@ -142,6 +140,5 @@ fn sweep_once(env: &ConsumerEnv) -> bool {
 }
 
 fn close_engine(engine_id: u64) {
-    let _ = metadata::remove_engine_metadata(engine_id);
     crate::prof::backend::unregister_engine_session(EngineId(engine_id));
 }

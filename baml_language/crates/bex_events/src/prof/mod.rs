@@ -28,7 +28,6 @@ pub mod clock;
 pub mod config;
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
 pub(crate) mod consumer;
-pub mod metadata;
 pub mod record;
 pub(crate) mod registry;
 pub(crate) mod ring;
@@ -41,45 +40,9 @@ mod concurrency_tests;
 pub use config::ProfConfig;
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
 pub use consumer::{engine_closed, flush_and_join};
-pub use metadata::register_engine_metadata;
 #[cfg(not(baml_loom))]
 pub use registry::ring_for_engine;
 pub use ring::{Ring, RingHandle};
-
-/// Per-engine metadata registered for CCT labels.
-#[derive(Debug, Clone, Default)]
-pub struct EngineProfileMetadata {
-    /// What identifies a Program is still open (M0 coordination); empty for
-    /// now.
-    pub program_id: String,
-    pub source_snapshot_id: Option<String>,
-    pub revision_id: Option<String>,
-    /// Per-run function table; the FQN is the cross-run key.
-    pub functions: Vec<FunctionMetaEntry>,
-}
-
-/// One function metadata row.
-#[derive(Debug, Clone)]
-pub struct FunctionMetaEntry {
-    /// Per-run id, as emitted in `CallFunction.function_id`.
-    pub function_id: u32,
-    /// Fully qualified name — the stable cross-run key.
-    pub fqn: String,
-    /// Source file path as known to the compiler.
-    pub source_file: String,
-    /// Span start byte offset.
-    pub span_start: u32,
-    /// Span end byte offset.
-    pub span_end: u32,
-    /// "bytecode" | "sysop" | "native".
-    pub kind: String,
-    pub definition_key: Option<String>,
-    pub owner_type: Option<String>,
-    pub parent_function: Option<String>,
-    pub lambda_path: Option<String>,
-    pub package_name: Option<String>,
-    pub namespace: Vec<String>,
-}
 
 // wasm32 has no native background consumer. Generic embedders keep profiling
 // off through config, while adapters such as bridge_wasm may opt into a
@@ -90,9 +53,6 @@ pub fn flush_and_join(_timeout: std::time::Duration) -> bool {
     true
 }
 
-/// WASM has no native consumer, but engine close still releases shared
-/// metadata registered for cooperative artifact/header construction.
+/// WASM has no native consumer, so engine close has nothing to release.
 #[cfg(target_arch = "wasm32")]
-pub fn engine_closed(engine_id: u64) {
-    let _ = metadata::remove_engine_metadata(engine_id);
-}
+pub fn engine_closed(_engine_id: u64) {}

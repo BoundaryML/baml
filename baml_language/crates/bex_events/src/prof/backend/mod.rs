@@ -4,11 +4,13 @@
 
 mod boundary;
 mod cct;
+#[cfg(not(target_arch = "wasm32"))]
 mod cct_codec;
 #[cfg(not(target_arch = "wasm32"))]
 mod decoder;
 mod domain;
 mod evidence;
+#[cfg(not(target_arch = "wasm32"))]
 mod evidence_codec;
 mod memory;
 #[cfg(not(target_arch = "wasm32"))]
@@ -25,13 +27,16 @@ pub use boundary::{
     BoundaryProducerHealthSnapshot, BoundaryRegistry, BoundarySlotUnavailable, BoundaryThreadLease,
     LeaseUnavailable, RootBoundaryCompletionGuard,
 };
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use cct::{ActiveCctEpoch, ContextAdmission, ParentContextRef};
 pub use cct::{
-    ActiveCctEpoch, BoundaryRef, CctCounters, ContextAdmission, ContextDelta, ContextRef,
-    CounterHealth, DerivedTiming, OverflowDelta, OverflowReason, ParentContextRef, SealedCctEpoch,
+    BoundaryRef, CctCounters, ContextDelta, ContextRef, CounterHealth, DerivedTiming,
+    OverflowDelta, OverflowReason, SealedCctEpoch,
 };
-pub use cct_codec::{
-    CctCodecError, CctSegmentData, EncodedCctBatch, decode_cct_payload, encode_cct_epoch,
-};
+#[cfg(not(target_arch = "wasm32"))]
+pub use cct_codec::{CctCodecError, CctSegmentData};
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use cct_codec::{decode_cct_payload, encode_cct_epoch};
 #[cfg(not(target_arch = "wasm32"))]
 pub use decoder::{BoundaryHealthSnapshot, ProfilerCheckpoint, QueueHealthSnapshot};
 pub use domain::{
@@ -40,16 +45,19 @@ pub use domain::{
     resolve_capture_plan,
 };
 pub use evidence::{
-    ErrorCapture, ErrorCaptureAttempt, ErrorCaptureId, ErrorCaptureLossReason, ErrorCodecError,
-    ErrorSource, ErrorUnwindKind, RuntimeIdAnnotation, SpanEnd, SpanRuntimeId, SpanStart,
-    TerminalErrorRef, TerminalErrorTarget, ThrowSite, ValueLossReason, ValueOccurrence, ValueRole,
-    ValueState, decode_error_capture, decode_terminal_error_ref, encode_error_capture,
+    ErrorCapture, ErrorCaptureAttempt, ErrorCaptureId, ErrorCaptureLossReason, ErrorSource,
+    ErrorUnwindKind, RuntimeIdAnnotation, SpanEnd, SpanRuntimeId, SpanStart, TerminalErrorRef,
+    TerminalErrorTarget, ThrowSite, ValueLossReason, ValueOccurrence, ValueRole, ValueState,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use evidence::{
+    ErrorCodecError, decode_error_capture, decode_terminal_error_ref, encode_error_capture,
     encode_terminal_error_ref,
 };
-pub use evidence_codec::{
-    EncodedEvidenceBatch, EvidenceCodecError, EvidenceFact, decode_evidence_payload,
-    encode_evidence_facts,
-};
+#[cfg(not(target_arch = "wasm32"))]
+pub use evidence_codec::{EvidenceCodecError, EvidenceFact};
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use evidence_codec::{decode_evidence_payload, encode_evidence_facts};
 pub use memory::{MemoryDenied, Owner, ProfilerMemoryGovernor, Reservation, ReservationClass};
 #[cfg(not(target_arch = "wasm32"))]
 pub use reader::{
@@ -148,11 +156,13 @@ mod wasm_runtime_stubs {
 }
 #[cfg(not(target_arch = "wasm32"))]
 pub use store::{
-    AdmittedBoundary, BeginBoundaryResult, BoundaryRunMeta, CleanProfilesError, DecodedCasObject,
-    DecodedCctSegment, DecodedEvidenceSegment, DecodedRunEnd, FinishBoundaryResult,
-    IndeterminateToken, NativeStorePlatform, ProfilerStore, PublishBatchResult, PublishCasResult,
-    ResolveIndeterminateResult, RunEnd, RunEndSegmentFence, SegmentHighWater, SegmentKind,
-    SegmentReadError, StoreFailureReason, StoreFileKind, StoreOpenError, StorePlatform,
-    clean_profiles_v1, decode_cas_object, decode_cct_segment, decode_evidence_segment,
-    decode_run_end, decode_run_meta,
+    AdmittedBoundary, BeginBoundaryResult, BoundaryRunMeta, DecodedCasObject, DecodedCctSegment,
+    DecodedEvidenceSegment, DecodedRunEnd, FinishBoundaryResult, IndeterminateToken, ProfilerStore,
+    PublishBatchResult, PublishCasResult, ResolveIndeterminateResult, RunEnd, RunEndSegmentFence,
+    SegmentHighWater, SegmentReadError, StoreFailureReason, StoreFileKind, StoreOpenError,
+    StorePlatform,
 };
+#[cfg(not(target_arch = "wasm32"))]
+pub use store::{CleanProfilesError, SegmentKind, clean_profiles_v1, decode_evidence_segment};
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use store::{decode_cas_object, decode_cct_segment, decode_run_end, decode_run_meta};

@@ -24,7 +24,7 @@ pub enum EvidenceFact {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EncodedEvidenceBatch {
+pub(crate) struct EncodedEvidenceBatch {
     pub record_count: u64,
     pub payload: Vec<u8>,
 }
@@ -41,7 +41,7 @@ pub enum EvidenceCodecError {
 }
 
 #[must_use]
-pub fn encode_evidence_facts(facts: &[EvidenceFact]) -> EncodedEvidenceBatch {
+pub(crate) fn encode_evidence_facts(facts: &[EvidenceFact]) -> EncodedEvidenceBatch {
     let mut payload = Vec::with_capacity(facts.len().saturating_mul(160).saturating_add(8));
     payload.extend_from_slice(&u64::try_from(facts.len()).unwrap_or(u64::MAX).to_be_bytes());
     for fact in facts {
@@ -56,7 +56,7 @@ pub fn encode_evidence_facts(facts: &[EvidenceFact]) -> EncodedEvidenceBatch {
     }
 }
 
-pub fn decode_evidence_payload(
+pub(crate) fn decode_evidence_payload(
     payload: &[u8],
     record_count: u64,
 ) -> Result<Vec<EvidenceFact>, EvidenceCodecError> {

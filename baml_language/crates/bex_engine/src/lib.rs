@@ -1072,23 +1072,23 @@ pub struct BexEngine {
     profiler_session: Arc<ProfilerSession>,
 
     /// Whether this engine's profiling lifecycle has been activated
-    /// (metadata registered with the profiling consumer). Engines built via
+    /// (registered with the profiling consumer). Engines built via
     /// [`BexEngine::new`] activate at construction. Candidate engines built
     /// via [`BexEngine::new_with_deferred_profiling`] stay inactive until a
     /// winning conditional commit calls [`BexEngine::activate_profiling`];
-    /// a superseded candidate therefore drops without registering metadata
-    /// or emitting an `engine_closed` tombstone.
+    /// a superseded candidate therefore drops without registering or
+    /// emitting an `engine_closed` notification.
     prof_activated: AtomicBool,
 }
 
 impl Drop for BexEngine {
     /// Closes the engine's profiling lifecycle: a non-blocking notification;
-    /// the direct consumer drains remaining events, seals backend state, and
-    /// frees metadata. Every commit happened-before the last `Arc` release.
+    /// the direct consumer drains remaining events and seals backend state.
+    /// Every commit happened-before the last `Arc` release.
     ///
     /// An engine whose profiling lifecycle was never activated (a discarded
-    /// candidate) drops quietly: it registered no metadata, so it must not
-    /// emit a close notification or leave a closed-engine tombstone.
+    /// candidate) drops quietly: it was never registered, so it must not
+    /// emit a close notification.
     fn drop(&mut self) {
         let rooted = self
             .rooted_unhandled_spawn_errors
@@ -1114,39 +1114,6 @@ impl Drop for BexEngine {
         if self.profiler_session.is_on() && self.prof_activated.load(Ordering::Acquire) {
             bex_events::prof::engine_closed(self.engine_id.0);
         }
-    }
-}
-
-/// Maps M0 [`ProgramMetadata`] into the direct consumer's function registry.
-fn prof_engine_metadata(meta: &ProgramMetadata) -> bex_events::prof::EngineProfileMetadata {
-    bex_events::prof::EngineProfileMetadata {
-        program_id: hex_bytes(&meta.program_id.0),
-        source_snapshot_id: meta.source_snapshot_id.as_ref().map(|id| hex_bytes(&id.0)),
-        revision_id: meta.revision_id.as_ref().map(|id| id.0.clone()),
-        functions: meta
-            .function_table
-            .functions
-            .iter()
-            .map(|f| bex_events::prof::FunctionMetaEntry {
-                function_id: f.function_id.0,
-                fqn: f.fqn.clone(),
-                source_file: f.source_file.clone().unwrap_or_default(),
-                span_start: f.source_span.as_ref().map_or(0, |sp| sp.start),
-                span_end: f.source_span.as_ref().map_or(0, |sp| sp.end),
-                kind: match &f.kind {
-                    bex_events::RuntimeFunctionKind::Bytecode => "bytecode".to_string(),
-                    bex_events::RuntimeFunctionKind::SysOp(_) => "sysop".to_string(),
-                    bex_events::RuntimeFunctionKind::Native
-                    | bex_events::RuntimeFunctionKind::NativeUnresolved => "native".to_string(),
-                },
-                definition_key: f.definition_key.as_ref().map(|key| key.0.clone()),
-                owner_type: f.owner_type.as_ref().map(|key| key.0.clone()),
-                parent_function: f.parent_function.as_ref().map(|key| key.0.clone()),
-                lambda_path: f.lambda_path.clone(),
-                package_name: f.package_name.clone(),
-                namespace: f.namespace.clone(),
-            })
-            .collect(),
     }
 }
 
@@ -2166,12 +2133,9 @@ impl BexEngine {
         })
     }
 
-    /// Activate this engine's profiling lifecycle by registering metadata
+    /// Activate this engine's profiling lifecycle by registering the engine
     /// with the direct consumer. Idempotent; a no-op when the `BAML_PROFILE`
     /// master switch is off.
-    ///
-    /// The consumer uses the M0 metadata table; its ids match those stamped
-    /// on each function during construction.
     pub fn activate_profiling(&self) {
         self.shutdown_required.store(true, Ordering::Release);
         if !self.profiler_session.is_on() {
@@ -2185,10 +2149,6 @@ impl BexEngine {
             bex_events::prof::backend::register_engine_session(
                 self.engine_id,
                 &self.profiler_session,
-            );
-            bex_events::prof::register_engine_metadata(
-                self.engine_id.0,
-                prof_engine_metadata(&self.program_metadata),
             );
         }
     }
