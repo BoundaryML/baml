@@ -169,7 +169,7 @@ fn error_value(vm: &mut BexVm, e: &ErrInfo) -> Result<Value, VmRustFnError> {
 
 fn throw_err(vm: &mut BexVm, e: &ErrInfo) -> VmRustFnError {
     match error_value(vm, e) {
-        Ok(v) => VmRustFnError::Thrown(v),
+        Ok(v) => VmRustFnError::thrown_fresh(v),
         Err(fatal) => fatal,
     }
 }

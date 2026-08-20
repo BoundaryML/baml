@@ -29,8 +29,8 @@
 
 pub use imp::{base_ticks, init, meta, now_ticks, started_at_epoch_ns};
 
-/// Which hardware source backs [`now_ticks`]. Recorded in the `.bamlprof`
-/// header for diagnostics.
+/// Which hardware source backs [`now_ticks`]. Stored in run metadata for
+/// diagnostics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClockKind {
     /// `x86_64` invariant TSC (`rdtsc`); rate calibrated by the consumer.
@@ -301,15 +301,14 @@ mod imp {
     }
 
     /// Wall-clock time of the zero point, in nanoseconds since the Unix
-    /// epoch. Written into the `.bamlprof` file header.
+    /// epoch. Stored in run metadata.
     pub fn started_at_epoch_ns() -> u128 {
         anchor().base_unix_ns
     }
 }
 
 // wasm32: use web_time's browser/worker-safe Instant as a monotonic
-// nanosecond source. This keeps ProfileEvent.timestamp_ns non-zero and
-// target-neutral once the wasm profile drain is enabled.
+// nanosecond source for target-neutral direct-consumer timing.
 #[cfg(target_arch = "wasm32")]
 mod imp {
     use std::sync::OnceLock;
@@ -395,7 +394,7 @@ mod imp {
     }
 }
 
-/// How trustworthy the tick→ns rate is. Recorded in the `.bamlprof` header.
+/// How trustworthy the tick→ns rate is. Stored in run metadata.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClockQuality {
     /// Platform-stated rational rate (CNTVCT, Instant, Stub).
@@ -638,7 +637,7 @@ mod tests {
 
     #[test]
     fn cross_thread_ordering() {
-        // The property prof_gate actually depends on: a stamp taken on one
+        // A stamp taken on one
         // OS thread, handed off, then re-stamped on another thread must not
         // go backwards (invariant TSC / system-wide CNTVCT).
         init();

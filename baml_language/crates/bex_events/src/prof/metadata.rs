@@ -1,8 +1,7 @@
 //! Target-neutral profile metadata registry.
 //!
-//! Engine metadata is needed to build `.bamlprof` headers and to replay
-//! artifacts with function/source joins. The storage is shared across native
-//! and WASM; native persistence remains in the consumer/file adapter.
+//! Engine metadata supplies function/source joins to the direct consumer.
+//! Storage is process-shared and bounded by active engine lifetimes.
 
 use std::{
     collections::HashMap,
@@ -16,8 +15,7 @@ fn registry() -> &'static Mutex<HashMap<u64, EngineProfileMetadata>> {
     META.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Registers an engine's header metadata. Call before (or shortly after) the
-/// engine starts producing profile records.
+/// Registers metadata before the engine starts producing profile records.
 pub fn register_engine_metadata(engine_id: u64, meta: EngineProfileMetadata) {
     registry()
         .lock()

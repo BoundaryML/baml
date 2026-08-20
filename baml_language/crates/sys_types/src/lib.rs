@@ -359,7 +359,9 @@ impl std::fmt::Display for ContractViolation {
 pub fn validate_sys_op_error(op: SysOp, err: &VmRustFnError) -> Result<(), ContractViolation> {
     let baml_err = match err {
         VmRustFnError::BamlError(b) => b,
-        VmRustFnError::Panic(_) | VmRustFnError::Thrown(_) | VmRustFnError::InternalError(_) => {
+        VmRustFnError::Panic(_)
+        | VmRustFnError::Thrown { .. }
+        | VmRustFnError::InternalError(_) => {
             return Ok(());
         }
     };
@@ -1040,7 +1042,7 @@ mod tests {
         let op = bex_vm_types::sys_op_for_path("baml.env.get").unwrap();
         for err in [
             bex_vm_types::errors::VmRustFnError::Panic(bex_vm_types::errors::VmPanic::Cancelled),
-            bex_vm_types::errors::VmRustFnError::Thrown(bex_vm_types::Value::NULL),
+            bex_vm_types::errors::VmRustFnError::thrown_fresh(bex_vm_types::Value::NULL),
             bex_vm_types::errors::VmRustFnError::InternalError(
                 bex_vm_types::errors::VmInternalError::UnexpectedEmptyStack,
             ),

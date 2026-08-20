@@ -143,7 +143,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
                 baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
                 message,
             );
-            return Err(VmRustFnError::Thrown(
+            return Err(VmRustFnError::thrown_fresh(
                 super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
             ));
         }
@@ -153,7 +153,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
         {
             let diagnostic =
                 baml_compiler_diagnostics::runtime_type::open_interface_at_render(&field, &open_ty);
-            return Err(VmRustFnError::Thrown(
+            return Err(VmRustFnError::thrown_fresh(
                 super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
             ));
         }
@@ -169,7 +169,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
                     &non_data_ty,
                 )
             };
-            return Err(VmRustFnError::Thrown(
+            return Err(VmRustFnError::thrown_fresh(
                 super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
             ));
         }

@@ -13,7 +13,7 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use bex_engine::{BexEngine, BexExternalValue, RuntimeTy};
 
-use crate::CallContextCapture;
+use crate::HelperCallContext;
 
 /// Serialization format for a target's return value.
 #[derive(
@@ -43,13 +43,14 @@ pub async fn write_output(
         value,
         return_type,
         format,
-        &CallContextCapture::disabled(),
+        &HelperCallContext::disabled(),
         || {},
     )
     .await
 }
 
-/// Write a target's return value while preserving capture for conversion hooks.
+/// Write a target's return value while preserving logger/cancellation context
+/// for conversion hooks.
 ///
 /// `before_print` runs after any user-defined `to_json` hook and before the
 /// serialized value is written, allowing callers to keep captured logs ordered
@@ -59,7 +60,7 @@ pub async fn write_output_with_context(
     value: BexExternalValue,
     return_type: &RuntimeTy,
     format: OutputFormat,
-    capture: &CallContextCapture,
+    helper_context: &HelperCallContext,
     before_print: impl FnOnce(),
 ) -> Result<()> {
     match format {
@@ -76,7 +77,7 @@ pub async fn write_output_with_context(
             Ok(())
         }
         OutputFormat::Json => {
-            let text = serialize_via_baml_json(engine, value, return_type, capture).await?;
+            let text = serialize_via_baml_json(engine, value, return_type, helper_context).await?;
             before_print();
             println!("{text}");
             Ok(())
@@ -96,13 +97,13 @@ async fn serialize_via_baml_json(
     engine: &Arc<BexEngine>,
     value: BexExternalValue,
     return_type: &RuntimeTy,
-    capture: &CallContextCapture,
+    helper_context: &HelperCallContext,
 ) -> Result<String> {
     let result = engine
         .call_function(
             "baml.json.serialize",
             vec![value],
-            capture.call_context(indexmap::IndexMap::from([(
+            helper_context.call_context(indexmap::IndexMap::from([(
                 "T".to_string(),
                 return_type.clone(),
             )])),

@@ -1431,7 +1431,7 @@ impl BexMultiProject {
                     // Serialize the full test tree via TestRegistry.serialize
                     let ctx = bex_engine::FunctionCallContextBuilder::new(call_id)
                         .with_cancel_token(cancel)
-                        .with_profile_enabled(false)
+                        .suppress_internal_profile()
                         .build();
                     match engine
                         .call_function(
@@ -1581,7 +1581,7 @@ impl BexMultiProject {
 
             let ctx = bex_engine::FunctionCallContextBuilder::new(call_id)
                 .with_cancel_token(cancel.clone())
-                .with_profile_enabled(false)
+                .suppress_internal_profile()
                 .build();
 
             // Expand — mutates registry.expansions in-place on the heap
@@ -1608,7 +1608,7 @@ impl BexMultiProject {
                 let ctx_resend =
                     bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel)
-                        .with_profile_enabled(false)
+                        .suppress_internal_profile()
                         .build();
                 let data = match engine
                     .call_function(
@@ -1651,7 +1651,7 @@ impl BexMultiProject {
             // Re-serialize full state
             let ctx2 = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
-                .with_profile_enabled(false)
+                .suppress_internal_profile()
                 .build();
             match engine
                 .call_function(

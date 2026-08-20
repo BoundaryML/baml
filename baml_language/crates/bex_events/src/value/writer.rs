@@ -9,11 +9,10 @@ use crate::{
     ids::BoundaryId,
     value::{
         BlobRef, BlobStore, CaptureLossRecord, LogEventRecord, LogRecord, RunCompletedRecord,
-        RunStartedRecord, ValueArtifactRef, ValueArtifactSink, ValueCapture, ValueCodec,
-        ValueRecord, ValueRef,
+        RunStartedRecord, ValueArtifactRef, ValueArtifactSink, ValueCodec, ValueRef,
         encode::{
-            encode_capture_loss, encode_header, encode_log_event, encode_record,
-            encode_run_completed, encode_run_started,
+            encode_capture_loss, encode_header, encode_log_event, encode_run_completed,
+            encode_run_started,
         },
     },
 };
@@ -128,38 +127,6 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         })
     }
 
-    pub fn append_body(
-        &mut self,
-        codec: ValueCodec,
-        body: Vec<u8>,
-    ) -> io::Result<ValueWriteOutcome> {
-        self.append_body_with_capture(codec, body, None)
-    }
-
-    pub fn append_body_with_capture(
-        &mut self,
-        codec: ValueCodec,
-        body: Vec<u8>,
-        capture: Option<ValueCapture>,
-    ) -> io::Result<ValueWriteOutcome> {
-        let id = self.value_id_allocator.allocate();
-        let original_size = body.len();
-        let (body, blob_ref) = self.store_body(body)?;
-        let retained_size = blob_ref.as_ref().map_or(body.len(), |blob| blob.size_bytes);
-        let value_ref = ValueRef::available(id, codec, original_size, retained_size);
-        let record = ValueRecord {
-            value_ref: value_ref.clone(),
-            body,
-            blob_ref,
-            capture,
-        };
-        let mut encoded = Vec::new();
-        encode_record(&mut encoded, &record)
-            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
-        self.sink.write_chunk(&encoded)?;
-        Ok(ValueWriteOutcome { value_ref })
-    }
-
     pub fn append_log_body(
         &mut self,
         codec: ValueCodec,
@@ -231,19 +198,35 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ids::BoundaryId,
+        ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
+        run::TraceCallKey,
         value::{
-            BlobStore, ByteValueArtifactSink, ValueArtifactRef, ValueCodec, ValueFileRecord,
-            ValueIdAllocator, ValueWriter, read_bamlvalue_from_bytes,
+            BlobStore, ByteValueArtifactSink, LogEventRecord, ValueArtifactRef, ValueCodec,
+            ValueFileRecord, ValueIdAllocator, ValueWriter, read_bamlvalue_from_bytes,
         },
     };
+
+    fn log_event() -> LogEventRecord {
+        LogEventRecord {
+            call: TraceCallKey {
+                process_euid: ProcessEuid([1; 16]),
+                engine_id: EngineId(2),
+                thread_id: BexThreadId(3),
+                call_id: BexCallId(4),
+            },
+            level: Some("info".to_string()),
+            source: None,
+            timestamp_ms: 5,
+            message_preview: Some("message".to_string()),
+        }
+    }
 
     #[test]
     fn writer_appends_records_and_retains_bytes() {
         let sink = ByteValueArtifactSink::new();
         let mut writer = ValueWriter::new(sink, BoundaryId::from_bytes([2; 16])).unwrap();
         let outcome = writer
-            .append_body(ValueCodec::BamlOutboundValue, vec![1, 2, 3])
+            .append_log_body(ValueCodec::BamlOutboundValue, vec![1, 2, 3], log_event())
             .unwrap();
         assert_eq!(outcome.value_ref.id, "value_1");
         assert_eq!(
@@ -258,8 +241,8 @@ mod tests {
 
         let parsed = read_bamlvalue_from_bytes(writer.sink().bytes()).unwrap();
         assert_eq!(parsed.records.len(), 1);
-        let ValueFileRecord::CapturedValue(record) = &parsed.records[0] else {
-            panic!("expected value record");
+        let ValueFileRecord::LogEvent(record) = &parsed.records[0] else {
+            panic!("expected log record");
         };
         assert_eq!(record.body, vec![1, 2, 3]);
         assert!(record.blob_ref.is_none());
@@ -283,10 +266,10 @@ mod tests {
         .unwrap();
 
         let first_outcome = first
-            .append_body(ValueCodec::BamlOutboundValue, vec![1])
+            .append_log_body(ValueCodec::BamlOutboundValue, vec![1], log_event())
             .unwrap();
         let second_outcome = second
-            .append_body(ValueCodec::BamlOutboundValue, vec![2])
+            .append_log_body(ValueCodec::BamlOutboundValue, vec![2], log_event())
             .unwrap();
 
         assert_eq!(first_outcome.value_ref.id, "value_1");
@@ -309,7 +292,11 @@ mod tests {
             ValueWriter::with_blob_store(sink, BoundaryId::from_bytes([2; 16]), blob_store, 3)
                 .unwrap();
         let outcome = writer
-            .append_body(ValueCodec::BamlOutboundValue, b"abcdef".to_vec())
+            .append_log_body(
+                ValueCodec::BamlOutboundValue,
+                b"abcdef".to_vec(),
+                log_event(),
+            )
             .unwrap();
 
         assert_eq!(outcome.value_ref.id, "value_1");
@@ -317,8 +304,8 @@ mod tests {
         assert_eq!(outcome.value_ref.retained_size_bytes, Some(6));
 
         let parsed = read_bamlvalue_from_bytes(writer.sink().bytes()).unwrap();
-        let ValueFileRecord::CapturedValue(record) = &parsed.records[0] else {
-            panic!("expected value record");
+        let ValueFileRecord::LogEvent(record) = &parsed.records[0] else {
+            panic!("expected log record");
         };
         assert!(record.body.is_empty());
         let blob_ref = record.blob_ref.as_ref().expect("blob ref recorded");

@@ -14,11 +14,11 @@
 #![allow(unsafe_code)]
 
 use crate::prof::{
-    ring::{Ring, RingCtx, RingState},
+    ring::{Ring, RingCtx, RingState, segment_footprint},
     sync::thread,
 };
 
-/// Big enough that no scenario ever trips the D6 hard error.
+/// Big enough that no ordinary scenario hits transport admission pressure.
 const BIG_CAP: usize = 1 << 40;
 
 fn leak_ctx(cap: usize) -> &'static RingCtx {
@@ -49,7 +49,7 @@ struct TestRing {
 impl TestRing {
     fn new(ctx: &'static RingCtx, seg_bytes: usize, freelist_cap: usize, engine_id: u64) -> Self {
         Self {
-            ring: Ring::alloc(ctx, seg_bytes, freelist_cap, engine_id),
+            ring: Ring::alloc(ctx, seg_bytes, freelist_cap, engine_id).expect("test ring capacity"),
         }
     }
 
@@ -264,14 +264,14 @@ mod scenarios {
         let reg: &'static Registry = unsafe { &*reg_ptr };
 
         let t1 = thread::spawn(move || {
-            let h = reg.acquire(ctx, 16, 8, 1);
+            let h = reg.acquire(ctx, 16, 8, 1).expect("test ring capacity");
             // SAFETY: the claiming thread is alive for the whole call (no TLS
             // teardown in flight).
             unsafe { h.push(&rec(101)) };
             std::ptr::from_ref(h.ring()) as usize
         });
         let t2 = thread::spawn(move || {
-            let h = reg.acquire(ctx, 16, 8, 2);
+            let h = reg.acquire(ctx, 16, 8, 2).expect("test ring capacity");
             // SAFETY: the claiming thread is alive for the whole call (no TLS
             // teardown in flight).
             unsafe { h.push(&rec(202)) };
@@ -323,7 +323,7 @@ mod scenarios {
 
         // Producer 1 lives and dies on a spawned thread.
         let p1 = thread::spawn(move || {
-            let h = reg.acquire(ctx, 16, 8, 1);
+            let h = reg.acquire(ctx, 16, 8, 1).expect("test ring capacity");
             // SAFETY: the claiming thread is alive for the whole call (no TLS
             // teardown in flight).
             unsafe { h.push(&rec(7)) };
@@ -339,7 +339,7 @@ mod scenarios {
 
         // Producer 2 claims while the consumer keeps sweeping.
         let t = thread::spawn(move || {
-            let h = reg.acquire(ctx, 16, 8, 2);
+            let h = reg.acquire(ctx, 16, 8, 2).expect("test ring capacity");
             // SAFETY: the claiming thread is alive for the whole call (no TLS
             // teardown in flight).
             unsafe { h.push(&rec(8)) };
@@ -369,7 +369,7 @@ mod scenarios {
         let reg: &'static Registry = unsafe { &*reg_ptr };
 
         let producer = thread::spawn(move || {
-            let h = reg.acquire(ctx, 16, 8, 1);
+            let h = reg.acquire(ctx, 16, 8, 1).expect("test ring capacity");
             // SAFETY: the claiming thread is alive for the whole call (no TLS
             // teardown in flight).
             unsafe {
@@ -399,6 +399,24 @@ mod scenarios {
         drop(unsafe { Box::from_raw(reg_ptr) });
         assert_eq!(ctx.live_bytes(), 0, "Registry::drop leaked segments");
     }
+}
+
+#[test]
+fn segment_growth_pressure_rejects_record_without_aborting() {
+    let ctx = leak_ctx(segment_footprint(16));
+    let ring = TestRing::new(ctx, 16, 0, 1);
+    let producer = ring.get();
+    unsafe {
+        assert!(producer.push(&rec(1)));
+        assert!(producer.push(&rec(2)));
+        assert!(!producer.push(&rec(3)));
+    }
+    let mut observed = Vec::new();
+    unsafe {
+        producer.drain(&mut |bytes| collect_seqs(bytes, &mut observed));
+    }
+    assert_eq!(observed, [1, 2]);
+    assert_eq!(ctx.live_bytes(), segment_footprint(16));
 }
 
 #[cfg(baml_loom)]
@@ -566,7 +584,9 @@ mod stress {
                 let remaining = Arc::clone(&remaining);
                 std::thread::spawn(move || {
                     let engine = engine_idx as u64;
-                    let h = reg.acquire(ctx, seg_bytes, freelist_cap, engine);
+                    let h = reg
+                        .acquire(ctx, seg_bytes, freelist_cap, engine)
+                        .expect("test ring capacity");
                     let mut buf = [0u8; record::MAX_RECORD_LEN];
                     for seq in 1u64..=per_producer {
                         let len = RawRecord::CallFunction {
@@ -670,7 +690,7 @@ mod stress {
     }
 
     /// Wake delivery, not just wake survival: a parked consumer must be
-    /// unparked by a producer's segment fill. The producer keeps filling
+    /// unparked by a producer's segment-fill wake. The producer keeps filling
     /// segments, so the benign D4 lost-wakeup window cannot swallow every
     /// wake — only a broken path (consumer never registered, dead flag, no
     /// unpark call) leaves the consumer asleep for the full long timeout.
@@ -730,7 +750,7 @@ mod stress {
         let mut tagged: Vec<(u64, u64)> = Vec::new();
         for round in 1..=rounds {
             std::thread::spawn(move || {
-                let h = reg.acquire(ctx, 64, 4, round);
+                let h = reg.acquire(ctx, 64, 4, round).expect("test ring capacity");
                 // SAFETY: the claiming thread is alive for the whole call (no TLS
                 // teardown in flight).
                 unsafe { h.push(&rec(round)) };
@@ -782,7 +802,7 @@ mod stress {
         );
 
         let ptr1 = std::thread::spawn(|| {
-            let h = ring_for_engine(ENGINE);
+            let h = ring_for_engine(ENGINE).expect("test ring capacity");
             // SAFETY: the claiming thread is alive for the whole call (no TLS
             // teardown in flight).
             unsafe { h.push(&rec(1)) };
@@ -815,7 +835,7 @@ mod stress {
 
         // The next thread asking for any engine must claim the pooled ring.
         let ptr2 = std::thread::spawn(|| {
-            let h = ring_for_engine(ENGINE + 1);
+            let h = ring_for_engine(ENGINE + 1).expect("test ring capacity");
             // SAFETY: the claiming thread is alive for the whole call (no TLS
             // teardown in flight).
             unsafe { h.push(&rec(2)) };

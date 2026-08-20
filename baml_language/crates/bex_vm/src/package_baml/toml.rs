@@ -18,7 +18,7 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
     fn parse(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
         match ::toml::Table::from_str(s.as_str()) {
             Ok(table) => convert_toml_value(vm, ::toml::Value::Table(table)),
-            Err(e) => Err(VmRustFnError::Thrown(make_toml_parse_error(
+            Err(e) => Err(VmRustFnError::thrown_fresh(make_toml_parse_error(
                 vm,
                 e.to_string(),
             ))),
@@ -37,7 +37,7 @@ fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmR
     match value {
         toml::Value::String(s) => Ok(Value::object(vm.alloc_string(s))),
         toml::Value::Integer(i) => Value::try_int(i).ok_or_else(|| {
-            VmRustFnError::Thrown(make_toml_parse_error(
+            VmRustFnError::thrown_fresh(make_toml_parse_error(
                 vm,
                 "BAML `int` is 63 bits. It is unable to parse 64-bit TOML integers.".to_string(),
             ))
@@ -104,7 +104,7 @@ fn convert_toml_datetime(
             )
             .map(super::time::days_since_epoch)
             .map_err(|_| {
-                VmRustFnError::Thrown(make_toml_parse_error(
+                VmRustFnError::thrown_fresh(make_toml_parse_error(
                     vm,
                     format!("invalid TOML date: {datetime}"),
                 ))
@@ -151,7 +151,7 @@ fn convert_toml_datetime(
         .to_value(vm)),
         // The `toml` crate never produces other combinations (an offset
         // requires both a date and a time).
-        _ => Err(VmRustFnError::Thrown(make_toml_parse_error(
+        _ => Err(VmRustFnError::thrown_fresh(make_toml_parse_error(
             vm,
             format!("invalid TOML datetime: {datetime}"),
         ))),

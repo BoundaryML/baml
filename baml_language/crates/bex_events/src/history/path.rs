@@ -22,12 +22,6 @@ impl BoundaryHistoryPath {
     }
 
     #[must_use]
-    pub fn stack_segment_path(&self, thread_id: u64, segment: u64) -> PathBuf {
-        self.thread_dir(thread_id)
-            .join(format!("stack-{segment}.bamlprof"))
-    }
-
-    #[must_use]
     pub fn value_segment_path(&self, thread_id: u64, segment: u64) -> PathBuf {
         self.thread_dir(thread_id)
             .join(format!("value-{segment}.bamlvalue"))
