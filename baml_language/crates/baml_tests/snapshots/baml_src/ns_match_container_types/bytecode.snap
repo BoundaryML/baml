@@ -147,9 +147,16 @@ function match_container_types.classify_int_map_fn() -> string {
 
 function match_container_types.classify_list(x: int[] | string[]) -> string {
     load_var x
-    store_var _2
-    load_var _2
-    narrow_bind int[], slot=2
+    is_type int[]
+    pop_jump_if_false L0
+    load_var x
+    is_type int[]
+    pop_jump_if_false L0
+    load_var x
+    container_len
+    store_var_load_var _4
+    load_const 0
+    cmp_int_op >=
     pop_jump_if_false L0
     jump L1
 

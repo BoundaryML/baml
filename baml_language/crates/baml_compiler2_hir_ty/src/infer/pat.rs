@@ -1296,7 +1296,12 @@ impl<'db> InferenceContext<'db> {
         // only a UNIQUE fit claims - B-633's provable-overlap
         // conservatism: "cannot tell" keeps the member, several
         // survivors stay unclaimed.
-        let claimed_union = match effective.kind() {
+        // Keep the original scrutinee as the matrix column. The narrowed
+        // `effective` type belongs inside the UnionMember constructor; using
+        // it as the column loses the union discriminator and makes equal-shape
+        // slices cover one another regardless of their ascriptions.
+        let scrut_structure = self.structurally_resolve(scrut);
+        let claimed_union = match scrut_structure.kind() {
             TyKind::Union(members, _) => {
                 let members = members.to_vec();
                 let mut lists: Vec<Ty> = Vec::new();
@@ -1321,7 +1326,7 @@ impl<'db> InferenceContext<'db> {
                         }
                     }
                 };
-                claimed.map(|member| (effective.clone(), member))
+                claimed.map(|member| (scrut.clone(), member))
             }
             _ => None,
         };
@@ -1428,6 +1433,15 @@ impl<'db> InferenceContext<'db> {
                 let TyKind::List(element, _) = expanded.kind() else {
                     return false;
                 };
+                if let Some(type_ref) = self.type_refs.array_ascriptions.get(&pat).copied() {
+                    let ascribed = self.lower_body_annotation(type_ref);
+                    if !ascribed.has_error()
+                        && !self.provable_subtype(&ascribed, &expanded)
+                        && !self.provable_subtype(&expanded, &ascribed)
+                    {
+                        return false;
+                    }
+                }
                 let element = element.clone();
                 let subs: Vec<PatId> = prefix.iter().chain(suffix.iter()).copied().collect();
                 let rest_pat = rest.as_ref().and_then(|rest| rest.pat);

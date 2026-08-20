@@ -17,8 +17,8 @@
 
 function classify_list(x: int[] | string[]) -> string {
     match (x) {
-        let a: int[] => "ints",
-        let b: string[] => "strings",
+        [..]: int[] => "ints",
+        [..]: string[] => "strings",
     }
 }
 
