@@ -2605,11 +2605,19 @@ mod tests {
         is_stack_covered_phi(local, &def_use[&local], body, &predecessors)
     }
 
+    fn analyzed_classification(body: &MirFunctionBody, local: Local) -> LocalClassification {
+        AnalysisResult::analyze(body, 0, OptLevel::One).classifications[&local]
+    }
+
     #[test]
     fn nested_short_circuit_definitions_are_stack_carried() {
         let body = nested_short_circuit_body(None, false);
 
         assert!(is_stack_covered(&body, Local(1)));
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::PhiLike
+        );
     }
 
     /// A user-named local is not special: what matters is that every edge into
@@ -2619,6 +2627,10 @@ mod tests {
         let body = nested_short_circuit_body(Some("result"), false);
 
         assert!(is_stack_covered(&body, Local(1)));
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::PhiLike
+        );
     }
 
     #[test]
@@ -2626,6 +2638,10 @@ mod tests {
         let body = nested_short_circuit_body(Some("result"), true);
 
         assert!(!is_stack_covered(&body, Local(1)));
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
     }
 
     /// The stray initializer is just as unbalanced when the local is a compiler
@@ -2635,6 +2651,10 @@ mod tests {
         let body = nested_short_circuit_body(None, true);
 
         assert!(!is_stack_covered(&body, Local(1)));
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
     }
 
     /// `let x = false; if (c) { x = a && b } x` — MIR merges the short circuit's
@@ -2911,6 +2931,7 @@ mod tests {
         body.catch_regions.push(CatchRegion {
             body_entry: BlockId(0),
             handler: BlockId(3),
+            body_blocks: vec![BlockId(0)],
             handler_body: vec![BlockId(3)],
             error_local: Local(0),
             stack_trace_local: None,
