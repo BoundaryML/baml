@@ -1208,12 +1208,25 @@ fn is_short_circuit_phi(local: Local, du: &LocalDefUse, body: &MirFunctionBody) 
         return false;
     }
 
-    // One of the defs must be a ShortCircuit terminator targeting this local.
-    du.all_defs.iter().any(|&(block_id, ref stmt_ref)| {
-        *stmt_ref == StatementRef::Terminator
+    let use_block = du.uses[0].block;
+
+    // `_0` is the return place; all other named locals are source variables
+    // and may be reassigned. Keep them in slots rather than stack-carrying a
+    // value across control-flow edges. This mirrors MIR copy propagation,
+    // which only optimizes unnamed compiler temporaries for the same reason.
+    if local != Local(0) && body.local(local).name.is_some() {
+        return false;
+    }
+
+    du.all_defs.iter().any(|&(block_id, statement_ref)| {
+        statement_ref == StatementRef::Terminator
             && matches!(
                 &body.block(block_id).terminator,
-                Some(Terminator::ShortCircuit { destination: Place::Local(l), .. }) if *l == local
+                Some(Terminator::ShortCircuit {
+                    destination: Place::Local(destination),
+                    join,
+                    ..
+                }) if *destination == local && *join == use_block
             )
     })
 }
@@ -2359,6 +2372,131 @@ mod tests {
             scope_span: None,
             is_captured: false,
         }
+    }
+
+    fn nested_short_circuit_body(
+        name: Option<&str>,
+        with_prior_definition: bool,
+    ) -> MirFunctionBody {
+        let destination = Local(1);
+        let prior_definition = with_prior_definition.then_some(Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(destination),
+                value: Rvalue::Use(Operand::Constant(Constant::Bool(false))),
+            },
+            span: None,
+        });
+
+        MirFunctionBody {
+            blocks: vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: prior_definition.into_iter().collect(),
+                    terminator: Some(Terminator::ShortCircuit {
+                        operand: Operand::Constant(Constant::Bool(true)),
+                        is_and: true,
+                        destination: Place::Local(destination),
+                        eval_rhs: BlockId(1),
+                        join: BlockId(4),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![],
+                    terminator: Some(Terminator::ShortCircuit {
+                        operand: Operand::Constant(Constant::Bool(true)),
+                        is_and: true,
+                        destination: Place::Local(destination),
+                        eval_rhs: BlockId(2),
+                        join: BlockId(3),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(destination),
+                            value: Rvalue::Use(Operand::Constant(Constant::Bool(true))),
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Goto { target: BlockId(3) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(3),
+                    statements: vec![],
+                    terminator: Some(Terminator::Goto { target: BlockId(4) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(4),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Use(Operand::copy_local(destination)),
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Return),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                LocalDecl {
+                    name: None,
+                    ty: RuntimeTy::Bool {
+                        attr: TyAttr::default(),
+                    },
+                    span: None,
+                    scope_span: None,
+                    is_captured: false,
+                },
+                LocalDecl {
+                    name: name.map(baml_base::Name::new),
+                    ty: RuntimeTy::Bool {
+                        attr: TyAttr::default(),
+                    },
+                    span: None,
+                    scope_span: None,
+                    is_captured: false,
+                },
+            ],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        }
+    }
+
+    #[test]
+    fn nested_short_circuit_definitions_are_stack_carried() {
+        let body = nested_short_circuit_body(None, false);
+        let def_use = collect_def_use(&body);
+
+        assert!(is_short_circuit_phi(Local(1), &def_use[&Local(1)], &body));
+    }
+
+    #[test]
+    fn named_short_circuit_local_is_materialized() {
+        let body = nested_short_circuit_body(Some("result"), false);
+        let def_use = collect_def_use(&body);
+
+        assert!(!is_short_circuit_phi(Local(1), &def_use[&Local(1)], &body));
+    }
+
+    #[test]
+    fn reassigned_named_short_circuit_local_is_materialized() {
+        let body = nested_short_circuit_body(Some("result"), true);
+        let def_use = collect_def_use(&body);
+
+        assert!(!is_short_circuit_phi(Local(1), &def_use[&Local(1)], &body));
     }
 
     /// A single static use in a CFG cycle represents repeated dynamic uses.
