@@ -332,6 +332,44 @@ fn generate_rust_language_naming_convention_returns_diagnostic() {
 }
 
 #[test]
+fn generate_rust_default_output_stays_inside_project() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir(&project).unwrap();
+    create_project(
+        &project,
+        "function echo(value: string) -> string { value }\n",
+    );
+    std::fs::write(
+        project.join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.rust]\n\
+         output_type = \"rust\"\n\
+         naming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, &project, &["generate", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Rust generation failed: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        project.join("baml_sdk/Cargo.toml").is_file(),
+        "the default Rust SDK should be generated inside the project"
+    );
+    assert!(
+        !tmp.path().join("baml_sdk").exists(),
+        "generation must not create a sibling directory outside the project"
+    );
+}
+
+#[test]
 fn generate_go_writes_sdk_through_cli() {
     if !gofmt_is_available() {
         return;
