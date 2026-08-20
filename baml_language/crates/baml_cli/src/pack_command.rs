@@ -62,7 +62,10 @@ Examples:
     baml pack --function Extract --function Classify --output ./baml-tools
 
   Package a function from a standalone file:
-    baml pack --file script.baml main")]
+    baml pack --file script.baml main
+
+  Enable BAML log output from the packed executable:
+    BAML_LOG=info ./my-tool")]
 pub struct PackArgs {
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,

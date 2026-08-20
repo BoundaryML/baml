@@ -10,6 +10,7 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
+use baml_exec::{LogLevel as TestLogLevel, LogOutput};
 use baml_project::ProjectDatabase;
 use baml_type::RuntimeTy;
 use bex_engine::{
@@ -19,12 +20,7 @@ use bex_engine::{
 use clap::{Args, FromArgMatches};
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{
-    bytecode_cache::CacheContext,
-    log_output::{LogLevel as TestLogLevel, LogOutput},
-    reporter::Reporter,
-    test_filter::TestFilter,
-};
+use crate::{bytecode_cache::CacheContext, reporter::Reporter, test_filter::TestFilter};
 
 /// Run BAML tests.
 ///

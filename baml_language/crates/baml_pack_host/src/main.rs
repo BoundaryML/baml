@@ -11,8 +11,9 @@
 //      [`baml_exec::parse_multi_target_argv`]) — this gives `--help` /
 //      unknown-flag / missing-required handling for free, with the same
 //      brand-purple styling as `baml run`'s top-level clap.
-//   5. Dispatch to the resolved target via `baml_exec::dispatch_target`
-//      and write the return value in the baked-in output format.
+//   5. Dispatch to the resolved target with structured log capture when
+//      `BAML_LOG` selects a level, and write the return value in the baked-in
+//      output format.
 //
 // Exit codes: 0 on success, non-zero on error. To set a non-zero exit
 // code from BAML, the program calls `baml.sys.exit(code)`.
@@ -25,10 +26,11 @@
 use std::{collections::HashMap, process::ExitCode, sync::Arc};
 
 use baml_exec::{
-    DispatchResult, PACK_SECTION_NAME, PackEnvelope, PackMode, clamp_exit_code, dispatch_target,
-    load_json_source, parse_multi_target_argv, parse_target_argv, print_error,
+    DispatchResult, LogLevel, LogOutput, PACK_SECTION_NAME, PackEnvelope, PackMode,
+    clamp_exit_code, dispatch_target_with_context, load_json_source, parse_multi_target_argv,
+    parse_target_argv, print_error,
 };
-use bex_engine::{BexEngine, UserFunctionInfo};
+use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
 use sys_native::SysOpsExt;
 
 fn extract_envelope() -> Result<PackEnvelope, String> {
@@ -256,14 +258,30 @@ fn finalize_dispatch(
         }
     };
 
-    let result = rt.block_on(dispatch_target(
-        Arc::clone(engine),
-        target_name,
-        parsed.cli_values,
-        json_args,
-        output_format,
-    ));
-    rt.block_on(engine.shutdown());
+    let log_level = match LogLevel::from_env() {
+        Ok(level) => level,
+        Err(error) => {
+            print_error(error);
+            return ExitCode::FAILURE;
+        }
+    };
+    let log_output = LogOutput::new(log_level, "packed run");
+    let (call_context, logs) =
+        log_output.call_context(FunctionCallContextBuilder::new(bex_engine::CallId::next()));
+    let result = log_output.block_on(
+        &rt,
+        dispatch_target_with_context(
+            Arc::clone(engine),
+            target_name,
+            parsed.cli_values,
+            json_args,
+            output_format,
+            call_context,
+            || log_output.print(logs.as_ref()),
+        ),
+        logs.as_ref(),
+    );
+    log_output.block_on(&rt, engine.shutdown(), logs.as_ref());
     let mut unhandled_spawn_failed = false;
     for report in engine.take_unhandled_spawn_errors() {
         if report.cancelled {
