@@ -697,8 +697,8 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             sdkgen_go::DEFAULT_MAX_TYPED_UNION_ARITY
         };
         // `output_dir` is resolved relative to the project root and defaults
-        // to "..", with the target-owned generated directory appended.
-        let raw_output_dir = generator.output_dir.as_deref().unwrap_or("..");
+        // to the project root, with the target-owned generated directory appended.
+        let raw_output_dir = generator.output_dir.as_deref().unwrap_or(".");
         let generated_directory = output_type.map_or("baml_sdk", OutputType::generated_directory);
         let output_dir = root.join(raw_output_dir).join(generated_directory);
 
@@ -925,16 +925,13 @@ mod tests {
         };
         assert_eq!(
             output_for("csharp_default"),
-            &directory.path().join("..").join("baml_sdk")
+            &directory.path().join("baml_sdk")
         );
         assert_eq!(
             output_for("csharp_explicit"),
             &directory.path().join("generated").join("baml_sdk")
         );
-        assert_eq!(
-            output_for("python"),
-            &directory.path().join("..").join("baml_sdk")
-        );
+        assert_eq!(output_for("python"), &directory.path().join("baml_sdk"));
     }
 
     #[test]
@@ -1055,6 +1052,22 @@ mod tests {
                 .get_ref(),
             "typescript/node"
         );
+    }
+
+    #[test]
+    fn generator_output_defaults_to_project_root() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n[generator.rust]\noutput_type = \"rust\"\nnaming_convention = \"preserve-case\"\n",
+        )
+        .unwrap();
+
+        let (generators, diagnostics) = discover_generators(directory.path());
+
+        assert!(diagnostics.is_empty());
+        assert_eq!(generators.len(), 1);
+        assert_eq!(generators[0].output_dir, directory.path().join("baml_sdk"));
     }
 
     #[test]
