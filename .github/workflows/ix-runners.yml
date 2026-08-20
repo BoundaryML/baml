@@ -18,7 +18,7 @@ on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_run:
-    workflows: ["**"]
+    workflows: ["CI on ix (preview)"]
     types: [requested]
 
 # Overlapping ticks can double-spawn; this group is the lock.
@@ -45,6 +45,8 @@ jobs:
     name: Reconcile runners
     # Control plane is hosted-only; secrets never reach the fleet.
     runs-on: ubuntu-latest
+    # IX_TOKEN lives in this environment's secrets.
+    environment: boundary-tools-dev
     steps:
       # Repos without IX_TOKEN configured (forks, and this repo until the
       # secret is set) skip quietly instead of failing every wave.
@@ -61,7 +63,7 @@ jobs:
 
       - name: Reconcile
         if: steps.optin.outputs.ok == 'true'
-        uses: indexable-inc/ix-runners@1da294a29ca9dcc20eec21f3f5c9856dc10645eb
+        uses: indexable-inc/ix-runners@768d545e0cce8c62f2ce2005f2da3ec904775e35
         with:
           ix-token: ${{ secrets.IX_TOKEN }}
           token-source: ix
