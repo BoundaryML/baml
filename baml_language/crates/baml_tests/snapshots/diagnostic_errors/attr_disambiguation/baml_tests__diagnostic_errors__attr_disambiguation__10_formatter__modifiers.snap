@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-// Group C: type modifiers — optional, array, generic.
+// Group C: reflect.Type modifiers — optional, array, generic.
 // All cases should compile without errors.
 
 class MFoo {

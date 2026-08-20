@@ -448,7 +448,7 @@ function vertex_media_url_passthrough() -> string {
         prompt: GoogleVision$spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
     let cl = google.VertexClient.new(
         model = "gemini-2.5-flash",
@@ -483,7 +483,7 @@ function google_media_url_inlined() -> string {
         prompt: GoogleVision$spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
             let cl = google.GoogleClient.new(
                 model = "gemini-2.5-flash",
@@ -513,7 +513,7 @@ function google_media_youtube_passthrough() -> string {
         prompt: GoogleWatch$spec(clip).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
     let cl = google.GoogleClient.new(
         model = "gemini-2.5-flash",
@@ -790,7 +790,7 @@ function vertex_claude_raw_predict() -> string {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
     let cl = google.VertexClient.new(
         model = "claude-sonnet-4-5",
@@ -826,7 +826,7 @@ function vertex_claude_model_override() -> string {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
     let cl = google.VertexClient.new(
         model = "claude-sonnet-4-5",
@@ -1009,11 +1009,11 @@ test "google_error_taxonomy" {
 // network. Both assert the same thing — no panic. (Mirrors
 // `anthropic_missing_key_resolve` / `_invoke`.)
 function _google_missing_key_client() -> google.GoogleClient {
-    // `env.NAME` naming a variable that exists nowhere: the ref resolves to
+    // An explicit env ref naming a variable that exists nowhere resolves to
     // null at REQUEST time and the client falls through to GOOGLE_API_KEY.
     google.GoogleClient.new(
         model = "gemini-2.5-flash",
-        api_key = env.BAML_GOOGLE_KEY_THAT_IS_NEVER_SET,
+        api_key = baml.env.ref("BAML_GOOGLE_KEY_THAT_IS_NEVER_SET"),
         base_url = "http://127.0.0.1:1",
     )
 }
@@ -1050,7 +1050,7 @@ function google_missing_key_invoke() -> string {
         prompt: GoogleEcho$spec("Say pong.").prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
     // The concrete classes, not the `ai.errors.Failure` interface: a
     // configuration error and a transport error are both typed, and matching

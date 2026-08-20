@@ -611,7 +611,7 @@ pub mod inbound_value {
         #[prost(string, tag = "12")]
         BigintValue(::prost::alloc::string::String),
         /// A reflected BAML type passed as a value (mirrors a `type`-typed BAML
-        /// value, e.g. the result of `type.of<T>()`). Accepted as an
+        /// value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
         /// argument value so the host can pass types as data.
         #[prost(message, tag = "13")]
         TyValue(super::BamlTy),
@@ -843,7 +843,7 @@ pub mod baml_outbound_value {
         Uint8arrayValue(::prost::alloc::vec::Vec<u8>),
         #[prost(string, tag = "20")]
         BigintValue(::prost::alloc::string::String),
-        /// A reflected BAML type returned as a value (e.g. `type.of<T>()`).
+        /// A reflected BAML type returned as a value (e.g. `reflect.Type.of<T>()`).
         /// Shares the `BamlTy` representation with the inbound side.
         #[prost(message, tag = "21")]
         TyValue(super::BamlTy),

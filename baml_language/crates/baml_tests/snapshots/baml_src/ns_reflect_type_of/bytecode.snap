@@ -228,7 +228,7 @@ function reflect_type_of.of_value_helper(q: string) -> string {
     return
 }
 
-function reflect_type_of.wrap_in_container() -> type {
+function reflect_type_of.wrap_in_container() -> reflect.Type {
     load_type reflect_type_of.Container<#0>
     return
 }

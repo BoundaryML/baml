@@ -1,11 +1,11 @@
 use bex_vm_types::types::{DynTypeDefs, DynWitnessDef, Object, TypeValue, Value};
 use indexmap::IndexMap;
 
-use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, resolve};
+use super::{BamlClassType, PackageReflectImpl, resolve};
 use crate::{BexVm, errors::VmRustFnError};
 
-impl BamlNamespaceType for PackageBamlImpl {
-    /// BEP-066 K-13: `type.of_value(v)` — the runtime `type` value describing
+impl BamlClassType for PackageReflectImpl {
+    /// BEP-066 K-13: `reflect.Type.of_value(v)` — the runtime `type` value describing
     /// `v`'s concrete type, reconstructed by `BexVm::value_concrete_ty`.
     ///
     /// K-12 holds by construction: `value_concrete_ty` reports value types
@@ -32,9 +32,7 @@ impl BamlNamespaceType for PackageBamlImpl {
             .map_or_else(baml_type::RealizedTy::unknown, baml_type::RealizedTy::from);
         Ok(Value::object(vm.alloc_static_type(ty)))
     }
-}
 
-impl BamlClassTypeValue for PackageBamlImpl {
     fn array(vm: &mut BexVm, self_value: &Value) -> Value {
         let type_value = cloned_type_value(vm, *self_value);
         alloc_runtime_type(
@@ -184,7 +182,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
     ///
     /// This identity guarantee makes the result usable as a stable key in
     /// `map<string, V>` until generic-K interfaces enable a real
-    /// `map<type, V>`.
+    /// `map<reflect.Type, V>`.
     fn _to_string_impl(vm: &BexVm, self_value: &Value) -> bex_str::BexStr {
         let Some(ptr) = self_value.as_object_ptr() else {
             return bex_str::BexStr::from("<type: ?>");
@@ -1318,7 +1316,7 @@ fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<RealizedTypeInstan
 }
 
 /// BEP-044 wf3 #G19: a synthetic `TypeName` for a primitive type, so reflection on a
-/// primitive type value (`type.of<int>()`) has a name to key by, the way
+/// primitive type value (`reflect.Type.of<int>()`) has a name to key by, the way
 /// non-primitive types carry their own `TypeName`. Impl *matching* for primitives is
 /// structural — the registry bakes their for-types as `Concrete(RuntimeTy::Int { .. })`
 /// etc. (`baml_compiler2_mir`'s `tir2_to_template`), matched by `resolve::match_template`

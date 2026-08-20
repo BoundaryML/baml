@@ -617,7 +617,7 @@ function chat_azure_config_error_survives_normalize() -> string {
 function chat_anthropic_config_error_survives_normalize() -> string {
     anthropic.AnthropicClient.new(
         model = "claude-haiku-4-5",
-        api_key = env.BAML_TEST_UNSET_ANTHROPIC_KEY,
+        api_key = baml.env.ref("BAML_TEST_UNSET_ANTHROPIC_KEY"),
     ).resolved_api_key() catch_all (e) { _ => _config_failure_class(e) }
 }
 

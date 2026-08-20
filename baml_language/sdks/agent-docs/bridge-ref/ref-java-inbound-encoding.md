@@ -341,7 +341,7 @@ from a **contextual union** supplied by generated codegen:
   instance, or a type-alias resolving to one) in
   `new baml_bridge.BamlTypedValue(value, <descriptor>)` (`emit.rs:824-841`,
   `needs_inbound_descriptor:1303-1312`). `encodeInboundValue` unwraps the
-  `BamlTypedValue` to `(value, type)` (`ProtoWriter.java:194-203`), so a
+  `BamlTypedValue` to `(value, reflect.Type)` (`ProtoWriter.java:194-203`), so a
   union-typed argument arrives with its declared union as the contextual type.
 - **Class fields.** `registerClass` carries a parallel `fieldDescs[]` — one
   `descriptor_expr_opt(field.ty)` per field (`lib.rs:180-187`) — so a

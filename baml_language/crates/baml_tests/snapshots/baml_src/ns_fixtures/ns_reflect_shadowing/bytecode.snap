@@ -25,7 +25,7 @@ function fixtures.reflect_shadowing.$init_test_ns_fixtures_ns_reflect_shadowing_
     pop 1
     load_var registry
     load_const "root.fixtures.reflect_shadowing"
-    load_const "qualified baml.reflect still works"
+    load_const "qualified reflect still works"
     make_closure .<lambda($init_test_ns_fixtures_ns_reflect_shadowing_main, 3)>, 0
     load_const null
     call testing.TestCollector.register_test_at
@@ -50,9 +50,9 @@ function fixtures.reflect_shadowing.local_shadows_shorthand() -> int {
 
 function fixtures.reflect_shadowing.qualified_still_works() -> string {
     load_const user.fixtures.reflect_shadowing.helper
-    call baml.reflect.signature
+    call reflect.signature
     load_field .returns
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 

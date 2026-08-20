@@ -89,6 +89,7 @@ fn route_inner(name: &Name) -> LeafPath {
         "user" => {}
         "baml" => segs.push("baml".to_string()),
         "ai" => segs.push("ai".to_string()),
+        "reflect" => segs.push("reflect".to_string()),
         other => {
             segs.push("vendor".to_string());
             segs.push(sanitize_module_segment(other));

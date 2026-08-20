@@ -22,7 +22,7 @@ async fn self_recursive_employee_renders_and_parses() {
         function main() -> string {
             let employee = reflect.class.builder("Employee")
             let pending = employee.type()
-            employee.field("name", type.of<string>().meta(
+            employee.field("name", reflect.Type.of<string>().meta(
                 alias = "full_name",
                 description = "the employee's display name",
             ))
@@ -70,7 +70,7 @@ async fn mutually_recursive_group_freezes_together_and_is_idempotent() {
             let left_p = left.type()
             let right_p = right.type()
             let lefts_p = left_p.array()
-            let either_p = left_p.union([type.of<string>()])
+            let either_p = left_p.union([reflect.Type.of<string>()])
             let pending_starts_null = left_p.resolved() == null
 
             left.field("right", right_p.optional())
@@ -118,16 +118,16 @@ async fn frozen_mutation_and_unresolved_call_name_the_builder() {
 
         function main() -> string {
             let frozen = reflect.class.builder("FrozenEmployee")
-            frozen.field("name", type.of<string>())
+            frozen.field("name", reflect.Type.of<string>())
             frozen.build()
-            let frozen_error = frozen.field("age", type.of<int>()) catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].message
+            let frozen_error = frozen.field("age", reflect.Type.of<int>()) catch (e) {
+                reflect.errors.CompilationError => e.diagnostics[0].message
             }
 
             let unresolved = reflect.class.builder("UnbuiltTenant")
             let erased: unknown = unresolved.type()
             let pending_error = Extract$render_prompt<unreflect(erased)>() catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].message
+                reflect.errors.CompilationError => e.diagnostics[0].message
             }
 
             let left = "missing frozen error"
@@ -160,9 +160,9 @@ async fn duplicate_field_structured_diagnostic_has_a_null_span() {
         r#"
         function main() -> string {
             let builder = reflect.class.builder("Duplicate")
-            builder.field("name", type.of<string>())
-            let result = builder.field("name", type.of<int>()) catch (e) {
-                baml.reflect.errors.CompilationError => {
+            builder.field("name", reflect.Type.of<string>())
+            let result = builder.field("name", reflect.Type.of<int>()) catch (e) {
+                reflect.errors.CompilationError => {
                     let span = e.diagnostics[0].span
                     return e.diagnostics[0].code
                         + "|" + (span == null).to_string()
@@ -183,7 +183,7 @@ async fn duplicate_field_structured_diagnostic_has_a_null_span() {
 async fn pending_type_is_not_a_static_subtype_of_type() {
     let _ = baml_test!(
         r#"
-        function accepts_type(value: type) -> bool { true }
+        function accepts_type(value: reflect.Type) -> bool { true }
 
         function main() -> bool {
             let builder = reflect.class.builder("StillPending")
@@ -217,7 +217,7 @@ async fn recursive_pending_fields_carry_metadata() {
         function main() -> string throws unknown {
             let node = reflect.class.builder("Node")
             let next = node.type().optional()
-            node.field("label", type.of<string>())
+            node.field("label", reflect.Type.of<string>())
             node.field(
                 "next",
                 next.meta(alias = "child", description = "Recursive child"),
@@ -263,7 +263,7 @@ async fn recursive_pending_field_metadata_reaches_the_rendered_schema() {
         function main() -> string throws unknown {
             let node = reflect.class.builder("Node")
             let next = node.type().optional()
-            node.field("label", type.of<string>())
+            node.field("label", reflect.Type.of<string>())
             node.field(
                 "next",
                 next.meta(alias = "child", description = "Recursive child"),
@@ -296,7 +296,7 @@ async fn metadata_survives_an_already_resolved_pending_reference() {
         r#"
         function main() -> string throws unknown {
             let inner = reflect.class.builder("Inner")
-            inner.field("value", type.of<string>())
+            inner.field("value", reflect.Type.of<string>())
             let pending = inner.type()
             inner.build()
 

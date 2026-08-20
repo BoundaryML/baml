@@ -17,13 +17,13 @@ class UC {
 }
 
 class OrderingUnions {
-    // B1: type attr after full union — baseline
+    // B1: reflect.Type attr after full union — baseline
     b1: UA | UB | UC @stream.done,
 
-    // B2: type attr on middle member
+    // B2: reflect.Type attr on middle member
     b2: UA | UB @stream.done | UC,
 
-    // B3: type attr on first member
+    // B3: reflect.Type attr on first member
     b3: UA @stream.done | UB | UC,
 
     // B4: field attr after full union — valid, hoisted to field
@@ -38,7 +38,7 @@ class OrderingUnions {
     // B7: mixed attrs after full union — valid
     b7: UA | UB | UC @alias("b7_alias") @stream.done,
 
-    // B8: type attr mid-union + field attr at end — valid
+    // B8: reflect.Type attr mid-union + field attr at end — valid
     b8: UA | UB @stream.done | UC @alias("b8_alias"),
 
     // B9: parenthesized union + type attr — valid

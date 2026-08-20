@@ -31,7 +31,7 @@ that code exists.
 | [x] | B-06 | 4 | A bare value in a generic slot reports the targeted “requires `unreflect`” diagnostic. |
 | [x] | B-07 | 4 | Every runtime operand is inferred and checked below primitive `type`, with normal error/pending cascade suppression. |
 | [x] | B-08 | 4 | Only checks that depend on a runtime slot are deferred; operands are still inferred and unrelated static bounds remain enforced. |
-| [x] | B-09 | 4, 7 | Exact `baml.reflect.Package.get_function<F>` extraction uses its special type position and MIR consumes the solved plan without re-lowering syntax. |
+| [x] | B-09 | 4, 7 | Exact `reflect.Package.get_function<F>` extraction uses its special type position and MIR consumes the solved plan without re-lowering syntax. |
 | [x] | B-10 | 4 | Argument binding enriches one call plan without erasing type slots; optional and ordinary calls use the same write path. |
 | [x] | B-11 | 4 | Uncontracted render/build helpers seed schema `T` from a named, non-generic LLM function return type. |
 | [x] | B-12 | 2, 5 | Default and forward-reference traversal visits hidden operands exactly once and default inference cannot leak per-body external-call state. |
@@ -42,7 +42,7 @@ that code exists.
 | [x] | B-17 | 3, 6 | Mounted builtins without a loc-free link contract are reserved and fail with the targeted unsupported-call diagnostic, including optional calls. |
 | [x] | B-18 | 4 | Streaming calls reject runtime type-argument slots. |
 | [x] | B-19 | 4 | `from_json` reconstruction runs only for an all-static type-argument plan. |
-| [x] | B-20 | 3 | Expression inference uses the same shadow-preserving `baml.reflect/type/json` fallback as type lowering. |
+| [x] | B-20 | 3 | Expression inference uses the same ordinary package resolution for `reflect` and the same shadow-preserving `json` fallback as type lowering. |
 | [x] | B-21 | 5 | An `unreflect` pattern checks its operand as `type`, preserves the scrutinee type, has unique possible-but-non-covering usefulness identity, and binds nothing. |
 | [x] | B-22 | 2, 5 | Inference and throw analysis share canonical hidden-child traversal for runtime operands and type-binding values. |
 | [x] | N-01 | 1 | Static Mint identity hashes canonical plain `NormalTy` with fixed FNV-1a-64 and architecture-stable numeric encoding, never an intern handle. |

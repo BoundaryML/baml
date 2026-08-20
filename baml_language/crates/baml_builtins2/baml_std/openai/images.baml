@@ -14,9 +14,9 @@
 // editing is a different, multipart endpoint) and tools are not supported.
 class ImageClient {
     model: string,
-    // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
-    // time), or null to resolve OPENAI_API_KEY at request time. Construction
-    // never touches env, so declaring/constructing a client is always safe.
+    // A literal string (including a strict `env.NAME` lookup), an explicit
+    // `baml.env.Ref` read at request time, or null to resolve OPENAI_API_KEY at
+    // request time.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
 
@@ -118,7 +118,7 @@ class ImageClient {
         throw ai.errors.InvalidRequest {
             provider: "openai-images",
             status_code: null,
-            detail: `no OpenAI API key: set the client's api_key (a literal or env.NAME), or export one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "OPENAI_API_KEY")}`,
+            detail: `no OpenAI API key: set the client's api_key (a literal, env.NAME, or baml.env.ref("NAME")), or export one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "OPENAI_API_KEY")}`,
             raw_body: null,
         }
     }

@@ -48,7 +48,7 @@ function transcript_text(j: ai.Journal) -> string {
 // {outcome: anyOf [T-schema, calls-schema]} — the constrained output that
 // lets one CLI run return either the final result or BAML tool calls. T's
 // $defs lift to the envelope root so its $refs stay valid.
-function envelope_schema(output_type: type) -> map<string, unknown> {
+function envelope_schema(output_type: reflect.Type) -> map<string, unknown> {
     let final_root = baml.json.from_json<map<string, unknown>>(baml.json.schema(output_type));
     let definitions = final_root.delete("$defs");
     let call_props: map<string, unknown> = {};

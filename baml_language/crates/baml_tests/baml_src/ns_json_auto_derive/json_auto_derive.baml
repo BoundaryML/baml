@@ -683,7 +683,7 @@ test "round_trip_with_overrides_both_directions" {
     assert.equal(round_trip_with_overrides_both_directions_val(), "[reset]")
 }
 
-// alias_chain_dispatch_to_json: type Outer = Inner; type Inner = B; b.to_json() → B's override
+// alias_chain_dispatch_to_json: reflect.Type Outer = Inner; type Inner = B; b.to_json() → B's override
 class BAliasTo {
     y int
 

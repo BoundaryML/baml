@@ -12,8 +12,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0003
 
-  × unresolved name: `baml.reflect.type_of`
+  × unresolved name: `reflect.type_of`
     ╭─[main.baml:10:5]
- 10 │     baml.reflect.type_of<string>()
-    ·     ────────────────────
+ 10 │     reflect.type_of<string>()
+    ·     ───────────────
     ╰────

@@ -32,7 +32,7 @@ fn user.fixtures.reflect_shadowing.$init_test_ns_fixtures_ns_reflect_shadowing_m
 
     bb3: {
         _9 = make_closure lambda[3]();
-        _8 = call const fn testing.TestCollector.register_test_at(copy _1, const "root.fixtures.reflect_shadowing", const "qualified baml.reflect still works", copy _9, const null) -> [bb4];
+        _8 = call const fn testing.TestCollector.register_test_at(copy _1, const "root.fixtures.reflect_shadowing", const "qualified reflect still works", copy _9, const null) -> [bb4];
     }
 
     bb4: {
@@ -209,19 +209,19 @@ fn user.fixtures.reflect_shadowing.qualified_still_works() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.AnyFunction<Returns = unknown, Throws = unknown> // f
-    let _2: baml.reflect.Signature // sig
+    let _2: reflect.Signature // sig
     let _3: baml.AnyFunction<Returns = unknown, Throws = unknown>
-    let _4: (baml.TypeValue) -> string throws never
+    let _4: (reflect.Type) -> string throws never
 
     bb0: {
         _1 = const fn user.fixtures.reflect_shadowing.helper;
         _3 = copy _1;
-        _2 = call const fn baml.reflect.signature(copy _3) -> [bb1];
+        _2 = call const fn reflect.signature(copy _3) -> [bb1];
     }
 
     bb1: {
         _4 = copy _2.3;
-        _0 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb2];
+        _0 = call const fn reflect.Type.baml.ToString.to_string(copy _4) -> [bb2];
     }
 
     bb2: {

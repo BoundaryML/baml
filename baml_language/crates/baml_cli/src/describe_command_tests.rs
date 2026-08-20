@@ -429,6 +429,29 @@ fn render_builtin_namespace_env() {
     insta::assert_snapshot!(output);
 }
 
+/// `baml describe reflect` routes through the ordinary root-package path.
+#[test]
+fn render_reflect_package_listing() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "reflect");
+    assert!(output.contains("reflect.Type"), "{output}");
+    assert!(output.contains("reflect.Package"), "{output}");
+    assert!(!output.contains("baml.reflect"), "{output}");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn describe_reflect_type_and_intrinsic() {
+    let db = simple_project();
+    let type_output = describe_via_dispatch(&db, "reflect.Type");
+    assert!(type_output.contains("class Type"), "{type_output}");
+    let intrinsic_output = describe_via_dispatch(&db, "reflect.Type.of");
+    assert!(
+        intrinsic_output.contains("function of<T>() -> reflect.Type"),
+        "{intrinsic_output}"
+    );
+}
+
 /// `baml describe ai.internal` — list items in the `ai.internal` namespace,
 /// the home of the package-private helpers and the prompt-rendering plumbing
 /// (there is deliberately no `baml.prompt` namespace).
@@ -893,7 +916,7 @@ fn describe_builtin_method_drill_in_via_alias() {
 #[test]
 fn describe_package_functions_documents_the_generic_listing_contract() {
     let db = simple_project();
-    let output = describe_via_dispatch(&db, "baml.reflect.Package.functions");
+    let output = describe_via_dispatch(&db, "reflect.Package.functions");
     assert!(
         output.contains("including generic ones") && output.contains("specialize(args)"),
         "expected generic-listing contract in builtin method docs:\n{output}",
@@ -910,7 +933,7 @@ fn describe_builtin_method_drill_in_via_class_name() {
     let cases = [
         (
             "Array.reduce",
-            "function reduce(self, reducer: (A, T) -> A throws E, initial: A) -> A throws E",
+            "function reduce<A, E>(self, reducer: (A, T) -> A throws E, initial: A) -> A throws E",
         ),
         (
             "String.split",

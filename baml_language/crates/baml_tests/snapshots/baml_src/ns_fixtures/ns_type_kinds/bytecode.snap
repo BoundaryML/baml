@@ -1,54 +1,54 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.type_kinds.classify(t: type) -> string {
+function fixtures.type_kinds.classify(t: reflect.Type) -> string {
     load_var t
-    call baml.TypeValue.kind
+    call reflect.Type.kind
     store_var _2
     load_var _2
-    is_type baml.reflect.class.Type
+    is_type reflect.class.Type
     pop_jump_if_false L0
     jump L15
 
   L0:
     load_var _2
-    is_type baml.reflect.enum.Type
+    is_type reflect.enum.Type
     pop_jump_if_false L1
     jump L14
 
   L1:
     load_var _2
-    is_type baml.reflect.union.Type
+    is_type reflect.union.Type
     pop_jump_if_false L2
     jump L13
 
   L2:
     load_var _2
-    is_type baml.reflect.literal.Type
+    is_type reflect.literal.Type
     pop_jump_if_false L3
     jump L12
 
   L3:
     load_var _2
-    is_type baml.reflect.array.Type
+    is_type reflect.array.Type
     pop_jump_if_false L4
     jump L11
 
   L4:
     load_var _2
-    is_type baml.reflect.map.Type
+    is_type reflect.map.Type
     pop_jump_if_false L5
     jump L10
 
   L5:
     load_var _2
-    is_type baml.reflect.interface.Type
+    is_type reflect.interface.Type
     pop_jump_if_false L6
     jump L9
 
   L6:
     load_var _2
-    is_type baml.reflect.primitive.Type
+    is_type reflect.primitive.Type
     pop_jump_if_false L7
     jump L8
 
@@ -163,9 +163,9 @@ function fixtures.type_kinds.exercise_all_kinds() -> bool {
     return
 }
 
-function fixtures.type_kinds.read_class(view: baml.reflect.class.Type) -> type {
+function fixtures.type_kinds.read_class(view: reflect.class.Type) -> reflect.Type {
     load_var view
-    load_type baml.reflect.TypeView
+    load_type reflect.TypeView
     load_const "as_type"
     virtual_call nargs=1 ntypeargs=0
     store_var _0

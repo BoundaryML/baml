@@ -2,11 +2,11 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 === MIR2 ===
-fn user.fixtures.type_kinds.classify(t: type) -> string {
+fn user.fixtures.type_kinds.classify(t: reflect.Type) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: type // t // param
-    let _2: baml.reflect.array.Type | baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.function.Type | baml.reflect.interface.Type | baml.reflect.literal.Type | baml.reflect.map.Type | baml.reflect.primitive.Type | baml.reflect.union.Type
+    let _1: reflect.Type // t // param
+    let _2: reflect.array.Type | reflect.class.Type | reflect.enum.Type | reflect.function.Type | reflect.interface.Type | reflect.literal.Type | reflect.map.Type | reflect.primitive.Type | reflect.union.Type
     let _3: bool
     let _4: bool
     let _5: bool
@@ -17,46 +17,46 @@ fn user.fixtures.type_kinds.classify(t: type) -> string {
     let _10: bool
 
     bb0: {
-        _2 = call const fn baml.TypeValue.kind(copy _1) -> [bb1];
+        _2 = call const fn reflect.Type.kind(copy _1) -> [bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _2, baml.reflect.class.Type);
+        _3 = is_type(copy _2, reflect.class.Type);
         branch copy _3 -> [bb17, bb2];
     }
 
     bb2: {
-        _4 = is_type(copy _2, baml.reflect.enum.Type);
+        _4 = is_type(copy _2, reflect.enum.Type);
         branch copy _4 -> [bb16, bb3];
     }
 
     bb3: {
-        _5 = is_type(copy _2, baml.reflect.union.Type);
+        _5 = is_type(copy _2, reflect.union.Type);
         branch copy _5 -> [bb15, bb4];
     }
 
     bb4: {
-        _6 = is_type(copy _2, baml.reflect.literal.Type);
+        _6 = is_type(copy _2, reflect.literal.Type);
         branch copy _6 -> [bb14, bb5];
     }
 
     bb5: {
-        _7 = is_type(copy _2, baml.reflect.array.Type);
+        _7 = is_type(copy _2, reflect.array.Type);
         branch copy _7 -> [bb13, bb6];
     }
 
     bb6: {
-        _8 = is_type(copy _2, baml.reflect.map.Type);
+        _8 = is_type(copy _2, reflect.map.Type);
         branch copy _8 -> [bb12, bb7];
     }
 
     bb7: {
-        _9 = is_type(copy _2, baml.reflect.interface.Type);
+        _9 = is_type(copy _2, reflect.interface.Type);
         branch copy _9 -> [bb11, bb8];
     }
 
     bb8: {
-        _10 = is_type(copy _2, baml.reflect.primitive.Type);
+        _10 = is_type(copy _2, reflect.primitive.Type);
         branch copy _10 -> [bb10, bb9];
     }
 
@@ -110,13 +110,13 @@ fn user.fixtures.type_kinds.classify(t: type) -> string {
     }
 }
 
-fn user.fixtures.type_kinds.read_class(view: baml.reflect.class.Type) -> type {
+fn user.fixtures.type_kinds.read_class(view: reflect.class.Type) -> reflect.Type {
     // Locals:
-    let _0: type // _0 // return
-    let _1: baml.reflect.class.Type // view // param
+    let _0: reflect.Type // _0 // return
+    let _1: reflect.class.Type // view // param
 
     bb0: {
-        _0 = virtual_call as_type as baml.reflect.TypeView(copy _1) -> [bb1];
+        _0 = virtual_call as_type as reflect.TypeView(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -136,23 +136,23 @@ fn user.fixtures.type_kinds.exercise_all_kinds() -> bool {
     let _7: bool
     let _8: bool
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: string
-    let _12: type
+    let _12: reflect.Type
     let _13: string
-    let _14: type
+    let _14: reflect.Type
     let _15: string
-    let _16: type
+    let _16: reflect.Type
     let _17: string
-    let _18: type
+    let _18: reflect.Type
     let _19: string
-    let _20: type
+    let _20: reflect.Type
     let _21: string
-    let _22: type
+    let _22: reflect.Type
     let _23: string
-    let _24: type
+    let _24: reflect.Type
     let _25: string
-    let _26: type
+    let _26: reflect.Type
 
     bb0: {
         _10 = load_type(fixtures.type_kinds.Foo);

@@ -338,7 +338,7 @@ nominal **sealed interface** named after the alias, one `record` arm per union
 member:
 
 ```java
-// baml_sdk/aliases/RecList.java   —  BAML: type RecList = int | RecList[]
+// baml_sdk/aliases/RecList.java   —  BAML: reflect.Type RecList = int | RecList[]
 public sealed interface RecList permits RecList.IntValue, RecList.RecListListValue {
     record IntValue(java.lang.Long value) implements RecList {}
     record RecListListValue(java.util.List<baml_sdk.aliases.RecList> value) implements RecList {}

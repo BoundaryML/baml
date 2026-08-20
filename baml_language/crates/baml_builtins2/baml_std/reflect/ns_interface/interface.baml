@@ -1,11 +1,11 @@
 /// An interface-kind view of a `type` value. Users never construct this class.
 class Type {
-  implements baml.reflect.TypeView {
+  implements reflect.TypeView {
     //baml:vm
-    function as_type(self) -> type throws never { $rust_function }
+    function as_type(self) -> reflect.Type throws never { $rust_function }
   }
   //baml:vm
-  function implemented_by(self, other: type) -> bool throws never { $rust_function }
+  function implemented_by(self, other: reflect.Type) -> bool throws never { $rust_function }
 }
 
 /// An immutable structural-conformance witness.  Values are created only by
@@ -18,13 +18,13 @@ class Implementation {
     self,
     interface_field: string,
     class_field: string? = null,
-  ) -> Implementation throws baml.reflect.errors.CompilationError {
+  ) -> Implementation throws reflect.errors.CompilationError {
     $rust_function
   }
 }
 
 /// Start a structural witness for a static interface.
 //baml:mut_vm
-function implementation<I>() -> Implementation throws baml.reflect.errors.CompilationError {
+function implementation<I>() -> Implementation throws reflect.errors.CompilationError {
   $rust_function
 }

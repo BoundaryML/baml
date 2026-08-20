@@ -39,9 +39,7 @@ mod ops_bitwise;
 mod ops_math;
 mod prompt;
 mod random;
-pub(crate) mod reflect;
-mod resolve;
-pub(crate) mod runtime_class_builder;
+pub(crate) mod resolve;
 pub(crate) use resolve::ImplResolver;
 mod root;
 mod spawn;
@@ -50,8 +48,6 @@ mod string;
 mod sys;
 mod time;
 mod toml;
-mod type_class;
-pub(crate) mod type_kinds;
 mod uint8array;
 mod unknown_error;
 mod yaml;
@@ -318,7 +314,7 @@ pub(super) fn make_to_string_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr>
 /// arrays, maps) — `string.from` renders those structurally.
 ///
 /// Covers `Object::Instance` (user/builtin classes) plus the two builtin
-/// non-instance implementors, `type` (`baml.TypeValue`) and `uint8array`
+/// non-instance implementors, `type` (`reflect.Type`) and `uint8array`
 /// (`baml.Uint8Array`); without them `string.from(v)` would diverge from
 /// `v.to_string()` (e.g. a `type` rendering structurally instead of as its type
 /// name, or bytes as `[1, 2]` instead of their UTF-8 text). Allocation-free
@@ -332,7 +328,7 @@ pub(super) fn to_string_override_fn_name(vm: &BexVm, v: Value) -> Option<String>
                 Object::Class(c) => c.name.render_dotted(false),
                 _ => return None,
             },
-            Object::Type(_) => "baml.TypeValue".to_string(),
+            Object::Type(_) => "reflect.Type".to_string(),
             Object::Uint8Array(_) => "baml.Uint8Array".to_string(),
             _ => return None,
         },
@@ -406,6 +402,10 @@ const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
     (
         "boundary.",
         <crate::package_boundary::PackageBoundaryImpl as crate::package_boundary::BamlPackageBoundary>::get_native_fn,
+    ),
+    (
+        "reflect.",
+        <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,
     ),
 ];
 

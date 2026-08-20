@@ -1,16 +1,12 @@
-//! Native implementations for the `baml.reflect` namespace (BEP-062, moved
-//! into the `baml` package by BEP-066): `reflect.signature` and
-//! `reflect.call_any` (`reflect` is the keyword shorthand for `baml.reflect`).
+//! Native implementations for the root `reflect` package: `reflect.signature`,
+//! `reflect.call_any`, runtime package compilation, and sessions.
 //!
 //! Dispatch and the class constructors are generated from
-//! `baml_std/baml/ns_reflect/reflect.baml` by `baml_builtins2_codegen` into
-//! the `baml` package's trait hierarchy: declaring a `$rust_function` there
-//! adds a required [`BamlNamespaceReflect`] method here, and each class gets a
-//! `copy::reflect::` struct whose fields are checked by the compiler. Adding
-//! to the namespace is therefore a single edit to `reflect.baml` plus the
-//! implementation it demands. (`type.of` is a compiler intrinsic, so it never
-//! reaches a native at all; `type.of_value` lives in
-//! [`crate::package_baml::type_class`].)
+//! `baml_std/reflect/reflect.baml` by `baml_builtins2_codegen`: declaring a
+//! `$rust_function` there adds a required [`BamlPackageReflect`] method here,
+//! and each class gets a `copy::` struct whose fields are compiler-checked.
+//! `reflect.Type.of` is a compiler intrinsic; `reflect.Type.of_value` lives in
+//! [`crate::package_reflect::type_class`].
 
 use std::{
     collections::{HashMap, HashSet},
@@ -36,8 +32,8 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use super::{
-    BamlClassReflectPackage, BamlClassReflectSession, BamlNamespaceReflect, Continuation,
-    ImplResolver, NativeCallResult, PackageBamlImpl, PassThroughContinuation, copy,
+    BamlClassPackage, BamlClassSession, BamlPackageReflect, Continuation, ImplResolver,
+    NativeCallResult, PackageReflectImpl, PassThroughContinuation, copy,
 };
 use crate::{
     BexVm,
@@ -55,7 +51,7 @@ fn compilation_error(vm: &mut BexVm, id: DiagnosticId, message: String) -> VmRus
 
 /// Element tag for the `Arg[]` / `map<string, Arg>` containers. The class
 /// instances themselves are built through the generated `copy::` structs.
-const ARG_FQN: &str = "baml.reflect.Arg";
+const ARG_FQN: &str = "reflect.Arg";
 
 /// Materialize the public wrapper for the package selected by the lexical
 /// `Package.current()` instruction. Dynamic code uses its owning package;
@@ -69,13 +65,13 @@ pub(crate) fn current_package_value(vm: &mut BexVm, static_package: &str) -> Val
     } else {
         runtime
     };
-    copy::reflect::Package {
+    copy::Package {
         _inner: Value::object(package),
     }
     .to_value(vm)
 }
 
-impl BamlNamespaceReflect for PackageBamlImpl {
+impl BamlPackageReflect for PackageReflectImpl {
     fn signature(vm: &mut BexVm, f: &Value) -> Result<Value, VmRustFnError> {
         signature_impl(vm, *f)
     }
@@ -653,7 +649,7 @@ pub(super) fn descriptor_generic_params(vm: &mut BexVm, r#type: Value) -> Vec<Va
         .into_iter()
         .map(|name| {
             let name = Value::object(vm.alloc_string(name.as_str()));
-            copy::reflect::function::GenericParam { name }.to_value(vm)
+            copy::function::GenericParam { name }.to_value(vm)
         })
         .collect()
 }
@@ -951,7 +947,7 @@ fn dependency_object(vm: &BexVm, package: HeapPtr, local: &str) -> Option<HeapPt
 fn diagnostic_value(vm: &mut BexVm, diagnostic: &bex_vm_types::RuntimeCompileDiagnostic) -> Value {
     let span = diagnostic.span.as_ref().map_or(Value::NULL, |span| {
         let file = Value::object(vm.alloc_string(span.file.as_str()));
-        copy::reflect::Span {
+        copy::Span {
             file,
             start: i64::try_from(span.start).expect("source offsets fit BAML int"),
             end: i64::try_from(span.end).expect("source offsets fit BAML int"),
@@ -960,7 +956,7 @@ fn diagnostic_value(vm: &mut BexVm, diagnostic: &bex_vm_types::RuntimeCompileDia
     });
     let code = Value::object(vm.alloc_string(diagnostic.code.as_str()));
     let message = Value::object(vm.alloc_string(diagnostic.message.as_str()));
-    copy::reflect::Diagnostic {
+    copy::Diagnostic {
         code,
         span,
         message,
@@ -1099,7 +1095,7 @@ impl Continuation for FinishPackageTests {
     }
 }
 
-impl BamlClassReflectPackage for PackageBamlImpl {
+impl BamlClassPackage for PackageReflectImpl {
     #[allow(clippy::too_many_lines)]
     fn _finish(
         vm: &mut BexVm,
@@ -1444,7 +1440,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         runtime.type_values = type_values;
         runtime.init = init;
 
-        let wrapper = copy::reflect::Package {
+        let wrapper = copy::Package {
             _inner: Value::object(package_ptr),
         }
         .to_value(vm);
@@ -1595,7 +1591,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         }
 
         let derived_ptr = vm.alloc(Object::Package(Box::new(derived)));
-        Ok(copy::reflect::Package {
+        Ok(copy::Package {
             _inner: Value::object(derived_ptr),
         }
         .to_value(vm))
@@ -2307,7 +2303,7 @@ fn graft_session_submission(
     Ok(actions)
 }
 
-impl BamlClassReflectSession for PackageBamlImpl {
+impl BamlClassSession for PackageReflectImpl {
     fn _new(
         vm: &mut BexVm,
         packages: &IndexMap<bex_str::BexStr, Value>,
@@ -2364,7 +2360,7 @@ impl BamlClassReflectSession for PackageBamlImpl {
             })),
         };
         let package = vm.alloc(Object::Package(Box::new(package)));
-        Ok(copy::reflect::Session {
+        Ok(copy::Session {
             _inner: Value::object(package),
         }
         .to_value(vm))
@@ -2486,7 +2482,7 @@ fn alloc_arg(
         None => Value::object(vm.alloc_string(format!("$arg{position}"))),
     };
     let ty = alloc_type_in(vm, ty, defs);
-    copy::reflect::Arg { name, r#type: ty }.to_value(vm)
+    copy::Arg { name, r#type: ty }.to_value(vm)
 }
 
 /// A `string?` field: the string, or null.
@@ -2534,7 +2530,7 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
     let errors = alloc_type_in(vm, sig.throws, &defs);
     let docstring = opt_string(vm, sig.docstring.as_ref());
     let name = opt_string(vm, sig.name.as_ref());
-    Ok(copy::reflect::Signature {
+    Ok(copy::Signature {
         name,
         args,
         opts,
@@ -2555,7 +2551,7 @@ fn raise_invalid_argument(
     let argument = Value::object(vm.alloc_string(argument));
     let expected = Value::object(vm.alloc_static_type(expected));
     let got = Value::object(vm.alloc_static_type(got));
-    let err = copy::reflect::InvalidArgumentError {
+    let err = copy::InvalidArgumentError {
         argument,
         expected,
         got,

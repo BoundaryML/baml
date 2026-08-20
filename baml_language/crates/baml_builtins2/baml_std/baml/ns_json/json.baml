@@ -330,7 +330,7 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// describes the *shape* a value of `t` would take.
 ///
 /// Throws `root.errors.Unsupported` for constructs without a JSON Schema form.
-function schema(t: type) -> json throws root.errors.Unsupported {
+function schema(t: reflect.Type) -> json throws root.errors.Unsupported {
     $rust_io_function
 }
 

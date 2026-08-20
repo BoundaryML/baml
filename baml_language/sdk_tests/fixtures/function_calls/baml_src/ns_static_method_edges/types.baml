@@ -78,7 +78,7 @@ class Edge {
     value
   }
 
-  function type_value(value: type) -> type {
+  function type_value(value: reflect.Type) -> reflect.Type {
     value
   }
 

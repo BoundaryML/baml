@@ -58,7 +58,7 @@ pub enum Object {
     /// compile time so identical instantiations share one object
     /// (pointer-stable `foo<int> === foo<int>`). When called, the VM resolves
     /// `function` via the global table and seeds `frame.type_args` from
-    /// `type_args`, so type-reifying bodies (`type.of<T>`, json natives)
+    /// `type_args`, so type-reifying bodies (`reflect.Type.of<T>`, json natives)
     /// work through the value.
     GenericFunction(GenericFunction),
 

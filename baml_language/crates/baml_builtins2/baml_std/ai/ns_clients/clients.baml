@@ -24,7 +24,8 @@ type ClientSelector = root.Client | string | baml.env.Ref;
 ///     UNSET variable is a typed `root.errors.InvalidRequest` naming it — not
 ///     a panic, so a `catch_all` at the call boundary can still fall back.
 ///
-/// This is what makes `client: env.MODEL.get() ?? "openai/gpt-4o-mini"` work:
+/// This is what makes
+/// `client: baml.env.ref("MODEL").get() ?? "openai/gpt-4o-mini"` work:
 /// nothing about the selection is decided until the call happens.
 function resolve(selector: ClientSelector) -> root.Client {
     match (selector) {
@@ -36,7 +37,7 @@ function resolve(selector: ClientSelector) -> root.Client {
                 throw root.errors.InvalidRequest {
                     provider: "ai.clients",
                     status_code: null,
-                    detail: `client selector env.${named.name} is not set: point it at a "provider/model" string (valid prefixes are ${root.internal._shorthand_prefixes()}), or give the client: position a value with a fallback — env.${named.name}.get() ?? "openai/gpt-4o-mini"`,
+                    detail: `client selector env.${named.name} is not set: point it at a "provider/model" string (valid prefixes are ${root.internal._shorthand_prefixes()}), or give the client: position a value with a fallback — baml.env.ref("${named.name}").get() ?? "openai/gpt-4o-mini"`,
                     raw_body: null,
                 }
             }
@@ -475,7 +476,7 @@ class StreamRelay {
                 self.close_current();
                 throw unknown_error
             },
-            let compilation: baml.reflect.errors.CompilationError => {
+            let compilation: reflect.errors.CompilationError => {
                 self.close_current();
                 throw compilation
             },

@@ -1060,6 +1060,7 @@ fn media_reexport_rust_name(
         "baml.media.Audio" => Some(("baml_bridge.baml_py", "BamlAudio")),
         "baml.media.Pdf" => Some(("baml_bridge.baml_py", "BamlPdf")),
         AI_STREAM_STREAM => Some(("baml_bridge", "BamlStream")),
+        "reflect.Type" => Some(("baml_bridge.reflect", "Type")),
         _ => None,
     }
 }

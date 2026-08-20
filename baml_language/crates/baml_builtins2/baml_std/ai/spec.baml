@@ -3,15 +3,17 @@
 // No journal, no conversation, no wire state.
 // Mirrors _planv2/pages/02_guides/02_specs_and_runners/01_specs.md.
 
-/// A client credential (or endpoint) option: either the literal value, or a
-/// LATE-BOUND `baml.env.Ref` naming the environment variable that holds it.
+/// A client credential (or endpoint) option: either the literal value, or an
+/// explicit late-bound `baml.env.Ref` naming the environment variable that
+/// holds it.
 ///
 /// Every provider client's `api_key` / `base_url` is `Credential?`, so all
 /// three shapes are accepted positionally:
 ///
-///     api_key = "sk-..."                  // literal
-///     api_key = env.OPENAI_API_KEY        // late-bound ref, read per request
-///     api_key = null                      // fall back to the canonical env var
+///     api_key = "sk-..."                            // literal
+///     api_key = env.OPENAI_API_KEY                  // strict eager lookup
+///     api_key = baml.env.ref("OPENAI_API_KEY")      // late-bound lookup
+///     api_key = null                                // canonical env fallback
 ///
 /// A `Ref` carries the variable's NAME only, never its value: a constructed
 /// client never holds the secret, and the read happens at request time — after
@@ -123,8 +125,8 @@ class FunctionSpec<Out> {
         self.args
     }
 
-    function output_type(self) -> type throws baml.reflect.errors.CompilationError {
-        let output_type = type.of<Out>();
+    function output_type(self) -> reflect.Type throws reflect.errors.CompilationError {
+        let output_type = reflect.Type.of<Out>();
         root.internal.validate_output_type(output_type);
         output_type
     }

@@ -1172,7 +1172,7 @@ fn compute_non_defaultable_classes(
 
     // Seed: classes with a direct non-`Default` field — insert both name forms.
     // `$rust_type` (`Arc<dyn Any>`) and the `type` metatype (`RuntimeTy`) are
-    // both non-`Default`. (Container forms like `list<type>`/`type?` stay
+    // both non-`Default`. (Container forms like `list<reflect.Type>`/`reflect.Type?` stay
     // defaultable — `Vec`/`Option` are `Default` — so only direct fields seed.)
     let mut non_defaultable: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (cd, full_name) in &all_classes {

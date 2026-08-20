@@ -41,10 +41,9 @@ class BedrockClient {
     /// endpoint, a LocalStack instance, or a test server. A trailing slash is
     /// tolerated. Setting it bypasses region resolution for the URL.
     ///
-    /// A literal string, or `env.NAME` (a late-bound `baml.env.Ref` read at
-    /// request time) so a `client Name = ...` declaration — evaluated during
-    /// `$init`, which cannot run io sysops — stays pure while a deployment
-    /// still points the client somewhere else.
+    /// A literal string (including a strict `env.NAME` lookup), or an explicit
+    /// `baml.env.Ref` read at request time so a `client Name = ...`
+    /// declaration stays pure while a deployment points it somewhere else.
     endpoint_url: ai.Credential?,
 
     // --- inference parameters (Converse `inferenceConfig`) ------------------
@@ -134,8 +133,8 @@ class BedrockClient {
         }
     }
 
-    /// The request-time endpoint override: the explicit value (a literal, or
-    /// the value of the variable an `env.NAME` ref points at), else null
+    /// The request-time endpoint override: the explicit value (a string, or
+    /// the value of the variable an explicit `baml.env.Ref` points at), else null
     /// (build the regional host). Bedrock has no canonical endpoint variable.
     function resolved_endpoint_url(self) -> string? {
         ai.wire.resolve_credential(self.endpoint_url, null)

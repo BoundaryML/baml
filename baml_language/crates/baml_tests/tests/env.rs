@@ -59,17 +59,14 @@ async fn env_get_existing_var() {
     );
 }
 
-/// `env.X` is a LATE-BOUND reference: it desugars to `baml.env.ref("X")`,
-/// which builds a `baml.env.Ref` carrying the variable NAME only. Nothing is
-/// read until the reference is used, so the value never lands in a constructed
-/// value and a host may load secrets after the runtime initializes.
+/// `env.X` is the strict shorthand for `baml.env.get("X") ?? panic`.
 #[tokio::test]
 async fn env_sugar_existing_var() {
     unsafe { std::env::set_var("BAML_TEST_SUGAR_VAR", "sugar_value") };
     let output = baml_test!(
         r#"
             function main() -> string {
-                env.BAML_TEST_SUGAR_VAR.get_or_panic()
+                env.BAML_TEST_SUGAR_VAR
             }
         "#
     );
@@ -80,36 +77,72 @@ async fn env_sugar_existing_var() {
     );
 }
 
-/// The bare sugar yields the reference itself — the name, not the secret.
+/// Pin the exact strict desugar rather than merely its result.
 #[tokio::test]
-async fn env_sugar_is_a_late_bound_ref() {
+async fn env_sugar_calls_get_or_panic() {
     unsafe { std::env::set_var("BAML_TEST_SUGAR_REF_VAR", "never-captured") };
     let output = baml_test!(
         r#"
             function main() -> string {
-                env.BAML_TEST_SUGAR_REF_VAR.name
+                env.BAML_TEST_SUGAR_REF_VAR
             }
         "#
     );
 
-    // The desugar itself: `baml.env.ref("NAME")`, not an eager read.
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "BAML_TEST_SUGAR_REF_VAR"
-        call baml.env.ref
-        load_field .name
+        call baml.env.get_or_panic
         return
     }
     "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "BAML_TEST_SUGAR_REF_VAR".to_string().into()
+            "never-captured".to_string().into()
         ))
     );
 }
 
 // ─── Provider `api_key` env defaulting ────────────────────────────────────────
+
+#[tokio::test]
+async fn env_sugar_missing_var_panics() {
+    unsafe { std::env::remove_var("BAML_TEST_SUGAR_MISSING") };
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                env.BAML_TEST_SUGAR_MISSING
+            }
+        "#
+    );
+
+    assert!(output.result.is_err(), "a missing env.NAME must panic");
+}
+
+/// Strict `env.NAME` remains valid in the top-level client declarations that
+/// are evaluated during `$init`.
+#[tokio::test]
+async fn env_sugar_configures_top_level_client() {
+    unsafe { std::env::set_var("BAML_TEST_CLIENT_ENV", "sk-client-env") };
+    let output = baml_test!(
+        r#"
+            client EnvConfiguredClient = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = env.BAML_TEST_CLIENT_ENV,
+            );
+
+            function main() -> string {
+                EnvConfiguredClient.resolved_api_key()
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("sk-client-env".into()))
+    );
+}
 
 /// Extract the headers map from a `main() -> map<string, string>` run.
 fn result_headers(
@@ -138,7 +171,7 @@ async fn runtime_constructed_openai_client_defaults_api_key_from_env() {
                     prompt: spec.prompt_template,
                     journal: ai.Journal { log: [] },
                     toolbox: ai.tools.Toolbox.new([]),
-                    output_type: type.of<string>(),
+                    output_type: reflect.Type.of<string>(),
                 };
                 openai.internal.openai_render(
                     openai.ResponsesClient.new(model = "gpt-4o"),
@@ -172,7 +205,7 @@ async fn anthropic_clients_default_api_key_from_env_at_runtime() {
                     prompt: spec.prompt_template,
                     journal: ai.Journal { log: [] },
                     toolbox: ai.tools.Toolbox.new([]),
-                    output_type: type.of<string>(),
+                    output_type: reflect.Type.of<string>(),
                 };
                 let runtime = anthropic.internal._anthropic_request(
                     anthropic.AnthropicClient.new(model = "claude-sonnet-4-20250514"),

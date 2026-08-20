@@ -4676,9 +4676,9 @@ impl<'db> InferenceContext<'db> {
     fn validate_runtime_type_operand(&mut self, body: &ExprBody, operand: ExprId) {
         let got = self.infer_expr(body, operand, &Expectation::None);
         let pending_type = matches!(got.kind(), TyKind::Class(name, _, _)
-            if name.package().as_str() == "baml"
+            if name.package().as_str() == "reflect"
                 && name.namespace().iter().map(baml_type::Name::as_str)
-                    .eq(["reflect", "class"])
+                    .eq(["class"])
                 && name.name().as_str() == "PendingType");
         if pending_type
             || got.has_error()
@@ -4850,12 +4850,8 @@ impl<'db> InferenceContext<'db> {
             return;
         };
         let qtn = crate::lower::class_qualified_name(self.db, class);
-        if qtn.package().as_str() != "baml"
-            || !qtn
-                .namespace()
-                .iter()
-                .map(baml_type::Name::as_str)
-                .eq(["reflect"])
+        if qtn.package().as_str() != "reflect"
+            || !qtn.namespace().is_empty()
             || qtn.name().as_str() != "Session"
             || baml_compiler2_ppir::item_data::function_data(self.db, func)
                 .name
@@ -7991,12 +7987,8 @@ impl<'db> InferenceContext<'db> {
         function: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ) -> bool {
         let qtn = crate::lower::class_qualified_name(self.db, class);
-        qtn.package().as_str() == "baml"
-            && qtn
-                .namespace()
-                .iter()
-                .map(baml_type::Name::as_str)
-                .eq(["reflect"])
+        qtn.package().as_str() == "reflect"
+            && qtn.namespace().is_empty()
             && qtn.name().as_str() == "Package"
             && baml_compiler2_ppir::item_data::function_data(self.db, function)
                 .name
@@ -11895,11 +11887,8 @@ fn external_type_position(
             namespace,
             class,
             name,
-        } if package.as_str() == "baml"
-            && namespace
-                .iter()
-                .map(baml_type::Name::as_str)
-                .eq(["reflect"])
+        } if package.as_str() == "reflect"
+            && namespace.is_empty()
             && class.as_str() == "Package"
             && name.as_str() == "get_function" =>
         {

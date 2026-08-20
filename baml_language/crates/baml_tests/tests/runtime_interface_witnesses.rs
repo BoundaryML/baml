@@ -18,11 +18,11 @@ async fn witnessed_runtime_class_implements_static_interface() {
                 .field("name")
                 .field("email")
             let person_t = reflect.class.new("Person", {
-                "name": type.of<string>(),
-                "email": type.of<string>(),
-                "favorite_editor": type.of<string>(),
+                "name": reflect.Type.of<string>(),
+                "email": reflect.Type.of<string>(),
+                "favorite_editor": reflect.Type.of<string>(),
             }, implementations = [witness])
-            return person_t.as_type().implements(type.of<PersonAnchor>())
+            return person_t.as_type().implements(reflect.Type.of<PersonAnchor>())
         }
         "#
     );
@@ -46,9 +46,9 @@ async fn witness_realizes_associated_field_binding_before_exact_type_check() {
             let witness = reflect.interface.implementation<PublicIdentity<Key = string>>()
                 .field("key", class_field = "public_key")
             let account_t = reflect.class.new("Account", {
-                "public_key": type.of<string>(),
+                "public_key": reflect.Type.of<string>(),
             }, implementations = [witness])
-            return account_t.as_type().implements(type.of<PublicIdentity<Key = string>>())
+            return account_t.as_type().implements(reflect.Type.of<PublicIdentity<Key = string>>())
         }
         "#
     );
@@ -84,9 +84,9 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
                 .field("name")
                 .field("email", class_field = "contact_email")
             let person_t = reflect.class.new("Person", {
-                "name": type.of<string>(),
-                "contact_email": type.of<string>(),
-                "favorite_editor": type.of<string>(),
+                "name": reflect.Type.of<string>(),
+                "contact_email": reflect.Type.of<string>(),
+                "favorite_editor": reflect.Type.of<string>(),
             }, implementations = [anchor_impl])
 
             let prompt = ExtractPerson$render_prompt<unreflect(person_t.as_type())>("sample").text()
@@ -141,7 +141,7 @@ async fn bounded_unreflect_fails_before_rendering() {
             // If rendering ran first this empty enum would produce E0159.
             let not_a_person = reflect.enum.new("NoPerson", [])
             let result = ExtractPerson$render_prompt<unreflect(not_a_person)>() catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 }
             }
@@ -183,11 +183,11 @@ async fn unreflect_argument_is_revalidated_against_the_runtime_type() {
                 .field("name")
                 .field("email")
             let person_t = reflect.class.new("Person", {
-                "name": type.of<string>(),
-                "email": type.of<string>(),
+                "name": reflect.Type.of<string>(),
+                "email": reflect.Type.of<string>(),
             }, implementations = [witness])
             let result = Echo<unreflect(person_t.as_type())>(42) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 }
             }
@@ -221,22 +221,22 @@ async fn incomplete_witness_fails_before_type_and_chain_is_immutable() {
             let base = reflect.interface.implementation<PersonAnchor>().field("name")
             let complete = base.field("email", class_field = "contact_email")
             let bad = reflect.class.new("Person", {
-                "name": type.of<string>(),
-                "contact_email": type.of<string>(),
+                "name": reflect.Type.of<string>(),
+                "contact_email": reflect.Type.of<string>(),
             }, implementations = [base]) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 }
             }
             let good = reflect.class.new("Person", {
-                "name": type.of<string>(),
-                "contact_email": type.of<string>(),
+                "name": reflect.Type.of<string>(),
+                "contact_email": reflect.Type.of<string>(),
             }, implementations = [complete])
             let failure = "missing witness did not throw"
             if bad is string {
                 failure = bad
             }
-            return failure + "|" + good.as_type().implements(type.of<PersonAnchor>()).to_string()
+            return failure + "|" + good.as_type().implements(reflect.Type.of<PersonAnchor>()).to_string()
         }
         "#
     );
@@ -283,12 +283,12 @@ async fn equivalent_witnessed_definitions_render_and_parse_identically() {
                 .field("name")
                 .field("email")
             let left = reflect.class.new("Person", {
-                "name": type.of<string>(),
-                "email": type.of<string>(),
+                "name": reflect.Type.of<string>(),
+                "email": reflect.Type.of<string>(),
             }, implementations = [witness])
             let right = reflect.class.new("Person", {
-                "name": type.of<string>(),
-                "email": type.of<string>(),
+                "name": reflect.Type.of<string>(),
+                "email": reflect.Type.of<string>(),
             }, implementations = [witness])
             let left_prompt = ExtractPerson$render_prompt<unreflect(left.as_type())>().text()
             let right_prompt = ExtractPerson$render_prompt<unreflect(right.as_type())>().text()
@@ -302,8 +302,8 @@ async fn equivalent_witnessed_definitions_render_and_parse_identically() {
                 && left_prompt == right_prompt
                 && l.name == r.name
                 && l.email == r.email
-                && left.as_type().implements(type.of<PersonAnchor>())
-                && right.as_type().implements(type.of<PersonAnchor>())
+                && left.as_type().implements(reflect.Type.of<PersonAnchor>())
+                && right.as_type().implements(reflect.Type.of<PersonAnchor>())
         }
         "##
     );
@@ -337,7 +337,7 @@ async fn open_interface_occurrence_fails_at_render_boundary() {
 
         function main() -> string {
             let rendered = ExtractEnvelope$render_prompt() catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 }
             }

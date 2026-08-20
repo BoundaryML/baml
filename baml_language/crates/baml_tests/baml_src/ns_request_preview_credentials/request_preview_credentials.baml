@@ -22,27 +22,27 @@ function _preview_input() -> ai.ModelTurnInput {
 test "provider previews are keyless and preserve user headers" {
     let responses: ai.Client = openai.ResponsesClient.new(
         model = "gpt-preview",
-        api_key = env.BAML_PREVIEW_OPENAI_KEY_THAT_IS_NEVER_SET,
+        api_key = baml.env.ref("BAML_PREVIEW_OPENAI_KEY_THAT_IS_NEVER_SET"),
         headers = { "x-user": "responses" },
     );
     let anthropic_client: ai.Client = anthropic.AnthropicClient.new(
         model = "claude-preview",
-        api_key = env.BAML_PREVIEW_ANTHROPIC_KEY_THAT_IS_NEVER_SET,
+        api_key = baml.env.ref("BAML_PREVIEW_ANTHROPIC_KEY_THAT_IS_NEVER_SET"),
         headers = { "x-user": "anthropic" },
     );
     let gateway: ai.Client = vercel.AiGatewayImageClient.new(
         model = "bfl/flux-preview",
-        api_key = env.BAML_PREVIEW_GATEWAY_KEY_THAT_IS_NEVER_SET,
+        api_key = baml.env.ref("BAML_PREVIEW_GATEWAY_KEY_THAT_IS_NEVER_SET"),
         headers = { "x-user": "gateway" },
     );
     let chat: ai.Client = openai.ChatClient.new(
         model = "gpt-preview",
-        api_key = env.BAML_PREVIEW_CHAT_KEY_THAT_IS_NEVER_SET,
+        api_key = baml.env.ref("BAML_PREVIEW_CHAT_KEY_THAT_IS_NEVER_SET"),
         headers = { "x-user": "chat" },
     );
     let image: ai.Client = openai.ImageClient.new(
         model = "gpt-image-preview",
-        api_key = env.BAML_PREVIEW_IMAGE_KEY_THAT_IS_NEVER_SET,
+        api_key = baml.env.ref("BAML_PREVIEW_IMAGE_KEY_THAT_IS_NEVER_SET"),
         headers = { "x-user": "image" },
     );
 
@@ -124,7 +124,7 @@ test "user auth headers survive preview while configured keys do not" {
 test "google previews use deterministic secret-free markers" {
     let gemini: ai.Client = google.GoogleClient.new(
         model = "gemini-preview",
-        api_key = env.BAML_PREVIEW_GOOGLE_KEY_THAT_IS_NEVER_SET,
+        api_key = baml.env.ref("BAML_PREVIEW_GOOGLE_KEY_THAT_IS_NEVER_SET"),
         headers = { "x-user": "gemini" },
         query_params = { "trace": "kept" },
         request_body = baml.json.parse(`{"preview_config":"kept"}`),
@@ -159,7 +159,7 @@ test "google previews use deterministic secret-free markers" {
 
     let vertex_ref: ai.Client = google.VertexClient.new(
         model = "gemini-preview",
-        api_key = env.BAML_PREVIEW_VERTEX_KEY_THAT_IS_NEVER_SET,
+        api_key = baml.env.ref("BAML_PREVIEW_VERTEX_KEY_THAT_IS_NEVER_SET"),
     );
     let vertex_ref_request = vertex_ref.render(_preview_input());
     assert.is_true(vertex_ref_request.url.includes("key=%3CPREVIEW%3E"));

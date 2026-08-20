@@ -1,7 +1,7 @@
 /// A reflection construction failed compiler-equivalent validation.
 class CompilationError {
   message string
-  diagnostics baml.reflect.Diagnostic[]
+  diagnostics reflect.Diagnostic[]
 }
 
 /// Runtime evaluation failed after successful construction/compilation.

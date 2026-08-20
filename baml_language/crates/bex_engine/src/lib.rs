@@ -2027,6 +2027,16 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
+        // `$init` is synchronous, but the `env.NAME` syntax is deliberately a
+        // strict string lookup and is commonly used while constructing
+        // top-level clients. Give that one sys-op a heap permit so its normal
+        // host-provided implementation can run below. No collection can start
+        // during construction, so the temporary holder has no roots.
+        let heap_permit_manager = Arc::new(HeapPermitManager::new());
+        let init_permit = futures::executor::block_on(async {
+            heap_permit_manager.new_permit(()).await.acquire().await
+        });
+
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -2067,6 +2077,62 @@ impl BexEngine {
                             vm.stack.push(Value::NULL);
                             continue;
                         }
+                        Ok(VmExecState::SysOp {
+                            operation: SysOp::BamlEnvGet,
+                            args,
+                        }) => {
+                            // `env.NAME` lowers to
+                            // `baml.env.get("NAME") ?? panic`. Client
+                            // declarations execute during `$init`, so dispatch
+                            // this one lookup synchronously through the
+                            // embedding's ordinary env implementation. Every
+                            // other sys-op remains forbidden at startup.
+                            let [key] = args.as_slice() else {
+                                return Err(EngineError::InitFailed(format!(
+                                    "$init function '{init_name}' called baml.env.get with {} arguments",
+                                    args.len()
+                                )));
+                            };
+                            let key = vm.as_string(key).map_err(|error| {
+                                EngineError::InitFailed(format!(
+                                    "$init function '{init_name}' passed an invalid key to baml.env.get: {error}"
+                                ))
+                            })?;
+                            let external_args = [BexExternalValue::String(key.clone())];
+                            let sysop_args = external_args.iter().map(Into::into).collect();
+                            let context = sys_types::SysOpContext::empty();
+                            let result = (sys_ops.get(SysOp::BamlEnvGet))(
+                                &heap,
+                                init_permit.proof(),
+                                sysop_args,
+                                &context,
+                                CallId::next(),
+                            );
+                            match result {
+                                SysOpResult::Ready(Ok(BexExternalValue::String(value))) => {
+                                    vm.stack.push(Value::object(vm.tlab.alloc_string(value)));
+                                }
+                                SysOpResult::Ready(Ok(BexExternalValue::Null)) => {
+                                    vm.stack.push(Value::NULL);
+                                }
+                                SysOpResult::Ready(Ok(other)) => {
+                                    return Err(EngineError::InitFailed(format!(
+                                        "$init function '{init_name}' received an invalid baml.env.get result: {other:?}"
+                                    )));
+                                }
+                                SysOpResult::Ready(Err(error)) => {
+                                    return Err(EngineError::InitFailed(format!(
+                                        "$init function '{init_name}' failed to read the environment: {error}"
+                                    )));
+                                }
+                                SysOpResult::Async(_) => {
+                                    return Err(EngineError::InitFailed(format!(
+                                        "$init function '{init_name}' requires a synchronous baml.env.get implementation"
+                                    )));
+                                }
+                            }
+                            continue;
+                        }
                         Ok(other) => {
                             return Err(EngineError::InitFailed(format!(
                                 "$init function '{init_name}' yielded unexpectedly: {other:?}"
@@ -2081,6 +2147,7 @@ impl BexEngine {
                 }
             }
         }
+        drop(init_permit);
 
         // Freeze the now-populated globals into a `SharedGlobals` so the GC
         // can trace + forward `Value::object(HeapPtr)` entries. Every
@@ -2098,7 +2165,6 @@ impl BexEngine {
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
-        let heap_permit_manager = Arc::new(HeapPermitManager::new());
         // We just created the permit manager so `new_permit` will not block:
         // the only synchronization inside is the `holders` mutex which is
         // uncontended at this point. `futures::executor::block_on` (rather
@@ -4455,7 +4521,7 @@ impl BexEngine {
     /// declaration order. Empty for a non-generic function. Sourced from the
     /// `Function`'s `display_type_params`, so it includes type params that
     /// appear only in the body (e.g. `one_type_arg<T>()` whose `T` shows up
-    /// solely via `type.of<T>()`), which a signature-only scan misses.
+    /// solely via `reflect.Type.of<T>()`), which a signature-only scan misses.
     fn function_generic_params(&self, name: &str) -> Vec<String> {
         let Some(resolved) = self.resolve_function_name(name) else {
             return vec![];
@@ -5851,10 +5917,10 @@ impl BexEngine {
 
                     let runtime_type_overlay = self.runtime_type_overlay(&args, thread.proof());
                     let runtime_compile_request = match operation {
-                        SysOp::BamlReflectPackageCompile => {
+                        SysOp::ReflectPackageCompile => {
                             Some(Ok(Self::runtime_compile_request(&thread.vm, &args)?))
                         }
-                        SysOp::BamlReflectSessionCompile => {
+                        SysOp::ReflectSessionCompile => {
                             Some(Self::runtime_session_compile_request(&mut thread.vm, &args))
                         }
                         _ => None,
@@ -6838,7 +6904,7 @@ impl BexEngine {
         vm: &mut BexVm,
         args: &[Value],
     ) -> Result<bex_vm_types::RuntimeCompileRequest, OpError> {
-        let operation = SysOp::BamlReflectSessionCompile;
+        let operation = SysOp::ReflectSessionCompile;
         let invalid = |message: String| {
             OpError::new(
                 operation,
@@ -6891,7 +6957,7 @@ impl BexEngine {
             return Err(OpError::host_thrown_value(
                 operation,
                 BexExternalValue::Instance {
-                    class_name: "baml.reflect.errors.SessionBusy".to_string(),
+                    class_name: "reflect.errors.SessionBusy".to_string(),
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
                         "message".to_string() => BexExternalValue::String(
@@ -6969,7 +7035,7 @@ impl BexEngine {
                 value
                     .span
                     .map_or(BexExternalValue::Null, |span| BexExternalValue::Instance {
-                        class_name: "baml.reflect.Span".to_string(),
+                        class_name: "reflect.Span".to_string(),
                         type_args: Vec::new(),
                         fields: indexmap::indexmap! {
                             "file".to_string() => string(span.file),
@@ -6978,7 +7044,7 @@ impl BexEngine {
                         },
                     });
             BexExternalValue::Instance {
-                class_name: "baml.reflect.Diagnostic".to_string(),
+                class_name: "reflect.Diagnostic".to_string(),
                 type_args: Vec::new(),
                 fields: indexmap::indexmap! {
                     "code".to_string() => string(value.code),
@@ -7000,7 +7066,7 @@ impl BexEngine {
             };
             match compiler.compile(request) {
                 Ok(artifact) => Ok(BexExternalValue::Instance {
-                    class_name: "baml.reflect.Package".to_string(),
+                    class_name: "reflect.Package".to_string(),
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
                         "_inner".to_string() => BexExternalValue::RustData(Arc::new(artifact)),
@@ -7020,7 +7086,7 @@ impl BexEngine {
                     Err(OpError::host_thrown_value(
                         operation,
                         BexExternalValue::Instance {
-                            class_name: "baml.reflect.errors.CompilationError".to_string(),
+                            class_name: "reflect.errors.CompilationError".to_string(),
                             type_args: Vec::new(),
                             fields: indexmap::indexmap! {
                                 "message".to_string() => string(message),

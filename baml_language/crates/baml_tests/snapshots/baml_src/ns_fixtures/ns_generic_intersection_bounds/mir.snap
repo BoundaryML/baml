@@ -60,7 +60,7 @@ fn user.fixtures.generic_intersection_bounds.describe(item: T) -> string {
     let _3: string
     let _4: string
     let _5: int
-    let _6: type
+    let _6: reflect.Type
 
     bb0: {
         _3 = copy _1.name#0 as fixtures.generic_intersection_bounds.Named;
@@ -198,7 +198,7 @@ fn user.fixtures.generic_intersection_bounds.Printable$for$T.display(self: T) ->
     // Locals:
     let _0: string // _0 // return
     let _1: T // self // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(#0);
@@ -231,7 +231,7 @@ fn user.fixtures.generic_intersection_bounds.Registered.Registry<Both>.summarize
     let _0: string // _0 // return
     let _1: fixtures.generic_intersection_bounds.Registered // self // param
     let _2: U // other // param
-    let _3: type
+    let _3: reflect.Type
 
     bb0: {
         _3 = load_type(#0);
@@ -266,23 +266,23 @@ fn user.fixtures.generic_intersection_bounds.main() -> string {
     let _18: string
     let _19: string
     let _20: fixtures.generic_intersection_bounds.Both
-    let _21: type
+    let _21: reflect.Type
     let _22: string
     let _23: fixtures.generic_intersection_bounds.Both
-    let _24: type
+    let _24: reflect.Type
     let _25: string
     let _26: int
     let _27: fixtures.generic_intersection_bounds.Both
-    let _28: type
-    let _29: type
+    let _28: reflect.Type
+    let _29: reflect.Type
     let _30: string
     let _31: fixtures.generic_intersection_bounds.Both
-    let _32: type
+    let _32: reflect.Type
     let _33: string
     let _34: string
     let _35: string
     let _36: fixtures.generic_intersection_bounds.Both
-    let _37: type
+    let _37: reflect.Type
 
     bb0: {
         _1 = user.fixtures.generic_intersection_bounds.Both { const "b" };

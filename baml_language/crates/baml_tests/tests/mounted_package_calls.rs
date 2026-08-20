@@ -510,7 +510,7 @@ function native_value() -> int throws never {
     $rust_function
 }
 
-function intrinsic_type<T>() -> type throws never {
+function intrinsic_type<T>() -> reflect.Type throws never {
     $compiler_intrinsic
 }
 "#,

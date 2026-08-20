@@ -106,10 +106,10 @@ function optional_chain_type_args.$init_test_ns_optional_chain_type_args_optiona
 
 function optional_chain_type_args.Boxed.both(self: optional_chain_type_args.Boxed<#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _3
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _5
     load_var _3
     load_const "/"
@@ -121,7 +121,7 @@ function optional_chain_type_args.Boxed.both(self: optional_chain_type_args.Boxe
 
 function optional_chain_type_args.Boxed.describe(self: optional_chain_type_args.Boxed<#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -138,7 +138,7 @@ function optional_chain_type_args.Callables.method(self: optional_chain_type_arg
 
 function optional_chain_type_args.Cat.Speaker.speak(self: optional_chain_type_args.Cat) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _2
     load_const "cat:"
     load_var _2
@@ -148,13 +148,13 @@ function optional_chain_type_args.Cat.Speaker.speak(self: optional_chain_type_ar
 
 function optional_chain_type_args.Dog.Speaker.speak(self: optional_chain_type_args.Dog) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
 function optional_chain_type_args.Holder.ident(self: optional_chain_type_args.Holder, v: #0) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -178,16 +178,16 @@ function optional_chain_type_args.Holder.plain(self: optional_chain_type_args.Ho
 
 function optional_chain_type_args.Holder.value(self: optional_chain_type_args.Holder) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
 function optional_chain_type_args.Pair.Tagged.tag(self: optional_chain_type_args.Pair<#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _3
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _5
     load_var _3
     load_const "/"
@@ -264,12 +264,15 @@ function optional_chain_type_args.callable_field_eval_count_fn() -> string {
     load_var _7
     load_field .0
     call_indirect
+    store_var out
     jump L2
 
   L1:
     load_const null
+    store_var out
 
   L2:
+    load_var out
     store_var_load_var _12
     load_const null
     cmp_op ==
@@ -313,12 +316,15 @@ function optional_chain_type_args.callable_field_null_after_two_fn() -> string {
     load_var _7
     load_field .0
     call_indirect
+    store_var out
     jump L2
 
   L1:
     load_const null
+    store_var out
 
   L2:
+    load_var out
     store_var_load_var _12
     load_const null
     cmp_op ==
@@ -536,12 +542,15 @@ function optional_chain_type_args.concrete_receiver_interface_method_fn() -> str
     load_type optional_chain_type_args.Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=1
+    store_var _0
     jump L2
 
   L1:
     load_const null
+    store_var _0
 
   L2:
+    load_var _0
     return
 }
 
@@ -727,12 +736,15 @@ function optional_chain_type_args.interface_receiver_fn() -> string | null {
     load_type optional_chain_type_args.Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=1
+    store_var _0
     jump L2
 
   L1:
     load_const null
+    store_var _0
 
   L2:
+    load_var _0
     return
 }
 
@@ -751,12 +763,15 @@ function optional_chain_type_args.method_eval_count_fn() -> string {
     call user.optional_chain_type_args.counted
     load_const 1
     call user.optional_chain_type_args.Callables.method
+    store_var out
     jump L2
 
   L1:
     load_const null
+    store_var out
 
   L2:
+    load_var out
     store_var_load_var _11
     load_const null
     cmp_op ==
@@ -932,7 +947,7 @@ function optional_chain_type_args.reflected_field_read_fn() -> int | null {
     store_var _6
     load_type int
     load_var _6
-    call baml.reflect.class.Field.value
+    call reflect.class.Field.value
     jump L4
 
   L3:
@@ -980,7 +995,8 @@ function optional_chain_type_args.reflected_field_wrong_type_arg_fn() -> string 
     store_var _8
     load_type string
     load_var _8
-    call baml.reflect.class.Field.value
+    call reflect.class.Field.value
+    store_var read
     jump L6
     load_var e
     is_type baml.errors.TypeMismatch
@@ -997,8 +1013,10 @@ function optional_chain_type_args.reflected_field_wrong_type_arg_fn() -> string 
 
   L5:
     load_const null
+    store_var read
 
   L6:
+    load_var read
     store_var_load_var _12
     load_const null
     cmp_op ==
@@ -1051,7 +1069,7 @@ function optional_chain_type_args.reflected_missing_field_fn() -> int | null {
     store_var _6
     load_type int
     load_var _6
-    call baml.reflect.class.Field.value
+    call reflect.class.Field.value
     jump L4
 
   L3:
@@ -1158,12 +1176,15 @@ function optional_chain_type_args.union_class_type_args_fn(which: int) -> string
     load_type optional_chain_type_args.Tagged
     load_const "tag"
     virtual_call nargs=1 ntypeargs=1
+    store_var _0
     jump L2
 
   L1:
     load_const null
+    store_var _0
 
   L2:
+    load_var _0
     return
 }
 
@@ -1184,11 +1205,14 @@ function optional_chain_type_args.union_receiver_fn(which: int) -> string | null
     load_type optional_chain_type_args.Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=1
+    store_var _0
     jump L2
 
   L1:
     load_const null
+    store_var _0
 
   L2:
+    load_var _0
     return
 }

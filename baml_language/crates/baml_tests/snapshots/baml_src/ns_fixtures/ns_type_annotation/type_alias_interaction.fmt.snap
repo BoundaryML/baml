@@ -1,13 +1,13 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-// Test interaction between `type` as keyword (type alias decl) and `type` as meta-type
+// Test interaction between `type` as a declaration keyword and `reflect.Type`
 
 // Type alias whose value is the meta-type
-type MetaAlias = type;
+type MetaAlias = reflect.Type;
 
 // Type alias whose value is a list of meta-types
-type MetaList = type[];
+type MetaList = reflect.Type[];
 
 // Type alias whose value is a union including the meta-type
-type MetaUnion = type | string;
+type MetaUnion = reflect.Type | string;

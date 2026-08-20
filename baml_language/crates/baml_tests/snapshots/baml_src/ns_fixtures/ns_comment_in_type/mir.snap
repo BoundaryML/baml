@@ -11,7 +11,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client:
     let _4: bool
     let _5: ai.RunResult<string>
     let _6: ai.Agent<string>
-    let _7: type
+    let _7: reflect.Type
     let _8: ai.FunctionSpec<string>
 
     bb0: {
@@ -34,7 +34,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client:
     }
 
     bb4: {
-        _5 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _6, copy _8) -> [bb5];
+        _5 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _6, copy _8) -> [bb5];
     }
 
     bb5: {
@@ -55,7 +55,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments$build_request(a: string, b
     let _3: null | ai.Client // client // param
     let _4: bool
     let _5: ai.FunctionSpec<string>
-    let _6: type
+    let _6: reflect.Type
 
     bb0: {
         _4 = copy _3 == const <omitted>;
@@ -85,7 +85,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments$parse(json: string) -> str
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(string);
@@ -104,8 +104,8 @@ fn user.fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, b
     let _2: int // b // param
     let _3: ai.FunctionSpec<string>
     let _4: string
-    let _5: type
-    let _6: type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _3 = call const fn user.fixtures.comment_in_type.FunctionWithComments$spec(copy _1, copy _2) -> [bb1];
@@ -175,7 +175,7 @@ fn .<lambda(FunctionWithComments$spec, 0)>( __spec_output_format: string) -> ai.
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: string[]
     let _12: unknown[]
     let _13: string[]
@@ -219,8 +219,8 @@ fn user.fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int, 
     let _3: null | ai.stream.StreamingClient // client // param
     let _4: bool
     let _5: ai.FunctionSpec<string>
-    let _6: type
-    let _7: type
+    let _6: reflect.Type
+    let _7: reflect.Type
 
     bb0: {
         _4 = copy _3 == const <omitted>;
@@ -254,7 +254,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client) -> 
     let _2: bool
     let _3: ai.RunResult<string>
     let _4: ai.Agent<string>
-    let _5: type
+    let _5: reflect.Type
     let _6: ai.FunctionSpec<string>
 
     bb0: {
@@ -277,7 +277,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client) -> 
     }
 
     bb4: {
-        _3 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
+        _3 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
     }
 
     bb5: {
@@ -296,7 +296,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow$build_request(client: null | 
     let _1: null | ai.Client // client // param
     let _2: bool
     let _3: ai.FunctionSpec<string>
-    let _4: type
+    let _4: reflect.Type
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -326,7 +326,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow$parse(json: string) -> string
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(string);
@@ -343,8 +343,8 @@ fn user.fixtures.comment_in_type.CommentAfterArrow$render_prompt() -> ai.Prompt 
     let _0: ai.Prompt // _0 // return
     let _1: ai.FunctionSpec<string>
     let _2: string
-    let _3: type
-    let _4: type
+    let _3: reflect.Type
+    let _4: reflect.Type
 
     bb0: {
         _1 = call const fn user.fixtures.comment_in_type.CommentAfterArrow$spec() -> [bb1];
@@ -412,7 +412,7 @@ fn .<lambda(CommentAfterArrow$spec, 0)>( __spec_output_format: string) -> ai.Pro
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: string[]
     let _12: unknown[]
     let _13: string[]
@@ -454,8 +454,8 @@ fn user.fixtures.comment_in_type.CommentAfterArrow$stream(client: null | ai.stre
     let _1: null | ai.stream.StreamingClient // client // param
     let _2: bool
     let _3: ai.FunctionSpec<string>
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = copy _1 == const <omitted>;

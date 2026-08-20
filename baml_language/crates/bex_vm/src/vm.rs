@@ -362,7 +362,7 @@ pub struct BytecodeFrame {
 struct FrameTypeMetadata {
     /// Dynamic definitions reachable from the frame's runtime type arguments.
     /// This preserves the realized-type substitution ABI while allowing
-    /// reified `type.of<T>()` values to carry their overlay.
+    /// reified `reflect.Type.of<T>()` values to carry their overlay.
     defs: DynTypeDefs,
     /// Exact runtime type values for explicitly supplied slots. Wrapper-
     /// supplied static slots use `None` and are reconstructed normally.
@@ -1928,7 +1928,7 @@ impl BexVm {
             let type_value = if let Some(type_value) = direct {
                 type_value
             } else if let Some(result) =
-                crate::package_baml::runtime_class_builder::coerce_pending_type_arg(self, value)
+                crate::package_reflect::runtime_class_builder::coerce_pending_type_arg(self, value)
             {
                 result.map_err(VmError::thrown_fresh)?
             } else {
@@ -2541,7 +2541,7 @@ impl BexVm {
     /// staples the whole frame overlay onto anything materialized there. So a
     /// name that several definitions can spell would answer from a *different*
     /// definition: a static `Holder<Item>` in a frame that also touched a
-    /// runtime package's `Item` would report `type.of<T>() != type.of<Item>()`,
+    /// runtime package's `Item` would report `reflect.Type.of<T>() != reflect.Type.of<Item>()`,
     /// and two compiled packages that both declare `Item` would cross-match.
     /// Handing back a wrong identity is worse than handing back none, so
     /// everything but a mint-unique name declines and re-derives normally.
@@ -3325,7 +3325,7 @@ impl BexVm {
             // A future carries the `<T, E>` it was spawned at (resolved against
             // the spawning frame), so its concrete type is the faithful
             // `Future<T, E>` — the subject of `is`/`match` arms and
-            // `type.of`.
+            // `reflect.Type.of`.
             Object::Future(fut) => ConcreteRealizedTy::Future(
                 Box::new(fut.returns().clone()),
                 Box::new(fut.throws().clone()),
@@ -5659,7 +5659,7 @@ impl BexVm {
     /// `HeapPtr` is `callee` unchanged — keeping the `BoundMethod` identity so
     /// that `execute_call_from_locals_offset` can extract the receiver's
     /// `class_type_args` to seed `frame.type_args` (needed for
-    /// `type.of<T>()` inside generic methods invoked indirectly).
+    /// `reflect.Type.of<T>()` inside generic methods invoked indirectly).
     /// `execute_call_from_locals_offset` and `load_function` both unwrap the
     /// `BoundMethod` to its inner `Function` for dispatch.
     fn resolve_bound_method_callee(&self, callee: HeapPtr, args: &mut Vec<Value>) -> HeapPtr {
@@ -6470,13 +6470,13 @@ impl BexVm {
 
         // For GenericFunction callees (`let f = foo<int>; f(x)`), the bound
         // concrete type args seed frame.type_args so type-reifying bodies
-        // (type.of<T>, json natives) resolve T at runtime. (The
+        // (reflect.Type.of<T>, json natives) resolve T at runtime. (The
         // Closure/BoundMethod type args are classified in the consolidated match
         // above; GenericFunction is specific to generic instantiation values.)
         //
         // A callable specialized through reflection additionally carries the
         // exact `type` values behind those args — what `LoadType` needs to hand
-        // a body's `type.of<T>()` back the caller's own minted value, overlay
+        // a body's `reflect.Type.of<T>()` back the caller's own minted value, overlay
         // and all. An ordinary `foo<int>` has none and stays on the cheap path.
         // Both come off one deref: this is the call hot path.
         let (gf_type_args, gf_exact_type_values): CarriedTypeArgs =
@@ -6971,8 +6971,10 @@ impl BexVm {
                 }
 
                 let diagnostic = runtime_type::mismatched_types();
-                let error =
-                    crate::package_baml::type_kinds::alloc_compilation_error(self, &[diagnostic]);
+                let error = crate::package_reflect::type_kinds::alloc_compilation_error(
+                    self,
+                    &[diagnostic],
+                );
                 return Err(VmError::thrown_fresh(error));
             }
         }
@@ -7008,7 +7010,7 @@ impl BexVm {
             })?;
             let diagnostic = runtime_type::mismatched_types();
             let error =
-                crate::package_baml::type_kinds::alloc_compilation_error(self, &[diagnostic]);
+                crate::package_reflect::type_kinds::alloc_compilation_error(self, &[diagnostic]);
             return Err(VmError::thrown_fresh(error));
         }
         Ok(())
@@ -8640,7 +8642,7 @@ impl BexVm {
                     };
                     // Exact runtime identity for the receiver's class-level
                     // slots. The resolver realizes those slots off `Self`,
-                    // which is realized types only, so `type.of<T>()` in an
+                    // which is realized types only, so `reflect.Type.of<T>()` in an
                     // impl or default-method body would derive a *fresh* mint
                     // for a type the caller minted — structurally right,
                     // `==`-wrong, which breaks every identity-keyed pattern
@@ -9439,7 +9441,7 @@ impl BexVm {
                         self.as_string(&value)?.to_string()
                     };
                     let value =
-                        crate::package_baml::reflect::current_package_value(self, &package_name);
+                        crate::package_reflect::reflect::current_package_value(self, &package_name);
                     self.stack.push(value);
                 }
 

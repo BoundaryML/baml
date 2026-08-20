@@ -15,7 +15,7 @@ fn user.fixtures.closure_loop_variable.sum_array(arr: int[]) -> int {
     let _8: int // i [captured]
     let _9: void
     let _10: () -> void throws never
-    let _11: type
+    let _11: reflect.Type
     let _12: (() -> void throws never)[]
     let _13: baml.iter.Iterator<Error = never, Item = () -> void throws never>
     let _14: unknown

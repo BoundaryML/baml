@@ -22,7 +22,7 @@ function main() -> string {
     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message
   }
   let field_name = reflect.class.new("ValidClass", {
-    "test": type.of<string>(),
+    "test": reflect.Type.of<string>(),
   }) catch (e) {
     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message
   }
@@ -83,11 +83,11 @@ function use_precise_enum_as_runtime_type() -> string {
 fn removed_reader_spellings_are_ordinary_unresolved_names() {
     let errors = compile_errors(
         r#"
-function old_type_reader() -> type {
+function old_type_reader() -> reflect.Type {
   reflect.type_of<int>()
 }
 
-function old_value_reader(value: unknown) -> type {
+function old_value_reader(value: unknown) -> reflect.Type {
   reflect.type_of_value(value)
 }
 "#,

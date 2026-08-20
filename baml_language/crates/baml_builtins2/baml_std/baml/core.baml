@@ -31,7 +31,7 @@ interface AnyFunction {
 /// Narrow an opaque value with `let value: baml.AnyClass = opaque else { ... }`
 /// before using this surface. Ordinary class instances implement it, including
 /// runtime-minted classes. Of the sealed reflection-kind views, only
-/// `baml.reflect.class.Type` implements it.
+/// `reflect.class.Type` implements it.
 interface AnyClass {
   /// Read a field as `T`. A missing field returns `null`; use `has_field` to
   /// distinguish that case from a present field whose value is null.
@@ -41,20 +41,20 @@ interface AnyClass {
     }
     // NOTE: spelled with `let … else` rather than `self.get_field(name)?.value<T>()`
     // because an optional-chained call does not thread `T` to the callee.
-    let field: baml.reflect.class.Field = self.get_field(name) else {
+    let field: reflect.class.Field = self.get_field(name) else {
       return null
     }
     field.value<T>()
   }
 
   /// Return a value-bound field handle, or `null` when no such field exists.
-  function get_field(self, name: string) -> baml.reflect.class.Field? throws never {
-    let class_type: baml.reflect.class.Type = type.of_value(self).as_class() else {
+  function get_field(self, name: string) -> reflect.class.Field? throws never {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
       return null
     }
     for (let field in class_type.fields()) {
       if (field.name == name) {
-        return baml.reflect.class.Field {
+        return reflect.class.Field {
           name: field.name,
           type: field.type,
           meta: field.meta,
@@ -66,7 +66,7 @@ interface AnyClass {
   }
 
   function has_field(self, name: string) -> bool throws never {
-    let class_type: baml.reflect.class.Type = type.of_value(self).as_class() else {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
       return false
     }
     for (let field in class_type.fields()) {
@@ -78,13 +78,13 @@ interface AnyClass {
   }
 
   /// Reflected fields bound to this value for `Field.value<T>()`.
-  function list_fields(self) -> baml.reflect.class.Field[] throws never {
-    let class_type: baml.reflect.class.Type = type.of_value(self).as_class() else {
+  function list_fields(self) -> reflect.class.Field[] throws never {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
       return []
     }
-    let fields: baml.reflect.class.Field[] = []
+    let fields: reflect.class.Field[] = []
     for (let field in class_type.fields()) {
-      fields.push(baml.reflect.class.Field {
+      fields.push(reflect.class.Field {
         name: field.name,
         type: field.type,
         meta: field.meta,
@@ -95,16 +95,16 @@ interface AnyClass {
   }
 
   function name(self) -> string throws never {
-    type.of_value(self).to_string()
+    reflect.Type.of_value(self).to_string()
   }
 
-  function type(self) -> type throws never {
-    type.of_value(self)
+  function type(self) -> reflect.Type throws never {
+    reflect.Type.of_value(self)
   }
 
-  function attributes(self) -> baml.reflect.Meta throws never {
-    let class_type: baml.reflect.class.Type = type.of_value(self).as_class() else {
-      return baml.reflect.Meta {
+  function attributes(self) -> reflect.Meta throws never {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+      return reflect.Meta {
         alias: null,
         description: null,
         docstring: null,

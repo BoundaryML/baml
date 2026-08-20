@@ -918,7 +918,7 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     call baml.String.from
     store_var _83
     load_var t
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _87
     load_type string
     load_var _87
@@ -1022,7 +1022,7 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
 
   L16:
     load_var t
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _42
     load_type string
     load_var _42
@@ -1101,7 +1101,7 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     call baml.String.from
     store_var _111
     load_var t
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _115
     load_type string
     load_var _115
@@ -1447,7 +1447,7 @@ function ai.FunctionSpec.name(self: ai.FunctionSpec<#0>) -> string {
     return
 }
 
-function ai.FunctionSpec.output_type(self: ai.FunctionSpec<#0>) -> type {
+function ai.FunctionSpec.output_type(self: ai.FunctionSpec<#0>) -> reflect.Type {
     load_type #0
     store_var output_type
     load_var output_type
@@ -2693,7 +2693,7 @@ function ai.clients.StreamRelay.next_event(self: ai.clients.StreamRelay) -> ai.s
     return
 }
 
-function ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> void {
+function ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> void {
     load_var error
     call ai.errors.normalize_invoke
     store_var _3
@@ -2908,11 +2908,11 @@ function ai.clients.resolve(selector: ai.Client | string | baml.env.Ref) -> ai.C
     bin_op +
     load_var _21
     bin_op +
-    load_const "), or give the client: position a value with a fallback — env."
+    load_const "), or give the client: position a value with a fallback — baml.env.ref(\""
     bin_op +
     load_var _24
     bin_op +
-    load_const ".get() ?? \"openai/gpt-4o-mini\""
+    load_const "\").get() ?? \"openai/gpt-4o-mini\""
     bin_op +
     load_const null
     init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
@@ -3174,7 +3174,7 @@ function ai.errors.classify_http(provider: string, status_code: int, body: strin
     return
 }
 
-function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError {
+function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError {
     load_var error
     store_var _2
     load_var _2
@@ -3210,7 +3210,7 @@ function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | ba
     load_var error
     store_var _12
     load_var _12
-    narrow_bind baml.reflect.errors.CompilationError, slot=6
+    narrow_bind reflect.errors.CompilationError, slot=6
     pop_jump_if_false L4
     jump L19
 
@@ -3364,7 +3364,7 @@ function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | ba
     return
 }
 
-function ai.errors.normalize_invoke(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError {
+function ai.errors.normalize_invoke(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError {
     load_var error
     call ai.errors.normalize
     return
@@ -4492,7 +4492,7 @@ function ai.internal._media_reject_mixed(turn: ai.ModelTurn, kind: string, provi
     throw
 }
 
-function ai.internal._media_shape(t: type) -> string {
+function ai.internal._media_shape(t: reflect.Type) -> string {
     load_var t
     load_type image
     call baml.ops.equals_equals
@@ -5449,7 +5449,7 @@ function ai.internal._retry_after_ms(headers: map<string, string> | null) -> int
 
 function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> {
     load_var handler
-    call baml.reflect.signature
+    call reflect.signature
     store_var sig
     load_type string
     load_type unknown
@@ -5460,14 +5460,14 @@ function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = u
     store_var required
     load_var sig
     load_field .args
-    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.Arg>
+    load_type baml.iter.Iterable<Error = never, Item = reflect.Arg>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
 
   L0:
     load_var _6
-    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.Arg>
+    load_type baml.iter.Iterator<Error = never, Item = reflect.Arg>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
@@ -5775,10 +5775,10 @@ function ai.internal.assemble_llm_prompt(parts: string[], values: unknown[]) -> 
 function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> ai.Prompt {
 }
 
-function ai.internal.build_output_format(return_type: type) -> ai.OutputFormat {
+function ai.internal.build_output_format(return_type: reflect.Type) -> ai.OutputFormat {
 }
 
-function ai.internal.get_return_type(function_name: string) -> type {
+function ai.internal.get_return_type(function_name: string) -> reflect.Type {
 }
 
 function ai.internal.make_role(name: string) -> ai.Role {
@@ -5790,18 +5790,18 @@ function ai.internal.make_role(name: string) -> ai.Role {
     return
 }
 
-function ai.internal.render_output_format(return_type: type) -> string {
+function ai.internal.render_output_format(return_type: reflect.Type) -> string {
 }
 
-function ai.internal.validate_output_type(return_type: type) -> void {
+function ai.internal.validate_output_type(return_type: reflect.Type) -> void {
     load_var return_type
-    call baml.TypeValue._validate_renderable
+    call reflect.Type._validate_renderable
     pop 1
     load_var return_type
-    call baml.TypeValue.as_enum
+    call reflect.Type.as_enum
     store_var _4
     load_var _4
-    narrow_bind baml.reflect.enum.Type, slot=2
+    narrow_bind reflect.enum.Type, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -5811,7 +5811,7 @@ function ai.internal.validate_output_type(return_type: type) -> void {
 
   L1:
     load_var _4
-    call baml.reflect.enum.Type.values
+    call reflect.enum.Type.values
     container_len
     store_var _7
     load_var _7
@@ -5828,7 +5828,7 @@ function ai.internal.validate_output_type(return_type: type) -> void {
 
   L4:
     load_var return_type
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _11
     load_const "empty enum `"
     load_var _11
@@ -5839,10 +5839,10 @@ function ai.internal.validate_output_type(return_type: type) -> void {
     load_const "E0159"
     load_const null
     load_var message
-    init_instance baml.reflect.Diagnostic .code, .span, .message
-    load_type baml.reflect.Diagnostic
+    init_instance reflect.Diagnostic .code, .span, .message
+    load_type reflect.Diagnostic
     alloc_array 1
-    init_instance baml.reflect.errors.CompilationError .message, .diagnostics
+    init_instance reflect.errors.CompilationError .message, .diagnostics
     throw
 }
 
@@ -6716,7 +6716,7 @@ function ai.stream.TurnStream.from_chunks(chunks: string[]) -> ai.stream.TurnStr
     return
 }
 
-function ai.stream.TurnStream.from_event_source(next_event: () -> ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone | ai.stream.Done throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError) -> ai.stream.TurnStream {
+function ai.stream.TurnStream.from_event_source(next_event: () -> ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone | ai.stream.Done throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError) -> ai.stream.TurnStream {
     load_var next_event
     load_const null
     load_const null
@@ -6737,7 +6737,7 @@ function ai.stream.TurnStream.from_event_source(next_event: () -> ai.stream.Text
     return
 }
 
-function ai.stream.TurnStream.from_sse(sse: baml.http.SseStream, decode: (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError, require_terminal: string | null) -> ai.stream.TurnStream {
+function ai.stream.TurnStream.from_sse(sse: baml.http.SseStream, decode: (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError, require_terminal: string | null) -> ai.stream.TurnStream {
     load_var require_terminal
     load_const <omitted>
     cmp_op ==
@@ -6800,7 +6800,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_field ._event_source
     store_var _33
     load_var _33
-    narrow_bind () -> ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone | ai.stream.Done throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError, slot=15
+    narrow_bind () -> ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone | ai.stream.Done throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError, slot=15
     pop_jump_if_false L5
     jump L14
 
@@ -6873,7 +6873,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
     load_field ._decode
     store_var _54
     load_var _54
-    narrow_bind (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError, slot=20
+    narrow_bind (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError, slot=20
     pop_jump_if_false L0
     load_var2 19 20
     call_indirect
@@ -7218,13 +7218,13 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
     load_type unknown
     load_type unknown
     load_var2 4 2
-    call baml.reflect.call_any
+    call reflect.call_any
     store_var value
     jump L5
     load_var e
     store_var _15
     load_var _15
-    narrow_bind baml.reflect.InvalidArgumentError, slot=7
+    narrow_bind reflect.InvalidArgumentError, slot=7
     pop_jump_if_false L3
     jump L4
 
@@ -7240,7 +7240,7 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
     load_field .name
     call baml.String.from
     store_var _21
-    load_type baml.reflect.InvalidArgumentError
+    load_type reflect.InvalidArgumentError
     load_var bad
     call baml.String.from
     store_var _25
@@ -7416,7 +7416,7 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
 
   L2:
     load_var handler
-    call baml.reflect.signature
+    call reflect.signature
     store_var sig
     load_var name
     store_var_load_var _10
@@ -7566,7 +7566,7 @@ function ai.wire.redact_url_secrets(text: string) -> string {
     return
 }
 
-function ai.wire.render_output_format(t: type) -> string {
+function ai.wire.render_output_format(t: reflect.Type) -> string {
     load_var t
     call ai.internal.validate_output_type
     pop 1

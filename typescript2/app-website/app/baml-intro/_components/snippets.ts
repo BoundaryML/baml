@@ -105,7 +105,7 @@ class Question { text: string }`;
 
 /* ---------------- 1d · eval / codemode (coming soon) ----------------
  * Direction-of-travel only; the reflection API below is not yet shipped. */
-export const BAML_EVAL = `let raw = baml.reflect.new_package("my_package");
+export const BAML_EVAL = `let raw = reflect.new_package("my_package");
 baml.package.set_file("virtual/path/to/file.baml", \`
    function hello() -> string {
      "hello world"
@@ -118,7 +118,7 @@ print(cb());
 
 // and its typesafe!
 let cb = pkg.get<() -> int>("hello") catch (e) {
-    baml.reflect.CompilerTypeError => {
+    reflect.CompilerTypeError => {
         print(\`"hello" is not a function that returns int. \${e}\`)
     }
 };`;

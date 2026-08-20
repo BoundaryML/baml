@@ -387,7 +387,7 @@ pub enum DiagnosticId {
     /// published type still mentions it. The lexical `type T = unreflect(v)`
     /// binding is the spelling that outlives the call.
     RuntimeTypeMustBeNamed,
-    /// `baml.reflect.function.Type.specialize` was given type arguments the
+    /// `reflect.function.Type.specialize` was given type arguments the
     /// callable cannot accept: the wrong number of them, one that fails a
     /// declared interface bound, or any at all for a callable with nothing
     /// left to bind.

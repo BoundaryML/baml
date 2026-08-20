@@ -27,7 +27,7 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use super::{
-    BamlClassReflectClassBuilder, BamlClassReflectClassPendingType, PackageBamlImpl,
+    BamlClassClassBuilder, BamlClassClassPendingType, PackageReflectImpl,
     type_kinds::{
         ReflectedTypeRow, WitnessField, alloc_compilation_error, alloc_with_meta,
         compiler_diagnostic, is_baml_identifier, reflected_type_row, register_class_witnesses,
@@ -36,8 +36,8 @@ use super::{
 };
 use crate::{BexVm, errors::VmRustFnError};
 
-const BUILDER_FQN: &str = "baml.reflect.class.Builder";
-const PENDING_FQN: &str = "baml.reflect.class.PendingType";
+const BUILDER_FQN: &str = "reflect.class.Builder";
+const PENDING_FQN: &str = "reflect.class.PendingType";
 
 static NEXT_BUILDER_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -179,7 +179,7 @@ fn pending_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, PendingHandle), S
 
 /// Split a field root into the pending reference it names and the metadata
 /// attached to it. `None` when the root is not a pending reference at all —
-/// a `type` value or a `reflect.WithMeta<type>` row, which the ordinary
+/// a `type` value or a `reflect.WithMeta<reflect.Type>` row, which the ordinary
 /// resolved-field path reads.
 fn pending_field_root(vm: &BexVm, root: Value) -> Option<Result<PendingFieldRoot, String>> {
     if class_name(vm, root).as_deref() == Some(PENDING_FQN) {
@@ -302,7 +302,7 @@ fn shared_compilation_error(vm: &mut BexVm, diagnostic: Diagnostic) -> VmRustFnE
     VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
 }
 
-impl BamlClassReflectClassBuilder for PackageBamlImpl {
+impl BamlClassClassBuilder for PackageReflectImpl {
     fn field(
         vm: &mut BexVm,
         builder: &Value,
@@ -422,7 +422,7 @@ impl BamlClassReflectClassBuilder for PackageBamlImpl {
     }
 }
 
-impl BamlClassReflectClassPendingType for PackageBamlImpl {
+impl BamlClassClassPendingType for PackageReflectImpl {
     fn array(vm: &mut BexVm, pendingtype: &Value) -> Value {
         alloc_pending(vm, PendingOp::Array, vec![*pendingtype])
     }
@@ -1006,7 +1006,7 @@ fn build_group(
         provenance_defs.classes.shift_remove(&plan.name);
         class.runtime_type = Some(RuntimeTypeProvenance {
             mint: plan.mint,
-            // A definition cannot own itself through provenance. `type.of_value`
+            // A definition cannot own itself through provenance. `reflect.Type.of_value`
             // adds this class pointer back while the other recursively-linked
             // group members remain available as dependencies.
             defs: provenance_defs,

@@ -33,13 +33,15 @@ test "env_get_missing_var_returns_null" {
 // ============================================================================
 // env_sugar_missing_var
 //
-// The `env.KEY` sugar desugars to `baml.env.ref("KEY")` — a late-bound
-// reference carrying the NAME only. It never reads the environment, so an
-// absent key does not throw; the read happens through the reference.
-// (`.get_or_panic()` is still the throwing read — see ns_env_ref_desugar for
-// the full reference surface.)
+// The `env.KEY` sugar is the strict spelling of
+// `baml.env.get("KEY") ?? panic`.
 // ============================================================================
 
 test "env_sugar_missing_var" {
-    assert.equal(env.BAML_TEST_SUGAR_MISSING.get(), null)
+    {
+        env.BAML_TEST_SUGAR_MISSING;
+        baml.sys.panic("expected env sugar to throw")
+    } catch (e) {
+        baml.panics.UserPanic => null
+    }
 }

@@ -10,7 +10,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc(input: string, client: nu
     let _3: bool
     let _4: ai.RunResult<string>
     let _5: ai.Agent<string>
-    let _6: type
+    let _6: reflect.Type
     let _7: ai.FunctionSpec<string>
 
     bb0: {
@@ -33,7 +33,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc(input: string, client: nu
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -53,7 +53,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$build_request(input: stri
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<string>
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -83,7 +83,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$parse(json: string) -> st
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(string);
@@ -101,8 +101,8 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$render_prompt(input: stri
     let _1: string // input // param
     let _2: ai.FunctionSpec<string>
     let _3: string
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(copy _1) -> [bb1];
@@ -171,15 +171,15 @@ fn .<lambda(TestFunc$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: int
     let _12: unknown[]
     let _13: string
-    let _14: type
+    let _14: reflect.Type
     let _15: int
     let _16: string[]
     let _17: ""
-    let _18: type
+    let _18: reflect.Type
     let _19: string[]
     let _20: unknown[]
     let _21: string[]
@@ -237,8 +237,8 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$stream(input: string, cli
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<string>
-    let _5: type
-    let _6: type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -269,8 +269,8 @@ fn user.fixtures.stream_llm_inferred_typeargs.call_stream_inferred() -> ai.strea
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: ai.FunctionSpec<string>
-    let _2: type
-    let _3: type
+    let _2: reflect.Type
+    let _3: reflect.Type
 
     bb0: {
         _1 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(const "world") -> [bb1];

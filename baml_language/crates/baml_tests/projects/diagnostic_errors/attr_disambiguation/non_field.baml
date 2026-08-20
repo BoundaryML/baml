@@ -6,16 +6,16 @@ class EA { x int }
 class EB { x int }
 class EC { x int }
 
-// E1: type alias with field attr — ERROR
+// E1: reflect.Type alias with field attr — ERROR
 type E1 = EFoo @alias("e1_alias")
 
-// E2: type alias with type attr — valid
+// E2: reflect.Type alias with type attr — valid
 type E2 = EFoo @stream.done
 
-// E3: type alias with both — ERROR for @alias, @stream.done is fine
+// E3: reflect.Type alias with both — ERROR for @alias, @stream.done is fine
 type E3 = EFoo @alias("e3_alias") @stream.done
 
-// E4: type alias union with field attr — ERROR
+// E4: reflect.Type alias union with field attr — ERROR
 type E4 = EA | EB | EC @alias("e4_alias")
 
 // E5: function param with field attr — ERROR

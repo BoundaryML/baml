@@ -154,7 +154,7 @@ fn agent_constructed_with_an_inline_runtime_type_is_refused() {
             prompt: `${{ctx.output_format}}`
         }}
 
-        function main(t: type, c: ai.Client) -> unknown throws unknown {{
+        function main(t: reflect.Type, c: ai.Client) -> unknown throws unknown {{
             ai.Agent<unreflect(t)>.new(client = c).run(DynamicOutput@spec<unreflect(t)>())
         }}
         "##
@@ -174,7 +174,7 @@ fn class_literal_with_an_inline_runtime_type_is_refused_before_lowering() {
         r#"
 class Holder<T> { label string }
 
-function main(t: type) -> unknown {
+function main(t: reflect.Type) -> unknown {
     Holder<unreflect(t)> { label: "h" }
 }
 "#,
@@ -196,7 +196,7 @@ class Holder<T> {
     }
 }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     Holder<unreflect(t)>.new("h")
 }
 "#,
@@ -213,7 +213,7 @@ class Wrapper<T> { inner T }
 
 function wrap<T>(v: T) -> Wrapper<T> throws never { Wrapper<T> { inner: v } }
 
-function main(t: type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
 "#,
     );
 }
@@ -232,24 +232,24 @@ class Wrapper<T> { inner T }
 
 function wrap<T>(v: T) -> Wrapper<T> throws never { Wrapper<T> { inner: v } }
 
-function main(t: type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
 "#
         ),
         @"
     E0168
 
       × this runtime type must be given a name before it can be used here
-       ╭─[test.baml:6:57]
-     6 │ function main(t: type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
-       ·                                                         ──────┬─────
-       ·                                                               ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the value this expression creates would still need it afterwards
+       ╭─[test.baml:6:65]
+     6 │ function main(t: reflect.Type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
+       ·                                                                 ──────┬─────
+       ·                                                                       ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the value this expression creates would still need it afterwards
        ╰────
       ╰─▶   ☞ name the type first, then use the name:
             │     type Out = unreflect(t);
             │     wrap<Out>(1)
-             ╭─[test.baml:6:57]
-           6 │ function main(t: type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
-             ·                                                         ────────────
+             ╭─[test.baml:6:65]
+           6 │ function main(t: reflect.Type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
+             ·                                                                 ────────────
              ╰────
     "
     );
@@ -262,7 +262,7 @@ fn a_result_under_a_builtin_constructor_is_refused() {
         r#"
 function listed<T>(v: T) -> T[]? throws never { [v] }
 
-function main(t: type) -> unknown throws unknown { listed<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown throws unknown { listed<unreflect(t)>(1) }
 "#,
     );
 }
@@ -277,7 +277,7 @@ fn the_report_names_the_slot_and_spells_the_fix() {
             r#"
 class Holder<T> { label string }
 
-function main(t: type) -> unknown {
+function main(t: reflect.Type) -> unknown {
     Holder<unreflect(t)> { label: "h" }
 }
 "#
@@ -316,7 +316,7 @@ class Boom<T> { payload T }
 
 function risky<T>(v: T) -> int throws Boom<T> { throw Boom<T> { payload: v } }
 
-function main(t: type) -> unknown { risky<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1) }
 "#,
     );
 }
@@ -338,7 +338,7 @@ function risky<T>(v: T, fail: bool) -> int {
     0
 }
 
-function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
+function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1, true) }
 "#,
     );
 }
@@ -357,24 +357,24 @@ function risky<T>(v: T, fail: bool) -> int {
     0
 }
 
-function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
+function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1, true) }
 "#
         ),
         @"
     E0168
 
       × this runtime type must be given a name before it can be used here
-       ╭─[test.baml:9:43]
-     9 │ function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
-       ·                                           ──────┬─────
-       ·                                                 ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the error this call can throw would still need it afterwards
+       ╭─[test.baml:9:51]
+     9 │ function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1, true) }
+       ·                                                   ──────┬─────
+       ·                                                         ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the error this call can throw would still need it afterwards
        ╰────
       ╰─▶   ☞ name the type first, then use the name:
             │     type Out = unreflect(t);
             │     risky<Out>(1, true)
-             ╭─[test.baml:9:43]
-           9 │ function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
-             ·                                           ────────────
+             ╭─[test.baml:9:51]
+           9 │ function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1, true) }
+             ·                                                   ────────────
              ╰────
     "
     );
@@ -390,7 +390,7 @@ class Boom<T> { payload T }
 
 function risky<T>(v: T) -> int throws Boom<T> { throw Boom<T> { payload: v } }
 
-function main(t: type) -> unknown {
+function main(t: reflect.Type) -> unknown {
     risky<unreflect(t)>(1) catch (e) { _ => 0 }
 }
 "#,
@@ -411,7 +411,7 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
 "#,
     );
 }
@@ -429,7 +429,7 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source?) -> unknown {
+function main(t: reflect.Type, s: Source?) -> unknown {
     s?.again().pick<unreflect(t)>(1)
 }
 "#,
@@ -446,7 +446,7 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, xs: Source[]?) -> unknown {
+function main(t: reflect.Type, xs: Source[]?) -> unknown {
     xs?.[0].pick<unreflect(t)>(1)
 }
 "#,
@@ -466,7 +466,7 @@ class Source {
     function wrapit<T>(self, v: T) -> Wrapper<T> throws never { Wrapper<T> { inner: v } }
 }
 
-function main(t: type, s: Source?) -> unknown { s?.wrapit<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source?) -> unknown { s?.wrapit<unreflect(t)>(1) }
 "#,
     );
 }
@@ -483,24 +483,24 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
 "#
         ),
         @"
     E0168
 
       × this runtime type must be given a name before it can be used here
-       ╭─[test.baml:6:57]
-     6 │ function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
-       ·                                                         ──────┬─────
-       ·                                                               ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the value this expression creates would still need it afterwards
+       ╭─[test.baml:6:65]
+     6 │ function main(t: reflect.Type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
+       ·                                                                 ──────┬─────
+       ·                                                                       ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the value this expression creates would still need it afterwards
        ╰────
       ╰─▶   ☞ name the type first, then use the name:
             │     type Out = unreflect(t);
             │     s?.pick<Out>(1)
-             ╭─[test.baml:6:57]
-           6 │ function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
-             ·                                                         ────────────
+             ╭─[test.baml:6:65]
+           6 │ function main(t: reflect.Type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
+             ·                                                                 ────────────
              ╰────
     "
     );
@@ -523,7 +523,7 @@ fn a_result_that_is_the_parameter_stays_legal() {
             prompt: `${{document}} ${{ctx.output_format}}`
         }}
 
-        function main(t: type, document: string) -> unknown throws unknown {{
+        function main(t: reflect.Type, document: string) -> unknown throws unknown {{
             Extract$parse<unreflect(t)>(document)
         }}
         "##
@@ -543,7 +543,7 @@ fn a_result_that_never_mentions_the_parameter_stays_legal() {
             prompt: `${{document}} ${{ctx.output_format}}`
         }}
 
-        function main(t: type, document: string) -> string throws unknown {{
+        function main(t: reflect.Type, document: string) -> string throws unknown {{
             Extract$render_prompt<unreflect(t)>(document).text()
         }}
         "##
@@ -562,7 +562,7 @@ function erase<T>(v: T) -> Wrapper<unknown> throws never {
     Wrapper<unknown> { inner: v }
 }
 
-function main(t: type) -> unknown throws unknown { erase<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown throws unknown { erase<unreflect(t)>(1) }
 "#,
     );
 }
@@ -578,7 +578,7 @@ class Wrapper<T> { inner T }
 
 function wrap<T>(v: T) -> Wrapper<T> throws never { Wrapper<T> { inner: v } }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     type Out = unreflect(t)
     let literal = Holder<Out> { label: "h" }
     let wrapped = wrap<Out>(1)
@@ -598,7 +598,7 @@ fn a_throws_that_is_the_parameter_stays_legal() {
         r#"
 function fail<T>(v: T) -> int throws T { throw v }
 
-function main(t: type) -> unknown { fail<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown { fail<unreflect(t)>(1) }
 "#,
     );
 }
@@ -616,7 +616,7 @@ function risky<T>(v: T, fail: bool) -> T throws Boom {
     v
 }
 
-function main(t: type) -> unknown { risky<unreflect(t)>(1, false) }
+function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1, false) }
 "#,
     );
 }
@@ -633,7 +633,7 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source) -> unknown { s?.pick<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source) -> unknown { s?.pick<unreflect(t)>(1) }
 "#,
     );
 }
@@ -651,7 +651,7 @@ class Source {
     function put<T>(self, v: T) -> bool throws never { true }
 }
 
-function main(t: type, s: Source?) -> unknown { s?.put<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source?) -> unknown { s?.put<unreflect(t)>(1) }
 "#,
     );
 }
@@ -671,7 +671,7 @@ class Source {
     }
 }
 
-function main(t: type, s: Source?) -> unknown { s?.erase<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source?) -> unknown { s?.erase<unreflect(t)>(1) }
 "#,
     );
 }
@@ -689,7 +689,7 @@ class Source {
 
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type, s: Source?) -> unknown {
+function main(t: reflect.Type, s: Source?) -> unknown {
     s?.keep(ident<unreflect(t)>(1))
 }
 "#,
@@ -716,7 +716,7 @@ fn spawning_and_awaiting_the_result_stays_legal() {
         r#"
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     let running = spawn { ident<unreflect(t)>(1) }
     await running
 }
@@ -734,7 +734,7 @@ class Wrapper<T> { inner T }
 
 function wrap<T>(v: T) -> Wrapper<T> throws never { Wrapper<T> { inner: v } }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     let running = spawn { wrap<unreflect(t)>(1) }
     await running
 }
@@ -750,7 +750,7 @@ fn catching_the_result_stays_legal() {
         r#"
 function ident<T>(v: T) -> T throws string { v }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     ident<unreflect(t)>(1) catch (e) { _ => 0 }
 }
 "#,
@@ -765,7 +765,7 @@ fn joining_the_result_in_match_arms_stays_legal() {
         r#"
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type, flag: bool) -> unknown throws unknown {
+function main(t: reflect.Type, flag: bool) -> unknown throws unknown {
     match flag {
         true => ident<unreflect(t)>(1),
         false => 0,
@@ -791,7 +791,7 @@ fn a_streaming_call_with_an_inline_runtime_type_is_refused_twice() {
             prompt: `${{document}} ${{ctx.output_format}}`
         }}
 
-        function main(t: type, document: string) -> unknown throws unknown {{
+        function main(t: reflect.Type, document: string) -> unknown throws unknown {{
             Extract$stream<unreflect(t)>(document)
         }}
         "##
@@ -810,7 +810,7 @@ fn a_postfix_bang_is_not_a_spelling_this_rule_has_to_cover() {
         r#"
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type) -> unknown throws unknown { ident<unreflect(t)>(1)! }
+function main(t: reflect.Type) -> unknown throws unknown { ident<unreflect(t)>(1)! }
 "#,
         &["E0010"],
     );
@@ -828,7 +828,7 @@ class Point { x int, y int }
 
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     Point { ...ident<unreflect(t)>(Point { x: 1, y: 2 }), x: 3 }
 }
 "#,
@@ -846,7 +846,7 @@ fn an_array_spread_is_not_a_spelling_this_rule_has_to_cover() {
         r#"
 function listed<T>(v: T) -> T[] throws never { [v] }
 
-function main(t: type) -> unknown { [...listed<unreflect(t)>(1)] }
+function main(t: reflect.Type) -> unknown { [...listed<unreflect(t)>(1)] }
 "#,
         &["E0010"],
     );
@@ -860,7 +860,7 @@ fn an_annotated_binding_of_the_result_stays_legal() {
         r#"
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type) -> unknown {
+function main(t: reflect.Type) -> unknown {
     let held: unknown = ident<unreflect(t)>(1)
     held
 }
@@ -876,7 +876,7 @@ fn collecting_the_result_into_a_literal_stays_legal() {
         r#"
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     let collected = [ident<unreflect(t)>(1), ident<unreflect(t)>(2)]
     collected
 }
@@ -938,7 +938,7 @@ async fn applying_the_suggestion_compiles_and_runs() {
 
         function main() -> string throws unknown {{
             let output_type = reflect.class.new("RuntimeOutput", {{
-                "name": type.of<string>(),
+                "name": reflect.Type.of<string>(),
             }}).as_type()
             {bind}
             let run = ai.Agent<{slot}>.new(
@@ -983,7 +983,7 @@ function risky<T>(v: T, fail: bool) -> int throws Boom<T> {{
 }}
 
 function main() -> int{clause} {{
-    let t = type.of<string>()
+    let t = reflect.Type.of<string>()
     {bind}
     risky<{slot}>("x", false)
 }}
@@ -1028,7 +1028,7 @@ fn a_lambda_clause_inside_the_block_is_quoted_as_written() {
             r#"
 class Boom<T> { payload T }
 
-function main(t: type) -> unknown throws never {
+function main(t: reflect.Type) -> unknown throws never {
     type Out = unreflect(t)
     let f = (v: int) -> int throws Boom<Out> { throw "plain" }
     f(1)
@@ -1069,14 +1069,14 @@ class Source {
 function ident<T>(v: T) -> T throws string { v }
 
 function main() -> string throws unknown {
-    let t = type.of<string>()
+    let t = reflect.Type.of<string>()
     let src = Source {}
     let direct = ident<unreflect(t)>("a")
     let awaited = await spawn { ident<unreflect(t)>("b") }
     let caught = ident<unreflect(t)>("c") catch (e) { _ => 0 }
     let collected = [ident<unreflect(t)>("d")]
     let chained = src?.pick<unreflect(t)>("e")
-    `${type.of_value(direct).to_string()} ${type.of_value(awaited).to_string()} ${type.of_value(caught).to_string()} ${type.of_value(collected[0]).to_string()} ${type.of_value(chained).to_string()}`
+    `${reflect.Type.of_value(direct).to_string()} ${reflect.Type.of_value(awaited).to_string()} ${reflect.Type.of_value(caught).to_string()} ${reflect.Type.of_value(collected[0]).to_string()} ${reflect.Type.of_value(chained).to_string()}`
 }
 "#;
     assert_accepted(program);

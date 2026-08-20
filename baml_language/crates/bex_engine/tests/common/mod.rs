@@ -212,7 +212,7 @@ pub(crate) async fn render_output_format_with_opts(
 
 function get_prompt() -> string {{
     let cc = ai.ContextClient {{ name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }};
-    let rt = type.of<{return_type}>();
+    let rt = reflect.Type.of<{return_type}>();
     let render_ctx = ai.Context {{
         client: cc,
         tags: {{}},

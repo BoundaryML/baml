@@ -1,6 +1,6 @@
 class Parameter {
   name string?
-  type type
+  type reflect.Type
   optional bool
 }
 
@@ -18,16 +18,16 @@ class GenericParam {
 /// A function-kind view of a `type` value. Throws are intentionally not part
 /// of the function reflection surface.
 ///
-/// An entry of `baml.reflect.Package.functions()` is also a *descriptor*: it
+/// An entry of `reflect.Package.functions()` is also a *descriptor*: it
 /// remembers the callable it was reflected from, so a generic one can be
 /// specialized and the result extracted without a second lookup by name (a
 /// specialized descriptor is anonymous). A function type obtained any other
-/// way — `type.of<(int) -> int>()`, a field's type — carries no callable, so
+/// way — `reflect.Type.of<(int) -> int>()`, a field's type — carries no callable, so
 /// `is_generic` is false, `generic_params` is empty, and `get` returns null.
 class Type {
-  implements baml.reflect.TypeView {
+  implements reflect.TypeView {
     //baml:vm
-    function as_type(self) -> type throws never { $rust_function }
+    function as_type(self) -> reflect.Type throws never { $rust_function }
   }
   /// The declared parameters, in order.
   ///
@@ -35,10 +35,10 @@ class Type {
   /// parameters has no realized signature at all; reading one throws rather
   /// than reporting an invented shape. `specialize` first.
   //baml:mut_vm
-  function params(self) -> Parameter[] throws baml.reflect.errors.CompilationError { $rust_function }
+  function params(self) -> Parameter[] throws reflect.errors.CompilationError { $rust_function }
   /// The declared return type. Throws for an unspecialized generic, like `params`.
   //baml:mut_vm
-  function return_type(self) -> type throws baml.reflect.errors.CompilationError { $rust_function }
+  function return_type(self) -> reflect.Type throws reflect.errors.CompilationError { $rust_function }
 
   /// Whether this descriptor still expects type arguments.
   ///
@@ -64,15 +64,15 @@ class Type {
   /// so a runtime-minted type keeps its identity and its definitions all the
   /// way into the specialized callable's body.
   //baml:mut_vm
-  function specialize(self, args: type[]) -> Type throws baml.reflect.errors.CompilationError { $rust_function }
+  function specialize(self, args: reflect.Type[]) -> Type throws reflect.errors.CompilationError { $rust_function }
 
   /// Extract the callable behind this descriptor through the function-type
-  /// contract `F`, exactly as `baml.reflect.Package.get_function` does for a
+  /// contract `F`, exactly as `reflect.Package.get_function` does for a
   /// named function: null when there is no callable, a throw when the
   /// callable's type is not a subtype of `F`.
   ///
   /// This is the only way to reach a specialized callable, which has no name
   /// to look up.
   //baml:mut_vm
-  function get<F>(self) -> F? throws baml.reflect.errors.CompilationError { $rust_function }
+  function get<F>(self) -> F? throws reflect.errors.CompilationError { $rust_function }
 }

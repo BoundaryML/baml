@@ -141,7 +141,7 @@ function reflect_type_of_generic.$init_test_ns_reflect_type_of_generic_reflect_t
 
 function reflect_type_of_generic.Box.describe(self: reflect_type_of_generic.Box<#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -155,19 +155,19 @@ function reflect_type_of_generic.HolderStr.delegate(self: reflect_type_of_generi
 
 function reflect_type_of_generic.Inner.name(self: reflect_type_of_generic.Inner<#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
 function reflect_type_of_generic.InnerShow.show(self: reflect_type_of_generic.InnerShow<#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
 function reflect_type_of_generic.Leaf.describe(self: reflect_type_of_generic.Leaf<#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -179,7 +179,7 @@ function reflect_type_of_generic.Outer.outer_describe(self: reflect_type_of_gene
     return
 }
 
-function reflect_type_of_generic.array_of() -> type {
+function reflect_type_of_generic.array_of() -> reflect.Type {
     load_type #0[]
     return
 }
@@ -187,14 +187,14 @@ function reflect_type_of_generic.array_of() -> type {
 function reflect_type_of_generic.array_of_int_fn() -> string {
     load_type int
     call user.reflect_type_of_generic.array_of
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
 function reflect_type_of_generic.array_of_user_to_string_fn() -> string {
     load_type reflect_type_of_generic.User
     call user.reflect_type_of_generic.array_of
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -228,7 +228,7 @@ function reflect_type_of_generic.closure_captures_type_arg_user_fn() -> string {
 
 function reflect_type_of_generic.describe() -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -250,7 +250,7 @@ function reflect_type_of_generic.describe_user_fn() -> string {
     return
 }
 
-function reflect_type_of_generic.described_type() -> type {
+function reflect_type_of_generic.described_type() -> reflect.Type {
     load_type #0
     return
 }
@@ -271,7 +271,7 @@ function reflect_type_of_generic.described_type_neq_different_fn() -> bool {
     return
 }
 
-function reflect_type_of_generic.fwd() -> type {
+function reflect_type_of_generic.fwd() -> reflect.Type {
     load_type #0
     call user.reflect_type_of_generic.described_type
     return
@@ -293,18 +293,18 @@ function reflect_type_of_generic.fwd_user_eq_reflect_type_of_user_fn() -> bool {
     return
 }
 
-function reflect_type_of_generic.level1() -> type {
+function reflect_type_of_generic.level1() -> reflect.Type {
     load_type #0
     return
 }
 
 function reflect_type_of_generic.level1_str() -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
-function reflect_type_of_generic.level2() -> type {
+function reflect_type_of_generic.level2() -> reflect.Type {
     load_type #0
     call user.reflect_type_of_generic.level1
     return
@@ -316,7 +316,7 @@ function reflect_type_of_generic.level2_str() -> string {
     return
 }
 
-function reflect_type_of_generic.level3() -> type {
+function reflect_type_of_generic.level3() -> reflect.Type {
     load_type #0
     call user.reflect_type_of_generic.level2
     return

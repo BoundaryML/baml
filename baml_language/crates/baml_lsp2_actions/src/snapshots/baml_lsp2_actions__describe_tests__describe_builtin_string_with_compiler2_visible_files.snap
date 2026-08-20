@@ -97,7 +97,7 @@ methods:
   function to_code_points(self) -> int[]
 static_methods:
   /// Renders any value as a human-readable string.
-  function from(value: T) -> string
+  function from<T>(value: T) -> string
   /// Decodes a `uint8array` of UTF-8 bytes into a string.
   function from_utf8(utf8: uint8array) -> string throws root.errors.InvalidArgument
   /// Builds a string from an array of Unicode code points.

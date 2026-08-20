@@ -532,9 +532,9 @@ mod tests {
                 "duplicate field `Collision.wire`",
             ),
             (
-                cannot_construct_reflection_kind("baml.reflect.class.Type"),
+                cannot_construct_reflection_kind("reflect.class.Type"),
                 "E0001",
-                "reflection kind `baml.reflect.class.Type` cannot be constructed; obtain it from a type value",
+                "reflection kind `reflect.class.Type` cannot be constructed; obtain it from a type value",
             ),
             (
                 cannot_construct_builtin_companion("baml.Int", "int", "literals", true),

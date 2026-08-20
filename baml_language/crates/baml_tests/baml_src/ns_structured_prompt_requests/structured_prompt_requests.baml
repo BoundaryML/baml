@@ -68,7 +68,7 @@ function _input_for(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     }
 }
 
@@ -107,7 +107,7 @@ test "generated build_request companion is reflection-visible" {
             | baml.errors.Timeout
             | baml.errors.UnknownError
             | baml.panics.Cancelled
-            | baml.reflect.errors.CompilationError
+            | reflect.errors.CompilationError
     > = RequestShape$build_request;
     let request = reflect.call_any(f, { "input": "hello", "client": PreviewResponses });
     assert.equal(request.url, "http://localhost:1234/v1/responses")
@@ -128,7 +128,7 @@ class Outer<T> {
 }
 
 test "generic nested output format uses concrete class arguments" {
-    let rendered = ai.wire.render_output_format(type.of<Outer<Choice>>());
+    let rendered = ai.wire.render_output_format(reflect.Type.of<Outer<Choice>>());
     assert.is_true(rendered.includes("'Empty'"));
     assert.is_true(!rendered.includes("TypeVar"));
     assert.is_true(!rendered.includes("T[]"))

@@ -62,14 +62,12 @@ client ViaSpawn = openai.ResponsesClient.new(
     api_key = spawned_secret(),
 );
 
-// ── CLEAN: `env.X` is a late-bound reference, not a read ─────────────────────
-// `env.X` desugars to `baml.env.ref("X")`, which only constructs a
-// `baml.env.Ref` holding the variable's NAME. Nothing is read until the
-// credential is used at request time, so `$init` performs no io. If this ever
-// starts erroring, the whole EnvRef feature is broken.
+// ── CLEAN: an explicit late-bound reference is data, not a read ──────────────
+// `env.X` itself is strict and eager; callers that deliberately need deferred
+// lookup can construct `baml.env.Ref` explicitly.
 client LateBoundRef = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
-    api_key = env.OPENAI_API_KEY,
+    api_key = baml.env.ref("OPENAI_API_KEY"),
 );
 
 // ── CLEAN: a closure that reads env but is STORED, never invoked ─────────────

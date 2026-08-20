@@ -46,7 +46,7 @@ function Flexible(value: unknown) -> string throws string {
     ?? throw "omitted throws rejected ordinary function subtyping"
 
   let explicit_never = pkg.get_function<NeverThrowContract>("root.Flexible") catch (e) {
-    baml.reflect.errors.CompilationError => e.diagnostics[0].code
+    reflect.errors.CompilationError => e.diagnostics[0].code
   }
   if explicit_never is string {
     inferred("input").to_string() + "|" + explicit_never

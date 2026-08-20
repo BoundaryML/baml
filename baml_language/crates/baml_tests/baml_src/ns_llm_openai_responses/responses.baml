@@ -980,11 +980,11 @@ test "oai_stream_content_index_parts" {
 // it. `base_url` points at a closed port, so neither branch reaches the
 // network. Both assert the same thing — no panic.
 function _oai_missing_key_client() -> openai.ResponsesClient {
-    // `env.NAME` naming a variable that exists nowhere: the ref resolves to
+    // An explicit env ref naming a variable that exists nowhere resolves to
     // null at REQUEST time and the client falls through to OPENAI_API_KEY.
     openai.ResponsesClient.new(
         model = "gpt-4o-mini",
-        api_key = env.BAML_OPENAI_KEY_THAT_IS_NEVER_SET,
+        api_key = baml.env.ref("BAML_OPENAI_KEY_THAT_IS_NEVER_SET"),
         base_url = "http://127.0.0.1:1",
     )
 }

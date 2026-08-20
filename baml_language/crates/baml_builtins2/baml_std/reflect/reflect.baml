@@ -7,7 +7,7 @@ class Arg {
   /// can never collide with a declared parameter or named-argument key.
   name string
   /// The parameter's type.
-  type type
+  type reflect.Type
 }
 
 /// Metadata baked into reflected schema definitions.
@@ -46,11 +46,11 @@ class Diagnostic {
 
 /// Common identity-preserving surface shared by every reflection kind view.
 interface TypeView {
-  function as_type(self) -> type throws never
+  function as_type(self) -> reflect.Type throws never
 }
 
 /// The closed set of reflection views for a runtime `type` value.
-type TypeKind = baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.union.Type | baml.reflect.literal.Type | baml.reflect.array.Type | baml.reflect.map.Type | baml.reflect.interface.Type | baml.reflect.primitive.Type | baml.reflect.function.Type
+type TypeKind = reflect.class.Type | reflect.enum.Type | reflect.union.Type | reflect.literal.Type | reflect.array.Type | reflect.map.Type | reflect.interface.Type | reflect.primitive.Type | reflect.function.Type
 
 /// The runtime signature of a function value, reconstructed from the value
 /// itself (BEP-062). Positional (required) parameters appear in `args` in
@@ -65,9 +65,9 @@ class Signature {
   /// Named/optional parameters, keyed by parameter name.
   opts map<string, Arg>
   /// The return type.
-  returns type
+  returns reflect.Type
   /// The error type; `never` if the function cannot throw.
-  errors type
+  errors reflect.Type
   /// The function's doc comment (joined `///` lines); null when absent.
   docstring string?
 }
@@ -80,8 +80,8 @@ class Signature {
 /// function type and the value's type.
 class InvalidArgumentError {
   argument string
-  expected type
-  got type
+  expected reflect.Type
+  got reflect.Type
 }
 
 /// An isolated runtime-compiled package.
@@ -98,7 +98,7 @@ class Package {
     Package._finish(artifact, packages)
   }
 
-  function _compile(files: map<string, string>, packages: map<string, Package>) -> Package throws baml.reflect.errors.CompilationError {
+  function _compile(files: map<string, string>, packages: map<string, Package>) -> Package throws reflect.errors.CompilationError {
     $rust_io_function
   }
 
@@ -109,24 +109,24 @@ class Package {
   }
 
   //baml:mut_vm
-  function get_class(self, name: string) -> baml.reflect.class.Type? throws never {
+  function get_class(self, name: string) -> reflect.class.Type? throws never {
     $rust_function
   }
 
   //baml:mut_vm
-  function get_enum(self, name: string) -> baml.reflect.enum.Type? throws never {
+  function get_enum(self, name: string) -> reflect.enum.Type? throws never {
     $rust_function
   }
 
   //baml:mut_vm
-  function get_interface(self, name: string) -> baml.reflect.interface.Type? throws never {
+  function get_interface(self, name: string) -> reflect.interface.Type? throws never {
     $rust_function
   }
 
   /// Return a derived package view that exports exact runtime type values
   /// under source-visible names for subsequent Package.compile calls.
   //baml:mut_vm
-  function with_types(self, types: map<string, type | baml.reflect.TypeView>) -> Package throws baml.reflect.errors.CompilationError {
+  function with_types(self, types: map<string, reflect.Type | reflect.TypeView>) -> Package throws reflect.errors.CompilationError {
     $rust_function
   }
   //baml:mut_vm
@@ -136,22 +136,22 @@ class Package {
   /// generic function is refused here. Reach it through `functions()` instead:
   /// the descriptor there takes `specialize(args)` and hands the specialized
   /// callable back through its own `get<F>()`.
-  function get_function<F>(self, name: string) -> F? throws baml.reflect.errors.CompilationError {
+  function get_function<F>(self, name: string) -> F? throws reflect.errors.CompilationError {
     $rust_function
   }
 
   //baml:mut_vm
-  function classes(self) -> map<string, baml.reflect.class.Type> throws never {
+  function classes(self) -> map<string, reflect.class.Type> throws never {
     $rust_function
   }
 
   //baml:mut_vm
-  function enums(self) -> map<string, baml.reflect.enum.Type> throws never {
+  function enums(self) -> map<string, reflect.enum.Type> throws never {
     $rust_function
   }
 
   //baml:mut_vm
-  function interfaces(self) -> map<string, baml.reflect.interface.Type> throws never {
+  function interfaces(self) -> map<string, reflect.interface.Type> throws never {
     $rust_function
   }
 
@@ -162,7 +162,7 @@ class Package {
   /// generated companions. A generic entry reports `is_generic() == true` and
   /// has no readable signature until `specialize(args)` supplies its type
   /// arguments; the specialized descriptor's `get<F>()` yields the callable.
-  function functions(self) -> map<string, baml.reflect.function.Type> throws never {
+  function functions(self) -> map<string, reflect.function.Type> throws never {
     $rust_function
   }
 
@@ -185,23 +185,23 @@ class Package {
 class Session {
   _inner unknown
 
-  function new(packages: map<string, Package> = {}) -> Session throws baml.reflect.errors.CompilationError {
+  function new(packages: map<string, Package> = {}) -> Session throws reflect.errors.CompilationError {
     Session._new(packages)
   }
 
   //baml:mut_vm
-  function _new(packages: map<string, Package>) -> Session throws baml.reflect.errors.CompilationError {
+  function _new(packages: map<string, Package>) -> Session throws reflect.errors.CompilationError {
     $rust_function
   }
 
-  function eval<T>(self, source: string) -> T throws baml.reflect.errors.CompilationError | baml.reflect.errors.EvaluationError | baml.reflect.errors.SessionBusy {
+  function eval<T>(self, source: string) -> T throws reflect.errors.CompilationError | reflect.errors.EvaluationError | reflect.errors.SessionBusy {
     let artifact = self._compile<T>(source)
     self._finish<T>(artifact) catch (_) {
-      _ => throw baml.reflect.errors.EvaluationError { message: "session evaluation failed" }
+      _ => throw reflect.errors.EvaluationError { message: "session evaluation failed" }
     }
   }
 
-  function _compile<T>(self, source: string) -> Package throws baml.reflect.errors.CompilationError | baml.reflect.errors.SessionBusy {
+  function _compile<T>(self, source: string) -> Package throws reflect.errors.CompilationError | reflect.errors.SessionBusy {
     $rust_io_function
   }
 
@@ -237,9 +237,9 @@ function signature(f: baml.AnyFunction) -> Signature throws never {
 /// `AnyFunction<Returns = json, Throws = ToolError>` yields typed results
 /// and an exhaustive catch; a bare `AnyFunction` returns `unknown` and
 /// throws `unknown` (which covers `InvalidArgumentError` and
-/// `baml.reflect.errors.CompilationError`).
+/// `reflect.errors.CompilationError`).
 //baml:mut_vm
 //baml:may_yield
-function call_any<R, E>(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R throws E | InvalidArgumentError | baml.reflect.errors.CompilationError {
+function call_any<R, E>(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R throws E | InvalidArgumentError | reflect.errors.CompilationError {
   $rust_function
 }
