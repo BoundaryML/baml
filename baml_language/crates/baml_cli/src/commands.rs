@@ -197,6 +197,12 @@ pub(crate) enum Commands {
     )]
     Agent(crate::agent_command::AgentArgs),
 
+    #[command(
+        about = "Open the BAML playground in a browser",
+        after_long_help = "Examples:\n  Open the nearest project:\n    baml playground\n\n  Serve a project without opening a browser:\n    baml playground --project ./my-project --no-open"
+    )]
+    Playground(crate::playground_command::PlaygroundArgs),
+
     #[command(about = "Start a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
 
@@ -374,6 +380,7 @@ impl RuntimeCli {
             Commands::Agent(args) => args.run(),
             Commands::Generate(args) => args.run(),
             Commands::Test(args) => args.run(),
+            Commands::Playground(args) => args.run(),
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(e) => {
@@ -403,6 +410,7 @@ impl Commands {
             Self::Test(args) => args.from.is_some(),
             Self::Run(args) => args.from.is_some(),
             Self::Pack(args) => args.from.is_some(),
+            Self::Playground(args) => args.from.is_some(),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
             }) => args.dir.is_some(),
@@ -423,6 +431,7 @@ impl Commands {
             Self::Test(args) => args.from = Some(project.clone()),
             Self::Run(args) => args.from = Some(project.clone()),
             Self::Pack(args) => args.from = Some(project.clone()),
+            Self::Playground(args) => args.from = Some(project.clone()),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
             }) => args.dir = Some(project),
@@ -486,6 +495,7 @@ mod tests {
         &["ide", "install"],
         &["agent"],
         &["agent", "install"],
+        &["playground"],
         &["lsp"],
         &["help"],
     ];
@@ -858,6 +868,22 @@ mod tests {
             &["baml", "agent", "install"],
             &["baml", "agent", "install", "--project", "./my-project"],
             &["baml", "agent", "install", "--source", "./skills.tar.gz"],
+            &["baml", "playground"],
+            &[
+                "baml",
+                "playground",
+                "--project",
+                "./my-project",
+                "--no-open",
+            ],
+            &[
+                "baml",
+                "playground",
+                "--file",
+                "script.baml",
+                "--port",
+                "4265",
+            ],
             &["baml", "lsp"],
             &["baml", "lsp", "--workspace", "./my-project"],
             &["baml", "help", "run"],

@@ -35,6 +35,12 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct SourceRevision(pub u64);
 
+impl std::fmt::Display for SourceRevision {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "r{}", self.0)
+    }
+}
+
 /// A client connection (stdio, a browser socket, ...). Minted by the host.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SessionKey(pub u64);
@@ -232,6 +238,23 @@ pub struct DiagnosticCandidate {
     pub referenced: Vec<ReferencedFile>,
 }
 
+impl DiagnosticCandidate {
+    /// Whether any file of the root carries an error. Emit is only attempted
+    /// for a clean candidate, so the host's build pipeline reads this instead
+    /// of re-deriving the check through `get_bytecode`'s own error gate.
+    pub fn has_errors(&self) -> bool {
+        self.files
+            .iter()
+            .flat_map(|file| &file.diagnostics)
+            .any(|diagnostic| {
+                matches!(
+                    diagnostic.severity,
+                    baml_compiler_diagnostics::Severity::Error
+                )
+            })
+    }
+}
+
 #[derive(Debug)]
 pub struct CandidateFile {
     pub file_id: baml_base::FileId,
@@ -316,6 +339,14 @@ pub struct Applied {
     pub workspace_root_removed: bool,
 }
 
+/// A host's callback for applied source mutations (see
+/// [`GlobalState::set_source_observer`]).
+pub type SourceObserver = Arc<dyn Fn(&Applied) + Send + Sync>;
+
+/// A host's implementation of the open-panel command (see
+/// [`GlobalState::set_open_panel_handler`]).
+pub type OpenPanelHandler = Arc<dyn Fn(&crate::dispatch::OpenPanelRequest) + Send + Sync>;
+
 pub struct GlobalState {
     db: ProjectDatabase,
     revision: SourceRevision,
@@ -337,6 +368,15 @@ pub struct GlobalState {
     /// short instead of letting it burn to completion.
     in_flight_reads: HashMap<(SessionKey, lsp_server::RequestId), salsa::CancellationToken>,
     fs: Arc<dyn ProjectFs>,
+    /// Notified after every batch that advanced the revision, so a host can
+    /// drive work that is not the protocol layer's business (the playground's
+    /// engine rebuilds, its project-list pushes). The observer is called on
+    /// the owner thread with the owner's own `&Applied`: it must only hand the
+    /// facts off (a channel send), never block or re-enter the state.
+    source_observer: Option<SourceObserver>,
+    /// How this host opens the playground. `None` means it has none, which
+    /// is why the capability (and therefore code lenses) is not advertised.
+    open_panel_handler: Option<OpenPanelHandler>,
     handle: OwnerHandle,
     events: crossbeam_channel::Receiver<OwnerEvent>,
 }
@@ -371,6 +411,8 @@ impl GlobalState {
             executors,
             in_flight_reads: HashMap::new(),
             fs,
+            source_observer: None,
+            open_panel_handler: None,
             handle: OwnerHandle { tx },
             events,
         };
@@ -387,6 +429,22 @@ impl GlobalState {
 
     pub fn fs(&self) -> &Arc<dyn ProjectFs> {
         &self.fs
+    }
+
+    /// Install the host's source-change observer (see the field docs). One
+    /// observer per process; installing a second replaces the first.
+    pub fn set_source_observer(&mut self, observer: SourceObserver) {
+        self.source_observer = Some(observer);
+    }
+
+    /// Install the host's playground opener. Advertised capabilities are read
+    /// at `initialize`, so this must be installed before any client connects.
+    pub fn set_open_panel_handler(&mut self, handler: OpenPanelHandler) {
+        self.open_panel_handler = Some(handler);
+    }
+
+    pub fn open_panel_handler(&self) -> Option<&OpenPanelHandler> {
+        self.open_panel_handler.as_ref()
     }
 
     // ── Read side ─────────────────────────────────────────────────────────
@@ -772,6 +830,9 @@ impl GlobalState {
             self.handle.post(OwnerEvent::Call(Box::new(|state| {
                 state.rediscover_freed_workspace_slot();
             })));
+        }
+        if let Some(observer) = &self.source_observer {
+            observer(&applied);
         }
         applied
     }

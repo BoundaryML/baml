@@ -11,6 +11,10 @@ use std::{collections::HashMap, sync::Arc};
 
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::{Bex, BexCallTraceResult};
+// The engine type itself, for hosts that manage engine lifecycles (the LSP
+// server's playground runtime): the blessed seam stays this crate rather
+// than a direct `bex_engine` dependency.
+pub use bex_engine::BexEngine;
 pub use bex_engine::{
     CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError, FunctionCallContext,
     FunctionCallContextBuilder, InboundUnionAmbiguityPolicy, UnhandledSpawnError,

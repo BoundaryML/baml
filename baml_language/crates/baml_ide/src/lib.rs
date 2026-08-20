@@ -22,6 +22,8 @@
 
 pub mod actions;
 pub mod annotations;
+pub mod cfg;
+pub mod cursor_context;
 pub mod definition;
 pub mod describe;
 pub mod env_vars;
@@ -47,6 +49,8 @@ pub use annotations::{AnnotationKind, InlineAnnotation, file_annotations};
 // Re-exported so protocol/CLI consumers convert kinds without depending on
 // the compiler crates directly.
 pub use baml_compiler2_hir::contributions::DefinitionKind;
+pub use cfg::ast_control_flow_graph;
+pub use cursor_context::{CursorContext, find_source_file, playground_cursor_context};
 pub use definition::definition_at;
 pub use describe::{
     DepRef, MethodRef, RefSite, SymbolDescription, describe, describe_by_definition,

@@ -35,6 +35,7 @@ pub(crate) mod manifest;
 pub(crate) mod output;
 pub(crate) mod pack_command;
 pub(crate) mod paint;
+pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub(crate) mod project_session;
 pub mod reporter;

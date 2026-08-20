@@ -259,6 +259,30 @@ fn function_source_position(
     }
 }
 
+/// [`playground_function_name`] with the namespace read from the file's
+/// package info — the spelling every playground surface (CFG, cursor
+/// context, run targets) uses for a function declared in `source_file`.
+pub(crate) fn playground_function_name_for_file(
+    db: &dyn baml_compiler2_ppir::Db,
+    source_file: baml_base::SourceFile,
+    name: &Name,
+) -> String {
+    let package_info = baml_compiler2_hir::file_package::file_package(db, source_file);
+    playground_function_name(&package_info.namespace_path, name)
+}
+
+/// Whether a declared function name answers to `target_name` in playground
+/// addressing: the bare name, or the namespace-qualified playground name.
+pub(crate) fn function_name_matches_source_name(
+    db: &dyn baml_compiler2_ppir::Db,
+    source_file: baml_base::SourceFile,
+    name: &Name,
+    target_name: &str,
+) -> bool {
+    name.as_str() == target_name
+        || playground_function_name_for_file(db, source_file, name) == target_name
+}
+
 /// Function names exposed to the playground preserve source namespaces so the
 /// UI can group them. Root-level functions keep their historical bare names.
 pub(crate) fn playground_function_name(namespace_path: &[Name], name: &Name) -> String {

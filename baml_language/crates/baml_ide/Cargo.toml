@@ -15,12 +15,14 @@ baml_compiler2_ast = { workspace = true }
 baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
 baml_compiler2_ppir = { workspace = true }
+baml_compiler2_visualization = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 baml_db = { workspace = true }
 baml_type = { workspace = true }
 bitflags = { workspace = true }
+la-arena = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }

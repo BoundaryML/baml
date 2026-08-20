@@ -20,9 +20,14 @@ use crate::{
 /// the session's negotiated position encoding; advertising it is mandatory
 /// whenever the client offered `positionEncodings`.
 ///
+/// `open_panel` is whether the host installed
+/// [`GlobalState::set_open_panel_handler`]. Code lenses and
+/// [`OPEN_PANEL_COMMAND`] are advertised together and only then: a lens is a
+/// button for that command, so a host that cannot run it must not show one.
+///
 /// Diagnostics are push-only (`publishDiagnostics`); the pull provider is
 /// deliberately absent so editors never show each diagnostic twice.
-pub fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilities {
+pub fn server_capabilities(encoding: PositionEncoding, open_panel: bool) -> ServerCapabilities {
     ServerCapabilities {
         position_encoding: Some(encoding.to_lsp_kind()),
         text_document_sync: Some(TextDocumentSyncCapability::Options(
@@ -69,14 +74,24 @@ pub fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilities {
             file_operations: None,
         }),
         diagnostic_provider: None,
-        code_lens_provider: None,
+        // Lenses ship fully resolved; `codeLens/resolve` is the identity so
+        // clients that honour `resolveProvider` get an answer rather than
+        // `MethodNotFound`.
+        code_lens_provider: open_panel.then_some(lsp_types::CodeLensOptions {
+            resolve_provider: Some(true),
+        }),
+        execute_command_provider: open_panel.then(|| lsp_types::ExecuteCommandOptions {
+            commands: vec![OPEN_PANEL_COMMAND.to_owned()],
+            work_done_progress_options: lsp_types::WorkDoneProgressOptions::default(),
+        }),
+
         ..ServerCapabilities::default()
     }
 }
 
-pub fn initialize_result(encoding: PositionEncoding) -> InitializeResult {
+pub fn initialize_result(encoding: PositionEncoding, open_panel: bool) -> InitializeResult {
     InitializeResult {
-        capabilities: server_capabilities(encoding),
+        capabilities: server_capabilities(encoding, open_panel),
         server_info: Some(ServerInfo {
             name: "baml-lsp".to_owned(),
             version: Some(baml_version::CANONICAL_VERSION.to_owned()),
@@ -163,7 +178,10 @@ pub(super) fn initialize(
     session_state.snippet_support = snippet_support;
     session_state.workspace_folders = workspace_folders;
     session_state.lifecycle = SessionLifecycle::Initialized;
-    Ok(initialize_result(encoding))
+    Ok(initialize_result(
+        encoding,
+        state.open_panel_handler().is_some(),
+    ))
 }
 
 /// The database is kept: a browser reload re-initializes against the same
@@ -177,19 +195,103 @@ pub(super) fn shutdown(
     Ok(())
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "dispatch-table signature: handlers own their params"
-)]
+/// The one command this server implements: focus the BAML playground on a
+/// function, a test, or a testset. The id is a contract with the VS Code
+/// extension, which registers it client-side and routes it back here as
+/// `workspace/executeCommand`.
+pub const OPEN_PANEL_COMMAND: &str = "baml.openBamlPanel";
+
+/// The single argument of [`OPEN_PANEL_COMMAND`], and the payload handed to
+/// the host. Field names are the wire spelling; every field is optional, so
+/// a bare "open the playground" is `{}`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenPanelArgs {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub function_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub testset_name: Option<String>,
+}
+
+/// A resolved open-panel request: what the host is asked to do. `project` is
+/// always a real workspace root — resolution happens here, so hosts never
+/// re-derive it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenPanelRequest {
+    pub project: PathBuf,
+    pub function_name: Option<String>,
+    pub test_name: Option<String>,
+    pub testset_name: Option<String>,
+}
+
 pub(super) fn execute_command(
-    _state: &mut GlobalState,
+    state: &mut GlobalState,
     _session: SessionKey,
-    params: lsp_types::ExecuteCommandParams,
+    mut params: lsp_types::ExecuteCommandParams,
 ) -> Result<Option<serde_json::Value>, LspError> {
-    Err(LspError::RequestNotSupported(format!(
-        "workspace/executeCommand ({})",
-        params.command
-    )))
+    if params.command != OPEN_PANEL_COMMAND {
+        return Err(LspError::RequestNotSupported(format!(
+            "workspace/executeCommand ({})",
+            params.command
+        )));
+    }
+    let Some(handler) = state.open_panel_handler().cloned() else {
+        return Err(LspError::RequestNotSupported(format!(
+            "workspace/executeCommand ({OPEN_PANEL_COMMAND}): this host has no playground"
+        )));
+    };
+    // A missing argument means "just open it"; more than one is a client bug
+    // worth reporting rather than guessing at.
+    let args: OpenPanelArgs = match params.arguments.len() {
+        0 => OpenPanelArgs::default(),
+        1 => serde_json::from_value(params.arguments.remove(0)).map_err(|error| {
+            LspError::InvalidParams(format!("{OPEN_PANEL_COMMAND} arguments: {error}"))
+        })?,
+        count => {
+            return Err(LspError::InvalidParams(format!(
+                "{OPEN_PANEL_COMMAND} takes at most one argument, got {count}"
+            )));
+        }
+    };
+
+    let project = match &args.project_path {
+        Some(path) => {
+            let path = paths::canonical_physical_path(std::path::Path::new(path));
+            state
+                .roots()
+                .workspace_roots()
+                .any(|entry| entry.path == path)
+                .then_some(path)
+                .ok_or_else(|| {
+                    LspError::InvalidParams(format!(
+                        "{OPEN_PANEL_COMMAND}: {} is not a workspace root",
+                        args.project_path.as_deref().unwrap_or_default()
+                    ))
+                })?
+        }
+        // No project named: the sole workspace root is unambiguous, and it is
+        // the only shape that exists until the world-viewpoint unit lands.
+        None => state
+            .roots()
+            .workspace_roots()
+            .next()
+            .map(|entry| entry.path.clone())
+            .ok_or_else(|| {
+                LspError::RequestFailed(format!("{OPEN_PANEL_COMMAND}: no BAML project is open"))
+            })?,
+    };
+
+    handler(&OpenPanelRequest {
+        project,
+        function_name: args.function_name,
+        test_name: args.test_name,
+        testset_name: args.testset_name,
+    });
+    Ok(None)
 }
 
 /// Code lenses are produced fully resolved.
@@ -583,6 +685,77 @@ pub(super) fn inlay_hint(
     Ok(Some(hints))
 }
 
+/// One lens per runnable item in the file, each carrying a fully-resolved
+/// [`OPEN_PANEL_COMMAND`].
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "dispatch-table signature: handlers own their params"
+)]
+pub(super) fn code_lens(
+    snap: &Snapshot,
+    params: lsp_types::CodeLensParams,
+) -> Result<Option<Vec<lsp_types::CodeLens>>, LspError> {
+    let path = paths::canonical_document_path(snap.roots(), &params.text_document.uri)?;
+    let db = snap.db();
+    let Some(file) = db.get_file(&path) else {
+        return Err(LspError::FileNotFound(path));
+    };
+    // Lenses run things, and only a workspace root has a runtime to run them
+    // in; stdlib and dependency files are read-only views.
+    let Some(project) = snap
+        .roots()
+        .root_for_path(&path)
+        .filter(|entry| entry.kind == baml_db::SourceRootKind::Workspace)
+        .map(|entry| entry.path.to_string_lossy().into_owned())
+    else {
+        return Ok(None);
+    };
+    let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
+    let lenses = baml_ide::file_actions(db, file)
+        .into_iter()
+        .map(|action| {
+            let (title, args) = match action.kind {
+                baml_ide::FileActionKind::RunInPlayground => (
+                    "▶ Open 🐑 Playground",
+                    OpenPanelArgs {
+                        project_path: Some(project.clone()),
+                        function_name: Some(action.name),
+                        ..OpenPanelArgs::default()
+                    },
+                ),
+                baml_ide::FileActionKind::RunTest => (
+                    "▶ Run test",
+                    OpenPanelArgs {
+                        project_path: Some(project.clone()),
+                        test_name: Some(action.name),
+                        ..OpenPanelArgs::default()
+                    },
+                ),
+                baml_ide::FileActionKind::RunTestSet => (
+                    "▶ Run testset",
+                    OpenPanelArgs {
+                        project_path: Some(project.clone()),
+                        testset_name: Some(action.name),
+                        ..OpenPanelArgs::default()
+                    },
+                ),
+            };
+            lsp_types::CodeLens {
+                range: codec.byte_range_to_lsp(action.name_span),
+                command: Some(lsp_types::Command {
+                    title: title.to_owned(),
+                    command: OPEN_PANEL_COMMAND.to_owned(),
+                    arguments: Some(vec![serde_json::to_value(&args).unwrap_or_else(|error| {
+                        unreachable!("OpenPanelArgs always serializes: {error}")
+                    })]),
+                }),
+                data: None,
+            }
+        })
+        .collect();
+    Ok(Some(lenses))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -590,18 +763,18 @@ mod tests {
     #[test]
     fn capabilities_advertise_the_negotiated_encoding() {
         assert_eq!(
-            server_capabilities(PositionEncoding::UTF8).position_encoding,
+            server_capabilities(PositionEncoding::UTF8, false).position_encoding,
             Some(lsp_types::PositionEncodingKind::UTF8)
         );
         assert_eq!(
-            server_capabilities(PositionEncoding::UTF16).position_encoding,
+            server_capabilities(PositionEncoding::UTF16, false).position_encoding,
             Some(lsp_types::PositionEncodingKind::UTF16)
         );
     }
 
     #[test]
     fn capabilities_are_incremental_sync_push_diagnostics_only() {
-        let capabilities = server_capabilities(PositionEncoding::UTF16);
+        let capabilities = server_capabilities(PositionEncoding::UTF16, false);
         let Some(TextDocumentSyncCapability::Options(sync)) = capabilities.text_document_sync
         else {
             panic!("text sync options expected");
@@ -609,8 +782,54 @@ mod tests {
         assert_eq!(sync.change, Some(TextDocumentSyncKind::INCREMENTAL));
         assert_eq!(sync.will_save, Some(false));
         assert!(capabilities.diagnostic_provider.is_none());
-        assert!(capabilities.code_lens_provider.is_none());
-        assert!(capabilities.execute_command_provider.is_none());
+    }
+
+    /// Lenses and the command they invoke are advertised together, and only
+    /// when the host can actually run it — a lens for a command the server
+    /// would reject is a button that does nothing.
+    #[test]
+    fn code_lens_is_advertised_only_with_a_playground_host() {
+        let without = server_capabilities(PositionEncoding::UTF16, false);
+        assert!(without.code_lens_provider.is_none());
+        assert!(without.execute_command_provider.is_none());
+
+        let with = server_capabilities(PositionEncoding::UTF16, true);
+        assert_eq!(
+            with.code_lens_provider
+                .map(|options| options.resolve_provider),
+            Some(Some(true))
+        );
+        assert_eq!(
+            with.execute_command_provider
+                .map(|options| options.commands),
+            Some(vec![OPEN_PANEL_COMMAND.to_owned()])
+        );
+    }
+
+    /// The lens payload is the command payload: what a lens serializes must
+    /// round-trip through the argument the client sends back.
+    #[test]
+    fn open_panel_args_round_trip_in_the_wire_spelling() {
+        let args = OpenPanelArgs {
+            project_path: Some("/ws".to_owned()),
+            test_name: Some("adds".to_owned()),
+            ..OpenPanelArgs::default()
+        };
+        let value = serde_json::to_value(&args).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({ "projectPath": "/ws", "testName": "adds" }),
+            "absent fields are omitted, present ones are camelCase"
+        );
+        assert_eq!(
+            serde_json::from_value::<OpenPanelArgs>(value).unwrap(),
+            args
+        );
+        // A bare open carries no argument at all.
+        assert_eq!(
+            serde_json::from_value::<OpenPanelArgs>(serde_json::json!({})).unwrap(),
+            OpenPanelArgs::default()
+        );
     }
 
     #[test]

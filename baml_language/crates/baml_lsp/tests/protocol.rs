@@ -858,6 +858,196 @@ fn feature_harness() -> Harness {
     harness
 }
 
+/// A lens-enabled workspace: one file with a runnable function and a test,
+/// plus a recording open-panel handler installed *before* `initialize` (the
+/// capability is read there).
+const LENS_FIXTURE: &str = "function greet(name: string) -> string {\n    name\n}\n\n\
+                            test \"greets\" {\n    assert.is_true(greet(\"a\") == \"a\")\n}\n";
+
+type PanelLog = Arc<std::sync::Mutex<Vec<baml_lsp::OpenPanelRequest>>>;
+
+fn lens_harness() -> (Harness, PanelLog) {
+    let mut harness = Harness::new();
+    harness.fs.add_project(&harness.ws);
+    harness.fs.write(harness.ws.join("lens.baml"), LENS_FIXTURE);
+    let log: PanelLog = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorder = Arc::clone(&log);
+    harness
+        .state
+        .set_open_panel_handler(Arc::new(move |request: &baml_lsp::OpenPanelRequest| {
+            recorder.lock().unwrap().push(request.clone());
+        }));
+    harness.init_session(SessionKey(1), &[lsp_types::PositionEncodingKind::UTF16]);
+    harness.settle();
+    (harness, log)
+}
+
+/// A lens is a fully-resolved button for `baml.openBamlPanel`, positioned on
+/// the item's name, carrying the workspace root it belongs to.
+#[test]
+fn code_lenses_run_functions_and_tests_through_the_panel_command() {
+    let (mut harness, _log) = lens_harness();
+    let uri = harness.uri("lens.baml");
+    let response = harness
+        .request(
+            SessionKey(1),
+            "textDocument/codeLens",
+            serde_json::json!({ "textDocument": { "uri": uri } }),
+        )
+        .expect("code lenses succeed");
+    let lenses = response.as_array().expect("lens array");
+    assert_eq!(
+        lenses.len(),
+        2,
+        "one per function and test, got: {lenses:?}"
+    );
+
+    let project = harness.ws.to_string_lossy().into_owned();
+    let function_lens = &lenses[0];
+    assert_eq!(function_lens["command"]["command"], "baml.openBamlPanel");
+    assert_eq!(
+        function_lens["command"]["arguments"][0],
+        serde_json::json!({ "projectPath": project, "functionName": "greet" })
+    );
+    // Positioned on the name token, not the whole declaration.
+    assert_eq!(function_lens["range"]["start"]["line"], 0);
+    assert_eq!(
+        function_lens["range"]["start"]["character"],
+        serde_json::json!(9)
+    );
+
+    let test_lens = &lenses[1];
+    assert_eq!(
+        test_lens["command"]["arguments"][0],
+        serde_json::json!({ "projectPath": project, "testName": "greets" })
+    );
+    assert_eq!(test_lens["command"]["title"], "▶ Run test");
+
+    // Lenses ship resolved: `codeLens/resolve` is the identity.
+    let resolved = harness
+        .request(SessionKey(1), "codeLens/resolve", function_lens.clone())
+        .expect("resolve succeeds");
+    assert_eq!(&resolved, function_lens);
+}
+
+/// Clicking a lens round-trips: the argument the server produced is the
+/// argument it accepts, and it reaches the host as a resolved request.
+#[test]
+fn executing_a_lens_command_reaches_the_host() {
+    let (mut harness, log) = lens_harness();
+    let uri = harness.uri("lens.baml");
+    let lenses = harness
+        .request(
+            SessionKey(1),
+            "textDocument/codeLens",
+            serde_json::json!({ "textDocument": { "uri": uri } }),
+        )
+        .expect("code lenses succeed");
+    let arguments = lenses[1]["command"]["arguments"].clone();
+
+    harness
+        .request(
+            SessionKey(1),
+            "workspace/executeCommand",
+            serde_json::json!({ "command": "baml.openBamlPanel", "arguments": arguments }),
+        )
+        .expect("the command runs");
+
+    let recorded = log.lock().unwrap();
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].project, harness.ws);
+    assert_eq!(recorded[0].test_name.as_deref(), Some("greets"));
+    assert!(recorded[0].function_name.is_none());
+}
+
+/// A bare open (no argument) resolves to the workspace root; an argument
+/// naming something that is not a root is rejected rather than guessed at.
+#[test]
+fn panel_command_resolves_the_project_or_rejects_it() {
+    let (mut harness, log) = lens_harness();
+    harness
+        .request(
+            SessionKey(1),
+            "workspace/executeCommand",
+            serde_json::json!({ "command": "baml.openBamlPanel", "arguments": [] }),
+        )
+        .expect("a bare open uses the workspace root");
+    assert_eq!(log.lock().unwrap()[0].project, harness.ws);
+
+    let error = harness
+        .request(
+            SessionKey(1),
+            "workspace/executeCommand",
+            serde_json::json!({
+                "command": "baml.openBamlPanel",
+                "arguments": [{ "projectPath": "/not/a/root" }],
+            }),
+        )
+        .expect_err("a non-root project path is rejected");
+    assert!(matches!(error, LspError::InvalidParams(_)), "got {error:?}");
+    assert_eq!(
+        log.lock().unwrap().len(),
+        1,
+        "nothing further reached the host"
+    );
+
+    let error = harness
+        .request(
+            SessionKey(1),
+            "workspace/executeCommand",
+            serde_json::json!({ "command": "baml.unknownCommand", "arguments": [] }),
+        )
+        .expect_err("unknown commands are not silently accepted");
+    assert!(
+        matches!(error, LspError::RequestNotSupported(_)),
+        "got {error:?}"
+    );
+}
+
+/// Without a playground host there are no lenses to click, and the command
+/// is not advertised — so `initialize` says so and the request is refused.
+#[test]
+fn a_host_without_a_playground_advertises_no_lenses() {
+    let mut harness = Harness::new();
+    harness.fs.add_project(&harness.ws);
+    harness.fs.write(harness.ws.join("lens.baml"), LENS_FIXTURE);
+    let sender = Arc::new(RecordingSender::default());
+    harness.senders.insert(SessionKey(1), Arc::clone(&sender));
+    harness.state.open_session(SessionKey(1), sender);
+    let result = harness
+        .request(
+            SessionKey(1),
+            "initialize",
+            serde_json::json!({
+                "processId": null,
+                "capabilities": {},
+                "workspaceFolders": [{
+                    "uri": Url::from_file_path(&harness.ws).unwrap(),
+                    "name": "ws",
+                }],
+            }),
+        )
+        .unwrap();
+    assert!(result["capabilities"]["codeLensProvider"].is_null());
+    assert!(result["capabilities"]["executeCommandProvider"].is_null());
+    harness
+        .notify(SessionKey(1), "initialized", json!({}))
+        .unwrap();
+    harness.settle();
+
+    let error = harness
+        .request(
+            SessionKey(1),
+            "workspace/executeCommand",
+            serde_json::json!({ "command": "baml.openBamlPanel", "arguments": [] }),
+        )
+        .expect_err("no host, no command");
+    assert!(
+        matches!(error, LspError::RequestNotSupported(_)),
+        "got {error:?}"
+    );
+}
+
 fn position_params(uri: &Url, position: lsp_types::Position) -> Value {
     serde_json::json!({
         "textDocument": { "uri": uri },

@@ -7,19 +7,69 @@ description = "Native stdio host for the BAML language server: transport, admiss
 [lints]
 workspace = true
 
+# The playground engine runs in-process, so the host picks the TLS/crypto
+# provider for the runtime's HTTP stack (same shape as baml_cli's features).
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [
+  "dep:rustls",
+  "reqwest/rustls",
+  "rustls?/aws_lc_rs",
+  "rustls?/std",
+  "bex_engine/aws-crypto",
+  "bridge_ctypes/aws-crypto",
+  "sys_native/aws-crypto",
+]
+ring-crypto = [
+  "dep:rustls",
+  "reqwest/rustls-no-provider",
+  "rustls?/ring",
+  "rustls?/std",
+  "bex_engine/ring-crypto",
+  "bridge_ctypes/ring-crypto",
+  "sys_native/ring-crypto",
+]
+native-tls = [ "reqwest/native-tls", "sys_native/native-tls" ]
+
 [dependencies]
 baml_builtins2 = { workspace = true }
+baml_compiler2_visualization = { workspace = true }
+baml_db = { workspace = true }
+baml_ide = { workspace = true }
 baml_lsp = { workspace = true }
+baml_type = { workspace = true }
 baml_version = { workspace = true }
+bex_engine = { workspace = true }
+bex_events = { workspace = true }
+bex_heap = { workspace = true }
+bex_project = { workspace = true }
+bex_vm_types = { workspace = true }
+bridge_ctypes = { workspace = true }
+sys_native = { workspace = true, features = [ "bundle-http" ] }
+sys_ops = { workspace = true }
+sys_types = { workspace = true }
 anyhow = { workspace = true }
+axum = { workspace = true }
+base64 = { workspace = true }
 crossbeam-channel = { workspace = true }
+futures = { workspace = true }
+indexmap = { workspace = true }
 lsp-server = { workspace = true }
 lsp-types = { workspace = true }
+notify = { workspace = true }
+num-bigint = { workspace = true }
 parking_lot = { workspace = true, features = [ "deadlock_detection" ] }
+reqwest = { workspace = true }
+rustls = { workspace = true, optional = true }
+serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = [ "sync", "rt-multi-thread", "net", "time", "macros" ] }
+tokio-tungstenite = { workspace = true }
+tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+webbrowser = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

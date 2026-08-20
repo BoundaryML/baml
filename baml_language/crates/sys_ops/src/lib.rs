@@ -1999,10 +1999,29 @@ pub struct IoSysOpsBuilder {
 impl IoSysOpsBuilder {
     /// Create a new builder with all operations defaulting to `Unsupported`,
     /// except LLM ops which use the real blanket implementation.
+    ///
+    /// Every operation not overridden afterwards throws — including ones a
+    /// host may never think about (`baml.time.Instant.now`, `random`, the
+    /// per-class `fs::File`/`http::Response` readers). A host that wants a
+    /// working platform with a few operations *intercepted* wants
+    /// [`IoSysOpsBuilder::from_ops`] instead.
     pub fn new() -> Self {
         Self {
             inner: io::SysOps::from_impl(DefaultIoOps),
         }
+    }
+
+    /// Start from an existing table — typically `SysOps::native()` — and
+    /// override individual namespaces on top of it.
+    ///
+    /// This is the right base for an *interposing* host (the playground
+    /// intercepts HTTP, env and IO to route them through its UI, and wants
+    /// the platform's real behavior for everything else): the set of
+    /// operations it must not break is open-ended and grows with the
+    /// standard library, so it cannot be enumerated at the call site.
+    #[must_use]
+    pub fn from_ops(ops: io::SysOps) -> Self {
+        Self { inner: ops }
     }
 
     /// Consume the builder and return the composed [`io::SysOps`] table.

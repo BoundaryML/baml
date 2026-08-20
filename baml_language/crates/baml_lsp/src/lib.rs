@@ -38,8 +38,13 @@ pub mod state;
 #[cfg(not(target_arch = "wasm32"))]
 pub use discovery::NativeFs;
 pub use discovery::{DiscoveredRoot, LoadedRoot, NoFs, ProjectFs};
-pub use dispatch::{initialize_result, server_capabilities};
+pub use dispatch::{
+    OPEN_PANEL_COMMAND, OpenPanelArgs, OpenPanelRequest, initialize_result, server_capabilities,
+};
 pub use error::LspError;
+pub use mutation::SourceMutation;
+pub use snapshot::{RequestCx, Snapshot};
 pub use state::{
-    ClientSender, GlobalState, OwnerEvent, OwnerHandle, Responder, SessionKey, SourceRevision,
+    Applied, ClientSender, GlobalState, OpenPanelHandler, OwnerEvent, OwnerHandle, Responder,
+    SessionKey, SourceObserver, SourceRevision,
 };

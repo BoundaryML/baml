@@ -24,9 +24,20 @@
 //! ```
 
 mod deadlock_watchdog;
+pub mod engine;
 pub mod lsp_ingress;
 pub mod lsp_runtime;
 pub mod native_lsp_sender;
+pub mod playground_env;
+pub mod playground_http;
+pub mod playground_io;
+pub mod playground_notify;
+pub mod playground_runs;
+pub mod playground_seam;
+pub mod playground_sender;
+pub mod playground_server;
+pub mod playground_session;
+pub mod playground_ws;
 
 use std::{
     io::{BufRead, Write},
@@ -36,9 +47,17 @@ use std::{
 };
 
 use anyhow::Context as _;
-use baml_lsp::{GlobalState, SessionKey, discovery::NativeFs, executor::Executors};
+use baml_lsp::{GlobalState, OwnerEvent, SessionKey, discovery::NativeFs, executor::Executors};
 
-use crate::lsp_runtime::{LspRuntime, SubmitResult};
+use crate::{
+    lsp_runtime::{LspRuntime, SubmitResult},
+    playground_env::{PlaygroundEnv, PlaygroundEnvState},
+    playground_http::{PlaygroundHttp, PlaygroundHttpState},
+    playground_io::{PlaygroundIo, PlaygroundIoState},
+    playground_seam::PlaygroundSeam,
+    playground_session::PlaygroundSessionStore,
+    playground_ws::WsOutMessage,
+};
 
 // ---------------------------------------------------------------------------
 // Bounded outbound frames: no transport hides an unbounded writer queue
@@ -365,11 +384,104 @@ fn resolve_stdlib_dir() -> Option<PathBuf> {
         .then(|| std::fs::canonicalize(&checkout).unwrap_or(checkout))
 }
 
+/// Build the `SysOps` every playground engine runs on: the native platform,
+/// with exactly three namespaces intercepted so fetch logs, env prompts and
+/// `baml.io` reads reach the webview.
+///
+/// The base is `native()`, not an empty builder. A playground run is an
+/// ordinary program run — it must have the whole platform, and the set of
+/// operations it needs is not enumerable here. Building up from
+/// `SysOpsBuilder::new()` left everything unlisted throwing `Unsupported`,
+/// which broke `baml.time.Instant.now` and so every test run, since
+/// `testing.run_test` times each one.
+fn build_playground_sys_ops(
+    broadcast_tx: &tokio::sync::broadcast::Sender<WsOutMessage>,
+    run_store: &Arc<bex_events::run::InMemoryRunStore>,
+    env_state: &Arc<PlaygroundEnvState>,
+    io_state: &Arc<PlaygroundIoState>,
+) -> sys_ops::SysOps {
+    use sys_native::SysOpsExt as _;
+
+    let http_state = Arc::new(PlaygroundHttpState::new(
+        broadcast_tx.clone(),
+        run_store.clone(),
+    ));
+    sys_ops::SysOpsBuilder::from_ops(sys_ops::SysOps::native())
+        .with_http_instance(Arc::new(PlaygroundHttp(http_state)))
+        .with_env_instance(Arc::new(PlaygroundEnv(env_state.clone())))
+        .with_io_instance(Arc::new(PlaygroundIo(io_state.clone())))
+        .build()
+}
+
+/// Who the playground is opened for.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PlaygroundOpenTarget {
+    /// `baml lsp`: an editor drives the process over stdio and the playground
+    /// runs alongside it, for the extension's webview.
+    LspClient,
+    /// `baml playground`: no editor client — the browser is the only front
+    /// end, and the HTTP server is the process's foreground work.
+    Browser,
+}
+
+/// Options for [`run_playground_server`] (browser mode only).
+#[derive(Default)]
+pub struct PlaygroundServerOptions {
+    /// Bind exactly this port; error if unavailable. `None` scans from 4265.
+    pub port: Option<u16>,
+    /// Open the local browser once the server is up.
+    pub open_browser: bool,
+    /// Called once with the bound port, before anything is served. The
+    /// process's terminal output belongs to the caller — a library that owns
+    /// stdout cannot also be the stdio LSP host — so this is how `baml
+    /// playground` prints its banner.
+    pub on_listening: Option<Box<dyn FnOnce(u16) + Send>>,
+}
+
+impl std::fmt::Debug for PlaygroundServerOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PlaygroundServerOptions")
+            .field("port", &self.port)
+            .field("open_browser", &self.open_browser)
+            .field("on_listening", &self.on_listening.is_some())
+            .finish()
+    }
+}
+
 /// Run the native BAML LSP server over stdio until the client exits.
 ///
 /// Returns `Err` when the client sent `exit` before completing `shutdown`
 /// (the LSP lifecycle's abnormal termination), so the process exits nonzero.
 pub fn run_server(workspace_roots: Vec<PathBuf>) -> anyhow::Result<()> {
+    run_server_inner(
+        PlaygroundOpenTarget::LspClient,
+        workspace_roots,
+        None,
+        PlaygroundServerOptions::default(),
+    )
+}
+
+/// Run the standalone browser playground: the same server, with the HTTP host
+/// in the foreground and no stdio client.
+pub fn run_playground_server(
+    workspace_roots: Vec<PathBuf>,
+    playground_dir_override: Option<PathBuf>,
+    options: PlaygroundServerOptions,
+) -> anyhow::Result<()> {
+    run_server_inner(
+        PlaygroundOpenTarget::Browser,
+        workspace_roots,
+        playground_dir_override,
+        options,
+    )
+}
+
+fn run_server_inner(
+    open_target: PlaygroundOpenTarget,
+    workspace_roots: Vec<PathBuf>,
+    playground_dir_override: Option<PathBuf>,
+    options: PlaygroundServerOptions,
+) -> anyhow::Result<()> {
     let workspace_roots = absolutize_workspace_roots(workspace_roots)?;
 
     // Tracing → stderr so vscode-languageclient captures it in the "BAML
@@ -400,6 +512,8 @@ pub fn run_server(workspace_roots: Vec<PathBuf>) -> anyhow::Result<()> {
         );
     }));
 
+    apply_single_workspace_cwd(&workspace_roots)?;
+
     tracing::info!("baml-lsp v{} starting", version());
     deadlock_watchdog::spawn();
 
@@ -409,25 +523,299 @@ pub fn run_server(workspace_roots: Vec<PathBuf>) -> anyhow::Result<()> {
     }
     let state = GlobalState::with_fs(Executors::native_default(), stdlib_dir, Arc::new(NativeFs));
     let runtime = LspRuntime::new(state)?;
+    let tokio_runtime = tokio::runtime::Runtime::new()?;
 
-    // Stdio sender: bounded frames charged against one process outbound
-    // budget; there is no unbounded writer queue.
+    // Outbound LSP frames: bounded and charged against one process budget;
+    // there is no unbounded writer queue. In stdio mode a writer thread
+    // drains them to stdout; in browser mode a bridge thread forwards them
+    // to `/api/lsp` instead.
     let (writer_tx, writer_rx) = crossbeam_channel::bounded::<OutboundFrame>(512);
     let writer_tx = Arc::new(writer_tx);
     let writer_budget = OutboundBudget::new();
-    let stdio_sender = native_lsp_sender::NativeLspSender::new(&writer_tx, &writer_budget);
+    let lsp_sender = Arc::new(native_lsp_sender::NativeLspSender::new(
+        &writer_tx,
+        &writer_budget,
+    ));
 
+    // ── Playground host ──────────────────────────────────────────────────
+    let (broadcast_tx, _) = tokio::sync::broadcast::channel::<WsOutMessage>(64);
+    // Terminal runs beyond the cap are evicted from memory; the playground
+    // rehydrates them on demand from the disk-backed history store.
+    let run_store = Arc::new(bex_events::run::InMemoryRunStore::new(
+        bex_events::run::RunRetentionPolicy {
+            max_terminal_runs: Some(100),
+            ..Default::default()
+        },
+    ));
+    let _profile_observer = bex_events::run::register_profile_observer(Arc::new(
+        playground_runs::RunStoreProfileObserver::new(run_store.clone(), broadcast_tx.clone()),
+    ));
+    let env_state = Arc::new(PlaygroundEnvState::new(
+        broadcast_tx.clone(),
+        run_store.clone(),
+        Arc::new(PlaygroundSessionStore::default()),
+    ));
+    let io_state = Arc::new(PlaygroundIoState::new(
+        broadcast_tx.clone(),
+        run_store.clone(),
+    ));
+    let sys_ops = Arc::new(build_playground_sys_ops(
+        &broadcast_tx,
+        &run_store,
+        &env_state,
+        &io_state,
+    ));
+
+    // Bind the playground port before anything advertises it. Browser mode is
+    // useless without the server; stdio mode keeps serving the editor.
+    let (playground_listener, playground_port) = match tokio_runtime.block_on(async {
+        match options.port {
+            Some(port) => playground_server::bind_exact_port(port)
+                .await
+                .map(|listener| (listener, port)),
+            None => playground_server::pick_port(4265, 100).await,
+        }
+    }) {
+        Ok((listener, port)) => (Some(listener), port),
+        Err(error) => {
+            if open_target == PlaygroundOpenTarget::Browser {
+                return Err(error);
+            }
+            tracing::error!("Could not find a playground port: {error}");
+            (None, 0)
+        }
+    };
+    if let Some(announce) = options.on_listening {
+        announce(playground_port);
+    }
+
+    // Where the most recent `OpenPlayground` pointed, so a page that connects
+    // afterwards (a fresh window, or a reconnect) can be navigated there.
+    let current_open_target: playground_sender::SharedOpenTarget =
+        Arc::new(std::sync::Mutex::new(None));
+    let playground_sender = Arc::new(playground_sender::NativePlaygroundSender::new(
+        broadcast_tx.clone(),
+        lsp_sender.clone(),
+        playground_port,
+        open_target == PlaygroundOpenTarget::Browser,
+        current_open_target.clone(),
+    ));
+
+    let runtimes = Arc::new(engine::RuntimeRegistry::default());
+    run_store.set_graph_runtime_overlay_span_provider(Arc::new(
+        playground_runs::ProjectGraphRuntimeOverlaySpanProvider::new(runtimes.clone()),
+    ));
+    let seam = PlaygroundSeam::new(
+        runtime.clone(),
+        runtimes,
+        playground_sender.clone(),
+        env_state.clone(),
+        sys_ops,
+    );
+    {
+        // The pipeline task and its debounce timer need the tokio context.
+        let _enter = tokio_runtime.enter();
+        seam.spawn_source_pipeline();
+    }
+
+    // How this host runs `baml.openBamlPanel`: the sender decides whether
+    // that means navigating a browser page or telling the editor to open its
+    // webview. Installed before any client connects, because `initialize`
+    // reads it to decide whether to advertise code lenses at all.
+    let panel_sender = playground_sender.clone();
+    runtime
+        .owner()
+        .post(OwnerEvent::Call(Box::new(move |state| {
+            state.set_open_panel_handler(Arc::new(move |request: &baml_lsp::OpenPanelRequest| {
+                panel_sender.send_playground_notification(
+                    &playground_notify::PlaygroundNotification::OpenPlayground {
+                        project: request.project.to_string_lossy().into_owned(),
+                        function_name: request.function_name.clone(),
+                        test_name: request.test_name.clone(),
+                        testset_name: request.testset_name.clone(),
+                    },
+                );
+            }));
+        })));
+
+    // Mirror of what the browser editor has per file: written by the
+    // `/api/lsp` bridge on didOpen/didChange, read by the disk watcher so the
+    // browser's own write-throughs are not echoed back as external changes.
+    let doc_mirror: playground_server::DocMirror =
+        Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    // Broadcast LSP output destined for `/api/lsp`: root notifications and
+    // disk-change pushes. Responses never travel here — the ingress runtime
+    // routes those per session.
+    let (lsp_out_tx, _lsp_out_rx) = tokio::sync::broadcast::channel::<OutboundFrame>(256);
+
+    if open_target == PlaygroundOpenTarget::Browser {
+        // No editor client to announce workspace folders, so discover the CLI
+        // roots directly.
+        let roots = workspace_roots.clone();
+        runtime
+            .owner()
+            .post(OwnerEvent::Call(Box::new(move |state| {
+                for root in roots {
+                    tracing::info!(path = %root.display(), "discovering playground root");
+                    state.spawn_discovery(baml_lsp::paths::canonical_physical_path(&root));
+                }
+            })));
+    }
+
+    let Some(listener) = playground_listener else {
+        anyhow::ensure!(
+            open_target == PlaygroundOpenTarget::LspClient,
+            "could not start the playground server"
+        );
+        return run_stdio_loop(
+            &runtime,
+            &writer_tx,
+            &writer_budget,
+            writer_rx,
+            &lsp_sender,
+            &workspace_roots,
+        );
+    };
+
+    if open_target == PlaygroundOpenTarget::Browser {
+        // Nothing drains `writer_rx` in browser mode (no stdout writer), so
+        // the bridge owns it and fans LSP output out to `/api/lsp`.
+        let lsp_out_tx_bridge = lsp_out_tx.clone();
+        std::thread::Builder::new()
+            .name("lsp-ws-bridge".into())
+            .spawn(move || {
+                while let Ok(frame) = writer_rx.recv() {
+                    let _ = lsp_out_tx_bridge.send(frame);
+                }
+            })?;
+
+        if options.open_browser
+            && let Some(project) = workspace_roots.first()
+        {
+            playground_sender.send_playground_notification(
+                &playground_notify::PlaygroundNotification::OpenPlayground {
+                    project: project.to_string_lossy().into_owned(),
+                    function_name: None,
+                    test_name: None,
+                    testset_name: None,
+                },
+            );
+        }
+
+        // Watch for external edits (another editor, a formatter) for the
+        // session's lifetime: they reach the database *and* the browser model.
+        let _disk_watcher = playground_server::spawn_disk_watcher(
+            &workspace_roots,
+            lsp_out_tx.clone(),
+            writer_budget,
+            doc_mirror.clone(),
+            runtime.owner().clone(),
+        );
+
+        return tokio_runtime.block_on(playground_server::run(
+            listener,
+            seam,
+            broadcast_tx,
+            env_state,
+            io_state,
+            run_store,
+            playground_dir_override,
+            lsp_out_tx,
+            runtime,
+            doc_mirror,
+            workspace_roots,
+            current_open_target,
+        ));
+    }
+
+    tokio_runtime.spawn(playground_host_task(
+        listener,
+        seam,
+        broadcast_tx,
+        env_state,
+        io_state,
+        run_store,
+        playground_dir_override,
+        lsp_out_tx,
+        runtime.clone(),
+        doc_mirror,
+        workspace_roots.clone(),
+        current_open_target,
+    ));
+
+    run_stdio_loop(
+        &runtime,
+        &writer_tx,
+        &writer_budget,
+        writer_rx,
+        &lsp_sender,
+        &workspace_roots,
+    )
+}
+
+/// The playground host in editor mode: a background task, whose exit is only
+/// worth an error line when it is not "the host was never configured".
+#[allow(clippy::too_many_arguments)]
+async fn playground_host_task(
+    listener: tokio::net::TcpListener,
+    seam: Arc<PlaygroundSeam>,
+    broadcast_tx: tokio::sync::broadcast::Sender<WsOutMessage>,
+    env_state: Arc<PlaygroundEnvState>,
+    io_state: Arc<PlaygroundIoState>,
+    run_store: Arc<bex_events::run::InMemoryRunStore>,
+    playground_dir_override: Option<PathBuf>,
+    lsp_out_tx: tokio::sync::broadcast::Sender<OutboundFrame>,
+    runtime: Arc<LspRuntime>,
+    doc_mirror: playground_server::DocMirror,
+    workspace_roots: Vec<PathBuf>,
+    current_open_target: playground_sender::SharedOpenTarget,
+) {
+    let Err(error) = playground_server::run(
+        listener,
+        seam,
+        broadcast_tx,
+        env_state,
+        io_state,
+        run_store,
+        playground_dir_override,
+        lsp_out_tx,
+        runtime,
+        doc_mirror,
+        workspace_roots,
+        current_open_target,
+    )
+    .await
+    else {
+        return;
+    };
+    if error.is::<playground_server::PlaygroundNotConfigured>() {
+        tracing::info!("Playground assets are not configured; running without it: {error}");
+    } else {
+        tracing::error!("Playground server exited: {error}");
+    }
+}
+
+/// The stdio session and its read loop: the editor drives the process here.
+fn run_stdio_loop(
+    runtime: &Arc<LspRuntime>,
+    writer_tx: &Arc<crossbeam_channel::Sender<OutboundFrame>>,
+    writer_budget: &Arc<OutboundBudget>,
+    writer_rx: crossbeam_channel::Receiver<OutboundFrame>,
+    lsp_sender: &Arc<native_lsp_sender::NativeLspSender>,
+    workspace_roots: &[PathBuf],
+) -> anyhow::Result<()> {
     // The stdio session: a bounded sink into the writer channel. Saturation
     // is backpressure (the response stays reserved and is retried), never
     // silent loss; a disconnected writer closes the session.
     let stdio_closed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stdio_sender = lsp_sender.clone();
     let stdio_sink: lsp_runtime::Sink = Arc::new(move |message| stdio_sender.deliver(&message));
     let stdio_closed_for_endpoint = stdio_closed.clone();
     let stdio_close: lsp_runtime::Close = Arc::new(move || {
         stdio_closed_for_endpoint.store(true, std::sync::atomic::Ordering::Release);
     });
     let after_notification = (!workspace_roots.is_empty()).then(|| {
-        let roots = workspace_roots.clone();
+        let roots = workspace_roots.to_vec();
         let hook: lsp_runtime::NotificationHook = Arc::new(move |state, session, notification| {
             if notification.method == "initialized" {
                 apply_cli_workspace_roots(state, session, &roots);
@@ -567,6 +955,26 @@ fn apply_cli_workspace_roots(state: &mut GlobalState, session: SessionKey, roots
     }
 }
 
+/// Run playground/LSP work from inside the project when exactly one root was
+/// named on the command line. BAML's own filesystem operations resolve
+/// relative paths against the process's current directory, so a run started
+/// from the playground must see the project as its working directory — not
+/// wherever the terminal (or the editor's spawn) happened to be.
+fn apply_single_workspace_cwd(workspace_roots: &[PathBuf]) -> anyhow::Result<()> {
+    let [root] = workspace_roots else {
+        return Ok(());
+    };
+    let cwd = if root.is_file() {
+        root.parent().unwrap_or(root)
+    } else {
+        root
+    };
+    std::env::set_current_dir(cwd)
+        .with_context(|| format!("Failed to set current directory to {}", cwd.display()))?;
+    tracing::info!(path = %cwd.display(), "working directory");
+    Ok(())
+}
+
 fn absolutize_workspace_roots(workspace_roots: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {
     if workspace_roots.iter().all(|root| root.is_absolute()) {
         return Ok(workspace_roots);
@@ -588,6 +996,68 @@ fn absolutize_workspace_roots(workspace_roots: Vec<PathBuf>) -> anyhow::Result<V
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The playground's platform is the native one. Regression for a table
+    /// built up from an empty `SysOpsBuilder`, which left everything the host
+    /// did not name throwing `Unsupported` — `baml.time.Instant.now` among
+    /// them, and `testing.run_test` times every test, so no test could ever
+    /// pass in the playground.
+    #[tokio::test]
+    async fn playground_sys_ops_provide_the_whole_native_platform() {
+        let (broadcast_tx, _rx) = tokio::sync::broadcast::channel(8);
+        let run_store = Arc::new(bex_events::run::InMemoryRunStore::new(
+            bex_events::run::RunRetentionPolicy::default(),
+        ));
+        let env_state = Arc::new(PlaygroundEnvState::new(
+            broadcast_tx.clone(),
+            run_store.clone(),
+            Arc::new(PlaygroundSessionStore::default()),
+        ));
+        let io_state = Arc::new(PlaygroundIoState::new(
+            broadcast_tx.clone(),
+            run_store.clone(),
+        ));
+        let sys_ops = Arc::new(build_playground_sys_ops(
+            &broadcast_tx,
+            &run_store,
+            &env_state,
+            &io_state,
+        ));
+
+        let mut db = baml_db::ProjectDatabase::new();
+        db.ensure_stdlib_sources();
+        let root = db
+            .add_source_root(baml_db::SourceRootSpec {
+                path: PathBuf::from("/sysops-test"),
+                package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+                kind: baml_db::SourceRootKind::Workspace,
+            })
+            .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
+        db.add_or_update_file_in(
+            root,
+            std::path::Path::new("/sysops-test/main.baml"),
+            "function stamp() -> bool throws never {\n    \
+             let start = baml.time.Instant.now();\n    \
+             start.elapsed().to_milliseconds() >= 0n\n}\n",
+        );
+        let program = db
+            .get_bytecode_unchecked()
+            .unwrap_or_else(|e| unreachable!("the fixture compiles: {e}"));
+
+        let engine = Arc::new(
+            engine::construct_engine_candidate(program, sys_ops, baml_lsp::SourceRevision(1))
+                .unwrap_or_else(|e| unreachable!("the engine constructs: {e}"))
+                .into_engine(),
+        );
+        let context =
+            bex_project::FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+        let value = engine
+            .call_function("stamp", Vec::new(), context, true)
+            .await
+            .expect("a timed function runs on the playground platform");
+        assert_eq!(value, bex_project::BexExternalValue::Bool(true));
+        bex_project::Bex::shutdown(engine).await;
+    }
 
     fn framed(body: &str) -> Vec<u8> {
         format!("Content-Length: {}\r\n\r\n{body}", body.len()).into_bytes()

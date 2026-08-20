@@ -24,7 +24,9 @@ mod notifications;
 mod proto;
 mod requests;
 
-pub use requests::{initialize_result, server_capabilities};
+pub use requests::{
+    OPEN_PANEL_COMMAND, OpenPanelArgs, OpenPanelRequest, initialize_result, server_capabilities,
+};
 
 use crate::{
     error::LspError,
@@ -250,6 +252,7 @@ define_request_tables! {
         "workspace/symbol" => workspace_symbol,
         "textDocument/semanticTokens/range" => semantic_tokens_range,
         "textDocument/inlayHint" => inlay_hint,
+        "textDocument/codeLens" => code_lens,
     }
     snapshot_commit {
         "textDocument/semanticTokens/full" => semantic_tokens_full,

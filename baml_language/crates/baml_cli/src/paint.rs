@@ -14,9 +14,8 @@
 
 use std::{cell::RefCell, collections::HashMap, fmt::Write, path::Path, rc::Rc};
 
-use baml_db::ProjectDatabase;
 use baml_db::{
-    SourceFile,
+    ProjectDatabase, SourceFile,
     baml_compiler_diagnostics::{
         DiagnosticIdentifierKind, DiagnosticMessageHighlighter, DiagnosticMessageKind,
         HighlightAttributes, HighlightColor, HighlightSpan,
@@ -489,9 +488,11 @@ fn push_styled(out: &mut String, seg: &str, style: &Style) {
 mod tests {
     use std::path::Path;
 
-    use baml_db::ProjectDatabase;
-    use baml_db::baml_compiler_diagnostics::{
-        DiagnosticMessageHighlighter, DiagnosticMessageKind, HighlightColor,
+    use baml_db::{
+        ProjectDatabase,
+        baml_compiler_diagnostics::{
+            DiagnosticMessageHighlighter, DiagnosticMessageKind, HighlightColor,
+        },
     };
     use baml_ide::{ModifierSet, SemanticTokenType};
 
