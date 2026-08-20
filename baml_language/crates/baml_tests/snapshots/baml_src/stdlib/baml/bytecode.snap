@@ -3431,7 +3431,6 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<#0, #1, #2>) -> #0 
 
   L0:
     load_var _4
-    store_var _0
     jump L3
 
   L1:
@@ -3445,10 +3444,8 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<#0, #1, #2>) -> #0 
     load_type baml.iter.Iterator<Error = #2, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L3:
-    load_var _0
     return
 }
 
@@ -4087,7 +4084,6 @@ function baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable<#0, #1>) -> #
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L2
 
   L1:
@@ -4101,10 +4097,8 @@ function baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable<#0, #1>) -> #
     load_const false
     store_field .has_buffer
     load_var v
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -4378,7 +4372,7 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<#0, #1>) -> #0 | 
     store_var i
 
   L1:
-    load_var2 3 1
+    load_var2 2 1
     load_field .n
     load_const 1
     sub_int
@@ -4392,7 +4386,6 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<#0, #1>) -> #0 | 
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L3:
@@ -4416,7 +4409,6 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<#0, #1>) -> #0 | 
 
   L5:
     alloc_instance baml.iter.Done
-    store_var _0
     jump L7
 
   L6:
@@ -4428,10 +4420,8 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<#0, #1>) -> #0 | 
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L7:
-    load_var _0
     return
 }
 
@@ -5563,7 +5553,6 @@ function baml.ops.Compare.le(self: baml.ops.Compare, other: #0) -> bool {
     store_var _3
     load_var _3
     jump_if_false L0
-    store_var _0
     jump L1
 
   L0:
@@ -5572,10 +5561,8 @@ function baml.ops.Compare.le(self: baml.ops.Compare, other: #0) -> bool {
     load_type baml.ops.Equals
     load_const "eq"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
 
   L1:
-    load_var _0
     return
 }
 
@@ -8447,7 +8434,6 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L1: PlainDate
@@ -8455,7 +8441,6 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L2: PlainDateTime
@@ -8463,7 +8448,6 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L3: ZonedDateTime
@@ -8471,7 +8455,6 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L4: list
@@ -8481,7 +8464,6 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_var item
     load_const baml.toml.item_to_json
     call baml.Array.map
-    store_var _0
     jump L7
 
   L5: Table
@@ -8489,15 +8471,12 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L6: string
     load_var item
-    store_var _0
 
   L7:
-    load_var _0
     return
 
   L8:

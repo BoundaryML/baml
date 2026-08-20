@@ -1190,16 +1190,13 @@ fn is_stack_covered_phi(
 /// c. Be a statement-free block ending in `Goto { target: block }` whose own
 ///    predecessors all cover it. The intermediate joins of a chain such as
 ///    `a && b && c` have this shape.
+/// d. End in a call terminator that defines the local and returns into `block`
+///    — see [`call_result_carried_into`]. `a || b.starts_with(c)` lowers the rhs
+///    this way, so without this arm every short circuit over a call keeps its
+///    destination in a slot.
 ///
 /// `visited` rejects back-edges: a block reachable from itself would need a push
 /// per trip to stay balanced, which this shape cannot prove.
-///
-/// A predecessor that defines the local from a call-like terminator and
-/// continues at `block` also leaves the result on the stack, but it is not
-/// accepted here: `is_call_result_immediate` documents that the carry path is
-/// not wired for every call terminator, so proving that edge needs its own
-/// argument rather than a fourth arm bolted onto this one. Locals with such a
-/// predecessor stay in a slot — correct, one store/load short of optimal.
 fn predecessors_cover_block(
     local: Local,
     block: BlockId,
@@ -1227,6 +1224,11 @@ fn predecessors_cover_block(
             && *destination == local
             && *join == block
         {
+            covered_defs.insert((pred_id, StatementRef::Terminator));
+            continue;
+        }
+
+        if call_result_carried_into(pred.terminator.as_ref(), block) == Some(local) {
             covered_defs.insert((pred_id, StatementRef::Terminator));
             continue;
         }
@@ -1260,6 +1262,62 @@ fn predecessors_cover_block(
     }
 
     true
+}
+
+/// The local a call terminator leaves on top of the operand stack in `block`,
+/// when the call's result is stack-carried rather than stored.
+///
+/// `Call` and `VirtualCall` both emit as `<call opcode>`, then
+/// `emit_store_place(destination)` — a no-op for a stack-carried destination —
+/// then the jump to `target`. So control arrives at `target` with the call's one
+/// result on top, exactly like a predecessor that assigns and falls through.
+///
+/// The other call-shaped terminators are deliberately not here:
+///
+/// - `Await` and `AwaitAny` suspend the engine, and the note on
+///   `is_call_result_immediate` records that their opcodes rewind and
+///   re-execute across that suspend.
+/// - `SysOp` also suspends, and its dispatch asserts that the arguments are the
+///   whole of the frame's operand stack.
+/// - `Spawn` defines the spawned future rather than a call result, and
+///   continues at `resume`.
+///
+/// None of those covers a join anywhere in the corpus, so allowing them would be
+/// speculation instead of a proof.
+///
+/// `is_call_result_immediate` also excludes `VirtualCall`, but for a reason that
+/// does not apply here: that exclusion exists because the `CallResultImmediate`
+/// stack simulation has to recognize the *defining* terminator to know which
+/// block to start simulating from, and its match has no `VirtualCall` arm. The
+/// `PhiLike` simulation starts at the use block and never looks at the def.
+fn call_result_carried_into(terminator: Option<&Terminator>, block: BlockId) -> Option<Local> {
+    let (Terminator::Call {
+        destination,
+        target,
+        unwind,
+        ..
+    }
+    | Terminator::VirtualCall {
+        destination,
+        target,
+        unwind,
+        ..
+    }) = terminator?
+    else {
+        return None;
+    };
+
+    // A call that unwinds into `block` also reaches it on the throwing edge,
+    // where nothing was pushed. `Terminator::successors` reports both edges, so
+    // without this the same predecessor would be counted as covering twice.
+    if *target != block || *unwind == Some(block) {
+        return None;
+    }
+
+    match destination {
+        Place::Local(local) => Some(*local),
+        _ => None,
+    }
 }
 
 /// Check if a MIR statement is stack-neutral (doesn't push or pop from the eval stack).
@@ -2654,6 +2712,112 @@ mod tests {
         );
 
         assert!(is_stack_covered(&body, Local(1)));
+    }
+
+    /// `a && f(b)`: the short circuit joins at bb2, and the rhs block reaches
+    /// that same join through `rhs`, a terminator that defines the destination.
+    fn short_circuit_over_call_body(name: Option<&str>, rhs: Terminator) -> MirFunctionBody {
+        let destination = Local(1);
+
+        bool_body(
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::ShortCircuit {
+                        operand: Operand::Constant(Constant::Bool(true)),
+                        is_and: true,
+                        destination: Place::Local(destination),
+                        eval_rhs: BlockId(1),
+                        join: BlockId(2),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![],
+                    terminator: Some(rhs),
+                    span: None,
+                    terminator_span: None,
+                },
+                return_local_block(BlockId(2), destination),
+            ],
+            name,
+        )
+    }
+
+    fn call_into(target: BlockId, unwind: Option<BlockId>) -> Terminator {
+        Terminator::Call {
+            callee: Operand::Constant(Constant::Null),
+            args: vec![],
+            ntypeargs: 0,
+            runtime_type_check: false,
+            runtime_id: None,
+            destination: Place::Local(Local(1)),
+            target,
+            unwind,
+        }
+    }
+
+    fn virtual_call_into(target: BlockId) -> Terminator {
+        Terminator::VirtualCall {
+            iface: baml_type::TyTemplateInterface::new(
+                baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
+                Vec::new(),
+                Vec::new(),
+            ),
+            method: "eq".to_string(),
+            args: vec![],
+            ntypeargs: 0,
+            runtime_type_check: false,
+            runtime_id: None,
+            destination: Place::Local(Local(1)),
+            target,
+            unwind: None,
+        }
+    }
+
+    /// `a && f(b)` and `a && (b == c)`: the call opcode leaves its result on the
+    /// stack and jumps to the join, exactly like an assignment that falls
+    /// through. Both are common enough that materializing them would cost the
+    /// stdlib's comparison operators a store/load pair.
+    #[test]
+    fn short_circuit_joining_a_call_result_is_stack_carried() {
+        for name in [None, Some("ok")] {
+            let call = short_circuit_over_call_body(name, call_into(BlockId(2), None));
+            assert!(is_stack_covered(&call, Local(1)));
+
+            let virtual_call = short_circuit_over_call_body(name, virtual_call_into(BlockId(2)));
+            assert!(is_stack_covered(&virtual_call, Local(1)));
+        }
+    }
+
+    /// The throwing edge reaches the join without the call ever pushing a
+    /// result, so the join cannot assume anything is on the stack.
+    #[test]
+    fn call_that_unwinds_into_the_join_is_materialized() {
+        let body = short_circuit_over_call_body(None, call_into(BlockId(2), Some(BlockId(2))));
+
+        assert!(!is_stack_covered(&body, Local(1)));
+    }
+
+    /// `Await` suspends the engine and its opcode re-executes across the
+    /// suspend, so its result is not carried even though it lands on the stack
+    /// the same way a call's does.
+    #[test]
+    fn awaited_result_in_the_join_is_materialized() {
+        let body = short_circuit_over_call_body(
+            None,
+            Terminator::Await {
+                future: Place::Local(Local(0)),
+                destination: Place::Local(Local(1)),
+                target: BlockId(2),
+                unwind: None,
+            },
+        );
+
+        assert!(!is_stack_covered(&body, Local(1)));
     }
 
     /// The classic phi-like diamond: both arms assign and fall through.

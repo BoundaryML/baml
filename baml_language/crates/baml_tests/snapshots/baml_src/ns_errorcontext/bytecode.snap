@@ -255,7 +255,6 @@ function errorcontext.ec_deferthrow_fail_low() -> string {
 
 function errorcontext.ec_deferthrow_main() -> string {
     call user.errorcontext.ec_deferthrow_mid
-    store_var _0
     jump L0
     load_var e
     throw_if_panic
@@ -263,10 +262,8 @@ function errorcontext.ec_deferthrow_main() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L0:
-    load_var _0
     return
 }
 
@@ -682,7 +679,6 @@ function errorcontext.ec_tostring_fail_low() -> string {
 
 function errorcontext.ec_tostring_main() -> string {
     call user.errorcontext.ec_tostring_mid
-    store_var _0
     jump L0
     load_var e
     throw_if_panic
@@ -690,10 +686,8 @@ function errorcontext.ec_tostring_main() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L0:
-    load_var _0
     return
 }
 
