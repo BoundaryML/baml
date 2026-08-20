@@ -27,54 +27,55 @@ pub(super) fn location(
     })
 }
 
-/// Hover markdown for a [`TypeInfo`]: the describe block in a `baml` fence,
-/// docstring lines inside the fence, and — for a class with methods — a
-/// pointer at `baml describe` (hover never inlines method lists).
+/// Hover markdown for a [`TypeInfo`], rust-analyzer's shape spelled in
+/// BAML's `.`-paths: the owning path in its own fence above the
+/// declaration, the declaration block, then docs below a `---` separator —
+/// plus, for a class with methods, a pointer at `baml describe` (hover
+/// never inlines method lists).
 pub(super) fn hover_markdown(info: &TypeInfo) -> String {
+    let mut out = String::new();
+    if let Some(owner) = info.owner_path() {
+        out.push_str("```baml\n");
+        out.push_str(owner);
+        out.push_str("\n```\n\n---\n\n");
+    }
+    out.push_str("```baml\n");
+    out.push_str(&info.to_describe_block());
+    out.push_str("\n```");
+    if let Some(docs) = info.docs() {
+        out.push_str("\n\n---\n\n");
+        out.push_str(docs);
+    }
     match info {
         TypeInfo::Class {
-            docstring,
             methods,
             canonical_fqn,
             ..
-        } => {
-            let mut inner = String::new();
-            if let Some(doc) = docstring {
-                for line in doc.lines() {
-                    inner.push_str("/// ");
-                    inner.push_str(line);
-                    inner.push('\n');
-                }
-            }
-            inner.push_str(&info.to_describe_block());
-            let mut out = format!("```baml\n{inner}\n```");
-            if !methods.is_empty() {
-                out.push_str("\n\nRun `baml describe ");
-                out.push_str(canonical_fqn);
-                out.push_str("` for methods and details.");
-            }
-            out
+        } if !methods.is_empty() => {
+            out.push_str("\n\nRun `baml describe ");
+            out.push_str(canonical_fqn);
+            out.push_str("` for methods and details.");
         }
-        TypeInfo::Function { note, .. } => {
-            let mut out = format!("```baml\n{}\n```", info.to_describe_block());
-            if let Some(note) = note {
-                out.push_str("\n\n");
-                out.push_str(note);
-            }
-            out
+        TypeInfo::Function {
+            note: Some(note), ..
+        } => {
+            out.push_str("\n\n");
+            out.push_str(note);
         }
         TypeInfo::Documentation { detail, .. } => {
-            format!("```baml\n{}\n```\n\n{detail}", info.to_describe_block())
+            out.push_str("\n\n");
+            out.push_str(detail);
         }
-        TypeInfo::Enum { .. }
+        TypeInfo::Class { .. }
+        | TypeInfo::Function { .. }
+        | TypeInfo::Enum { .. }
         | TypeInfo::TypeAlias { .. }
         | TypeInfo::TemplateString { .. }
         | TypeInfo::LocalVar { .. }
         | TypeInfo::Symbol { .. }
-        | TypeInfo::OtherItem { .. } => {
-            format!("```baml\n{}\n```", info.to_describe_block())
-        }
+        | TypeInfo::OtherItem { .. } => {}
     }
+    out
 }
 
 /// The LSP symbol kind for a definition kind. LSP has no alias/template

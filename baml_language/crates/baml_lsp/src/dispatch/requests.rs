@@ -1,6 +1,6 @@
 //! Request handlers, in the two shapes the tables in [`super`] expect.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use lsp_types::{
     InitializeParams, InitializeResult, SaveOptions, ServerCapabilities, ServerInfo,
@@ -42,6 +42,25 @@ pub fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilities {
         references_provider: Some(lsp_types::OneOf::Left(true)),
         document_symbol_provider: Some(lsp_types::OneOf::Left(true)),
         workspace_symbol_provider: Some(lsp_types::OneOf::Left(true)),
+        semantic_tokens_provider: Some(
+            lsp_types::SemanticTokensOptions {
+                work_done_progress_options: lsp_types::WorkDoneProgressOptions::default(),
+                legend: lsp_types::SemanticTokensLegend {
+                    token_types: baml_ide::TOKEN_TYPES
+                        .iter()
+                        .map(|t| lsp_types::SemanticTokenType::new(t.as_str()))
+                        .collect(),
+                    token_modifiers: baml_ide::TOKEN_MODIFIERS
+                        .iter()
+                        .map(|m| lsp_types::SemanticTokenModifier::new(m))
+                        .collect(),
+                },
+                range: Some(true),
+                full: Some(lsp_types::SemanticTokensFullOptions::Delta { delta: Some(true) }),
+            }
+            .into(),
+        ),
+        inlay_hint_provider: Some(lsp_types::OneOf::Left(true)),
         workspace: Some(WorkspaceServerCapabilities {
             workspace_folders: Some(WorkspaceFoldersServerCapabilities {
                 supported: Some(true),
@@ -370,6 +389,198 @@ pub(super) fn workspace_symbol(
         })
         .collect();
     Ok(Some(lsp_types::WorkspaceSymbolResponse::Flat(infos)))
+}
+
+// ── Snapshot lane: semantic tokens + inlay hints ─────────────────────────────
+
+/// Encode ide-layer tokens with LSP line/character deltas in the session's
+/// encoding. Multi-line tokens are split into per-line segments (VS Code has
+/// no multiline-token capability); document order in, monotonic deltas out.
+fn encode_semantic_tokens(
+    tokens: &[baml_ide::SemanticToken],
+    codec: &PositionCodec<'_>,
+) -> Vec<lsp_types::SemanticToken> {
+    let mut out = Vec::with_capacity(tokens.len());
+    let (mut prev_line, mut prev_start) = (0u32, 0u32);
+    for token in tokens {
+        for segment in codec.token_segments(token.range) {
+            let delta_line = segment.line - prev_line;
+            let delta_start = if delta_line == 0 {
+                segment.start_character - prev_start
+            } else {
+                segment.start_character
+            };
+            out.push(lsp_types::SemanticToken {
+                delta_line,
+                delta_start,
+                length: segment.length,
+                token_type: token.token_type.legend_index(),
+                token_modifiers_bitset: token.modifiers.bits(),
+            });
+            prev_line = segment.line;
+            prev_start = segment.start_character;
+        }
+    }
+    out
+}
+
+/// The full-tokens response plus the baseline commit for the owner. Shared
+/// by the full and (fallback path of the) delta handler.
+fn full_tokens_with_commit(
+    snap: &crate::snapshot::Snapshot,
+    uri: &lsp_types::Url,
+) -> Result<(lsp_types::SemanticTokens, crate::state::BaselineCommit), LspError> {
+    let path = crate::paths::canonical_document_path(snap.roots(), uri)?;
+    let db = snap.db();
+    let Some(file) = db.get_file(&path) else {
+        return Err(LspError::FileNotFound(path));
+    };
+    let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
+    let encoded = encode_semantic_tokens(baml_ide::semantic_tokens(db, file), &codec);
+    let result_id = snap.revision();
+    let tokens = Arc::new(encoded);
+    Ok((
+        lsp_types::SemanticTokens {
+            result_id: Some(result_id.0.to_string()),
+            data: tokens.as_ref().clone(),
+        },
+        crate::state::BaselineCommit {
+            path,
+            baseline: crate::state::TokenBaseline { result_id, tokens },
+        },
+    ))
+}
+
+type CommitOutcome<T> = (Result<T, LspError>, Option<crate::state::BaselineCommit>);
+
+pub(super) fn semantic_tokens_full(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::SemanticTokensParams,
+) -> CommitOutcome<Option<lsp_types::SemanticTokensResult>> {
+    let text_document = params.text_document;
+    match full_tokens_with_commit(snap, &text_document.uri) {
+        Ok((tokens, commit)) => (
+            Ok(Some(lsp_types::SemanticTokensResult::Tokens(tokens))),
+            Some(commit),
+        ),
+        Err(error) => (Err(error), None),
+    }
+}
+
+pub(super) fn semantic_tokens_delta(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::SemanticTokensDeltaParams,
+) -> CommitOutcome<Option<lsp_types::SemanticTokensFullDeltaResult>> {
+    let text_document = params.text_document;
+    let previous_result_id = params.previous_result_id;
+    let (tokens, commit) = match full_tokens_with_commit(snap, &text_document.uri) {
+        Ok(computed) => computed,
+        Err(error) => return (Err(error), None),
+    };
+    // Diff only against the baseline the client says it holds; anything else
+    // (evicted on close, another document, a stale id) falls back to full.
+    let baseline = snap
+        .cx()
+        .token_baselines
+        .get(&commit.path)
+        .filter(|baseline| baseline.result_id.0.to_string() == previous_result_id);
+    let Some(baseline) = baseline else {
+        return (
+            Ok(Some(lsp_types::SemanticTokensFullDeltaResult::Tokens(
+                tokens,
+            ))),
+            Some(commit),
+        );
+    };
+
+    let previous = baseline.tokens.as_slice();
+    let current = commit.baseline.tokens.as_slice();
+    let prefix = previous
+        .iter()
+        .zip(current)
+        .take_while(|(a, b)| a == b)
+        .count();
+    let suffix = previous[prefix..]
+        .iter()
+        .rev()
+        .zip(current[prefix..].iter().rev())
+        .take_while(|(a, b)| a == b)
+        .count();
+    // Edit offsets count *integers*, five per token (LSP flattens the data).
+    let edits = if prefix == previous.len() && previous.len() == current.len() {
+        Vec::new()
+    } else {
+        vec![lsp_types::SemanticTokensEdit {
+            start: u32::try_from(5 * prefix).unwrap_or(u32::MAX),
+            delete_count: u32::try_from(5 * (previous.len() - prefix - suffix)).unwrap_or(u32::MAX),
+            data: Some(current[prefix..current.len() - suffix].to_vec()),
+        }]
+    };
+    let delta = lsp_types::SemanticTokensDelta {
+        result_id: tokens.result_id,
+        edits,
+    };
+    (
+        Ok(Some(lsp_types::SemanticTokensFullDeltaResult::TokensDelta(
+            delta,
+        ))),
+        Some(commit),
+    )
+}
+
+pub(super) fn semantic_tokens_range(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::SemanticTokensRangeParams,
+) -> Result<Option<lsp_types::SemanticTokensRangeResult>, LspError> {
+    let (text_document, range) = (params.text_document, params.range);
+    let path = crate::paths::canonical_document_path(snap.roots(), &text_document.uri)?;
+    let db = snap.db();
+    let Some(file) = db.get_file(&path) else {
+        return Err(LspError::FileNotFound(path));
+    };
+    let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
+    let start = codec.position_to_offset(range.start)?;
+    let end = codec.position_to_offset(range.end)?;
+    let tokens = baml_ide::semantic_tokens_in_range(db, file, u32::from(start), u32::from(end));
+    Ok(Some(lsp_types::SemanticTokensRangeResult::Tokens(
+        lsp_types::SemanticTokens {
+            result_id: None,
+            data: encode_semantic_tokens(&tokens, &codec),
+        },
+    )))
+}
+
+pub(super) fn inlay_hint(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::InlayHintParams,
+) -> Result<Option<Vec<lsp_types::InlayHint>>, LspError> {
+    let (text_document, range) = (params.text_document, params.range);
+    let path = crate::paths::canonical_document_path(snap.roots(), &text_document.uri)?;
+    let db = snap.db();
+    let Some(file) = db.get_file(&path) else {
+        return Err(LspError::FileNotFound(path));
+    };
+    let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
+    let start = codec.position_to_offset(range.start)?;
+    let end = codec.position_to_offset(range.end)?;
+    let hints = baml_ide::file_annotations(db, file)
+        .iter()
+        .filter(|annotation| start <= annotation.offset && annotation.offset <= end)
+        .map(|annotation| lsp_types::InlayHint {
+            position: codec.offset_to_position(u32::from(annotation.offset)),
+            label: lsp_types::InlayHintLabel::String(annotation.label.clone()),
+            kind: Some(match annotation.kind {
+                baml_ide::AnnotationKind::Type => lsp_types::InlayHintKind::TYPE,
+                baml_ide::AnnotationKind::Parameter => lsp_types::InlayHintKind::PARAMETER,
+            }),
+            text_edits: None,
+            tooltip: None,
+            padding_left: Some(annotation.padding_left),
+            padding_right: Some(annotation.padding_right),
+            data: None,
+        })
+        .collect::<Vec<_>>();
+    Ok(Some(hints))
 }
 
 #[cfg(test)]

@@ -808,8 +808,8 @@ fn pos_of(text: &str, needle: &str) -> lsp_types::Position {
 }
 
 const TYPES_FIXTURE: &str = "class Person {\n    name string\n}\n";
-const FUNCS_FIXTURE: &str =
-    "/// Greets someone.\nfunction greet(p: Person) -> string {\n    p.name\n}\n";
+const FUNCS_FIXTURE: &str = "/// Greets someone.\nfunction greet(p: Person) -> string {\n    \
+p.name\n}\n\nfunction tally(xs: int[]) -> int? {\n    xs.at(0)\n}\n";
 
 /// A settled single-session workspace with the two feature fixtures.
 fn feature_harness() -> Harness {
@@ -848,6 +848,40 @@ fn hover_renders_the_resolved_signature() {
     assert!(
         markdown.contains("function greet(p: Person) -> string throws never"),
         "resolved signature with explicit throws, got:\n{markdown}"
+    );
+    // rust-analyzer's shape: the owning path fenced above the declaration,
+    // docs below a separator (not `///` inside the fence).
+    assert!(
+        markdown.starts_with("```baml\nuser\n```\n\n---\n\n"),
+        "the compiler's package name leads, separated from the item, got:\n{markdown}"
+    );
+    assert!(
+        markdown.contains("---\n\nGreets someone."),
+        "docs render below the separator, got:\n{markdown}"
+    );
+}
+
+#[test]
+fn method_hover_owner_is_the_receiver_subject_type() {
+    let mut harness = feature_harness();
+    let uri = harness.uri("funcs.baml");
+    let response = harness
+        .request(
+            SessionKey(1),
+            "textDocument/hover",
+            position_params(&uri, pos_of(FUNCS_FIXTURE, "at(0")),
+        )
+        .expect("hover succeeds");
+    let markdown = response["contents"]["value"].as_str().expect("markdown");
+    // The owner fence spells the receiver subject the way the reader writes
+    // it — the impl/companion generics (`T[]`), never a companion class path.
+    assert!(
+        markdown.starts_with("```baml\nT[]\n```\n\n---\n\n"),
+        "the companion subject type leads, got:\n{markdown}"
+    );
+    assert!(
+        markdown.contains("function at(self, index: int) -> T? throws never"),
+        "resolved method signature, got:\n{markdown}"
     );
 }
 
@@ -954,5 +988,139 @@ fn workspace_symbols_cover_user_and_materialized_stdlib() {
     assert!(
         uri.starts_with(Url::from_file_path(&stdlib_dir).unwrap().as_str()),
         "stdlib URI maps under the materialized dir, got: {uri}"
+    );
+}
+
+#[test]
+fn semantic_tokens_delta_edits_only_the_changed_region() {
+    let mut harness = feature_harness();
+    let funcs = harness.uri("funcs.baml");
+
+    let full = harness
+        .request(
+            SessionKey(1),
+            "textDocument/semanticTokens/full",
+            serde_json::json!({ "textDocument": { "uri": funcs } }),
+        )
+        .expect("full tokens succeed");
+    let result_id = full["resultId"].as_str().expect("result id").to_owned();
+    let data = full["data"].as_array().expect("token data");
+    assert!(!data.is_empty(), "fixture produces tokens");
+
+    // Unchanged document → an empty edit list against the same baseline.
+    let delta = harness
+        .request(
+            SessionKey(1),
+            "textDocument/semanticTokens/full/delta",
+            serde_json::json!({
+                "textDocument": { "uri": funcs },
+                "previousResultId": result_id,
+            }),
+        )
+        .expect("delta succeeds");
+    assert_eq!(
+        delta["edits"].as_array().map(Vec::len),
+        Some(0),
+        "got: {delta}"
+    );
+
+    // Append a declaration; the delta must be an edit, not a full resend.
+    let changed =
+        format!("{FUNCS_FIXTURE}\nfunction shout(p: Person) -> string {{\n    p.name\n}}\n");
+    harness.open(SessionKey(1), &funcs, 1, FUNCS_FIXTURE);
+    harness.settle();
+    harness.change(SessionKey(1), &funcs, 2, &changed);
+    harness.settle();
+    let delta = harness
+        .request(
+            SessionKey(1),
+            "textDocument/semanticTokens/full/delta",
+            serde_json::json!({
+                "textDocument": { "uri": funcs },
+                "previousResultId": delta["resultId"].as_str().unwrap_or(&result_id),
+            }),
+        )
+        .expect("delta succeeds");
+    let edits = delta["edits"].as_array().expect("edits, not a full resend");
+    assert_eq!(edits.len(), 1, "one contiguous edit, got: {delta}");
+
+    // A stale/unknown baseline falls back to full tokens.
+    let fallback = harness
+        .request(
+            SessionKey(1),
+            "textDocument/semanticTokens/full/delta",
+            serde_json::json!({
+                "textDocument": { "uri": funcs },
+                "previousResultId": "not-a-result-id",
+            }),
+        )
+        .expect("delta succeeds");
+    assert!(
+        fallback.get("data").is_some(),
+        "full fallback, got: {fallback}"
+    );
+}
+
+#[test]
+fn semantic_tokens_range_covers_a_subset() {
+    let mut harness = feature_harness();
+    let funcs = harness.uri("funcs.baml");
+    let full = harness
+        .request(
+            SessionKey(1),
+            "textDocument/semanticTokens/full",
+            serde_json::json!({ "textDocument": { "uri": funcs } }),
+        )
+        .expect("full succeeds");
+    let full_len = full["data"].as_array().map(Vec::len).unwrap_or(0);
+
+    let ranged = harness
+        .request(
+            SessionKey(1),
+            "textDocument/semanticTokens/range",
+            serde_json::json!({
+                "textDocument": { "uri": funcs },
+                "range": {
+                    "start": pos_of(FUNCS_FIXTURE, "function"),
+                    "end": pos_of(FUNCS_FIXTURE, "{"),
+                },
+            }),
+        )
+        .expect("range succeeds");
+    let ranged_len = ranged["data"].as_array().map(Vec::len).unwrap_or(0);
+    assert!(ranged_len > 0, "signature line yields tokens");
+    assert!(
+        ranged_len < full_len,
+        "range is a strict subset ({ranged_len} vs {full_len})"
+    );
+}
+
+#[test]
+fn inlay_hints_appear_for_inferred_let_types() {
+    let mut harness = Harness::new();
+    harness.fs.add_project(&harness.ws);
+    let fixture = "function main() -> string {\n    let greeting = \"hi\"\n    greeting\n}\n";
+    harness.fs.write(harness.ws.join("main.baml"), fixture);
+    harness.init_session(SessionKey(1), &[lsp_types::PositionEncodingKind::UTF16]);
+    harness.settle();
+
+    let uri = harness.uri("main.baml");
+    let response = harness
+        .request(
+            SessionKey(1),
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": { "uri": uri },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 4, "character": 0 },
+                },
+            }),
+        )
+        .expect("inlay hints succeed");
+    let hints = response.as_array().expect("hint array");
+    assert!(
+        hints.iter().any(|hint| hint["label"] == ": string"),
+        "let-binding type hint present, got: {hints:?}"
     );
 }

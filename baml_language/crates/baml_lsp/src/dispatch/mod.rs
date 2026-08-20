@@ -70,6 +70,7 @@ macro_rules! define_request_tables {
     (
         owner { $($owner_method:tt => $owner_fn:ident),* $(,)? }
         snapshot { $($snap_method:tt => $snap_fn:ident),* $(,)? }
+        snapshot_commit { $($commit_method:tt => $commit_fn:ident),* $(,)? }
     ) => {
         impl GlobalState {
             /// Route one request. Owner-inline requests respond before this
@@ -100,6 +101,60 @@ macro_rules! define_request_tables {
                             let result: Result<lsp_request_result!($owner_method), LspError> =
                                 requests::$owner_fn(self, session, params);
                             respond(result.and_then(to_value));
+                        }
+                    )*
+                    $(
+                        // Snapshot handlers whose result must be recorded in
+                        // owner state BEFORE the response leaves (semantic
+                        // token baselines): the pool computes, the owner
+                        // commits then responds — one `OwnerEvent::Call`.
+                        lsp_request_method!($commit_method) => {
+                            let (_, params): (_, lsp_request_params!($commit_method)) =
+                                match req.extract(lsp_request_method!($commit_method)) {
+                                    Ok(extracted) => extracted,
+                                    Err(error) => {
+                                        respond(Err(LspError::RequestExtractError(error)));
+                                        return;
+                                    }
+                                };
+                            let cx = match self.request_cx(session) {
+                                Ok(cx) => cx,
+                                Err(error) => {
+                                    respond(Err(error));
+                                    return;
+                                }
+                            };
+                            let snap = self.snapshot(cx);
+                            let handle = self.handle();
+                            spawn_read(
+                                self.executor(),
+                                snap,
+                                move |snap| {
+                                    let (result, commit): (
+                                        Result<lsp_request_result!($commit_method), LspError>,
+                                        Option<crate::state::BaselineCommit>,
+                                    ) = requests::$commit_fn(snap, params);
+                                    Ok((result.and_then(to_value), commit))
+                                },
+                                move |outcome| {
+                                    handle.post(OwnerEvent::Call(Box::new(move |state| {
+                                        match outcome {
+                                            Ok(Ok((result, commit))) => {
+                                                if let Some(commit) = commit {
+                                                    state.store_token_baseline(
+                                                        session,
+                                                        commit.path,
+                                                        commit.baseline,
+                                                    );
+                                                }
+                                                respond(result);
+                                            }
+                                            Ok(Err(error)) => respond(Err(error)),
+                                            Err(failure) => respond(Err(LspError::from(failure))),
+                                        }
+                                    })));
+                                },
+                            );
                         }
                     )*
                     $(
@@ -184,6 +239,12 @@ define_request_tables! {
         "textDocument/references" => references,
         "textDocument/documentSymbol" => document_symbol,
         "workspace/symbol" => workspace_symbol,
+        "textDocument/semanticTokens/range" => semantic_tokens_range,
+        "textDocument/inlayHint" => inlay_hint,
+    }
+    snapshot_commit {
+        "textDocument/semanticTokens/full" => semantic_tokens_full,
+        "textDocument/semanticTokens/full/delta" => semantic_tokens_delta,
     }
 }
 

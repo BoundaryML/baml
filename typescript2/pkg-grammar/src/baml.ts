@@ -2480,6 +2480,43 @@ const classItem: Rule = {
   patterns: [comments, classHeader, classBody],
 };
 
+// Hover/documentation fence fragments. The LSP renders single declaration
+// fragments inside ```baml fences: a member line (a parameter's
+// `asdf: Box<int>`, a field's `name: string`, a variant's `Active: Status`)
+// or a bare owner/receiver type alone on a line (`T[]`, `map<K, V>`,
+// `user.util.Widget<T>`). Neither is valid top-level BAML, but colorizing
+// them keeps hover fences rendered like source — the same friendliness rule
+// as the top-level `let` below. Both sit last in the root pattern list so
+// every real declaration keyword wins first. (Deliberately not mirrored into
+// the KDE syntax: Kate highlights files, not hover fences.)
+const memberFragment: Rule = {
+  key: "member-fragment",
+  scope: "meta.member-fragment.baml",
+  begin: String.raw`^\s*(${IDENT})\s*(\?)?\s*(:)`,
+  beginCaptures: {
+    "1": { scope: "variable.other.property.baml" },
+    "2": { scope: "keyword.operator.optional.baml" },
+    "3": { scope: "punctuation.separator.colon.baml" },
+  },
+  end: String.raw`$`,
+  patterns: [comments, typeExpression],
+};
+
+const typeFragment: Rule = {
+  key: "type-fragment",
+  scope: "meta.type-fragment.baml",
+  // Whole-line type material only, gated by three lookaheads: the line
+  // starts with an identifier; it carries no member colon, initializer,
+  // statement/block structure, call parens, or string delimiters; and it
+  // contains a structural type character (`.<[?|`) or is exactly one
+  // builtin primitive. The structural requirement keeps stray prose words
+  // (`John Doe`, `Education`) plain while every receiver spelling the LSP
+  // emits (`T[]`, `map<K, V>`, `user.util.Widget<T>`, `string`) qualifies.
+  begin: String.raw`^\s*(?=${IDENT})(?=[^:=;{}()#"'\r\n]*$)(?=[^<.\[?|\r\n]*[<.\[?|]|(?:${oneOf(BUILTIN_TYPES)})\s*$)`,
+  end: String.raw`$`,
+  patterns: [comments, typeExpression],
+};
+
 export const baml: Grammar = {
   $schema: tm.schema,
   name: "baml",
@@ -2505,5 +2542,7 @@ export const baml: Grammar = {
     // `semicolon` is their statement terminator, mirroring `blockContents`.
     letStatement,
     semicolon,
+    memberFragment,
+    typeFragment,
   ] satisfies Rule[],
 };

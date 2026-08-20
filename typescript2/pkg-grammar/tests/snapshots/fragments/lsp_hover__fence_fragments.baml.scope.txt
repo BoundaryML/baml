@@ -1,0 +1,61 @@
+1:1-77       "// Hover-fence fragment shapes: member lines, bare owner/receiver types, and" source.baml comment.line.double-slash.baml
+2:1-77       "// a `let` binding, exactly as the LSP emits them inside ```baml fences. Not" source.baml comment.line.double-slash.baml
+3:1-77       "// valid top-level BAML — this fixture locks the fence-fragment friendliness" source.baml comment.line.double-slash.baml
+4:1-75       "// rules (member-fragment / type-fragment). It lives under `fragments/` so" source.baml comment.line.double-slash.baml
+5:1-74       "// the tree-sitter port's whole-file parse gate (top-level `*.baml` only)" source.baml comment.line.double-slash.baml
+6:1-72       "// skips it while the recursive TextMate/hljs harnesses still cover it." source.baml comment.line.double-slash.baml
+7:1-33       "// A real hover fence is its own" source.baml comment.line.double-slash.baml
+8:1-77       "// one-fragment document; here the multi-line `let` context sits last so the" source.baml comment.line.double-slash.baml
+9:1-68       "// `$`-terminated fragment lines above it stay at the root context." source.baml comment.line.double-slash.baml
+10:1-5       "asdf"             source.baml meta.member-fragment.baml variable.other.property.baml
+10:5-6       ":"                source.baml meta.member-fragment.baml punctuation.separator.colon.baml
+10:7-10      "Box"              source.baml meta.member-fragment.baml meta.type-reference.baml entity.name.type.baml
+10:10-11     "<"                source.baml meta.member-fragment.baml punctuation.definition.type.baml
+10:11-14     "int"              source.baml meta.member-fragment.baml support.type.primitive.baml
+10:14-15     ">"                source.baml meta.member-fragment.baml punctuation.definition.type.baml
+11:1-6       "label"            source.baml meta.member-fragment.baml variable.other.property.baml
+11:6-7       "?"                source.baml meta.member-fragment.baml keyword.operator.optional.baml
+11:7-8       ":"                source.baml meta.member-fragment.baml punctuation.separator.colon.baml
+11:9-15      "string"           source.baml meta.member-fragment.baml support.type.primitive.baml
+12:1-5       "name"             source.baml meta.member-fragment.baml variable.other.property.baml
+12:5-6       ":"                source.baml meta.member-fragment.baml punctuation.separator.colon.baml
+12:7-13      "string"           source.baml meta.member-fragment.baml support.type.primitive.baml
+13:1-7       "Active"           source.baml meta.member-fragment.baml variable.other.property.baml
+13:7-8       ":"                source.baml meta.member-fragment.baml punctuation.separator.colon.baml
+13:9-15      "Status"           source.baml meta.member-fragment.baml meta.type-reference.baml entity.name.type.baml
+14:1-2       "T"                source.baml meta.type-fragment.baml meta.type-reference.baml entity.name.type.baml
+14:2-3       "["                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+14:3-4       "]"                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+15:1-4       "int"              source.baml meta.type-fragment.baml support.type.primitive.baml
+15:4-5       "["                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+15:5-6       "]"                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+16:1-4       "map"              source.baml meta.type-fragment.baml support.type.primitive.baml
+16:4-5       "<"                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+16:5-6       "K"                source.baml meta.type-fragment.baml meta.type-reference.baml entity.name.type.baml
+16:6-7       ","                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+16:8-9       "V"                source.baml meta.type-fragment.baml meta.type-reference.baml entity.name.type.baml
+16:9-10      ">"                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+17:1-5       "user"             source.baml meta.type-fragment.baml meta.type-reference.baml entity.name.namespace.baml
+17:5-6       "."                source.baml meta.type-fragment.baml meta.type-reference.baml punctuation.accessor.baml
+17:6-10      "util"             source.baml meta.type-fragment.baml meta.type-reference.baml entity.name.namespace.baml
+17:10-11     "."                source.baml meta.type-fragment.baml meta.type-reference.baml punctuation.accessor.baml
+17:11-17     "Widget"           source.baml meta.type-fragment.baml meta.type-reference.baml entity.name.type.baml
+17:17-18     "<"                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+17:18-19     "T"                source.baml meta.type-fragment.baml meta.type-reference.baml entity.name.type.baml
+17:19-20     ">"                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+18:1-5       "baml"             source.baml meta.type-fragment.baml meta.type-reference.baml support.other.namespace.baml
+18:5-6       "."                source.baml meta.type-fragment.baml meta.type-reference.baml punctuation.accessor.baml
+18:6-12      "future"           source.baml meta.type-fragment.baml meta.type-reference.baml entity.name.namespace.baml
+18:12-13     "."                source.baml meta.type-fragment.baml meta.type-reference.baml punctuation.accessor.baml
+18:13-19     "Future"           source.baml meta.type-fragment.baml meta.type-reference.baml entity.name.type.baml
+18:19-20     "<"                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+18:20-21     "V"                source.baml meta.type-fragment.baml meta.type-reference.baml entity.name.type.baml
+18:21-22     ","                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+18:23-24     "E"                source.baml meta.type-fragment.baml meta.type-reference.baml entity.name.type.baml
+18:24-25     ">"                source.baml meta.type-fragment.baml punctuation.definition.type.baml
+19:1-5       "user"             source.baml
+20:1-7       "string"           source.baml meta.type-fragment.baml support.type.primitive.baml
+21:1-4       "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+21:5-10      "turns"            source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+21:10-11     ":"                source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml punctuation.separator.colon.baml
+21:12-15     "int"              source.baml meta.statement.let.baml meta.pattern.statement.baml support.type.primitive.baml

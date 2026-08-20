@@ -54,24 +54,14 @@ impl TyDisplayContext<'_> {
             return alias.to_string();
         }
 
-        if qtn.package() != &self.current_package {
-            // Cross-package: keep the dependency package prefix to
-            // disambiguate, but never the implicit `user` package.
-            return qtn.render_user_facing();
-        }
-
-        if self.can_use_bare_name(qtn) {
+        if qtn.package() == &self.current_package && self.can_use_bare_name(qtn) {
             return qtn.name().to_string();
         }
 
-        let path = qtn
-            .namespace()
-            .iter()
-            .chain(std::iter::once(qtn.name()))
-            .map(Name::as_str)
-            .collect::<Vec<_>>()
-            .join(".");
-        format!("root.{path}")
+        // Everything non-bare spells the full canonical path — real package
+        // names, never the `root.` source shorthand (correct only inside the
+        // defining package, and signatures are read from outside it).
+        qtn.to_string()
     }
 
     fn can_use_bare_name(&self, qtn: &QualifiedTypeName) -> bool {
@@ -109,15 +99,15 @@ impl TyRenderStrategy for TyDisplayContext<'_> {
     }
 }
 
-/// Context-free strategy: like the canonical form but elides the implicit
-/// `user` package, hides `(evolving)`, and shows synthetic effect params as
-/// `callback`. Used by [`display_ty`] where no current-package context is
-/// available.
+/// Context-free strategy: full canonical paths (real package names,
+/// including the implicit `user` package), hides `(evolving)`, and shows
+/// synthetic effect params as `callback`. Used by [`display_ty`] where no
+/// current-package context is available.
 struct PlainTyRender;
 
 impl TyRenderStrategy for PlainTyRender {
     fn qtn(&self, qtn: &QualifiedTypeName) -> String {
-        qtn.render_user_facing()
+        qtn.to_string()
     }
 
     fn type_var(&self, name: &Name) -> String {
@@ -173,12 +163,44 @@ fn display_ty_for_file_impl(
 
 /// Format a resolved [`Ty`] as a user-friendly string without file context.
 ///
-/// Keeps the dependency package prefix so same-short-name types stay
-/// distinguishable, but elides the implicit `user` package and shows
-/// synthetic effect params as `callback`. With file context available,
+/// Full canonical paths so same-short-name types stay distinguishable;
+/// synthetic effect params show as `callback`. With file context available,
 /// prefer [`display_ty_for_file`].
 pub fn display_ty(ty: &Ty) -> String {
     ty.render_with(&PlainTyRender)
+}
+
+/// Render `ty` for a hover owner line: full canonical paths — member owners
+/// never elide, the reader may be hovering from any package — with builtin
+/// companion classes collapsed to their reader-facing alias (`baml.String`
+/// → `string`). Combined with `class_self_ty`'s builtin bridging this
+/// spells a method's container the way the reader writes the receiver:
+/// `T[]`, `map<K, V>`, `string`, `user.util.Widget<T>`.
+pub fn display_owner_ty(ty: &Ty) -> String {
+    ty.render_with(&OwnerTyRender)
+}
+
+/// Strategy for [`display_owner_ty`]: [`PlainTyRender`] plus the companion
+/// alias collapse of [`display_ty_canonical_for_file`].
+struct OwnerTyRender;
+
+impl TyRenderStrategy for OwnerTyRender {
+    fn qtn(&self, qtn: &QualifiedTypeName) -> String {
+        qtn.builtin_alias()
+            .map_or_else(|| qtn.to_string(), str::to_string)
+    }
+
+    fn type_var(&self, name: &Name) -> String {
+        if baml_type::is_synthetic_effect_param(name) {
+            "callback".to_string()
+        } else {
+            name.to_string()
+        }
+    }
+
+    fn show_evolving(&self) -> bool {
+        false
+    }
 }
 
 /// Canonical fully-qualified name string for a resolved type, used by the

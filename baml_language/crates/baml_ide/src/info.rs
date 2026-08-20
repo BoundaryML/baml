@@ -91,6 +91,10 @@ pub enum TypeInfo {
         return_type: Option<String>,
         throws: Option<String>,
         note: Option<String>,
+        /// The owning namespace path (`baml.http`, `root.util`, `root`).
+        owner: Option<String>,
+        /// The function's full `///` docstring, if any.
+        docstring: Option<String>,
     },
     /// A class definition: name, fields (name + type string), implemented interfaces.
     Class {
@@ -105,20 +109,49 @@ pub enum TypeInfo {
         methods: Vec<MethodSig>,
         /// The class's full `///` docstring (all lines), if any.
         docstring: Option<String>,
+        /// The owning container path (`user`, `baml.http`).
+        owner: Option<String>,
         /// Canonical FQN for the hover "Run `baml describe …`" hint (`string`,
         /// `Foo`, `root.ns.Foo`, `baml.json.JsonObject`).
         canonical_fqn: String,
     },
     /// An enum definition: name, variants.
-    Enum { name: String, variants: Vec<String> },
+    Enum {
+        name: String,
+        variants: Vec<String>,
+        owner: Option<String>,
+    },
     /// A type alias: name + the expansion type string.
-    TypeAlias { name: String, expansion: String },
+    TypeAlias {
+        name: String,
+        expansion: String,
+        owner: Option<String>,
+    },
     /// A template string: name only (no further type info).
     TemplateString { name: String },
-    /// A local variable (let binding or parameter): name + inferred/declared type.
-    LocalVar { name: String, ty: String },
+    /// A named binding or member slot: a local, a parameter, or a field.
+    LocalVar {
+        name: String,
+        ty: String,
+        /// Introduced by `let`/`for`/pattern/catch — rendered with the `let`
+        /// keyword, the way rust-analyzer spells binding provenance.
+        /// Parameters and fields are spelled bare.
+        is_let: bool,
+        /// For members: the owning item's path (`baml.errors.Io`); `None`
+        /// for locals and parameters.
+        owner: Option<String>,
+    },
     /// A declaration or resolved expression already rendered as canonical BAML.
-    Symbol { declaration: String },
+    Symbol {
+        declaration: String,
+        /// The owning container: a method's receiver subject spelled the way
+        /// the reader writes the call (`T[]`, `map<K, V>`,
+        /// `user.util.Widget<T>`), an interface member's interface path, an
+        /// item's namespace path.
+        owner: Option<String>,
+        /// The declaration's full `///` docstring, if any.
+        docstring: Option<String>,
+    },
     /// Concise language documentation for a primitive, literal, or keyword.
     Documentation { label: String, detail: String },
     /// A non-structural top-level item (client, generator, test, `retry_policy`).
@@ -126,6 +159,37 @@ pub enum TypeInfo {
 }
 
 impl TypeInfo {
+    /// The owning path shown above the declaration (rust-analyzer's
+    /// provenance header), when one is known.
+    pub fn owner_path(&self) -> Option<&str> {
+        match self {
+            TypeInfo::Function { owner, .. }
+            | TypeInfo::LocalVar { owner, .. }
+            | TypeInfo::Class { owner, .. }
+            | TypeInfo::Enum { owner, .. }
+            | TypeInfo::TypeAlias { owner, .. }
+            | TypeInfo::Symbol { owner, .. } => owner.as_deref(),
+            TypeInfo::TemplateString { .. }
+            | TypeInfo::Documentation { .. }
+            | TypeInfo::OtherItem { .. } => None,
+        }
+    }
+
+    /// The docstring shown below the declaration, when one is carried.
+    pub fn docs(&self) -> Option<&str> {
+        match self {
+            TypeInfo::Class { docstring, .. }
+            | TypeInfo::Function { docstring, .. }
+            | TypeInfo::Symbol { docstring, .. } => docstring.as_deref(),
+            TypeInfo::Enum { .. }
+            | TypeInfo::TypeAlias { .. }
+            | TypeInfo::TemplateString { .. }
+            | TypeInfo::LocalVar { .. }
+            | TypeInfo::Documentation { .. }
+            | TypeInfo::OtherItem { .. } => None,
+        }
+    }
+
     /// The canonical BAML block for this item, without code fences, docstring,
     /// or any trailing hint/note. For a class this is the **fields-only** body
     /// (`class Foo {\n    bar: int,\n}`): methods are surfaced separately by
@@ -189,7 +253,7 @@ impl TypeInfo {
                     format!("class {name}{generics} {{\n{}\n}}", member_strs.join("\n"))
                 }
             }
-            TypeInfo::Enum { name, variants } => {
+            TypeInfo::Enum { name, variants, .. } => {
                 let variant_strs: Vec<String> =
                     variants.iter().map(|v| format!("    {v}")).collect();
                 if variant_strs.is_empty() {
@@ -198,10 +262,20 @@ impl TypeInfo {
                     format!("enum {name} {{\n{}\n}}", variant_strs.join("\n"))
                 }
             }
-            TypeInfo::TypeAlias { name, expansion } => format!("type {name} = {expansion}"),
+            TypeInfo::TypeAlias {
+                name, expansion, ..
+            } => format!("type {name} = {expansion}"),
             TypeInfo::TemplateString { name } => format!("template_string {name}"),
-            TypeInfo::LocalVar { name, ty } => format!("{name}: {ty}"),
-            TypeInfo::Symbol { declaration } => declaration.clone(),
+            TypeInfo::LocalVar {
+                name, ty, is_let, ..
+            } => {
+                if *is_let {
+                    format!("let {name}: {ty}")
+                } else {
+                    format!("{name}: {ty}")
+                }
+            }
+            TypeInfo::Symbol { declaration, .. } => declaration.clone(),
             TypeInfo::Documentation { label, .. } => label.clone(),
             TypeInfo::OtherItem { name, kind } => format!("{kind} {name}"),
         }
@@ -290,9 +364,15 @@ fn target_type_info(
                 .find(|(name, _, _)| *name == field.name)
                 .map(|(_, ty, _)| render::display_ty_canonical_for_file(db, class.file(db), ty))
                 .unwrap_or_else(|| render::display_type_ref(&class_data.type_refs, field.type_ref));
+            // The owner is the class's own self type — the same subject-type
+            // rule as methods, so generic owners anchor their params
+            // (`user.Box<T>` above `item: T`).
+            let self_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class).to_plain();
             Some(TypeInfo::LocalVar {
                 name: field.name.as_str().to_string(),
                 ty,
+                is_let: false,
+                owner: Some(render::display_owner_ty(&self_ty)),
             })
         }
         SymbolTarget::Variant {
@@ -301,13 +381,17 @@ fn target_type_info(
         } => {
             let enum_data = item_data::enum_data(db, enum_loc);
             let variant = enum_data.variants.get(variant_index)?;
+            // The member shape: `Active: Status` under a `user.Status` owner
+            // fence, parallel to a field's `name: string` under its class.
+            let qtn = baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                Definition::Enum(enum_loc),
+                &enum_data.name,
+            );
             Some(TypeInfo::Symbol {
-                declaration: format!(
-                    "{}.{}: {}",
-                    enum_data.name.as_str(),
-                    variant.name.as_str(),
-                    enum_data.name.as_str()
-                ),
+                declaration: format!("{}: {}", variant.name.as_str(), enum_data.name.as_str()),
+                owner: Some(qtn.to_string()),
+                docstring: variant.docstring.clone(),
             })
         }
         SymbolTarget::Method { func } => Some(TypeInfo::Symbol {
@@ -316,6 +400,8 @@ fn target_type_info(
                 func.file(db),
                 hover_sig_style(),
             ),
+            owner: method_owner_path(db, func),
+            docstring: item_data::function_data(db, func).docstring.clone(),
         }),
         SymbolTarget::InterfaceRequiredMethod {
             iface,
@@ -323,20 +409,34 @@ fn target_type_info(
         } => {
             let iface_data = item_data::interface_data(db, iface);
             let method = iface_data.required_methods.get(method_index)?;
+            let qtn = baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                Definition::Interface(iface),
+                &iface_data.name,
+            );
             Some(TypeInfo::Symbol {
                 declaration: FnSigParts::of_interface_method(iface_data, method).render(
                     db,
                     iface.file(db),
                     hover_sig_style(),
                 ),
+                owner: Some(qtn.to_string()),
+                docstring: method.docstring.clone(),
             })
         }
         SymbolTarget::InterfaceField { iface, field_index } => {
             let iface_data = item_data::interface_data(db, iface);
             let field = iface_data.fields.get(field_index)?;
+            let qtn = baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                Definition::Interface(iface),
+                &iface_data.name,
+            );
             Some(TypeInfo::LocalVar {
                 name: field.name.as_str().to_string(),
                 ty: render::display_type_ref(&iface_data.type_refs, field.type_ref),
+                is_let: false,
+                owner: Some(qtn.to_string()),
             })
         }
     }
@@ -369,6 +469,8 @@ fn local_target_type_info(
                 return Some(TypeInfo::LocalVar {
                     name: name.as_str().to_string(),
                     ty: render::PENDING_INFERENCE.to_string(),
+                    is_let: false,
+                    owner: None,
                 });
             }
             let data = item_data::function_data(db, func);
@@ -386,6 +488,8 @@ fn local_target_type_info(
             Some(TypeInfo::LocalVar {
                 name: param.name.as_str().to_string(),
                 ty,
+                is_let: false,
+                owner: None,
             })
         }
         BindingKind::Local(idx) => {
@@ -401,6 +505,8 @@ fn local_target_type_info(
             Some(TypeInfo::LocalVar {
                 name: local.name.as_str().to_string(),
                 ty,
+                is_let: true,
+                owner: None,
             })
         }
     }
@@ -560,6 +666,55 @@ fn keyword_type_info(keyword: &str) -> Option<TypeInfo> {
     })
 }
 
+/// The owning container of `file`'s items: the compiler's package name
+/// plus the namespace path (`user`, `user.util`, `baml.http`). Assembled
+/// from `file_package`'s components with no eliding and no special cases —
+/// the spelling changes automatically when workspace packages gain real
+/// names.
+fn owning_path(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> String {
+    let pkg = baml_compiler2_hir::file_package::file_package(db, file);
+    let mut path = pkg.package.as_str().to_string();
+    for segment in &pkg.namespace_path {
+        path.push('.');
+        path.push_str(segment.as_str());
+    }
+    path
+}
+
+/// The owner line for a method: the subject type of its declaring container,
+/// spelled the way the reader writes the receiver. The compiler's
+/// [`item_data::method_owner`] names the container; `class_self_ty`'s builtin
+/// bridging spells the companion classes structurally (`T[]`, `map<K, V>`,
+/// `string`) with no per-class special case, an out-of-body `implements`
+/// block spells its resolved for-target, and an interface default method
+/// spells the interface's path. Full canonical paths throughout — member
+/// owners never elide.
+fn method_owner_path(
+    db: &dyn baml_compiler2_ppir::Db,
+    func: baml_compiler2_hir::loc::FunctionLoc<'_>,
+) -> Option<String> {
+    use baml_compiler2_ppir::item_data::MethodOwner;
+
+    match item_data::method_owner(db, func)? {
+        MethodOwner::Class(class) => {
+            let self_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class).to_plain();
+            Some(render::display_owner_ty(&self_ty))
+        }
+        MethodOwner::Interface(iface) => {
+            let name = &item_data::interface_data(db, iface).name;
+            let qtn =
+                baml_compiler2_hir_ty::lower::qualify_def(db, Definition::Interface(iface), name);
+            Some(qtn.to_string())
+        }
+        MethodOwner::FreeImpl(block) => {
+            // `impl_facts` is `None` when the block's header does not resolve
+            // to an interface — honest absence beats a wrong owner.
+            let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).as_ref()?;
+            Some(render::display_owner_ty(&facts.for_ty_pattern.to_plain()))
+        }
+    }
+}
+
 fn first_docstring_paragraph(docstring: &str) -> Option<String> {
     let paragraph = docstring.split("\n\n").next()?.trim();
     (!paragraph.is_empty()).then(|| {
@@ -592,28 +747,64 @@ fn generic_type_parameter_info_at(
         }
         let data = item_data::function_data(db, *func_loc);
         if let Some(declared) = data.generic_params.iter().find(|param| &param.name == name) {
-            let origin = item_data::file_classes(db, file)
-                .iter()
-                .find_map(|class_loc| {
-                    let class = item_data::class_data(db, *class_loc);
-                    class
-                        .methods
-                        .contains(func_loc)
-                        .then(|| format!("method {}.{}", class.name.as_str(), data.name.as_str()))
-                })
-                .or_else(|| {
-                    item_data::file_interfaces(db, file)
-                        .iter()
-                        .find_map(|iface_loc| {
-                            let iface = item_data::interface_data(db, *iface_loc);
-                            iface.default_methods.contains(func_loc).then(|| {
-                                format!("method {}.{}", iface.name.as_str(), data.name.as_str())
-                            })
-                        })
-                })
-                .unwrap_or_else(|| format!("function {}", data.name.as_str()));
+            // The compiler's method→owner record, not a membership scan —
+            // the same source the hover owner line reads.
+            let origin = match item_data::method_owner(db, *func_loc) {
+                Some(item_data::MethodOwner::Class(class)) => format!(
+                    "method {}.{}",
+                    item_data::class_data(db, class).name.as_str(),
+                    data.name.as_str()
+                ),
+                Some(item_data::MethodOwner::Interface(iface)) => format!(
+                    "method {}.{}",
+                    item_data::interface_data(db, iface).name.as_str(),
+                    data.name.as_str()
+                ),
+                Some(item_data::MethodOwner::FreeImpl(block)) => {
+                    let subject = baml_compiler2_hir_ty::impls::impl_facts(db, block)
+                        .as_ref()
+                        .map(|facts| render::display_owner_ty(&facts.for_ty_pattern.to_plain()));
+                    match subject {
+                        Some(subject) => format!("method {}.{}", subject, data.name.as_str()),
+                        None => format!("function {}", data.name.as_str()),
+                    }
+                }
+                None => format!("function {}", data.name.as_str()),
+            };
             let bound = render::render_generic_bounds(declared, &data.type_refs);
             candidates.push((source_map.span.len(), origin, bound));
+        }
+    }
+
+    // Free `implements … for …` blocks declare their own generic frame
+    // (`implement<T extends Compare> Sortable for T[]`); the header's params
+    // are hoverable like any class/interface param.
+    for impl_loc in item_data::file_impls(db, file) {
+        let source_map = item_data::impl_block_source_map(db, *impl_loc);
+        if !range_contains(source_map.span, offset) {
+            continue;
+        }
+        let data = item_data::impl_block_data(db, *impl_loc);
+        let item_data::ImplSubjectData::Free { generics, .. } = &data.subject else {
+            continue;
+        };
+        if let Some(declared) = generics.iter().find(|param| &param.name == name) {
+            let subject = baml_compiler2_hir_ty::impls::impl_facts(db, *impl_loc)
+                .as_ref()
+                .map_or_else(
+                    || "implements".to_string(),
+                    |facts| {
+                        format!(
+                            "implements for {}",
+                            render::display_owner_ty(&facts.for_ty_pattern.to_plain())
+                        )
+                    },
+                );
+            candidates.push((
+                source_map.span.len(),
+                subject,
+                render::render_generic_bounds(declared, &data.type_refs),
+            ));
         }
     }
 
@@ -716,6 +907,8 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
                         .throws
                         .map(|id| render::display_type_ref(&data.type_refs, id)),
                     note: None,
+                    owner: Some(owning_path(db, file)),
+                    docstring: data.docstring.clone(),
                 };
             };
 
@@ -742,6 +935,8 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
                 return_type,
                 throws,
                 note: callback_forwarding_note(exported),
+                owner: Some(owning_path(db, file)),
+                docstring: data.docstring.clone(),
             }
         }
 
@@ -785,6 +980,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
                 methods,
                 docstring: class_data.docstring.clone(),
                 canonical_fqn,
+                owner: Some(owning_path(db, class_loc.file(db))),
             }
         }
 
@@ -798,6 +994,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
             TypeInfo::Enum {
                 name: enum_data.name.as_str().to_string(),
                 variants,
+                owner: Some(owning_path(db, enum_loc.file(db))),
             }
         }
 
@@ -812,6 +1009,8 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
             };
             TypeInfo::Symbol {
                 declaration: format!("interface {}{generics}", iface.name.as_str()),
+                owner: Some(owning_path(db, iface_loc.file(db))),
+                docstring: iface.docstring.clone(),
             }
         }
 
@@ -826,6 +1025,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
             TypeInfo::TypeAlias {
                 name: alias_name,
                 expansion,
+                owner: Some(owning_path(db, alias_loc.file(db))),
             }
         }
 
@@ -1326,7 +1526,7 @@ function main() -> int {
 
         assert_eq!(
             info_at(&test).to_describe_block(),
-            "f: (x: int, b?: int) -> int throws never"
+            "let f: (x: int, b?: int) -> int throws never"
         );
     }
 
@@ -1342,7 +1542,7 @@ function main() -> int {
 }"#,
         );
 
-        assert_eq!(info_at(&test).to_describe_block(), "x: int");
+        assert_eq!(info_at(&test).to_describe_block(), "let x: int");
     }
 
     #[test]
@@ -1454,5 +1654,182 @@ class Foo<[CURSOR] {
         assert!(methods.is_empty());
         let block = info.to_describe_block();
         assert!(block.contains("x: int,") && block.contains("y: int,"));
+    }
+
+    /// Destructure a `TypeInfo::Symbol` or panic with context.
+    fn symbol_parts(info: TypeInfo) -> (String, Option<String>, Option<String>) {
+        let TypeInfo::Symbol {
+            declaration,
+            owner,
+            docstring,
+        } = info
+        else {
+            panic!("expected a Symbol hover, got: {info:?}");
+        };
+        (declaration, owner, docstring)
+    }
+
+    #[test]
+    fn array_method_owner_is_the_companion_subject_type() {
+        let test = CursorTest::new(
+            r#"function example() -> int {
+  let xs: int[] = [1, 2, 3];
+  xs.a<[CURSOR]t(0);
+  0
+}"#,
+        );
+        let (declaration, owner, docstring) = symbol_parts(info_at(&test));
+        assert_eq!(
+            declaration,
+            "function at(self, index: int) -> T? throws never"
+        );
+        assert_eq!(owner.as_deref(), Some("T[]"));
+        assert!(
+            docstring
+                .as_deref()
+                .is_some_and(|d| d.contains("Negative indices")),
+            "stdlib method docstring rides along, got: {docstring:?}"
+        );
+    }
+
+    #[test]
+    fn map_method_owner_is_the_companion_subject_type() {
+        let test = CursorTest::new(
+            r#"function example() -> int {
+  let scores: map<string, int> = { "a": 1 };
+  scores.ke<[CURSOR]ys();
+  0
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "function keys(self) -> K[] throws never");
+        assert_eq!(owner.as_deref(), Some("map<K, V>"));
+    }
+
+    #[test]
+    fn free_impl_method_owner_is_the_for_target() {
+        // `sum` on `int[]` lives in stdlib's `implements Summable for int[]`:
+        // the owner is the impl header's for-target, not a companion path.
+        let test = CursorTest::new(
+            r#"function example() -> int {
+  let xs: int[] = [1, 2, 3];
+  xs.su<[CURSOR]m()
+}"#,
+        );
+        // (`sum`'s docstring sits on the `implements` block, not the
+        // method — block docs are not folded onto members.)
+        let (_, owner, _) = symbol_parts(info_at(&test));
+        assert_eq!(owner.as_deref(), Some("int[]"));
+    }
+
+    #[test]
+    fn blanket_impl_method_owner_keeps_the_impl_generics() {
+        // `sort` comes from the blanket `implements Sortable for T[]`.
+        let test = CursorTest::new(
+            r#"function example() -> int[] {
+  let xs: int[] = [3, 1, 2];
+  xs.so<[CURSOR]rt()
+}"#,
+        );
+        let (_, owner, _) = symbol_parts(info_at(&test));
+        assert_eq!(owner.as_deref(), Some("T[]"));
+    }
+
+    #[test]
+    fn class_method_owner_is_the_full_self_type_path() {
+        let test = CursorTest::new(
+            r#"class Widget {
+    label string
+
+    function describe_self(self) -> string {
+        self.label
+    }
+}
+
+function example(w: Widget) -> string {
+    w.describe<[CURSOR]_self()
+}"#,
+        );
+        let (_, owner, _) = symbol_parts(info_at(&test));
+        assert_eq!(owner.as_deref(), Some("user.Widget"));
+    }
+
+    #[test]
+    fn interface_default_method_owner_is_the_interface_path() {
+        let test = CursorTest::new(
+            r#"interface Greeter {
+    /// Say hello.
+    function greet(self) -> string throws never {
+        "hi"
+    }
+}
+
+class Widget {
+    implements Greeter {}
+}
+
+function example(w: Widget) -> string {
+    w.gre<[CURSOR]et()
+}"#,
+        );
+        let (_, owner, docstring) = symbol_parts(info_at(&test));
+        assert_eq!(owner.as_deref(), Some("user.Greeter"));
+        assert_eq!(docstring.as_deref(), Some("Say hello."));
+    }
+
+    #[test]
+    fn variant_hover_is_a_member_under_its_enum_owner() {
+        let test = CursorTest::new(
+            r#"enum Status {
+    Active
+    Inactive
+}
+
+function example() -> Status {
+    Status.Act<[CURSOR]ive
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "Active: Status");
+        assert_eq!(owner.as_deref(), Some("user.Status"));
+    }
+
+    #[test]
+    fn free_impl_header_generic_param_hovers_with_its_subject() {
+        let test = CursorTest::new(
+            r#"interface Wrap {
+    function describe_wrapped(self) -> string throws never
+}
+
+implements<El<[CURSOR]em extends Wrap> Wrap for Elem[] {
+    function describe_wrapped(self) -> string throws never {
+        "many"
+    }
+}"#,
+        );
+        let TypeInfo::Documentation { label, detail } = info_at(&test) else {
+            panic!("generic params hover as documentation");
+        };
+        assert_eq!(label, "type parameter Elem extends Wrap");
+        assert_eq!(detail, "Declared by `implements for Elem[]`.");
+    }
+
+    #[test]
+    fn item_owners_are_the_compiler_package_path() {
+        // Class/enum owners come from `file_package`, never from string
+        // surgery on the canonical fqn (which spelled `root`).
+        let class = CursorTest::new(
+            r#"class Poi<[CURSOR]nt {
+    x int
+}"#,
+        );
+        assert_eq!(info_at(&class).owner_path(), Some("user"));
+
+        let en = CursorTest::new(
+            r#"enum Sta<[CURSOR]tus {
+    Active
+}"#,
+        );
+        assert_eq!(info_at(&en).owner_path(), Some("user"));
     }
 }

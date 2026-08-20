@@ -11,9 +11,12 @@
 //! snapshot, lends it to the task as `&Snapshot`, and drops it *before*
 //! reporting the result.
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use baml_db::ProjectDatabase;
@@ -22,7 +25,7 @@ use crate::{
     error::LspError,
     position_codec::PositionEncoding,
     roots::RootsView,
-    state::{OpenDocuments, SourceRevision},
+    state::{OpenDocuments, SourceRevision, TokenBaseline},
 };
 
 /// Request-immutable session context baked into a snapshot at mint time.
@@ -32,6 +35,10 @@ pub struct RequestCx {
     /// negotiation, matching the LSP default).
     pub encoding: PositionEncoding,
     pub snippet_support: bool,
+    /// The session's semantic-token baselines at mint time (immutable view;
+    /// the owner replaces the map on store). Delta requests diff against
+    /// this on the pool.
+    pub token_baselines: Arc<std::collections::HashMap<PathBuf, TokenBaseline>>,
 }
 
 impl Default for RequestCx {
@@ -39,6 +46,7 @@ impl Default for RequestCx {
         Self {
             encoding: PositionEncoding::UTF16,
             snippet_support: false,
+            token_baselines: Arc::new(std::collections::HashMap::new()),
         }
     }
 }

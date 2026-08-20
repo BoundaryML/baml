@@ -1069,8 +1069,7 @@ fn classify_type_token(
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Write as _;
-    use std::path::Path;
+    use std::{fmt::Write as _, path::Path};
 
     use baml_db::ProjectDatabase;
 

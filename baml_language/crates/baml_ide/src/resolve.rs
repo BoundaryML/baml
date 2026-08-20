@@ -11,6 +11,7 @@
 
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::SyntaxKind;
+use baml_compiler2_ast::Expr;
 use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc},
@@ -114,6 +115,16 @@ pub fn symbol_at(
     let name_text = token.text();
     let name = Name::new(name_text);
 
+    // A token inside a *recorded member span* (`e.message`'s member, a
+    // non-root path segment, a constructor key) is a member, full stop:
+    // it commits to inference-record resolution and never falls through to
+    // bare-name lookup — a field spelled like a visible local must not
+    // resolve to the local, and when inference has nothing, honest absence
+    // beats wrong-name navigation.
+    if let Some(member) = member_position_at(db, file, offset) {
+        return member.target;
+    }
+
     if let Some(target) = local_at(db, file, offset, &name) {
         return Some(target);
     }
@@ -123,8 +134,147 @@ pub fn symbol_at(
         // A local that `local_at` did not find has no recoverable binding
         // identity; member resolution cannot apply to a scope name either.
         ResolvedName::Local { .. } => None,
-        ResolvedName::Unknown => member_at(db, file, offset, name_text),
+        ResolvedName::Unknown => member_at(db, file, offset, name_text)
+            .or_else(|| qualified_item_at(db, file, offset, &token)),
     }
+}
+
+/// Resolve a dotted *name* around `token` (`baml.errors.Io` in a type
+/// annotation or pattern, where no expression claims the token): the CST
+/// dot-chain plus the compiler's qualified-path resolver.
+fn qualified_item_at<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    offset: TextSize,
+    token: &baml_compiler_syntax::SyntaxToken,
+) -> Option<SymbolTarget<'db>> {
+    let chain = crate::syntax::dotted_chain_to(token);
+    if chain.len() < 2 {
+        return None;
+    }
+    match baml_compiler2_ppir::resolve::resolve_path_at(db, file, offset, &chain, None) {
+        ResolvedName::Item(def) | ResolvedName::Builtin(def) => Some(SymbolTarget::Item(def)),
+        ResolvedName::Local { .. } | ResolvedName::Unknown => None,
+    }
+}
+
+/// The verdict for a token that occupies a recorded member span.
+struct MemberPosition<'db> {
+    /// The resolved target — `None` when inference has no record for the
+    /// member (mid-edit, unresolvable receiver), which still means "this is
+    /// a member, do not resolve it as a bare name".
+    target: Option<SymbolTarget<'db>>,
+}
+
+/// Whether `offset` sits in a member position of the enclosing function
+/// body — decided purely by the *recorded spans* of member accesses, dotted
+/// path segments, and constructor keys.
+fn member_position_at(
+    db: &dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    offset: TextSize,
+) -> Option<MemberPosition<'_>> {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let scope_id = index.scope_at_offset(offset, None);
+    let func_scope = enclosing_function_scope(index, scope_id)?;
+    let func_owner = index.scope_ids[func_scope.index() as usize];
+    let item_data::ScopeOwner::Function(func_loc) = item_data::scope_owner(db, func_owner)? else {
+        return None;
+    };
+    let body = baml_compiler2_hir::body::function_body(db, func_loc);
+    let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+        return None;
+    };
+    let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
+
+    // Innermost claim wins (`a.b(c.d)` — the argument's member span nests
+    // inside the call's expression span).
+    let mut claim: Option<(baml_compiler2_ast::ExprId, TextRange, Option<usize>)> = None;
+    let mut narrower = |candidate: (baml_compiler2_ast::ExprId, TextRange, Option<usize>)| {
+        if claim.is_none_or(|(_, previous, _)| candidate.1.len() < previous.len()) {
+            claim = Some(candidate);
+        }
+    };
+    for (expr_id, expr) in expr_body.exprs.iter() {
+        match expr {
+            Expr::MemberAccess { .. } => {
+                let member_span = source_map.member_access_member_span(expr_id);
+                // The accessor falls back to the whole expression span when
+                // no member span was recorded; that would over-claim (the
+                // receiver too), so require a strict sub-span.
+                if member_span != source_map.expr_span(expr_id)
+                    && (member_span.contains(offset) || member_span.end() == offset)
+                {
+                    narrower((expr_id, member_span, None));
+                }
+            }
+            Expr::Path(segments) if segments.len() >= 2 => {
+                for segment_idx in 1..segments.len() {
+                    let span = source_map.path_segment_span(expr_id, segment_idx);
+                    if span.contains(offset) || span.end() == offset {
+                        narrower((expr_id, span, Some(segment_idx)));
+                    }
+                }
+            }
+            Expr::Object { fields, .. } => {
+                for field in fields {
+                    let span = source_map.object_field_name_span(expr_id, field.value);
+                    if span.contains(offset) || span.end() == offset {
+                        narrower((expr_id, span, None));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let (expr_id, _, segment_idx) = claim?;
+    let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner);
+    let target = match &expr_body.exprs[expr_id] {
+        Expr::Object { .. } => constructor_field_at(db, offset, expr_body, &source_map, inference?),
+        Expr::MemberAccess { .. } | Expr::Path(_) => {
+            let inference = inference?;
+            let resolution = match segment_idx {
+                Some(idx) => inference
+                    .path_resolutions
+                    .get(&expr_id)
+                    .and_then(|path| path.segments.get(idx))
+                    .and_then(|step| step.resolution.as_ref())
+                    .or_else(|| inference.member_resolutions.get(&expr_id)),
+                None => inference.member_resolutions.get(&expr_id),
+            };
+            match resolution {
+                Some(resolution) => member_resolution_target(db, resolution),
+                // No inference record: a package/namespace-qualified NAME
+                // (`baml.http.fetch`) rather than a value's member.
+                // `resolve_path_at` is inert for value-rooted paths (a local
+                // receiver never resolves as a package), so this cannot
+                // reintroduce shadowing.
+                None => {
+                    let (Expr::Path(segments), Some(idx)) =
+                        (&expr_body.exprs[expr_id], segment_idx)
+                    else {
+                        return Some(MemberPosition { target: None });
+                    };
+                    match baml_compiler2_ppir::resolve::resolve_path_at(
+                        db,
+                        file,
+                        offset,
+                        &segments[..=idx],
+                        None,
+                    ) {
+                        ResolvedName::Item(def) | ResolvedName::Builtin(def) => {
+                            Some(SymbolTarget::Item(def))
+                        }
+                        ResolvedName::Local { .. } | ResolvedName::Unknown => None,
+                    }
+                }
+            }
+        }
+        // Only the three claiming kinds reach here.
+        _ => None,
+    };
+    Some(MemberPosition { target })
 }
 
 /// The local binding at `offset`, if any: either the declaration's own name

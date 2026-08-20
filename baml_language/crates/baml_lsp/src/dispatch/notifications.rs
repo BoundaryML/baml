@@ -250,6 +250,7 @@ pub(super) fn did_close(
     params: DidCloseTextDocumentParams,
 ) -> Result<(), LspError> {
     let path = paths::canonical_document_path(state.roots(), &params.text_document.uri)?;
+    state.evict_token_baselines(&path);
     state.close_document(&path);
     Ok(())
 }

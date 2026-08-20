@@ -540,4 +540,103 @@ function pick_text(d: Data) -> string {
             "Should navigate to the interface method declaration Serializer.encode (3:12), got: {desc}"
         );
     }
+
+    #[test]
+    fn member_access_never_resolves_to_a_shadowing_local() {
+        // `e.message` names a FIELD; a parameter of the same name is in
+        // scope. The member span commits to member resolution — landing on
+        // the parameter would be wrong-name navigation.
+        let test = CursorTest::new(
+            r#"
+class IoError {
+    message string
+}
+
+function respond(message: string, e: IoError) -> string {
+    let note = `error: ${e.<[CURSOR]message}`
+    message
+}
+"#,
+        );
+
+        let loc = test.goto_definition().expect("field definition found");
+        let desc = test.format_location_with_name(&loc);
+        assert!(
+            desc.contains("test.baml:3"),
+            "lands on the field declaration line, got: {desc}"
+        );
+
+        // The bare name in the same body still resolves to the parameter.
+        let bare = CursorTest::new(
+            r#"
+class IoError {
+    message string
+}
+
+function respond(message: string, e: IoError) -> string {
+    let note = e.message
+    <[CURSOR]message
+}
+"#,
+        );
+        let loc = bare.goto_definition().expect("parameter found");
+        let desc = bare.format_location_with_name(&loc);
+        assert!(
+            desc.contains("test.baml:6"),
+            "bare name lands on the parameter, got: {desc}"
+        );
+    }
+
+    #[test]
+    fn qualified_names_resolve_in_expressions_and_annotations() {
+        // `util.Widget` in a type ANNOTATION — no expression claims the
+        // token, so this exercises the CST dot-chain rung.
+        let mut builder = CursorTest::builder();
+        builder.source(
+            "ns_util/helpers.baml",
+            r#"
+class Widget {
+    size int
+}
+"#,
+        );
+        builder.source(
+            "main.baml",
+            r#"
+function build() -> int {
+    let w: root.util.Wid<[CURSOR]get = root.util.Widget { size: 1 }
+    w.size
+}
+"#,
+        );
+        let test = builder.build();
+        let loc = test.goto_definition().expect("annotation path resolves");
+        assert!(
+            test.format_location_with_name(&loc)
+                .contains("helpers.baml"),
+            "lands in the namespace file"
+        );
+    }
+
+    #[test]
+    fn stdlib_call_targets_resolve_to_builtin_sources() {
+        // `baml.http.fetch` in an EXPRESSION — the inference ladder has no
+        // member record for a namespace-qualified name, so this exercises
+        // the resolve_path_at fallback inside the member-position claim.
+        let test = CursorTest::new(
+            r#"
+function get(url: string) -> string {
+    let body = baml.http.fet<[CURSOR]ch(url)
+    "done"
+}
+"#,
+        );
+        let loc = test.goto_definition().expect("stdlib function resolves");
+        let path = loc.file.path(&test.db);
+        assert!(
+            path.to_string_lossy().starts_with("<builtin>/"),
+            "definition lives in the stdlib sources, got: {}",
+            path.display()
+        );
+    }
 }

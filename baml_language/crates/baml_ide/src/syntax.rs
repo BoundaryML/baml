@@ -69,6 +69,34 @@ pub(crate) fn definition_span<'db>(
     Some((def_file, name_span))
 }
 
+/// The dotted name chain ending at `token`: for the `fetch` in
+/// `baml.http.fetch`, `["baml", "http", "fetch"]`. Walks WORD‐DOT pairs
+/// leftward through the CST (skipping whitespace), so it works in every
+/// position — expressions, type annotations, patterns. A bare token yields
+/// a one-element chain.
+pub(crate) fn dotted_chain_to(token: &SyntaxToken) -> Vec<baml_base::Name> {
+    fn prev_meaningful(token: &SyntaxToken) -> Option<SyntaxToken> {
+        let mut current = token.prev_token()?;
+        while matches!(current.kind(), SyntaxKind::WHITESPACE) {
+            current = current.prev_token()?;
+        }
+        Some(current)
+    }
+
+    let mut chain = vec![baml_base::Name::new(token.text())];
+    let mut cursor = token.clone();
+    while let Some(dot) = prev_meaningful(&cursor)
+        && dot.kind() == SyntaxKind::DOT
+        && let Some(word) = prev_meaningful(&dot)
+        && word.kind() == SyntaxKind::WORD
+    {
+        chain.push(baml_base::Name::new(word.text()));
+        cursor = word;
+    }
+    chain.reverse();
+    chain
+}
+
 /// The binding pattern introduced by a `let` or `for` statement, if any.
 pub(crate) fn extract_pat_from_stmt(
     expr_body: &baml_compiler2_ast::ExprBody,

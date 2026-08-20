@@ -1,6 +1,6 @@
 ---
 source: crates/baml_ide/src/describe.rs
-assertion_line: 2044
+assertion_line: 2083
 expression: "project.format_description(&descs[0])"
 ---
 class String  (string)  string.baml:5
@@ -98,6 +98,6 @@ static_methods:
   /// Renders any value as a human-readable string.
   function from<T>(value: T) -> string throws never
   /// Decodes a `uint8array` of UTF-8 bytes into a string.
-  function from_utf8(utf8: uint8array) -> string throws root.errors.InvalidArgument
+  function from_utf8(utf8: uint8array) -> string throws baml.errors.InvalidArgument
   /// Builds a string from an array of Unicode code points.
-  function from_code_points(unicode: int[]) -> string throws root.errors.InvalidArgument
+  function from_code_points(unicode: int[]) -> string throws baml.errors.InvalidArgument
