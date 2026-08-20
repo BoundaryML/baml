@@ -16,10 +16,8 @@
 //!
 //! So an io sysop reached from a top-level initializer does not fail with a
 //! BAML error the user can catch — it kills engine construction with an
-//! opaque `InitFailed`. That is a check-time-detectable mistake, and this
-//! module is the check. The sole exception is `baml.env.get`: `$init` has a
-//! dedicated synchronous dispatch for it because strict `env.NAME` lookup is
-//! part of the client-declaration surface.
+//! opaque `InitFailed("$init yielded unexpectedly: SysOp BamlEnvGet")`. That
+//! is a check-time-detectable mistake, and this module is the check.
 //!
 //! # The analysis
 //!
@@ -259,13 +257,7 @@ fn resolved_function<'db>(
 fn io_sysop_of<'db>(db: &'db dyn baml_compiler2_ppir::Db, func: FunctionLoc<'db>) -> Option<Name> {
     let body = baml_compiler2_hir::body::function_body(db, func);
     match body.as_ref() {
-        FunctionBody::Builtin(BuiltinKind::Io) => {
-            let name = qualified_name(db, func);
-            // `env.NAME` is strict syntax for this operation, including in
-            // top-level client declarations. The engine can dispatch this one
-            // sys-op synchronously during `$init`; all other io stays tainted.
-            (name.as_str() != "baml.env.get").then_some(name)
-        }
+        FunctionBody::Builtin(BuiltinKind::Io) => Some(qualified_name(db, func)),
         _ => None,
     }
 }

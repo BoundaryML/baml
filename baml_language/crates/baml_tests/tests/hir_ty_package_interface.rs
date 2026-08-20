@@ -264,10 +264,13 @@ fn bare_type_is_not_a_value_type_annotation() {
     assert!(
         errors
             .iter()
-            .filter(|message| message.contains("unresolved type: type"))
+            .filter(|message| {
+                message.contains("`type` no longer names a runtime type value")
+                    && message.contains("write `reflect.Type` instead")
+            })
             .count()
             >= 2,
-        "bare `type` annotations must be rejected: {errors:#?}"
+        "bare `type` annotations must be rejected, and must name their replacement: {errors:#?}"
     );
 }
 

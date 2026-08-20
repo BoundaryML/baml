@@ -1,0 +1,379 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function reflect.Package._compile(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.Package {
+}
+
+function reflect.Package._finish(artifact: reflect.Package, packages: map<string, reflect.Package>) -> reflect.Package {
+}
+
+function reflect.Package.classes(self: reflect.Package) -> map<string, reflect.class.Type> {
+}
+
+function reflect.Package.compile(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.Package {
+    load_var packages
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type reflect.Package
+    alloc_map 0
+    store_var packages
+
+  L0:
+    load_var2 1 2
+    sys_op reflect.Package._compile
+    load_var packages
+    call reflect.Package._finish
+    return
+}
+
+function reflect.Package.diagnostics(self: reflect.Package) -> reflect.Diagnostic[] {
+}
+
+function reflect.Package.enums(self: reflect.Package) -> map<string, reflect.enum.Type> {
+}
+
+function reflect.Package.functions(self: reflect.Package) -> map<string, reflect.function.Type> {
+}
+
+function reflect.Package.get_class(self: reflect.Package, name: string) -> reflect.class.Type | null {
+}
+
+function reflect.Package.get_enum(self: reflect.Package, name: string) -> reflect.enum.Type | null {
+}
+
+function reflect.Package.get_function(self: reflect.Package, name: string) -> #0 | null {
+}
+
+function reflect.Package.get_interface(self: reflect.Package, name: string) -> reflect.interface.Type | null {
+}
+
+function reflect.Package.interfaces(self: reflect.Package) -> map<string, reflect.interface.Type> {
+}
+
+function reflect.Package.tests(self: reflect.Package) -> map<string, () -> null throws unknown> {
+}
+
+function reflect.Package.with_types(self: reflect.Package, types: map<string, reflect.Type | reflect.TypeView>) -> reflect.Package {
+}
+
+function reflect.Session._compile(self: reflect.Session, source: string) -> reflect.Package {
+}
+
+function reflect.Session._finish(self: reflect.Session, artifact: reflect.Package) -> #0 {
+}
+
+function reflect.Session._new(packages: map<string, reflect.Package>) -> reflect.Session {
+}
+
+function reflect.Session.diagnostics(self: reflect.Session) -> reflect.Diagnostic[] {
+}
+
+function reflect.Session.eval(self: reflect.Session, source: string) -> #0 {
+    load_var2 1 2
+    load_type #0
+    sys_op reflect.Session._compile
+    store_var artifact
+    load_type #0
+    load_var2 1 3
+    call reflect.Session._finish
+    jump L0
+    load_var _
+    throw_if_panic
+    load_const "session evaluation failed"
+    init_instance reflect.errors.EvaluationError .message
+    throw
+
+  L0:
+    return
+}
+
+function reflect.Session.new(packages: map<string, reflect.Package>) -> reflect.Session {
+    load_var packages
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type reflect.Package
+    alloc_map 0
+    store_var packages
+
+  L0:
+    load_var packages
+    call reflect.Session._new
+    return
+}
+
+function reflect.Type._to_string_impl(self: reflect.Type) -> string {
+}
+
+function reflect.Type._validate_renderable(self: reflect.Type) -> void {
+}
+
+function reflect.Type.array(self: reflect.Type) -> reflect.array.Type {
+}
+
+function reflect.Type.as_array(self: reflect.Type) -> reflect.array.Type | null {
+}
+
+function reflect.Type.as_class(self: reflect.Type) -> reflect.class.Type | null {
+}
+
+function reflect.Type.as_enum(self: reflect.Type) -> reflect.enum.Type | null {
+}
+
+function reflect.Type.as_function(self: reflect.Type) -> reflect.function.Type | null {
+}
+
+function reflect.Type.as_interface(self: reflect.Type) -> reflect.interface.Type | null {
+}
+
+function reflect.Type.as_literal(self: reflect.Type) -> reflect.literal.Type | null {
+}
+
+function reflect.Type.as_map(self: reflect.Type) -> reflect.map.Type | null {
+}
+
+function reflect.Type.as_primitive(self: reflect.Type) -> reflect.primitive.Type | null {
+}
+
+function reflect.Type.as_union(self: reflect.Type) -> reflect.union.Type | null {
+}
+
+function reflect.Type.baml.ToString.to_string(self: reflect.Type) -> string {
+    load_var self
+    call reflect.Type._to_string_impl
+    return
+}
+
+function reflect.Type.implemented_by(self: reflect.Type, other: reflect.Type) -> bool {
+}
+
+function reflect.Type.implements(self: reflect.Type, other: reflect.Type) -> bool {
+}
+
+function reflect.Type.kind(self: reflect.Type) -> reflect.class.Type | reflect.enum.Type | reflect.union.Type | reflect.literal.Type | reflect.array.Type | reflect.map.Type | reflect.interface.Type | reflect.primitive.Type | reflect.function.Type {
+}
+
+function reflect.Type.meta(self: reflect.Type, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> reflect.WithMeta<reflect.Type> {
+}
+
+function reflect.Type.of_value(value: unknown) -> reflect.Type {
+}
+
+function reflect.Type.optional(self: reflect.Type) -> reflect.union.Type {
+}
+
+function reflect.Type.to_baml(self: reflect.Type) -> string {
+}
+
+function reflect.array.Type.element_type(self: reflect.array.Type) -> reflect.Type {
+}
+
+function reflect.array.Type.reflect.TypeView.as_type(self: reflect.array.Type) -> reflect.Type {
+}
+
+function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
+}
+
+function reflect.class.Builder._build(self: reflect.class.Builder, implementations: reflect.interface.Implementation[]) -> reflect.class.Type {
+}
+
+function reflect.class.Builder.build(self: reflect.class.Builder, implementations: reflect.interface.Implementation[]) -> reflect.class.Type {
+    load_var implementations
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type reflect.interface.Implementation
+    alloc_array 0
+    store_var implementations
+
+  L0:
+    load_var2 1 2
+    call reflect.class.Builder._build
+    return
+}
+
+function reflect.class.Builder.field(self: reflect.class.Builder, name: string, ty: reflect.Type | reflect.WithMeta<reflect.Type> | reflect.class.PendingType | reflect.WithMeta<reflect.class.PendingType>) -> reflect.class.Builder {
+}
+
+function reflect.class.Builder.type(self: reflect.class.Builder) -> reflect.class.PendingType {
+}
+
+function reflect.class.Field.metadata(self: reflect.class.Field) -> reflect.Meta {
+    load_var self
+    load_field .meta
+    return
+}
+
+function reflect.class.Field.value(self: reflect.class.Field) -> #0 | null {
+    load_var self
+    load_field ._owner
+    store_var _3
+    load_var _3
+    narrow_bind baml.AnyClass, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L4
+
+  L1:
+    load_type #0
+    load_var2 2 1
+    load_field .name
+    call reflect.class.get_field
+    jump L4
+    load_var e
+    is_type reflect.errors.CompilationError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var e
+    rethrow
+
+  L3:
+    load_var e
+    load_field .0
+    init_instance baml.errors.TypeMismatch .message
+    throw
+
+  L4:
+    return
+}
+
+function reflect.class.PendingType.array(self: reflect.class.PendingType) -> reflect.class.PendingType {
+}
+
+function reflect.class.PendingType.meta(self: reflect.class.PendingType, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> reflect.WithMeta<reflect.class.PendingType> {
+}
+
+function reflect.class.PendingType.optional(self: reflect.class.PendingType) -> reflect.class.PendingType {
+}
+
+function reflect.class.PendingType.resolved(self: reflect.class.PendingType) -> reflect.Type | null {
+}
+
+function reflect.class.PendingType.union(self: reflect.class.PendingType, others: (reflect.Type | reflect.class.PendingType)[]) -> reflect.class.PendingType {
+}
+
+function reflect.class.Type.fields(self: reflect.class.Type) -> reflect.class.Field[] {
+}
+
+function reflect.class.Type.meta(self: reflect.class.Type) -> reflect.Meta {
+}
+
+function reflect.class.Type.reflect.TypeView.as_type(self: reflect.class.Type) -> reflect.Type {
+}
+
+function reflect.class._new(name: string, fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>>, implementations: reflect.interface.Implementation[]) -> reflect.class.Type {
+}
+
+function reflect.class.builder(name: string) -> reflect.class.Builder {
+}
+
+function reflect.class.get_field(value: unknown, name: string) -> #0 {
+}
+
+function reflect.class.new(name: string, fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>>, implementations: reflect.interface.Implementation[]) -> reflect.class.Type {
+    load_var implementations
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type reflect.interface.Implementation
+    alloc_array 0
+    store_var implementations
+
+  L0:
+    load_var2 1 2
+    load_var implementations
+    call reflect.class._new
+    return
+}
+
+function reflect.enum.Type.meta(self: reflect.enum.Type) -> reflect.Meta {
+}
+
+function reflect.enum.Type.reflect.TypeView.as_type(self: reflect.enum.Type) -> reflect.Type {
+}
+
+function reflect.enum.Type.values(self: reflect.enum.Type) -> reflect.enum.Value[] {
+}
+
+function reflect.enum.get_value(value: unknown) -> string {
+}
+
+function reflect.enum.new(name: string, values: (string | reflect.enum.Value)[]) -> reflect.enum.Type {
+}
+
+function reflect.enum.value(name: string, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> reflect.enum.Value {
+}
+
+function reflect.function.Type.generic_params(self: reflect.function.Type) -> reflect.function.GenericParam[] {
+}
+
+function reflect.function.Type.get(self: reflect.function.Type) -> #0 | null {
+}
+
+function reflect.function.Type.is_generic(self: reflect.function.Type) -> bool {
+}
+
+function reflect.function.Type.params(self: reflect.function.Type) -> reflect.function.Parameter[] {
+}
+
+function reflect.function.Type.reflect.TypeView.as_type(self: reflect.function.Type) -> reflect.Type {
+}
+
+function reflect.function.Type.return_type(self: reflect.function.Type) -> reflect.Type {
+}
+
+function reflect.function.Type.specialize(self: reflect.function.Type, args: reflect.Type[]) -> reflect.function.Type {
+}
+
+function reflect.interface.Implementation.field(self: reflect.interface.Implementation, interface_field: string, class_field: string | null) -> reflect.interface.Implementation {
+}
+
+function reflect.interface.Type.implemented_by(self: reflect.interface.Type, other: reflect.Type) -> bool {
+}
+
+function reflect.interface.Type.reflect.TypeView.as_type(self: reflect.interface.Type) -> reflect.Type {
+}
+
+function reflect.interface.implementation() -> reflect.interface.Implementation {
+}
+
+function reflect.literal.Type.reflect.TypeView.as_type(self: reflect.literal.Type) -> reflect.Type {
+}
+
+function reflect.literal.new(value: string | int | bool) -> reflect.literal.Type {
+}
+
+function reflect.map.Type.key_type(self: reflect.map.Type) -> reflect.Type {
+}
+
+function reflect.map.Type.reflect.TypeView.as_type(self: reflect.map.Type) -> reflect.Type {
+}
+
+function reflect.map.Type.value_type(self: reflect.map.Type) -> reflect.Type {
+}
+
+function reflect.map.new(key: reflect.Type, value: reflect.Type) -> reflect.map.Type {
+}
+
+function reflect.primitive.Type.reflect.TypeView.as_type(self: reflect.primitive.Type) -> reflect.Type {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+}
+
+function reflect.union.Type.member_types(self: reflect.union.Type) -> reflect.Type[] {
+}
+
+function reflect.union.Type.reflect.TypeView.as_type(self: reflect.union.Type) -> reflect.Type {
+}
+
+function reflect.union.new(types: reflect.Type[]) -> reflect.union.Type {
+}

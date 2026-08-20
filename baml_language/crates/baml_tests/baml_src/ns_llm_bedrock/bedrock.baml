@@ -142,7 +142,7 @@ function _turn_input(
 
 // A client aimed at `endpoint_url`, with the AWS documentation's example
 // credentials so signing never touches the environment. `endpoint_url` takes
-// the `ai.Credential?` union, so a literal or an explicit env ref both fit.
+// the `ai.Credential?` union, so a literal or an `env.NAME` ref both fit.
 function _client(endpoint_url: ai.Credential?) -> aws.BedrockClient {
     aws.BedrockClient.new(
         model = _model(),
@@ -300,12 +300,12 @@ test "bedrock_endpoint_url_override" {
 }
 
 // `endpoint_url` takes the same `ai.Credential?` union every other client
-// option does: a literal wins outright, and an explicit env ref is read at
+// option does: a literal wins outright, and an `env.NAME` ref is read at
 // REQUEST time — constructing with one that names an unset variable is fine,
 // and resolves to null (build the regional host) rather than exploding.
 function bedrock_endpoint_url_ref_resolves_at_request_time() -> string {
     let literal = _client("http://localhost:4566").resolved_endpoint_url() ?? "<null>";
-    let unset = _client(baml.env.ref("BAML_TEST_BEDROCK_ENDPOINT_NEVER_SET")).resolved_endpoint_url() ?? "<null>";
+    let unset = _client(env.BAML_TEST_BEDROCK_ENDPOINT_NEVER_SET).resolved_endpoint_url() ?? "<null>";
     let absent = _client(null).resolved_endpoint_url() ?? "<null>";
     [literal, unset, absent].join("|")
 }

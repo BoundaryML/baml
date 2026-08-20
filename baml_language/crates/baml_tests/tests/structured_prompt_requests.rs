@@ -1,8 +1,8 @@
 //! Provider request builders consume the structural `ai.Prompt` produced by an
 //! LLM spec. The offline request-shape suite lives in
 //! `baml_src/ns_structured_prompt_requests/` as native BAML tests; this file
-//! keeps only the test that must control the host environment (an explicit
-//! late-bound `baml.env.Ref` resolved during preview), which needs a re-exec'd
+//! keeps only the test that must control the host environment (a late-bound
+//! `env.NAME` reference resolved during preview), which needs a re-exec'd
 //! child process for isolation.
 
 use baml_tests::baml_test;
@@ -29,7 +29,7 @@ async fn vertex_project_id_accepts_late_bound_env_ref_in_preview() {
     let source = r#"
 client Vertex = google.VertexClient.new(
   model = "gemini-test",
-  project_id = baml.env.ref("VERTEX_PROJECT_ID"),
+  project_id = env.VERTEX_PROJECT_ID,
   location = "us-central1",
   api_key = "test-key",
   headers = { "x-preview": "yes" },
@@ -43,7 +43,7 @@ function Shape() -> string {
 }
 
 function main() -> string {
-  let expected = baml.env.ref("VERTEX_PROJECT_ID").get_or_panic()
+  let expected = env.VERTEX_PROJECT_ID.get_or_panic()
   let input = ai.ModelTurnInput {
     prompt: Shape$spec().prompt_template,
     journal: ai.Journal { log: [] },

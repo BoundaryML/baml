@@ -46,21 +46,21 @@ function ValidControlFlowWithSemicolons(x: int) -> int {
 // break/continue/return - semicolons optional (type ! expressions)
 function ValidBreakNoSemicolon() -> int {
     while (true) {
-        break  // No semicolon needed - break is reflect.Type !
+        break  // No semicolon needed - break is type !
     };
     0
 }
 
 function ValidContinueNoSemicolon() -> int {
     while (true) {
-        continue  // No semicolon needed - continue is reflect.Type !
+        continue  // No semicolon needed - continue is type !
     };
     0
 }
 
 function ValidReturnNoSemicolon(x: int) -> int {
     if (x == 0) {
-        return 0  // No semicolon needed - return is reflect.Type !
+        return 0  // No semicolon needed - return is type !
     };
     x
 }

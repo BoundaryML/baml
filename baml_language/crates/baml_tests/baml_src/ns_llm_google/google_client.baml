@@ -1009,11 +1009,11 @@ test "google_error_taxonomy" {
 // network. Both assert the same thing — no panic. (Mirrors
 // `anthropic_missing_key_resolve` / `_invoke`.)
 function _google_missing_key_client() -> google.GoogleClient {
-    // An explicit env ref naming a variable that exists nowhere resolves to
+    // `env.NAME` naming a variable that exists nowhere: the ref resolves to
     // null at REQUEST time and the client falls through to GOOGLE_API_KEY.
     google.GoogleClient.new(
         model = "gemini-2.5-flash",
-        api_key = baml.env.ref("BAML_GOOGLE_KEY_THAT_IS_NEVER_SET"),
+        api_key = env.BAML_GOOGLE_KEY_THAT_IS_NEVER_SET,
         base_url = "http://127.0.0.1:1",
     )
 }

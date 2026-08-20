@@ -3674,9 +3674,20 @@ impl LoweringContext {
     }
 
     fn lower_env_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
-        // `env.VAR_NAME` is special syntax for the ordinary strict lookup
-        // `baml.env.get("VAR_NAME") ?? panic`. `get_or_panic` is exactly that
-        // stdlib wrapper and keeps this rewrite small and inspectable.
+        // Desugar `env.VAR_NAME` → `baml.env.ref("VAR_NAME")`
+        //
+        // `env.X` is a LATE-BOUND typed reference (`baml.env.Ref`), not an
+        // eager read. Two reasons:
+        //
+        //   1. `client Foo = ...` declarations are evaluated during `$init`,
+        //      which cannot perform io — an eager `baml.env.get_or_panic`
+        //      there died at runtime with an opaque `InitFailed`.
+        //   2. Hosts routinely load secrets *after* the runtime initializes,
+        //      so an eager snapshot taken at declaration time is wrong.
+        //
+        // The `Ref` carries the variable NAME only — a secret is never
+        // captured into a constructed value. Reads happen at use time through
+        // `Ref.get()` / `.get_or_panic()` / `.or(fallback)`.
         let range = node.span_range();
 
         let mut field_text = None;
@@ -3698,11 +3709,7 @@ impl LoweringContext {
             range,
         });
         let callee = self.alloc_expr(
-            Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("env"),
-                Name::new("get_or_panic"),
-            ]),
+            Expr::Path(vec![Name::new("baml"), Name::new("env"), Name::new("ref")]),
             range,
         );
         let arg = self.alloc_expr(Expr::Literal(Literal::String(var_name)), range);

@@ -980,11 +980,11 @@ test "anthropic_png_image_block" {
 // fallback resolves it (base_url points at a closed port, so nothing escapes to
 // the network either way). Both branches assert the same thing — no panic.
 function anth_missing_key_client() -> anthropic.AnthropicClient {
-    // An explicit env ref naming a variable that exists nowhere resolves to
+    // `env.NAME` naming a variable that exists nowhere: the ref resolves to
     // null at REQUEST time and the client falls through to ANTHROPIC_API_KEY.
     anthropic.AnthropicClient.new(
         model = "claude-haiku-4-5",
-        api_key = baml.env.ref("BAML_ANTHROPIC_KEY_THAT_IS_NEVER_SET"),
+        api_key = env.BAML_ANTHROPIC_KEY_THAT_IS_NEVER_SET,
         base_url = "http://127.0.0.1:1",
     )
 }

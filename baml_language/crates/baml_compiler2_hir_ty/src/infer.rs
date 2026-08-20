@@ -10123,16 +10123,22 @@ impl<'db> InferenceContext<'db> {
                         expr,
                         name,
                         suggestions,
-                    } => (TirTypeError::UnresolvedType { name, suggestions }, expr),
+                    } => (
+                        crate::diagnostics::removed_reflect_spelling(&name)
+                            .unwrap_or(TirTypeError::UnresolvedType { name, suggestions }),
+                        expr,
+                    ),
                     PendingDiag::PositionalAfterNamed { expr } => {
                         (TirTypeError::PositionalArgumentAfterNamed, expr)
                     }
                     PendingDiag::DuplicateNamedArg { expr, name } => {
                         (TirTypeError::DuplicateNamedArgument { name }, expr)
                     }
-                    PendingDiag::UnresolvedName { expr, name } => {
-                        (TirTypeError::UnresolvedName { name }, expr)
-                    }
+                    PendingDiag::UnresolvedName { expr, name } => (
+                        crate::diagnostics::removed_reflect_spelling(&name)
+                            .unwrap_or(TirTypeError::UnresolvedName { name }),
+                        expr,
+                    ),
                     PendingDiag::TopLevelLetCycle { expr } => (TirTypeError::CannotInferType, expr),
                     PendingDiag::UnresolvedMember { expr, base, member } => (
                         TirTypeError::UnresolvedMember {
@@ -10841,7 +10847,8 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::UnresolvedPatternName { pat, name } => {
                         diags.push(TirDiagnostic {
-                            error: TirTypeError::UnresolvedName { name },
+                            error: crate::diagnostics::removed_reflect_spelling(&name)
+                                .unwrap_or(TirTypeError::UnresolvedName { name }),
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Pat(pat),
                             related: Vec::new(),

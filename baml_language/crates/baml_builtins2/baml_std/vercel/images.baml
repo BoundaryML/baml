@@ -25,9 +25,10 @@
 class AiGatewayImageClient {
     // The gateway model id, e.g. "bfl/flux-2-pro" — sent as `ai-model-id`.
     model: string,
-    // A literal string (including a strict `env.NAME` lookup), an explicit
-    // `baml.env.Ref` read at request time, or null to resolve
-    // AI_GATEWAY_API_KEY at request time.
+    // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
+    // time), or null to resolve AI_GATEWAY_API_KEY at request time.
+    // Construction never touches env, so declaring/constructing a client is
+    // always safe.
     api_key: ai.Credential?,
     // Defaults to https://ai-gateway.vercel.sh/v4/ai.
     base_url: ai.Credential?,
@@ -79,7 +80,7 @@ class AiGatewayImageClient {
 
     // The request-time credential: an explicit value, else the gateway's
     // conventional variable. (sys_llm had no env default here and required
-    // an explicit `api_key` in every client declaration.)
+    // `api_key: env.AI_GATEWAY_API_KEY` in every client declaration.)
     // A missing credential is a catchable ai.errors.InvalidRequest rather than
     // a panic, so the caller's `catch_all` can fall back to another client.
     function resolved_api_key(self) -> string {
@@ -89,7 +90,7 @@ class AiGatewayImageClient {
         throw ai.errors.InvalidRequest {
             provider: "ai-gateway-images",
             status_code: null,
-            detail: `no AI Gateway API key: set the client's api_key (a literal, env.NAME, or baml.env.ref("NAME")), or export one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "AI_GATEWAY_API_KEY")}`,
+            detail: `no AI Gateway API key: set the client's api_key (a literal or env.NAME), or export one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "AI_GATEWAY_API_KEY")}`,
             raw_body: null,
         }
     }

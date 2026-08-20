@@ -103,8 +103,8 @@ class AzureClient {
     /// The deployment base this client posts to, resolved in the order Azure
     /// users actually configure things:
     ///
-    ///   1. an explicit `base_url` (a string or an explicit `baml.env.Ref`),
-    ///      used verbatim — it already names the deployment;
+    ///   1. an explicit `base_url` (a literal or an `env.NAME` ref), used
+    ///      verbatim — it already names the deployment;
     ///   2. `resource_name`, which builds
     ///      `https://{resource}.openai.azure.com/openai/deployments/{deployment}`;
     ///   3. `AZURE_OPENAI_ENDPOINT` — the variable the official Azure OpenAI
@@ -121,8 +121,8 @@ class AzureClient {
     /// per-key spans; a BAML constructor can only report at request time, so
     /// the error names every source that was checked.
     function resolved_base_url(self) -> string {
-        // An explicit `base_url = baml.env.ref("NAME")` resolves here, at
-        // request time; an unset variable behaves like no base_url at all.
+        // A `base_url = env.NAME` ref resolves here, at request time; an unset
+        // variable behaves exactly like no base_url at all.
         if let explicit: string = ai.wire.resolve_credential(self.base_url, null) {
             if (self.resource_name != null || self.deployment_id != null) {
                 throw root.internal._azure_reject(

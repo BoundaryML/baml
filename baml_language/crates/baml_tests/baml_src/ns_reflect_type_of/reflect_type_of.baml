@@ -197,13 +197,21 @@ test "of_value_function_value_reports_function_type" {
     assert.is_true(t != reflect.Type.of<unknown>())
 }
 
-// ─── `reflect` shorthand and its qualified form (BEP-066 I-9) ────────────────
+// ─── `reflect.signature` reads a function value's own signature ─────────────
+//
+// `reflect` is an ordinary root package now (#4543), so this is ordinary
+// package routing — there is no second, qualified spelling for it to agree
+// with. What is worth pinning is the content: the reconstructed signature
+// reports the declared name, return type, and error type.
 
-test "reflect_signature_bare_and_qualified_agree" {
+test "reflect_signature_reports_the_declared_types" {
     let f: baml.AnyFunction = of_value_helper;
-    let bare = reflect.signature(f);
-    let qualified = reflect.signature(f);
-    assert.equal(bare.returns.to_string(), "string");
-    assert.is_true(bare.returns == qualified.returns);
-    assert.is_true(bare.errors == qualified.errors)
+    let sig = reflect.signature(f);
+    // `name` is null for host and compiler-synthesized callables; a declared
+    // function reports the name it was written with.
+    assert.equal(sig.name ?? "<unnamed>", "of_value_helper");
+    assert.equal(sig.returns.to_string(), "string");
+    assert.is_true(sig.returns == reflect.Type.of<string>());
+    // `of_value_helper` declares `throws never`.
+    assert.is_true(sig.errors == reflect.Type.of<never>())
 }

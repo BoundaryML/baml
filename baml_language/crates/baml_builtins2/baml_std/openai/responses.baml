@@ -24,9 +24,10 @@
 // configuring a string list of provider finish reasons.
 class ResponsesClient {
     model: string,
-    // A literal string (including a strict `env.NAME` lookup), an explicit
-    // `baml.env.Ref` read at request time, or null to resolve OPENAI_API_KEY at
-    // request time. A `Ref` keeps the secret out of the client value.
+    // A literal string, `env.NAME` (a late-bound `baml.env.Ref`, read at
+    // request time), or null to resolve OPENAI_API_KEY at request time.
+    // Construction never touches env, so declaring/constructing a client is
+    // always safe — and a `Ref` keeps the secret out of the client value.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
     // Native request deadline, including a streaming response body. Null or a
@@ -101,8 +102,8 @@ class ResponsesClient {
         }
     }
 
-    // The request-time credential: an explicit value (a string, or the value
-    // of the variable an explicit `baml.env.Ref` points at), else the provider's
+    // The request-time credential: an explicit value (a literal, or the value
+    // of the variable an `env.NAME` ref points at), else the provider's
     // canonical one. Nothing here runs before the request.
     //
     // A missing key is a CATCHABLE configuration error, not a panic:
@@ -116,7 +117,7 @@ class ResponsesClient {
         throw ai.errors.InvalidRequest {
             provider: "openai",
             status_code: null,
-            detail: `openai needs an API key: pass api_key (a literal, env.NAME, or baml.env.ref("NAME")), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "OPENAI_API_KEY")}`,
+            detail: `openai needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "OPENAI_API_KEY")}`,
             raw_body: null,
         }
     }

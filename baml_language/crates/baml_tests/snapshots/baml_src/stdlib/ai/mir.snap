@@ -176,7 +176,7 @@ fn ai.clients.resolve(selector: string | baml.env.Ref | ai.Client) -> ai.Client 
 
     bb8: {
         _15 = copy _16 + copy _21;
-        _14 = copy _15 + const "), or give the client: position a value with a fallback — baml.env.ref(\"";
+        _14 = copy _15 + const "), or give the client: position a value with a fallback — env.";
         _25 = copy _6.0;
         _26 = load_type(string);
         _24 = call const fn baml.String.from<copy _26>(copy _25) -> [bb9];
@@ -184,7 +184,7 @@ fn ai.clients.resolve(selector: string | baml.env.Ref | ai.Client) -> ai.Client 
 
     bb9: {
         _13 = copy _14 + copy _24;
-        _12 = copy _13 + const "\").get() ?? \"openai/gpt-4o-mini\"";
+        _12 = copy _13 + const ".get() ?? \"openai/gpt-4o-mini\"";
         _11 = ai.errors.InvalidRequest { const "ai.clients", const null, copy _12, const null };
         throw copy _11;
     }

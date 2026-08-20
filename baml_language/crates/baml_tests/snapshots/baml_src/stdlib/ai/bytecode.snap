@@ -2908,11 +2908,11 @@ function ai.clients.resolve(selector: ai.Client | string | baml.env.Ref) -> ai.C
     bin_op +
     load_var _21
     bin_op +
-    load_const "), or give the client: position a value with a fallback — baml.env.ref(\""
+    load_const "), or give the client: position a value with a fallback — env."
     bin_op +
     load_var _24
     bin_op +
-    load_const "\").get() ?? \"openai/gpt-4o-mini\""
+    load_const ".get() ?? \"openai/gpt-4o-mini\""
     bin_op +
     load_const null
     init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body

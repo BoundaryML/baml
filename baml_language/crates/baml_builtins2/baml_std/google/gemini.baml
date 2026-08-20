@@ -34,9 +34,9 @@ class SafetySetting {
 /// `"vertex/<model>"` client shorthand.
 class GoogleClient {
     model: string,
-    // A literal string (including a strict `env.NAME` lookup), an explicit
-    // `baml.env.Ref` read at request time, or null to resolve GOOGLE_API_KEY at
-    // request time.
+    // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
+    // time), or null to resolve GOOGLE_API_KEY at request time. Construction
+    // never touches env, so declaring/constructing a client is always safe.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
 
@@ -110,7 +110,7 @@ class GoogleClient {
         throw ai.errors.InvalidRequest {
             provider: "google",
             status_code: null,
-            detail: `google needs an API key: pass api_key (a literal, env.NAME, or baml.env.ref("NAME")), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "GOOGLE_API_KEY")}`,
+            detail: `google needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "GOOGLE_API_KEY")}`,
             raw_body: null,
         }
     }

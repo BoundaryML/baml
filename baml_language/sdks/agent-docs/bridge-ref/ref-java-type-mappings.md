@@ -335,7 +335,7 @@ Notes:
   `record`s** (decided 2026-07-17): deep `byte[]` equality has to be hand-generated regardless, and the
   reified type-args ride a weak-identity side-table rather than a hidden instance field
   (conventions doc:42–49).
-- Class fields are plain `(name, reflect.Type)` pairs. An optional field renders as the **boxed nullable
+- Class fields are plain `(name, type)` pairs. An optional field renders as the **boxed nullable
   type** (`java.lang.Long field`), never `Optional<T>` and never with a default — required-but-nullable,
   mirroring Pydantic's stance. `registerClass` carries a parallel `String[] fieldDescs` of descriptor
   tokens for type-directed decode.

@@ -80,7 +80,7 @@ fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmR
 
 /// Map a TOML datetime onto the `baml.time` types (BEP-021's interop table):
 ///
-/// | TOML kind                                    | BAML type |
+/// | TOML kind                                    | BAML type                      |
 /// | -------------------------------------------- | ------------------------------ |
 /// | Offset Date-Time `1979-05-27T07:32:00-07:00` | `ZonedDateTime` (fixed offset) |
 /// | Local Date-Time `1979-05-27T07:32:00`        | `PlainDateTime`                |

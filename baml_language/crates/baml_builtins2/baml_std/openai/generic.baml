@@ -14,9 +14,9 @@
 class GenericClient {
     model: string,
     // Required: the endpoint's base, up to and including any version prefix,
-    // e.g. "http://localhost:8000/v1". May be a string (including a strict
-    // `env.NAME` lookup) or an explicit `baml.env.Ref` read at request time.
-    // An unset explicit Ref is the same error as no base_url at all.
+    // e.g. "http://localhost:8000/v1". May be a literal or an `env.NAME` ref
+    // read at request time. An `env.NAME` whose variable is unset is the same
+    // configuration error as no base_url at all.
     base_url: ai.Credential?,
     api_key: ai.Credential?,
     // Native request deadline; TTFT begins only after a streaming response opens.
@@ -73,19 +73,20 @@ class GenericClient {
     }
 
     // Throws `ai.errors.InvalidRequest` when no base_url resolves. A
-    // `base_url = baml.env.ref("NAME")` naming an UNSET variable resolves to
-    // null and lands here too, so it reports the same clear configuration
-    // error rather than a mystery request to nowhere.
+    // `base_url = env.NAME` naming an UNSET variable resolves to null and lands
+    // here too, so it reports the same clear configuration error rather than a
+    // mystery request to nowhere.
     function resolved_base_url(self) -> string {
         if let explicit: string = ai.wire.resolve_credential(self.base_url, null) {
             return explicit;
         }
-        // An explicit Ref whose variable is not set must not degrade into a
-        // mystery request, so it raises the same error as a plainly-unset
-        // base_url — plus the names it consulted.
+        // A `base_url = env.NAME` whose variable is not set must not degrade
+        // into a mystery request, so it raises the same error a plainly-unset
+        // base_url does — plus the names it consulted, so the ref's own
+        // variable is reported.
         throw root.internal._reject(
             "openai-generic",
-            `openai.GenericClient requires base_url (a literal, env.NAME, or baml.env.ref("NAME") naming a set variable): the endpoint of the OpenAI-compatible server, e.g. "http://localhost:8000/v1". Checked: ${ai.wire.credential_sources(self.base_url, null)}`,
+            `openai.GenericClient requires base_url (a literal or env.NAME naming a set variable): the endpoint of the OpenAI-compatible server, e.g. "http://localhost:8000/v1". Checked: ${ai.wire.credential_sources(self.base_url, null)}`,
         )
     }
 

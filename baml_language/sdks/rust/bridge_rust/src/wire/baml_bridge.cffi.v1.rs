@@ -610,7 +610,7 @@ pub mod inbound_value {
         Uint8arrayValue(::prost::alloc::vec::Vec<u8>),
         #[prost(string, tag = "12")]
         BigintValue(::prost::alloc::string::String),
-        /// A reflected BAML type passed as a value (mirrors a `type`-typed BAML
+        /// A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
         /// value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
         /// argument value so the host can pass types as data.
         #[prost(message, tag = "13")]

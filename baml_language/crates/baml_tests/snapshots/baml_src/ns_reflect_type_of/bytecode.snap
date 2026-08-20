@@ -214,7 +214,7 @@ function reflect_type_of.$init_test_ns_reflect_type_of_reflect_type_of(registry:
     pop 1
     load_var registry
     load_const "root.reflect_type_of"
-    load_const "reflect_signature_bare_and_qualified_agree"
+    load_const "reflect_signature_reports_the_declared_types"
     make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 30)>, 0
     load_const null
     call testing.TestCollector.register_test_at

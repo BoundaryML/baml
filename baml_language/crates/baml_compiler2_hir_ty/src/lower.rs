@@ -2094,10 +2094,14 @@ pub fn owner_impl_target<'db>(
 pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTypeError {
     use crate::diagnostics::TirTypeError;
     match kind {
-        LoweringDiagKind::Unresolved { name, suggestions } => TirTypeError::UnresolvedType {
-            name: name.clone(),
-            suggestions: suggestions.clone(),
-        },
+        LoweringDiagKind::Unresolved { name, suggestions } => {
+            crate::diagnostics::removed_reflect_spelling(name).unwrap_or(
+                TirTypeError::UnresolvedType {
+                    name: name.clone(),
+                    suggestions: suggestions.clone(),
+                },
+            )
+        }
         LoweringDiagKind::WrongArgCount {
             name,
             expected,

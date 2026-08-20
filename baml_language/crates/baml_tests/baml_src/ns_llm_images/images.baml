@@ -1045,14 +1045,14 @@ test "gateway_images_streaming_unsupported" {
 // NetworkFailure rather than pass silently. Registered only when the variable
 // is unset, since the fallback chain ends at the real environment.
 //
-// An explicit `baml.env.ref` naming a variable that exists nowhere is the shape under
+// `api_key = env.NAME` naming a variable that exists nowhere is the shape under
 // test: the ref resolves to null at REQUEST time, the client falls through to
 // its canonical variable, and the empty chain becomes a typed failure.
 
 function openai_images_missing_key() -> string {
     let cl = openai.ImageClient.new(
         model = "gpt-image-1",
-        api_key = baml.env.ref("BAML_TEST_NO_SUCH_OPENAI_IMAGES_KEY"),
+        api_key = env.BAML_TEST_NO_SUCH_OPENAI_IMAGES_KEY,
         base_url = "http://127.0.0.1:1/v1",
     );
     ai.Agent<image>.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
@@ -1064,7 +1064,7 @@ function openai_images_missing_key() -> string {
 function gateway_images_missing_key() -> string {
     let cl = vercel.AiGatewayImageClient.new(
         model = "bfl/flux-2-pro",
-        api_key = baml.env.ref("BAML_TEST_NO_SUCH_GATEWAY_KEY"),
+        api_key = env.BAML_TEST_NO_SUCH_GATEWAY_KEY,
         base_url = "http://127.0.0.1:1/v4/ai",
     );
     ai.Agent<image>.new(client = cl).run(GatewayDraw@spec("a lamp")).value.base64() catch_all (e) {

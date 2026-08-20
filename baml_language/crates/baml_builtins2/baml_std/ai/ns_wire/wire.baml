@@ -21,9 +21,8 @@
 /// credential configured" error the same client raises when the variable is
 /// absent entirely. The two spellings of "I did not set this" now behave alike.
 ///
-/// This IS the whole chain a client needs: explicit credential (a literal,
-/// strict `env.NAME` lookup, or explicit `baml.env.ref("NAME")`) → the
-/// provider's canonical variable (`env_fallback`).
+/// This IS the whole chain a client needs: explicit credential (a literal or an
+/// `env.NAME` ref) → the provider's canonical variable (`env_fallback`).
 function resolve_credential(cred: root.Credential?, env_fallback: string?) -> string? {
     let explicit: string? = match (cred) {
         let literal: string => root.internal._configured(literal),
@@ -58,8 +57,8 @@ function redact_url_secrets(text: string) -> string {
 /// for the "no credential configured" error a client raises when the whole
 /// chain came back empty.
 ///
-/// The point is the `Ref` arm: `api_key = baml.env.ref("MY_KEY")` pointing at
-/// an UNSET variable resolves to `null` and falls through to the rest of the chain, so
+/// The point is the `Ref` arm: `api_key = env.MY_KEY` pointing at an UNSET
+/// variable resolves to `null` and falls through to the rest of the chain, so
 /// without this the error would name only the provider's canonical variable and
 /// never mention the one the caller actually asked for. Values are never
 /// included — only names.

@@ -238,7 +238,7 @@ type InboundValue_BigintValue struct {
 }
 
 type InboundValue_TyValue struct {
-	// A reflected BAML type passed as a value (mirrors a `type`-typed BAML
+	// A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
 	// value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
 	// argument value so the host can pass types as data.
 	TyValue *BamlTy `protobuf:"bytes,13,opt,name=ty_value,json=tyValue,proto3,oneof"`

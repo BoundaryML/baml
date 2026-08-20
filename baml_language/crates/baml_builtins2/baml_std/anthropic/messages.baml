@@ -65,9 +65,10 @@ class ToolChoice {
 
 class AnthropicClient {
     model: string,
-    // A literal string (including a strict `env.NAME` lookup), an explicit
-    // `baml.env.Ref` read at request time, or null to resolve ANTHROPIC_API_KEY
-    // at request time. A `Ref` keeps the secret out of the client value.
+    // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
+    // time), or null to resolve ANTHROPIC_API_KEY at request time. Construction
+    // never touches env, so declaring/constructing a client is always safe —
+    // and a `Ref` keeps the secret out of the client value entirely.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
     // Native request deadline, including a streaming response body. Null or a
@@ -156,7 +157,7 @@ class AnthropicClient {
             return k;
         }
         throw root.internal._reject(
-            `anthropic needs an API key: pass api_key (a literal, env.NAME, or baml.env.ref("NAME")), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "ANTHROPIC_API_KEY")}`,
+            `anthropic needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "ANTHROPIC_API_KEY")}`,
         )
     }
 

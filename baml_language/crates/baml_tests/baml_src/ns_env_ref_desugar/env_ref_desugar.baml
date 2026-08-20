@@ -1,51 +1,63 @@
-// The explicit `baml.env.ref("X")` helper constructs a late-bound reference.
-// The `env.X` syntax is intentionally different: it is a strict eager lookup
-// and is pinned independently by the env tests.
+// `env.X` desugars to a LATE-BOUND reference: `baml.env.ref("X")`.
+//
+// It used to desugar to `baml.env.get_or_panic("X")` — an eager read. That was
+// wrong in two ways:
+//
+//   1. `client Foo = ...` declarations are evaluated during `$init`, which
+//      cannot perform io. An eager env read there died at runtime with an
+//      opaque `InitFailed`. The `client EnvRefDesugarClient = ...` declaration
+//      below is that exact repro; today it is a passing test.
+//   2. Hosts routinely load secrets *after* the runtime initializes, so a
+//      snapshot taken at declaration time is stale.
 //
 // The `Ref` carries the variable NAME only — a secret is never captured into a
 // constructed value. Reads happen at use time via `.get()` / `.get_or_panic()`
 // / `.or(fallback)`.
 //
-// Stdlib side: baml_std/baml/ns_env/env.baml.
+// Compiler side: crates/baml_compiler2_ast/src/lower_expr_body.rs
+// (`lower_env_access_expr`). Stdlib side: baml_std/baml/ns_env/env.baml.
 //
 // Corpus convention: every case body is a top-level `function`, `test` blocks
 // only assert (test-block locals are boxed by the VM).
 
 // ─── the reference is pure data ──────────────────────────────────────────────
 
-// The declared return type pins the explicit helper's static type.
+// The declared return type is the static-type assertion: `env.X` must be a
+// `baml.env.Ref`, not a string. If the desugar regressed to `get_or_panic`,
+// this would fail to compile with a string-vs-Ref mismatch.
 function EnvRefOf() -> baml.env.Ref {
-    let r = baml.env.ref("BAML_TEST_ENV_REF_SOME_VAR");
+    let r = env.BAML_TEST_ENV_REF_SOME_VAR;
     r
 }
 
 // The reference carries the NAME, never a value — reading it is io-free, so
 // this works whether or not the variable is set.
 function EnvRefName() -> string {
-    let r = baml.env.ref("BAML_TEST_ENV_REF_SOME_VAR");
+    let r = env.BAML_TEST_ENV_REF_SOME_VAR;
     r.name
 }
 
 // ─── reading through the reference ───────────────────────────────────────────
 
-// `.get()` on an unset variable is null (no panic).
+// `.get()` on an unset variable is null (no panic) — the difference from the
+// old eager desugar, which threw `baml.panics.UserPanic` on the `env.X` itself.
 function EnvRefUnsetGet() -> string? {
-    let r = baml.env.ref("BAML_TEST_ENV_REF_UNSET");
+    let r = env.BAML_TEST_ENV_REF_UNSET;
     r.get()
 }
 
 // `.or(fallback)` yields the fallback for an unset variable.
 function EnvRefUnsetOr() -> string {
-    let r = baml.env.ref("BAML_TEST_ENV_REF_UNSET");
+    let r = env.BAML_TEST_ENV_REF_UNSET;
     r.or("fallback-value")
 }
 
 // The `??` chain over `.get()` — the shape hosts write by hand.
 function EnvRefGetChain() -> string {
-    baml.env.ref("BAML_TEST_ENV_REF_UNSET").get() ?? "chained-fallback"
+    env.BAML_TEST_ENV_REF_UNSET.get() ?? "chained-fallback"
 }
 
-// A reference built by name can use the same fallback surface.
+// A reference built by name is the same thing the sugar produces.
 function EnvRefExplicit() -> string {
     let r = baml.env.ref("BAML_TEST_ENV_REF_UNSET");
     r.or("explicit-fallback")
@@ -53,10 +65,13 @@ function EnvRefExplicit() -> string {
 
 // ─── the `$init` repro: a client declaration reading env ─────────────────────
 
-// This declaration pins that the explicit helper stays pure during `$init`.
+// THIS DECLARATION IS THE TEST. It is evaluated during `$init`, which cannot
+// do io. With the old eager desugar the `env.X` read here aborted startup with
+// `InitFailed`; with the late-bound `Ref` the field just holds the name, and
+// the credential is read when a request is built.
 client EnvRefDesugarClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
-    api_key = baml.env.ref("BAML_TEST_ENV_REF_UNSET"),
+    api_key = env.BAML_TEST_ENV_REF_UNSET,
     base_url = "http://localhost:1234",
 );
 

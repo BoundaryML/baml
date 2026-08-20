@@ -31,8 +31,8 @@ class VertexClient {
     // Express-mode API key (opt-in; there is deliberately no ambient env
     // fallback, so an unrelated GOOGLE_API_KEY cannot downgrade a
     // project-scoped client).
-    // A literal string (including a strict `env.NAME` lookup) or an explicit
-    // `baml.env.Ref` read at request time; null keeps OAuth2 as the path.
+    // A literal string or `env.NAME` (a late-bound `baml.env.Ref` read at
+    // request time); null keeps OAuth2 credentials as the path.
     api_key: ai.Credential?,
     // Replaces the whole `…/publishers/google/models` prefix; the caller owns
     // the path from there on.

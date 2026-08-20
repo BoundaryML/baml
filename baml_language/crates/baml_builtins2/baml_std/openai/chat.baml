@@ -10,9 +10,9 @@
 
 class ChatClient {
     model: string,
-    // A literal string (including a strict `env.NAME` lookup), an explicit
-    // `baml.env.Ref` read at request time, or null to resolve OPENAI_API_KEY at
-    // request time.
+    // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
+    // time), or null to resolve OPENAI_API_KEY at request time. Construction
+    // never touches env, so declaring/constructing a client is always safe.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
     // Native request deadline; TTFT begins only after a streaming response opens.
@@ -72,8 +72,8 @@ class ChatClient {
         }
     }
 
-    // The request-time credential: the explicit value (a string, or the value
-    // of the variable an explicit `baml.env.Ref` points at), else the provider's
+    // The request-time credential: the explicit value (a literal, or the value
+    // of the variable an `env.NAME` ref points at), else the provider's
     // canonical variable. Null is reported as a configuration error when the
     // request is built, naming OPENAI_API_KEY.
     function resolved_api_key(self) -> string? {

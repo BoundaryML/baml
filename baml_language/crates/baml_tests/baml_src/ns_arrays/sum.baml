@@ -4,7 +4,7 @@
 // for `int[]` (returning `int`, native `_sum_int`) and `float[]` (returning
 // `float`, native `_sum_float`). `int` and `float` are distinct types
 // with no widening, so each impl stays in its own number domain. Results are
-// compared with `assert.equal`, which is reflect.Type-aware: an `int` `6` does not
+// compared with `assert.equal`, which is type-aware: an `int` `6` does not
 // equal a `float` `6.0`, so these also pin the return type.
 //
 // The overflow / boundary helpers take runtime args so the array is built (and
