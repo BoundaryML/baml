@@ -314,7 +314,6 @@ struct ThreadState {
     boundary: BoundaryHandle,
     spawn_parent: Option<ContextKeyProjection>,
     spawn_site: Option<CallSiteSourceSpan>,
-    first_call: bool,
     _reservation: Reservation,
 }
 
@@ -355,6 +354,16 @@ impl CallState {
             required |= super::RoleMask::OUTPUT;
         }
         self.values_observed & required != required
+    }
+
+    fn next_missing_value(&self, status: FunctionEndStatus) -> Option<super::ValueRole> {
+        if self.roles.inputs() && self.values_observed & super::RoleMask::INPUT == 0 {
+            return Some(super::ValueRole::Input);
+        }
+        (self.roles.output()
+            && status == FunctionEndStatus::Ok
+            && self.values_observed & super::RoleMask::OUTPUT == 0)
+            .then_some(super::ValueRole::Output)
     }
 }
 
@@ -958,7 +967,7 @@ impl DirectDecoder {
             engine_id: fact.call_ref.engine_id,
             thread_id: fact.call_ref.thread_id,
         };
-        let Some(thread) = self.threads.get_mut(&thread_ref) else {
+        let Some(thread) = self.threads.get(&thread_ref) else {
             self.insert_pending_start(resources, fact);
             return;
         };
@@ -977,7 +986,6 @@ impl DirectDecoder {
             } else {
                 fact.call_site
             };
-            thread.first_call = false;
             (parent, None, edge, site)
         } else {
             let parent_ref = CallRef {
@@ -1009,19 +1017,10 @@ impl DirectDecoder {
             ParentContextRef::External(key) => Some(ContextKeyProjection(key)),
             ParentContextRef::Root | ParentContextRef::Local(_) => None,
         };
-        let Ok(reservation) = resources.memory.try_reserve(
-            ReservationClass::General,
-            Owner::ActiveCalls,
-            MeasuredLayouts::V1.active_call_min_bytes,
-        ) else {
-            with_runtime(resources.boundaries, boundary, |runtime| {
-                runtime.health.active_call_capacity_exceeded = runtime
-                    .health
-                    .active_call_capacity_exceeded
-                    .saturating_add(1);
-            });
-            return;
-        };
+        // Fold the decoded start before retaining per-call join state. Under
+        // pressure this preserves the every-start CCT invariant while the
+        // active-call loss below explicitly explains why no end/evidence join
+        // can be retained.
         rollover_if_needed(resources, boundary);
         let context = with_runtime_value(resources.boundaries, boundary, |runtime| {
             let epoch = runtime.cct.as_mut()?;
@@ -1047,6 +1046,19 @@ impl DirectDecoder {
         let context_key = match context.context_ref() {
             ContextRef::Normal(key) => Some(ContextKeyProjection(key)),
             ContextRef::Overflow { .. } => None,
+        };
+        let Ok(reservation) = resources.memory.try_reserve(
+            ReservationClass::General,
+            Owner::ActiveCalls,
+            MeasuredLayouts::V1.active_call_min_bytes,
+        ) else {
+            with_runtime(resources.boundaries, boundary, |runtime| {
+                runtime.health.active_call_capacity_exceeded = runtime
+                    .health
+                    .active_call_capacity_exceeded
+                    .saturating_add(1);
+            });
+            return;
         };
         let span_state = if plan.selected {
             let started_ns = resources.clock.to_ns(fact.ts_ticks);
@@ -1289,7 +1301,7 @@ impl DirectDecoder {
             engine_id: call_ref.engine_id,
             thread_id: call_ref.thread_id,
         };
-        let boundary = self.threads.get(&thread_ref).map(|thread| thread.boundary);
+        let boundary = self.boundary_for_thread(thread_ref);
         match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
@@ -1315,6 +1327,17 @@ impl DirectDecoder {
                 }
             }
         }
+    }
+
+    fn boundary_for_thread(&self, thread_ref: ThreadRef) -> Option<BoundaryHandle> {
+        self.threads
+            .get(&thread_ref)
+            .map(|thread| thread.boundary)
+            .or_else(|| {
+                self.pending_threads
+                    .get(&thread_ref)
+                    .and_then(|thread| thread.boundary)
+            })
     }
 
     fn insert_thread(
@@ -1347,35 +1370,100 @@ impl DirectDecoder {
                 boundary,
                 spawn_parent,
                 spawn_site,
-                first_call: true,
                 _reservation: reservation,
             },
         );
+        self.attribute_pending_joins();
+    }
+
+    fn attribute_pending_joins(&mut self) {
+        // Facts may have arrived on another ring before this thread's start.
+        // Propagate newly known ownership through any pending descendant
+        // threads, then latch it on their unresolved facts. This is a cold
+        // reorder path; repeated scans avoid another ungoverned work queue.
+        loop {
+            let next = self
+                .pending_threads
+                .iter()
+                .find_map(|(thread_ref, pending)| {
+                    if pending.boundary.is_some() {
+                        return None;
+                    }
+                    self.boundary_for_thread(call_thread_ref(pending.fact.parent_call))
+                        .map(|boundary| (*thread_ref, boundary))
+                });
+            let Some((thread_ref, boundary)) = next else {
+                break;
+            };
+            if let Some(pending) = self.pending_threads.get_mut(&thread_ref) {
+                pending.boundary = Some(boundary);
+            }
+        }
+
+        let threads = &self.threads;
+        let pending_threads = &self.pending_threads;
+        let boundary_for_thread = |thread_ref: ThreadRef| {
+            threads
+                .get(&thread_ref)
+                .map(|thread| thread.boundary)
+                .or_else(|| {
+                    pending_threads
+                        .get(&thread_ref)
+                        .and_then(|thread| thread.boundary)
+                })
+        };
+        for pending in self.pending_starts.values_mut() {
+            if pending.boundary.is_none() {
+                pending.boundary = boundary_for_thread(call_thread_ref(pending.fact.call_ref));
+            }
+        }
+        for pending in self.pending_ends.values_mut() {
+            if pending.boundary.is_none() {
+                pending.boundary = boundary_for_thread(call_thread_ref(pending.fact.call_ref));
+            }
+        }
+        for (thread_ref, pending) in &mut self.pending_thread_ends {
+            if pending.boundary.is_none() {
+                pending.boundary = boundary_for_thread(*thread_ref);
+            }
+        }
+        for (call_ref, pending) in &mut self.pending_runtime_ids {
+            if let Some(boundary) = boundary_for_thread(call_thread_ref(*call_ref)) {
+                for annotation in pending {
+                    if annotation.boundary.is_none() {
+                        annotation.boundary = Some(boundary);
+                    }
+                }
+            }
+        }
     }
 
     fn insert_pending_start(&mut self, resources: &DecoderResources<'_>, fact: OwnedCallStart) {
         if self.pending_starts.contains_key(&fact.call_ref) {
             return;
         }
-        if let Ok(reservation) = resources.memory.try_reserve(
+        let thread_ref = ThreadRef {
+            process_euid: fact.call_ref.process_euid,
+            engine_id: fact.call_ref.engine_id,
+            thread_id: fact.call_ref.thread_id,
+        };
+        let boundary = self.boundary_for_thread(thread_ref);
+        match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
             MeasuredLayouts::V1.unresolved_fact_min_bytes,
         ) {
-            let thread_ref = ThreadRef {
-                process_euid: fact.call_ref.process_euid,
-                engine_id: fact.call_ref.engine_id,
-                thread_id: fact.call_ref.thread_id,
-            };
-            let boundary = self.threads.get(&thread_ref).map(|thread| thread.boundary);
-            self.pending_starts.insert(
-                fact.call_ref,
-                PendingCallStart {
-                    fact,
-                    boundary,
-                    _reservation: reservation,
-                },
-            );
+            Ok(reservation) => {
+                self.pending_starts.insert(
+                    fact.call_ref,
+                    PendingCallStart {
+                        fact,
+                        boundary,
+                        _reservation: reservation,
+                    },
+                );
+            }
+            Err(_) => record_join_capacity_exceeded(resources.boundaries, boundary),
         }
     }
 
@@ -1383,25 +1471,28 @@ impl DirectDecoder {
         if self.pending_ends.contains_key(&fact.call_ref) {
             return;
         }
-        if let Ok(reservation) = resources.memory.try_reserve(
+        let thread_ref = ThreadRef {
+            process_euid: fact.call_ref.process_euid,
+            engine_id: fact.call_ref.engine_id,
+            thread_id: fact.call_ref.thread_id,
+        };
+        let boundary = self.boundary_for_thread(thread_ref);
+        match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
             MeasuredLayouts::V1.unresolved_fact_min_bytes,
         ) {
-            let thread_ref = ThreadRef {
-                process_euid: fact.call_ref.process_euid,
-                engine_id: fact.call_ref.engine_id,
-                thread_id: fact.call_ref.thread_id,
-            };
-            let boundary = self.threads.get(&thread_ref).map(|thread| thread.boundary);
-            self.pending_ends.insert(
-                fact.call_ref,
-                PendingCallEnd {
-                    fact,
-                    boundary,
-                    _reservation: reservation,
-                },
-            );
+            Ok(reservation) => {
+                self.pending_ends.insert(
+                    fact.call_ref,
+                    PendingCallEnd {
+                        fact,
+                        boundary,
+                        _reservation: reservation,
+                    },
+                );
+            }
+            Err(_) => record_join_capacity_exceeded(resources.boundaries, boundary),
         }
     }
 
@@ -1409,28 +1500,36 @@ impl DirectDecoder {
         if self.pending_threads.contains_key(&fact.thread_ref) {
             return;
         }
-        if let Ok(reservation) = resources.memory.try_reserve(
+        let parent_thread = ThreadRef {
+            process_euid: fact.parent_call.process_euid,
+            engine_id: fact.parent_call.engine_id,
+            thread_id: fact.parent_call.thread_id,
+        };
+        let boundary = self
+            .threads
+            .get(&parent_thread)
+            .map(|thread| thread.boundary)
+            .or_else(|| {
+                self.pending_threads
+                    .get(&parent_thread)
+                    .and_then(|thread| thread.boundary)
+            });
+        match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
             MeasuredLayouts::V1.unresolved_fact_min_bytes,
         ) {
-            let parent_thread = ThreadRef {
-                process_euid: fact.parent_call.process_euid,
-                engine_id: fact.parent_call.engine_id,
-                thread_id: fact.parent_call.thread_id,
-            };
-            let boundary = self
-                .threads
-                .get(&parent_thread)
-                .map(|thread| thread.boundary);
-            self.pending_threads.insert(
-                fact.thread_ref,
-                PendingThreadStart {
-                    fact,
-                    boundary,
-                    _reservation: reservation,
-                },
-            );
+            Ok(reservation) => {
+                self.pending_threads.insert(
+                    fact.thread_ref,
+                    PendingThreadStart {
+                        fact,
+                        boundary,
+                        _reservation: reservation,
+                    },
+                );
+            }
+            Err(_) => record_join_capacity_exceeded(resources.boundaries, boundary),
         }
     }
 
@@ -1909,6 +2008,40 @@ impl DirectDecoder {
         }
     }
 
+    /// Once every producer lease and command has drained, a requested value
+    /// that never reached the decoder can only be an admitted-attempt
+    /// transport loss. Materialize that per-span loss and then fold the
+    /// already-retained structural end; evidence pressure must not turn a
+    /// completed CCT invocation into an unmatched call.
+    pub(super) fn complete_missing_values(
+        &mut self,
+        resources: &DecoderResources<'_>,
+        handle: BoundaryHandle,
+    ) {
+        loop {
+            let missing = self.calls.iter().find_map(|(call_ref, call)| {
+                let end = call.pending_end?;
+                if call.boundary != handle {
+                    return None;
+                }
+                call.next_missing_value(end.status)
+                    .map(|role| (*call_ref, role, call.manual_selected))
+            });
+            let Some((call_ref, role, manual_eligible)) = missing else {
+                break;
+            };
+            self.consume_value_occurrence(
+                resources,
+                handle,
+                call_ref,
+                role,
+                ValueState::Lost(super::ValueLossReason::ValueAttemptTransportExceeded),
+                manual_eligible,
+                None,
+            );
+        }
+    }
+
     pub(super) fn discard_boundary(&mut self, handle: BoundaryHandle) -> BoundaryHealthSnapshot {
         let mut unmatched_calls = 0u64;
         let mut unmatched_threads = 0u64;
@@ -2216,11 +2349,31 @@ fn with_runtime_value<T>(
         .flatten()
 }
 
+fn record_join_capacity_exceeded(
+    boundaries: &[std::sync::Mutex<Option<BoundaryRuntime>>],
+    handle: Option<BoundaryHandle>,
+) {
+    if let Some(handle) = handle {
+        with_runtime(boundaries, handle, |runtime| {
+            runtime.health.join_capacity_exceeded =
+                runtime.health.join_capacity_exceeded.saturating_add(1);
+        });
+    }
+}
+
 fn thread_ref(resources: &DecoderResources<'_>, thread_id: crate::ids::BexThreadId) -> ThreadRef {
     ThreadRef {
         process_euid: resources.process_euid,
         engine_id: resources.engine_id,
         thread_id,
+    }
+}
+
+fn call_thread_ref(call_ref: CallRef) -> ThreadRef {
+    ThreadRef {
+        process_euid: call_ref.process_euid,
+        engine_id: call_ref.engine_id,
+        thread_id: call_ref.thread_id,
     }
 }
 

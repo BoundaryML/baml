@@ -7,7 +7,6 @@
 #![allow(unsafe_code)]
 
 use std::{
-    collections::HashSet,
     sync::{OnceLock, mpsc},
     time::Duration,
 };
@@ -81,21 +80,20 @@ pub fn engine_closed(engine_id: u64) {
 
 pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &ConsumerEnv) {
     env.ctx.wake().register_consumer();
-    let mut state = ConsumerState::default();
     loop {
         while let Ok(message) = control.try_recv() {
             match message {
                 ControlMsg::Flush(ack) => {
-                    state.drain_to_idle(env);
+                    drain_to_idle(env);
                     let _ = ack.send(());
                 }
                 ControlMsg::EngineClosed(engine_id) => {
-                    state.drain_to_idle(env);
-                    state.close_engine(engine_id);
+                    drain_to_idle(env);
+                    close_engine(engine_id);
                 }
             }
         }
-        state.service_once(env);
+        service_once(env);
         let wake = env.ctx.wake();
         wake.pre_park();
         // Recheck after advertising the parked state, then sleep even when
@@ -103,59 +101,47 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
         // terminal/control paths wake unconditionally, so polling an open
         // segment only bounces its commit cache line against the producer.
         // The timeout remains the bounded-latency path for low-volume streams.
-        state.service_once(env);
+        service_once(env);
         wake.park(env.wake_interval);
         wake.post_park();
     }
 }
 
-#[derive(Default)]
-struct ConsumerState {
-    closed_engines: HashSet<u64>,
+fn drain_to_idle(env: &ConsumerEnv) {
+    for _ in 0..1024 {
+        if !service_once(env) {
+            break;
+        }
+    }
 }
 
-impl ConsumerState {
-    fn drain_to_idle(&mut self, env: &ConsumerEnv) {
-        for _ in 0..1024 {
-            if !self.service_once(env) {
-                break;
-            }
-        }
-    }
+fn service_once(env: &ConsumerEnv) -> bool {
+    let commands_before = crate::prof::backend::drain_session_commands();
+    let structural = sweep_once(env);
+    let thread_ends = structural && crate::prof::backend::resolve_session_thread_ends();
+    let commands_after = crate::prof::backend::drain_session_commands();
+    let terminal = crate::prof::backend::maintain_sessions();
+    commands_before || structural || thread_ends || commands_after || terminal
+}
 
-    fn service_once(&mut self, env: &ConsumerEnv) -> bool {
-        let commands_before = crate::prof::backend::drain_session_commands();
-        let structural = self.sweep_once(env);
-        let thread_ends = structural && crate::prof::backend::resolve_session_thread_ends();
-        let commands_after = crate::prof::backend::drain_session_commands();
-        let terminal = crate::prof::backend::maintain_sessions();
-        commands_before || structural || thread_ends || commands_after || terminal
+fn sweep_once(env: &ConsumerEnv) -> bool {
+    // SAFETY: `consumer_main` is the registry's sole consumer.
+    unsafe {
+        env.registry.sweep(&mut |ring, bytes| {
+            let engine_id = ring.engine_id();
+            // Closed engines are absent from the engine/session registry, so
+            // late orphan drainage is already a bounded no-op. A lifetime
+            // tombstone set here would grow with engine churn.
+            crate::prof::backend::consume_engine_bytes(
+                ProcessEuid::current(),
+                EngineId(engine_id),
+                bytes,
+            );
+        })
     }
+}
 
-    fn sweep_once(&mut self, env: &ConsumerEnv) -> bool {
-        // SAFETY: `consumer_main` is the registry's sole consumer.
-        unsafe {
-            env.registry.sweep(&mut |ring, bytes| {
-                let engine_id = ring.engine_id();
-                if !self.closed_engines.contains(&engine_id) {
-                    // The ring's acquire-load observed these structural
-                    // commits. Any producer command submitted before a later
-                    // call-end commit must be folded first so the decoder's
-                    // active-call join cannot be overtaken across lanes.
-                    crate::prof::backend::drain_session_commands();
-                    crate::prof::backend::consume_engine_bytes(
-                        ProcessEuid::current(),
-                        EngineId(engine_id),
-                        bytes,
-                    );
-                }
-            })
-        }
-    }
-
-    fn close_engine(&mut self, engine_id: u64) {
-        let _ = metadata::remove_engine_metadata(engine_id);
-        crate::prof::backend::unregister_engine_session(EngineId(engine_id));
-        self.closed_engines.insert(engine_id);
-    }
+fn close_engine(engine_id: u64) {
+    let _ = metadata::remove_engine_metadata(engine_id);
+    crate::prof::backend::unregister_engine_session(EngineId(engine_id));
 }

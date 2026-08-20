@@ -5,6 +5,8 @@ use std::{
     sync::{Arc, Mutex, OnceLock, Weak},
 };
 
+use smallvec::SmallVec;
+
 use super::{
     BoundaryHandle, ErrorCaptureAttempt, ErrorCaptureId, ProfilerSession, Reservation,
     TerminalErrorTarget, ValueLossReason, ValueState,
@@ -24,12 +26,12 @@ fn engine_session(engine_id: EngineId) -> Option<Arc<ProfilerSession>> {
         .and_then(Weak::upgrade)
 }
 
-fn live_sessions() -> Vec<Arc<ProfilerSession>> {
+fn live_sessions() -> SmallVec<[Arc<ProfilerSession>; 4]> {
     let mut engines = engines()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     engines.retain(|_, session| session.strong_count() != 0);
-    let mut sessions = Vec::new();
+    let mut sessions = SmallVec::new();
     for session in engines.values().filter_map(Weak::upgrade) {
         if !sessions
             .iter()
@@ -66,6 +68,10 @@ pub fn unregister_engine_session(engine_id: EngineId) {
 pub fn consume_engine_bytes(process_euid: ProcessEuid, engine_id: EngineId, bytes: &[u8]) {
     let session = engine_session(engine_id);
     let Some(session) = session else { return };
+    // A producer command committed before a later structural end must be
+    // folded first. Resolve the engine once here instead of rebuilding and
+    // deduplicating the process-wide session list for every drained slice.
+    session.drain_producer_commands();
     session.consume_raw_bytes(process_euid, engine_id, bytes);
 }
 

@@ -5,7 +5,7 @@ use std::sync::{Arc, OnceLock};
 #[cfg(not(target_arch = "wasm32"))]
 use super::decoder::{BoundaryRuntime, DecoderResources, DirectDecoder, finalize_ready_boundary};
 #[cfg(not(target_arch = "wasm32"))]
-use super::{AdmittedBoundary, BeginBoundaryResult, BoundaryRunMeta, ProfilerStore};
+use super::{BeginBoundaryResult, BoundaryRunMeta, ProfilerStore};
 use super::{
     BoundaryHandle, BoundaryMetadata, BoundaryRegistry, CapturePlan, DerivedSizing,
     ErrorCaptureAttempt, ErrorCaptureId, FunctionCaptureClass, LocalIdOverrides, MeasuredLayouts,
@@ -400,44 +400,11 @@ impl ProfilerSession {
 
     #[cfg(not(target_arch = "wasm32"))]
     #[must_use]
-    pub fn boundary_publisher(&self, handle: BoundaryHandle) -> Option<Arc<AdmittedBoundary>> {
-        let SessionKind::On(session) = &self.kind else {
-            return None;
-        };
-        let slot = session.publishers.get(handle.slot as usize)?;
-        let guard = slot
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let runtime = guard.as_ref()?;
-        (runtime.generation == handle.generation).then(|| Arc::clone(&runtime.publisher))
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[must_use]
     pub fn checkpoint(&self, handle: BoundaryHandle) -> Option<super::ProfilerCheckpoint> {
         let SessionKind::On(session) = &self.kind else {
             return None;
         };
         DirectDecoder::checkpoint(handle, &session.publishers)
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn release_boundary_publisher(&self, handle: BoundaryHandle) {
-        let SessionKind::On(session) = &self.kind else {
-            return;
-        };
-        let Some(slot) = session.publishers.get(handle.slot as usize) else {
-            return;
-        };
-        let mut guard = slot
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if guard
-            .as_ref()
-            .is_some_and(|runtime| runtime.generation == handle.generation)
-        {
-            *guard = None;
-        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -983,6 +950,14 @@ impl ProfilerSession {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         for handle in ready {
+            if let Some((metadata, _)) = session.boundaries.closing_facts(handle) {
+                let resources = Self::decoder_resources(
+                    session,
+                    metadata.root_thread_ref.process_euid,
+                    metadata.root_thread_ref.engine_id,
+                );
+                decoder.complete_missing_values(&resources, handle);
+            }
             let Some(slot) = session.publishers.get(handle.slot as usize) else {
                 continue;
             };
@@ -1110,7 +1085,7 @@ impl ProfilerSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prof::backend::DiskBudget;
+    use crate::prof::backend::{BoundaryEndStatus, DiskBudget};
 
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
@@ -1235,6 +1210,113 @@ mod tests {
         assert_eq!(checkpoint.committed_cct_sequence, 0);
         assert_eq!(checkpoint.committed_evidence_sequence, 0);
         assert_eq!(checkpoint.queued_and_inflight.evidence_fact_count, 0);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn final_drain_keeps_structural_end_when_value_command_was_lost() {
+        use crate::{
+            ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid},
+            prof::{
+                backend::DurableRunReader,
+                record::{FunctionEndStatus, MAX_RECORD_LEN, RawRecord},
+            },
+        };
+
+        let temp = tempfile::TempDir::new().unwrap();
+        let root = temp.path().join(".baml/profiles-v1");
+        let boundary_id = BoundaryId::from_bytes([0x55; 16]);
+        let thread_ref = ThreadRef {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id: EngineId(2),
+            thread_id: BexThreadId(3),
+        };
+        let (session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
+            enabled: true,
+            store_root: root.clone(),
+            process_memory_bytes: 32 * 1024 * 1024,
+            disk: DiskBudget {
+                max_project_bytes: 16 * 1024 * 1024,
+                minimum_free_bytes: 0,
+            },
+        });
+        assert!(diagnostic.is_none());
+        let RootAdmission::Active(admission) = session.register_root(
+            RootProfileIntent::UserBoundary { boundary_id },
+            thread_ref,
+            ProgramId([4; 16]),
+            None,
+            None,
+        ) else {
+            panic!("root must be admitted");
+        };
+        let handle = admission.completion.lease().handle();
+        let call_ref = CallRef {
+            process_euid: thread_ref.process_euid,
+            engine_id: thread_ref.engine_id,
+            thread_id: thread_ref.thread_id,
+            call_id: BexCallId(6),
+        };
+        let emit = |record: RawRecord<'_>| {
+            let mut bytes = [0; MAX_RECORD_LEN];
+            let len = record.encode(&mut bytes);
+            session.consume_raw_bytes(thread_ref.process_euid, thread_ref.engine_id, &bytes[..len]);
+        };
+        emit(RawRecord::StartThread {
+            flags: 0,
+            thread_id: thread_ref.thread_id,
+            parent_thread_id: BexThreadId(0),
+            parent_call_id: BexCallId(0),
+            ts_ticks: 10,
+            name: b"",
+        });
+        emit(RawRecord::CallFunction {
+            flags: resolve_capture_plan(true, FunctionCaptureClass::Ordinary, None).to_call_flags(),
+            thread_id: thread_ref.thread_id,
+            call_id: call_ref.call_id,
+            parent_call_id: BexCallId(0),
+            function_id: FunctionId(7),
+            call_site: None,
+            ts_ticks: 20,
+        });
+        emit(RawRecord::EndFunction {
+            status: FunctionEndStatus::Errored,
+            thread_id: thread_ref.thread_id,
+            call_id: call_ref.call_id,
+            ts_ticks: 30,
+        });
+
+        let SessionKind::On(on) = &session.kind else {
+            panic!("profiling session must be active");
+        };
+        on.boundaries.record_value_attempt_transport_loss(handle);
+        admission.completion.complete(BoundaryEndStatus::Failed);
+        assert!(session.maintain_ready_boundaries());
+        assert!(session.maintain_ready_boundaries());
+
+        let run = DurableRunReader::open(root, boundary_id)
+            .unwrap()
+            .load()
+            .unwrap();
+        let span = run.spans.get(&call_ref).expect("selected span");
+        assert_eq!(
+            span.end.map(|end| end.status),
+            Some(FunctionEndStatus::Errored)
+        );
+        assert_eq!(
+            span.input.map(|value| value.state),
+            Some(ValueState::Lost(
+                ValueLossReason::ValueAttemptTransportExceeded
+            ))
+        );
+        assert_eq!(run.terminal_health.value_attempt_transport_exceeded, 1);
+        assert_eq!(
+            run.contexts
+                .values()
+                .map(|context| context.counters.completed_error)
+                .sum::<u64>(),
+            1
+        );
     }
 
     #[test]

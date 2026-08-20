@@ -118,7 +118,14 @@ pub fn clean_profiles_v1(root: &Path) -> Result<bool, CleanProfilesError> {
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or(CleanProfilesError::InvalidRoot)?;
+    if root_name != "profiles-v1" || parent.file_name().is_none_or(|name| name != ".baml") {
+        return Err(CleanProfilesError::InvalidRoot);
+    }
     fs::create_dir_all(parent).map_err(CleanProfilesError::Io)?;
+    let parent_metadata = fs::symlink_metadata(parent).map_err(CleanProfilesError::Io)?;
+    if !parent_metadata.file_type().is_dir() || parent_metadata.file_type().is_symlink() {
+        return Err(CleanProfilesError::InvalidRoot);
+    }
     let store_lock = read_write_file(&parent.join(format!("{root_name}.lock")))
         .map_err(CleanProfilesError::Io)?;
     FileExt::try_lock_exclusive(&store_lock).map_err(|error| {
@@ -268,6 +275,7 @@ pub enum ResolveIndeterminateResult {
 #[derive(Debug)]
 struct IndeterminateState {
     token: IndeterminateToken,
+    kind: StoreFileKind,
     final_directory: PathBuf,
 }
 
@@ -439,6 +447,27 @@ impl ProfilerStore {
     }
 
     pub fn begin_boundary(self: &Arc<Self>, meta: BoundaryRunMeta) -> BeginBoundaryResult {
+        // A post-rename `run.meta` ambiguity has no boundary publisher to
+        // drive its retry. Resolve that store-owned state before admitting a
+        // later root; segment, CAS, and terminal ambiguities remain owned by
+        // their original caller/publisher and must not be stolen here.
+        loop {
+            let token = self
+                .indeterminate
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_ref()
+                .filter(|pending| pending.kind == StoreFileKind::RunMeta)
+                .map(|pending| pending.token);
+            let Some(token) = token else { break };
+            match self.resolve_indeterminate(token) {
+                ResolveIndeterminateResult::Committed
+                | ResolveIndeterminateResult::TokenMismatch => {}
+                ResolveIndeterminateResult::StillIndeterminate => {
+                    return BeginBoundaryResult::Indeterminate(token);
+                }
+            }
+        }
         if let Some(reason) = self.gate_reason() {
             return BeginBoundaryResult::Rejected(reason);
         }
@@ -543,8 +572,10 @@ impl ProfilerStore {
         bytes: &[u8],
     ) -> AtomicPublishResult {
         if final_path.exists() {
-            self.admission_gate
-                .store(GATE_UNAVAILABLE, Ordering::Release);
+            if kind != StoreFileKind::CasObject {
+                self.admission_gate
+                    .store(GATE_UNAVAILABLE, Ordering::Release);
+            }
             return AtomicPublishResult::Lost(StoreFailureReason::PathConflict);
         }
         let Ok(current_usage) = read_usage_state(&self.root) else {
@@ -590,9 +621,15 @@ impl ProfilerStore {
             return self.io_failure(&error);
         }
         if final_path.exists() {
-            self.account_pre_rename_orphan(&temporary, current_usage);
-            self.admission_gate
-                .store(GATE_UNAVAILABLE, Ordering::Release);
+            if kind == StoreFileKind::CasObject {
+                if fs::remove_file(&temporary).is_err() {
+                    self.account_pre_rename_orphan(&temporary, current_usage);
+                }
+            } else {
+                self.account_pre_rename_orphan(&temporary, current_usage);
+                self.admission_gate
+                    .store(GATE_UNAVAILABLE, Ordering::Release);
+            }
             return AtomicPublishResult::Lost(StoreFailureReason::PathConflict);
         }
         if let Err(error) = fs::rename(&temporary, final_path) {
@@ -601,11 +638,11 @@ impl ProfilerStore {
         }
 
         if self.platform.sync_dir(final_directory).is_err() {
-            return self.retain_indeterminate(final_directory);
+            return self.retain_indeterminate(kind, final_directory);
         }
         let new_usage = current_usage + bytes_len;
         if write_usage_state(&self.root, new_usage, self.platform.as_ref()).is_err() {
-            return self.retain_indeterminate(final_directory);
+            return self.retain_indeterminate(kind, final_directory);
         }
         AtomicPublishResult::Committed
     }
@@ -622,13 +659,18 @@ impl ProfilerStore {
         }
     }
 
-    fn retain_indeterminate(&self, final_directory: &Path) -> AtomicPublishResult {
+    fn retain_indeterminate(
+        &self,
+        kind: StoreFileKind,
+        final_directory: &Path,
+    ) -> AtomicPublishResult {
         let token = IndeterminateToken(*uuid::Uuid::new_v4().as_bytes());
         *self
             .indeterminate
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(IndeterminateState {
             token,
+            kind,
             final_directory: final_directory.to_owned(),
         });
         AtomicPublishResult::Indeterminate(token)
@@ -1220,6 +1262,9 @@ fn verify_cas_object(
     let Ok(bytes) = fs::read(path) else {
         return PublishCasResult::Lost(StoreFailureReason::StoreUnavailable);
     };
+    if u64::try_from(bytes.len()) != Ok(expected_len) {
+        return PublishCasResult::Conflict;
+    }
     let checksum_start = bytes.len() - 32;
     let expected_checksum: [u8; 32] = Sha256::digest(&bytes[..checksum_start]).into();
     if bytes[checksum_start..] != expected_checksum
@@ -1484,7 +1529,14 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let root = temp.path().join(".baml/profiles-v1");
         let legacy = temp.path().join(".baml/history/keep");
+        let unrelated = temp.path().join(".baml/not-profiles");
         fs::create_dir_all(&legacy).unwrap();
+        fs::create_dir_all(&unrelated).unwrap();
+        assert!(matches!(
+            clean_profiles_v1(&unrelated),
+            Err(CleanProfilesError::InvalidRoot)
+        ));
+        assert!(unrelated.is_dir());
         let store = store(&temp, Arc::new(TestPlatform::new(u64::MAX)), 1024 * 1024);
         assert!(matches!(
             clean_profiles_v1(&root),
@@ -1591,6 +1643,63 @@ mod tests {
         assert_eq!(
             store.publish_cas_object(codec, second_body),
             (second_cid, PublishCasResult::Reused)
+        );
+    }
+
+    #[test]
+    fn cas_publish_race_does_not_close_store_admission() {
+        let temp = TempDir::new().unwrap();
+        let store = store(&temp, Arc::new(TestPlatform::new(u64::MAX)), 1024 * 1024);
+        let codec = CodecVersion(1);
+        let body = b"shared-value";
+        let (cid, result) = store.publish_cas_object(codec, body);
+        assert_eq!(result, PublishCasResult::Published);
+
+        // This is the locked half of the race where another process creates
+        // the CID path after our optimistic existence check.
+        let digest = hex::encode(cid.0);
+        let path = store
+            .root
+            .join("cas/sha256")
+            .join(&digest[..2])
+            .join(format!("{digest}.bamlvalue"));
+        assert!(matches!(
+            store.publish_bytes(StoreFileKind::CasObject, &path, b"discarded", false),
+            AtomicPublishResult::Lost(StoreFailureReason::PathConflict)
+        ));
+        assert!(store.is_normal_admission_open());
+        assert!(matches!(
+            store.begin_boundary(meta(12)),
+            BeginBoundaryResult::Admitted(_)
+        ));
+    }
+
+    #[test]
+    fn later_boundary_resolves_store_owned_metadata_ambiguity() {
+        let temp = TempDir::new().unwrap();
+        let platform = Arc::new(TestPlatform::new(u64::MAX));
+        let store = store(&temp, Arc::clone(&platform), 1024 * 1024);
+        platform.fail_next_dir_sync.store(true, Ordering::Relaxed);
+        assert!(matches!(
+            store.begin_boundary(meta(13)),
+            BeginBoundaryResult::Indeterminate(_)
+        ));
+
+        assert!(matches!(
+            store.begin_boundary(meta(14)),
+            BeginBoundaryResult::Admitted(_)
+        ));
+        assert!(
+            store
+                .run_directory(meta(13).boundary_id)
+                .join("run.meta")
+                .is_file()
+        );
+        assert!(
+            store
+                .run_directory(meta(14).boundary_id)
+                .join("run.meta")
+                .is_file()
         );
     }
 

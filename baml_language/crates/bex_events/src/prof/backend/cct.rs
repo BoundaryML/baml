@@ -132,7 +132,6 @@ pub enum ContextAdmission {
     },
     Overflow {
         context_ref: ContextRef,
-        denial: Option<MemoryDenied>,
     },
 }
 
@@ -234,24 +233,25 @@ impl ActiveCctEpoch {
         if let ParentContextRef::External(parent_key) = parent
             && !self.external_deltas.contains_key(&parent_key)
         {
-            if let Err(denial) = self.reserve_context(memory) {
+            if self.reserve_context(memory).is_err() {
                 return self.record_overflow(
                     OverflowReason::ContextMemoryUnavailableAfterDrain,
                     edge_kind,
                     selected,
-                    Some(denial),
+                );
+            }
+            if self.external_deltas.try_reserve(1).is_err() {
+                return self.record_overflow(
+                    OverflowReason::ContextMemoryUnavailableAfterDrain,
+                    edge_kind,
+                    selected,
                 );
             }
             self.external_deltas
                 .insert(parent_key, CctCounters::default());
         }
         let Some(parent_key) = self.parent_key(parent) else {
-            return self.record_overflow(
-                OverflowReason::InvalidParentContext,
-                edge_kind,
-                selected,
-                None,
-            );
+            return self.record_overflow(OverflowReason::InvalidParentContext, edge_kind, selected);
         };
         let lookup_key = LookupKey {
             parent_key,
@@ -275,15 +275,20 @@ impl ActiveCctEpoch {
                 OverflowReason::ContextMemoryUnavailableAfterDrain,
                 edge_kind,
                 selected,
-                None,
             );
         }
-        if let Err(denial) = self.reserve_context(memory) {
+        if self.reserve_context(memory).is_err() {
             return self.record_overflow(
                 OverflowReason::ContextMemoryUnavailableAfterDrain,
                 edge_kind,
                 selected,
-                Some(denial),
+            );
+        }
+        if self.contexts.try_reserve(1).is_err() || self.lookup.try_reserve(1).is_err() {
+            return self.record_overflow(
+                OverflowReason::ContextMemoryUnavailableAfterDrain,
+                edge_kind,
+                selected,
             );
         }
 
@@ -496,7 +501,6 @@ impl ActiveCctEpoch {
         reason: OverflowReason,
         edge_kind: EdgeKind,
         selected: bool,
-        denial: Option<MemoryDenied>,
     ) -> ContextAdmission {
         self.overflow[reason_index(reason)][edge_index(edge_kind)]
             .start(selected, &mut self.health);
@@ -506,7 +510,6 @@ impl ActiveCctEpoch {
                 reason,
                 edge_kind,
             },
-            denial,
         }
     }
 
