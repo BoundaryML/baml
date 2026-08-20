@@ -41,6 +41,10 @@ class Server {
     ///
     /// # Parameters
     /// - `handler`: Turns each incoming `Request` into a `Response`.
+    /// - `websocket`: Handles WebSocket upgrade requests (see `WsAccept`). Returning a
+    ///   `Response` refuses the upgrade and serves that response; returning a `WsAccept`
+    ///   completes the handshake and runs it with the connected socket. The default
+    ///   refuses every upgrade with `501`.
     /// - `tls_config`: Optional TLS configuration. If provided, the server behaves as an HTTPS server.
     /// - `allow_http1` / `allow_http2`: Which HTTP versions to accept (at least one must be true).
     /// - `max_body_size`: Maximum request body size, in bytes, buffered per request
@@ -49,9 +53,22 @@ class Server {
     /// - `max_connections`: Maximum number of connections served concurrently
     ///   (default 1024). At the cap the accept loop applies backpressure (new
     ///   connections wait in the kernel backlog) rather than spawning unbounded tasks.
+    ///   An accepted WebSocket holds its slot for as long as the socket lives, not
+    ///   just for the handshake.
     /// - `header_read_timeout`: How long a client has to send the complete request
     ///   headers before the connection is closed (default 30s) — a Slowloris defense.
     ///   A non-positive duration disables it. (HTTP/1 only; HTTP/2 frames its headers.)
+    ///
+    /// # WebSockets
+    /// A request is dispatched to `websocket` instead of `handler` only when it is a
+    /// complete RFC 6455 handshake — an HTTP/1.1 `GET` carrying `Connection: Upgrade`,
+    /// `Upgrade: websocket`, and `Sec-WebSocket-Version: 13`. Anything short of that,
+    /// including WebSocket over HTTP/2 (RFC 8441 extended CONNECT, unsupported here),
+    /// is an ordinary request and goes to `handler`.
+    ///
+    /// The handshake response is built by the server, so a `WsAccept` cannot add
+    /// headers to it: `Sec-WebSocket-Protocol` subprotocols and extensions are not
+    /// negotiated.
     ///
     /// # Panics
     /// - Calling `serve` on an unsupported platform (e.g. in the browser) will panic.
@@ -60,6 +77,7 @@ class Server {
     function serve(
         self,
         handler: (req: Request) -> Response throws never,
+        websocket: (req: Request) -> Response | WsAccept throws never = reject_websocket,
         tls_config: TlsConfig? = null,
         allow_http1: bool = true,
         allow_http2: bool = true,
@@ -72,6 +90,7 @@ class Server {
         // sys-op (whose params are all required).
         self._serve(
             handler,
+            websocket,
             tls_config,
             allow_http1,
             allow_http2,
@@ -84,6 +103,7 @@ class Server {
     function _serve(
         self,
         handler: (req: Request) -> Response throws never,
+        websocket: (req: Request) -> Response | WsAccept throws never,
         tls_config: TlsConfig?,
         allow_http1: bool,
         allow_http2: bool,
@@ -93,6 +113,40 @@ class Server {
     ) -> never throws root.errors.Io {
         $rust_io_function
     }
+}
+
+/// Takes over an accepted WebSocket connection.
+///
+/// A `serve` `websocket` handler returns one of these to complete the upgrade.
+/// It runs on its own BAML thread once the handshake finishes, and owns the
+/// connection: when it returns, the socket is closed.
+///
+/// ```baml
+/// // Echo every frame back until the peer closes.
+/// spawn {
+///     server.serve(my_handler, websocket = (req) -> {
+///        // always accept websocket requests:
+///        (socket) -> {
+///            while (true) {
+///                match (socket.next()) {
+///                    baml.ws.CloseEvent => { break; },
+///                    let frame: string | uint8array => socket.send(frame),
+///                }
+///            }
+///        }
+///     })
+/// };
+/// ```
+type WsAccept = (socket: root.ws.WebSocket) -> void throws never;
+
+/// The `websocket` handler `serve` uses when none is supplied: refuse every
+/// upgrade, leaving the server HTTP-only.
+///
+/// RFC 6455 §4.1 fails the client handshake on any status other than `101`; the
+/// status here says specifically that this server implements no WebSocket
+/// endpoint, rather than blaming the request.
+function reject_websocket(req: Request) -> Response throws never {
+    Response.new(501, { }, "websocket upgrade is not supported".to_utf8())
 }
 
 /// Used to convert an HTTP server into an HTTPS server for secure connections.

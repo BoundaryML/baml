@@ -200,6 +200,7 @@ impl io::IoClassHttpServer for WebHttp {
         _call_id: CallId,
         _server: io::owned::http::Server,
         _handler: Handle,
+        _websocket: Handle,
         _tls_config: Option<io::owned::http::TlsConfig>,
         _allow_http1: bool,
         _allow_http2: bool,

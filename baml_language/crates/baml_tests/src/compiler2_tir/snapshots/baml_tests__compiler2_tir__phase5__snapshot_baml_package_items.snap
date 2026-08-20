@@ -157,12 +157,14 @@ namespace baml.http:
   class Server { methods: [bind, serve, _serve] }
   class SseStream { methods: [next, close] }
   class TlsConfig { methods: [new, _new] }
+  type WsAccept
   function _fetch
   function _fetch_sse
   function _send
   function _timeout_nanos
   function fetch
   function fetch_sse
+  function reject_websocket
   function send
 namespace baml.id:
   function current
@@ -383,7 +385,8 @@ namespace baml.type:
   function of<T>
   function of_value
 namespace baml.ws:
-  class WsStream { methods: [send, next, close] }
+  class CloseEvent { methods: [] }
+  class WebSocket { methods: [send, next, close] }
   function _connect
   function connect
 namespace baml.yaml:

@@ -208,7 +208,8 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv.CsvError"
         | "baml.csv.CsvPosition"
         | "baml.csv.ReaderOptions"
-        | "baml.csv.WriterOptions" => Some(BuiltinProjection::StructuralClass),
+        | "baml.csv.WriterOptions"
+        | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
         "baml.csv.CsvErrorKind" => Some(BuiltinProjection::StructuralEnum),
         "baml.spawn.TaskGroup"
         | "baml.spawn.CancelToken"
@@ -225,7 +226,8 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv.CsvWriter"
         | "baml.net.TcpStream"
         | "baml.net.TcpListener"
-        | "baml.net.UdpSocket" => Some(BuiltinProjection::Resource),
+        | "baml.net.UdpSocket"
+        | "baml.ws.WebSocket" => Some(BuiltinProjection::Resource),
         "ai.Prompt" => Some(BuiltinProjection::OpaqueHandle),
         "baml.csv.CsvNeedData"
         | "baml.csv.CsvSkip"

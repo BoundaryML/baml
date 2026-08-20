@@ -1010,14 +1010,19 @@ class baml.http.TlsConfig$stream {
   _private_key: $rust_type
   _handshake_timeout_nanos: bigint | null
 }
+type baml.http.WsAccept = (socket: root.ws.WebSocket) -> void throws never
+type baml.http.WsAccept$stream = unknown
 function baml.http._new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout_nanos: bigint) -> baml.http.TlsConfig  [builtin]
-function baml.http._serve(self: ?, handler: (req: Request) -> Response throws never, tls_config: baml.http.TlsConfig?, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout_nanos: bigint) -> never  [builtin]
+function baml.http._serve(self: ?, handler: (req: Request) -> Response throws never, websocket: (req: Request) -> Response | baml.http.WsAccept throws never, tls_config: baml.http.TlsConfig?, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout_nanos: bigint) -> never  [builtin]
 function baml.http.bind(addr: string) -> baml.http.Server  [builtin]
 function baml.http.new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool = true, handshake_timeout: root.time.Duration = root.time.Duration.from_seconds(10n)) -> baml.http.TlsConfig  [expr] {
   {  } TlsConfig._new(cert_pem, key_pem, allow_tls1_2, handshake_timeout.to_nanoseconds())
 }
-function baml.http.serve(self: ?, handler: (req: Request) -> Response throws never, tls_config: baml.http.TlsConfig? = null, allow_http1: bool = true, allow_http2: bool = true, max_body_size: int = 104857600, max_connections: int = 1024, header_read_timeout: root.time.Duration = root.time.Duration.from_seconds(30n)) -> never  [expr] {
-  {  } self._serve(handler, tls_config, allow_http1, allow_http2, max_body_size, max_connections, header_read_timeout.to_nanoseconds())
+function baml.http.reject_websocket(req: Request) -> Response  [expr] {
+  {  } Response.new(501, map {  }, "websocket upgrade...".to_utf8())
+}
+function baml.http.serve(self: ?, handler: (req: Request) -> Response throws never, websocket: (req: Request) -> Response | baml.http.WsAccept throws never = reject_websocket, tls_config: baml.http.TlsConfig? = null, allow_http1: bool = true, allow_http2: bool = true, max_body_size: int = 104857600, max_connections: int = 1024, header_read_timeout: root.time.Duration = root.time.Duration.from_seconds(30n)) -> never  [expr] {
+  {  } self._serve(handler, websocket, tls_config, allow_http1, allow_http2, max_body_size, max_connections, header_read_timeout.to_nanoseconds())
 }
 
 --- <builtin>/baml/ns_id/id.baml ---
@@ -2716,19 +2721,27 @@ function baml.type.of() -> type  [builtin]
 function baml.type.of_value(v: unknown) -> type  [builtin]
 
 --- <builtin>/baml/ns_ws/ws.baml ---
-class baml.ws.WsStream {
+class baml.ws.CloseEvent {
+  code: int
+  reason: string
+}
+class baml.ws.CloseEvent$stream {
+  code: int | null
+  reason: string | null
+}
+class baml.ws.WebSocket {
   _handle: $rust_type
 }
-class baml.ws.WsStream$stream {
+class baml.ws.WebSocket$stream {
   _handle: $rust_type
 }
-function baml.ws._connect(url: string, headers: map<string, string>, timeout_nanos: bigint) -> baml.ws.WsStream  [builtin]
-function baml.ws.close(self: ?) -> null  [builtin]
-function baml.ws.connect(url: string, headers: map<string, string>, timeout: root.time.Duration = root.time.Duration.from_seconds(30)) -> baml.ws.WsStream  [expr] {
+function baml.ws._connect(url: string, headers: map<string, string>, timeout_nanos: bigint) -> baml.ws.WebSocket  [builtin]
+function baml.ws.close(self: ?, code: int, reason: string) -> void  [builtin]
+function baml.ws.connect(url: string, headers: map<string, string>, timeout: root.time.Duration = root.time.Duration.from_seconds(30)) -> baml.ws.WebSocket  [expr] {
   {  } _connect(url, headers, timeout.to_nanoseconds())
 }
-function baml.ws.next(self: ?) -> string?  [builtin]
-function baml.ws.send(self: ?, text: string) -> null  [builtin]
+function baml.ws.next(self: ?) -> string | uint8array | baml.ws.CloseEvent  [builtin]
+function baml.ws.send(self: ?, data: string | uint8array) -> void  [builtin]
 
 --- <builtin>/baml/ns_yaml/yaml.baml ---
 class baml.yaml.YamlParseError {
