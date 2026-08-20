@@ -1587,7 +1587,6 @@ function env_ref_clients.resolve_of_a_ref_reads_at_call_time() -> string {
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L2
     load_var e
     is_type ai.errors.InvalidRequest
@@ -1601,10 +1600,8 @@ function env_ref_clients.resolve_of_a_ref_reads_at_call_time() -> string {
   L1:
     load_var e
     load_field .detail
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -1649,7 +1646,6 @@ function env_ref_clients.resolve_unknown_prefix_is_typed() -> string {
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L2
     load_var e
     is_type ai.errors.InvalidRequest
@@ -1676,10 +1672,8 @@ function env_ref_clients.resolve_unknown_prefix_is_typed() -> string {
     bin_op +
     load_var _8
     bin_op +
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -1689,7 +1683,6 @@ function env_ref_clients.resolve_without_a_slash_is_typed() -> string {
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L2
     load_var e
     is_type ai.errors.InvalidRequest
@@ -1703,10 +1696,8 @@ function env_ref_clients.resolve_without_a_slash_is_typed() -> string {
   L1:
     load_var e
     load_field .detail
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 

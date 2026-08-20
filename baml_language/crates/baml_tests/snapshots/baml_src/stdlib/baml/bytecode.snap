@@ -3431,7 +3431,6 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<#0, #1, #2>) -> #0 
 
   L0:
     load_var _4
-    store_var _0
     jump L3
 
   L1:
@@ -3445,10 +3444,8 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<#0, #1, #2>) -> #0 
     load_type baml.iter.Iterator<Error = #2, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L3:
-    load_var _0
     return
 }
 
@@ -4087,7 +4084,6 @@ function baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable<#0, #1>) -> #
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L2
 
   L1:
@@ -4101,10 +4097,8 @@ function baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable<#0, #1>) -> #
     load_const false
     store_field .has_buffer
     load_var v
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -4266,7 +4260,6 @@ function baml.iter.Skip.Iterator.next(self: baml.iter.Skip<#0, #1>) -> #0 | baml
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L5
 
   L2:
@@ -4295,10 +4288,8 @@ function baml.iter.Skip.Iterator.next(self: baml.iter.Skip<#0, #1>) -> #0 | baml
     load_const 0
     store_field .remaining
     alloc_instance baml.iter.Done
-    store_var _0
 
   L5:
-    load_var _0
     return
 }
 
@@ -4320,7 +4311,6 @@ function baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile<#0, #1, #2>
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L5
 
   L2:
@@ -4347,7 +4337,6 @@ function baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile<#0, #1, #2>
     load_const false
     store_field .skipping
     load_var x
-    store_var _0
     jump L5
 
   L4:
@@ -4355,10 +4344,8 @@ function baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile<#0, #1, #2>
     load_const false
     store_field .skipping
     alloc_instance baml.iter.Done
-    store_var _0
 
   L5:
-    load_var _0
     return
 }
 
@@ -4378,7 +4365,7 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<#0, #1>) -> #0 | 
     store_var i
 
   L1:
-    load_var2 3 1
+    load_var2 2 1
     load_field .n
     load_const 1
     sub_int
@@ -4392,7 +4379,6 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<#0, #1>) -> #0 | 
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L3:
@@ -4416,7 +4402,6 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<#0, #1>) -> #0 | 
 
   L5:
     alloc_instance baml.iter.Done
-    store_var _0
     jump L7
 
   L6:
@@ -4428,10 +4413,8 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<#0, #1>) -> #0 | 
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L7:
-    load_var _0
     return
 }
 
@@ -8444,7 +8427,6 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L1: PlainDate
@@ -8452,7 +8434,6 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L2: PlainDateTime
@@ -8460,7 +8441,6 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L3: ZonedDateTime
@@ -8468,7 +8448,6 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L4: list
@@ -8478,7 +8457,6 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_var item
     load_const baml.toml.item_to_json
     call baml.Array.map
-    store_var _0
     jump L7
 
   L5: Table
@@ -8486,15 +8464,12 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L6: string
     load_var item
-    store_var _0
 
   L7:
-    load_var _0
     return
 
   L8:

@@ -2534,15 +2534,12 @@ function interfaces.b1180_optional_get(value: interfaces.B1180Getter<int> | null
     load_type interfaces.B1180Getter<int>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
     jump L2
 
   L1:
     load_const null
-    store_var _3
 
   L2:
-    load_var _3
     store_var_load_var _2
     load_const null
     cmp_op ==
@@ -2567,15 +2564,12 @@ function interfaces.b1180_optional_name(value: interfaces.B1180Named | null) -> 
     load_type interfaces.B1180Named
     load_const "name"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
     jump L2
 
   L1:
     load_const null
-    store_var _3
 
   L2:
-    load_var _3
     store_var_load_var _2
     load_const null
     cmp_op ==
@@ -3421,7 +3415,6 @@ function interfaces.fz03_accepts_optional(a: interfaces.Fz03Animal | null) -> st
 
   L0:
     load_const "none"
-    store_var _0
     jump L2
 
   L1:
@@ -3429,10 +3422,8 @@ function interfaces.fz03_accepts_optional(a: interfaces.Fz03Animal | null) -> st
     load_type interfaces.Fz03Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -3785,13 +3776,12 @@ function interfaces.fz41_maybe_speak(a: interfaces.Fz41Animal | null) -> string 
     load_var a
     store_var _2
     load_var _2
-    narrow_bind interfaces.Fz41Animal, slot=3
+    narrow_bind interfaces.Fz41Animal, slot=2
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_const "silent"
-    store_var _0
     jump L2
 
   L1:
@@ -3799,10 +3789,8 @@ function interfaces.fz41_maybe_speak(a: interfaces.Fz41Animal | null) -> string 
     load_type interfaces.Fz41Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -3849,13 +3837,12 @@ function interfaces.fz45_describe(x: interfaces.Fz45Animal | string) -> string {
     load_var x
     store_var _2
     load_var _2
-    narrow_bind interfaces.Fz45Animal, slot=3
+    narrow_bind interfaces.Fz45Animal, slot=2
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var x
-    store_var _0
     jump L2
 
   L1:
@@ -3863,10 +3850,8 @@ function interfaces.fz45_describe(x: interfaces.Fz45Animal | string) -> string {
     load_type interfaces.Fz45Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -4376,13 +4361,12 @@ function interfaces.itic_main() -> string {
     alloc_instance user.interfaces.IticDog
     store_var _3
     load_var _3
-    narrow_bind interfaces.IticDog, slot=2
+    narrow_bind interfaces.IticDog, slot=1
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_const "not a swimmer"
-    store_var _0
     jump L2
 
   L1:
@@ -4390,10 +4374,8 @@ function interfaces.itic_main() -> string {
     load_type interfaces.IticSwimmer
     load_const "swim"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -4937,12 +4919,11 @@ function interfaces.tidu_main() -> string {
     load_type interfaces.TiduFallible
     load_const "run"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L2
     load_var e
     store_var _3
     load_var _3
-    narrow_bind interfaces.TiduBoom, slot=3
+    narrow_bind interfaces.TiduBoom, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -4953,10 +4934,8 @@ function interfaces.tidu_main() -> string {
   L1:
     load_var _3
     load_field .message
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -5140,13 +5119,12 @@ function interfaces.uf09_main() -> string {
     alloc_instance user.interfaces.Uf09Cat
     store_var _2
     load_var _2
-    narrow_bind interfaces.Uf09Animal, slot=2
+    narrow_bind interfaces.Uf09Animal, slot=1
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_const "none"
-    store_var _0
     jump L2
 
   L1:
@@ -5154,10 +5132,8 @@ function interfaces.uf09_main() -> string {
     load_type interfaces.Uf09Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 

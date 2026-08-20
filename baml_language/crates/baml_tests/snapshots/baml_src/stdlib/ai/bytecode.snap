@@ -1182,7 +1182,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     load_field .name
     call baml.String.from
     store_var _44
-    load_var2 4 18
+    load_var2 4 17
     load_const "tool is not in the active toolbox: "
     load_var _44
     bin_op +
@@ -1200,7 +1200,6 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     load_var2 6 3
     load_field .args
     call ai.tools.Tool.call
-    store_var outcome
     jump L8
     load_var e
     throw_if_panic
@@ -1211,7 +1210,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     load_var e
     call baml.String.from
     store_var _16
-    load_var2 4 9
+    load_var2 4 8
     load_var _16
     init_instance ai.events.ToolFailed .id, .message
     load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
@@ -1238,14 +1237,13 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
 
   L3:
     load_const null
-    store_var outcome
     jump L8
 
   L4:
     load_var e
     store_var _24
     load_var _24
-    narrow_bind ai.errors.Failure, slot=13
+    narrow_bind ai.errors.Failure, slot=12
     pop_jump_if_false L5
     jump L6
 
@@ -1269,16 +1267,15 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     load_var e
     call baml.String.from
     store_var _29
-    load_var2 14 15
-    load_var2 16 12
+    load_var2 13 14
+    load_var2 15 11
     init_instance ai.errors.ToolFailedError .id, .name, .message, .cause
     throw
 
   L8:
-    load_var outcome
     store_var _32
     load_var _32
-    narrow_bind string, slot=17
+    narrow_bind string, slot=16
     pop_jump_if_false L9
     load_var2 4 3
     load_field .id
@@ -1856,13 +1853,12 @@ function ai.clients.Fallback.root.Client.id(self: ai.clients.Fallback) -> string
     call baml.Array.at
     store_var _5
     load_var _5
-    narrow_bind ai.Client, slot=3
+    narrow_bind ai.Client, slot=2
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_const "fallback"
-    store_var _0
     jump L2
 
   L1:
@@ -1870,10 +1866,8 @@ function ai.clients.Fallback.root.Client.id(self: ai.clients.Fallback) -> string
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -2205,13 +2199,12 @@ function ai.clients.RoundRobin.root.Client.id(self: ai.clients.RoundRobin) -> st
     call baml.Array.at
     store_var _5
     load_var _5
-    narrow_bind ai.Client, slot=3
+    narrow_bind ai.Client, slot=2
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_const "round-robin"
-    store_var _0
     jump L2
 
   L1:
@@ -2219,10 +2212,8 @@ function ai.clients.RoundRobin.root.Client.id(self: ai.clients.RoundRobin) -> st
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -3874,7 +3865,6 @@ function ai.internal._int_header(headers: map<string, string>, lower: string, ca
     load_var _5
     call baml.String.trim
     call baml.Int.parse
-    store_var parsed
     jump L2
     load_var e
     is_type baml.errors.ParseError
@@ -3887,13 +3877,11 @@ function ai.internal._int_header(headers: map<string, string>, lower: string, ca
 
   L1:
     load_const null
-    store_var parsed
 
   L2:
-    load_var parsed
     store_var _11
     load_var _11
-    narrow_bind int, slot=7
+    narrow_bind int, slot=6
     pop_jump_if_false L3
     load_var _11
     store_var_load_var value
