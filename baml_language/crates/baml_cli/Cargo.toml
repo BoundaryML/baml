@@ -49,7 +49,6 @@ borsh = { workspace = true }
 clap = { workspace = true, features = [ "color", "env", "wrap_help" ] }
 console = { workspace = true }
 ctrlc = { workspace = true }
-flate2 = { workspace = true }
 hex = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
@@ -57,13 +56,11 @@ libsui = { workspace = true }
 mimalloc = { workspace = true }
 mime_guess = { workspace = true }
 rayon = { workspace = true }
-regex = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "json", "rustls" ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 strsim = { workspace = true }
-tar = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }

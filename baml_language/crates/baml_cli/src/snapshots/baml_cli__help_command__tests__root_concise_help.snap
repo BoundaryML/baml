@@ -20,7 +20,7 @@ Commands:
   playground  Open the BAML playground in your browser
   pack        Package a BAML target as a standalone executable
   ide         Install or manage IDE integration assets
-  agent       Install BAML agent skills for this project
+  agent       Print or install BAML agent guidance
   lsp         Start a language server
   help        Display documentation for a command
 

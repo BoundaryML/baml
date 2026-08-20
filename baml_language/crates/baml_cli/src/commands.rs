@@ -195,8 +195,8 @@ pub(crate) enum Commands {
     Ide(crate::ide_command::IdeArgs),
 
     #[command(
-        about = "Install BAML agent skills for this project",
-        after_long_help = "Examples:\n  Install the latest skills:\n    baml agent install\n\n  Install in a specific project:\n    baml agent install --project ./my-project"
+        about = "Print or install BAML agent guidance",
+        after_long_help = "Examples:\n  Print the guide for this toolchain:\n    baml agent guide\n\n  Install the discovery skill:\n    baml agent install\n\n  Install in a specific project:\n    baml agent install --project ./my-project"
     )]
     Agent(crate::agent_command::AgentArgs),
 
@@ -354,18 +354,6 @@ impl RuntimeCli {
         // Resolve every output dial once, before any subcommand writes.
         crate::output::init(self.output);
 
-        // Passive skill warning + background freshness refresh, only on the
-        // core authoring commands (init, run, generate, pack) so the nag
-        // never bleeds into machine-facing or utility invocations. The
-        // guard's drop, after the match below returns, gives the background
-        // refresh the rest of its time budget.
-        let _skill_check = match &self.command {
-            Commands::Init(_) | Commands::Run(_) | Commands::Generate(_) | Commands::Pack(_) => {
-                crate::skill_check::SkillCheck::start()
-            }
-            _ => crate::skill_check::SkillCheck::skipped(),
-        };
-
         match &self.command {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
@@ -492,6 +480,7 @@ mod tests {
         &["ide"],
         &["ide", "install"],
         &["agent"],
+        &["agent", "guide"],
         &["agent", "install"],
         &["lsp"],
         &["help"],
@@ -895,9 +884,10 @@ mod tests {
             &["baml", "ide", "install"],
             &["baml", "ide", "install", "--cursor"],
             &["baml", "ide", "install", "--output-dir", "./extensions"],
+            &["baml", "agent", "guide"],
+            &["baml", "agent", "guide", "main"],
             &["baml", "agent", "install"],
             &["baml", "agent", "install", "--project", "./my-project"],
-            &["baml", "agent", "install", "--source", "./skills.tar.gz"],
             &["baml", "lsp"],
             &["baml", "lsp", "--workspace", "./my-project"],
             &["baml", "help", "run"],
@@ -967,15 +957,13 @@ mod tests {
     }
 
     #[test]
-    fn agent_project_and_source_have_distinct_meanings() {
+    fn agent_install_accepts_global_project() {
         let cli = RuntimeCli::parse_from_smart(vec![
             "baml".into(),
             "agent".into(),
             "install".into(),
             "--project".into(),
             "workspace".into(),
-            "--source".into(),
-            "skills.tar.gz".into(),
         ]);
         let Commands::Agent(crate::agent_command::AgentArgs {
             command: crate::agent_command::AgentCommand::Install(args),
@@ -984,6 +972,5 @@ mod tests {
             panic!("expected agent install command");
         };
         assert_eq!(args.dir, Some(PathBuf::from("workspace")));
-        assert_eq!(args.source.as_deref(), Some("skills.tar.gz"));
     }
 }

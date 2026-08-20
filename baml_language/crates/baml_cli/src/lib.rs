@@ -43,7 +43,6 @@ pub(crate) mod project_session;
 pub mod reporter;
 pub(crate) mod run_command;
 pub(crate) mod shutdown;
-pub(crate) mod skill_check;
 pub(crate) mod telemetry;
 pub(crate) mod telemetry_command;
 pub(crate) mod test_command;

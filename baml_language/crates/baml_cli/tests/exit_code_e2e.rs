@@ -516,12 +516,6 @@ fn run_valid_project_outputs_only_program_output() {
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(tmp.path(), "function answer() -> int {\n    42\n}\n");
-    // Installed skills keep the passive skill check quiet, so stderr stays
-    // exactly the program's own output.
-    let skill_dir = tmp.path().join(".agents/skills/baml-core");
-    std::fs::create_dir_all(&skill_dir).unwrap();
-    std::fs::write(skill_dir.join("SKILL.md"), "---\nname: baml-core\n---\n").unwrap();
-
     let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
 
     assert!(

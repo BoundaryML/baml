@@ -789,7 +789,6 @@ dependencies = [
  "clap",
  "console",
  "ctrlc",
- "flate2",
  "hex",
  "indexmap",
  "indicatif",
@@ -798,7 +797,6 @@ dependencies = [
  "mimalloc",
  "mime_guess",
  "rayon",
- "regex",
  "reqwest",
  "sdkgen_cpp",
  "sdkgen_csharp",
@@ -813,7 +811,6 @@ dependencies = [
  "sha2",
  "strsim",
  "sys_native",
- "tar",
  "tempfile",
  "text-size",
  "tokio",
@@ -1202,7 +1199,6 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror 2.0.18",
- "toml 0.8.23",
  "zip",
 ]
 
