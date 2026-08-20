@@ -45,6 +45,8 @@ jobs:
     name: Reconcile runners
     # Control plane is hosted-only; secrets never reach the fleet.
     runs-on: ubuntu-latest
+    # IX_TOKEN lives in this environment's secrets.
+    environment: boundary-tools-dev
     steps:
       # Repos without IX_TOKEN configured (forks, and this repo until the
       # secret is set) skip quietly instead of failing every wave.
