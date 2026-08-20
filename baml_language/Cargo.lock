@@ -1405,6 +1405,7 @@ dependencies = [
  "base64",
  "bex_external_types",
  "bex_vm_types",
+ "crossbeam-channel",
  "crossbeam-utils",
  "fs2",
  "hex",

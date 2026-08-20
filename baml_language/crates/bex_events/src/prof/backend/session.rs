@@ -1,9 +1,6 @@
-use std::sync::{Arc, OnceLock};
 #[cfg(not(target_arch = "wasm32"))]
-use std::sync::{
-    Mutex,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::Mutex;
+use std::sync::{Arc, OnceLock};
 
 #[cfg(not(target_arch = "wasm32"))]
 use super::decoder::{BoundaryRuntime, DecoderResources, DirectDecoder, finalize_ready_boundary};
@@ -18,7 +15,8 @@ use super::{
 };
 use crate::ids::{BoundaryId, ProgramId, ThreadRef};
 
-const DECODER_LOCK_BATCH_RECORDS: u16 = 256;
+#[cfg(not(target_arch = "wasm32"))]
+const DECODER_COMMAND_BATCH_RECORDS: u16 = 256;
 
 /// The only per-root admission intents. Internal work must be explicit rather
 /// than mutating a generic profiling boolean after construction.
@@ -96,8 +94,55 @@ struct OnSession {
     #[cfg(not(target_arch = "wasm32"))]
     decoder: Mutex<DirectDecoder>,
     #[cfg(not(target_arch = "wasm32"))]
-    decoder_producer_waiters: AtomicUsize,
+    producer_commands_tx: crossbeam_channel::Sender<DecoderCommand>,
+    #[cfg(not(target_arch = "wasm32"))]
+    producer_commands_rx: crossbeam_channel::Receiver<DecoderCommand>,
+    #[cfg(not(target_arch = "wasm32"))]
+    _producer_queue_reservation: Reservation,
     clock: crate::prof::clock::TickConverter,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug)]
+enum DecoderCommand {
+    ErrorAttempt {
+        handle: BoundaryHandle,
+        attempt: ErrorCaptureAttempt,
+        reservation: Reservation,
+    },
+    ErrorValue {
+        handle: BoundaryHandle,
+        id: ErrorCaptureId,
+        value: ValueState,
+    },
+    EncodedErrorValue {
+        handle: BoundaryHandle,
+        id: ErrorCaptureId,
+        encoded_body: Vec<u8>,
+        reservation: Reservation,
+    },
+    TerminalError {
+        handle: BoundaryHandle,
+        call_ref: crate::ids::CallRef,
+        target: TerminalErrorTarget,
+        reservation: Reservation,
+    },
+    ValueOccurrence {
+        handle: BoundaryHandle,
+        call_ref: crate::ids::CallRef,
+        role: ValueRole,
+        state: ValueState,
+        manual_eligible: bool,
+        reservation: Option<Reservation>,
+    },
+    EncodedValue {
+        handle: BoundaryHandle,
+        call_ref: crate::ids::CallRef,
+        role: ValueRole,
+        encoded_body: Vec<u8>,
+        manual_eligible: bool,
+        reservation: Reservation,
+    },
 }
 
 #[derive(Debug)]
@@ -199,6 +244,32 @@ impl ProfilerSession {
                         );
                     }
                 };
+                let producer_queue_bytes = u64::from(sizing.producer_queue_slots)
+                    .saturating_mul(MeasuredLayouts::V1.evidence_item_min_bytes);
+                let producer_queue_reservation = match memory.try_reserve(
+                    ReservationClass::General,
+                    Owner::Transport,
+                    producer_queue_bytes,
+                ) {
+                    Ok(reservation) => reservation,
+                    Err(denied) => {
+                        return (
+                            Arc::new(Self {
+                                kind: SessionKind::Off,
+                            }),
+                            Some(SetupDiagnostic {
+                                message: format!(
+                                    "profiling disabled: bounded producer queue requested {} general bytes with {} available",
+                                    denied.requested_bytes, denied.available_bytes
+                                ),
+                            }),
+                        );
+                    }
+                };
+                let producer_queue_slots =
+                    usize::try_from(sizing.producer_queue_slots).unwrap_or(usize::MAX);
+                let (producer_commands_tx, producer_commands_rx) =
+                    crossbeam_channel::bounded(producer_queue_slots);
                 #[cfg(not(target_arch = "wasm32"))]
                 let store = match ProfilerStore::open_native(config.store_root.clone(), config.disk)
                 {
@@ -234,7 +305,11 @@ impl ProfilerSession {
                             #[cfg(not(target_arch = "wasm32"))]
                             decoder: Mutex::new(DirectDecoder::default()),
                             #[cfg(not(target_arch = "wasm32"))]
-                            decoder_producer_waiters: AtomicUsize::new(0),
+                            producer_commands_tx,
+                            #[cfg(not(target_arch = "wasm32"))]
+                            producer_commands_rx,
+                            #[cfg(not(target_arch = "wasm32"))]
+                            _producer_queue_reservation: producer_queue_reservation,
                             clock,
                         })),
                     }),
@@ -303,6 +378,14 @@ impl ProfilerSession {
         match &self.kind {
             SessionKind::Off => None,
             SessionKind::On(session) => Some(&session.boundaries),
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn boundary_accepts_producer(&self, handle: BoundaryHandle) -> bool {
+        match &self.kind {
+            SessionKind::Off => false,
+            SessionKind::On(session) => session.boundaries.accepts_producer(handle),
         }
     }
 
@@ -375,33 +458,246 @@ impl ProfilerSession {
             clock: &session.clock,
             boundaries: &session.publishers,
         };
-        let mut records = crate::prof::record::iter(bytes);
-        loop {
-            // Value/error occurrence producers share this mutex. Bound each
-            // consumer ownership interval so a selected root completing
-            // behind a large structural backlog can enqueue its occurrence
-            // without waiting for the entire ring snapshot to fold. Pending
-            // joins already make that cross-lane ordering explicit.
-            let mut decoder = session
-                .decoder
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut consumed = 0_u16;
-            while consumed < DECODER_LOCK_BATCH_RECORDS {
-                let Some(raw) = records.next() else {
-                    return;
-                };
-                let Ok(raw) = raw else {
-                    return;
-                };
-                decoder.consume(&resources, raw);
-                consumed += 1;
+        // Only the sole consumer enters the decoder. Producer facts use the
+        // bounded command lane, so the whole acquired ring slice can fold
+        // under one lock without creating a producer wait edge.
+        let mut decoder = session
+            .decoder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for raw in crate::prof::record::iter(bytes) {
+            let Ok(raw) = raw else { return };
+            decoder.consume(&resources, raw);
+        }
+    }
+
+    /// Drain the bounded producer command lane on the sole consumer thread.
+    /// Producers only call `try_send`; they never acquire the decoder mutex or
+    /// perform CAS/store I/O.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn drain_producer_commands(&self) -> bool {
+        let SessionKind::On(session) = &self.kind else {
+            return false;
+        };
+        let Ok(first) = session.producer_commands_rx.try_recv() else {
+            return false;
+        };
+        let mut decoder = session
+            .decoder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Self::consume_producer_command(session, &mut decoder, first);
+        let mut consumed = 1_u16;
+        while consumed < DECODER_COMMAND_BATCH_RECORDS {
+            let Ok(command) = session.producer_commands_rx.try_recv() else {
+                break;
+            };
+            Self::consume_producer_command(session, &mut decoder, command);
+            consumed += 1;
+        }
+        true
+    }
+
+    /// Resolve cross-ring `EndThread` facts only after the consumer has swept
+    /// every ring. A child start and its entry call are consecutive on the
+    /// parent ring, but an earlier per-ring resolution point could still fall
+    /// between them at a segment boundary.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn resolve_thread_ends_after_sweep(&self) -> bool {
+        let SessionKind::On(session) = &self.kind else {
+            return false;
+        };
+        let mut decoder = session
+            .decoder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = decoder.pending_thread_end_count();
+        decoder.resolve_thread_ends_after_sweep();
+        decoder.pending_thread_end_count() != before
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn consume_producer_command(
+        session: &OnSession,
+        decoder: &mut DirectDecoder,
+        command: DecoderCommand,
+    ) {
+        match command {
+            DecoderCommand::ErrorAttempt {
+                handle,
+                attempt,
+                reservation,
+            } => decoder.consume_error_attempt(
+                &Self::decoder_resources(
+                    session,
+                    attempt.id.thread_ref.process_euid,
+                    attempt.id.thread_ref.engine_id,
+                ),
+                handle,
+                attempt,
+                reservation,
+            ),
+            DecoderCommand::ErrorValue { id, value, .. } => decoder.complete_error_value(
+                &Self::decoder_resources(
+                    session,
+                    id.thread_ref.process_euid,
+                    id.thread_ref.engine_id,
+                ),
+                id,
+                value,
+            ),
+            DecoderCommand::EncodedErrorValue {
+                id,
+                encoded_body,
+                mut reservation,
+                ..
+            } => {
+                let state = Self::publish_value_state(session, &encoded_body, &mut reservation);
+                drop(reservation);
+                decoder.complete_error_value(
+                    &Self::decoder_resources(
+                        session,
+                        id.thread_ref.process_euid,
+                        id.thread_ref.engine_id,
+                    ),
+                    id,
+                    state,
+                );
             }
-            drop(decoder);
-            if session.decoder_producer_waiters.load(Ordering::Acquire) != 0 {
-                std::thread::yield_now();
+            DecoderCommand::TerminalError {
+                handle,
+                call_ref,
+                target,
+                reservation,
+            } => decoder.consume_terminal_error(
+                &Self::decoder_resources(session, call_ref.process_euid, call_ref.engine_id),
+                handle,
+                call_ref,
+                target,
+                reservation,
+            ),
+            DecoderCommand::ValueOccurrence {
+                handle,
+                call_ref,
+                role,
+                state,
+                manual_eligible,
+                reservation,
+            } => decoder.consume_value_occurrence(
+                &Self::decoder_resources(session, call_ref.process_euid, call_ref.engine_id),
+                handle,
+                call_ref,
+                role,
+                state,
+                manual_eligible,
+                reservation,
+            ),
+            DecoderCommand::EncodedValue {
+                handle,
+                call_ref,
+                role,
+                encoded_body,
+                manual_eligible,
+                mut reservation,
+            } => {
+                let state = Self::publish_value_state(session, &encoded_body, &mut reservation);
+                decoder.consume_value_occurrence(
+                    &Self::decoder_resources(session, call_ref.process_euid, call_ref.engine_id),
+                    handle,
+                    call_ref,
+                    role,
+                    state,
+                    manual_eligible,
+                    Some(reservation),
+                );
             }
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn decoder_resources(
+        session: &OnSession,
+        process_euid: crate::ids::ProcessEuid,
+        engine_id: crate::ids::EngineId,
+    ) -> DecoderResources<'_> {
+        DecoderResources {
+            process_euid,
+            engine_id,
+            memory: &session.memory,
+            sizing: session.sizing,
+            clock: &session.clock,
+            boundaries: &session.publishers,
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn publish_value_state(
+        session: &OnSession,
+        encoded_body: &[u8],
+        reservation: &mut Reservation,
+    ) -> ValueState {
+        let encoded_bytes = u64::try_from(encoded_body.len()).unwrap_or(u64::MAX);
+        let publication_bytes = session
+            .store
+            .cas_publication_allocation_bound(encoded_bytes);
+        if encoded_bytes > session.sizing.single_value_bytes {
+            return ValueState::Lost(ValueLossReason::ValueTooLarge);
+        }
+        if reservation.try_grow(publication_bytes).is_err() {
+            return ValueState::Lost(ValueLossReason::ValueMemoryExceeded);
+        }
+        let codec = super::CodecVersion(1);
+        let (cid, result) = session.store.publish_cas_object(codec, encoded_body);
+        match result {
+            super::PublishCasResult::Published | super::PublishCasResult::Reused => {
+                ValueState::Available {
+                    cid,
+                    codec,
+                    encoded_bytes,
+                }
+            }
+            super::PublishCasResult::Conflict => ValueState::Lost(ValueLossReason::CasConflict),
+            super::PublishCasResult::Lost(super::StoreFailureReason::DiskGuardExceeded) => {
+                ValueState::Lost(ValueLossReason::DiskGuardExceeded)
+            }
+            super::PublishCasResult::Lost(_) => ValueState::Lost(ValueLossReason::CasWriteFailed),
+            super::PublishCasResult::Indeterminate(token) => {
+                if session.store.resolve_indeterminate(token)
+                    == super::ResolveIndeterminateResult::Committed
+                {
+                    ValueState::Available {
+                        cid,
+                        codec,
+                        encoded_bytes,
+                    }
+                } else {
+                    ValueState::Lost(ValueLossReason::StoreUnavailable)
+                }
+            }
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn enqueue_producer_command(session: &OnSession, command: DecoderCommand) {
+        if let Err(error) = session.producer_commands_tx.try_send(command) {
+            let command = error.into_inner();
+            match command {
+                DecoderCommand::ErrorAttempt { handle, .. }
+                | DecoderCommand::ErrorValue { handle, .. }
+                | DecoderCommand::EncodedErrorValue { handle, .. } => session
+                    .boundaries
+                    .record_error_attempt_transport_loss(handle),
+                DecoderCommand::TerminalError { handle, .. } => session
+                    .boundaries
+                    .record_terminal_error_transport_loss(handle),
+                DecoderCommand::ValueOccurrence { handle, .. }
+                | DecoderCommand::EncodedValue { handle, .. } => session
+                    .boundaries
+                    .record_value_attempt_transport_loss(handle),
+            }
+        }
+        #[cfg(not(baml_loom))]
+        crate::prof::registry::global_ctx().wake().force_wake();
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -449,7 +745,9 @@ impl ProfilerSession {
         let SessionKind::On(session) = &self.kind else {
             return None;
         };
-        self.boundary_publisher(handle)?;
+        if !session.boundaries.accepts_producer(handle) {
+            return None;
+        }
         session
             .memory
             .try_reserve(
@@ -481,46 +779,33 @@ impl ProfilerSession {
         let SessionKind::On(session) = &self.kind else {
             return;
         };
-        let mut decoder = session
-            .decoder
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        decoder.consume_error_attempt(
-            &DecoderResources {
-                process_euid: attempt.id.thread_ref.process_euid,
-                engine_id: attempt.id.thread_ref.engine_id,
-                memory: &session.memory,
-                sizing: session.sizing,
-                clock: &session.clock,
-                boundaries: &session.publishers,
+        if !session.boundaries.accepts_producer(handle) {
+            return;
+        }
+        Self::enqueue_producer_command(
+            session,
+            DecoderCommand::ErrorAttempt {
+                handle,
+                attempt,
+                reservation,
             },
-            handle,
-            attempt,
-            reservation,
         );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn complete_error_value(&self, id: ErrorCaptureId, value: ValueState) {
+    pub(crate) fn complete_error_value(
+        &self,
+        handle: BoundaryHandle,
+        id: ErrorCaptureId,
+        value: ValueState,
+    ) {
         let SessionKind::On(session) = &self.kind else {
             return;
         };
-        let mut decoder = session
-            .decoder
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        decoder.complete_error_value(
-            &DecoderResources {
-                process_euid: id.thread_ref.process_euid,
-                engine_id: id.thread_ref.engine_id,
-                memory: &session.memory,
-                sizing: session.sizing,
-                clock: &session.clock,
-                boundaries: &session.publishers,
-            },
-            id,
-            value,
-        );
+        if !session.boundaries.accepts_producer(handle) {
+            return;
+        }
+        Self::enqueue_producer_command(session, DecoderCommand::ErrorValue { handle, id, value });
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -534,23 +819,17 @@ impl ProfilerSession {
         let SessionKind::On(session) = &self.kind else {
             return;
         };
-        let mut decoder = session
-            .decoder
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        decoder.consume_terminal_error(
-            &DecoderResources {
-                process_euid: call_ref.process_euid,
-                engine_id: call_ref.engine_id,
-                memory: &session.memory,
-                sizing: session.sizing,
-                clock: &session.clock,
-                boundaries: &session.publishers,
+        if !session.boundaries.accepts_producer(handle) {
+            return;
+        }
+        Self::enqueue_producer_command(
+            session,
+            DecoderCommand::TerminalError {
+                handle,
+                call_ref,
+                target,
+                reservation,
             },
-            handle,
-            call_ref,
-            target,
-            reservation,
         );
     }
 
@@ -559,21 +838,9 @@ impl ProfilerSession {
         let SessionKind::On(session) = &self.kind else {
             return;
         };
-        let Some(publisher) = self.boundary_publisher(handle) else {
-            return;
-        };
-        let meta = publisher.meta();
-        DirectDecoder::record_error_attempt_transport_loss(
-            &DecoderResources {
-                process_euid: meta.root_thread_ref.process_euid,
-                engine_id: meta.root_thread_ref.engine_id,
-                memory: &session.memory,
-                sizing: session.sizing,
-                clock: &session.clock,
-                boundaries: &session.publishers,
-            },
-            handle,
-        );
+        session
+            .boundaries
+            .record_error_attempt_transport_loss(handle);
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -581,21 +848,9 @@ impl ProfilerSession {
         let SessionKind::On(session) = &self.kind else {
             return;
         };
-        let Some(publisher) = self.boundary_publisher(handle) else {
-            return;
-        };
-        let meta = publisher.meta();
-        DirectDecoder::record_terminal_error_transport_loss(
-            &DecoderResources {
-                process_euid: meta.root_thread_ref.process_euid,
-                engine_id: meta.root_thread_ref.engine_id,
-                memory: &session.memory,
-                sizing: session.sizing,
-                clock: &session.clock,
-                boundaries: &session.publishers,
-            },
-            handle,
-        );
+        session
+            .boundaries
+            .record_terminal_error_transport_loss(handle);
     }
 
     #[must_use]
@@ -612,140 +867,62 @@ impl ProfilerSession {
         handle: BoundaryHandle,
         call_ref: crate::ids::CallRef,
         role: ValueRole,
-        encoded_body: &[u8],
+        encoded_body: Vec<u8>,
         manual_eligible: bool,
-        mut reservation: Reservation,
+        reservation: Reservation,
     ) {
         let SessionKind::On(session) = &self.kind else {
             return;
         };
-        let encoded_bytes = u64::try_from(encoded_body.len()).unwrap_or(u64::MAX);
-        let publication_bytes = session
-            .store
-            .cas_publication_allocation_bound(encoded_bytes);
-        let state = if encoded_bytes > session.sizing.single_value_bytes {
-            ValueState::Lost(ValueLossReason::ValueTooLarge)
-        } else if reservation.try_grow(publication_bytes).is_err() {
-            ValueState::Lost(ValueLossReason::ValueMemoryExceeded)
-        } else {
-            let codec = super::CodecVersion(1);
-            let (cid, result) = session.store.publish_cas_object(codec, encoded_body);
-            match result {
-                super::PublishCasResult::Published | super::PublishCasResult::Reused => {
-                    ValueState::Available {
-                        cid,
-                        codec,
-                        encoded_bytes,
-                    }
-                }
-                super::PublishCasResult::Conflict => ValueState::Lost(ValueLossReason::CasConflict),
-                super::PublishCasResult::Lost(super::StoreFailureReason::DiskGuardExceeded) => {
-                    ValueState::Lost(ValueLossReason::DiskGuardExceeded)
-                }
-                super::PublishCasResult::Lost(_) => {
-                    ValueState::Lost(ValueLossReason::CasWriteFailed)
-                }
-                super::PublishCasResult::Indeterminate(token) => {
-                    if session.store.resolve_indeterminate(token)
-                        == super::ResolveIndeterminateResult::Committed
-                    {
-                        ValueState::Available {
-                            cid,
-                            codec,
-                            encoded_bytes,
-                        }
-                    } else {
-                        ValueState::Lost(ValueLossReason::StoreUnavailable)
-                    }
-                }
-            }
-        };
-        session
-            .decoder_producer_waiters
-            .fetch_add(1, Ordering::AcqRel);
-        let mut decoder = session
-            .decoder
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        session
-            .decoder_producer_waiters
-            .fetch_sub(1, Ordering::Release);
-        decoder.consume_value_occurrence(
-            &DecoderResources {
-                process_euid: call_ref.process_euid,
-                engine_id: call_ref.engine_id,
-                memory: &session.memory,
-                sizing: session.sizing,
-                clock: &session.clock,
-                boundaries: &session.publishers,
+        if !session.boundaries.accepts_producer(handle) {
+            return;
+        }
+        Self::enqueue_producer_command(
+            session,
+            DecoderCommand::EncodedValue {
+                handle,
+                call_ref,
+                role,
+                encoded_body,
+                manual_eligible,
+                reservation,
             },
-            handle,
-            call_ref,
-            role,
-            state,
-            manual_eligible,
-            Some(reservation),
         );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn record_encoded_error_value(
         &self,
+        handle: BoundaryHandle,
         id: ErrorCaptureId,
-        encoded_body: &[u8],
-        mut reservation: Reservation,
+        encoded_body: Vec<u8>,
+        reservation: Reservation,
     ) {
         let SessionKind::On(session) = &self.kind else {
             return;
         };
-        let encoded_bytes = u64::try_from(encoded_body.len()).unwrap_or(u64::MAX);
-        let publication_bytes = session
-            .store
-            .cas_publication_allocation_bound(encoded_bytes);
-        let state = if encoded_bytes > session.sizing.single_value_bytes {
-            ValueState::Lost(ValueLossReason::ValueTooLarge)
-        } else if reservation.try_grow(publication_bytes).is_err() {
-            ValueState::Lost(ValueLossReason::ValueMemoryExceeded)
-        } else {
-            let codec = super::CodecVersion(1);
-            let (cid, result) = session.store.publish_cas_object(codec, encoded_body);
-            match result {
-                super::PublishCasResult::Published | super::PublishCasResult::Reused => {
-                    ValueState::Available {
-                        cid,
-                        codec,
-                        encoded_bytes,
-                    }
-                }
-                super::PublishCasResult::Conflict => ValueState::Lost(ValueLossReason::CasConflict),
-                super::PublishCasResult::Lost(super::StoreFailureReason::DiskGuardExceeded) => {
-                    ValueState::Lost(ValueLossReason::DiskGuardExceeded)
-                }
-                super::PublishCasResult::Lost(_) => {
-                    ValueState::Lost(ValueLossReason::CasWriteFailed)
-                }
-                super::PublishCasResult::Indeterminate(token) => {
-                    if session.store.resolve_indeterminate(token)
-                        == super::ResolveIndeterminateResult::Committed
-                    {
-                        ValueState::Available {
-                            cid,
-                            codec,
-                            encoded_bytes,
-                        }
-                    } else {
-                        ValueState::Lost(ValueLossReason::StoreUnavailable)
-                    }
-                }
-            }
-        };
-        drop(reservation);
-        self.complete_error_value(id, state);
+        if !session.boundaries.accepts_producer(handle) {
+            return;
+        }
+        Self::enqueue_producer_command(
+            session,
+            DecoderCommand::EncodedErrorValue {
+                handle,
+                id,
+                encoded_body,
+                reservation,
+            },
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn record_error_value_loss(&self, id: ErrorCaptureId, reason: ValueLossReason) {
-        self.complete_error_value(id, ValueState::Lost(reason));
+    pub fn record_error_value_loss(
+        &self,
+        handle: BoundaryHandle,
+        id: ErrorCaptureId,
+        reason: ValueLossReason,
+    ) {
+        self.complete_error_value(handle, id, ValueState::Lost(reason));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -760,42 +937,46 @@ impl ProfilerSession {
         let SessionKind::On(session) = &self.kind else {
             return;
         };
-        session
-            .decoder_producer_waiters
-            .fetch_add(1, Ordering::AcqRel);
-        let mut decoder = session
-            .decoder
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        session
-            .decoder_producer_waiters
-            .fetch_sub(1, Ordering::Release);
-        decoder.consume_value_occurrence(
-            &DecoderResources {
-                process_euid: call_ref.process_euid,
-                engine_id: call_ref.engine_id,
-                memory: &session.memory,
-                sizing: session.sizing,
-                clock: &session.clock,
-                boundaries: &session.publishers,
+        if !session.boundaries.accepts_producer(handle) {
+            return;
+        }
+        Self::enqueue_producer_command(
+            session,
+            DecoderCommand::ValueOccurrence {
+                handle,
+                call_ref,
+                role,
+                state: ValueState::Lost(reason),
+                manual_eligible,
+                reservation: None,
             },
-            handle,
-            call_ref,
-            role,
-            ValueState::Lost(reason),
-            manual_eligible,
-            None,
         );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn maintain_ready_boundaries(&self) {
+    pub(crate) fn maintain_ready_boundaries(&self) -> bool {
         let SessionKind::On(session) = &self.kind else {
-            return;
+            return false;
         };
+        // A ready boundary has no live producer, but its already-submitted
+        // commands may still be behind this sweep's bounded drain batch.
+        // Finalization must not discard those exact evidence facts.
+        if !session.producer_commands_rx.is_empty() {
+            return false;
+        }
         let ready = session.boundaries.ready_handles();
         if ready.is_empty() {
-            return;
+            return false;
+        }
+        let ready = ready
+            .into_iter()
+            .filter(|handle| session.boundaries.consumer_drain_completed(*handle))
+            .collect::<Vec<_>>();
+        if ready.is_empty() {
+            // Observing a terminal candidate is progress: the next consumer
+            // service pass performs the required full structural sweep before
+            // this boundary becomes eligible for durable finalization.
+            return true;
         }
         let mut decoder = session
             .decoder
@@ -818,6 +999,7 @@ impl ProfilerSession {
                 *slot = None;
             }
         }
+        true
     }
 
     /// Converts one producer tick interval with the session's immutable clock
@@ -929,6 +1111,93 @@ impl ProfilerSession {
 mod tests {
     use super::*;
     use crate::prof::backend::DiskBudget;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn producer_command_lane_never_takes_decoder_lock_and_reports_saturation() {
+        assert!(
+            std::mem::size_of::<DecoderCommand>()
+                <= usize::try_from(MeasuredLayouts::V1.evidence_item_min_bytes).unwrap()
+        );
+        let temp = tempfile::TempDir::new().unwrap();
+        let (session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
+            enabled: true,
+            store_root: temp.path().join(".baml/profiles-v1"),
+            process_memory_bytes: 32 * 1024 * 1024,
+            disk: DiskBudget {
+                max_project_bytes: 16 * 1024 * 1024,
+                minimum_free_bytes: 0,
+            },
+        });
+        assert!(diagnostic.is_none());
+        let thread_ref = ThreadRef {
+            process_euid: crate::ids::ProcessEuid([1; 16]),
+            engine_id: crate::ids::EngineId(2),
+            thread_id: crate::ids::BexThreadId(3),
+        };
+        let admission = session.register_root(
+            RootProfileIntent::UserBoundary {
+                boundary_id: BoundaryId::from_bytes([4; 16]),
+            },
+            thread_ref,
+            ProgramId([5; 16]),
+            None,
+            None,
+        );
+        let handle = admission.boundary_handle().expect("active boundary");
+        let SessionKind::On(on) = &session.kind else {
+            panic!("profiling session must be active");
+        };
+        let decoder = on
+            .decoder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let call_ref = crate::ids::CallRef {
+            process_euid: thread_ref.process_euid,
+            engine_id: thread_ref.engine_id,
+            thread_id: thread_ref.thread_id,
+            call_id: crate::ids::BexCallId(6),
+        };
+
+        session.record_value_loss(
+            handle,
+            call_ref,
+            ValueRole::Output,
+            ValueLossReason::CopyFailed,
+            false,
+        );
+        assert!(matches!(
+            on.producer_commands_rx.try_recv(),
+            Ok(DecoderCommand::ValueOccurrence { .. })
+        ));
+
+        for ordinal in 0..on.producer_commands_tx.capacity().unwrap() {
+            on.producer_commands_tx
+                .try_send(DecoderCommand::ErrorValue {
+                    handle,
+                    id: ErrorCaptureId {
+                        thread_ref,
+                        unwind_ordinal: u64::try_from(ordinal).unwrap(),
+                    },
+                    value: ValueState::Lost(ValueLossReason::CopyFailed),
+                })
+                .unwrap();
+        }
+        session.record_value_loss(
+            handle,
+            call_ref,
+            ValueRole::Output,
+            ValueLossReason::CopyFailed,
+            false,
+        );
+        assert_eq!(
+            on.boundaries
+                .producer_health(handle)
+                .value_attempt_transport_exceeded,
+            1
+        );
+        drop(decoder);
+    }
 
     #[cfg(not(target_arch = "wasm32"))]
     #[test]

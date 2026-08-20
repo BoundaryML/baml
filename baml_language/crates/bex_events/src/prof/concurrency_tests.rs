@@ -300,6 +300,27 @@ mod scenarios {
         drop(unsafe { Box::from_raw(reg_ptr) });
     }
 
+    /// (5a) Registry traversal preserves ring registration order. Parent
+    /// producers register before the workers they spawn; FIFO sweep order is
+    /// the bounded-memory causal fast path for cross-ring decoder joins.
+    pub(super) fn registry_preserves_registration_order() {
+        let ctx = leak_ctx(BIG_CAP);
+        let reg = Registry::new();
+        let first = reg.acquire(ctx, 16, 8, 1).expect("first test ring");
+        let second = reg.acquire(ctx, 16, 8, 2).expect("second test ring");
+        unsafe {
+            first.push(&rec(101));
+            second.push(&rec(202));
+        }
+        let mut engines = Vec::new();
+        unsafe {
+            reg.sweep(&mut |ring, _| engines.push(ring.engine_id()));
+        }
+        assert_eq!(engines, vec![1, 2]);
+        drop(reg);
+        assert_eq!(ctx.live_bytes(), 0, "Registry::drop leaked segments");
+    }
+
     /// (5b) Registry pooling: a ring pooled after its producer dies is
     /// claimed through `acquire` by the next producer — concurrently with
     /// the consumer's sweeping — instead of allocating fresh.
@@ -468,6 +489,11 @@ mod loom_suite {
     }
 
     #[test]
+    fn registry_preserves_registration_order() {
+        model(scenarios::registry_preserves_registration_order);
+    }
+
+    #[test]
     fn registry_pool_reuse() {
         model(scenarios::registry_pool_reuse);
     }
@@ -525,6 +551,11 @@ mod std_suite {
     #[test]
     fn registry_concurrent_acquire() {
         many(scenarios::registry_concurrent_acquire);
+    }
+
+    #[test]
+    fn registry_preserves_registration_order() {
+        many(scenarios::registry_preserves_registration_order);
     }
 
     #[test]

@@ -1,8 +1,10 @@
 //! The ring registry and per-thread ring map (plan §3.4, design D5b).
 //!
-//! The registry is an append-only, push-only Treiber list: rings are
-//! CAS-appended once and never removed (no pop ⇒ no ABA; no reclamation ⇒ no
-//! epochs). Thread death *orphans* a ring; the consumer drains it to empty
+//! The registry is an append-only FIFO list: rings are linked once and never
+//! removed (no pop ⇒ no ABA; no reclamation ⇒ no epochs). FIFO traversal
+//! preserves causal registration order, so a parent ring that creates worker
+//! rings is swept before those descendants. Thread death *orphans* a ring;
+//! the consumer drains it to empty
 //! and *pools* it; a new `(engine, os-thread)` pair *claims* a pooled ring by
 //! CAS before allocating fresh. Registry size is therefore bounded by the
 //! peak number of concurrent `(engine, os-thread)` pairs, not by churn —
@@ -31,6 +33,7 @@ struct RegNode {
 /// ([`global_registry`]); tests build their own.
 pub(crate) struct Registry {
     head: AtomicPtr<RegNode>,
+    tail: AtomicPtr<RegNode>,
 }
 
 impl Registry {
@@ -38,6 +41,7 @@ impl Registry {
     pub(crate) const fn new() -> Self {
         Self {
             head: AtomicPtr::new(null_mut()),
+            tail: AtomicPtr::new(null_mut()),
         }
     }
 
@@ -45,6 +49,7 @@ impl Registry {
     pub(crate) fn new() -> Self {
         Self {
             head: AtomicPtr::new(null_mut()),
+            tail: AtomicPtr::new(null_mut()),
         }
     }
 
@@ -85,17 +90,17 @@ impl Registry {
             ring,
             next: AtomicPtr::new(null_mut()),
         }));
-        let mut head = self.head.load(Ordering::Relaxed);
-        loop {
-            unsafe { (&*node).next.store(head, Ordering::Relaxed) };
-            // Release publishes the node fields and the fully built ring.
-            match self
-                .head
-                .compare_exchange(head, node, Ordering::Release, Ordering::Relaxed)
-            {
-                Ok(_) => return,
-                Err(observed) => head = observed,
-            }
+        // The tail exchange is the append linearization point. A concurrent
+        // consumer may miss a node whose predecessor link is not published
+        // yet, but the next sweep observes it; nodes are never removed.
+        let previous = self.tail.swap(node, Ordering::AcqRel);
+        if previous.is_null() {
+            self.head.store(node, Ordering::Release);
+        } else {
+            // SAFETY: `previous` is an append-only registry node that remains
+            // allocated for the process lifetime, and this appender uniquely
+            // owns its one transition from a null `next` pointer.
+            unsafe { (&*previous).next.store(node, Ordering::Release) };
         }
     }
 

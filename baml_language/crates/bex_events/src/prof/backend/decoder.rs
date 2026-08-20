@@ -33,6 +33,7 @@ pub struct BoundaryHealthSnapshot {
     pub evidence_queue_full: u64,
     pub evidence_segment_publish_failed: u64,
     pub structural_transport_exceeded: u64,
+    pub value_attempt_transport_exceeded: u64,
     pub applicable_error_unwinds: u64,
     pub error_captures_queued: u64,
     pub error_captures_committed: u64,
@@ -50,7 +51,7 @@ pub struct BoundaryHealthSnapshot {
 }
 
 impl BoundaryHealthSnapshot {
-    const ENCODED_LEN: usize = 8 * 25;
+    const ENCODED_LEN: usize = 8 * 26;
 
     fn encode(self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(Self::ENCODED_LEN);
@@ -66,6 +67,7 @@ impl BoundaryHealthSnapshot {
             self.evidence_queue_full,
             self.evidence_segment_publish_failed,
             self.structural_transport_exceeded,
+            self.value_attempt_transport_exceeded,
             self.applicable_error_unwinds,
             self.error_captures_queued,
             self.error_captures_committed,
@@ -108,6 +110,7 @@ impl BoundaryHealthSnapshot {
             evidence_queue_full: next()?,
             evidence_segment_publish_failed: next()?,
             structural_transport_exceeded: next()?,
+            value_attempt_transport_exceeded: next()?,
             applicable_error_unwinds: next()?,
             error_captures_queued: next()?,
             error_captures_committed: next()?,
@@ -330,7 +333,29 @@ struct CallState {
     manual_selected: bool,
     next_runtime_id_ordinal: u32,
     start_ticks: u64,
+    values_observed: u8,
+    pending_end: Option<OwnedCallEnd>,
     _reservation: Reservation,
+}
+
+impl CallState {
+    fn observe_value(&mut self, role: super::ValueRole) {
+        self.values_observed |= match role {
+            super::ValueRole::Input => super::RoleMask::INPUT,
+            super::ValueRole::Output => super::RoleMask::OUTPUT,
+        };
+    }
+
+    fn waits_for_value(&self, status: FunctionEndStatus) -> bool {
+        let mut required = 0;
+        if self.roles.inputs() {
+            required |= super::RoleMask::INPUT;
+        }
+        if self.roles.output() && status == FunctionEndStatus::Ok {
+            required |= super::RoleMask::OUTPUT;
+        }
+        self.values_observed & required != required
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -421,6 +446,12 @@ struct PendingThreadStart {
 }
 
 #[derive(Debug)]
+struct PendingThreadEnd {
+    boundary: Option<BoundaryHandle>,
+    _reservation: Reservation,
+}
+
+#[derive(Debug)]
 struct PendingRuntimeId {
     id: [u8; 16],
     ts_ticks: u64,
@@ -434,7 +465,7 @@ struct PendingValueOccurrence {
     role: super::ValueRole,
     state: super::ValueState,
     manual_eligible: bool,
-    _reservation: Reservation,
+    reservation: Reservation,
 }
 
 #[derive(Debug)]
@@ -471,6 +502,7 @@ pub(super) struct DirectDecoder {
     pending_starts: HashMap<CallRef, PendingCallStart>,
     pending_ends: HashMap<CallRef, PendingCallEnd>,
     pending_threads: HashMap<ThreadRef, PendingThreadStart>,
+    pending_thread_ends: HashMap<ThreadRef, PendingThreadEnd>,
     pending_runtime_ids: HashMap<CallRef, Vec<PendingRuntimeId>>,
     pending_values: HashMap<CallRef, Vec<PendingValueOccurrence>>,
     pending_error_attempts: HashMap<ErrorCaptureId, PendingErrorAttempt>,
@@ -488,6 +520,10 @@ pub(super) struct DecoderResources<'a> {
 }
 
 impl DirectDecoder {
+    pub(super) fn pending_thread_end_count(&self) -> usize {
+        self.pending_thread_ends.len()
+    }
+
     pub(super) fn checkpoint(
         handle: BoundaryHandle,
         boundaries: &[std::sync::Mutex<Option<BoundaryRuntime>>],
@@ -636,7 +672,10 @@ impl DirectDecoder {
                 },
             ),
             RawRecord::EndThread { thread_id, .. } => {
-                self.threads.remove(&thread_ref(resources, thread_id));
+                let thread_ref = thread_ref(resources, thread_id);
+                if self.threads.remove(&thread_ref).is_none() {
+                    self.insert_pending_thread_end(resources, thread_ref);
+                }
             }
             RawRecord::SetFunctionId {
                 thread_id,
@@ -671,7 +710,16 @@ impl DirectDecoder {
         reservation: Option<Reservation>,
     ) {
         if self.calls.contains_key(&call_ref) {
-            self.queue_value_occurrence(resources, handle, call_ref, role, state, manual_eligible);
+            if self.queue_value_occurrence(
+                resources,
+                handle,
+                call_ref,
+                role,
+                state,
+                manual_eligible,
+            ) {
+                self.record_value_observed(resources, call_ref, role);
+            }
             return;
         }
         let reservation = reservation.or_else(|| {
@@ -710,7 +758,7 @@ impl DirectDecoder {
                 role,
                 state,
                 manual_eligible,
-                _reservation: reservation,
+                reservation,
             });
     }
 
@@ -803,36 +851,6 @@ impl DirectDecoder {
         self.resolve_terminal_errors(resources);
     }
 
-    pub(super) fn record_error_attempt_transport_loss(
-        resources: &DecoderResources<'_>,
-        handle: BoundaryHandle,
-    ) {
-        with_runtime(resources.boundaries, handle, |runtime| {
-            runtime.health.applicable_error_unwinds =
-                runtime.health.applicable_error_unwinds.saturating_add(1);
-            runtime.health.error_capture_attempt_transport_exceeded = runtime
-                .health
-                .error_capture_attempt_transport_exceeded
-                .saturating_add(1);
-        });
-    }
-
-    pub(super) fn record_terminal_error_transport_loss(
-        resources: &DecoderResources<'_>,
-        handle: BoundaryHandle,
-    ) {
-        with_runtime(resources.boundaries, handle, |runtime| {
-            runtime.health.terminal_error_links_observed = runtime
-                .health
-                .terminal_error_links_observed
-                .saturating_add(1);
-            runtime.health.terminal_error_link_transport_exceeded = runtime
-                .health
-                .terminal_error_link_transport_exceeded
-                .saturating_add(1);
-        });
-    }
-
     fn queue_value_occurrence(
         &mut self,
         resources: &DecoderResources<'_>,
@@ -841,21 +859,22 @@ impl DirectDecoder {
         role: super::ValueRole,
         state: super::ValueState,
         manual_eligible: bool,
-    ) {
+    ) -> bool {
         let Some(call) = self.calls.get(&call_ref) else {
-            return;
+            return false;
         };
-        if call.boundary != handle
-            || !matches!(call.span_state, SpanState::Queued(_) | SpanState::Durable)
-        {
-            return;
+        if call.boundary != handle {
+            return false;
         }
         let role_enabled = match role {
             super::ValueRole::Input => call.roles.inputs(),
             super::ValueRole::Output => call.roles.output(),
         };
         if !role_enabled {
-            return;
+            return false;
+        }
+        if !matches!(call.span_state, SpanState::Queued(_) | SpanState::Durable) {
+            return true;
         }
         let context_ref = call.context.context_ref();
         with_runtime(resources.boundaries, handle, |runtime| {
@@ -878,6 +897,23 @@ impl DirectDecoder {
             }
         });
         self.flush_evidence_if_target(resources, handle);
+        true
+    }
+
+    fn record_value_observed(
+        &mut self,
+        resources: &DecoderResources<'_>,
+        call_ref: CallRef,
+        role: super::ValueRole,
+    ) {
+        let ready_end = self.calls.get_mut(&call_ref).and_then(|call| {
+            call.observe_value(role);
+            let end = call.pending_end?;
+            (!call.waits_for_value(end.status)).then_some(end)
+        });
+        if let Some(end) = ready_end {
+            self.consume_call_end(resources, end);
+        }
     }
 
     fn consume_child_thread_start(
@@ -1068,6 +1104,8 @@ impl DirectDecoder {
                 manual_selected: plan.reasons.manual(),
                 next_runtime_id_ordinal: u32::from(plan.reasons.root() && !plan.reasons.manual()),
                 start_ticks: fact.ts_ticks,
+                values_observed: 0,
+                pending_end: None,
                 _reservation: reservation,
             },
         );
@@ -1085,10 +1123,20 @@ impl DirectDecoder {
     }
 
     fn consume_call_end(&mut self, resources: &DecoderResources<'_>, fact: OwnedCallEnd) {
-        let Some(call) = self.calls.remove(&fact.call_ref) else {
+        let Some(mut call) = self.calls.remove(&fact.call_ref) else {
             self.insert_pending_end(resources, fact);
             return;
         };
+        if call.waits_for_value(fact.status) {
+            if call.pending_end.replace(fact).is_some() {
+                with_runtime(resources.boundaries, call.boundary, |runtime| {
+                    runtime.health.corrupt_records =
+                        runtime.health.corrupt_records.saturating_add(1);
+                });
+            }
+            self.calls.insert(fact.call_ref, call);
+            return;
+        }
         let inclusive_ns = if fact.ts_ticks < call.start_ticks {
             with_runtime(resources.boundaries, call.boundary, |runtime| {
                 runtime.health.clock_invalid = runtime.health.clock_invalid.saturating_add(1);
@@ -1386,6 +1434,49 @@ impl DirectDecoder {
         }
     }
 
+    fn insert_pending_thread_end(
+        &mut self,
+        resources: &DecoderResources<'_>,
+        thread_ref: ThreadRef,
+    ) {
+        if self.pending_thread_ends.contains_key(&thread_ref) {
+            return;
+        }
+        let boundary = self
+            .threads
+            .get(&thread_ref)
+            .map(|thread| thread.boundary)
+            .or_else(|| {
+                self.pending_threads
+                    .get(&thread_ref)
+                    .and_then(|thread| thread.boundary)
+            })
+            .or_else(|| find_boundary_by_root(resources.boundaries, thread_ref));
+        match resources.memory.try_reserve(
+            ReservationClass::General,
+            Owner::UnresolvedJoins,
+            MeasuredLayouts::V1.unresolved_fact_min_bytes,
+        ) {
+            Ok(reservation) => {
+                self.pending_thread_ends.insert(
+                    thread_ref,
+                    PendingThreadEnd {
+                        boundary,
+                        _reservation: reservation,
+                    },
+                );
+            }
+            Err(_) => {
+                if let Some(boundary) = boundary {
+                    with_runtime(resources.boundaries, boundary, |runtime| {
+                        runtime.health.join_capacity_exceeded =
+                            runtime.health.join_capacity_exceeded.saturating_add(1);
+                    });
+                }
+            }
+        }
+    }
+
     fn resolve_threads_for_parent(
         &mut self,
         resources: &DecoderResources<'_>,
@@ -1414,18 +1505,41 @@ impl DirectDecoder {
         }
     }
 
+    pub(super) fn resolve_thread_ends_after_sweep(&mut self) {
+        let ready = self
+            .pending_thread_ends
+            .keys()
+            .filter(|thread_ref| self.threads.contains_key(thread_ref))
+            .copied()
+            .collect::<Vec<_>>();
+        for thread_ref in ready {
+            self.pending_thread_ends.remove(&thread_ref);
+            self.threads.remove(&thread_ref);
+        }
+    }
+
     fn resolve_starts_for_thread(
         &mut self,
         resources: &DecoderResources<'_>,
         thread_ref: ThreadRef,
     ) {
         loop {
-            let next = self.pending_starts.iter().find_map(|(key, pending)| {
-                (pending.fact.call_ref.thread_id == thread_ref.thread_id
-                    && pending.fact.call_ref.engine_id == thread_ref.engine_id
-                    && pending.fact.call_ref.process_euid == thread_ref.process_euid)
-                    .then_some(*key)
-            });
+            // A consumer can observe a spawned child's descendants before the
+            // spawning thread's ring publishes the child's entry call. Only
+            // remove a fact whose parent is already resolvable; removing and
+            // immediately reinserting an unready fact can otherwise select the
+            // same hash-map entry forever and livelock the sole consumer.
+            let next = self
+                .pending_starts
+                .iter()
+                .filter(|(_, pending)| {
+                    pending.fact.call_ref.thread_id == thread_ref.thread_id
+                        && pending.fact.call_ref.engine_id == thread_ref.engine_id
+                        && pending.fact.call_ref.process_euid == thread_ref.process_euid
+                        && self.call_start_dependency_ready(&pending.fact)
+                })
+                .map(|(key, _)| *key)
+                .min_by_key(|key| key.call_id.0);
             let Some(key) = next else { break };
             let pending = self
                 .pending_starts
@@ -1433,6 +1547,19 @@ impl DirectDecoder {
                 .expect("selected pending call start exists");
             self.consume_call_start(resources, pending.fact);
         }
+    }
+
+    fn call_start_dependency_ready(&self, fact: &OwnedCallStart) -> bool {
+        if fact.parent_call_id.0 == 0 {
+            return true;
+        }
+        let parent_ref = CallRef {
+            call_id: fact.parent_call_id,
+            ..fact.call_ref
+        };
+        self.calls
+            .get(&parent_ref)
+            .is_some_and(|parent| parent.context_key.is_some())
     }
 
     fn resolve_runtime_ids(&mut self, resources: &DecoderResources<'_>, call_ref: CallRef) {
@@ -1450,13 +1577,14 @@ impl DirectDecoder {
             return;
         };
         for occurrence in pending {
-            self.queue_value_occurrence(
+            self.consume_value_occurrence(
                 resources,
                 occurrence.handle,
                 call_ref,
                 occurrence.role,
                 occurrence.state,
                 occurrence.manual_eligible,
+                Some(occurrence.reservation),
             );
         }
     }
@@ -1809,6 +1937,11 @@ impl DirectDecoder {
             unmatched_threads = unmatched_threads.saturating_add(u64::from(remove));
             !remove
         });
+        self.pending_thread_ends.retain(|_, pending| {
+            let remove = pending.boundary == Some(handle);
+            unmatched_threads = unmatched_threads.saturating_add(u64::from(remove));
+            !remove
+        });
         self.pending_runtime_ids.retain(|_, pending| {
             pending.retain(|annotation| {
                 let remove = annotation.boundary == Some(handle);
@@ -1926,9 +2059,26 @@ pub(super) fn finalize_ready_boundary(
     }
 
     let discarded = decoder.discard_boundary(handle);
-    runtime.health.structural_transport_exceeded = registry
-        .producer_health(handle)
-        .structural_transport_exceeded;
+    let producer_health = registry.producer_health(handle);
+    runtime.health.structural_transport_exceeded = producer_health.structural_transport_exceeded;
+    runtime.health.value_attempt_transport_exceeded =
+        producer_health.value_attempt_transport_exceeded;
+    runtime.health.error_capture_attempt_transport_exceeded = runtime
+        .health
+        .error_capture_attempt_transport_exceeded
+        .saturating_add(producer_health.error_capture_attempt_transport_exceeded);
+    runtime.health.applicable_error_unwinds = runtime
+        .health
+        .applicable_error_unwinds
+        .saturating_add(producer_health.error_capture_attempt_transport_exceeded);
+    runtime.health.terminal_error_link_transport_exceeded = runtime
+        .health
+        .terminal_error_link_transport_exceeded
+        .saturating_add(producer_health.terminal_error_link_transport_exceeded);
+    runtime.health.terminal_error_links_observed = runtime
+        .health
+        .terminal_error_links_observed
+        .saturating_add(producer_health.terminal_error_link_transport_exceeded);
     runtime.health.unmatched_call_facts = runtime
         .health
         .unmatched_call_facts
@@ -2076,7 +2226,8 @@ fn thread_ref(resources: &DecoderResources<'_>, thread_id: crate::ids::BexThread
 
 #[cfg(test)]
 mod tests {
-    use super::BoundaryHealthSnapshot;
+    use super::{BoundaryHealthSnapshot, DirectDecoder, OwnedCallStart};
+    use crate::ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid};
 
     #[test]
     fn terminal_health_round_trips_and_rejects_wrong_lengths() {
@@ -2092,5 +2243,26 @@ mod tests {
         let mut trailing = encoded;
         trailing.push(0);
         assert!(BoundaryHealthSnapshot::decode(&trailing).is_none());
+    }
+
+    #[test]
+    fn unresolved_child_call_is_not_ready_for_pending_start_resolution() {
+        let decoder = DirectDecoder::default();
+        let mut fact = OwnedCallStart {
+            flags: 0,
+            call_ref: CallRef {
+                process_euid: ProcessEuid([1; 16]),
+                engine_id: EngineId(2),
+                thread_id: BexThreadId(3),
+                call_id: BexCallId(5),
+            },
+            parent_call_id: BexCallId(4),
+            function_id: FunctionId(6),
+            call_site: None,
+            ts_ticks: 7,
+        };
+        assert!(!decoder.call_start_dependency_ready(&fact));
+        fact.parent_call_id = BexCallId(0);
+        assert!(decoder.call_start_dependency_ready(&fact));
     }
 }

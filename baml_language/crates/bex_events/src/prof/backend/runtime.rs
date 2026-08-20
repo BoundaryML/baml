@@ -16,7 +16,33 @@ fn engines() -> &'static Mutex<HashMap<u64, Weak<ProfilerSession>>> {
     ENGINES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+fn engine_session(engine_id: EngineId) -> Option<Arc<ProfilerSession>> {
+    engines()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&engine_id.0)
+        .and_then(Weak::upgrade)
+}
+
+fn live_sessions() -> Vec<Arc<ProfilerSession>> {
+    let mut engines = engines()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    engines.retain(|_, session| session.strong_count() != 0);
+    let mut sessions = Vec::new();
+    for session in engines.values().filter_map(Weak::upgrade) {
+        if !sessions
+            .iter()
+            .any(|existing| Arc::ptr_eq(existing, &session))
+        {
+            sessions.push(session);
+        }
+    }
+    sessions
+}
+
 pub fn register_engine_session(engine_id: EngineId, session: &Arc<ProfilerSession>) {
+    #[cfg(not(baml_loom))]
     if let (Some(sizing), Some(memory)) = (session.sizing(), session.memory()) {
         crate::prof::registry::configure_global_transport(
             memory.clone(),
@@ -38,128 +64,90 @@ pub fn unregister_engine_session(engine_id: EngineId) {
 }
 
 pub fn consume_engine_bytes(process_euid: ProcessEuid, engine_id: EngineId, bytes: &[u8]) {
-    let session = engines()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&engine_id.0)
-        .and_then(Weak::upgrade);
+    let session = engine_session(engine_id);
     let Some(session) = session else { return };
     session.consume_raw_bytes(process_euid, engine_id, bytes);
 }
 
-pub fn record_engine_transport_loss(engine_id: EngineId, handle: BoundaryHandle) {
-    let session = engines()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&engine_id.0)
-        .and_then(Weak::upgrade);
-    if let Some(session) = session {
-        session.record_structural_transport_loss(handle);
-    }
+pub fn record_session_transport_loss(session: &ProfilerSession, handle: BoundaryHandle) {
+    session.record_structural_transport_loss(handle);
 }
 
-pub fn reserve_engine_error_attempt(
-    engine_id: EngineId,
+pub fn reserve_session_error_attempt(
+    session: &ProfilerSession,
     handle: BoundaryHandle,
     manual_eligible: bool,
 ) -> Option<Reservation> {
-    engines()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&engine_id.0)
-        .and_then(Weak::upgrade)
-        .and_then(|session| session.reserve_error_attempt(handle, manual_eligible))
+    session.reserve_error_attempt(handle, manual_eligible)
 }
 
-pub fn reserve_engine_error_value(
-    engine_id: EngineId,
+pub fn reserve_session_error_value(
+    session: &ProfilerSession,
     handle: BoundaryHandle,
     manual_eligible: bool,
 ) -> Result<Reservation, ValueLossReason> {
-    let session = engines()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&engine_id.0)
-        .and_then(Weak::upgrade)
-        .ok_or(ValueLossReason::StoreUnavailable)?;
-    session
-        .boundary_publisher(handle)
-        .ok_or(ValueLossReason::StoreUnavailable)?;
+    if !session.boundary_accepts_producer(handle) {
+        return Err(ValueLossReason::StoreUnavailable);
+    }
     session.reserve_value_work(manual_eligible)
 }
 
-pub fn submit_engine_error_attempt(
-    engine_id: EngineId,
+pub fn submit_session_error_attempt(
+    session: &ProfilerSession,
     handle: BoundaryHandle,
     attempt: ErrorCaptureAttempt,
     reservation: Reservation,
 ) {
-    if let Some(session) = engines()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&engine_id.0)
-        .and_then(Weak::upgrade)
-    {
-        session.submit_error_attempt(handle, attempt, reservation);
-    }
+    session.submit_error_attempt(handle, attempt, reservation);
 }
 
-pub fn complete_engine_error_value(engine_id: EngineId, id: ErrorCaptureId, value: ValueState) {
-    if let Some(session) = engines()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&engine_id.0)
-        .and_then(Weak::upgrade)
-    {
-        session.complete_error_value(id, value);
-    }
+pub fn complete_session_error_value(
+    session: &ProfilerSession,
+    handle: BoundaryHandle,
+    id: ErrorCaptureId,
+    value: ValueState,
+) {
+    session.complete_error_value(handle, id, value);
 }
 
-pub fn submit_engine_terminal_error(
-    engine_id: EngineId,
+pub fn submit_session_terminal_error(
+    session: &ProfilerSession,
     handle: BoundaryHandle,
     call_ref: CallRef,
     target: TerminalErrorTarget,
     reservation: Reservation,
 ) {
-    if let Some(session) = engines()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&engine_id.0)
-        .and_then(Weak::upgrade)
-    {
-        session.submit_terminal_error(handle, call_ref, target, reservation);
-    }
+    session.submit_terminal_error(handle, call_ref, target, reservation);
 }
 
-pub fn record_engine_error_attempt_loss(engine_id: EngineId, handle: BoundaryHandle) {
-    if let Some(session) = engines()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&engine_id.0)
-        .and_then(Weak::upgrade)
-    {
-        session.record_error_attempt_transport_loss(handle);
-    }
+pub fn record_session_error_attempt_loss(session: &ProfilerSession, handle: BoundaryHandle) {
+    session.record_error_attempt_transport_loss(handle);
 }
 
-pub fn record_engine_terminal_error_loss(engine_id: EngineId, handle: BoundaryHandle) {
-    if let Some(session) = engines()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&engine_id.0)
-        .and_then(Weak::upgrade)
-    {
-        session.record_terminal_error_transport_loss(handle);
-    }
+pub fn record_session_terminal_error_loss(session: &ProfilerSession, handle: BoundaryHandle) {
+    session.record_terminal_error_transport_loss(handle);
 }
 
-pub fn maintain_sessions() {
-    let mut engines = engines()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    engines.retain(|_, session| session.strong_count() != 0);
-    for session in engines.values().filter_map(Weak::upgrade) {
-        session.maintain_ready_boundaries();
+pub fn drain_session_commands() -> bool {
+    let mut progress = false;
+    for session in live_sessions() {
+        progress |= session.drain_producer_commands();
     }
+    progress
+}
+
+pub fn resolve_session_thread_ends() -> bool {
+    let mut progress = false;
+    for session in live_sessions() {
+        progress |= session.resolve_thread_ends_after_sweep();
+    }
+    progress
+}
+
+pub fn maintain_sessions() -> bool {
+    let mut progress = false;
+    for session in live_sessions() {
+        progress |= session.maintain_ready_boundaries();
+    }
+    progress
 }

@@ -73,6 +73,7 @@ pub struct DerivedSizing {
     pub boundary_slots: u32,
     pub transport_segment_bytes: u64,
     pub transport_freelist_segments: u32,
+    pub producer_queue_slots: u32,
     pub cct_epoch_target_bytes: u64,
     pub segment_target_bytes: u64,
     pub single_value_bytes: u64,
@@ -135,6 +136,10 @@ impl ProfilerSizingPolicy {
             .clamp(Self::SEGMENT_MIN, Self::SEGMENT_MAX)
             .max(measured.writer_batch_min_bytes);
         let cct_epoch_target_bytes = (general_bytes / 4).clamp(Self::EPOCH_MIN, Self::EPOCH_MAX);
+        let producer_queue_slots =
+            u32::try_from(segment_target_bytes / measured.evidence_item_min_bytes.max(1))
+                .unwrap_or(u32::MAX)
+                .max(1);
         let value_working_bytes = general_bytes / 4;
         let single_value_bytes = (value_working_bytes / 4)
             .min(Self::SINGLE_VALUE_MAX)
@@ -148,6 +153,7 @@ impl ProfilerSizingPolicy {
             boundary_slots,
             transport_segment_bytes: measured.transport_segment_bytes,
             transport_freelist_segments: 2,
+            producer_queue_slots,
             cct_epoch_target_bytes,
             segment_target_bytes,
             single_value_bytes,
@@ -197,6 +203,7 @@ mod tests {
                 boundary_slots: 2016,
                 transport_segment_bytes: 262_144,
                 transport_freelist_segments: 2,
+                producer_queue_slots: 16_384,
                 cct_epoch_target_bytes: 58_720_256,
                 segment_target_bytes: 4_194_304,
                 single_value_bytes: 14_680_064,
@@ -217,6 +224,7 @@ mod tests {
                 boundary_slots: 224,
                 transport_segment_bytes: 262_144,
                 transport_freelist_segments: 2,
+                producer_queue_slots: 3_584,
                 cct_epoch_target_bytes: 7_340_032,
                 segment_target_bytes: 917_504,
                 single_value_bytes: 1_835_008,

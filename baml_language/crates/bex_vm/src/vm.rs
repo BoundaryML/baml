@@ -490,6 +490,7 @@ pub(crate) mod tests {
             prof_ring: None,
             prof_suppressed: false,
             root_profiler: RootProfiler::Inactive(InactiveReason::Disabled),
+            profiler_session: None,
             prof_boundary_handle: None,
             prof_boundary_root_pending: false,
             prof_thread_id: 0,
@@ -1140,6 +1141,11 @@ pub struct BexVm {
     /// Inactive variants are immutable no-op adapters.
     pub root_profiler: RootProfiler,
 
+    /// Direct session capability for non-structural profiler producers. It is
+    /// present only for an admitted active root and inherited by descendants,
+    /// so producer hooks never consult the consumer's engine registry.
+    pub profiler_session: Option<Arc<bex_events::prof::backend::ProfilerSession>>,
+
     /// Non-owning projection of the outer completion guard's live boundary
     /// lease. It is used only to acquire a new owned child lease before that
     /// child becomes runnable.
@@ -1773,6 +1779,7 @@ impl BexVm {
             prof_ring: None,
             prof_suppressed: false,
             root_profiler: RootProfiler::Inactive(InactiveReason::Disabled),
+            profiler_session: None,
             prof_boundary_handle: None,
             prof_boundary_root_pending: false,
             prof_thread_id: 0,
@@ -5084,21 +5091,23 @@ impl BexVm {
         first_selected_call_id: u64,
         manual_eligible: bool,
     ) -> VmProfilerUnwindState {
-        let (Some((process_euid, engine_id)), Some(handle)) =
-            (self.bex_ref_seed, self.prof_boundary_handle)
-        else {
+        let (Some((process_euid, engine_id)), Some(handle), Some(session)) = (
+            self.bex_ref_seed,
+            self.prof_boundary_handle,
+            self.profiler_session.as_ref().map(Arc::clone),
+        ) else {
             return VmProfilerUnwindState::Lost;
         };
-        let Some(reservation) = bex_events::prof::backend::reserve_engine_error_attempt(
-            engine_id,
+        let Some(reservation) = bex_events::prof::backend::reserve_session_error_attempt(
+            &session,
             handle,
             manual_eligible,
         ) else {
-            bex_events::prof::backend::record_engine_error_attempt_loss(engine_id, handle);
+            bex_events::prof::backend::record_session_error_attempt_loss(&session, handle);
             return VmProfilerUnwindState::Lost;
         };
         let Some(unwind_ordinal) = self.prof_unwind_ordinal.checked_add(1) else {
-            bex_events::prof::backend::record_engine_error_attempt_loss(engine_id, handle);
+            bex_events::prof::backend::record_session_error_attempt_loss(&session, handle);
             return VmProfilerUnwindState::Lost;
         };
         self.prof_unwind_ordinal = unwind_ordinal;
@@ -5117,8 +5126,8 @@ impl BexVm {
             thread_id: thread_ref.thread_id,
             call_id: BexCallId(call_id),
         };
-        bex_events::prof::backend::submit_engine_error_attempt(
-            engine_id,
+        bex_events::prof::backend::submit_session_error_attempt(
+            &session,
             handle,
             ErrorCaptureAttempt {
                 id,
@@ -5145,8 +5154,8 @@ impl BexVm {
             },
             reservation,
         );
-        match bex_events::prof::backend::reserve_engine_error_value(
-            engine_id,
+        match bex_events::prof::backend::reserve_session_error_value(
+            &session,
             handle,
             manual_eligible,
         ) {
@@ -5159,15 +5168,17 @@ impl BexVm {
                         reservation: value_reservation,
                     });
                 } else {
-                    bex_events::prof::backend::complete_engine_error_value(
-                        engine_id,
+                    bex_events::prof::backend::complete_session_error_value(
+                        &session,
+                        handle,
                         id,
                         ValueState::Lost(ValueLossReason::CopyFailed),
                     );
                 }
             }
-            Err(reason) => bex_events::prof::backend::complete_engine_error_value(
-                engine_id,
+            Err(reason) => bex_events::prof::backend::complete_session_error_value(
+                &session,
+                handle,
                 id,
                 ValueState::Lost(reason),
             ),
@@ -5188,21 +5199,23 @@ impl BexVm {
                 ErrorCaptureLossReason::ErrorCaptureAttemptTransportExceeded,
             ),
         };
-        let (Some((process_euid, engine_id)), Some(handle)) =
-            (self.bex_ref_seed, self.prof_boundary_handle)
-        else {
+        let (Some((process_euid, engine_id)), Some(handle), Some(session)) = (
+            self.bex_ref_seed,
+            self.prof_boundary_handle,
+            self.profiler_session.as_ref(),
+        ) else {
             return;
         };
-        let Some(reservation) = bex_events::prof::backend::reserve_engine_error_attempt(
-            engine_id,
+        let Some(reservation) = bex_events::prof::backend::reserve_session_error_attempt(
+            session,
             handle,
             manual_eligible,
         ) else {
-            bex_events::prof::backend::record_engine_terminal_error_loss(engine_id, handle);
+            bex_events::prof::backend::record_session_terminal_error_loss(session, handle);
             return;
         };
-        bex_events::prof::backend::submit_engine_terminal_error(
-            engine_id,
+        bex_events::prof::backend::submit_session_terminal_error(
+            session,
             handle,
             bex_events::ids::CallRef {
                 process_euid,
@@ -5756,11 +5769,12 @@ impl BexVm {
     }
 
     fn prof_note_transport_loss(&self) {
-        let (Some((_, engine_id)), Some(handle)) = (self.bex_ref_seed, self.prof_boundary_handle)
+        let (Some(session), Some(handle)) =
+            (self.profiler_session.as_ref(), self.prof_boundary_handle)
         else {
             return;
         };
-        bex_events::prof::backend::record_engine_transport_loss(engine_id, handle);
+        bex_events::prof::backend::record_session_transport_loss(session, handle);
     }
 
     /// Resolve the caller-side source span for a bytecode frame/PC pair.

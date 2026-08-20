@@ -496,7 +496,7 @@ impl BackendValueCaptureContext {
                 self.boundary,
                 call_ref,
                 role,
-                &body,
+                body,
                 manual_eligible,
                 reservation,
             ),
@@ -527,20 +527,27 @@ impl BackendValueCaptureContext {
         let snapshot = match copy(&mut reservation, value) {
             Ok(snapshot) => snapshot,
             Err(reason) => {
-                self.session.record_error_value_loss(id, reason);
+                self.session
+                    .record_error_value_loss(self.boundary, id, reason);
                 return;
             }
         };
         let Some(single_value_bytes) = self.session.single_value_bytes() else {
-            self.session
-                .record_error_value_loss(id, ValueLossReason::StoreUnavailable);
+            self.session.record_error_value_loss(
+                self.boundary,
+                id,
+                ValueLossReason::StoreUnavailable,
+            );
             return;
         };
         match encode_trace_snapshot_body_bounded(&snapshot, &mut reservation, single_value_bytes) {
-            Ok(body) => self
+            Ok(body) => {
+                self.session
+                    .record_encoded_error_value(self.boundary, id, body, reservation);
+            }
+            Err(reason) => self
                 .session
-                .record_encoded_error_value(id, &body, reservation),
-            Err(reason) => self.session.record_error_value_loss(id, reason),
+                .record_error_value_loss(self.boundary, id, reason),
         }
     }
 }
@@ -2238,7 +2245,10 @@ impl BexEngine {
         handle: Option<bex_events::prof::backend::BoundaryHandle>,
     ) {
         if let Some(handle) = handle {
-            bex_events::prof::backend::record_engine_transport_loss(self.engine_id, handle);
+            bex_events::prof::backend::record_session_transport_loss(
+                &self.profiler_session,
+                handle,
+            );
         }
     }
 
@@ -3611,6 +3621,11 @@ impl BexEngine {
         thread.vm.root_profiler = admission.profiler();
         thread.vm.prof_boundary_handle = admission.boundary_handle();
         thread.vm.prof_suppressed = !thread.vm.root_profiler.is_active();
+        thread.vm.profiler_session = thread
+            .vm
+            .root_profiler
+            .is_active()
+            .then(|| Arc::clone(&self.profiler_session));
         thread.vm.prof_boundary_root_pending = thread.vm.root_profiler.is_active();
         if thread.vm.root_profiler.is_active() {
             thread.vm.prof_enable_await_accumulator();
@@ -4768,6 +4783,7 @@ impl BexEngine {
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
+            let error_boundary = thread.vm.prof_boundary_handle;
             let error_events = thread.vm.drain_error_capture_events();
             if let Some(backend) = capture.map(|capture| &capture.backend) {
                 for event in error_events {
@@ -4782,8 +4798,12 @@ impl BexEngine {
                 }
             } else {
                 for event in error_events {
-                    bex_events::prof::backend::complete_engine_error_value(
-                        self.engine_id,
+                    let Some(handle) = error_boundary else {
+                        continue;
+                    };
+                    bex_events::prof::backend::complete_session_error_value(
+                        &self.profiler_session,
+                        handle,
                         event.id,
                         bex_events::prof::backend::ValueState::Lost(
                             ValueLossReason::StoreUnavailable,
@@ -5266,6 +5286,10 @@ impl BexEngine {
         child_vm.prof_boundary_handle = boundary_lease
             .as_ref()
             .and_then(ThreadBoundaryLeaseGuard::handle);
+        child_vm.profiler_session = child_vm
+            .root_profiler
+            .is_active()
+            .then(|| Arc::clone(&self.profiler_session));
         child_vm.prof_boundary_root_pending = false;
         if child_vm.root_profiler.is_active() {
             child_vm.prof_enable_await_accumulator();

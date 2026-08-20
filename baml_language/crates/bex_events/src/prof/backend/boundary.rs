@@ -59,6 +59,9 @@ pub struct BoundaryMetadata {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct BoundaryProducerHealthSnapshot {
     pub structural_transport_exceeded: u64,
+    pub value_attempt_transport_exceeded: u64,
+    pub error_capture_attempt_transport_exceeded: u64,
+    pub terminal_error_link_transport_exceeded: u64,
 }
 
 #[derive(Debug)]
@@ -68,7 +71,11 @@ struct BoundarySlot {
     active_threads: AtomicU64,
     root_status: AtomicU8,
     finish_ready: AtomicBool,
+    consumer_drain_armed: AtomicBool,
     structural_transport_exceeded: AtomicU64,
+    value_attempt_transport_exceeded: AtomicU64,
+    error_capture_attempt_transport_exceeded: AtomicU64,
+    terminal_error_link_transport_exceeded: AtomicU64,
     metadata: Mutex<Option<BoundaryMetadata>>,
 }
 
@@ -80,7 +87,11 @@ impl BoundarySlot {
             active_threads: AtomicU64::new(0),
             root_status: AtomicU8::new(STATUS_NONE),
             finish_ready: AtomicBool::new(false),
+            consumer_drain_armed: AtomicBool::new(false),
             structural_transport_exceeded: AtomicU64::new(0),
+            value_attempt_transport_exceeded: AtomicU64::new(0),
+            error_capture_attempt_transport_exceeded: AtomicU64::new(0),
+            terminal_error_link_transport_exceeded: AtomicU64::new(0),
             metadata: Mutex::new(None),
         }
     }
@@ -150,7 +161,14 @@ impl BoundaryRegistry {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(metadata);
         slot.root_status.store(STATUS_NONE, Ordering::Relaxed);
         slot.finish_ready.store(false, Ordering::Relaxed);
+        slot.consumer_drain_armed.store(false, Ordering::Relaxed);
         slot.structural_transport_exceeded
+            .store(0, Ordering::Relaxed);
+        slot.value_attempt_transport_exceeded
+            .store(0, Ordering::Relaxed);
+        slot.error_capture_attempt_transport_exceeded
+            .store(0, Ordering::Relaxed);
+        slot.terminal_error_link_transport_exceeded
             .store(0, Ordering::Relaxed);
         slot.active_threads.store(1, Ordering::Relaxed);
         slot.phase
@@ -190,6 +208,27 @@ impl BoundaryRegistry {
         );
     }
 
+    pub fn record_value_attempt_transport_loss(&self, handle: BoundaryHandle) {
+        let Ok(slot) = self.validate(handle) else {
+            return;
+        };
+        saturating_increment(&slot.value_attempt_transport_exceeded);
+    }
+
+    pub fn record_error_attempt_transport_loss(&self, handle: BoundaryHandle) {
+        let Ok(slot) = self.validate(handle) else {
+            return;
+        };
+        saturating_increment(&slot.error_capture_attempt_transport_exceeded);
+    }
+
+    pub fn record_terminal_error_transport_loss(&self, handle: BoundaryHandle) {
+        let Ok(slot) = self.validate(handle) else {
+            return;
+        };
+        saturating_increment(&slot.terminal_error_link_transport_exceeded);
+    }
+
     #[must_use]
     pub fn producer_health(&self, handle: BoundaryHandle) -> BoundaryProducerHealthSnapshot {
         self.validate(handle)
@@ -199,8 +238,28 @@ impl BoundaryRegistry {
                     structural_transport_exceeded: slot
                         .structural_transport_exceeded
                         .load(Ordering::Acquire),
+                    value_attempt_transport_exceeded: slot
+                        .value_attempt_transport_exceeded
+                        .load(Ordering::Acquire),
+                    error_capture_attempt_transport_exceeded: slot
+                        .error_capture_attempt_transport_exceeded
+                        .load(Ordering::Acquire),
+                    terminal_error_link_transport_exceeded: slot
+                        .terminal_error_link_transport_exceeded
+                        .load(Ordering::Acquire),
                 }
             })
+    }
+
+    #[must_use]
+    pub fn accepts_producer(&self, handle: BoundaryHandle) -> bool {
+        self.validate(handle).is_ok_and(|slot| {
+            matches!(
+                slot.phase.load(Ordering::Acquire),
+                phase if phase == BoundaryPhase::Open as u8
+                    || phase == BoundaryPhase::RootReturned as u8
+            )
+        })
     }
 
     /// Acquires from the handle carried by a currently executing VM. The
@@ -290,6 +349,23 @@ impl BoundaryRegistry {
             .collect()
     }
 
+    /// Returns `true` only after a previous consumer pass observed this
+    /// terminal candidate. The pass between the first `false` and the next
+    /// `true` performs a complete ring sweep, so structural commits that
+    /// happen-before the last thread lease release cannot be overtaken by
+    /// boundary finalization.
+    pub fn consumer_drain_completed(&self, handle: BoundaryHandle) -> bool {
+        let Ok(slot) = self.validate(handle) else {
+            return false;
+        };
+        if slot.phase.load(Ordering::Acquire) != BoundaryPhase::Closing as u8
+            || !slot.finish_ready.load(Ordering::Acquire)
+        {
+            return false;
+        }
+        slot.consumer_drain_armed.swap(true, Ordering::AcqRel)
+    }
+
     pub fn closing_facts(
         &self,
         handle: BoundaryHandle,
@@ -328,6 +404,7 @@ impl BoundaryRegistry {
             return false;
         }
         slot.finish_ready.store(false, Ordering::Release);
+        slot.consumer_drain_armed.store(false, Ordering::Release);
         *slot
             .metadata
             .lock()
@@ -418,6 +495,12 @@ impl BoundaryRegistry {
         }
         Ok(slot)
     }
+}
+
+fn saturating_increment(counter: &AtomicU64) {
+    let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+        value.checked_add(1)
+    });
 }
 
 impl BoundaryThreadLease {

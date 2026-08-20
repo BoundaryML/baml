@@ -87,7 +87,6 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
             match message {
                 ControlMsg::Flush(ack) => {
                     state.drain_to_idle(env);
-                    crate::prof::backend::maintain_sessions();
                     let _ = ack.send(());
                 }
                 ControlMsg::EngineClosed(engine_id) => {
@@ -96,8 +95,7 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
                 }
             }
         }
-        state.sweep_once(env);
-        crate::prof::backend::maintain_sessions();
+        state.service_once(env);
         let wake = env.ctx.wake();
         wake.pre_park();
         // Recheck after advertising the parked state, then sleep even when
@@ -105,7 +103,7 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
         // terminal/control paths wake unconditionally, so polling an open
         // segment only bounces its commit cache line against the producer.
         // The timeout remains the bounded-latency path for low-volume streams.
-        state.sweep_once(env);
+        state.service_once(env);
         wake.park(env.wake_interval);
         wake.post_park();
     }
@@ -119,10 +117,19 @@ struct ConsumerState {
 impl ConsumerState {
     fn drain_to_idle(&mut self, env: &ConsumerEnv) {
         for _ in 0..1024 {
-            if !self.sweep_once(env) {
+            if !self.service_once(env) {
                 break;
             }
         }
+    }
+
+    fn service_once(&mut self, env: &ConsumerEnv) -> bool {
+        let commands_before = crate::prof::backend::drain_session_commands();
+        let structural = self.sweep_once(env);
+        let thread_ends = structural && crate::prof::backend::resolve_session_thread_ends();
+        let commands_after = crate::prof::backend::drain_session_commands();
+        let terminal = crate::prof::backend::maintain_sessions();
+        commands_before || structural || thread_ends || commands_after || terminal
     }
 
     fn sweep_once(&mut self, env: &ConsumerEnv) -> bool {
@@ -131,6 +138,11 @@ impl ConsumerState {
             env.registry.sweep(&mut |ring, bytes| {
                 let engine_id = ring.engine_id();
                 if !self.closed_engines.contains(&engine_id) {
+                    // The ring's acquire-load observed these structural
+                    // commits. Any producer command submitted before a later
+                    // call-end commit must be folded first so the decoder's
+                    // active-call join cannot be overtaken across lanes.
+                    crate::prof::backend::drain_session_commands();
                     crate::prof::backend::consume_engine_bytes(
                         ProcessEuid::current(),
                         EngineId(engine_id),
