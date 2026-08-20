@@ -4260,7 +4260,6 @@ function baml.iter.Skip.Iterator.next(self: baml.iter.Skip<#0, #1>) -> #0 | baml
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L5
 
   L2:
@@ -4289,10 +4288,8 @@ function baml.iter.Skip.Iterator.next(self: baml.iter.Skip<#0, #1>) -> #0 | baml
     load_const 0
     store_field .remaining
     alloc_instance baml.iter.Done
-    store_var _0
 
   L5:
-    load_var _0
     return
 }
 
@@ -4314,7 +4311,6 @@ function baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile<#0, #1, #2>
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L5
 
   L2:
@@ -4341,7 +4337,6 @@ function baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile<#0, #1, #2>
     load_const false
     store_field .skipping
     load_var x
-    store_var _0
     jump L5
 
   L4:
@@ -4349,10 +4344,8 @@ function baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile<#0, #1, #2>
     load_const false
     store_field .skipping
     alloc_instance baml.iter.Done
-    store_var _0
 
   L5:
-    load_var _0
     return
 }
 
