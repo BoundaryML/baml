@@ -213,38 +213,32 @@ function invoke_error_normalization.capture_agent_timeout(client: ai.Client) -> 
     store_var _3
     call user.invoke_error_normalization.TimeoutSpec$spec
     store_var _5
-    load_var2 4 5
+    load_var2 3 4
     load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
     jump L0
     load_var e
     throw_if_panic
     load_var e
-    store_var _0
 
   L0:
-    load_var _0
     return
 }
 
 function invoke_error_normalization.capture_client_timeout(client: ai.Client) -> unknown {
     call user.invoke_error_normalization.timeout_input
     store_var _3
-    load_var2 1 4
+    load_var2 1 3
     load_type ai.Client
     load_const "invoke"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
     jump L0
     load_var e
     throw_if_panic
     load_var e
-    store_var _0
 
   L0:
-    load_var _0
     return
 }
 
