@@ -17,6 +17,7 @@ pub mod indexable;
 pub mod lazy_biased_mutex;
 pub mod link;
 pub mod relink;
+pub mod rename;
 mod roots;
 pub mod runtime_compile;
 pub mod task_group;

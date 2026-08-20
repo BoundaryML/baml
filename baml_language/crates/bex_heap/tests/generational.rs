@@ -128,6 +128,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
                 dependency_names: IndexMap::new(),
                 init: None,
                 initialized: true,
+                mint: None,
             })),
             session: None,
         };

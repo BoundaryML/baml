@@ -208,6 +208,9 @@ impl BexVm {
                 alias: class.metadata.alias.clone(),
                 docstring: class.metadata.docstring.clone(),
                 other: class.metadata.other.clone(),
+                // Digest of this (already mint-unique) name — see the note in
+                // `runtime_class_builder` on why a minted name and its type tag
+                // are not derivable from one another.
                 type_tag: baml_type::typetag::class_type_tag(&class.name.to_string()),
                 ty_attr: baml_type::TyAttr::default(),
                 has_cleanup: false,

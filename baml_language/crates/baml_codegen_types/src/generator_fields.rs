@@ -66,6 +66,14 @@ impl OutputType {
     pub const fn generated_directory(self) -> &'static str {
         "baml_sdk"
     }
+
+    /// The naming convention currently implemented by this generator.
+    pub const fn required_naming_convention(self) -> NamingConvention {
+        match self {
+            Self::Go | Self::CSharp => NamingConvention::Language,
+            _ => NamingConvention::PreserveCase,
+        }
+    }
 }
 
 /// Identifier-casing policy a code generator must respect. Surfaces as
@@ -99,15 +107,10 @@ pub struct Generator {
 
 impl From<OutputType> for Generator {
     fn from(output_type: OutputType) -> Self {
-        let naming_convention = match output_type {
-            OutputType::Go | OutputType::CSharp => NamingConvention::Language,
-            _ => NamingConvention::PreserveCase,
-        };
-
         Self {
             output_type,
             output_dir: None,
-            naming_convention,
+            naming_convention: output_type.required_naming_convention(),
             sdk_import_path: None,
             max_typed_union_arity: None,
         }
@@ -123,11 +126,19 @@ mod tests {
         for &output_type in OutputType::all() {
             let generator = Generator::from(output_type);
             assert_eq!(generator.output_type, output_type);
+            assert_eq!(
+                generator.naming_convention,
+                output_type.required_naming_convention()
+            );
             assert!(!output_type.add_name().is_empty());
         }
 
         assert_eq!(
             Generator::from(OutputType::Go).naming_convention,
+            NamingConvention::Language
+        );
+        assert_eq!(
+            Generator::from(OutputType::CSharp).naming_convention,
             NamingConvention::Language
         );
         assert_eq!(

@@ -124,6 +124,13 @@ struct TyDisplayContext<'db> {
 }
 
 impl TyDisplayContext<'_> {
+    /// Every namespace decision below reads
+    /// [`QualifiedTypeName::source_namespace`], not `namespace()`: a
+    /// runtime-minted declaration carries a hidden `$dyn.<mint>` discriminator
+    /// that keys its identity in the VM, and rendering it would show a `root.`
+    /// path nobody can write. Below the discriminator the name is the one the
+    /// source wrote, and that is what this path — hover, completions, describe,
+    /// and the diagnostics a runtime compile hands back — must show.
     fn display_qtn(&self, qtn: &QualifiedTypeName) -> String {
         if self.collapse_aliases {
             if let Some(alias) = qtn.builtin_alias() {
@@ -142,7 +149,7 @@ impl TyDisplayContext<'_> {
         }
 
         let path = qtn
-            .namespace()
+            .source_namespace()
             .iter()
             .chain(std::iter::once(qtn.name()))
             .map(Name::as_str)
@@ -152,11 +159,11 @@ impl TyDisplayContext<'_> {
     }
 
     fn can_use_bare_name(&self, qtn: &QualifiedTypeName) -> bool {
-        if qtn.namespace() == &self.current_namespace {
+        if qtn.source_namespace() == self.current_namespace {
             return true;
         }
 
-        if qtn.namespace().is_empty() {
+        if qtn.source_namespace().is_empty() {
             return self
                 .package_items
                 .lookup_type(&self.current_namespace, qtn.name())
@@ -257,16 +264,20 @@ fn display_ty_for_file_impl(
 /// - user type at package root → its bare name (`Foo`);
 /// - user type in a namespace → `root.<ns>.<Name>`;
 /// - other dependency type → `<pkg>.<path>` (`baml.json.JsonObject`).
+///
+/// A runtime-minted declaration reads through its
+/// [`QualifiedTypeName::source_namespace`], so it renders as the name its
+/// source wrote rather than the hidden discriminator that keys its identity.
 pub fn canonical_fqn_string(qtn: &QualifiedTypeName) -> String {
     if let Some(alias) = qtn.builtin_alias() {
         return alias.to_string();
     }
     if qtn.is_local() {
-        if qtn.namespace().is_empty() {
+        if qtn.source_namespace().is_empty() {
             qtn.name().to_string()
         } else {
             let path = qtn
-                .namespace()
+                .source_namespace()
                 .iter()
                 .chain(std::iter::once(qtn.name()))
                 .map(Name::as_str)

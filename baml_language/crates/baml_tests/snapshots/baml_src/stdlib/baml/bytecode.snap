@@ -3967,6 +3967,24 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (#3, #1) -> #3 
     return
 }
 
+function baml.iter.Iterator.skip(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = #2, Item = #1> {
+    load_var2 1 2
+    load_type #1
+    load_type #2
+    init_instance<2> baml.iter.Skip .source, .remaining
+    return
+}
+
+function baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+    load_var2 1 2
+    load_const true
+    load_type #1
+    load_type #2
+    load_type #3
+    init_instance<3> baml.iter.SkipWhile .source, .predicate, .skipping
+    return
+}
+
 function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> bool {
   L0:
     load_const true
@@ -4001,6 +4019,24 @@ function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.it
     load_type #1
     load_type #2
     init_instance<2> baml.iter.StepBy .source, .n, .first
+    return
+}
+
+function baml.iter.Iterator.take(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = #2, Item = #1> {
+    load_var2 1 2
+    load_type #1
+    load_type #2
+    init_instance<2> baml.iter.Take .source, .remaining
+    return
+}
+
+function baml.iter.Iterator.take_while(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+    load_var2 1 2
+    load_const false
+    load_type #1
+    load_type #2
+    load_type #3
+    init_instance<3> baml.iter.TakeWhile .source, .predicate, .done
     return
 }
 
@@ -4210,6 +4246,122 @@ function baml.iter.Repeat.new(value: #0, count: int) -> baml.iter.Repeat<#0> {
     return
 }
 
+function baml.iter.Skip.Iterable.iter(self: baml.iter.Skip<#0, #1>) -> baml.iter.Iterator<Error = #1, Item = #0> {
+    load_var self
+    return
+}
+
+function baml.iter.Skip.Iterator.next(self: baml.iter.Skip<#0, #1>) -> #0 | baml.iter.Done {
+  L0:
+    load_var self
+    load_field .remaining
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var self
+    load_field .source
+    load_type baml.iter.Iterator<Error = #1, Item = #0>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    jump L5
+
+  L2:
+    load_var self
+    load_field .source
+    load_type baml.iter.Iterator<Error = #1, Item = #0>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var self
+    copy 0
+    load_field .remaining
+    load_const 1
+    bin_op -
+    store_field .remaining
+    jump L0
+
+  L4:
+    load_var self
+    load_const 0
+    store_field .remaining
+    alloc_instance baml.iter.Done
+    store_var _0
+
+  L5:
+    load_var _0
+    return
+}
+
+function baml.iter.SkipWhile.Iterable.iter(self: baml.iter.SkipWhile<#0, #1, #2>) -> baml.iter.Iterator<Error = #1 | #2, Item = #0> {
+    load_var self
+    return
+}
+
+function baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile<#0, #1, #2>) -> #0 | baml.iter.Done {
+  L0:
+    load_var self
+    load_field .skipping
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var self
+    load_field .source
+    load_type baml.iter.Iterator<Error = #1, Item = #0>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    jump L5
+
+  L2:
+    load_var self
+    load_field .source
+    load_type baml.iter.Iterator<Error = #1, Item = #0>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _3
+    store_var_load_var x
+    load_var self
+    load_field .predicate
+    call_indirect
+    unary_op !
+    pop_jump_if_false L0
+    load_var self
+    load_const false
+    store_field .skipping
+    load_var x
+    store_var _0
+    jump L5
+
+  L4:
+    load_var self
+    load_const false
+    store_field .skipping
+    alloc_instance baml.iter.Done
+    store_var _0
+
+  L5:
+    load_var _0
+    return
+}
+
 function baml.iter.StepBy.Iterable.iter(self: baml.iter.StepBy<#0, #1>) -> baml.iter.Iterator<Error = #1, Item = #0> {
     load_var self
     return
@@ -4280,6 +4432,113 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<#0, #1>) -> #0 | 
 
   L7:
     load_var _0
+    return
+}
+
+function baml.iter.Take.Iterable.iter(self: baml.iter.Take<#0, #1>) -> baml.iter.Iterator<Error = #1, Item = #0> {
+    load_var self
+    return
+}
+
+function baml.iter.Take.Iterator.next(self: baml.iter.Take<#0, #1>) -> #0 | baml.iter.Done {
+    load_var self
+    load_field .remaining
+    load_const 0
+    cmp_int_op <=
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var self
+    load_field .source
+    load_type baml.iter.Iterator<Error = #1, Item = #0>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var self
+    copy 0
+    load_field .remaining
+    load_const 1
+    bin_op -
+    store_field .remaining
+    load_var _4
+    jump L4
+
+  L2:
+    load_var self
+    load_const 0
+    store_field .remaining
+    alloc_instance baml.iter.Done
+    jump L4
+
+  L3:
+    alloc_instance baml.iter.Done
+
+  L4:
+    return
+}
+
+function baml.iter.TakeWhile.Iterable.iter(self: baml.iter.TakeWhile<#0, #1, #2>) -> baml.iter.Iterator<Error = #1 | #2, Item = #0> {
+    load_var self
+    return
+}
+
+function baml.iter.TakeWhile.Iterator.next(self: baml.iter.TakeWhile<#0, #1, #2>) -> #0 | baml.iter.Done {
+    load_var self
+    load_field .done
+    pop_jump_if_false L0
+    jump L6
+
+  L0:
+    load_var self
+    load_field .source
+    load_type baml.iter.Iterator<Error = #1, Item = #0>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _3
+    store_var_load_var x
+    load_var self
+    load_field .predicate
+    call_indirect
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var self
+    load_const true
+    store_field .done
+    jump L5
+
+  L3:
+    load_var x
+    jump L7
+
+  L4:
+    load_var self
+    load_const true
+    store_field .done
+
+  L5:
+    alloc_instance baml.iter.Done
+    jump L7
+
+  L6:
+    alloc_instance baml.iter.Done
+
+  L7:
     return
 }
 

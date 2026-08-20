@@ -1,0 +1,140 @@
+# CI on ix (preview): the Linux CI running side by side on an ix runner
+# pool, next to the gating Blacksmith checks. A trial artifact: none of
+# these checks is required, no existing workflow is changed, and deleting
+# the ix-* workflow files (plus the IX_TOKEN secret) removes every
+# ix-scheduled job; nothing outside .github/ is touched.
+#
+# The jobs are copies of the reusable workflows that carry the Linux
+# spend, pointed at the pool - each ix-*.reusable.yaml header names its
+# source. Fork PRs are skipped by design: untrusted code never schedules
+# onto ix machines; the hosted lanes remain fork PRs' CI.
+name: CI on ix (preview)
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [canary]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ix-preview-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  determine_changes:
+    name: "Determine changes"
+    # A free hosted runner on purpose: events that path-gate to nothing
+    # never wake the pool. The original workflow's code filters, minus its
+    # release/publish workflow paths (this preview runs none of them), plus
+    # the ix copies.
+    runs-on: ubuntu-latest
+    # Repo-gated so a fork of this repo never queues jobs against runner
+    # labels it does not have; IX_CI_PREVIEW=true (a repo variable) opts a
+    # fork in deliberately - it is also the kill switch here.
+    if: (github.repository == 'BoundaryML/baml' || vars.IX_CI_PREVIEW == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    outputs:
+      code: ${{ steps.check_code.outputs.changed }}
+      webview: ${{ steps.check_webview.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Determine merge base
+        id: merge_base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || 'canary' }}
+        run: |
+          sha=$(git merge-base HEAD "origin/${BASE_REF}")
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if code changed
+        id: check_code
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/**' \
+            ':typescript2/app-promptfiddle/src/playground/default.baml' \
+            ':scripts/baml-language-version' \
+            ':scripts/baml-wrapper-version' \
+            ':scripts/baml-release-manifests' \
+            ':scripts/baml-package-manager-artifacts' \
+            ':scripts/baml-release-platforms' \
+            ':scripts/baml_release_platforms.py' \
+            ':scripts/baml-bridge-cffi-hygiene' \
+            ':scripts/tests/**' \
+            ':release/platforms.json' \
+            ':scripts/install.sh' \
+            ':scripts/install.ps1' \
+            ':packaging/aur/**' \
+            ':tools/pkg_boundaryml_com/**' \
+            ':.github/workflows/ix-ci.yml' \
+            ':.github/workflows/ix-cargo-tests.reusable.yaml' \
+            ':.github/workflows/ix-size-gate.reusable.yaml' \
+            ':.github/workflows/ix-wasm-pack-tests.reusable.yaml' \
+            ':.github/actions/setup-musl-cross/**' \
+            ':.github/actions/setup-mise/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if webview changed
+        id: check_webview
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':typescript2/app-vscode-webview/**' \
+            ':typescript2/pkg-playground/**' \
+            ':typescript2/pkg-proto/**' \
+            ':baml_language/crates/bridge_ctypes/types/**' \
+            ':.github/workflows/ix-webview-tests.reusable.yaml' \
+            ':.github/actions/setup-node2/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  cargo-tests:
+    name: "Cargo Tests"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/canary'
+    # No secrets, deliberately: these jobs run PR-controlled code on ix
+    # machines, so nothing secret may flow to them. .envrc sees no R2
+    # credentials and sccache falls back to the machine-local cache.
+    uses: ./.github/workflows/ix-cargo-tests.reusable.yaml
+
+  size-gate:
+    name: "Size Gate"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/canary'
+    uses: ./.github/workflows/ix-size-gate.reusable.yaml
+    # The ix copy drops the report's PR-comment step outright, so the
+    # gating workflow's comment stays the only one; the report is still in
+    # the job summary.
+    permissions:
+      contents: read
+
+  wasm-pack-tests:
+    name: "WASM Pack Tests"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/canary'
+    uses: ./.github/workflows/ix-wasm-pack-tests.reusable.yaml
+
+  webview-tests:
+    name: "Webview Tests"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/canary'
+    uses: ./.github/workflows/ix-webview-tests.reusable.yaml

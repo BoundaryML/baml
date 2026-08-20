@@ -6065,13 +6065,29 @@ impl BexEngine {
                     qtn.clone()
                 }
                 _ => {
+                    // A hand-rolled name in the hidden runtime namespace, for a
+                    // mounted type that has no qualified name of its own (a
+                    // list, a union, …). `baml_type::RUNTIME_MINT_NAMESPACE` is
+                    // the convention's source of truth — the segment below is
+                    // it, spelled out because this name is not one this crate
+                    // may hand to `to_runtime_local`.
+                    //
+                    // The discriminator here is `r-<n>`/`s-<n>`, not the bare
+                    // `<n>` a minted declaration carries, so that a mounted
+                    // type can never collide with one. `has_runtime_mint`
+                    // parses that segment as a `u64` and therefore never
+                    // matches these — which is correct: this name is a mount
+                    // key, not a declaration's identity.
                     let suffix = match value.mint() {
                         bex_vm_types::types::MintId::Runtime(n) => format!("r-{n}"),
                         bex_vm_types::types::MintId::Static(n) => format!("s-{n}"),
                     };
                     baml_type::QualifiedTypeName::new(
                         baml_type::Name::new("user"),
-                        vec![baml_type::Name::new("$dyn"), baml_type::Name::new(suffix)],
+                        vec![
+                            baml_type::Name::new(baml_type::RUNTIME_MINT_NAMESPACE),
+                            baml_type::Name::new(suffix),
+                        ],
                         baml_type::Name::new(export_name),
                     )
                 }

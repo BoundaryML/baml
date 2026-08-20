@@ -817,7 +817,9 @@ pub(super) fn descriptor_specialize(
                 // A bound that cannot be realized against a complete frame is
                 // a bound this specialization cannot discharge. Report it as
                 // the failure it is rather than raising an internal error.
-                _ => bound.interface.to_string(),
+                // A runtime-minted interface names itself the way its source
+                // did, as it does everywhere a person reads it.
+                _ => bound.interface.render_source_dotted(),
             };
             let supplied_ty = actual.to_string();
             let name = callable.name(vm);
@@ -1121,7 +1123,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             Ok(artifact) => artifact.clone(),
             Err(error) => return error.into(),
         };
-        let plan = match link_dynamic(&artifact.units) {
+        let mut plan = match link_dynamic(&artifact.units) {
             Ok(plan) => plan,
             Err(error) => {
                 return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
@@ -1152,6 +1154,31 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             }
         }
 
+        // Every compiled package names its declarations `user.Foo`, so the
+        // linked image alone cannot say whose `Foo` an overlay holds. Re-spell
+        // this package's own declarations under a mint-unique name before any
+        // of it reaches the heap — see `bex_vm_types::rename`. The mint is
+        // allocated here so the whole image, and the identities minted from it
+        // below, agree on one spelling.
+        let bex_vm_types::types::MintId::Runtime(package_mint_id) = vm.heap.mint_runtime_id()
+        else {
+            unreachable!("BexHeap::mint_runtime_id always returns a runtime mint")
+        };
+        let external_objects: std::collections::HashMap<usize, _> = plan
+            .external_objects
+            .iter()
+            .map(|(index, symbol)| (index.raw(), symbol))
+            .collect();
+        let owned_objects: std::collections::HashSet<usize> = (0..plan.program.objects.len())
+            .filter(|index| !external_objects.contains_key(index))
+            .collect();
+        let minted_declarations = bex_vm_types::rename::rename_package_declarations(
+            &mut plan.program,
+            &baml_type::Name::new("user"),
+            &owned_objects,
+            package_mint_id,
+        );
+
         let program_package = plan
             .program
             .packages
@@ -1180,16 +1207,12 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 dependency_names: dependencies.clone(),
                 init: None,
                 initialized: false,
+                mint: Some(package_mint_id),
             })),
             session: None,
         };
         let package_ptr = vm.alloc(Object::Package(Box::new(package)));
 
-        let external_objects: std::collections::HashMap<usize, _> = plan
-            .external_objects
-            .iter()
-            .map(|(index, symbol)| (index.raw(), symbol))
-            .collect();
         let mut objects = Vec::with_capacity(plan.program.objects.len());
         for (index, object) in plan.program.objects.iter().enumerate() {
             let external = external_objects.get(&index).and_then(|symbol| {
@@ -1339,6 +1362,15 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             .iter()
             .map(|(name, index)| (name.clone(), objects[index.raw()]))
             .collect::<IndexMap<_, _>>();
+        // A minted declaration is reachable by its mint-unique name from any
+        // frame, exactly as a `reflect.class.new` one is — the engine-wide
+        // table is what makes an overlay's key resolvable outside the package
+        // that owns it.
+        for (name, index) in minted_declarations {
+            vm.dynamic_dispatch
+                .register_class(name, objects[index.raw()]);
+        }
+
         let mut impl_rules = IndexMap::new();
         for (interface_index, rules) in &program_package.impl_rules {
             let interface_ptr = objects[interface_index.raw()];
@@ -2317,6 +2349,12 @@ impl BamlClassReflectSession for PackageBamlImpl {
                 init: None,
                 // Session cells intentionally stay mutable between evals.
                 initialized: false,
+                // A Session's declarations are not re-spelled. It re-grafts on
+                // every submission, so a per-submission discriminator would
+                // first have to answer what a declaration's identity means
+                // across submissions. Recovery declines for them exactly as it
+                // did before, by the same mint-unique-name gate.
+                mint: None,
             })),
             session: Some(Box::new(SessionState {
                 history: IndexMap::new(),

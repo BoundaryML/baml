@@ -929,6 +929,15 @@ fn build_group(
             alias: None,
             docstring: None,
             other: IndexMap::new(),
+            // The tag is a digest of the name it is built from, and for a
+            // `reflect.class.new` declaration that name is already mint-unique
+            // — nothing was ever emitted against it, so there is no
+            // compiler-side digest to agree with. A compiled package is the
+            // opposite case: `bex_vm_types::rename` re-spells `Class::name` at
+            // graft but deliberately leaves `type_tag` at the digest of the
+            // *source* name, because this image's jump tables were emitted
+            // against that digest. So after a mint, `name` and `type_tag` are
+            // not derivable from one another — do not "resynchronize" them.
             type_tag: baml_type::typetag::class_type_tag(&identity.name.to_string()),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
