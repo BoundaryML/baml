@@ -406,6 +406,11 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     scan_operand(cap, set);
                 }
             }
+            crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+                for arg in type_args {
+                    scan_operand(arg, set);
+                }
+            }
             crate::Rvalue::MakeBoundMethod { receiver, .. }
             | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. }
             | crate::Rvalue::VirtualFieldAccess { receiver, .. } => {
@@ -709,6 +714,11 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 count_in_operand(cap, uses);
+            }
+        }
+        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+            for arg in type_args {
+                count_in_operand(arg, uses);
             }
         }
         crate::Rvalue::MakeBoundMethod { receiver, .. }
@@ -1081,6 +1091,11 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
                 apply_subst_to_operand(cap, subst);
             }
         }
+        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+            for arg in type_args {
+                apply_subst_to_operand(arg, subst);
+            }
+        }
         crate::Rvalue::MakeBoundMethod { receiver, .. }
         | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. }
         | crate::Rvalue::VirtualFieldAccess { receiver, .. } => {
@@ -1386,6 +1401,11 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
                 remap_operand(cap, map);
             }
         }
+        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+            for arg in type_args {
+                remap_operand(arg, map);
+            }
+        }
         crate::Rvalue::MakeBoundMethod { receiver, .. }
         | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. }
         | crate::Rvalue::VirtualFieldAccess { receiver, .. } => {
@@ -1665,6 +1685,11 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         crate::Rvalue::MakeClosure { captures, .. } => {
                             for cap in captures {
                                 check_operand(cap, &blk);
+                            }
+                        }
+                        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+                            for arg in type_args {
+                                check_operand(arg, &blk);
                             }
                         }
                         crate::Rvalue::MakeBoundMethod { receiver, .. }

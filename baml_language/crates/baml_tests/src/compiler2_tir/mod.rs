@@ -346,6 +346,11 @@ pub(crate) mod support {
                 baml_compiler2_ast::TemplateTag::Default { .. } => "`...`".into(),
             },
             Expr::GenericApply { base, .. } => format!("{}<...>", expr_desc(*base, body)),
+            Expr::QualifiedPath {
+                qself,
+                interface,
+                member,
+            } => format!("({qself} as {interface}).{member}"),
             Expr::Missing => "<missing>".into(),
         }
     }
@@ -2014,6 +2019,15 @@ pub(crate) mod support {
                         expr_desc_hir(*base, body, prefix, local_type_names)
                     )
                 }
+                Expr::QualifiedPath {
+                    qself,
+                    interface,
+                    member,
+                } => format!(
+                    "({} as {}).{member}",
+                    type_expr_to_string_hir(qself, prefix, local_type_names),
+                    type_expr_to_string_hir(interface, prefix, local_type_names)
+                ),
                 Expr::Missing => "<missing>".into(),
             }
         }

@@ -381,6 +381,15 @@ fn fill_package_slots(
 /// The free-function form of [`crate::vm::BexVm::lookup_type_by_fqn`], usable
 /// before a `BexVm` exists (e.g. to pre-resolve builtin error/panic classes in
 /// `BexVm::new`).
+///
+/// The `LocalName` is built from the dotted string verbatim, with no
+/// runtime-mint translation ([`baml_type::TypeName::source_namespace`]). That is
+/// safe because the index this reads only holds compile-time packages, and
+/// callers only ever ask it for a hardcoded builtin (`baml.*`) path. A minted
+/// name addresses a declaration that was grafted at runtime, which is not in
+/// here under any spelling, so it can only miss — never answer wrongly. Take
+/// the mint-aware [`crate::vm::BexVm::lookup_type`] for a name that came from a
+/// runtime-compiled package.
 pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr> {
     let mut parts: Vec<Name> = fqn.split('.').map(Name::new).collect();
     let name = parts.pop()?;

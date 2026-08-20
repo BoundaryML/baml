@@ -4217,7 +4217,11 @@ function interfaces.idmc_main() -> bool {
 
 function interfaces.idmr_main() -> string {
     alloc_instance user.interfaces.IdmrThing
-    call user.interfaces.IdmrDescribable.describe
+    load_type interfaces.IdmrThing
+    load_type interfaces.IdmrDescribable
+    load_const "describe"
+    make_virtual_function ntypeargs=0
+    call_indirect
     return
 }
 

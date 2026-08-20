@@ -436,7 +436,7 @@ pub fn lookup_interface_member<'db>(
 
 /// Whether `target` declares method `name` with a `Self` use that makes it
 /// uncallable through an existential receiver, and where that use sits.
-fn declared_method_self_restriction<'db>(
+pub(crate) fn declared_method_self_restriction<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
     target: &InterfaceRef,
@@ -1125,7 +1125,7 @@ pub fn lookup_union_member<'db>(
     }
     let mut declarers: Vec<(InterfaceRef, bool)> = Vec::new();
     for iface in shared.unwrap_or_default() {
-        if let Some(is_field) = interface_declares_member(db, facts, &iface, name)
+        if let Some(is_field) = interface_declares_member(db, &iface, name)
             && !declarers.iter().any(|(seen, _)| *seen == iface)
         {
             declarers.push((iface, is_field));
@@ -1219,46 +1219,26 @@ fn union_arm_interfaces<'db>(
 /// Whether the interface declares `name`, and as which kind
 /// (`Some(true)` = field). Side-effect-free - used to count shared
 /// declarers before committing to a virtual resolution.
-fn interface_declares_member<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    facts: &Facts<'db>,
+///
+/// A thin reading of the shared declaration oracle: value-namespace
+/// membership is one question, asked here and by item-projection
+/// determination alike.
+fn interface_declares_member(
+    db: &dyn baml_compiler2_ppir::Db,
     target: &InterfaceRef,
     name: &Name,
 ) -> Option<bool> {
-    if let Some(crate::package_interface::ExportedType::Interface {
-        fields,
-        required_methods,
-        default_methods,
-        ..
-    }) = crate::package_interface::mounted_type_row(db, &target.name)
-    {
-        if fields.iter().any(|(field, ..)| field == name) {
-            return Some(true);
-        }
-        if required_methods
-            .iter()
-            .chain(default_methods)
-            .any(|method| method.name == *name)
-        {
-            return Some(false);
-        }
-        return None;
+    use crate::interfaces::{InterfaceMemberKind, MemberNamespace, ValueMemberKind};
+    match crate::interfaces::interface_declared_kind(
+        db,
+        &target.name,
+        name,
+        MemberNamespace::Value,
+    )? {
+        InterfaceMemberKind::Value(ValueMemberKind::Field) => Some(true),
+        InterfaceMemberKind::Value(ValueMemberKind::Method) => Some(false),
+        InterfaceMemberKind::AssociatedType => None,
     }
-    let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
-        return None;
-    };
-    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-    if data.fields.iter().any(|field| field.name == *name) {
-        return Some(true);
-    }
-    if data
-        .methods
-        .iter()
-        .any(|&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)
-    {
-        return Some(false);
-    }
-    None
 }
 
 /// The spec's TS-style union field read: every arm is a concrete class

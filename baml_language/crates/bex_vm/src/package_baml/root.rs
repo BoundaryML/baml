@@ -641,7 +641,9 @@ pub(super) fn render_to_sink(
             let (class_name, paired) = match vm.get_object(inst.class) {
                 Object::Class(class) => {
                     let name = if state.qualified_class_names {
-                        class.name.to_string()
+                        // The qualified form a person reads, which is the
+                        // source spelling — never the runtime mint.
+                        class.name.render_source_dotted()
                     } else {
                         class.name.name().to_string()
                     };

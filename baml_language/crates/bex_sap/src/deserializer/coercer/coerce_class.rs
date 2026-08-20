@@ -140,7 +140,7 @@ where
 
         // If this combination has been visited bail out.
         if ctx.visited_during_coerce.contains(&ptr_pair) {
-            return Err(ctx.error_circular_reference(&class_ty.name.to_string(), value));
+            return Err(ctx.error_circular_reference(class_ty.name.render().as_ref(), value));
         }
 
         // Mark this class as visited for the duration of this function

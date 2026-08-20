@@ -468,6 +468,10 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("MakeVirtualBoundMethod must be handled in emit_rvalue_pull")
         }
+        Rvalue::MakeVirtualFunction { .. } => {
+            // Handled specially in emit_rvalue_pull before this function is called.
+            unreachable!("MakeVirtualFunction must be handled in emit_rvalue_pull")
+        }
         Rvalue::VirtualFieldAccess { .. } => {
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("VirtualFieldAccess must be handled in emit_rvalue_pull")

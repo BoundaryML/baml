@@ -188,7 +188,11 @@ namespace baml.iter:
   class Peekable<T, E> { methods: [peek, iter, next] }
   class Range { methods: [new, iter, next] }
   class Repeat<T> { methods: [new, iter, next] }
+  class Skip<T, E> { methods: [iter, next] }
+  class SkipWhile<T, E, E2> { methods: [iter, next] }
   class StepBy<T, E> { methods: [iter, next] }
+  class Take<T, E> { methods: [iter, next] }
+  class TakeWhile<T, E, E2> { methods: [iter, next] }
   function flatten<R, E, E3, I>
 namespace baml.json:
   class JsonDecodeError { methods: [] }

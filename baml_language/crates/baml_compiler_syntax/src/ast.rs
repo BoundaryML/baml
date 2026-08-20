@@ -895,6 +895,7 @@ ast_node!(DeferStmt, DEFER_STMT);
 ast_node!(PathExpr, PATH_EXPR);
 ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
 ast_node!(UpcastExpr, UPCAST_EXPR);
+ast_node!(QualifiedPathExpr, QUALIFIED_PATH_EXPR);
 ast_node!(EnvAccessExpr, ENV_ACCESS_EXPR);
 ast_node!(MatchExpr, MATCH_EXPR);
 ast_node!(MatchArm, MATCH_ARM);
@@ -2657,6 +2658,7 @@ impl BlockExpr {
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
                         | SyntaxKind::UPCAST_EXPR
+                        | SyntaxKind::QUALIFIED_PATH_EXPR
                         | SyntaxKind::SPEC_EXPR
                         | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR

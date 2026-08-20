@@ -287,7 +287,7 @@ generator:
     - `"cpp"` — C++17
     - `"csharp"` — C#
 
-    `naming_convention` accepts `"preserve-case"` or `"language"`. Go requires `"language"` and also requires `sdk_import_path`.
+    `naming_convention` accepts `"preserve-case"` or `"language"`. Go and C# require `"language"`; Go also requires `sdk_import_path`. All other targets require `"preserve-case"`.
 
 test:
   summary: "Defines a named executable test using ordinary BAML expressions."

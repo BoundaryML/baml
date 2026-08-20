@@ -2251,10 +2251,7 @@ impl BexVm {
             return Some(ptr);
         }
         let package = self.package_for_type(qtn)?;
-        let local = bex_vm_types::types::LocalName {
-            namespace: qtn.namespace().clone(),
-            name: qtn.name().clone(),
-        };
+        let local = package_local_name(package, qtn)?;
         package
             .classes
             .get(&local)
@@ -2278,14 +2275,9 @@ impl BexVm {
         current_ptr: HeapPtr,
         qtn: &baml_type::TypeName,
     ) -> Option<HeapPtr> {
-        let local = bex_vm_types::types::LocalName {
-            namespace: qtn.namespace().clone(),
-            name: qtn.name().clone(),
-        };
-        self.package_for_type_in(current_ptr, qtn)?
-            .interfaces
-            .get(&local)
-            .copied()
+        let package = self.package_for_type_in(current_ptr, qtn)?;
+        let local = package_local_name(package, qtn)?;
+        package.interfaces.get(&local).copied()
     }
 
     /// Look up a class, enum, or interface object by its fully-qualified dotted
@@ -2300,13 +2292,9 @@ impl BexVm {
     /// The recursive type-alias definition for `qtn`, if any (only recursive
     /// aliases survive to runtime; non-recursive ones are expanded inline).
     pub fn recursive_type_alias(&self, qtn: &baml_type::TypeName) -> Option<&baml_type::RuntimeTy> {
-        let local = bex_vm_types::types::LocalName {
-            namespace: qtn.namespace().clone(),
-            name: qtn.name().clone(),
-        };
-        self.package_for_type(qtn)?
-            .recursive_type_aliases
-            .get(&local)
+        let package = self.package_for_type(qtn)?;
+        let local = package_local_name(package, qtn)?;
+        package.recursive_type_aliases.get(&local)
     }
 
     /// Get mutable access to an object via `HeapPtr`.
@@ -2389,14 +2377,19 @@ impl BexVm {
         let Object::Package(package) = self.get_object(package_ptr) else {
             unreachable!("runtime function owner does not point to Object::Package")
         };
-        let key = name
-            .namespace()
+        // `type_values` is keyed by the source-visible name, which is also what
+        // `reflect.Package.get_class("root.Item")` addresses — so a minted name
+        // is translated back, and one another package minted is refused.
+        let runtime = package.runtime.as_ref()?;
+        let local = runtime.source_local_name(name)?;
+        let key = local
+            .namespace
             .iter()
             .map(baml_type::Name::as_str)
-            .chain(std::iter::once(name.name().as_str()))
+            .chain(std::iter::once(local.name.as_str()))
             .collect::<Vec<_>>()
             .join(".");
-        let ptr = package.runtime.as_ref()?.type_values.get(&key).copied()?;
+        let ptr = runtime.type_values.get(&key).copied()?;
         match self.get_object(ptr) {
             Object::Type(value) if &value.ty == ty => Some(ptr),
             _ => None,
@@ -2450,18 +2443,22 @@ impl BexVm {
     /// runtime declaration `defs` carries.
     ///
     /// **The name has to be mint-unique.** A `DynTypeDefs` is keyed by
-    /// `QualifiedTypeName`, and only a `runtime_local` name (`user.$dyn.N.Foo`
-    /// — `reflect.class.new` / `reflect.enum.new`) has its mint *in* the name.
-    /// A static declaration and a runtime *package*'s declaration are both
-    /// plain `user.Foo`, and an overlay reaches a frame whether or not the
-    /// spelling that pulled it in is the one being recovered — `LoadType`
-    /// staples the whole frame overlay onto anything materialized there. So
-    /// matching an ordinary name against the overlay would answer a *different*
-    /// definition's mint: a static `Holder<Item>` in a frame that also touched a
+    /// `QualifiedTypeName`, and an overlay reaches a frame whether or not the
+    /// spelling being recovered is the one that pulled it in — `LoadType`
+    /// staples the whole frame overlay onto anything materialized there. So a
+    /// name that several definitions can spell would answer from a *different*
+    /// definition: a static `Holder<Item>` in a frame that also touched a
     /// runtime package's `Item` would report `type.of<T>() != type.of<Item>()`,
     /// and two compiled packages that both declare `Item` would cross-match.
     /// Handing back a wrong identity is worse than handing back none, so
     /// everything but a mint-unique name declines and re-derives normally.
+    ///
+    /// Every *runtime* declaration now has a mint-unique name: `reflect.class.
+    /// new` / `reflect.enum.new` mint theirs at construction, and a compiled
+    /// `reflect.Package`'s are re-spelled when the package is grafted
+    /// (`bex_vm_types::rename`). A plain `user.Foo` therefore names a static
+    /// declaration, whose mint is the deterministic digest of its spelling and
+    /// needs no recovery.
     ///
     /// A decorated or parameterized spelling is a *different* type value than
     /// the definition was minted as, so the recovered value must also describe
@@ -3007,6 +3004,70 @@ impl BexVm {
                 |constant| matches!(constant, ConstValue::Type(template) if unrealizable(template)),
             );
         needs_arguments.then(|| Self::callable_display_name(function))
+    }
+
+    /// Resolve `method_name` of the interface `iface_value` names for the
+    /// `Self` type `self_ty` — the shared tail of `MakeVirtualBoundMethod`
+    /// (which DERIVES `self_ty` from the receiver value) and
+    /// `MakeVirtualFunction` (which takes it as a PASSED type operand). Either
+    /// way the resolution key is `(Self type, interface, method)`; coherence
+    /// guarantees at most one matching rule. Returns the resolved impl
+    /// method's function pointer and the callee's complete frame: the impl's
+    /// realized frame followed by `method_type_args`.
+    ///
+    /// `world_anchor` selects the dynamic world the resolution runs in: the
+    /// receiver value or the `Self` type value, whichever the caller popped —
+    /// both carry their owning runtime package.
+    fn resolve_virtual_method(
+        &self,
+        world_anchor: Value,
+        self_ty: &baml_type::RealizedTy,
+        iface_value: Value,
+        method_name: &str,
+        method_type_args: TakenTypeArgs,
+    ) -> Result<(HeapPtr, Vec<baml_type::RealizedTy>), VmError> {
+        let (iface_qtn, iface_args) = {
+            let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
+            match self.get_object(iface_ptr) {
+                Object::Type(type_value) => match &type_value.ty {
+                    baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
+                        (qtn.clone(), args.clone())
+                    }
+                    other => unreachable!(
+                        "virtual-method interface operand must be an Interface type, \
+                         found {other:?}"
+                    ),
+                },
+                other => unreachable!(
+                    "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                    ObjectType::of(other)
+                ),
+            }
+        };
+        let resolver = crate::package_baml::ImplResolver::for_value(self, world_anchor);
+        let (rule, bound_args) = resolver
+            .resolve_implements_rule(self_ty, &iface_qtn, &iface_args)
+            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
+                method: method_name.to_string(),
+            })?;
+        let method = rule.methods.get(method_name).ok_or_else(|| {
+            VmInternalError::UnresolvedVirtualCall {
+                method: method_name.to_string(),
+            }
+        })?;
+        let mut frame = resolver.realize_frame(&method.frame, &bound_args)?;
+        // BUG: only `.tys` survives — `method_type_args.values`/`.defs` (the
+        // exact `TypeValue`s and their `DynTypeDefs`) are dropped, so a
+        // runtime-defined type argument reaching a virtual callable loses the
+        // metadata that resolves names like `user.$dyn.N.Out`. Both carriers
+        // (`Closure` for `MakeVirtualFunction`, `BoundMethod` for
+        // `MakeVirtualBoundMethod`) hold only `RealizedTy`, so preserving it
+        // means widening them and threading the metadata into the callee
+        // frame — a call-convention change affecting both opcodes, not a
+        // regression of either. `VirtualCall` keeps it via
+        // `append_virtual_method_type_args`; these value forms do not.
+        frame.extend(method_type_args.tys);
+        Ok((method.fqn, frame))
     }
 
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
@@ -8768,30 +8829,14 @@ impl BexVm {
                     let method_value = self.stack.ensure_pop();
                     let method_name = self.as_string(&method_value)?.to_string();
                     let iface_value = self.stack.ensure_pop();
-                    let (iface_qtn, iface_args) = {
-                        let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
-                        match self.get_object(iface_ptr) {
-                            Object::Type(type_value) => match &type_value.ty {
-                                baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
-                                    (qtn.clone(), args.clone())
-                                }
-                                other => unreachable!(
-                                    "MakeVirtualBoundMethod interface operand must be an \
-                                     Interface type, found {other:?}"
-                                ),
-                            },
-                            other => unreachable!(
-                                "as_object_ptr(Type) guarantees a Type object, found {:?}",
-                                ObjectType::of(other)
-                            ),
-                        }
-                    };
                     // The method-level type args (a generic interface method's own
                     // generics, specialized at the reference site) sit below the
                     // interface type; they append to the resolved impl frame.
                     let method_type_args = self.pop_type_args(ntypeargs)?;
                     let receiver = self.stack.ensure_pop();
-                    // `Self` is the receiver value's realized concrete type.
+                    // `Self` is DERIVED: the receiver value's realized concrete
+                    // type — the one dispatch source that works when the static
+                    // type was an interface-existential.
                     let self_ty = baml_type::RealizedTy::from(
                         self.value_concrete_ty(receiver).unwrap_or_else(|| {
                             unreachable!(
@@ -8800,28 +8845,61 @@ impl BexVm {
                             )
                         }),
                     );
-                    let (function_ptr, type_args) = {
-                        let resolver = crate::package_baml::ImplResolver::for_value(self, receiver);
-                        let (rule, bound_args) = resolver
-                            .resolve_implements_rule(&self_ty, &iface_qtn, &iface_args)
-                            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
-                                method: method_name.clone(),
-                            })?;
-                        let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
-                            VmInternalError::UnresolvedVirtualCall {
-                                method: method_name.clone(),
-                            }
-                        })?;
-                        let mut frame = resolver.realize_frame(&method.frame, &bound_args)?;
-                        frame.extend(method_type_args.tys);
-                        (method.fqn, frame)
-                    };
+                    let (function_ptr, type_args) = self.resolve_virtual_method(
+                        receiver,
+                        &self_ty,
+                        iface_value,
+                        &method_name,
+                        method_type_args,
+                    )?;
                     let bound = Object::BoundMethod(BoundMethod {
                         function: function_ptr,
                         receiver,
                         type_args: type_args.into_boxed_slice(),
                     });
                     let ptr = self.tlab.alloc(bound);
+                    self.stack.push(Value::object(ptr));
+                }
+
+                // ── MakeVirtualFunction ───────────────────────────────────────
+                OpCode::MakeVirtualFunction => {
+                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
+                    let method_value = self.stack.ensure_pop();
+                    let method_name = self.as_string(&method_value)?.to_string();
+                    let iface_value = self.stack.ensure_pop();
+                    let method_type_args = self.pop_type_args(ntypeargs)?;
+                    let self_type_value = self.stack.ensure_pop();
+                    // `Self` is PASSED: a written (or frame-realized) type
+                    // operand — the only dispatch source for a method with no
+                    // `self` receiver. The compiler guarantees it is a
+                    // dispatchable concrete type by the time it gets here.
+                    let self_ty = {
+                        let self_ptr = self.as_object_ptr(self_type_value, ObjectType::Type)?;
+                        match self.get_object(self_ptr) {
+                            Object::Type(type_value) => type_value.ty.clone(),
+                            other => unreachable!(
+                                "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                                ObjectType::of(other)
+                            ),
+                        }
+                    };
+                    let (function_ptr, type_args) = self.resolve_virtual_method(
+                        self_type_value,
+                        &self_ty,
+                        iface_value,
+                        &method_name,
+                        method_type_args,
+                    )?;
+                    // A capture-less closure is the unbound-callable carrier:
+                    // calling it seeds `frame.type_args` from
+                    // `captured_type_args`, exactly like the pooled
+                    // `GenericFunction` path (`MakeGenericFunctionFromValue`).
+                    let closure = Object::Closure(bex_vm_types::types::Closure {
+                        function: function_ptr,
+                        captures: Box::new([]),
+                        captured_type_args: type_args.into_boxed_slice(),
+                    });
+                    let ptr = self.tlab.alloc(closure);
                     self.stack.push(Value::object(ptr));
                 }
 
@@ -9770,5 +9848,25 @@ impl TlabHolder for BexVm {
     }
     fn tlab_mut(&mut self) -> &mut Tlab {
         &mut self.tlab
+    }
+}
+
+/// The key `qtn` has in `package`'s own declaration tables.
+///
+/// A runtime-compiled package's declarations are re-spelled with a hidden
+/// mint at load, while the tables that index them stay keyed by the source
+/// name — so a minted name is translated back, and one minted by a *different*
+/// package is refused rather than answered from the wrong table. A statically
+/// compiled package has no mint and takes the name as written.
+fn package_local_name(
+    package: &bex_vm_types::types::Package,
+    qtn: &baml_type::TypeName,
+) -> Option<bex_vm_types::types::LocalName> {
+    match package.runtime.as_ref() {
+        Some(runtime) => runtime.source_local_name(qtn),
+        None => (!qtn.is_runtime_minted()).then(|| bex_vm_types::types::LocalName {
+            namespace: qtn.namespace().clone(),
+            name: qtn.name().clone(),
+        }),
     }
 }

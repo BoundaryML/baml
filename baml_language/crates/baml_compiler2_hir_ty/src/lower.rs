@@ -564,7 +564,12 @@ impl<'db> LowerCtx<'db> {
         member: &Name,
     ) -> Option<baml_type::interned::InterfaceRef> {
         let declares = |target: &baml_type::interned::InterfaceRef| {
-            crate::interfaces::interface_declares_member(self.db, &target.name, member)
+            crate::interfaces::interface_declares_member(
+                self.db,
+                &target.name,
+                member,
+                crate::interfaces::MemberNamespace::Type,
+            )
         };
         match base.kind() {
             TyKind::TypeVar(param, _) => {

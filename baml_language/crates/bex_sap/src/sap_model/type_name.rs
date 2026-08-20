@@ -105,7 +105,7 @@ impl<N: TypeIdent> TypeName for Ty<'_, N> {
         match self {
             Ty::Resolved(r) => r.type_name(),
             Ty::ResolvedRef(r) => r.type_name(),
-            Ty::Unresolved(n) => Cow::Owned(n.to_string()),
+            Ty::Unresolved(n) => n.render(),
         }
     }
 }
@@ -128,19 +128,19 @@ impl<N: TypeIdent> TypeName for MapTy<'_, N> {
 
 impl<N: TypeIdent> TypeName for ClassTy<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
-        Cow::Owned(self.name.to_string())
+        self.name.render()
     }
 }
 
 impl<N: TypeIdent> TypeName for EnumTy<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
-        Cow::Owned(self.name.to_string())
+        self.name.render()
     }
 }
 
 impl<N: TypeIdent> TypeName for EnumVariantTy<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
-        Cow::Owned(format!("{}.{}", self.name, self.value.name))
+        Cow::Owned(format!("{}.{}", self.name.render(), self.value.name))
     }
 }
 

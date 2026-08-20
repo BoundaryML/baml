@@ -798,6 +798,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => elements
                 .iter()
                 .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
+            Rvalue::MakeVirtualFunction { type_args, .. } => type_args
+                .iter()
+                .any(|arg| self.operand_reads_spawn_captured_local(arg, seen)),
             Rvalue::Uint8Array(_)
             | Rvalue::LoadType(_)
             | Rvalue::CurrentPackage(_)
@@ -1899,6 +1902,35 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.set_operand(inst, OperandMeta::Const(iface.to_string()));
             self.emit_constant(&Constant::String(method.clone()));
             let inst = self.emit(Instruction::MakeVirtualBoundMethod {
+                ntypeargs: u16::try_from(type_args.len()).expect("ntypeargs fits in u16"),
+            });
+            self.set_operand(inst, OperandMeta::Callable(method.clone()));
+            return;
+        }
+        if let Rvalue::MakeVirtualFunction {
+            self_ty,
+            iface,
+            method,
+            type_args,
+        } = rvalue
+        {
+            // Stack layout mirrors `MakeVirtualBoundMethod` with the `Self`
+            // TYPE in the receiver's slot: `Self`, then the method-level type
+            // args (already `Object::Type` OPERANDS — a written static arg is
+            // a `LoadType` temp, a runtime `unreflect` arg any expression),
+            // then the interface type, then the method name — the opcode pops
+            // in reverse.
+            let self_const = self.add_constant(ConstValue::Type(self_ty.clone()));
+            let inst = self.emit(Instruction::LoadType(self_const));
+            self.set_operand(inst, OperandMeta::Const(self_ty.to_string()));
+            for arg in type_args {
+                self.emit_operand_pull(arg);
+            }
+            let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
+            let inst = self.emit(Instruction::LoadType(iface_const));
+            self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+            self.emit_constant(&Constant::String(method.clone()));
+            let inst = self.emit(Instruction::MakeVirtualFunction {
                 ntypeargs: u16::try_from(type_args.len()).expect("ntypeargs fits in u16"),
             });
             self.set_operand(inst, OperandMeta::Callable(method.clone()));
@@ -3214,6 +3246,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     Rvalue::MakeClosure { .. }
                         | Rvalue::MakeBoundMethod { .. }
                         | Rvalue::MakeVirtualBoundMethod { .. }
+                        | Rvalue::MakeVirtualFunction { .. }
                         | Rvalue::VirtualFieldAccess { .. }
                         | Rvalue::BinaryOp { .. }
                         | Rvalue::Aggregate {
