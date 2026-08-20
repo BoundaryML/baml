@@ -445,7 +445,7 @@ mod tests {
         use bex_project::{
             PortableClassDef, PortableClassFieldDef, PortableMetadata, PortableTypeDef,
         };
-        let name = TypeName::runtime_local(Name::new("Row"), 41);
+        let name = TypeName::local(Name::new("Row"));
         let metadata = PortableMetadata {
             description: Some("row description".into()),
             alias: None,

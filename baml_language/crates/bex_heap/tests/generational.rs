@@ -136,7 +136,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         let class_name = QualifiedTypeName::local(Name::new("RuntimeClass"));
         let type_tag = baml_type::typetag::TypeTag::of_head("RuntimeClass");
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: class_name.clone(),
+            name: bex_vm_types::DeclarationName::Declared(class_name.clone()),
             fields: Vec::new(),
             description: None,
             alias: None,
@@ -1116,7 +1116,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
     let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
     let enum_tag = baml_type::typetag::TypeTag::fresh_dynamic();
     let enum_ptr = tlab.alloc(Object::Enum(Box::new(bex_vm_types::Enum {
-        name: QualifiedTypeName::runtime_local(Name::new("FieldEnum"), 7),
+        name: bex_vm_types::DeclarationName::Anonymous(Name::new("FieldEnum")),
         variants: Vec::new(),
         description: None,
         alias: None,
@@ -1131,7 +1131,9 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         TyAttr::default(),
     );
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-        name: QualifiedTypeName::local(Name::new("FieldOwner")),
+        name: bex_vm_types::DeclarationName::Declared(QualifiedTypeName::local(Name::new(
+            "FieldOwner",
+        ))),
         fields: vec![ClassField {
             name: "value".to_string(),
             field_type: bex_vm_types::RuntimeTy::from(field_ty.clone()),

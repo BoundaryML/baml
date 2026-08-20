@@ -182,7 +182,11 @@ fn collect_to_json_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
 /// Whether `inst`'s class is one of the builtin media classes.
 fn is_media_instance(vm: &BexVm, inst: &Instance) -> bool {
     match vm.get_object(inst.class) {
-        Object::Class(c) => media_kind_from_fqn(c.name.render_dotted(false).as_str()).is_some(),
+        // Media classes are stdlib declarations; an anonymous class is never one.
+        Object::Class(c) => c
+            .name
+            .declared()
+            .is_some_and(|qtn| media_kind_from_fqn(qtn.render_dotted(false).as_str()).is_some()),
         _ => false,
     }
 }
@@ -308,9 +312,9 @@ fn render_to_serde(
             Ok(serde_json::Value::Object(out))
         }
         Snap::Instance { class_ptr, fields } => {
-            let (class_fqn, field_names) = match vm.get_object(class_ptr) {
+            let (class_name, field_names) = match vm.get_object(class_ptr) {
                 Object::Class(c) => (
-                    c.name.render_dotted(false),
+                    c.name.clone(),
                     c.fields.iter().map(|f| f.name.clone()).collect::<Vec<_>>(),
                 ),
                 _ => {
@@ -323,7 +327,12 @@ fn render_to_serde(
                 }
             };
             // Media instances render to their tagged form, not a field map.
-            if let Some(kind) = media_kind_from_fqn(&class_fqn) {
+            // Media classes are stdlib declarations, so anonymous classes
+            // always take the field-map path.
+            if let Some(kind) = class_name
+                .declared()
+                .and_then(|qtn| media_kind_from_fqn(&qtn.render_dotted(false)))
+            {
                 return serialize_media(vm, value, kind, path);
             }
             let mut out = serde_json::Map::with_capacity(fields.len());
@@ -1113,7 +1122,7 @@ pub(crate) fn read_media_value(
         _ => return None,
     };
     let class_name = match vm.get_object(class) {
-        Object::Class(class) => class.name.render_dotted(false),
+        Object::Class(class) => class.name.declared()?.render_dotted(false),
         _ => return None,
     };
     media_kind_from_fqn(class_name.as_str())?;

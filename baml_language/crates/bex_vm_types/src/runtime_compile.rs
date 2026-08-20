@@ -9,21 +9,29 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use baml_type::{Interface, Name, QualifiedTypeName, RealizedTy, Ty};
+use baml_type::{Interface, Name, RealizedTy, Ty};
 use indexmap::IndexMap;
 
 use crate::CompilationUnit;
 
 /// Compiler-neutral structural projection of one runtime class definition.
+///
+/// `name` is the declaration's bare item name; the compile world spells it
+/// `alias.<name>` under whatever alias the package is mounted as. `tag` is the
+/// declaration's live identity, carried only so the compile seam can tell two
+/// same-named declarations apart (a fail-closed duplicate check) — it is never
+/// a compile-time identity.
 #[derive(Clone, Debug)]
 pub struct RuntimeMountedClass {
-    pub qtn: QualifiedTypeName,
+    pub name: Name,
+    pub tag: baml_type::typetag::TypeTag,
     pub fields: Vec<(Name, Ty, RuntimeMountedFieldAttrs)>,
 }
 
 #[derive(Clone, Debug)]
 pub struct RuntimeMountedEnum {
-    pub qtn: QualifiedTypeName,
+    pub name: Name,
+    pub tag: baml_type::typetag::TypeTag,
     pub variants: Vec<Name>,
 }
 
@@ -34,10 +42,13 @@ pub struct RuntimeMountedFieldAttrs {
 }
 
 /// One exact type value mounted under a source-visible export name.
+///
+/// `ty` and every field type in `classes` are already spelled from the
+/// consumer compile world's viewpoint: a runtime declaration appears as
+/// `alias.<item name>`, a compiled one as its own qualified name.
 #[derive(Clone, Debug)]
 pub struct RuntimeTypeMount {
     pub export_name: Name,
-    pub identity_name: QualifiedTypeName,
     pub ty: RealizedTy,
     pub classes: Vec<RuntimeMountedClass>,
     pub enums: Vec<RuntimeMountedEnum>,

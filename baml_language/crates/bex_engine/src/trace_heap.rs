@@ -320,8 +320,10 @@ impl TraceSnapshotBuilder {
                             .class_type_args
                             .iter()
                             .filter_map(|arg| {
-                                crate::conversion::to_wire_ty(&bex_vm_types::RuntimeTy::from(arg))
-                                    .ok()
+                                crate::conversion::overlay_wire_ty(&bex_vm_types::RuntimeTy::from(
+                                    arg,
+                                ))
+                                .ok()
                             })
                             .collect(),
                         fields,

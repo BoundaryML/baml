@@ -1009,7 +1009,7 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         for ptr in package.classes.values().copied().filter(|ptr| {
             !matches!(
                 vm.get_object(*ptr),
-                Object::Class(class) if class.name.name().as_str().ends_with("$stream")
+                Object::Class(class) if class.name.item_name().as_str().ends_with("$stream")
             )
         }) {
             if !class_ptrs.contains(&ptr) {

@@ -245,8 +245,12 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
             Object::Bigint(_) => "baml.Comparable$for$bigint.compare".to_string(),
             Object::Instance(inst) => {
                 let class_ptr = inst.class;
-                let fqn = match vm.get_object(class_ptr) {
-                    Object::Class(c) => c.name.render_dotted(false),
+                let qtn = match vm.get_object(class_ptr) {
+                    // `compare` methods register as globals under the class's
+                    // declared FQN at emit time. An anonymous class has no
+                    // declared FQN and no emitted methods, so it cannot
+                    // implement `Comparable` — same as the non-instance arm.
+                    Object::Class(c) => c.name.declared().cloned(),
                     _ => {
                         return Err(VmRustFnError::InternalError(
                             VmInternalError::MissingNativeFunction {
@@ -255,7 +259,13 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
                         ));
                     }
                 };
-                format!("{fqn}.baml.Comparable.compare")
+                let Some(qtn) = qtn else {
+                    return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                        message: "_compare_shim: element type does not implement Comparable"
+                            .to_string(),
+                    }));
+                };
+                format!("{}.baml.Comparable.compare", qtn.render_dotted(false))
             }
             _ => {
                 return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
@@ -328,7 +338,7 @@ pub(super) fn to_string_override_fn_name(vm: &BexVm, v: Value) -> Option<String>
     let fqn = match v.kind() {
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Instance(inst) => match vm.get_object(inst.class) {
-                Object::Class(c) => c.name.render_dotted(false),
+                Object::Class(c) => c.name.declared()?.render_dotted(false),
                 _ => return None,
             },
             Object::Type(_) => "baml.TypeValue".to_string(),
@@ -371,7 +381,7 @@ pub(super) fn to_json_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
     let fqn = match v.kind() {
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Instance(inst) => match vm.get_object(inst.class) {
-                Object::Class(c) => c.name.render_dotted(false),
+                Object::Class(c) => c.name.declared()?.render_dotted(false),
                 _ => return None,
             },
             _ => return None,

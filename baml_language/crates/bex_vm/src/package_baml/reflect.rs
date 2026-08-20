@@ -472,6 +472,48 @@ fn dependency_object(vm: &BexVm, package: HeapPtr, local: &str) -> Option<HeapPt
         .or_else(|| package.interfaces.get(&local_name))
         .or_else(|| package.functions.get(&local_name))
         .copied()
+        .or_else(|| mounted_declaration(vm, package, local))
+}
+
+/// Resolve `local` against a package's mount surface: the export name of a
+/// mounted type resolves to the declaration it is headed at, and the item name
+/// of any runtime declaration a mounted type reaches resolves to that
+/// declaration. This is the linker's name boundary for declarations that have
+/// no spelling of their own — the mount surface is the only place a consumer
+/// compile can name them, and its blob rows are spelled `alias.<item name>`.
+fn mounted_declaration(
+    vm: &BexVm,
+    package: &bex_vm_types::types::Package,
+    local: &str,
+) -> Option<HeapPtr> {
+    let head_declaration = |value: &bex_vm_types::types::TypeValue| match &value.ty {
+        RealizedTy::Class(head, ..) | RealizedTy::Enum(head, ..) => {
+            head.is_resolved().then(|| head.ptr())
+        }
+        _ => None,
+    };
+    if let Some(&type_ptr) = package.mounted_types.get(local)
+        && let Object::Type(value) = vm.get_object(type_ptr)
+        && let Some(ptr) = head_declaration(value)
+    {
+        return Some(ptr);
+    }
+    for &type_ptr in package.mounted_types.values() {
+        let Object::Type(value) = vm.get_object(type_ptr) else {
+            continue;
+        };
+        for ptr in crate::reachable::runtime_definitions(vm, &value.ty) {
+            let item = match vm.get_object(ptr) {
+                Object::Class(class) => class.name.item_name(),
+                Object::Enum(enm) => enm.name.item_name(),
+                _ => continue,
+            };
+            if item.as_str() == local {
+                return Some(ptr);
+            }
+        }
+    }
+    None
 }
 
 fn diagnostic_value(vm: &mut BexVm, diagnostic: &bex_vm_types::RuntimeCompileDiagnostic) -> Value {
@@ -724,35 +766,12 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 if matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn) {
                     return None;
                 }
-                let qtn = baml_type::QualifiedTypeName::from_dotted_path(&symbol.fq_name);
-                vm.dynamic_dispatch
-                    .class_ptr(&qtn)
-                    .or_else(|| {
-                        dependencies.values().find_map(|package_ptr| {
-                            let Object::Package(package) = vm.get_object(*package_ptr) else {
-                                return None;
-                            };
-                            package.mounted_types.values().find_map(|type_ptr| {
-                                let Object::Type(value) = vm.get_object(*type_ptr) else {
-                                    return None;
-                                };
-                                // A mounted type's head is the declaration it
-                                // exports; this is the linker resolving an FQN,
-                                // one of the sanctioned name boundaries.
-                                let (RealizedTy::Class(head, ..) | RealizedTy::Enum(head, ..)) =
-                                    &value.ty
-                                else {
-                                    return None;
-                                };
-                                (head.declared_name().as_ref() == Some(&qtn)).then(|| head.ptr())
-                            })
-                        })
-                    })
-                    .or_else(|| vm.packages.object_by_name(&symbol.fq_name))
-                    .or_else(|| {
-                        let (alias, local) = symbol.fq_name.split_once('.')?;
-                        dependency_object(vm, *dependencies.get(alias)?, local)
-                    })
+                vm.packages.object_by_name(&symbol.fq_name).or_else(|| {
+                    // Alias-qualified names — a dependency's own exports and
+                    // its mount surface — resolve through the dependency.
+                    let (alias, local) = symbol.fq_name.split_once('.')?;
+                    dependency_object(vm, *dependencies.get(alias)?, local)
+                })
             });
             if let Some(ptr) = external {
                 objects.push(ptr);
@@ -1376,6 +1395,17 @@ fn dependency_named_declarations(
         if head.is_resolved() {
             out.push((format!("{alias}.{name}"), head.ptr()));
         }
+        // Every runtime declaration the mounted type reaches is spelled
+        // `alias.<item name>` in the consumer compile world (the blob rows
+        // name it that way), so index those spellings too.
+        for ptr in crate::reachable::runtime_definitions(vm, &value.ty) {
+            let item = match vm.get_object(ptr) {
+                Object::Class(class) => class.name.item_name(),
+                Object::Enum(enm) => enm.name.item_name(),
+                _ => continue,
+            };
+            out.push((format!("{alias}.{item}"), ptr));
+        }
     }
 }
 
@@ -1434,11 +1464,13 @@ fn bind_graft_type_heads(
             continue;
         };
         let bound = bex_vm_types::TypeHead::new(*ptr, live_tag);
+        // An anonymous declaration has no spelling of its own — it is only
+        // reachable through the surface names it was mounted under.
         let declared = match object {
-            Object::Class(class) => Some(&class.name),
-            Object::Enum(enm) => Some(&enm.name),
-            Object::Interface(interface) => Some(&interface.name),
-            Object::TypeAlias(alias) => Some(&alias.name),
+            Object::Class(class) => class.name.declared().cloned(),
+            Object::Enum(enm) => enm.name.declared().cloned(),
+            Object::Interface(interface) => Some(interface.name.clone()),
+            Object::TypeAlias(alias) => Some(alias.name.clone()),
             _ => None,
         };
         if let Some(name) = declared {

@@ -9,6 +9,7 @@
 mod class;
 mod const_value;
 mod containers;
+mod declaration_name;
 mod enums;
 mod function;
 mod future;
@@ -26,6 +27,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 pub use class::*;
 pub use const_value::*;
 pub use containers::*;
+pub use declaration_name::*;
 pub use enums::*;
 pub use function::*;
 pub use future::*;

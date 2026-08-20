@@ -3469,7 +3469,7 @@ fn emit_file_group(
             });
 
             let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
-                name: fq_to_type_name(&fq_name),
+                name: bex_vm_types::DeclarationName::Declared(fq_to_type_name(&fq_name)),
                 fields,
                 description: class_meta.description,
                 alias: class_meta.alias,
@@ -3572,7 +3572,7 @@ fn emit_file_group(
             let enum_meta = extract_schema_attrs(&enm.attributes, enm.docstring.as_deref());
 
             let enum_obj_idx = program.add_object(Object::Enum(Box::new(Enum {
-                name: fq_to_type_name(&fq_name),
+                name: bex_vm_types::DeclarationName::Declared(fq_to_type_name(&fq_name)),
                 type_tag: claim_type_tag(type_tags, &fq_name)?,
                 variants,
                 description: enum_meta.description,

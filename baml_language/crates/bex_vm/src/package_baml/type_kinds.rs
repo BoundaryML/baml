@@ -50,7 +50,9 @@ impl BexVm {
         for class in &definition.classes {
             let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
             let ptr = self.tlab.alloc(Object::Class(Box::new(Class {
-                name: class.name.clone(),
+                // The wire qtn is the request's internal linking spelling; the
+                // declaration it authors is anonymous — item name only.
+                name: bex_vm_types::DeclarationName::Anonymous(class.name.name().clone()),
                 fields: Vec::new(),
                 description: class.metadata.description.clone(),
                 alias: class.metadata.alias.clone(),
@@ -70,7 +72,7 @@ impl BexVm {
         for enm in &definition.enums {
             let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
             let ptr = self.tlab.alloc(Object::Enum(Box::new(Enum {
-                name: enm.name.clone(),
+                name: bex_vm_types::DeclarationName::Anonymous(enm.name.name().clone()),
                 variants: enm
                     .variants
                     .iter()
@@ -476,13 +478,9 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             ));
         }
 
-        let type_name = baml_type::QualifiedTypeName::runtime_local(
-            baml_type::Name::new(class_name),
-            vm.tlab.heap().next_synthetic_name_id(),
-        );
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
-            name: type_name.clone(),
+            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(class_name)),
             fields: class_fields,
             description: None,
             alias: None,
@@ -502,7 +500,6 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             Vec::new(),
             baml_type::TyAttr::default(),
         );
-        vm.dynamic_dispatch.register_class(type_name, class_ptr);
         register_class_witnesses(vm, class_ptr, &ty, witnesses);
         Ok(Value::object(vm.tlab.alloc_type(TypeValue::new(ty))))
     }
@@ -677,13 +674,9 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
             ));
         }
 
-        let type_name = baml_type::QualifiedTypeName::runtime_local(
-            baml_type::Name::new(enum_name),
-            vm.tlab.heap().next_synthetic_name_id(),
-        );
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let enum_ptr = vm.tlab.alloc(Object::Enum(Box::new(Enum {
-            name: type_name,
+            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(enum_name)),
             variants,
             description: None,
             alias: None,

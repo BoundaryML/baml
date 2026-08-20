@@ -34,9 +34,12 @@ pub struct ClassField {
 /// Runtime class representation.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Class {
-    /// Type identity: carries short name, module path, and display name.
-    /// Use `name.display_name` for the display string (e.g. "ai.PromptMessage" or "Person").
-    pub name: baml_type::TypeName,
+    /// How this declaration is named: package-qualified for a compiled class,
+    /// a bare item name for a runtime-created one. Display and boundary
+    /// spelling only — identity is `type_tag` and the declaration object
+    /// itself. Use `name.display_name()` for the display string (e.g.
+    /// "ai.PromptMessage" or "Person").
+    pub name: crate::DeclarationName,
 
     /// Class fields with type and schema metadata.
     pub fields: Vec<ClassField>,

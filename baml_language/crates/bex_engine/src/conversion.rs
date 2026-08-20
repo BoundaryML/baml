@@ -40,6 +40,47 @@ pub(crate) fn to_wire_ty(ty: &bex_vm_types::RuntimeTy) -> Result<RuntimeTy, Engi
         })
 }
 
+/// The per-call sys-op seam's spelling of a declaration name: the declared
+/// qualified name, or the bare item name as a local spelling for an anonymous
+/// declaration.
+///
+/// Valid only within one call: the overlay definition maps, per-call handles,
+/// and definition graphs a call carries are all built through this same
+/// spelling, so keys and references agree there. It is deliberately not
+/// [`to_wire_ty`]'s contract — nothing outside the call can resolve the local
+/// spelling, and the strict outbound paths still refuse anonymous heads.
+pub(crate) fn overlay_type_name(name: &bex_vm_types::DeclarationName) -> baml_type::TypeName {
+    name.overlay_name()
+}
+
+/// [`overlay_type_name`] over a whole type: every head spelled the way the
+/// per-call overlay keys it.
+///
+/// Total by invariant: a live type's heads are resolved and point at
+/// declarations, and declared interface/alias heads already answer through
+/// `declared_name` — only class/enum heads can be anonymous.
+pub(crate) fn overlay_wire_ty_under_permit(
+    ty: &bex_vm_types::RuntimeTy,
+    _permit: PermitProof<'_>,
+) -> RuntimeTy {
+    ty.try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
+        .unwrap_or_else(|head| {
+            unreachable!("a live type's heads are resolved declaration pointers: {head}")
+        })
+}
+
+/// The fallible form of [`overlay_wire_ty_under_permit`] for this module's
+/// value paths, which already run on the VM thread with the heap permit held
+/// (the same contract as every raw object read here). Fails only on an
+/// unresolved or non-declaration head — an invariant break surfaced as the
+/// same error the strict converter raises.
+pub(crate) fn overlay_wire_ty(ty: &bex_vm_types::RuntimeTy) -> Result<RuntimeTy, EngineError> {
+    ty.try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
+        .map_err(|head| EngineError::TypeMismatch {
+            message: format!("type leaving the VM names an unnameable declaration: {head}"),
+        })
+}
+
 /// The runtime's spelling of a wire type: every name resolved to the head of
 /// the declaration this engine holds for it.
 ///
@@ -123,7 +164,7 @@ fn portable_type_def(
         // companions, which are synthesized rather than written.
         for ptr in package.classes.values().copied() {
             if !class_ptrs.contains(&ptr)
-                && !matches!(unsafe { ptr.get() }, Object::Class(class) if class.name.name().as_str().ends_with("$stream"))
+                && !matches!(unsafe { ptr.get() }, Object::Class(class) if class.name.item_name().as_str().ends_with("$stream"))
             {
                 class_ptrs.push(ptr);
             }
@@ -151,14 +192,18 @@ fn portable_type_def(
                 return None;
             };
             Some(PortableClassDef {
-                name: class.name.clone(),
+                // Deprecated graph (see `portable_type_def`): names use
+                // the per-call overlay spelling, so the graph's internal
+                // links and the sys-op definition maps agree. Hosts never
+                // resolved runtime declarations by name, so nothing host-
+                // side keys off this.
+                name: overlay_type_name(&class.name),
                 fields: class
                     .fields
                     .iter()
                     .map(|field| PortableClassFieldDef {
                         name: field.name.clone(),
-                        ty: to_wire_ty(&field.field_type)
-                            .unwrap_or_else(|_| baml_type::RuntimeTy::unknown()),
+                        ty: overlay_wire_ty_under_permit(&field.field_type, permit),
                         metadata: metadata(
                             &field.description,
                             &field.alias,
@@ -185,7 +230,7 @@ fn portable_type_def(
                 return None;
             };
             Some(PortableEnumDef {
-                name: enm.name.clone(),
+                name: overlay_type_name(&enm.name),
                 variants: enm
                     .variants
                     .iter()
@@ -205,8 +250,10 @@ fn portable_type_def(
         })
         .collect();
     PortableTypeDef {
-        root: to_wire_ty(&bex_vm_types::RuntimeTy::from(type_value.ty.clone()))
-            .unwrap_or_else(|_| baml_type::RuntimeTy::unknown()),
+        root: overlay_wire_ty_under_permit(
+            &bex_vm_types::RuntimeTy::from(type_value.ty.clone()),
+            permit,
+        ),
         classes,
         enums,
         // Witnesses are carried by the impl rules, not described alongside the
@@ -224,7 +271,7 @@ fn host_call_parameter_types<'a>(
         .iter()
         .filter(|param| param.is_required())
         .map(|param| {
-            to_wire_ty(&bex_vm_types::RuntimeTy::from(&param.ty)).map_err(|e| e.to_string())
+            overlay_wire_ty(&bex_vm_types::RuntimeTy::from(&param.ty)).map_err(|e| e.to_string())
         })
         .collect::<Result<Vec<_>, String>>()?;
     if positional_count != required.len() {
@@ -247,7 +294,8 @@ fn host_call_parameter_types<'a>(
             .ok_or_else(|| format!("host-call supplied unknown optional argument {name:?}"))?;
         optional.insert(
             name.to_string(),
-            to_wire_ty(&bex_vm_types::RuntimeTy::from(&param.ty)).map_err(|e| e.to_string())?,
+            overlay_wire_ty(&bex_vm_types::RuntimeTy::from(&param.ty))
+                .map_err(|e| e.to_string())?,
         );
     }
     Ok((required, optional))
@@ -462,11 +510,13 @@ impl BexEngine {
                 {
                     let handle = self.heap.create_handle(ptr);
                     let ty = RuntimeTy::Class(
-                        class.name.clone(),
+                        class.name.declared().cloned().unwrap_or_else(|| {
+                            unreachable!("ai.stream.Stream is a compiled declaration")
+                        }),
                         instance
                             .class_type_args
                             .iter()
-                            .map(|arg| to_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
+                            .map(|arg| overlay_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
                             .collect::<Result<Vec<_>, _>>()?,
                         baml_type::TyAttr::default(),
                     );
@@ -504,7 +554,7 @@ impl BexEngine {
                                 class_field.name.clone(),
                                 self.convert_vm_value_to_external_with_type(
                                     value,
-                                    &to_wire_ty(&field_type)?,
+                                    &overlay_wire_ty(&field_type)?,
                                     permit,
                                 )?,
                             ))
@@ -516,7 +566,7 @@ impl BexEngine {
                     type_args: instance
                         .class_type_args
                         .iter()
-                        .map(|arg| to_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
+                        .map(|arg| overlay_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
                         .collect::<Result<Vec<_>, _>>()?,
                     fields: fields?,
                 })
@@ -761,7 +811,7 @@ impl BexEngine {
             .or_else(|| resolve_named_object(&self.resolved_class_names, class_name))?;
         // SAFETY: registered class names point to compile-time Class objects.
         match unsafe { ptr.get() } {
-            Object::Class(class) => Some(class.name.clone()),
+            Object::Class(class) => class.name.declared().cloned(),
             _ => None,
         }
     }
@@ -775,7 +825,7 @@ impl BexEngine {
             .or_else(|| resolve_named_object(&self.resolved_enum_names, enum_name))?;
         // SAFETY: registered enum names point to compile-time Enum objects.
         match unsafe { ptr.get() } {
-            Object::Enum(enum_obj) => Some(enum_obj.name.clone()),
+            Object::Enum(enum_obj) => enum_obj.name.declared().cloned(),
             _ => None,
         }
     }
@@ -1268,7 +1318,7 @@ impl BexEngine {
                         }
                     })?;
                     let field_ty = class_field.field_template.substitute_symbolic(&type_args);
-                    let wire_field_ty = to_wire_ty(&field_ty)?;
+                    let wire_field_ty = overlay_wire_ty(&field_ty)?;
                     let field_value = self.coerce_inbound_arg(ext.clone(), &wire_field_ty)?;
                     values.push(self.convert_external_to_vm_value_with_ty_and_runtime(
                         holder,
@@ -2514,10 +2564,21 @@ fn find_matching_member(
     Err(EngineError::TypeMismatch {
         message: format!(
             "Value of type '{}' does not match any member of union {:?}",
-            value.type_name(),
+            described_value_type(value),
             members
         ),
     })
+}
+
+/// `type_name`, refined for the mismatch diagnostics: an instance or variant
+/// names its class/enum, since "instance" alone cannot identify which
+/// declaration failed to match.
+fn described_value_type(value: &BexExternalValue) -> String {
+    match value {
+        BexExternalValue::Instance { class_name, .. } => format!("instance of `{class_name}`"),
+        BexExternalValue::Variant { enum_name, .. } => format!("variant of `{enum_name}`"),
+        other => other.type_name().to_string(),
+    }
 }
 
 /// Select a union member for an inbound node that did not carry `value_type`.
@@ -2568,7 +2629,7 @@ fn find_unannotated_inbound_member_with_aliases(
             .ok_or_else(|| EngineError::TypeMismatch {
                 message: format!(
                     "Value of type '{}' does not match any member of union {:?}",
-                    value.type_name(),
+                    described_value_type(value),
                     members
                 ),
             }),
@@ -3406,14 +3467,14 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                         // class_type_args exactly.
                         members.iter().find(|m| {
                             matches!(m, RuntimeTy::Class(tn, expected_args, _)
-                                if *tn == class.name
+                                if class.name.declared() == Some(tn)
                                 && (expected_args.is_empty()
                                     || (expected_args.len() == inst.class_type_args.len()
                                         && expected_args
                                             .iter()
                                             .zip(inst.class_type_args.iter())
                                             .all(|(e, a)| {
-                                                to_wire_ty(a.as_runtime_ty())
+                                                overlay_wire_ty(a.as_runtime_ty())
                                                     .is_ok_and(|a| *e == a)
                                             }))))
                         })
@@ -3431,12 +3492,13 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                                 matches!(
                                     (m, actual_variant),
                                     (RuntimeTy::EnumVariant(tn, expected, _), Some(actual))
-                                        if *tn == enm.name && expected.as_str() == actual
+                                        if enm.name.declared() == Some(tn)
+                                            && expected.as_str() == actual
                                 )
                             })
                             .or_else(|| {
                                 members.iter().find(
-                                    |m| matches!(m, RuntimeTy::Enum(tn, _) if *tn == enm.name),
+                                    |m| matches!(m, RuntimeTy::Enum(tn, _) if enm.name.declared() == Some(tn)),
                                 )
                             })
                     } else {
@@ -3448,15 +3510,15 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 // when the container is empty, where payload inspection cannot
                 // distinguish `int[]` from `string[]` (or analogous maps).
                 Object::Array(array) => {
-                    let actual_element = to_wire_ty(array.element_ty.as_runtime_ty()).ok()?;
+                    let actual_element = overlay_wire_ty(array.element_ty.as_runtime_ty()).ok()?;
                     members.iter().find(|member| {
                         matches!(member, RuntimeTy::List(expected, _)
                             if runtime_ty_structurally_equal(&actual_element, expected))
                     })
                 }
                 Object::Map(map) => {
-                    let actual_key = to_wire_ty(map.key_ty.as_runtime_ty()).ok()?;
-                    let actual_value = to_wire_ty(map.value_ty.as_runtime_ty()).ok()?;
+                    let actual_key = overlay_wire_ty(map.key_ty.as_runtime_ty()).ok()?;
+                    let actual_value = overlay_wire_ty(map.value_ty.as_runtime_ty()).ok()?;
                     members.iter().find(|member| {
                         matches!(member, RuntimeTy::Map { key, value, .. }
                             if runtime_ty_structurally_equal(&actual_key, key)
@@ -3576,7 +3638,9 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                         type_args: instance
                             .class_type_args
                             .iter()
-                            .filter_map(|arg| to_wire_ty(&bex_vm_types::RuntimeTy::from(arg)).ok())
+                            .filter_map(|arg| {
+                                overlay_wire_ty(&bex_vm_types::RuntimeTy::from(arg)).ok()
+                            })
                             .collect(),
                         fields,
                     }
@@ -4352,7 +4416,7 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
             element_type,
             items,
         } => BexExternalValue::Array {
-            element_type: to_wire_ty(element_type).unwrap_or_else(|_| RuntimeTy::unknown()),
+            element_type: overlay_wire_ty(element_type).unwrap_or_else(|_| RuntimeTy::unknown()),
             items: items.iter().map(test_arg_to_external).collect(),
         },
         bex_vm_types::TestArgValue::Map {
@@ -4360,8 +4424,8 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
             value_type,
             entries,
         } => BexExternalValue::Map {
-            key_type: to_wire_ty(key_type).unwrap_or_else(|_| RuntimeTy::unknown()),
-            value_type: to_wire_ty(value_type).unwrap_or_else(|_| RuntimeTy::unknown()),
+            key_type: overlay_wire_ty(key_type).unwrap_or_else(|_| RuntimeTy::unknown()),
+            value_type: overlay_wire_ty(value_type).unwrap_or_else(|_| RuntimeTy::unknown()),
             entries: entries
                 .iter()
                 .map(|(k, v)| (k.clone(), test_arg_to_external(v)))
@@ -4665,7 +4729,7 @@ mod union_container_selection_tests {
         let mut tlab = Tlab::new(BexHeap::new(Vec::new()));
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: mood.clone(),
+            name: bex_vm_types::DeclarationName::Declared(mood.clone()),
             variants: vec![
                 EnumVariant {
                     name: "HAPPY".to_string(),

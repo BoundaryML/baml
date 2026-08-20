@@ -98,7 +98,6 @@ struct BuilderNode {
 }
 
 struct ClassPlan {
-    name: baml_type::QualifiedTypeName,
     ptr: HeapPtr,
     ty: bex_vm_types::RealizedTy,
 }
@@ -853,16 +852,14 @@ fn build_group(
     let mut plans = IndexMap::new();
     let mut identities = IndexMap::new();
     for node in group.values() {
-        let name = baml_type::QualifiedTypeName::runtime_local(
-            baml_type::Name::new(node.name.as_str()),
-            vm.tlab.heap().next_synthetic_name_id(),
-        );
         // Counter tag: runtime-created declarations are identified by their
         // heap object, and by this tag across a serialization boundary; the
-        // synthesized `$dyn` name is display data only.
+        // item name is display data only.
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
-            name: name.clone(),
+            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(
+                node.name.as_str(),
+            )),
             fields: Vec::new(),
             description: None,
             alias: None,
@@ -880,7 +877,7 @@ fn build_group(
             baml_type::TyAttr::default(),
         );
         identities.insert(node.id, ClassIdentityPlan { ty: ty.clone() });
-        plans.insert(node.id, ClassPlan { name, ptr, ty });
+        plans.insert(node.id, ClassPlan { ptr, ty });
     }
 
     let witness_fields = planned_witness_fields(vm, &prepared[&start_id], &identities)
@@ -942,10 +939,6 @@ fn build_group(
         class.fields = class_fields;
     }
 
-    for plan in plans.values() {
-        vm.dynamic_dispatch
-            .register_class(plan.name.clone(), plan.ptr);
-    }
     let start_plan = &plans[&start_id];
     register_class_witnesses(vm, start_plan.ptr, &start_plan.ty, witnesses);
 

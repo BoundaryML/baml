@@ -17,9 +17,11 @@ pub struct EnumVariant {
 /// Runtime enum representation.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Enum {
-    /// Type identity: carries short name, module path, and display name.
-    /// Use `name.display_name` for the display string.
-    pub name: baml_type::TypeName,
+    /// How this declaration is named: package-qualified for a compiled enum,
+    /// a bare item name for a runtime-created one. Display and boundary
+    /// spelling only — identity is `type_tag` and the declaration object
+    /// itself. Use `name.display_name()` for the display string.
+    pub name: crate::DeclarationName,
 
     /// This enum's head identity, content-addressed from its fully-qualified
     /// name at emit time — the identity a `TypeHead` referring to this enum

@@ -17,7 +17,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex, RwLock, Weak,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
@@ -202,13 +202,6 @@ pub struct BexHeap {
     /// Next handle key to allocate.
     next_handle_key: AtomicUsize,
 
-    /// Next disambiguating suffix for a *synthesized display name*. Lives on
-    /// the heap — next to the handle counter — because the heap is the one
-    /// object every allocation path already shares, including spawned VMs
-    /// (each `Tlab` holds an `Arc<BexHeap>`), so two threads can never draw the
-    /// same suffix. Monotonic and never reused.
-    next_synthetic_name_id: AtomicU64,
-
     /// BEP-042: instances whose `cleanup` finalizer must run after the current
     /// collection. Populated during a collection (`copy_collection` /
     /// `copy_collection_minor`) when a dead-but-not-yet-cleaned instance of a
@@ -385,7 +378,6 @@ impl BexHeap {
             handles: RwLock::new(HashMap::new()),
             handles_by_ptr: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
-            next_synthetic_name_id: AtomicU64::new(0),
             pending_finalizers: Mutex::new(Vec::new()),
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes,
@@ -1259,20 +1251,6 @@ impl BexHeap {
         handle.is_of_heap(&(Arc::clone(self) as Arc<dyn WeakHeapRef>))
     }
 
-    /// Draw the next disambiguating suffix for a synthesized declaration name
-    /// (`user.$dyn.<n>.<Name>`).
-    ///
-    /// This is **not** an identity token: a runtime declaration is identified
-    /// by its heap object, and at serialization boundaries by its `TypeTag`.
-    /// The counter exists only so two runtime declarations that a user spelled
-    /// with the same name render distinguishably. Every VM sharing this heap —
-    /// including spawned children — draws from the same counter, so no two
-    /// declarations synthesize the same name. `Relaxed` suffices: uniqueness
-    /// needs only the atomicity of `fetch_add`, no ordering with other memory.
-    pub fn next_synthetic_name_id(&self) -> u64 {
-        self.next_synthetic_name_id.fetch_add(1, Ordering::Relaxed)
-    }
-
     /// Collect all handle roots for garbage collection.
     ///
     /// Returns a Vec of HeapPtr values for all live handles.
@@ -1463,15 +1441,6 @@ mod tests {
         let stats = heap.stats();
         assert_eq!(stats.tlab_chunks, 1);
         assert!(stats.total_objects >= 51); // Expanded for TLAB
-    }
-
-    #[test]
-    fn synthetic_name_ids_are_heap_wide_and_monotonic() {
-        let heap = BexHeap::new(vec![]);
-        let shared = Arc::clone(&heap);
-
-        assert_eq!(heap.next_synthetic_name_id(), 0);
-        assert_eq!(shared.next_synthetic_name_id(), 1);
     }
 
     // Note: Handle tests removed as they require HeapPtr creation which depends

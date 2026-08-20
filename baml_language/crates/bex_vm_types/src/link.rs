@@ -1290,7 +1290,9 @@ mod tests {
 
     fn class(name: &str, type_tag: i64) -> Object {
         Object::Class(Box::new(Class {
-            name: baml_type::TypeName::local(baml_base::Name::new(name)),
+            name: crate::DeclarationName::Declared(baml_type::TypeName::local(
+                baml_base::Name::new(name),
+            )),
             fields: Vec::new(),
             description: None,
             alias: None,

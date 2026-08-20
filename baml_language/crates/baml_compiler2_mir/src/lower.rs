@@ -10152,16 +10152,7 @@ impl<'db> LoweringContext<'db> {
         // synthetic Object exprs from `lower_cst.rs` that already use registry-
         // matching dotted forms like "ai.Prompt".
         let class_name = if let Some(tn) = &type_name_key {
-            if tn.is_runtime_minted() {
-                // A mounted runtime type keeps its hidden mint-qualified QTN
-                // in the value type, but its class object is linked through
-                // the source-visible package alias written at this literal
-                // (`app.Export`). The runtime linker resolves that symbol to
-                // the dependency's minted class object.
-                type_name.to_string()
-            } else {
-                tn.render_dotted(false)
-            }
+            tn.render_dotted(false)
         } else {
             type_name.to_string()
         };

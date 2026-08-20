@@ -643,7 +643,7 @@ pub(super) fn render_to_sink(
                     let name = if state.qualified_class_names {
                         class.name.to_string()
                     } else {
-                        class.name.name().to_string()
+                        class.name.item_name().to_string()
                     };
                     let fields = inst
                         .fields

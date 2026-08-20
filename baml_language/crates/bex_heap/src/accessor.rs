@@ -327,7 +327,7 @@ impl<'a> BexValue<'a> {
             // recover the names a host can look up, then widen into `RuntimeTy`.
             Ok(baml_type::RuntimeTy::from(
                 tv.ty
-                    .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+                    .try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
                     .map_err(|head| AccessError::TypeMismatch {
                         expected: "a nameable type",
                         actual: head.to_string(),
@@ -620,7 +620,7 @@ fn convert_object(
                     .class_type_args
                     .iter()
                     .map(|arg| {
-                        arg.try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+                        arg.try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
                             .map(|named| baml_type::RuntimeTy::from(&named))
                             .map_err(|head| AccessError::TypeMismatch {
                                 expected: "a nameable type argument",
@@ -656,7 +656,7 @@ fn convert_object(
         Object::Type(tv) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
             baml_type::RuntimeTy::from(
                 tv.ty
-                    .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+                    .try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
                     .map_err(|head| AccessError::TypeMismatch {
                         expected: "a nameable type",
                         actual: head.to_string(),

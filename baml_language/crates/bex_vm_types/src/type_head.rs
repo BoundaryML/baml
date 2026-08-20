@@ -140,7 +140,9 @@ impl TypeHead {
     }
 
     /// The fully-qualified name of the declaration this head points at, or
-    /// `None` if the head is unresolved or does not point at a declaration.
+    /// `None` if the head is unresolved, does not point at a declaration, or
+    /// points at an anonymous (runtime-created) declaration — which has no
+    /// qualified name for any name-keyed consumer to use.
     ///
     /// The inverse of [`of_name`](Self::of_name), and the boundary conversion: a
     /// head is a live pointer into this process's heap, so anything leaving the
@@ -161,8 +163,11 @@ impl TypeHead {
         )]
         let object = unsafe { self.ptr.get() };
         match object {
-            crate::Object::Class(class) => Some(class.name.clone()),
-            crate::Object::Enum(enm) => Some(enm.name.clone()),
+            // An anonymous (runtime-created) declaration has no qualified name,
+            // so it is unnameable here by design — `to_name` refuses rather
+            // than fabricating a spelling nothing declares.
+            crate::Object::Class(class) => class.name.declared().cloned(),
+            crate::Object::Enum(enm) => enm.name.declared().cloned(),
             crate::Object::Interface(iface) => Some(iface.name.clone()),
             crate::Object::TypeAlias(alias) => Some(alias.name.clone()),
             _ => None,
@@ -181,6 +186,43 @@ impl TypeHead {
     /// its declaration has no name a host could look up.
     pub fn to_name(&self) -> Result<baml_type::TypeName, crate::UnnameableHead> {
         self.declared_name().ok_or(crate::UnnameableHead(self.tag))
+    }
+
+    /// The per-call seam spelling of this head's declaration: its declared
+    /// name, or the bare item name as a local spelling when the declaration is
+    /// anonymous. `None` when the head is unresolved or points at no
+    /// declaration. See [`DeclarationName::overlay_name`](crate::DeclarationName::overlay_name)
+    /// for the contract — this spelling is only meaningful against tables the
+    /// same call built.
+    #[must_use]
+    pub fn overlay_name(self) -> Option<baml_type::TypeName> {
+        if !self.is_resolved() {
+            return None;
+        }
+        // SAFETY: as in `declared_name`.
+        #[expect(
+            unsafe_code,
+            reason = "recovering a head's name requires reading its declaration"
+        )]
+        let object = unsafe { self.ptr.get() };
+        match object {
+            crate::Object::Class(class) => Some(class.name.overlay_name()),
+            crate::Object::Enum(enm) => Some(enm.name.overlay_name()),
+            crate::Object::Interface(iface) => Some(iface.name.clone()),
+            crate::Object::TypeAlias(alias) => Some(alias.name.clone()),
+            _ => None,
+        }
+    }
+
+    /// The mapper form of [`overlay_name`](Self::overlay_name), for pairing
+    /// with `try_map_heads` — the per-call twin of [`to_name`](Self::to_name).
+    ///
+    /// # Errors
+    ///
+    /// [`UnnameableHead`](crate::UnnameableHead) when the head is unresolved
+    /// or does not point at a declaration.
+    pub fn to_overlay_name(&self) -> Result<baml_type::TypeName, crate::UnnameableHead> {
+        self.overlay_name().ok_or(crate::UnnameableHead(self.tag))
     }
 
     /// Whether the pointer cache has been filled — false for a head straight out
@@ -472,7 +514,7 @@ mod tests {
             baml_base::Name::new("Person"),
         );
         let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
-            name: name.clone(),
+            name: crate::DeclarationName::Declared(name.clone()),
             fields: vec![],
             description: None,
             alias: None,
@@ -498,6 +540,46 @@ mod tests {
             TyAttr::default(),
         );
         assert_eq!(ty.to_string(), "demo.Person[]");
+    }
+
+    /// A runtime-created declaration is *anonymous*: it carries an item name
+    /// and nothing else — no package, no namespace path. So the strict
+    /// outbound conversion refuses to name it (inventing a spelling is how a
+    /// runtime declaration would come to impersonate a compiled one), the
+    /// per-call seam spells it locally so a call's own tables can key on it,
+    /// and rendering shows what the user called it.
+    #[test]
+    fn an_anonymous_declaration_has_no_qualified_name() {
+        use baml_type::{RealizedTy, TyAttr};
+
+        let type_tag = TypeTag::fresh_dynamic();
+        let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
+            name: crate::DeclarationName::Anonymous(baml_base::Name::new("Widget")),
+            fields: vec![],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            type_tag,
+            ty_attr: TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
+            owner: crate::HeapPtr::null(),
+        }));
+        let head = TypeHead::new(ptr_to(&mut declaration), type_tag);
+
+        assert_eq!(head.declared_name(), None);
+        assert!(head.to_name().is_err());
+
+        let overlay = head
+            .overlay_name()
+            .expect("an anonymous head still spells locally");
+        assert!(overlay.is_local());
+        assert!(overlay.namespace().is_empty());
+        assert_eq!(overlay.name().as_str(), "Widget");
+
+        let ty: RealizedTy<TypeHead> = RealizedTy::Class(head, vec![], TyAttr::default());
+        assert_eq!(ty.to_string(), "Widget");
     }
 
     /// Dynamic tags are disjoint from every content-addressed one, so a

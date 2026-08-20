@@ -22,8 +22,10 @@ fn for_ty_head_name<'a>(program: &'a Program, pat: &TyTemplate) -> Option<&'a st
         return None;
     };
     program.objects.iter().find_map(|object| match object {
-        Object::Class(class) if class.type_tag == head.tag() => Some(class.name.name().as_str()),
-        Object::Enum(enm) if enm.type_tag == head.tag() => Some(enm.name.name().as_str()),
+        Object::Class(class) if class.type_tag == head.tag() => {
+            Some(class.name.item_name().as_str())
+        }
+        Object::Enum(enm) if enm.type_tag == head.tag() => Some(enm.name.item_name().as_str()),
         _ => None,
     })
 }

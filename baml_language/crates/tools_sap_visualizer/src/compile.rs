@@ -84,9 +84,21 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
 
     for obj in &program.objects {
         match obj {
-            bex_vm_types::Object::Class(cls) if cls.name.package() != "baml" => {
+            // A compiled pool's declarations are all declared, so the
+            // qualified name is always present.
+            bex_vm_types::Object::Class(cls)
+                if cls
+                    .name
+                    .declared()
+                    .is_some_and(|qtn| qtn.package().as_str() != "baml") =>
+            {
+                let qtn = cls
+                    .name
+                    .declared()
+                    .cloned()
+                    .unwrap_or_else(|| unreachable!("guarded by declared() above"));
                 // Extract the field type from our synthetic class.
-                if cls.name.name().as_str() == PARSE_CLASS {
+                if qtn.name().as_str() == PARSE_CLASS {
                     let field = cls
                         .fields
                         .iter()
@@ -103,7 +115,7 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                 }
 
                 class_defs.insert(
-                    cls.name.clone(),
+                    qtn,
                     sys_types::ClassDefinition {
                         name: cls.name.display_name().to_string(),
                         description: cls.description.clone(),
@@ -125,9 +137,17 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                     },
                 );
             }
-            bex_vm_types::Object::Enum(enm) if enm.name.package() != "baml" => {
+            bex_vm_types::Object::Enum(enm)
+                if enm
+                    .name
+                    .declared()
+                    .is_some_and(|qtn| qtn.package().as_str() != "baml") =>
+            {
                 enum_defs.insert(
-                    enm.name.clone(),
+                    enm.name
+                        .declared()
+                        .cloned()
+                        .unwrap_or_else(|| unreachable!("guarded by declared() above")),
                     sys_types::EnumDefinition {
                         name: enm.name.display_name().to_string(),
                         description: enm.description.clone(),

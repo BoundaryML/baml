@@ -199,8 +199,12 @@ impl BexHeap {
                 if class.has_cleanup {
                     // Resolve the `cleanup` function name here, while the class
                     // is in hand: methods register as `{class_fqn}.cleanup`
-                    // (matching `make_to_json_callee`'s `{fqn}.to_json`).
-                    let cleanup_fn = format!("{}.cleanup", class.name.render_dotted(false));
+                    // (matching `make_to_json_callee`'s `{fqn}.to_json`). Only
+                    // emit sets `has_cleanup`, so the class is always declared.
+                    let qtn = class.name.declared().unwrap_or_else(|| {
+                        unreachable!("`has_cleanup` on an anonymous class: only emit sets it")
+                    });
+                    let cleanup_fn = format!("{}.cleanup", qtn.render_dotted(false));
                     seeds.push((ptr, cleanup_fn));
                 }
             }
@@ -2430,7 +2434,7 @@ mod tests {
 
         // Allocate a class (leaf), a string (leaf), then an instance referencing both
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: TypeName::local(Name::new("TestClass")),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("TestClass"))),
             fields: vec![],
             description: None,
             alias: None,
@@ -2464,7 +2468,7 @@ mod tests {
         let Object::Class(c) = (unsafe { inst.class.get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.name().as_str(), "TestClass");
+        assert_eq!(c.name.item_name().as_str(), "TestClass");
     }
 
     #[test]
@@ -2477,7 +2481,7 @@ mod tests {
 
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: TypeName::local(Name::new("Color")),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("Color"))),
             variants: vec![],
             description: None,
             alias: None,
@@ -2500,7 +2504,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { v.enm.get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.name().as_str(), "Color");
+        assert_eq!(e.name.item_name().as_str(), "Color");
     }
 
     #[test]
@@ -2705,7 +2709,7 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: TypeName::local(Name::new("MyClass")),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("MyClass"))),
             fields: vec![],
             description: None,
             alias: None,
@@ -2722,7 +2726,7 @@ mod tests {
         let Object::Class(c) = (unsafe { new_roots[0].get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.name().as_str(), "MyClass");
+        assert_eq!(c.name.item_name().as_str(), "MyClass");
         assert_eq!(c.type_tag, baml_type::typetag::TypeTag::from_i64(42));
     }
 
@@ -2735,7 +2739,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: TypeName::local(Name::new("Status")),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("Status"))),
             variants: vec![],
             description: None,
             alias: None,
@@ -2749,7 +2753,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { new_roots[0].get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.name().as_str(), "Status");
+        assert_eq!(e.name.item_name().as_str(), "Status");
     }
 
     #[test]
@@ -2771,12 +2775,12 @@ mod tests {
     /// the head is repointed as both objects move.
     #[test]
     fn test_gc_traces_runtime_enum_definition_reached_through_a_head() {
-        use baml_type::{Name, QualifiedTypeName, TyAttr};
+        use baml_type::{Name, TyAttr};
         use bex_vm_types::{Enum, EnumVariant, TypeHead, types::TypeValue};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let type_name = QualifiedTypeName::runtime_local(Name::new("Category"), 41);
+        let type_name = bex_vm_types::DeclarationName::Anonymous(Name::new("Category"));
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             name: type_name.clone(),
@@ -2822,7 +2826,7 @@ mod tests {
         let Object::Enum(enm) = (unsafe { head.ptr().get() }) else {
             panic!("the head did not land on an enum")
         };
-        assert_eq!(enm.name, type_name);
+        assert_eq!(enm.name.item_name(), type_name.item_name());
         assert_eq!(enm.variants[0].name, "RED");
         assert_eq!(enm.variants[0].alias.as_deref(), Some("k7"));
     }
@@ -2830,12 +2834,12 @@ mod tests {
     /// The same for a class, whose fields carry heads of their own.
     #[test]
     fn test_gc_traces_runtime_class_definition_reached_through_a_head() {
-        use baml_type::{Name, QualifiedTypeName, TyAttr};
+        use baml_type::{Name, TyAttr};
         use bex_vm_types::{Class, ClassField, TypeHead, types::TypeValue};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let type_name = QualifiedTypeName::runtime_local(Name::new("VisitNote"), 42);
+        let type_name = bex_vm_types::DeclarationName::Anonymous(Name::new("VisitNote"));
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             name: type_name.clone(),
@@ -2891,7 +2895,7 @@ mod tests {
         let Object::Class(class) = (unsafe { head.ptr().get() }) else {
             panic!("the head did not land on a class")
         };
-        assert_eq!(class.name, type_name);
+        assert_eq!(class.name.item_name(), type_name.item_name());
         assert_eq!(class.fields[0].name, "height_cm");
         assert_eq!(
             class.fields[0].description.as_deref(),
@@ -3291,7 +3295,7 @@ mod tests {
         // --- Container: Object::Instance ---
         // Instance requires a class pointer.
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: TypeName::local(Name::new("T")),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("T"))),
             fields: vec![],
             description: None,
             alias: None,
@@ -3312,7 +3316,7 @@ mod tests {
         // --- Container: Object::Variant ---
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: TypeName::local(Name::new("E")),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("E"))),
             variants: vec![],
             description: None,
             alias: None,
@@ -3431,7 +3435,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { var.enm.get() }) else {
             panic!("variant.enm not Enum")
         };
-        assert_eq!(e.name.name().as_str(), "E");
+        assert_eq!(e.name.item_name().as_str(), "E");
     }
 
     // ========================================================================

@@ -583,7 +583,8 @@ class Item { value string }
 /// so binding a compiled package's `Item` puts `user.Item` in this frame's
 /// overlay — and the static `Holder<Item>` dispatch below then sees it. Reading
 /// the overlay by plain name reported `type.of<T>() != type.of<Item>()` and
-/// `== ` the *package's* mint, which no `$dyn`-named type can reproduce.
+/// `==` the *package's* declaration, which no runtime-created type can
+/// reproduce.
 #[tokio::test]
 async fn static_class_slots_are_not_answered_from_a_same_named_runtime_definition() {
     let output = baml_test!(

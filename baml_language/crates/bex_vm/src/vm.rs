@@ -676,7 +676,7 @@ pub(crate) mod tests {
 
         let tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            name: baml_type::QualifiedTypeName::from_dotted_path("test.Metadata"),
+            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new("Metadata")),
             fields: Vec::new(),
             description: None,
             alias: None,
@@ -1474,8 +1474,8 @@ fn function_callable_signature<C: baml_type::normalize::TypeContext<bex_vm_types
 /// The declaration a type names, together with its instantiation — `None` for
 /// types that name no declaration.
 ///
-/// Nominal identity is the qualified name: program-unique for compiled
-/// declarations, creation-unique for runtime ones (`user.$dyn.<n>.<Name>`).
+/// Nominal identity is the head: content-addressed from the qualified name
+/// for compiled declarations, a counter mint for runtime-created ones.
 fn nominal_identity(
     ty: &bex_vm_types::RealizedTy,
 ) -> Option<(bex_vm_types::TypeHead, &[bex_vm_types::RealizedTy])> {
@@ -2146,10 +2146,11 @@ impl BexVm {
 
     /// Look up a class or enum object by its qualified type name. Classes and
     /// enums share one type namespace, so a name resolves to at most one object.
+    ///
+    /// Only declared types resolve here: a runtime-created declaration is
+    /// anonymous, so there is no qualified name to look it up by — it is
+    /// reached through heads and mount surfaces instead.
     pub fn lookup_type(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
-        if let Some(ptr) = self.dynamic_dispatch.class_ptr(qtn) {
-            return Some(ptr);
-        }
         let package = self.package_for_type(qtn)?;
         let local = bex_vm_types::types::LocalName {
             namespace: qtn.namespace().clone(),
@@ -7642,10 +7643,10 @@ impl BexVm {
                     // A parameterized interface operand carries the runtime
                     // definitions of its arguments (BEP-066). Resolution reads
                     // only the realized `ty` off it, so without carrying the
-                    // overlay into the callee the impl body would see
-                    // `user.$dyn.N.Out` as a name nothing defines — reflection,
-                    // rendering and SAP inside an interface method would fail on
-                    // a type the caller can use fine.
+                    // overlay into the callee the impl body would lose the
+                    // argument's runtime declarations — reflection, rendering
+                    // and SAP inside an interface method would fail on a type
+                    // the caller can use fine.
                     //
                     // The clone is `O(defs)` on every dispatch that carries any
                     let method_type_args = if ntypeargs == 0 {

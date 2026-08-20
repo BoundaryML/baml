@@ -50,17 +50,9 @@ pub struct DynRuleEntry {
 #[derive(Default, Debug)]
 pub struct DynDispatchTables {
     impl_rules: RwLock<IndexMap<HeapPtr, Vec<DynRuleEntry>>>,
-    classes: RwLock<IndexMap<baml_type::TypeName, HeapPtr>>,
 }
 
 impl DynDispatchTables {
-    pub fn register_class(&self, name: baml_type::TypeName, class: HeapPtr) {
-        self.classes
-            .write()
-            .expect("dynamic-class table lock poisoned")
-            .insert(name, class);
-    }
-
     pub fn register_rule(&self, interface: HeapPtr, entry: DynRuleEntry) {
         self.impl_rules
             .write()
@@ -103,14 +95,6 @@ impl DynDispatchTables {
             .collect()
     }
 
-    pub fn class_ptr(&self, name: &baml_type::TypeName) -> Option<HeapPtr> {
-        self.classes
-            .read()
-            .expect("dynamic-class table lock poisoned")
-            .get(name)
-            .copied()
-    }
-
     /// Update weak pointers after a moving collection and sweep entries whose
     /// owning runtime class died.
     ///
@@ -134,10 +118,6 @@ impl DynDispatchTables {
                 survived(*ptr)
             }
         };
-        self.classes
-            .write()
-            .expect("dynamic-class table lock poisoned")
-            .retain(|_, class| follow(class));
         let mut table = self
             .impl_rules
             .write()
@@ -575,11 +555,6 @@ mod tests {
             // allocations stand in for runtime Object::Class owners and let
             // the test isolate the weak-lifetime/forwarding contract.
             let owner = tlab.alloc_string(format!("runtime class {index}"));
-            let name = baml_type::TypeName::runtime_local(
-                baml_type::Name::new(format!("RuntimeClass{index}")),
-                index,
-            );
-            tables.register_class(name, owner);
             let head =
                 bex_vm_types::TypeHead::new(owner, baml_type::typetag::TypeTag::fresh_dynamic());
             let rule = tlab.alloc(Object::ImplRule(Box::new(empty_rule(interface, head))));
@@ -612,11 +587,12 @@ mod tests {
             64,
             "dead owners must sweep their rules"
         );
-        let first_name =
-            baml_type::TypeName::runtime_local(baml_type::Name::new("RuntimeClass0"), 0);
-        assert_eq!(
-            tables.class_ptr(&first_name),
-            forwarding.get(&owners[0]).copied(),
+        let forwarded_owner = forwarding
+            .get(&owners[0])
+            .copied()
+            .expect("live owner must be forwarded");
+        assert!(
+            !tables.rules_for_class(forwarded_owner).is_empty(),
             "live owner pointers must follow relocation"
         );
         for rule in tables.rules_of(interface) {
@@ -637,7 +613,6 @@ mod tests {
             0,
             "dropping the last runtime class/witness reachability must sweep every rule"
         );
-        assert!(tables.class_ptr(&first_name).is_none());
     }
 
     /// A minor collection identity-maps every Gen2 object it does not visit, so
@@ -652,9 +627,10 @@ mod tests {
         let tables = Arc::new(DynDispatchTables::default());
         let mut hook = DynDispatchRoot::new(Arc::clone(&tables), Arc::clone(&heap));
         let (mut tlab, owners) = register_witnesses(&heap, &tables, interface, 8);
-        let name0 = baml_type::TypeName::runtime_local(baml_type::Name::new("RuntimeClass0"), 0);
 
         // Promote everything into Gen2: two minors move Gen0 -> Gen1 -> Gen2.
+        // `roots[0]` is the first owner throughout — each collection returns
+        // the remapped root list in order.
         let mut roots = owners;
         roots.extend(tables.rules_of(interface));
         #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
@@ -666,7 +642,7 @@ mod tests {
             unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
         hook.forward_roots(&forwarding);
         assert_eq!(tables.rule_count(), 8);
-        let old_class = tables.class_ptr(&name0).expect("class survives promotion");
+        let old_class = roots[0];
         assert_eq!(heap.generation_of(old_class), Generation::Gen2);
 
         // Now a minor collection with NO roots at all: nothing young is live,
@@ -685,7 +661,10 @@ mod tests {
             8,
             "a minor collection must not evict live, unvisited old witnesses"
         );
-        assert_eq!(tables.class_ptr(&name0), Some(old_class));
+        assert!(
+            !tables.rules_for_class(old_class).is_empty(),
+            "the unvisited owner keeps its witness"
+        );
 
         // A major with no roots reclaims them for real.
         #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
@@ -693,7 +672,6 @@ mod tests {
             unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Major) };
         hook.forward_roots(&forwarding);
         assert_eq!(tables.rule_count(), 0);
-        assert!(tables.class_ptr(&name0).is_none());
         drop(roots);
     }
 }

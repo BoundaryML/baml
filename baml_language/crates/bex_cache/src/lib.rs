@@ -74,7 +74,11 @@ use sha2::{Digest, Sha256};
 /// `ConstValue::Literal`. Both landed while 6 was current — on different
 /// branches — so a 6 image can be either shape and neither can be told from
 /// the other. The bump is what makes the ambiguity unreachable.
-pub const FORMAT_VERSION: u32 = 7;
+///
+/// Version 8: `Class.name` / `Enum.name` are `DeclarationName` (an enum over
+/// declared and anonymous), so both gained a leading discriminant byte. A 7
+/// image would decode that discriminant out of the old `TypeName` bytes.
+pub const FORMAT_VERSION: u32 = 8;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
