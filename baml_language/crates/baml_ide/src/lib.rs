@@ -25,6 +25,7 @@ pub mod annotations;
 pub mod definition;
 pub mod describe;
 pub mod env_vars;
+pub mod export;
 pub mod info;
 pub mod line_index;
 pub mod listing;
@@ -52,6 +53,7 @@ pub use describe::{
     describe_item_member,
 };
 pub use env_vars::all_env_var_names;
+pub use export::{PackageExport, export_package};
 pub use info::{FunctionParamInfo, MethodSig, TypeInfo, type_at, type_info_for_definition};
 pub use listing::{
     ListingEntry, ResolvedTarget, list_namespace_items, list_package_items,

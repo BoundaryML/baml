@@ -70,6 +70,14 @@ Output options:
 
           [default: 30]
 
+      --export
+          Export a whole package's surface as one versioned JSON document (NAME must be a package:
+          `baml`, `user`, …). Cross-package references are self-describing ids like
+          `T:baml.time.Duration` — the prefix is the kind (`T:` type, `V:` value, `M:` method, `F:`
+          field, `E:` variant, `A:` associated type; BAML's type and value namespaces are distinct,
+          so bare paths would be ambiguous). Export the referenced package for a foreign id's full
+          record. Filter with jq, e.g. `… --export | jq '.items[] | select(.namespace == ["json"])'`
+
 Global options:
   -q, --quiet...
           Suppress nonessential output

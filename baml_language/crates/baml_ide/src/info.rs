@@ -1128,7 +1128,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
                 .collect();
 
             let qtn = baml_compiler2_hir_ty::lower::qualify_def(db, def, &class_data.name);
-            let canonical_fqn = render::canonical_fqn_string(&qtn);
+            let canonical_fqn = qtn.render_addressable();
             let methods = class_method_sigs(db, class_loc);
 
             let generic_params =
@@ -1196,7 +1196,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
                 default_methods,
                 docstring: iface.docstring.clone(),
                 owner: Some(owning_path(db, iface_loc.file(db))),
-                canonical_fqn: render::canonical_fqn_string(&qtn),
+                canonical_fqn: qtn.render_addressable(),
             }
         }
 

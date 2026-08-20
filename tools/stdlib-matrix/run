@@ -208,16 +208,6 @@ trap cleanup EXIT
 
 data_dir="${script_dir}/data"
 mkdir -p "${data_dir}"
-# `baml describe --export` is still down while the IDE layer's package-surface
-# export is rebuilt on the new database foundation (the rest of `describe` is
-# back); until it returns, fall back to the committed surface data rather than
-# dying on an unknown flag. Probe the real invocation, not `--help`: the
-# subcommand existing does not mean the export does. Remove this gate when
-# `--export` returns.
-if ((skip_extract == 0)) && ! "${baml_bin}" describe baml --export >/dev/null 2>&1; then
-    echo "stdlib-matrix: this baml build has no 'describe --export' (IDE layer rebuild in progress); reusing committed data/ as with --skip-extract" >&2
-    skip_extract=1
-fi
 if ((skip_extract == 0)); then
     if ! command -v node >/dev/null 2>&1; then
         echo "stdlib-matrix: node is required to extract the TS surface (or pass --skip-extract to reuse data/)" >&2

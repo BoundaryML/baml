@@ -205,36 +205,6 @@ impl TyRenderStrategy for OwnerTyRender {
     }
 }
 
-/// Canonical fully-qualified name string for a resolved type, used by the
-/// describe header and the hover "Run `baml describe …`" hint.
-///
-/// Rules (single source of truth, matching the canonical printer):
-/// - builtin companion class with a lowercase alias → the alias (`string`);
-/// - user type at package root → its bare name (`Foo`);
-/// - user type in a namespace → `root.<ns>.<Name>`;
-/// - other dependency type → `<pkg>.<path>` (`baml.json.JsonObject`).
-pub fn canonical_fqn_string(qtn: &QualifiedTypeName) -> String {
-    if let Some(alias) = qtn.builtin_alias() {
-        return alias.to_string();
-    }
-    if qtn.is_local() {
-        if qtn.namespace().is_empty() {
-            qtn.name().to_string()
-        } else {
-            let path = qtn
-                .namespace()
-                .iter()
-                .chain(std::iter::once(qtn.name()))
-                .map(Name::as_str)
-                .collect::<Vec<_>>()
-                .join(".");
-            format!("root.{path}")
-        }
-    } else {
-        qtn.render_user_facing()
-    }
-}
-
 // ── Unresolved-type rendering (firewall type refs) ────────────────────────────
 
 fn type_ref_needs_postfix_parens(store: &TypeRefStore, id: TypeRefId) -> bool {

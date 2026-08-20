@@ -1084,7 +1084,7 @@ fn class_methods_and_fqn(
 
     let name = baml_base::Name::new(&sym.name);
     let qtn = baml_compiler2_hir_ty::lower::qualify_def(db, def, &name);
-    let fqn = render::canonical_fqn_string(&qtn);
+    let fqn = qtn.render_addressable();
     let canonical_fqn = (fqn != sym.name).then_some(fqn);
 
     let (instance, statics) = match def {

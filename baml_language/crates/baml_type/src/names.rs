@@ -281,6 +281,55 @@ impl QualifiedTypeName {
             .collect();
         BuiltinTypeName::from_builtin_definition_path(&path).map(BuiltinTypeName::alias)
     }
+
+    /// The addressable spelling: the shortest form that pastes back into
+    /// `baml describe` (and name resolution generally) and finds this type
+    /// again from any scope. The single source of describe's paste-back
+    /// addressing convention:
+    ///
+    /// - builtin companion class with a lowercase alias → the alias
+    ///   (`string`);
+    /// - workspace type at package root → its bare name (`Foo`);
+    /// - workspace type in a namespace → `root.<ns>.<Name>` (the workspace
+    ///   package is addressed as `root` — its literal name would read as an
+    ///   item *named* that, which is nothing);
+    /// - other dependency type → `<pkg>.<path>` (`baml.json.JsonObject`).
+    pub fn render_addressable(&self) -> String {
+        if let Some(alias) = self.builtin_alias() {
+            return alias.to_string();
+        }
+        if self.is_local() {
+            if self.namespace.is_empty() {
+                self.name.to_string()
+            } else {
+                let path = self
+                    .namespace
+                    .iter()
+                    .chain(std::iter::once(&self.name))
+                    .map(Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                format!("{ADDRESSABLE_USER_PACKAGE}.{path}")
+            }
+        } else {
+            self.render_user_facing()
+        }
+    }
+}
+
+/// How the workspace package is spelled in addressable paths (`root.ns.Foo`):
+/// the counterpart of [`RESERVED_USER_PACKAGE`] for paste-back output. The
+/// literal package name would read as an item named `user`, which is nothing.
+pub const ADDRESSABLE_USER_PACKAGE: &str = "root";
+
+/// The package-name prefix for addressable paths: the workspace package is
+/// spelled [`ADDRESSABLE_USER_PACKAGE`], every other package by its own name.
+pub fn addressable_package(package: &Name) -> &str {
+    if package.as_str() == RESERVED_USER_PACKAGE {
+        ADDRESSABLE_USER_PACKAGE
+    } else {
+        package.as_str()
+    }
 }
 
 /// The reserved implicit root package for user-authored code. It is the

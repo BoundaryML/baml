@@ -83,6 +83,17 @@ pub struct DescribeArgs {
         help_heading = "Output options"
     )]
     pub limit: u16,
+
+    /// Export a whole package's surface as one versioned JSON document
+    /// (NAME must be a package: `baml`, `user`, …). Cross-package references
+    /// are self-describing ids like `T:baml.time.Duration` — the prefix is
+    /// the kind (`T:` type, `V:` value, `M:` method, `F:` field, `E:`
+    /// variant, `A:` associated type; BAML's type and value namespaces are
+    /// distinct, so bare paths would be ambiguous). Export the referenced
+    /// package for a foreign id's full record. Filter with jq, e.g.
+    /// `… --export | jq '.items[] | select(.namespace == ["json"])'`.
+    #[arg(long, help_heading = "Output options")]
+    pub export: bool,
 }
 
 /// Find FQNs across the user and builtin packages that are fuzzy-similar to `name`.
@@ -336,6 +347,23 @@ impl DescribeArgs {
                     println!("{:<16} {:<40}{summary}", hit.kind, hit.path);
                 }
             }
+            return Ok(crate::ExitCode::Success);
+        }
+
+        // ── --export: the whole-package surface document ────────────────────
+        if self.export {
+            let Some(ResolvedTarget::Package(package)) = dispatch(&db, name) else {
+                eprintln!(
+                    "error: `--export` takes a package name (`baml`, `user`, …), got `{name}`"
+                );
+                return Ok(crate::ExitCode::Other);
+            };
+            let export = baml_ide::export_package(&db, package);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&export)
+                    .unwrap_or_else(|_| unreachable!("export IR serializes"))
+            );
             return Ok(crate::ExitCode::Success);
         }
 

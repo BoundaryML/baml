@@ -285,18 +285,6 @@ struct Candidate {
     docstring: Option<String>,
 }
 
-/// The prefix `describe` accepts for a package: the workspace package is
-/// addressed as `root` (`user.Foo` reads as an item *named* `user`, which is
-/// nothing — and pasting a path back into `describe` is the entire reason a
-/// path is printed).
-fn addressable_package(package: &Name) -> &str {
-    if package.as_str() == baml_type::RESERVED_USER_PACKAGE {
-        "root"
-    } else {
-        package.as_str()
-    }
-}
-
 /// Whether an item enumeration should skip this definition as synthesized:
 /// `$`-companions and auto-derives carry the docstring of the declaration
 /// they shadow, so each is a duplicate hit for whatever its original
@@ -326,7 +314,7 @@ fn ranked_candidates(
     let mut out = Vec::new();
     for &package in packages {
         db.unwind_if_revision_cancelled();
-        let prefix = addressable_package(&package.name(db)).to_string();
+        let prefix = baml_type::addressable_package(&package.name(db)).to_string();
         let items = package_items(db, package);
         for (ns_path, ns_items) in &items.namespaces {
             for (name, def) in ns_items.types.iter().chain(ns_items.values.iter()) {
