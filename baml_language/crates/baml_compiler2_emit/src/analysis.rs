@@ -28,7 +28,7 @@ use crate::stack_carry;
 // ============================================================================
 
 /// A reference to either a statement or a terminator within a block.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum StatementRef {
     /// A statement at the given index.
     Statement(usize),
@@ -1076,14 +1076,8 @@ fn classify_locals(
             } else {
                 LocalClassification::Virtual
             }
-        } else if is_phi_like(local, du, body, predecessors, def_use) {
+        } else if is_stack_covered_phi(local, du, body, predecessors) {
             // Stack-carry candidate validated in a later stack simulation pass.
-            stack_carry_candidates.insert(local, stack_carry::StackCarryKind::PhiLike);
-            LocalClassification::Real
-        } else if is_short_circuit_phi(local, du, body) {
-            // ShortCircuit destination: the JumpIfFalse keeps lhs on TOS on the
-            // short-circuit path, and the rhs block leaves its result on TOS.
-            // Treated like PhiLike — value stays on the stack, no store/load.
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::PhiLike);
             LocalClassification::Real
         } else if is_return_phi(local, body, def_use, redirect_targets) {
@@ -1115,120 +1109,157 @@ fn classify_locals(
     (classifications, copy_sources)
 }
 
-/// Check if a local is "phi-like": assigned in each predecessor of a join block,
-/// used exactly once at that join block.
+/// Check if a local is "phi-like": every path into its single use leaves the
+/// local's value on top of the operand stack, so the emitter can drop the
+/// `StoreVar`/`LoadVar` pair and let the value ride the CFG edge instead.
 ///
-/// Phi-like locals can skip Store/Load because:
-/// - Each predecessor leaves the value on the stack
-/// - At the join point, the value is already on top of the stack
-/// - No need for explicit Store/Load through a named variable
-fn is_phi_like(
+/// This predicate is the *entire* soundness proof for `StackCarryKind::PhiLike`.
+/// The stack simulation in [`crate::stack_carry`] starts AT the use block and
+/// only validates that block's own statement prefix — it never inspects the
+/// local's definitions, nor the use block's predecessors. So every def this
+/// function accepts is emitted as a push with no store, and the use pops
+/// exactly one value: an uncovered incoming edge leaves the pop consuming an
+/// unrelated value, and a definition off the covered paths leaves a push that
+/// nothing pops. Inside a loop the latter grows the operand stack every
+/// iteration.
+///
+/// A local qualifies when all of:
+///
+/// 1. It has exactly one use, in block `U`.
+/// 2. `U` is a join — at least two predecessors. Single-predecessor edges are a
+///    different shape and deliberately out of scope here.
+/// 3. Every predecessor covers the block it flows into, per
+///    [`predecessors_cover_block`].
+/// 4. Every definition of the local was recorded while proving (3); any other
+///    definition is a stray push.
+///
+/// Checking only that a `ShortCircuit` terminator's `join` equals `U` is not a
+/// substitute for (3): `merge_passthrough_blocks` in `baml_compiler2_mir`
+/// rewrites a `ShortCircuit`'s `join` when the original join block is an empty
+/// passthrough, and can retarget it onto a block that has unrelated incoming
+/// edges. `let x = false; if (c) { x = a && b } x` ends up with the `if` join as
+/// both the `ShortCircuit` join and the use block, while its other predecessor
+/// is the `Branch` false edge, which pushes nothing.
+fn is_stack_covered_phi(
     local: Local,
     du: &LocalDefUse,
     body: &MirFunctionBody,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
-    def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
-    // Must have exactly one use
-    if du.uses.len() != 1 {
+    if du.uses.len() != 1 || du.all_defs.is_empty() {
         return false;
     }
 
-    let use_loc = &du.uses[0];
-    let use_block = use_loc.block;
+    let use_block = du.uses[0].block;
 
-    // Get predecessors of the use block
-    let preds = match predecessors.get(&use_block) {
-        Some(p) if !p.is_empty() => p,
-        _ => return false,
+    if predecessors
+        .get(&use_block)
+        .is_none_or(|preds| preds.len() < 2)
+    {
+        return false;
+    }
+
+    let mut visited = HashSet::new();
+    let mut covered_defs = HashSet::new();
+    if !predecessors_cover_block(
+        local,
+        use_block,
+        body,
+        predecessors,
+        &mut visited,
+        &mut covered_defs,
+    ) {
+        return false;
+    }
+
+    // No stray defs: everything that writes the local must be one of the pushes
+    // the coverage walk accounted for.
+    du.all_defs.iter().all(|def| covered_defs.contains(def))
+}
+
+/// Prove that control cannot reach `block` without the local's value on top of
+/// the operand stack, recording the definitions that put it there.
+///
+/// Each predecessor must do one of:
+///
+/// a. End in `Goto { target: block }` with its last statement assigning the
+///    local — under `PhiLike` the emitter emits the rvalue and skips the store,
+///    so the value is left on the stack.
+/// b. End in `ShortCircuit { destination: local, join: block, .. }` — the
+///    `JumpIfFalse` peek leaves the LHS on the stack on the short-circuit edge.
+/// c. Be a statement-free block ending in `Goto { target: block }` whose own
+///    predecessors all cover it. The intermediate joins of a chain such as
+///    `a && b && c` have this shape.
+///
+/// `visited` rejects back-edges: a block reachable from itself would need a push
+/// per trip to stay balanced, which this shape cannot prove.
+///
+/// A predecessor that defines the local from a call-like terminator and
+/// continues at `block` also leaves the result on the stack, but it is not
+/// accepted here: `is_call_result_immediate` documents that the carry path is
+/// not wired for every call terminator, so proving that edge needs its own
+/// argument rather than a fourth arm bolted onto this one. Locals with such a
+/// predecessor stay in a slot — correct, one store/load short of optimal.
+fn predecessors_cover_block(
+    local: Local,
+    block: BlockId,
+    body: &MirFunctionBody,
+    predecessors: &HashMap<BlockId, Vec<BlockId>>,
+    visited: &mut HashSet<BlockId>,
+    covered_defs: &mut HashSet<(BlockId, StatementRef)>,
+) -> bool {
+    if !visited.insert(block) {
+        return false;
+    }
+
+    let Some(preds) = predecessors.get(&block).filter(|preds| !preds.is_empty()) else {
+        return false;
     };
 
-    // Need at least 2 predecessors for this to be a join point
-    if preds.len() < 2 {
-        return false;
-    }
-
-    // Get all definitions of this local
-    let defs = &def_use[&local].all_defs;
-    if defs.is_empty() {
-        return false;
-    }
-
-    // Check that each predecessor:
-    // 1. Defines this local
-    // 2. The definition is the last statement in the block
-    // 3. The block ends with Goto to the use block
     for &pred_id in preds {
-        let pred_block = body.block(pred_id);
+        let pred = body.block(pred_id);
 
-        // Must end with Goto to use_block
-        let goes_to_use_block = matches!(
-            &pred_block.terminator,
-            Some(Terminator::Goto { target }) if *target == use_block
+        if let Some(Terminator::ShortCircuit {
+            destination: Place::Local(destination),
+            join,
+            ..
+        }) = &pred.terminator
+            && *destination == local
+            && *join == block
+        {
+            covered_defs.insert((pred_id, StatementRef::Terminator));
+            continue;
+        }
+
+        let goes_to_block = matches!(
+            &pred.terminator,
+            Some(Terminator::Goto { target }) if *target == block
         );
-        if !goes_to_use_block {
+        if !goes_to_block {
             return false;
         }
 
-        // Must have at least one statement
-        if pred_block.statements.is_empty() {
-            return false;
-        }
-
-        // Last statement must be an assignment to this local
-        let last_stmt_idx = pred_block.statements.len() - 1;
-        let last_stmt = &pred_block.statements[last_stmt_idx];
+        let Some(last) = pred.statements.last() else {
+            // Empty passthrough — push the proof up to its own predecessors.
+            if !predecessors_cover_block(local, pred_id, body, predecessors, visited, covered_defs)
+            {
+                return false;
+            }
+            continue;
+        };
 
         let assigns_local = matches!(
-            &last_stmt.kind,
+            &last.kind,
             StatementKind::Assign { destination: Place::Local(l), .. } if *l == local
         );
         if !assigns_local {
             return false;
         }
 
-        // Verify this definition is in our defs list
-        let has_def = defs
-            .iter()
-            .any(|&(b, s)| b == pred_id && s == StatementRef::Statement(last_stmt_idx));
-        if !has_def {
-            return false;
-        }
+        covered_defs.insert((pred_id, StatementRef::Statement(pred.statements.len() - 1)));
     }
 
     true
-}
-
-/// Check if a local is the destination of a `ShortCircuit` terminator and has
-/// exactly one use in the join block. The `JumpIfFalse` peek instruction keeps
-/// the LHS on TOS for the short-circuit path, while the rhs block leaves its
-/// result on TOS. At the join, the value is on TOS from whichever path ran.
-fn is_short_circuit_phi(local: Local, du: &LocalDefUse, body: &MirFunctionBody) -> bool {
-    if du.uses.len() != 1 {
-        return false;
-    }
-
-    let use_block = du.uses[0].block;
-
-    // `_0` is the return place; all other named locals are source variables
-    // and may be reassigned. Keep them in slots rather than stack-carrying a
-    // value across control-flow edges. This mirrors MIR copy propagation,
-    // which only optimizes unnamed compiler temporaries for the same reason.
-    if local != Local(0) && body.local(local).name.is_some() {
-        return false;
-    }
-
-    du.all_defs.iter().any(|&(block_id, statement_ref)| {
-        statement_ref == StatementRef::Terminator
-            && matches!(
-                &body.block(block_id).terminator,
-                Some(Terminator::ShortCircuit {
-                    destination: Place::Local(destination),
-                    join,
-                    ..
-                }) if *destination == local && *join == use_block
-            )
-    })
 }
 
 /// Check if a MIR statement is stack-neutral (doesn't push or pop from the eval stack).
@@ -2374,21 +2405,17 @@ mod tests {
         }
     }
 
+    /// `a && b && c`: two chained `ShortCircuit` terminators whose inner join
+    /// (bb3) is an empty passthrough into the outer join (bb4).
     fn nested_short_circuit_body(
         name: Option<&str>,
         with_prior_definition: bool,
     ) -> MirFunctionBody {
         let destination = Local(1);
-        let prior_definition = with_prior_definition.then_some(Statement {
-            kind: StatementKind::Assign {
-                destination: Place::Local(destination),
-                value: Rvalue::Use(Operand::Constant(Constant::Bool(false))),
-            },
-            span: None,
-        });
+        let prior_definition = with_prior_definition.then(|| assign_bool(destination, false));
 
-        MirFunctionBody {
-            blocks: vec![
+        bool_body(
+            vec![
                 BasicBlock {
                     id: BlockId(0),
                     statements: prior_definition.into_iter().collect(),
@@ -2417,13 +2444,7 @@ mod tests {
                 },
                 BasicBlock {
                     id: BlockId(2),
-                    statements: vec![Statement {
-                        kind: StatementKind::Assign {
-                            destination: Place::Local(destination),
-                            value: Rvalue::Use(Operand::Constant(Constant::Bool(true))),
-                        },
-                        span: None,
-                    }],
+                    statements: vec![assign_bool(destination, true)],
                     terminator: Some(Terminator::Goto { target: BlockId(3) }),
                     span: None,
                     terminator_span: None,
@@ -2435,68 +2456,255 @@ mod tests {
                     span: None,
                     terminator_span: None,
                 },
-                BasicBlock {
-                    id: BlockId(4),
-                    statements: vec![Statement {
-                        kind: StatementKind::Assign {
-                            destination: Place::Local(Local(0)),
-                            value: Rvalue::Use(Operand::copy_local(destination)),
-                        },
-                        span: None,
-                    }],
-                    terminator: Some(Terminator::Return),
-                    span: None,
-                    terminator_span: None,
-                },
+                return_local_block(BlockId(4), destination),
             ],
+            name,
+        )
+    }
+
+    fn bool_local_decl(name: Option<&str>) -> LocalDecl {
+        LocalDecl {
+            name: name.map(baml_base::Name::new),
+            ty: RuntimeTy::Bool {
+                attr: TyAttr::default(),
+            },
+            span: None,
+            scope_span: None,
+            is_captured: false,
+        }
+    }
+
+    fn assign_bool(destination: Local, value: bool) -> Statement {
+        Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(destination),
+                value: Rvalue::Use(Operand::Constant(Constant::Bool(value))),
+            },
+            span: None,
+        }
+    }
+
+    /// `_0 = copy destination; return` — the single use of the carried local.
+    fn return_local_block(id: BlockId, destination: Local) -> BasicBlock {
+        BasicBlock {
+            id,
+            statements: vec![Statement {
+                kind: StatementKind::Assign {
+                    destination: Place::Local(Local(0)),
+                    value: Rvalue::Use(Operand::copy_local(destination)),
+                },
+                span: None,
+            }],
+            terminator: Some(Terminator::Return),
+            span: None,
+            terminator_span: None,
+        }
+    }
+
+    fn bool_body(blocks: Vec<BasicBlock>, name: Option<&str>) -> MirFunctionBody {
+        MirFunctionBody {
+            blocks,
             entry: BlockId(0),
-            locals: vec![
-                LocalDecl {
-                    name: None,
-                    ty: RuntimeTy::Bool {
-                        attr: TyAttr::default(),
-                    },
-                    span: None,
-                    scope_span: None,
-                    is_captured: false,
-                },
-                LocalDecl {
-                    name: name.map(baml_base::Name::new),
-                    ty: RuntimeTy::Bool {
-                        attr: TyAttr::default(),
-                    },
-                    span: None,
-                    scope_span: None,
-                    is_captured: false,
-                },
-            ],
+            locals: vec![bool_local_decl(None), bool_local_decl(name)],
             catch_regions: vec![],
             viz_nodes: vec![],
         }
     }
 
-    #[test]
-    fn nested_short_circuit_definitions_are_stack_carried() {
-        let body = nested_short_circuit_body(None, false);
-        let def_use = collect_def_use(&body);
+    fn is_stack_covered(body: &MirFunctionBody, local: Local) -> bool {
+        let def_use = collect_def_use(body);
+        let predecessors = build_predecessors(body);
 
-        assert!(is_short_circuit_phi(Local(1), &def_use[&Local(1)], &body));
+        is_stack_covered_phi(local, &def_use[&local], body, &predecessors)
     }
 
     #[test]
-    fn named_short_circuit_local_is_materialized() {
-        let body = nested_short_circuit_body(Some("result"), false);
-        let def_use = collect_def_use(&body);
+    fn nested_short_circuit_definitions_are_stack_carried() {
+        let body = nested_short_circuit_body(None, false);
 
-        assert!(!is_short_circuit_phi(Local(1), &def_use[&Local(1)], &body));
+        assert!(is_stack_covered(&body, Local(1)));
+    }
+
+    /// A user-named local is not special: what matters is that every edge into
+    /// the use block pushes its value, and that nothing else defines it.
+    #[test]
+    fn named_short_circuit_local_is_stack_carried() {
+        let body = nested_short_circuit_body(Some("result"), false);
+
+        assert!(is_stack_covered(&body, Local(1)));
     }
 
     #[test]
     fn reassigned_named_short_circuit_local_is_materialized() {
         let body = nested_short_circuit_body(Some("result"), true);
-        let def_use = collect_def_use(&body);
 
-        assert!(!is_short_circuit_phi(Local(1), &def_use[&Local(1)], &body));
+        assert!(!is_stack_covered(&body, Local(1)));
+    }
+
+    /// The stray initializer is just as unbalanced when the local is a compiler
+    /// temp, so the name plays no part in rejecting it.
+    #[test]
+    fn reassigned_unnamed_short_circuit_local_is_materialized() {
+        let body = nested_short_circuit_body(None, true);
+
+        assert!(!is_stack_covered(&body, Local(1)));
+    }
+
+    /// `let x = false; if (c) { x = a && b } x` — MIR merges the short circuit's
+    /// own join into the `if` join, so the `ShortCircuit`'s `join` really is the
+    /// use block. The `Branch` false edge still reaches that block without
+    /// pushing anything, so the local has to stay in its slot.
+    fn merged_join_body(name: Option<&str>) -> MirFunctionBody {
+        let destination = Local(1);
+
+        bool_body(
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::Branch {
+                        condition: Operand::Constant(Constant::Bool(true)),
+                        then_block: BlockId(1),
+                        else_block: BlockId(3),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![],
+                    terminator: Some(Terminator::ShortCircuit {
+                        operand: Operand::Constant(Constant::Bool(true)),
+                        is_and: true,
+                        destination: Place::Local(destination),
+                        eval_rhs: BlockId(2),
+                        join: BlockId(3),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![assign_bool(destination, true)],
+                    terminator: Some(Terminator::Goto { target: BlockId(3) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                return_local_block(BlockId(3), destination),
+            ],
+            name,
+        )
+    }
+
+    #[test]
+    fn short_circuit_join_shared_with_a_branch_edge_is_materialized() {
+        assert!(!is_stack_covered(&merged_join_body(Some("x")), Local(1)));
+        assert!(!is_stack_covered(&merged_join_body(None), Local(1)));
+    }
+
+    /// One predecessor short-circuits into the join, the other assigns and
+    /// falls through. Neither of the two predicates this replaced accepted the
+    /// mix on its own.
+    #[test]
+    fn mixed_short_circuit_and_assignment_predecessors_are_stack_carried() {
+        let destination = Local(1);
+        let body = bool_body(
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::Branch {
+                        condition: Operand::Constant(Constant::Bool(true)),
+                        then_block: BlockId(1),
+                        else_block: BlockId(3),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![],
+                    terminator: Some(Terminator::ShortCircuit {
+                        operand: Operand::Constant(Constant::Bool(true)),
+                        is_and: true,
+                        destination: Place::Local(destination),
+                        eval_rhs: BlockId(2),
+                        join: BlockId(4),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![assign_bool(destination, true)],
+                    terminator: Some(Terminator::Goto { target: BlockId(4) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(3),
+                    statements: vec![assign_bool(destination, false)],
+                    terminator: Some(Terminator::Goto { target: BlockId(4) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                return_local_block(BlockId(4), destination),
+            ],
+            Some("x"),
+        );
+
+        assert!(is_stack_covered(&body, Local(1)));
+    }
+
+    /// The classic phi-like diamond: both arms assign and fall through.
+    fn diamond_body(with_prior_definition: bool) -> MirFunctionBody {
+        let destination = Local(1);
+        let prior_definition = with_prior_definition.then(|| assign_bool(destination, false));
+
+        bool_body(
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: prior_definition.into_iter().collect(),
+                    terminator: Some(Terminator::Branch {
+                        condition: Operand::Constant(Constant::Bool(true)),
+                        then_block: BlockId(1),
+                        else_block: BlockId(2),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![assign_bool(destination, true)],
+                    terminator: Some(Terminator::Goto { target: BlockId(3) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![assign_bool(destination, false)],
+                    terminator: Some(Terminator::Goto { target: BlockId(3) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                return_local_block(BlockId(3), destination),
+            ],
+            Some("x"),
+        )
+    }
+
+    #[test]
+    fn assignment_in_every_predecessor_is_stack_carried() {
+        assert!(is_stack_covered(&diamond_body(false), Local(1)));
+    }
+
+    /// `let x = 0; if (c) { x = 1 } else { x = 2 }; use(x)` — the initializer is
+    /// emitted as a push that nothing pops, so inside a loop it grew the operand
+    /// stack once per iteration.
+    #[test]
+    fn diamond_with_a_definition_outside_the_predecessors_is_materialized() {
+        assert!(!is_stack_covered(&diamond_body(true), Local(1)));
     }
 
     /// A single static use in a CFG cycle represents repeated dynamic uses.
