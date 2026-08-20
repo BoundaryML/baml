@@ -1197,6 +1197,9 @@ fn is_stack_covered_phi(
 ///
 /// `visited` rejects back-edges: a block reachable from itself would need a push
 /// per trip to stay balanced, which this shape cannot prove.
+///
+/// Two kinds of block are refused outright, because the predecessor list is not
+/// a complete account of how they are entered — see the guard below.
 fn predecessors_cover_block(
     local: Local,
     block: BlockId,
@@ -1206,6 +1209,31 @@ fn predecessors_cover_block(
     covered_defs: &mut HashSet<(BlockId, StatementRef)>,
 ) -> bool {
     if !visited.insert(block) {
+        return false;
+    }
+
+    // `build_predecessors` is built purely from `Terminator::successors`, so it
+    // only knows about entries that traverse a CFG edge. Two blocks are also
+    // entered without one, and nothing is on the stack when they are:
+    //
+    // - `entry`, on every call of the function. A CFG predecessor set can look
+    //   complete for it if the entry block is also a loop header.
+    // - a catch region's handler, when the VM unwinds into it. A call's
+    //   `unwind` target is a `successors` edge, but a same-frame panic — an
+    //   overflowing `add_int`, a division by zero — reaches the handler from
+    //   the middle of a block, with no edge at all. `compute_rpo` has to seed
+    //   those handlers separately for exactly this reason, and `collect_def_use`
+    //   records the VM's write of the error local there as an implicit use.
+    //
+    // Only the block being *covered* is refused. A handler that is itself a
+    // predecessor stays fine: it reaches its successor over a real edge, having
+    // pushed the value like any other predecessor.
+    if block == body.entry
+        || body
+            .catch_regions
+            .iter()
+            .any(|region| region.handler == block)
+    {
         return false;
     }
 
@@ -2274,7 +2302,8 @@ fn get_copy_source(
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{
-        BasicBlock, Constant, LocalDecl, MirFunctionBody, Operand, Place, Statement, Terminator,
+        BasicBlock, CatchRegion, Constant, LocalDecl, MirFunctionBody, Operand, Place, Statement,
+        Terminator,
     };
     use baml_type::{RuntimeTy, TyAttr};
 
@@ -2816,6 +2845,76 @@ mod tests {
                 unwind: None,
             },
         );
+
+        assert!(!is_stack_covered(&body, Local(1)));
+    }
+
+    /// The entry block is entered on every call without traversing an edge, so
+    /// a predecessor set that looks complete is not. Contrived — a real MIR
+    /// entry block is never a loop header — but it is the shape the guard
+    /// exists for, and nothing else in the predicate would reject it.
+    #[test]
+    fn entry_block_as_the_join_is_materialized() {
+        let destination = Local(1);
+        let body = bool_body(
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Use(Operand::copy_local(destination)),
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Branch {
+                        condition: Operand::Constant(Constant::Bool(true)),
+                        then_block: BlockId(1),
+                        else_block: BlockId(2),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![assign_bool(destination, true)],
+                    terminator: Some(Terminator::Goto { target: BlockId(0) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![assign_bool(destination, false)],
+                    terminator: Some(Terminator::Goto { target: BlockId(0) }),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            Some("x"),
+        );
+
+        assert!(!is_stack_covered(&body, Local(1)));
+    }
+
+    /// The VM enters a handler on unwind rather than over an edge, so a block
+    /// the walk would otherwise pass through as an empty passthrough cannot be
+    /// proven covered once it is one.
+    #[test]
+    fn catch_handler_inside_the_coverage_walk_is_materialized() {
+        let mut body = nested_short_circuit_body(None, false);
+
+        // bb3 is the chain's inner join, the empty passthrough arm (c) recurses
+        // through. Everything below is unchanged except that it is now a
+        // handler, so the region is the only reason the answer flips.
+        assert!(is_stack_covered(&body, Local(1)));
+
+        body.catch_regions.push(CatchRegion {
+            body_entry: BlockId(0),
+            handler: BlockId(3),
+            handler_body: vec![BlockId(3)],
+            error_local: Local(0),
+            stack_trace_local: None,
+        });
 
         assert!(!is_stack_covered(&body, Local(1)));
     }
