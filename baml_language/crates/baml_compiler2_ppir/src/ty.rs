@@ -227,12 +227,54 @@ impl PpirTy {
     fn convert_type_expr(type_expr: &TypeExpr) -> PpirTy {
         let attrs = Self::extract_type_attrs(type_expr.attrs());
         match &type_expr.kind {
-            TypeExprKind::Int { .. } => PpirTy::Int { attrs },
-            TypeExprKind::Bigint { .. } => PpirTy::Bigint { attrs },
-            TypeExprKind::Float { .. } => PpirTy::Float { attrs },
-            TypeExprKind::String { .. } => PpirTy::String { attrs },
-            TypeExprKind::Bool { .. } => PpirTy::Bool { attrs },
-            TypeExprKind::Null { .. } => PpirTy::Null { attrs },
+            // The single primitive table: recognition (dedicated leaf OR the
+            // bare-alias path parsed source produces) is `written_primitive`'s
+            // job in the AST crate, the same context-free layer-0 reading the
+            // resolution chain gives those spellings. Written generic args on
+            // a builtin (`string<T>`) are dropped, matching type lowering's
+            // `lower_builtin`: no builtin type is generic.
+            kind if kind.written_primitive().is_some() => {
+                use baml_type::PrimitiveType as P;
+                match kind.written_primitive().expect("guard") {
+                    P::Int => PpirTy::Int { attrs },
+                    P::Bigint => PpirTy::Bigint { attrs },
+                    P::Float => PpirTy::Float { attrs },
+                    P::String => PpirTy::String { attrs },
+                    P::Bool => PpirTy::Bool { attrs },
+                    P::Null => PpirTy::Null { attrs },
+                    P::Uint8Array => PpirTy::CannotBeStreamed {
+                        origin: CannotBeStreamedOrigin::Uint8Array,
+                        attrs,
+                    },
+                    P::Image => PpirTy::CannotBeStreamed {
+                        origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Image),
+                        attrs,
+                    },
+                    P::Audio => PpirTy::CannotBeStreamed {
+                        origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Audio),
+                        attrs,
+                    },
+                    P::Video => PpirTy::CannotBeStreamed {
+                        origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Video),
+                        attrs,
+                    },
+                    P::Pdf => PpirTy::CannotBeStreamed {
+                        origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Pdf),
+                        attrs,
+                    },
+                }
+            }
+            // Consumed by the written_primitive guard above; grouped here
+            // only for match exhaustiveness - no second mapping table.
+            TypeExprKind::Int { .. }
+            | TypeExprKind::Bigint { .. }
+            | TypeExprKind::Float { .. }
+            | TypeExprKind::String { .. }
+            | TypeExprKind::Bool { .. }
+            | TypeExprKind::Null { .. }
+            | TypeExprKind::Uint8Array { .. } => {
+                unreachable!("consumed by the written_primitive guard")
+            }
             TypeExprKind::Never { .. } => PpirTy::Never { attrs },
             TypeExprKind::Void { .. } => PpirTy::Never { attrs },
             TypeExprKind::Path {
@@ -241,74 +283,6 @@ impl PpirTy {
                 associated_type_bindings,
                 ..
             } => {
-                // A bare builtin name normalizes to its dedicated leaf. This
-                // IS resolution, not a guess: the builtin scope is layer 0 of
-                // the resolution chain (`baml_compiler2_hir::nameres`), ahead
-                // of every scoped layer, so a single-segment builtin spelling
-                // resolves identically in every context - no shadowing can
-                // reach it (a shadowed declaration is only addressable as
-                // `root.<name>`, which is multi-segment). Normalizing here
-                // keeps expansion's leaf algebra (`contains_null`, the
-                // per-variant stream rules) working on one representation.
-                // Written generic args on a builtin (`string<T>`) are
-                // dropped, matching type lowering's `lower_builtin`: no
-                // builtin type is generic.
-                if let [single] = segments.as_slice()
-                    && let Some(builtin) =
-                        baml_compiler2_hir::nameres::builtin_type_scope(single)
-                {
-                    use baml_type::{BuiltinTypeName, PrimitiveType as P};
-                    return match builtin {
-                        BuiltinTypeName::Primitive(primitive) => match primitive {
-                            P::Int => PpirTy::Int { attrs },
-                            P::Bigint => PpirTy::Bigint { attrs },
-                            P::Float => PpirTy::Float { attrs },
-                            P::String => PpirTy::String { attrs },
-                            P::Bool => PpirTy::Bool { attrs },
-                            P::Null => PpirTy::Null { attrs },
-                            P::Uint8Array => PpirTy::CannotBeStreamed {
-                                origin: CannotBeStreamedOrigin::Uint8Array,
-                                attrs,
-                            },
-                            P::Image => PpirTy::CannotBeStreamed {
-                                origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Image),
-                                attrs,
-                            },
-                            P::Audio => PpirTy::CannotBeStreamed {
-                                origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Audio),
-                                attrs,
-                            },
-                            P::Video => PpirTy::CannotBeStreamed {
-                                origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Video),
-                                attrs,
-                            },
-                            P::Pdf => PpirTy::CannotBeStreamed {
-                                origin: CannotBeStreamedOrigin::Media(baml_base::MediaKind::Pdf),
-                                attrs,
-                            },
-                        },
-                        // `json` is expanded to `baml.json.json` at AST
-                        // lowering (sugar), so a bare `json` path never comes
-                        // from parsed source - but that invariant lives in
-                        // another crate, so recover to the same canonical
-                        // path the sugar produces rather than panicking.
-                        BuiltinTypeName::Json => PpirTy::Named {
-                            path: vec![Name::new("baml"), Name::new("json"), Name::new("json")],
-                            generic_args: vec![],
-                            associated_type_bindings: vec![],
-                            attrs,
-                        },
-                        // The intrinsics have no addressable definition and
-                        // are filtered out of the builtin scope itself
-                        // (`builtin_definition_path` is None), so this guard
-                        // cannot yield them.
-                        BuiltinTypeName::Void
-                        | BuiltinTypeName::Never
-                        | BuiltinTypeName::Unknown => {
-                            unreachable!("intrinsics are not in the builtin type scope")
-                        }
-                    };
-                }
                 PpirTy::Named {
                     path: segments.clone(),
                     generic_args: generic_args.iter().map(Self::convert_type_expr).collect(),
@@ -346,10 +320,9 @@ impl PpirTy {
                     attrs,
                 },
             },
-            TypeExprKind::Uint8Array { .. } => PpirTy::CannotBeStreamed {
-                origin: CannotBeStreamedOrigin::Uint8Array,
-                attrs,
-            },
+            // Uint8Array and the concrete media kinds are consumed by the
+            // written_primitive guard above; only `MediaKind::Generic`
+            // (which has no primitive) reaches this arm.
             TypeExprKind::Media { kind, .. } => PpirTy::CannotBeStreamed {
                 origin: CannotBeStreamedOrigin::Media(*kind),
                 attrs,

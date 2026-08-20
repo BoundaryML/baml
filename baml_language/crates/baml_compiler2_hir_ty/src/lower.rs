@@ -68,7 +68,36 @@ struct HirTyForeign<'a, 'db> {
     current_package: &'a Name,
 }
 
-impl HirTyForeign<'_, '_> {
+impl<'db> HirTyForeign<'_, 'db> {
+    /// The shorthand layer's shared policy: dependency access to `baml`,
+    /// then the package-interface visibility check the caller supplies
+    /// (types and values consult different interface tables), returning the
+    /// `baml` package's items on success.
+    fn baml_shorthand(
+        &self,
+        _namespace: &[Name],
+        _item: &Name,
+        visible_in: impl FnOnce(&crate::package_interface::PackageInterface) -> bool,
+    ) -> Option<&'db baml_compiler2_hir::package::PackageItems<'db>> {
+        let baml_package = Name::new("baml");
+        if !self.can_access(&baml_package) {
+            return None;
+        }
+        let visible = *self.current_package == baml_package
+            || visible_in(crate::package_interface::package_interface(
+                self.db,
+                PackageId::new(self.db, baml_package.clone()),
+            ));
+        if visible {
+            Some(baml_compiler2_ppir::package_items(
+                self.db,
+                PackageId::new(self.db, baml_package),
+            ))
+        } else {
+            None
+        }
+    }
+
     fn can_access(&self, package: &Name) -> bool {
         if self.current_package == package {
             return true;
@@ -123,51 +152,18 @@ impl<'db> ForeignLookup<'db> for HirTyForeign<'_, 'db> {
         namespace: &[Name],
         item: &Name,
     ) -> Option<TypePathResolution<'db, Self::Res>> {
-        let baml_package = Name::new("baml");
-        if !self.can_access(&baml_package) {
-            return None;
-        }
-        let baml_items = baml_compiler2_ppir::package_items(
-            self.db,
-            PackageId::new(self.db, baml_package.clone()),
-        );
-        let visible = *self.current_package == baml_package
-            || crate::package_interface::package_interface(
-                self.db,
-                PackageId::new(self.db, baml_package),
-            )
-            .lookup_type(namespace, item)
-            .is_some();
-        if visible {
-            baml_items
-                .lookup_type(namespace, item)
-                .map(TypePathResolution::Def)
-        } else {
-            None
-        }
+        self.baml_shorthand(namespace, item, |interface| {
+            interface.lookup_type(namespace, item).is_some()
+        })
+        .and_then(|items| items.lookup_type(namespace, item))
+        .map(TypePathResolution::Def)
     }
 
     fn baml_shorthand_value(&self, namespace: &[Name], item: &Name) -> Option<Definition<'db>> {
-        let baml_package = Name::new("baml");
-        if !self.can_access(&baml_package) {
-            return None;
-        }
-        let baml_items = baml_compiler2_ppir::package_items(
-            self.db,
-            PackageId::new(self.db, baml_package.clone()),
-        );
-        let visible = *self.current_package == baml_package
-            || crate::package_interface::package_interface(
-                self.db,
-                PackageId::new(self.db, baml_package),
-            )
-            .lookup_function(namespace, item)
-            .is_some();
-        if visible {
-            baml_items.lookup_value(namespace, item)
-        } else {
-            None
-        }
+        self.baml_shorthand(namespace, item, |interface| {
+            interface.lookup_function(namespace, item).is_some()
+        })
+        .and_then(|items| items.lookup_value(namespace, item))
     }
 
     fn is_stream_base(res: &Self::Res) -> bool {

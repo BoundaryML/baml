@@ -67,16 +67,13 @@ impl<'db> ForeignLookup<'db> for ExpandForeign<'_, 'db> {
         namespace: &[Name],
         item: &Name,
     ) -> Option<TypePathResolution<'db, Infallible>> {
-        self.all_package_items
-            .get(&Name::new("baml"))?
-            .lookup_type(namespace, item)
-            .map(TypePathResolution::Def)
+        // Expansion has no visibility policy: the shorthand is exactly a
+        // lookup rooted at the `baml` package.
+        self.lookup_type(&Name::new("baml"), namespace, item)
     }
 
     fn baml_shorthand_value(&self, namespace: &[Name], item: &Name) -> Option<Definition<'db>> {
-        self.all_package_items
-            .get(&Name::new("baml"))?
-            .lookup_value(namespace, item)
+        self.lookup_value(&Name::new("baml"), namespace, item)
     }
 
     fn is_stream_base(res: &Infallible) -> bool {

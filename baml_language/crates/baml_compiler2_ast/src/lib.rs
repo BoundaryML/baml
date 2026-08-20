@@ -2846,7 +2846,9 @@ mod reserved_name_tests {
     /// flavor of E0170 - the same set the runtime constructors enforce.
     #[test]
     fn contextual_keywords_are_rejected_as_declaration_names() {
-        for name in ["true", "false", "map", "const", "with", "as", "unreflect"] {
+        // `unreflect` is deliberately absent: it is contextual only inside
+        // type-argument slots and stays an ordinary declaration name.
+        for name in ["true", "false", "map", "const", "with", "as"] {
             let found = reserved_diags(&format!("class {name} {{ v int }}\n"));
             assert!(
                 found

@@ -342,7 +342,12 @@ fn reserved_declaration_name(name: &str) -> Option<crate::lowering_diagnostic::R
     if baml_type::BuiltinTypeName::from_alias(name).is_some() || name == "Self" {
         return Some(crate::lowering_diagnostic::ReservedNameKind::BuiltinType);
     }
-    if !baml_compiler_diagnostics::runtime_type::is_baml_identifier(name) {
+    // `unreflect` is contextual ONLY inside type-argument slots; outside
+    // them it is an ordinary name, and declarations may use it (pinned by
+    // canary's `unreflect_outside_a_type_argument_slot_is_an_ordinary_name`).
+    // It is the one entry of the lexer's contextual-keyword list with that
+    // property, so it is carved out rather than the list forked.
+    if name != "unreflect" && !baml_compiler_diagnostics::runtime_type::is_baml_identifier(name) {
         return Some(crate::lowering_diagnostic::ReservedNameKind::Keyword);
     }
     None

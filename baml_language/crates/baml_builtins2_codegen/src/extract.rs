@@ -715,32 +715,12 @@ fn extract_from_implements_for(
     }
 }
 
-/// The primitive a written type expression spells, if any.
-///
-/// The AST lowers primitive names as ordinary single-segment paths (what a
-/// path DENOTES is resolution's job). This extractor runs scope-free over
-/// the stdlib, where a primitive spelling always means the primitive, so the
-/// registry alias table is the correct reading here.
-fn written_primitive(ty: &TypeExpr) -> Option<baml_type::PrimitiveType> {
-    match &ty.kind {
-        TypeExprKind::Path { segments, .. } if segments.len() == 1 => {
-            baml_type::PrimitiveType::from_alias(segments[0].as_str())
-        }
-        _ => None,
-    }
-}
-
-/// Whether a written or synthesized type expression is the null type.
-fn is_null_type_expr(ty: &TypeExpr) -> bool {
-    ty.kind.is_null()
-}
-
 /// Map a `for` target type expression to the receiver class name whose
 /// extraction logic the codegen already knows. Returns `None` for targets that
 /// are not native-backed primitives/containers.
 fn receiver_class_for_target(ty: &TypeExpr) -> Option<&'static str> {
     use baml_type::PrimitiveType as P;
-    if let Some(primitive) = written_primitive(ty) {
+    if let Some(primitive) = ty.kind.written_primitive() {
         return match primitive {
             P::Int => Some("Int"),
             P::Bigint => Some("Bigint"),
@@ -788,7 +768,7 @@ fn type_expr_to_baml_type_with_self(
             BamlType::Map(Box::new(recurse(key)), Box::new(recurse(value)))
         }
         TypeExprKind::Union { variants, .. } => {
-            let non_null: Vec<_> = variants.iter().filter(|v| !is_null_type_expr(v)).collect();
+            let non_null: Vec<_> = variants.iter().filter(|v| !v.kind.is_null()).collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(recurse(non_null[0])))
             } else {
@@ -881,7 +861,7 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
     use baml_type::PrimitiveType as P;
-    if let Some(primitive) = written_primitive(ty) {
+    if let Some(primitive) = ty.kind.written_primitive() {
         return match primitive {
             P::Int => BamlType::Int,
             P::Bigint => BamlType::Bigint,
@@ -900,26 +880,19 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         TypeExprKind::Never { .. } => BamlType::Null,
         TypeExprKind::Void { .. } => BamlType::Null,
 
-        // Dedicated primitive nodes no longer come from parsed source (the
-        // AST lowers those names as paths); these arms serve synthesized
-        // trees only, through the same table as the path spellings.
-        TypeExprKind::Int { .. } => BamlType::Int,
-        TypeExprKind::Bigint { .. } => BamlType::Bigint,
-        TypeExprKind::Float { .. } => BamlType::Float,
-        TypeExprKind::String { .. } => BamlType::String,
-        TypeExprKind::Bool { .. } => BamlType::Bool,
-        TypeExprKind::Null { .. } => BamlType::Null,
-        TypeExprKind::Uint8Array { .. } => BamlType::Uint8Array,
-        TypeExprKind::Media { kind, .. } => {
-            let name = match kind {
-                baml_base::MediaKind::Image => "Image",
-                baml_base::MediaKind::Audio => "Audio",
-                baml_base::MediaKind::Video => "Video",
-                baml_base::MediaKind::Pdf => "Pdf",
-                baml_base::MediaKind::Generic => "Media",
-            };
-            BamlType::Media(name.to_string())
+        // Consumed by the written_primitive check above; grouped here only
+        // for match exhaustiveness - no second mapping table.
+        TypeExprKind::Int { .. }
+        | TypeExprKind::Bigint { .. }
+        | TypeExprKind::Float { .. }
+        | TypeExprKind::String { .. }
+        | TypeExprKind::Bool { .. }
+        | TypeExprKind::Null { .. }
+        | TypeExprKind::Uint8Array { .. } => {
+            unreachable!("consumed by the written_primitive check")
         }
+        // Only `MediaKind::Generic` (no primitive) reaches this arm.
+        TypeExprKind::Media { .. } => BamlType::Media("Media".to_string()),
 
         TypeExprKind::Optional { inner, .. } => {
             BamlType::Optional(Box::new(type_expr_to_baml_type(inner, generics)))
@@ -955,7 +928,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         }
 
         TypeExprKind::Union { variants, .. } => {
-            let non_null: Vec<_> = variants.iter().filter(|v| !is_null_type_expr(v)).collect();
+            let non_null: Vec<_> = variants.iter().filter(|v| !v.kind.is_null()).collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(type_expr_to_baml_type(non_null[0], generics)))
             } else {

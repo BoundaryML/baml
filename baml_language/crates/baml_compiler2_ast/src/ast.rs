@@ -213,22 +213,43 @@ impl std::ops::DerefMut for TypeExpr {
 }
 
 impl TypeExprKind {
-    /// Whether this node denotes the null type: the dedicated leaf
-    /// (synthesized trees), or the bare `null` path parsed source produces.
-    /// Treating the path spelling as null here IS resolution, not a guess:
-    /// a single-segment builtin name resolves in the resolution chain's
-    /// builtin scope ahead of every scoped layer, so it is context-free
-    /// (a shadowing declaration is only addressable as `root.null`).
-    pub fn is_null(&self) -> bool {
+    /// The primitive this node denotes, if any: a dedicated leaf
+    /// (synthesized trees), or the bare-alias path parsed source produces.
+    /// Treating the path spelling as its primitive here IS resolution, not
+    /// a guess: a single-segment builtin name resolves in the resolution
+    /// chain's builtin scope ahead of every scoped layer, so it is
+    /// context-free (a shadowing declaration is only addressable as
+    /// `root.<name>`). The ONE recognition point - consumers map the
+    /// returned `PrimitiveType` through their own single table instead of
+    /// re-matching node kinds.
+    pub fn written_primitive(&self) -> Option<baml_type::PrimitiveType> {
+        use baml_type::PrimitiveType as P;
         match self {
-            TypeExprKind::Null { .. } => true,
-            TypeExprKind::Path { segments, .. } => {
-                matches!(segments.as_slice(), [single]
-                    if baml_type::PrimitiveType::from_alias(single.as_str())
-                        == Some(baml_type::PrimitiveType::Null))
-            }
-            _ => false,
+            TypeExprKind::Int { .. } => Some(P::Int),
+            TypeExprKind::Bigint { .. } => Some(P::Bigint),
+            TypeExprKind::Float { .. } => Some(P::Float),
+            TypeExprKind::String { .. } => Some(P::String),
+            TypeExprKind::Bool { .. } => Some(P::Bool),
+            TypeExprKind::Null { .. } => Some(P::Null),
+            TypeExprKind::Uint8Array { .. } => Some(P::Uint8Array),
+            TypeExprKind::Media { kind, .. } => match kind {
+                baml_base::MediaKind::Image => Some(P::Image),
+                baml_base::MediaKind::Audio => Some(P::Audio),
+                baml_base::MediaKind::Video => Some(P::Video),
+                baml_base::MediaKind::Pdf => Some(P::Pdf),
+                baml_base::MediaKind::Generic => None,
+            },
+            TypeExprKind::Path { segments, .. } => match segments.as_slice() {
+                [single] => P::from_alias(single.as_str()),
+                _ => None,
+            },
+            _ => None,
         }
+    }
+
+    /// Whether this node denotes the null type, in either spelling.
+    pub fn is_null(&self) -> bool {
+        self.written_primitive() == Some(baml_type::PrimitiveType::Null)
     }
 
     /// Pair this node with its source span. `TypeExprKind::Int { .. }.at(span)`.
