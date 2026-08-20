@@ -18,11 +18,11 @@
 # compete.
 #
 # Because `target/` is excluded, rust-cache's payload is small (registry + git,
-# no build output). As on canary, only canary writes the cache
-# (`save-if: ${{ github.ref == 'refs/heads/canary' }}`); PR branches read the
-# shared entry instead of each saving a fresh one, so cache usage doesn't blow
-# out. rust-cache keys are content-addressed on Cargo.lock, so jobs sharing a
-# `shared-key` reuse the same entry.
+# no build output). This copy never SAVES cache entries (save-if: false on
+# every step): the env pins below shift rust-cache's keys, so saving here
+# would write a parallel set of entries into the repo's shared cache quota
+# and evict the gating workflow's. On ix, warmth comes from the seed disk,
+# not the Actions cache.
 #
 # mise installs sccache and direnv, then each cargo job loads .envrc via
 # `direnv export gha` so CI uses the exact same sccache config as local shells:
@@ -121,7 +121,7 @@ jobs:
           workspaces: "baml_language -> target"
           cache-all-crates: true
           cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          save-if: false
           shared-key: "linux-cargo"
 
       - name: "Load .envrc with direnv"
@@ -196,10 +196,10 @@ jobs:
     timeout-minutes: 45
     env:
       CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
-      # The ix machine image ships musl-gcc (a real musl cross compiler);
-      # setup-musl-cross is skipped there, so wire the cargo linker
-      # explicitly. Identical to what the action exports on hosted runners.
+      # The ix machine image ships musl-gcc; setup-musl-cross is skipped
+      # there, so wire the same env the action would export.
       CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+      CC_x86_64_unknown_linux_musl: musl-gcc
     steps:
       - uses: actions/checkout@v6
         with:
@@ -236,7 +236,7 @@ jobs:
           workspaces: "baml_language -> target"
           cache-all-crates: true
           cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          save-if: false
           shared-key: "linux-cargo"
 
       - name: "Load .envrc with direnv"
@@ -388,140 +388,6 @@ jobs:
   #         name: cargo-timings-test-macos
   #         path: baml_language/target/cargo-timings/cargo-timing-test-macos.html
   #         if-no-files-found: ignore
-
-  cargo-test-windows:
-    name: "cargo test (x86_64-pc-windows-msvc)"
-    # Skip in the merge queue (windows already ran on the PR) and outside
-    # the upstream repo (forks have no Blacksmith Windows runners).
-    if: ${{ github.event_name != 'merge_group' && github.repository == 'BoundaryML/baml' }}
-    # 8-vCPU + CARGO_BUILD_JOBS=16 (2x cores) was the value sweet spot for the
-    # native Windows Rust builds (build-caching/04 Exp 7/9).
-    runs-on: blacksmith-8vcpu-windows-2025
-    env:
-      CARGO_BUILD_JOBS: "16"
-      # Windows debug builds emit very large PDBs; full debuginfo across the
-      # whole `--all-features` test build overruns the runner's ~130 GB disk
-      # ("no space on device" during codegen, before any test runs).
-      # `line-tables-only` keeps file:line backtraces for test failures while
-      # dropping the bulk of the debug-info size (variable/type DIEs). Pinned on
-      # both `dev` (dependencies) and `test` (the `--test` binaries, which
-      # inherit `dev` but are pinned explicitly so the reduction is unambiguous).
-      # Drop to "0" if this is still too tight.
-      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
-      CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
-    # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
-    # Right now it needs to download our repo every time which is very slow
-    timeout-minutes: 50
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install sccache, direnv, and cargo-nextest"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv cargo:cargo-nextest"
-
-      - name: "Verify sccache"
-        run: sccache --version
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "windows-cargo"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
-
-      # Separate step so if fetch is slow, build is fast.
-      - name: "Fetch cargo dependencies"
-        run: cargo fetch
-        working-directory: baml_language
-
-      - name: "Build native sccache wrapper"
-        run: |
-          set -euo pipefail
-          # The native RUSTC_WRAPPER (tools_sccache crate) maps the R2 creds and
-          # execs sccache; cargo launches it via CreateProcess (32767-char
-          # limit), avoiding cmd.exe's ~8191-char limit that windows-sys' huge
-          # `--check-cfg cfg(feature, values(...))` line blows past. The binary
-          # lives in the build tree, so build it first — .envrc leaves
-          # RUSTC_WRAPPER unset until it exists, so this bootstrap compiles with
-          # plain rustc — then point RUSTC_WRAPPER at it for the cargo steps
-          # below.
-          cargo build -p tools_sccache
-          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
-        working-directory: baml_language
-
-      # Snapshot tests live in `baml_tests` and are covered by the dedicated
-      # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
-      # dedicated `sdk-tests` matrix below. Skip both here — at the cargo
-      # level (`--exclude`), not a nextest `-E` filter, so their test binaries
-      # (the heaviest links, and on Windows the largest PDBs) aren't built.
-      - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
-        working-directory: baml_language
-
-      # Profiling-specific test binaries opt in explicitly; keeping
-      # BAML_PROFILE off for the general suite avoids filling the Windows
-      # runner with incidental `.bamlprof` files. Run the two binaries that
-      # need `baml-pack-host` separately so their process-global OnceLocks
-      # build and share it instead of relinking it for every nextest case.
-      - name: "Run tests"
-        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e)'
-        working-directory: baml_language
-        env:
-          BAML_PROFILE: "0"
-
-      - name: "Free disk for CLI binary e2e tests"
-        run: |
-          set -euo pipefail
-          mv target/cargo-timings/cargo-timing.html cargo-timing-test-windows.html
-          cp target/debug/baml-sccache.exe baml-sccache.exe
-          echo "RUSTC_WRAPPER=$(pwd -W)/baml-sccache.exe" >> "$GITHUB_ENV"
-          cargo clean
-        working-directory: baml_language
-
-      - name: "Run CLI binary e2e tests (windows)"
-        run: cargo test -p baml_cli --test pack_e2e --test exit_code_e2e --all-features
-        working-directory: baml_language
-        env:
-          BAML_PROFILE: "0"
-
-      - name: "Show sccache stats"
-        if: always()
-        run: sccache --show-stats
-
-      - name: "Dump sccache stats (json)"
-        if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-test-windows.json
-
-      - name: "Upload sccache stats"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: sccache-stats-test-windows
-          path: sccache-stats-test-windows.json
-          if-no-files-found: ignore
-
-      - name: "Upload cargo timings"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: cargo-timings-test-windows
-          path: baml_language/cargo-timing-test-windows.html
-          if-no-files-found: ignore
 
   sdk-test-matrix:
     name: "sdk test matrix"
@@ -864,13 +730,9 @@ jobs:
 
             // TODO(B-1545): Re-enable macOS SDK tests after the SIGABRT flakiness is fixed: https://linear.app/boundaryml2/issue/B-1545/investigate-flakiness-in-cargo-test-aarch64-apple-darwin-ci-job
             const enabledMatrix = baseMatrix.filter((entry) => entry["os-label"] !== "macos");
-            // Linux-only in the merge queue (mac/win already ran on the PR)
-            // and on forks (no Blacksmith mac/win runners; the jobs would
-            // queue forever). Case-insensitive so a differently-cased
-            // repository name cannot silently drop the mac/win legs upstream.
-            const linuxOnly =
-              context.eventName === "merge_group" ||
-              process.env.GITHUB_REPOSITORY.toLowerCase() !== "boundaryml/baml";
+            // The preview covers the Linux lanes only; the gating
+            // workflow keeps sole ownership of the mac/win legs.
+            const linuxOnly = true;
             const matrix = linuxOnly
               ? enabledMatrix.filter((entry) => entry["os-label"] === "linux")
               : enabledMatrix;
@@ -1081,7 +943,8 @@ jobs:
         working-directory: baml_language
 
       # Windows-only: swap the .cmd RUSTC_WRAPPER for the native tools_sccache
-      # .exe. See the matching step in `cargo-test-windows` for why.
+      # .exe. See the matching step in the gating cargo-tests.reusable.yaml
+      # for why.
       - name: "Build native sccache wrapper"
         if: matrix.os-label == 'windows'
         run: |
@@ -1222,7 +1085,7 @@ jobs:
           workspaces: "baml_language -> target"
           cache-all-crates: true
           cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          save-if: false
           shared-key: "linux-wasm"
 
       - name: "Load .envrc with direnv"
@@ -1333,7 +1196,7 @@ jobs:
           workspaces: "baml_language -> target"
           cache-all-crates: true
           cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          save-if: false
           shared-key: "linux-msrv"
 
       - name: "Load .envrc with direnv"
@@ -1577,7 +1440,6 @@ jobs:
     needs:
       - cargo-test-linux
       - cargo-test-linux-musl
-      - cargo-test-windows
       - sdk-tests
       - cargo-test-wasm
       - cargo-build-msrv
@@ -1596,7 +1458,6 @@ jobs:
     needs:
       - cargo-test-linux
       - cargo-test-linux-musl
-      - cargo-test-windows
       - sdk-tests
       - cargo-test-wasm
       - cargo-build-msrv

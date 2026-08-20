@@ -18,7 +18,7 @@ on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_run:
-    workflows: ["**"]
+    workflows: ["CI on ix (preview)"]
     types: [requested]
 
 # Overlapping ticks can double-spawn; this group is the lock.
