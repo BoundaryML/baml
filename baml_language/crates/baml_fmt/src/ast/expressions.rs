@@ -954,6 +954,22 @@ impl Expression {
     /// the redundant layers around it still peel, so `((a + b)).f()` prints as
     /// `(a + b).f()` rather than keeping the whole stack.
     pub(crate) fn effective_postfix_operand(&self, trivia: &TriviaInfo) -> &Expression {
+        self.peel_to_needed_paren(trivia, false)
+    }
+
+    /// [`Self::effective_postfix_operand`] for a unary operand.
+    ///
+    /// Identical except that literals peel here. The literal restriction exists
+    /// only to keep `(1).to_string()` from re-lexing its `.` into a float, and
+    /// no `.` follows a unary operand — so `-((1))` prints as `-1` and
+    /// `!((true))` as `!true`. A literal that *is* a postfix receiver
+    /// (`-(1).to_string()`) sits in the receiver position, not this one, and
+    /// still keeps its parens.
+    pub(crate) fn effective_unary_operand(&self, trivia: &TriviaInfo) -> &Expression {
+        self.peel_to_needed_paren(trivia, true)
+    }
+
+    fn peel_to_needed_paren(&self, trivia: &TriviaInfo, unary: bool) -> &Expression {
         let mut expr = self;
         while let Expression::Paren(paren) = expr {
             if !paren.is_transparent(trivia) {
@@ -962,9 +978,10 @@ impl Expression {
             // Peel only down to the last paren this position still needs: an
             // inner paren is reconsidered on the next turn, so a stack around
             // a looser-binding receiver collapses to exactly one.
-            if !(paren.expr.binds_as_postfix_operand()
-                || matches!(&*paren.expr, Expression::Paren(_)))
-            {
+            let stands_alone = paren.expr.binds_as_postfix_operand()
+                || matches!(&*paren.expr, Expression::Paren(_))
+                || (unary && matches!(&*paren.expr, Expression::Literal(_)));
+            if !stands_alone {
                 break;
             }
             expr = &paren.expr;
@@ -1454,7 +1471,7 @@ impl UnaryExpr {
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
         let expr = self
             .expr
-            .effective_postfix_operand(input.trivia)
+            .effective_unary_operand(input.trivia)
             .single_line_width(input)?;
         Some(usize::from(self.op.span().len()) + expr)
     }
@@ -1464,7 +1481,7 @@ impl Printable for UnaryExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         multi_lined |= printer.print(&self.op, shape.clone()).multi_lined;
-        let expr = self.expr.effective_postfix_operand(printer.trivia);
+        let expr = self.expr.effective_unary_operand(printer.trivia);
         multi_lined |= printer.print(expr, shape).multi_lined;
 
         PrintInfo { multi_lined }
@@ -3267,13 +3284,13 @@ impl PrintMultiLine for IndexExpr {
 
 impl IndexExpr {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let base_len = self.base.single_line_width(printer)?;
+        let base = self.base.effective_postfix_operand(printer.trivia);
+        let base_len = base.single_line_width(printer)?;
         let args_len = self.args().single_line_width(printer)?;
         if base_len + args_len > shape.width {
             return None;
         }
-        if self
-            .base
+        if base
             .print(Shape::unlimited_single_line(), printer)
             .multi_lined
         {
@@ -3394,7 +3411,10 @@ impl KnownKind for OptionalFieldAccessExpr {
 
 impl OptionalFieldAccessExpr {
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self.base.single_line_width(input)?;
+        let base = self
+            .base
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         Some(
             base + usize::from(self.question_dot.span().len())
                 + usize::from(self.field.span().len()),
@@ -3459,7 +3479,10 @@ impl OptionalIndexExpr {
     }
 
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self.base.single_line_width(input)?;
+        let base = self
+            .base
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         Some(
             base + usize::from(self.question_dot.span().len())
                 + self.args().single_line_width(input)?,

@@ -310,6 +310,39 @@ mod redundant_paren_tests {
         assert!(formatted.contains("    xs.length()\n"), "{formatted}");
     }
 
+    /// The single-line index path measured and printed the raw base, so
+    /// `(xs)[0]` kept its parens inline while the multiline path stripped
+    /// them. Optional receivers had the mirror problem: `PrintChain` peeled
+    /// them while `single_line_width` still counted the parens, over-measuring
+    /// by two per paren and wrapping earlier than needed.
+    #[test]
+    fn test_index_and_optional_receiver_parens_strip() {
+        let formatted = fmt("function f(xs: string[]) -> string {\n    (xs)[0]\n}\n");
+        assert!(formatted.contains("    xs[0]\n"), "{formatted}");
+        let formatted = fmt("function f(o: string?) -> int? {\n    ((o))?.length\n}\n");
+        assert!(formatted.contains("    o?.length\n"), "{formatted}");
+        let formatted = fmt("function f(o: string[]?) -> string? {\n    ((o))?.[0]\n}\n");
+        assert!(formatted.contains("    o?.[0]\n"), "{formatted}");
+        // a looser-binding index receiver still collapses to exactly one paren
+        let formatted = fmt("function f(a: string, b: string) -> string {\n    ((a ?? b))[0]\n}\n");
+        assert!(formatted.contains("    (a ?? b)[0]\n"), "{formatted}");
+    }
+
+    /// The literal restriction exists only to stop `(1).to_string()` from
+    /// re-lexing its `.` into a float. No `.` follows a unary operand, so
+    /// literals peel there — but a literal that *is* a receiver still keeps
+    /// its parens.
+    #[test]
+    fn test_unary_operand_literal_parens_strip() {
+        let formatted = fmt("function f() -> int {\n    -((1))\n}\n");
+        assert!(formatted.contains("    -1\n"), "{formatted}");
+        let formatted = fmt("function f() -> bool {\n    !((true))\n}\n");
+        assert!(formatted.contains("    !true\n"), "{formatted}");
+        // the literal here is a postfix receiver, not a unary operand
+        let formatted = fmt("function f() -> string {\n    -(1).to_string()\n}\n");
+        assert!(formatted.contains("    -(1).to_string()\n"), "{formatted}");
+    }
+
     /// Parens that terminate an optional chain are load-bearing, not
     /// decoration: `(a?.b).c` evaluates `(null).c` — a `TypeError` — when `a` is
     /// null, where `a?.b.c` short-circuits to null. Peeling them would change
