@@ -241,6 +241,10 @@ fn to_lsp_diagnostic(
 /// then clear markers for files the previous publication covered but this
 /// one does not. A stale candidate (a newer mutation touched the root) is
 /// discarded — its own tail is already scheduled.
+///
+/// Files whose text and diagnostics both match the last admitted
+/// publication are skipped for the sessions that received it; a session
+/// seeing this root for the first time gets every file.
 pub fn publish_candidate(state: &mut GlobalState, candidate: &DiagnosticCandidate) {
     let admitted = match state.root_state_mut(candidate.root) {
         Some(root_state) => root_state
@@ -253,14 +257,42 @@ pub fn publish_candidate(state: &mut GlobalState, candidate: &DiagnosticCandidat
         return;
     }
 
+    let text_hashes: Vec<u64> = candidate
+        .files
+        .iter()
+        .map(|file| crate::state::published_text_hash(&file.text))
+        .collect();
+    let (changed, already_current): (HashSet<PathBuf>, HashSet<SessionKey>) = {
+        let root_state = state
+            .root_state(candidate.root)
+            .unwrap_or_else(|| unreachable!("admitted through this root's fence above"));
+        let changed = candidate
+            .files
+            .iter()
+            .zip(&text_hashes)
+            .filter(|(file, hash)| {
+                !root_state
+                    .fence
+                    .is_unchanged(&file.path, **hash, &file.diagnostics)
+            })
+            .map(|(file, _)| file.path.clone())
+            .collect();
+        (changed, root_state.published_sessions.clone())
+    };
+
     let roots = Arc::clone(state.roots());
     let mut converted: HashMap<PositionEncoding, Vec<PublishableDocument>> = HashMap::new();
+    let mut served: HashSet<SessionKey> = HashSet::new();
     for (key, session) in state.initialized_sessions() {
         let encoding = session.encoding.unwrap_or_default();
+        let full = !already_current.contains(&key);
         let documents = converted
             .entry(encoding)
             .or_insert_with(|| candidate_to_publishable(candidate, encoding, &roots));
         for document in documents.iter() {
+            if !full && !changed.contains(&document.path) {
+                continue;
+            }
             let Some(uri) = publication_uri(state, &document.path) else {
                 continue;
             };
@@ -270,15 +302,28 @@ pub fn publish_candidate(state: &mut GlobalState, candidate: &DiagnosticCandidat
                 .and_then(|doc| doc.version);
             send_publish(state, key, uri, document.diagnostics.clone(), version);
         }
+        served.insert(key);
     }
 
-    let current: HashSet<PathBuf> = candidate
+    let current: HashMap<PathBuf, crate::state::PublishedFile> = candidate
         .files
         .iter()
-        .map(|file| file.path.clone())
+        .zip(text_hashes)
+        .map(|(file, text_hash)| {
+            (
+                file.path.clone(),
+                crate::state::PublishedFile {
+                    text_hash,
+                    diagnostics: file.diagnostics.clone(),
+                },
+            )
+        })
         .collect();
     let vanished = match state.root_state_mut(candidate.root) {
-        Some(root_state) => root_state.fence.record_publication(current),
+        Some(root_state) => {
+            root_state.published_sessions = served;
+            root_state.fence.record_publication(current)
+        }
         None => Vec::new(),
     };
     publish_cleared(state, &vanished);

@@ -9,7 +9,7 @@
 //! deadlines) is plain owner-only data: no locks, nothing to poison.
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, atomic::AtomicUsize},
     time::{Duration, Instant},
@@ -23,7 +23,7 @@ use crate::{
     diagnostics,
     discovery::{LoadedRoot, NoFs, ProjectFs},
     error::LspError,
-    executor::{Executor, ReadOutcome},
+    executor::{Executor, Executors, ReadOutcome},
     mutation::SourceMutation,
     paths,
     position_codec::PositionEncoding,
@@ -109,6 +109,24 @@ pub struct TokenBaseline {
     pub tokens: Arc<Vec<lsp_types::SemanticToken>>,
 }
 
+/// What the last admitted publication said for one file, for change
+/// detection: a hash of the text the spans were converted against, and the
+/// diagnostics themselves. Positions are text-dependent, so a text change
+/// alone forces a resend even when the diagnostic set is identical.
+#[derive(Debug)]
+pub struct PublishedFile {
+    pub text_hash: u64,
+    pub diagnostics: Vec<baml_compiler_diagnostics::Diagnostic>,
+}
+
+/// The change-detection hash for [`PublishedFile::text_hash`].
+pub fn published_text_hash(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish()
+}
+
 /// Per-root publication fence.
 ///
 /// A computed candidate carries the revision it saw; the owner admits it
@@ -119,9 +137,10 @@ pub struct TokenBaseline {
 pub struct DiagnosticsFence {
     /// Newest revision requiring publication. Compare-and-clear only.
     dirty: Option<SourceRevision>,
-    /// Files covered by the last successful publication, so deleted files
-    /// get one empty publish.
-    last_published: HashSet<PathBuf>,
+    /// What the last admitted publication covered, per file: the coverage
+    /// clears deleted files with one empty publish, the content lets an
+    /// unchanged file skip republication entirely.
+    last_published: HashMap<PathBuf, PublishedFile>,
 }
 
 impl DiagnosticsFence {
@@ -144,15 +163,33 @@ impl DiagnosticsFence {
         true
     }
 
+    /// A file whose text and diagnostics both match the last admitted
+    /// publication needs no resend to a session that received it.
+    pub fn is_unchanged(
+        &self,
+        path: &Path,
+        text_hash: u64,
+        diagnostics: &[baml_compiler_diagnostics::Diagnostic],
+    ) -> bool {
+        self.last_published.get(path).is_some_and(|previous| {
+            previous.text_hash == text_hash && previous.diagnostics == diagnostics
+        })
+    }
+
     /// Record a publication's coverage; returns files covered before but not
     /// now — each needs one empty publish so stale markers clear.
-    pub fn record_publication(&mut self, current: HashSet<PathBuf>) -> Vec<PathBuf> {
-        let vanished = self.last_published.difference(&current).cloned().collect();
+    pub fn record_publication(&mut self, current: HashMap<PathBuf, PublishedFile>) -> Vec<PathBuf> {
+        let vanished = self
+            .last_published
+            .keys()
+            .filter(|path| !current.contains_key(*path))
+            .cloned()
+            .collect();
         self.last_published = current;
         vanished
     }
 
-    pub fn last_published(&self) -> &HashSet<PathBuf> {
+    pub fn last_published(&self) -> &HashMap<PathBuf, PublishedFile> {
         &self.last_published
     }
 
@@ -172,6 +209,10 @@ pub struct RootState {
     pub diagnostics_due: Option<Instant>,
     /// A diagnostics job is currently running on the pool.
     pub diagnostics_in_flight: bool,
+    /// Sessions that have received the fence's `last_published` state. A
+    /// session outside this set gets a full publication (every file), one
+    /// inside it only the files that changed.
+    pub published_sessions: HashSet<SessionKey>,
 }
 
 /// One computed pass over a workspace root, produced on a snapshot.
@@ -212,6 +253,10 @@ pub type Responder = Box<dyn FnOnce(Result<serde_json::Value, LspError>) + Send 
 /// Everything the owner reacts to. Posted by hosts, timers, and pool jobs.
 pub enum OwnerEvent {
     RequestDone {
+        /// Which in-flight read finished, so its cancellation token is
+        /// unregistered before the response leaves.
+        session: SessionKey,
+        request_id: lsp_server::RequestId,
         respond: Responder,
         outcome: ReadOutcome<serde_json::Value>,
     },
@@ -267,6 +312,8 @@ pub struct Applied {
     pub rejected: Vec<(SourceMutation, LspError)>,
     /// The root set changed (added/removed roots).
     pub roots_changed: bool,
+    /// A `Workspace` root was removed by this batch.
+    pub workspace_root_removed: bool,
 }
 
 pub struct GlobalState {
@@ -284,7 +331,11 @@ pub struct GlobalState {
     provisional_roots: HashSet<PathBuf>,
     sessions: HashMap<SessionKey, SessionState>,
     live_snapshots: Arc<AtomicUsize>,
-    executor: Box<dyn Executor>,
+    executors: Executors,
+    /// Cancellation tokens of the snapshot reads currently on the pool, so
+    /// `$/cancelRequest` (and session teardown) can cut the running query
+    /// short instead of letting it burn to completion.
+    in_flight_reads: HashMap<(SessionKey, lsp_server::RequestId), salsa::CancellationToken>,
     fs: Arc<dyn ProjectFs>,
     handle: OwnerHandle,
     events: crossbeam_channel::Receiver<OwnerEvent>,
@@ -294,13 +345,13 @@ impl GlobalState {
     /// A fresh state with the embedded stdlib loaded, no workspace, and no
     /// filesystem ([`NoFs`]: discovery finds nothing, reloads fail). Hosts
     /// with a filesystem use [`GlobalState::with_fs`].
-    pub fn new(executor: Box<dyn Executor>, stdlib_dir: Option<PathBuf>) -> Self {
-        Self::with_fs(executor, stdlib_dir, Arc::new(NoFs))
+    pub fn new(executors: Executors, stdlib_dir: Option<PathBuf>) -> Self {
+        Self::with_fs(executors, stdlib_dir, Arc::new(NoFs))
     }
 
     /// A fresh state whose discovery and reload jobs read through `fs`.
     pub fn with_fs(
-        executor: Box<dyn Executor>,
+        executors: Executors,
         stdlib_dir: Option<PathBuf>,
         fs: Arc<dyn ProjectFs>,
     ) -> Self {
@@ -317,7 +368,8 @@ impl GlobalState {
             provisional_roots: HashSet::new(),
             sessions: HashMap::new(),
             live_snapshots: Arc::new(AtomicUsize::new(0)),
-            executor,
+            executors,
+            in_flight_reads: HashMap::new(),
             fs,
             handle: OwnerHandle { tx },
             events,
@@ -365,12 +417,59 @@ impl GlobalState {
         })
     }
 
-    pub fn executor(&self) -> &dyn Executor {
-        self.executor.as_ref()
+    /// The lane for snapshot reads answering client requests.
+    pub fn request_executor(&self) -> &dyn Executor {
+        self.executors.requests.as_ref()
+    }
+
+    /// The lane for diagnostics sweeps.
+    pub fn diagnostics_executor(&self) -> &dyn Executor {
+        self.executors.diagnostics.as_ref()
+    }
+
+    /// The lane for filesystem jobs (discovery, reloads). Jobs here never
+    /// hold a snapshot — see [`Executors`].
+    pub fn io_executor(&self) -> &dyn Executor {
+        self.executors.io.as_ref()
     }
 
     pub fn handle(&self) -> OwnerHandle {
         self.handle.clone()
+    }
+
+    // ── In-flight snapshot reads ──────────────────────────────────────────
+
+    /// Record a spawned read's cancellation token under its request id.
+    /// Owner-thread only, so registration happens strictly before any
+    /// forwarded `$/cancelRequest` for the same id is dispatched.
+    pub(crate) fn register_read(
+        &mut self,
+        session: SessionKey,
+        request_id: lsp_server::RequestId,
+        token: salsa::CancellationToken,
+    ) {
+        self.in_flight_reads.insert((session, request_id), token);
+    }
+
+    /// Forget a finished read. Called from the completion event before the
+    /// response leaves; a cancelled read still completes (with
+    /// `RequestCanceled`) and unregisters here.
+    pub(crate) fn finish_read(&mut self, session: SessionKey, request_id: &lsp_server::RequestId) {
+        self.in_flight_reads.remove(&(session, request_id.clone()));
+    }
+
+    /// Cancel the running read for `request_id`, if one is on the pool: its
+    /// next Salsa query entry unwinds with `Cancelled::Local`. Returns
+    /// whether a read was found (a request still queued in the transport, or
+    /// already finished, has nothing to cancel).
+    pub fn cancel_read(&self, session: SessionKey, request_id: &lsp_server::RequestId) -> bool {
+        match self.in_flight_reads.get(&(session, request_id.clone())) {
+            Some(token) => {
+                token.cancel();
+                true
+            }
+            None => false,
+        }
     }
 
     /// The owner's event queue (drained by the host's loop).
@@ -422,6 +521,19 @@ impl GlobalState {
     /// closed documents' database paths; closing them again is a no-op.
     pub fn close_session(&mut self, key: SessionKey) -> Vec<PathBuf> {
         self.sessions.remove(&key);
+        // Nothing can deliver the answers, so stop the reads still running
+        // for the session and drop their tokens.
+        self.in_flight_reads.retain(|(session, _), token| {
+            if *session == key {
+                token.cancel();
+                false
+            } else {
+                true
+            }
+        });
+        for root_state in self.root_state.values_mut() {
+            root_state.published_sessions.remove(&key);
+        }
         let paths: Vec<PathBuf> = self
             .open_documents
             .iter()
@@ -651,7 +763,63 @@ impl GlobalState {
         }
         // A removed root's markers must not outlive it in any editor.
         diagnostics::publish_cleared(self, &applied.cleared);
+        // The single-workspace stopgap can have refused a real project while
+        // a scratch document's provisional root held the slot (see
+        // `single_workspace_guard`). When the batch frees the slot, re-run
+        // discovery as a posted continuation so whatever was refused gets
+        // its chance; this hook is deleted together with the guard.
+        if applied.workspace_root_removed && self.db.workspace_root().is_none() {
+            self.handle.post(OwnerEvent::Call(Box::new(|state| {
+                state.rediscover_freed_workspace_slot();
+            })));
+        }
         applied
+    }
+
+    /// The workspace slot just became free: re-run discovery for every
+    /// initialized session's folders, and re-serve open documents that are
+    /// under no root (their provisional mint lost the slot race earlier).
+    fn rediscover_freed_workspace_slot(&mut self) {
+        let folders: BTreeSet<PathBuf> = self
+            .initialized_sessions()
+            .flat_map(|(_, session)| session.workspace_folders.iter().cloned())
+            .collect();
+        for folder in folders {
+            self.spawn_discovery(folder);
+        }
+
+        let unserved: Vec<(PathBuf, OpenDocument)> = self
+            .open_documents
+            .iter()
+            .filter(|(path, _)| self.roots.root_for_path(path).is_none())
+            .map(|(path, doc)| (path.clone(), doc.clone()))
+            .collect();
+        for (path, doc) in unserved {
+            let Some(parent) = path.parent().map(Path::to_path_buf) else {
+                continue;
+            };
+            let applied = self.apply(vec![
+                SourceMutation::UpsertRoot {
+                    spec: crate::discovery::workspace_root_spec(parent.clone()),
+                    files: Vec::new(),
+                },
+                SourceMutation::SetOverlay {
+                    path,
+                    text: doc.text.to_string(),
+                    version: doc.version,
+                },
+            ]);
+            if applied.rejected.is_empty() {
+                self.mark_provisional_root(parent.clone());
+                self.spawn_discovery(parent);
+            } else {
+                // Another unserved document already claimed the slot; this
+                // one waits for the next free.
+                for (mutation, error) in &applied.rejected {
+                    tracing::debug!(?mutation, %error, "document still unserved after slot rescue");
+                }
+            }
+        }
     }
 
     fn apply_one(
@@ -712,7 +880,10 @@ impl GlobalState {
                 if let Some(state) = self.root_state.remove(&root) {
                     applied
                         .cleared
-                        .extend(state.fence.last_published().iter().cloned());
+                        .extend(state.fence.last_published().keys().cloned());
+                }
+                if root.kind(&self.db) == SourceRootKind::Workspace {
+                    applied.workspace_root_removed = true;
                 }
                 self.provisional_roots.remove(path);
                 self.db.remove_source_root(root);
@@ -774,6 +945,21 @@ impl GlobalState {
             })
             .collect();
         self.roots = RootsView::new(entries, self.stdlib_dir.clone());
+    }
+
+    /// Schedule a diagnostics pass for every root whose current published
+    /// state `session` has not received (a session that initialized after
+    /// the state settled would otherwise never see standing diagnostics —
+    /// publication is push-on-change and per-file diffing skips unchanged
+    /// files for sessions that already have them).
+    pub fn schedule_publications_for(&mut self, session: SessionKey) {
+        let revision = self.revision;
+        for root_state in self.root_state.values_mut() {
+            if !root_state.published_sessions.contains(&session) {
+                root_state.fence.mark_dirty(revision);
+                root_state.diagnostics_due = Some(Instant::now());
+            }
+        }
     }
 
     // ── Tails ─────────────────────────────────────────────────────────────

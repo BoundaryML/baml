@@ -8,7 +8,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use baml_lsp::{GlobalState, discovery::NativeFs, executor::ThreadPool};
+use baml_lsp::{
+    GlobalState,
+    discovery::NativeFs,
+    executor::{Executors, ThreadPool},
+};
 use baml_lsp_server::{
     lsp_ingress::TransportKind,
     lsp_runtime::{LspRuntime, Sink, SinkDelivery, SubmitResult},
@@ -144,8 +148,8 @@ fn stdio_transcript_end_to_end() {
     std::fs::write(&broken_path, BROKEN).unwrap();
     let broken_uri = file_uri(&broken_path);
 
-    let executor = ThreadPool::new(2);
-    let state = GlobalState::with_fs(Box::new(executor), None, Arc::new(NativeFs));
+    let executors = Executors::single(Arc::new(ThreadPool::new(2)));
+    let state = GlobalState::with_fs(executors, None, Arc::new(NativeFs));
     let runtime = LspRuntime::new(state).unwrap();
 
     let wire = Wire::default();

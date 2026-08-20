@@ -27,6 +27,7 @@ use crate::{
     error::LspError,
     mutation::SourceMutation,
     paths,
+    position_codec::{PositionCodec, PositionCodecError},
     state::{Applied, GlobalState, OpenDocument, SessionKey},
 };
 
@@ -77,6 +78,9 @@ pub(super) fn initialized(
     for folder in folders {
         state.spawn_discovery(folder);
     }
+    // A session joining a server whose roots are already settled needs one
+    // full publication; nothing else would push standing diagnostics to it.
+    state.schedule_publications_for(session);
     Ok(())
 }
 
@@ -87,17 +91,23 @@ pub(super) fn exit(_state: &mut GlobalState, _session: SessionKey, (): ()) -> Re
 }
 
 /// The transport claims the response on its own thread (the client gets
-/// `RequestCanceled` promptly; no double-respond is possible). Cutting the
-/// *running* query short via its snapshot's Salsa token is not wired yet:
-/// the pool job runs to completion and its result is discarded at the
-/// claimed response. Wire this together with a request-id → snapshot-token
-/// map when the remaining request handlers land.
+/// `RequestCanceled` promptly; no double-respond is possible). This side
+/// cuts the *computation* short: the read's snapshot token makes its next
+/// Salsa query entry unwind with `Cancelled::Local`, freeing the pool
+/// worker and letting a pending mutation proceed sooner. A request that
+/// never reached the pool (still queued in the transport, or already
+/// finished) has nothing to cancel here.
 #[expect(clippy::unnecessary_wraps, reason = "uniform dispatch-table signature")]
 pub(super) fn cancel_request(
-    _state: &mut GlobalState,
-    _session: SessionKey,
-    _params: lsp_types::CancelParams,
+    state: &mut GlobalState,
+    session: SessionKey,
+    params: lsp_types::CancelParams,
 ) -> Result<(), LspError> {
+    let request_id = match params.id {
+        lsp_types::NumberOrString::Number(id) => lsp_server::RequestId::from(id),
+        lsp_types::NumberOrString::String(id) => lsp_server::RequestId::from(id),
+    };
+    state.cancel_read(session, &request_id);
     Ok(())
 }
 
@@ -181,27 +191,21 @@ pub(super) fn did_open(
     first_rejection(applied)
 }
 
-/// FULL sync only: exactly one change event with no range.
+/// INCREMENTAL sync: change events apply in order, each ranged event
+/// against the text produced by the ones before it (a rangeless event
+/// replaces the whole document, so FULL-sync clients work unchanged).
+/// Ranges arrive in the session's negotiated position encoding.
 #[expect(
     clippy::needless_pass_by_value,
     reason = "uniform dispatch-table signature"
 )]
 pub(super) fn did_change(
     state: &mut GlobalState,
-    _session: SessionKey,
+    session: SessionKey,
     params: DidChangeTextDocumentParams,
 ) -> Result<(), LspError> {
-    let text = match params.content_changes.as_slice() {
-        [event] if event.range.is_none() => event.text.clone(),
-        _ => {
-            return Err(LspError::InvalidParams(
-                "expected a single full-document change event (TextDocumentSyncKind::FULL)"
-                    .to_owned(),
-            ));
-        }
-    };
     let path = paths::canonical_document_path(state.roots(), &params.text_document.uri)?;
-    if state.open_document(&path).is_none() {
+    let Some(doc) = state.open_document(&path) else {
         // Read-only roots are never tracked; anything else is a protocol
         // violation (didChange before didOpen).
         return match state.roots().root_for_path(&path) {
@@ -211,6 +215,24 @@ pub(super) fn did_change(
                 path.display()
             ))),
         };
+    };
+    let encoding = state.session(session)?.encoding.unwrap_or_default();
+    let mut text = doc.text.to_string();
+    for change in &params.content_changes {
+        match change.range {
+            None => {
+                text.clone_from(&change.text);
+            }
+            Some(range) => {
+                let codec = PositionCodec::new(&text, encoding);
+                let start = codec.position_to_offset(range.start)?;
+                let end = codec.position_to_offset(range.end)?;
+                if start > end {
+                    return Err(PositionCodecError::MalformedRange.into());
+                }
+                text.replace_range(usize::from(start)..usize::from(end), &change.text);
+            }
+        }
     }
     let applied = state.apply(vec![SourceMutation::SetOverlay {
         path,

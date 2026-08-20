@@ -208,7 +208,7 @@ impl GlobalState {
         let fs = Arc::clone(self.fs());
         let handle = self.handle();
         let open: HashSet<PathBuf> = self.open_documents().keys().cloned().collect();
-        self.executor().spawn_job(Box::new(move || {
+        self.io_executor().spawn_job(Box::new(move || {
             let roots = fs
                 .discover_roots(&folder)
                 .into_iter()
@@ -231,7 +231,7 @@ impl GlobalState {
         }
         let fs = Arc::clone(self.fs());
         let handle = self.handle();
-        self.executor().spawn_job(Box::new(move || {
+        self.io_executor().spawn_job(Box::new(move || {
             let files = paths
                 .into_iter()
                 .filter_map(|path| match fs.read_to_string(&path) {

@@ -28,7 +28,7 @@ pub fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Options(
             TextDocumentSyncOptions {
                 open_close: Some(true),
-                change: Some(TextDocumentSyncKind::FULL),
+                change: Some(TextDocumentSyncKind::INCREMENTAL),
                 will_save: Some(false),
                 will_save_wait_until: Some(false),
                 save: Some(TextDocumentSyncSaveOptions::SaveOptions(SaveOptions {
@@ -600,13 +600,13 @@ mod tests {
     }
 
     #[test]
-    fn capabilities_are_full_sync_push_diagnostics_only() {
+    fn capabilities_are_incremental_sync_push_diagnostics_only() {
         let capabilities = server_capabilities(PositionEncoding::UTF16);
         let Some(TextDocumentSyncCapability::Options(sync)) = capabilities.text_document_sync
         else {
             panic!("text sync options expected");
         };
-        assert_eq!(sync.change, Some(TextDocumentSyncKind::FULL));
+        assert_eq!(sync.change, Some(TextDocumentSyncKind::INCREMENTAL));
         assert_eq!(sync.will_save, Some(false));
         assert!(capabilities.diagnostic_provider.is_none());
         assert!(capabilities.code_lens_provider.is_none());

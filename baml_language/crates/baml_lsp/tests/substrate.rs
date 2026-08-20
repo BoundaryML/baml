@@ -10,7 +10,7 @@ use std::{
 use baml_base::{Name, SourceRootKind};
 use baml_lsp::{
     LspError, OwnerEvent,
-    executor::{ThreadPool, spawn_read},
+    executor::{Executors, ThreadPool, spawn_read},
     mutation::{RootSpec, SourceMutation},
     snapshot::RequestCx,
     state::GlobalState,
@@ -36,7 +36,7 @@ fn workspace(state: &mut GlobalState, root: &str, files: &[(&str, &str)]) {
 /// next read at the new revision succeeds.
 #[test]
 fn mid_read_mutation_yields_content_modified() {
-    let mut state = GlobalState::new(Box::new(ThreadPool::new(2)), None);
+    let mut state = GlobalState::new(Executors::single(Arc::new(ThreadPool::new(2))), None);
     workspace(&mut state, "/ws", &[("main.baml", "class A { x int }\n")]);
 
     // Job entered its query → barrier 1; owner starts `set_*` (blocks until
@@ -51,7 +51,7 @@ fn mid_read_mutation_yields_content_modified() {
         let resume = Arc::clone(&resume);
         let snap = state.snapshot(RequestCx::default());
         spawn_read(
-            state.executor(),
+            state.request_executor(),
             snap,
             move |snap| {
                 let files = baml_compiler2_hir::compiler2_all_files(snap.db());
@@ -66,6 +66,8 @@ fn mid_read_mutation_yields_content_modified() {
             },
             move |outcome| {
                 handle.post(OwnerEvent::RequestDone {
+                    session: baml_lsp::SessionKey(1),
+                    request_id: lsp_server::RequestId::from(1),
                     respond: Box::new(move |r| tx.send(r).unwrap()),
                     outcome,
                 });
@@ -94,7 +96,10 @@ fn mid_read_mutation_yields_content_modified() {
         .events()
         .recv_timeout(Duration::from_secs(10))
         .expect("job reports back");
-    let OwnerEvent::RequestDone { respond, outcome } = event else {
+    let OwnerEvent::RequestDone {
+        respond, outcome, ..
+    } = event
+    else {
         panic!("unexpected event");
     };
     let result: Result<serde_json::Value, LspError> = outcome
@@ -110,7 +115,7 @@ fn mid_read_mutation_yields_content_modified() {
     let (tx2, rx2) = std::sync::mpsc::channel::<Result<usize, LspError>>();
     let snap = state.snapshot(RequestCx::default());
     spawn_read(
-        state.executor(),
+        state.request_executor(),
         snap,
         |snap| Ok(baml_compiler2_hir::compiler2_all_files(snap.db()).len()),
         move |outcome| {
@@ -130,14 +135,14 @@ fn mid_read_mutation_yields_content_modified() {
 /// owner state survive and serve the next request.
 #[test]
 fn injected_panic_is_internal_error_and_state_survives() {
-    let mut state = GlobalState::new(Box::new(ThreadPool::new(1)), None);
+    let mut state = GlobalState::new(Executors::single(Arc::new(ThreadPool::new(1))), None);
     workspace(&mut state, "/ws", &[("main.baml", "class A { x int }\n")]);
     let (tx, rx) = std::sync::mpsc::channel::<Result<serde_json::Value, LspError>>();
     let counter = Arc::new(AtomicUsize::new(0));
 
     let snap = state.snapshot(RequestCx::default());
     spawn_read(
-        state.executor(),
+        state.request_executor(),
         snap,
         |_snap| -> Result<serde_json::Value, LspError> { panic!("injected") },
         {
@@ -161,7 +166,7 @@ fn injected_panic_is_internal_error_and_state_survives() {
     let snap = state.snapshot(RequestCx::default());
     let counter2 = Arc::clone(&counter);
     spawn_read(
-        state.executor(),
+        state.request_executor(),
         snap,
         move |snap| {
             counter2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);

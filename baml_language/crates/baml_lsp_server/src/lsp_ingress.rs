@@ -7,10 +7,10 @@
 //! accounting; handlers still own the actual LSP operation.
 //!
 //! Cancellation tokens returned by this module are operation-owned response
-//! signals: claiming one settles who answers the client. Connecting a
-//! cancelled operation to its snapshot's Salsa token (so the running query
-//! unwinds instead of completing into a claimed response) is the host's job
-//! and is not wired yet.
+//! signals: claiming one settles who answers the client. The running query is
+//! cancelled separately: the host forwards the `$/cancelRequest` to the owner
+//! thread, where the protocol layer cancels the read's snapshot Salsa token
+//! and the query unwinds instead of completing into a claimed response.
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
@@ -829,44 +829,66 @@ impl IngressScheduler {
         match self.has_normal_capacity(policy.class, serialized_bytes, read_charge) {
             Ok(()) => {}
             Err(reason) => {
-                if request_data.is_some() {
-                    self.release_response();
-                }
-                // A message whose size alone exceeds its class's byte
-                // capacity can never be admitted: report it once instead of
-                // backpressuring the transport forever. The session stays
-                // alive; a request receives a typed RequestFailed response
-                // and notifications/client responses are dropped. FULL-sync
-                // didChange recovers on the next (smaller) full text.
-                if self.permanently_oversized(policy.class, serialized_bytes) {
-                    return match message {
-                        Message::Request(request) => self.reject_request(
+                // A mutation notification (didOpen/didChange text,
+                // watched-file batches) is never dropped for size: silently
+                // losing one desyncs the server's overlay from the editor
+                // buffer until the document reopens, and no later message
+                // repairs that. The bytes are already in memory by the time
+                // admission runs, so admitting it merely lets the queue's
+                // byte counter overshoot its budget by at most this one
+                // transport-capped message; item capacity still applies, and
+                // everything else backpressures until the overshoot drains.
+                let oversized_mutation = policy.class == AdmissionClass::Mutation
+                    && matches!(message, Message::Notification(_))
+                    && self.permanently_oversized(policy.class, serialized_bytes);
+                if !(oversized_mutation
+                    && self
+                        .has_normal_capacity(policy.class, 0, read_charge)
+                        .is_ok())
+                {
+                    if request_data.is_some() {
+                        self.release_response();
+                    }
+                    // Any other message whose size alone exceeds its class's
+                    // byte capacity can never be admitted: report it once
+                    // instead of backpressuring the transport forever. The
+                    // session stays alive; a request receives a typed
+                    // RequestFailed response and non-mutation notifications
+                    // and client responses are dropped.
+                    if self.permanently_oversized(policy.class, serialized_bytes)
+                        && !oversized_mutation
+                    {
+                        return match message {
+                            Message::Request(request) => self.reject_request(
+                                session_id,
+                                request.id,
+                                ProtocolError::new(
+                                    ProtocolErrorKind::RequestFailed,
+                                    "message exceeds the LSP ingress byte capacity for its class",
+                                ),
+                            ),
+                            Message::Notification(_) | Message::Response(_) => {
+                                AdmissionResult::Dropped(DropReason::OversizedMessage)
+                            }
+                        };
+                    }
+                    if policy.class == AdmissionClass::Read {
+                        let Message::Request(request) = message else {
+                            return AdmissionResult::Backpressure(reason);
+                        };
+                        return self.reject_request(
                             session_id,
                             request.id,
                             ProtocolError::new(
                                 ProtocolErrorKind::RequestFailed,
-                                "message exceeds the LSP ingress byte capacity for its class",
+                                "LSP ingress read budget is saturated",
                             ),
-                        ),
-                        Message::Notification(_) | Message::Response(_) => {
-                            AdmissionResult::Dropped(DropReason::OversizedMessage)
-                        }
-                    };
+                        );
+                    }
+                    // An oversized mutation waiting on item capacity (or on a
+                    // previous overshoot draining) is transient backpressure.
+                    return AdmissionResult::Backpressure(reason);
                 }
-                if policy.class == AdmissionClass::Read {
-                    let Message::Request(request) = message else {
-                        return AdmissionResult::Backpressure(reason);
-                    };
-                    return self.reject_request(
-                        session_id,
-                        request.id,
-                        ProtocolError::new(
-                            ProtocolErrorKind::RequestFailed,
-                            "LSP ingress read budget is saturated",
-                        ),
-                    );
-                }
-                return AdmissionResult::Backpressure(reason);
             }
         }
 
@@ -2426,12 +2448,6 @@ mod tests {
                 ..
             }
         ));
-        // Mutation notification over normal+reserve bytes: dropped, not
-        // backpressured (a Backpressure here would spin the transport).
-        assert_eq!(
-            scheduler.admit_message(session, full_change("file:///a.baml", 2, "huge"), 500),
-            AdmissionResult::Dropped(DropReason::OversizedMessage)
-        );
         // Client response over the ordinary byte budget: dropped.
         let response = Message::Response(lsp_server::Response {
             id: RequestId::from(77),
@@ -2448,6 +2464,52 @@ mod tests {
             scheduler.lifecycle(session),
             Some(LifecycleState::Initialized)
         );
+        assert!(matches!(
+            scheduler.admit_message(session, full_change("file:///a.baml", 3, "ok"), 20),
+            AdmissionResult::Admitted { .. }
+        ));
+    }
+
+    /// A mutation notification whose size alone exceeds its class's byte
+    /// budget is admitted anyway (dropping it would silently desync the
+    /// editor overlay): the queue's byte counter overshoots by that one
+    /// message, other traffic backpressures until it drains, and draining
+    /// restores normal admission.
+    #[test]
+    fn oversized_mutation_notification_is_admitted_with_byte_overshoot() {
+        let mut scheduler = IngressScheduler::new(limits()).unwrap();
+        let session = scheduler.open_session(TransportKind::Stdio).session_id;
+        initialize(&mut scheduler, session, 1);
+
+        // 500 bytes > normal+reserve (200+200): admitted, not dropped.
+        assert!(matches!(
+            scheduler.admit_message(session, full_change("file:///a.baml", 2, "huge"), 500),
+            AdmissionResult::Admitted {
+                coalesced: false,
+                ..
+            }
+        ));
+        // The overshoot saturates the byte budget for everything else:
+        // a read request is rejected (not backpressured), a second
+        // oversized mutation backpressures until the first drains.
+        assert!(matches!(
+            scheduler.admit_message(session, request(3, "textDocument/hover"), 20),
+            AdmissionResult::Rejected { .. }
+        ));
+        assert!(matches!(
+            scheduler.admit_message(session, full_change("file:///b.baml", 2, "huge"), 500),
+            AdmissionResult::Backpressure(_)
+        ));
+
+        // Draining the big change releases its charge and restores normal
+        // admission.
+        let Some(SchedulerEvent::Dispatch(item)) = scheduler.next_event() else {
+            panic!("the oversized change must dispatch");
+        };
+        let Message::Notification(notification) = &item.message else {
+            panic!("expected the didChange notification");
+        };
+        assert_eq!(notification.method, "textDocument/didChange");
         assert!(matches!(
             scheduler.admit_message(session, full_change("file:///a.baml", 3, "ok"), 20),
             AdmissionResult::Admitted { .. }

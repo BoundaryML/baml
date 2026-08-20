@@ -24,7 +24,13 @@ impl GlobalState {
     /// [`OwnerEvent`].
     pub fn handle_event(&mut self, event: OwnerEvent) {
         match event {
-            OwnerEvent::RequestDone { respond, outcome } => {
+            OwnerEvent::RequestDone {
+                session,
+                request_id,
+                respond,
+                outcome,
+            } => {
+                self.finish_read(session, &request_id);
                 respond(
                     outcome
                         .map_err(LspError::from)
@@ -58,7 +64,7 @@ impl GlobalState {
         let snap = self.snapshot(RequestCx::default());
         let handle = self.handle();
         spawn_read(
-            self.executor(),
+            self.diagnostics_executor(),
             snap,
             move |snap| diagnostics::collect_root_candidate(snap, root),
             move |outcome| handle.post(OwnerEvent::DiagnosticsResult { root, outcome }),
@@ -81,7 +87,29 @@ impl GlobalState {
                 return;
             }
             // A mutation landed: it re-armed the tail itself.
-            Err(TaskFailure::Cancelled(_)) => {}
+            Err(TaskFailure::Cancelled(salsa::Cancelled::PendingWrite)) => {}
+            // A panicking query on another thread unwound this pass; the
+            // memo was not stored, so an immediate retry would re-run the
+            // panicking query from this thread and panic outright. Same
+            // policy as a local panic: wait for the next edit.
+            Err(TaskFailure::Cancelled(salsa::Cancelled::PropagatedPanic)) => {
+                tracing::error!(
+                    ?root,
+                    "another thread's query panicked under the diagnostics pass; retry on the next edit"
+                );
+                return;
+            }
+            // `Local` (nothing cancels a diagnostics token today) and any
+            // future variant: nothing re-armed the tail, so a blind repost
+            // could spin — fail safe and wait for the next edit.
+            Err(TaskFailure::Cancelled(other)) => {
+                tracing::warn!(
+                    ?root,
+                    ?other,
+                    "diagnostics pass cancelled; retry on the next edit"
+                );
+                return;
+            }
             Err(TaskFailure::Panicked(message)) => {
                 tracing::error!(?root, %message, "diagnostics pass panicked; retry on the next edit");
                 return;

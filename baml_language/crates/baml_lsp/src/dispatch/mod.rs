@@ -87,6 +87,7 @@ macro_rules! define_request_tables {
                     respond(Err(error));
                     return;
                 }
+                let request_id = req.id.clone();
                 match req.method.as_str() {
                     $(
                         lsp_request_method!($owner_method) => {
@@ -125,9 +126,10 @@ macro_rules! define_request_tables {
                                 }
                             };
                             let snap = self.snapshot(cx);
+                            self.register_read(session, request_id.clone(), snap.cancellation_token());
                             let handle = self.handle();
                             spawn_read(
-                                self.executor(),
+                                self.request_executor(),
                                 snap,
                                 move |snap| {
                                     let (result, commit): (
@@ -138,6 +140,7 @@ macro_rules! define_request_tables {
                                 },
                                 move |outcome| {
                                     handle.post(OwnerEvent::Call(Box::new(move |state| {
+                                        state.finish_read(session, &request_id);
                                         match outcome {
                                             Ok(Ok((result, commit))) => {
                                                 if let Some(commit) = commit {
@@ -175,16 +178,22 @@ macro_rules! define_request_tables {
                                 }
                             };
                             let snap = self.snapshot(cx);
+                            self.register_read(session, request_id.clone(), snap.cancellation_token());
                             let handle = self.handle();
                             spawn_read(
-                                self.executor(),
+                                self.request_executor(),
                                 snap,
                                 move |snap| {
                                     let result: Result<lsp_request_result!($snap_method), LspError> =
                                         requests::$snap_fn(snap, params);
                                     result.and_then(to_value)
                                 },
-                                move |outcome| handle.post(OwnerEvent::RequestDone { respond, outcome }),
+                                move |outcome| handle.post(OwnerEvent::RequestDone {
+                                    session,
+                                    request_id,
+                                    respond,
+                                    outcome,
+                                }),
                             );
                         }
                     )*

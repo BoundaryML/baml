@@ -7,8 +7,8 @@
 //! lands while a read is in flight cancels it (Salsa unwinding →
 //! `ContentModified`); a query panic becomes `InternalError` and the server
 //! keeps running. Hosts (`baml_lsp_server` natively, the wasm bridge in the
-//! browser) supply the transport, the executor, a [`discovery::ProjectFs`],
-//! and drain [`state::OwnerEvent`]s.
+//! browser) supply the transport, the [`executor::Executors`] lanes, a
+//! [`discovery::ProjectFs`], and drain [`state::OwnerEvent`]s.
 //!
 //! The host's loop, in order of what it calls here:
 //!

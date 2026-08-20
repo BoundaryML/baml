@@ -36,7 +36,7 @@ use std::{
 };
 
 use anyhow::Context as _;
-use baml_lsp::{GlobalState, SessionKey, discovery::NativeFs, executor::ThreadPool};
+use baml_lsp::{GlobalState, SessionKey, discovery::NativeFs, executor::Executors};
 
 use crate::lsp_runtime::{LspRuntime, SubmitResult};
 
@@ -374,6 +374,23 @@ pub fn run_server(workspace_roots: Vec<PathBuf>) -> anyhow::Result<()> {
         .with_ansi(false)
         .init();
 
+    // Panics carry their location and backtrace only at panic time; the
+    // `catch_unwind` boundaries downstream (the pool guard, the owner-step
+    // guard) see just the payload. Log the full picture here so a field
+    // report names the panicking query. Salsa cancellations unwind via
+    // `resume_unwind` and never reach the hook, so this fires for real
+    // defects only. The default hook is dropped: tracing already writes to
+    // stderr.
+    std::panic::set_hook(Box::new(|info| {
+        let backtrace = std::backtrace::Backtrace::force_capture();
+        tracing::error!(
+            panic = %info,
+            thread = std::thread::current().name().unwrap_or("<unnamed>"),
+            %backtrace,
+            "panic"
+        );
+    }));
+
     tracing::info!("baml-lsp v{} starting", version());
     deadlock_watchdog::spawn();
 
@@ -381,8 +398,7 @@ pub fn run_server(workspace_roots: Vec<PathBuf>) -> anyhow::Result<()> {
     if let Some(dir) = &stdlib_dir {
         tracing::info!(path = %dir.display(), "stdlib stubs directory");
     }
-    let executor = ThreadPool::new(ThreadPool::default_size());
-    let state = GlobalState::with_fs(Box::new(executor), stdlib_dir, Arc::new(NativeFs));
+    let state = GlobalState::with_fs(Executors::native_default(), stdlib_dir, Arc::new(NativeFs));
     let runtime = LspRuntime::new(state)?;
 
     // Stdio sender: bounded frames charged against one process outbound

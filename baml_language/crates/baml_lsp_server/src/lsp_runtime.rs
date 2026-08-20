@@ -17,8 +17,10 @@
 //! debounce tails and saturated-sink retries. There is no idle polling.
 //!
 //! Cancellation tokens handed out by the scheduler are operation-owned flags
-//! for response ownership; Salsa's own per-snapshot cancellation lives inside
-//! the protocol layer and is not driven from here.
+//! for response ownership. Salsa's own per-snapshot cancellation lives inside
+//! the protocol layer: the cancel is additionally forwarded to the owner as a
+//! `$/cancelRequest` notification, and the protocol layer cancels the running
+//! read's snapshot token there.
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -272,10 +274,10 @@ impl LspRuntime {
                 ControlAdmission::Admitted => {
                     // Cancellation is a true control path: process it on the
                     // submitting transport thread so it can claim a response
-                    // while the owner is busy. The protocol layer also sees
-                    // the cancel on the owner, but cancelling the running
-                    // read's Salsa token is not wired yet — the job runs to
-                    // completion, and whatever it reports finds its response
+                    // while the owner is busy. The forwarded copy makes the
+                    // protocol layer cancel the running read's Salsa token,
+                    // so the pool job unwinds at its next query entry; its
+                    // late `RequestCanceled` report finds the response
                     // already claimed here and is dropped.
                     self.drain_controls();
                     self.forward_cancel_to_owner(session_id, request_id);
@@ -526,9 +528,11 @@ impl LspRuntime {
                 let Some(token) = item.response_token else {
                     return;
                 };
-                let runtime = Arc::clone(self);
-                let respond: Responder =
-                    Box::new(move |result| runtime.send_handler_result(&token, result));
+                let responder = GuardedResponder {
+                    runtime: self.weak_self.clone(),
+                    token: Some(token),
+                };
+                let respond: Responder = Box::new(move |result| responder.respond(result));
                 let method = request.method.clone();
                 guarded(&method, || {
                     state.dispatch_request(session, request, respond);
@@ -555,7 +559,7 @@ impl LspRuntime {
                         return;
                     }
                 }
-                if self.record_applied_document(item.session_id, &tracking) {
+                if self.record_applied_document(state, item.session_id, &tracking) {
                     if let Some(hook) = &endpoint.after_notification {
                         hook(state, session, &tracking);
                     }
@@ -764,6 +768,7 @@ impl LspRuntime {
 
     fn record_applied_document(
         &self,
+        state: &GlobalState,
         session_id: SessionId,
         notification: &lsp_server::Notification,
     ) -> bool {
@@ -792,15 +797,18 @@ impl LspRuntime {
                     notification.params.clone(),
                 ) && let Some(identity) = canonical_document_identity(&params.text_document.uri)
                 {
-                    if let [change] = params.content_changes.as_slice()
-                        && change.range.is_none()
-                        && let Some(document) = self
-                            .document_overlays
-                            .lock()
-                            .get_mut(&(session_id, identity))
+                    // The change events may be incremental deltas; the
+                    // protocol layer just applied them, so its overlay is
+                    // the authoritative post-change text for replay.
+                    if let Some(document) = self
+                        .document_overlays
+                        .lock()
+                        .get_mut(&(session_id, identity.clone()))
                     {
                         document.version = params.text_document.version;
-                        document.text.clone_from(&change.text);
+                        if let Some(open) = state.open_document(&identity) {
+                            document.text = open.text.to_string();
+                        }
                     }
                     scheduler.record_document_version(
                         session_id,
@@ -850,6 +858,50 @@ impl LspRuntime {
             return;
         };
         self.restore_surviving_overlay(state, &identity);
+    }
+}
+
+/// Owns a request's response until the handler answers.
+///
+/// The protocol layer promises to call its responder exactly once, but a
+/// panicking handler unwinds past that promise, and a discarded owner
+/// continuation drops it unrun. Either way the responder is dropped without
+/// being called — and a request that never answers leaks its outbound
+/// response reservation ([`IngressLimits::response_reservation_bytes`])
+/// until the session ends; enough leaks exhaust the outbound budget and
+/// backpressure every later request. The drop path converts that leak into
+/// an `InternalError` response, which releases the reservation through the
+/// normal claim/order path. `send_handler_result` claims through the
+/// scheduler, so a response that already went out (or was claimed by
+/// cancellation) makes the drop a no-op — double-responding is impossible.
+struct GuardedResponder {
+    runtime: Weak<LspRuntime>,
+    token: Option<ResponseToken>,
+}
+
+impl GuardedResponder {
+    fn respond(mut self, result: Result<serde_json::Value, LspError>) {
+        if let (Some(runtime), Some(token)) = (self.runtime.upgrade(), self.token.take()) {
+            runtime.send_handler_result(&token, result);
+        }
+    }
+}
+
+impl Drop for GuardedResponder {
+    fn drop(&mut self) {
+        let Some(token) = self.token.take() else {
+            return;
+        };
+        let Some(runtime) = self.runtime.upgrade() else {
+            return;
+        };
+        runtime.send_handler_result(
+            &token,
+            Err(LspError::Internal(
+                "the request was dropped without a response (its handler likely panicked)"
+                    .to_owned(),
+            )),
+        );
     }
 }
 
@@ -926,9 +978,11 @@ fn owner_loop(runtime: &Weak<LspRuntime>, mut state: GlobalState, wake_rx: &Rece
 
 /// Run one owner-thread step under `catch_unwind`: a panic in a handler or
 /// event is logged and the loop continues. Every database `set_*` is atomic,
-/// so the state is never structurally corrupt after an unwind; the request
-/// (if any) simply never answers through this path and its response token
-/// is reclaimed when the session ends.
+/// so the state is never structurally corrupt after an unwind; a request
+/// whose [`GuardedResponder`] is dropped by the unwind answers
+/// `InternalError` from the drop, so its response reservation is released.
+/// (The process panic hook has already logged the payload, location, and
+/// backtrace; the message here ties them to the LSP method.)
 fn guarded<R>(what: &str, step: impl FnOnce() -> R) -> Option<R> {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(step)) {
         Ok(result) => Some(result),
@@ -960,7 +1014,7 @@ fn canonical_document_identity_str(uri: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use baml_lsp::executor::Inline;
+    use baml_lsp::executor::Executors;
     use lsp_server::{Message, Notification, Request, RequestId};
 
     use super::*;
@@ -985,7 +1039,7 @@ mod tests {
     }
 
     fn test_state() -> GlobalState {
-        GlobalState::new(Box::new(Inline), None)
+        GlobalState::new(Executors::inline(), None)
     }
 
     /// The runtime without its owner thread: tests drive `drain` and the
@@ -1498,6 +1552,76 @@ mod tests {
             "termination closes the session"
         );
         assert!(runtime.endpoint(opened.session_id).is_none());
+    }
+
+    /// A responder dropped without being called (the handler panicked and
+    /// unwound past it) answers `InternalError` from its drop, releasing the
+    /// request's outbound response reservation.
+    #[test]
+    fn dropped_responder_answers_internal_error_and_releases_the_reservation() {
+        let (runtime, _state) = runtime_without_worker();
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let opened = runtime.open_session(
+            TransportKind::Stdio,
+            capturing_sink(messages.clone()),
+            Arc::new(|| {}),
+            None,
+        );
+        initialize(&runtime, opened.session_id);
+
+        let token = admit_command(&runtime, opened.session_id, 2);
+        assert!(matches!(
+            runtime.scheduler.lock().next_event(),
+            Some(SchedulerEvent::Dispatch(_))
+        ));
+        let responder = GuardedResponder {
+            runtime: Arc::downgrade(&runtime),
+            token: Some(token.clone()),
+        };
+        drop(responder);
+
+        let messages = messages.lock();
+        let Some(Message::Response(response)) = messages.last() else {
+            panic!("the drop must answer the request");
+        };
+        assert_eq!(response.id, RequestId::from(2));
+        let error = response.error.as_ref().expect("must be an error response");
+        assert_eq!(error.code, ProtocolErrorKind::InternalError.json_rpc_code());
+        // The reservation is released: the request is no longer outstanding.
+        assert_eq!(runtime.scheduler.lock().outstanding_state(&token), None);
+    }
+
+    /// The livelock H3 described: with a 4 MiB reservation and a 64 MiB
+    /// outbound budget, sixteen leaked requests exhausted the budget and
+    /// every later request backpressured forever. With the drop answering,
+    /// far more than sixteen panicked handlers stay harmless.
+    #[test]
+    fn leaked_responders_do_not_exhaust_the_outbound_budget() {
+        let (runtime, _state) = runtime_without_worker();
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let opened = runtime.open_session(
+            TransportKind::Stdio,
+            capturing_sink(messages),
+            Arc::new(|| {}),
+            None,
+        );
+        initialize(&runtime, opened.session_id);
+
+        let limits = LspRuntime::default_limits();
+        let budget_exhausting =
+            2 + limits.outbound_response_bytes / limits.response_reservation_bytes;
+        for index in 0..budget_exhausting {
+            let id = i32::try_from(index).unwrap() + 2;
+            let token = admit_command(&runtime, opened.session_id, id);
+            assert!(matches!(
+                runtime.scheduler.lock().next_event(),
+                Some(SchedulerEvent::Dispatch(_))
+            ));
+            drop(GuardedResponder {
+                runtime: Arc::downgrade(&runtime),
+                token: Some(token),
+            });
+        }
     }
 
     /// The owner thread is bounded by the runtime: dropping the last runtime

@@ -12,7 +12,8 @@ use std::{
 use baml_lsp::{
     ClientSender, GlobalState, LspError, OwnerEvent, SessionKey,
     discovery::{DiscoveredRoot, ProjectFs, workspace_root_spec},
-    executor::ThreadPool,
+    executor::{Executor, Executors, Inline, Job, ThreadPool},
+    snapshot::TaskFailure,
     state::DIAGNOSTICS_DEBOUNCE,
 };
 use lsp_types::{PublishDiagnosticsParams, Url};
@@ -136,6 +137,36 @@ impl ProjectFs for MemFs {
     }
 }
 
+/// An executor that parks jobs until the test runs them, so a test can
+/// interleave owner-side work (a `$/cancelRequest`, an injected event)
+/// between a job's spawn and its execution without racing a real thread.
+#[derive(Default)]
+struct ManualExecutor {
+    jobs: Mutex<Vec<Job>>,
+}
+
+impl ManualExecutor {
+    fn run_all(&self) {
+        loop {
+            let job = self.jobs.lock().unwrap().pop();
+            match job {
+                Some(job) => job(),
+                None => return,
+            }
+        }
+    }
+
+    fn parked(&self) -> usize {
+        self.jobs.lock().unwrap().len()
+    }
+}
+
+impl Executor for ManualExecutor {
+    fn spawn_job(&self, job: Job) {
+        self.jobs.lock().unwrap().push(job);
+    }
+}
+
 // ── Harness ──────────────────────────────────────────────────────────────
 
 struct Harness {
@@ -153,14 +184,15 @@ impl Harness {
     }
 
     fn with_stdlib_dir(stdlib_dir: Option<PathBuf>) -> Self {
+        Self::with_executors(Executors::single(Arc::new(ThreadPool::new(2))), stdlib_dir)
+    }
+
+    fn with_executors(executors: Executors, stdlib_dir: Option<PathBuf>) -> Self {
         let temp = tempfile::tempdir().unwrap();
         let ws = temp.path().canonicalize().unwrap();
         let fs = Arc::new(MemFs::default());
-        let state = GlobalState::with_fs(
-            Box::new(ThreadPool::new(2)),
-            stdlib_dir,
-            Arc::clone(&fs) as Arc<dyn ProjectFs>,
-        );
+        let state =
+            GlobalState::with_fs(executors, stdlib_dir, Arc::clone(&fs) as Arc<dyn ProjectFs>);
         Self {
             state,
             fs,
@@ -756,14 +788,14 @@ fn request_gating_and_unsupported_methods() {
     h.notify(s, "$/setTrace", json!({ "value": "off" }))
         .unwrap();
 
-    // Incremental sync is rejected.
+    // A malformed incremental range (a nonexistent line) is InvalidParams.
     let uri = h.uri("main.baml");
     h.open(s, &uri, 1, "class A { x int }\n");
     let error = h
         .notify(
             s,
             "textDocument/didChange",
-            json!({ "textDocument": { "uri": uri, "version": 2 }, "contentChanges": [{ "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } }, "text": "x" }] }),
+            json!({ "textDocument": { "uri": uri, "version": 2 }, "contentChanges": [{ "range": { "start": { "line": 99, "character": 0 }, "end": { "line": 99, "character": 0 } }, "text": "x" }] }),
         )
         .unwrap_err();
     assert!(matches!(error, LspError::InvalidParams(_)), "{error:?}");
@@ -1123,4 +1155,333 @@ fn inlay_hints_appear_for_inferred_let_types() {
         hints.iter().any(|hint| hint["label"] == ": string"),
         "let-binding type hint present, got: {hints:?}"
     );
+}
+
+// ── 2.3b-3 substrate: cancellation, incremental sync, diffing, rescue ────
+
+/// `$/cancelRequest` cancels the running read's Salsa token: the parked job
+/// unwinds with `Cancelled::Local` at its first query entry and reports
+/// `RequestCanceled`; an uncancelled request on the same lane completes.
+#[test]
+fn cancel_request_unwinds_the_running_read() {
+    let manual = Arc::new(ManualExecutor::default());
+    let executors = Executors {
+        requests: Arc::clone(&manual) as Arc<dyn Executor>,
+        diagnostics: Arc::new(Inline),
+        io: Arc::new(Inline),
+    };
+    let mut h = Harness::with_executors(executors, None);
+    h.fs.add_project(&h.ws);
+    h.fs.write(h.ws.join("main.baml"), "class A { x int }\n");
+    let s = SessionKey(1);
+    h.init_session(s, &[]);
+    h.settle();
+    let uri = h.uri("main.baml");
+
+    let dispatch_hover = |h: &mut Harness, id: i32| {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let req = lsp_server::Request::new(
+            lsp_server::RequestId::from(id),
+            "textDocument/hover".to_owned(),
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": 0, "character": 7 },
+            }),
+        );
+        h.state
+            .dispatch_request(s, req, Box::new(move |result| tx.send(result).unwrap()));
+        rx
+    };
+
+    let rx = dispatch_hover(&mut h, 9);
+    assert_eq!(manual.parked(), 1, "the read is parked on the request lane");
+    h.notify(s, "$/cancelRequest", json!({ "id": 9 })).unwrap();
+    manual.run_all();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let result = loop {
+        if let Ok(result) = rx.try_recv() {
+            break result;
+        }
+        assert!(Instant::now() < deadline, "no completion for the read");
+        if let Ok(event) = h.state.events().recv_timeout(Duration::from_millis(20)) {
+            h.state.handle_event(event);
+        }
+    };
+    match result {
+        Err(LspError::RequestCanceled(_)) => {}
+        other => panic!("expected RequestCanceled, got {other:?}"),
+    }
+
+    // Control: the same request without a cancel completes normally.
+    let rx = dispatch_hover(&mut h, 10);
+    manual.run_all();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Ok(result) = rx.try_recv() {
+            result.expect("uncancelled hover succeeds");
+            break;
+        }
+        assert!(Instant::now() < deadline, "no completion for the read");
+        if let Ok(event) = h.state.events().recv_timeout(Duration::from_millis(20)) {
+            h.state.handle_event(event);
+        }
+    }
+}
+
+/// Incremental change events apply in order, each against the text produced
+/// by the ones before it, with ranges measured in the session's negotiated
+/// encoding (UTF-16 here: 🐑 is two units). A rangeless event still replaces
+/// the whole document, so FULL-sync clients keep working.
+#[test]
+fn incremental_changes_apply_in_order_with_utf16_positions() {
+    let mut h = Harness::new();
+    h.fs.add_project(&h.ws);
+    let s = SessionKey(1);
+    h.init_session(s, &[]);
+    let uri = h.uri("main.baml");
+    let path = h.ws.join("main.baml");
+    h.open(s, &uri, 1, "/// doc\nclass A {\n  s string\n}\n");
+
+    // Two deltas in one batch: the second is positioned in the coordinates
+    // produced by the first (`🐑🐑` occupies UTF-16 units 4..8).
+    h.notify(
+        s,
+        "textDocument/didChange",
+        json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [
+                {
+                    "range": { "start": { "line": 0, "character": 4 }, "end": { "line": 0, "character": 7 } },
+                    "text": "🐑🐑",
+                },
+                {
+                    "range": { "start": { "line": 0, "character": 6 }, "end": { "line": 0, "character": 8 } },
+                    "text": " sheep",
+                },
+            ],
+        }),
+    )
+    .unwrap();
+    assert_eq!(
+        h.state.file_text(&path).as_deref(),
+        Some("/// 🐑 sheep\nclass A {\n  s string\n}\n")
+    );
+    assert_eq!(
+        h.state.open_document(&path).unwrap().version,
+        Some(2),
+        "the overlay tracks the change's version"
+    );
+
+    // A rangeless event replaces the document; a delta after it applies to
+    // the replacement.
+    h.notify(
+        s,
+        "textDocument/didChange",
+        json!({
+            "textDocument": { "uri": uri, "version": 3 },
+            "contentChanges": [
+                { "text": "class B {}\n" },
+                {
+                    "range": { "start": { "line": 0, "character": 6 }, "end": { "line": 0, "character": 7 } },
+                    "text": "C",
+                },
+            ],
+        }),
+    )
+    .unwrap();
+    assert_eq!(h.state.file_text(&path).as_deref(), Some("class C {}\n"));
+}
+
+/// Per-file diffing: a pass after an edit republishes only the files whose
+/// text or diagnostics changed; the untouched file is not resent.
+#[test]
+fn unchanged_files_are_not_republished() {
+    let mut h = Harness::new();
+    h.fs.add_project(&h.ws);
+    h.fs.write(h.ws.join("clean.baml"), "class Clean { x int }\n");
+    let s = SessionKey(1);
+    h.init_session(s, &[]);
+    let bad_uri = h.uri("bad.baml");
+    h.open(s, &bad_uri, 1, BAD_SOURCE);
+    h.settle();
+
+    let clean_uri = h.uri("clean.baml");
+    let clean_before = h.sender(s).publications_for(&clean_uri).len();
+    let bad_before = h.sender(s).publications_for(&bad_uri).len();
+    assert!(clean_before > 0, "the first publication covers every file");
+    assert!(has_error(
+        h.sender(s).publications_for(&bad_uri).last().unwrap()
+    ));
+
+    h.change(s, &bad_uri, 2, "class A {\n  x AlsoUndefined\n}\n");
+    h.settle();
+
+    assert_eq!(
+        h.sender(s).publications_for(&clean_uri).len(),
+        clean_before,
+        "the untouched file is not republished"
+    );
+    let bad_after = h.sender(s).publications_for(&bad_uri);
+    assert!(bad_after.len() > bad_before, "the edited file republishes");
+    assert!(has_error(bad_after.last().unwrap()));
+}
+
+/// A session that initializes after the workspace has settled receives the
+/// standing diagnostics in full (per-file diffing must not starve it), and
+/// the recompute does not respam the session that already has them.
+#[test]
+fn a_late_session_receives_standing_diagnostics_in_full() {
+    let mut h = Harness::new();
+    h.fs.add_project(&h.ws);
+    h.fs.write(h.ws.join("bad.baml"), BAD_SOURCE);
+    let s1 = SessionKey(1);
+    h.init_session(s1, &[]);
+    h.settle();
+
+    let bad_uri = h.uri("bad.baml");
+    let s1_before = h.sender(s1).publications_for(&bad_uri).len();
+    assert!(s1_before > 0);
+
+    // No workspace folders: nothing but the new-session schedule triggers
+    // the publication pass.
+    let s2 = SessionKey(2);
+    h.init_session_with_folders(s2, &[], &[]);
+    h.settle();
+
+    let s2_publications = h.sender(s2).publications_for(&bad_uri);
+    assert!(
+        s2_publications.last().is_some_and(has_error),
+        "the late session sees the standing error: {s2_publications:?}"
+    );
+    assert_eq!(
+        h.sender(s1).publications_for(&bad_uri).len(),
+        s1_before,
+        "the already-current session is not respammed"
+    );
+}
+
+/// A scratch document outside every project mints a provisional root that
+/// holds the single-workspace slot; the real project's discovery is refused
+/// while it lives. Closing the scratch document frees the slot, and the
+/// owner re-runs discovery so the real project loads without further client
+/// action.
+#[test]
+fn closing_a_detached_document_frees_the_workspace_slot() {
+    let mut h = Harness::new();
+    h.fs.add_project(&h.ws);
+    h.fs.write(h.ws.join("main.baml"), "class A { x int }\n");
+    let s = SessionKey(1);
+    h.init_session_with_folders(s, &[], &[]);
+
+    let scratch_dir = tempfile::tempdir().unwrap();
+    let scratch = scratch_dir.path().canonicalize().unwrap();
+    let scratch_uri = Url::from_file_path(scratch.join("scratch.baml")).unwrap();
+    h.open(s, &scratch_uri, 1, "class S { y int }\n");
+    h.settle();
+    let roots: Vec<PathBuf> = h
+        .state
+        .roots()
+        .workspace_roots()
+        .map(|entry| entry.path.clone())
+        .collect();
+    assert_eq!(
+        roots,
+        vec![scratch.clone()],
+        "the scratch dir holds the slot"
+    );
+
+    // The client announces the real workspace folder; the guard refuses it.
+    h.notify(
+        s,
+        "workspace/didChangeWorkspaceFolders",
+        json!({
+            "event": {
+                "added": [{ "uri": Url::from_file_path(&h.ws).unwrap(), "name": "ws" }],
+                "removed": [],
+            }
+        }),
+    )
+    .unwrap();
+    h.settle();
+    let roots: Vec<PathBuf> = h
+        .state
+        .roots()
+        .workspace_roots()
+        .map(|entry| entry.path.clone())
+        .collect();
+    assert_eq!(roots, vec![scratch], "the slot is still held");
+
+    // Closing the scratch document removes its provisional root; the freed
+    // slot triggers rediscovery of the announced folder.
+    h.close(s, &scratch_uri);
+    h.settle();
+    let roots: Vec<PathBuf> = h
+        .state
+        .roots()
+        .workspace_roots()
+        .map(|entry| entry.path.clone())
+        .collect();
+    assert_eq!(roots, vec![h.ws.clone()], "the real project loaded");
+}
+
+/// A diagnostics pass unwound by another thread's query panic must not
+/// repost its tail: the panicking query would just re-run (the memo was
+/// never stored) and panic again. Retry waits for the next edit.
+#[test]
+fn a_propagated_panic_does_not_hot_retry_diagnostics() {
+    let manual = Arc::new(ManualExecutor::default());
+    let executors = Executors {
+        requests: Arc::new(Inline),
+        diagnostics: Arc::clone(&manual) as Arc<dyn Executor>,
+        io: Arc::new(Inline),
+    };
+    let mut h = Harness::with_executors(executors, None);
+    h.fs.add_project(&h.ws);
+    h.fs.write(h.ws.join("main.baml"), "class A { x int }\n");
+    let s = SessionKey(1);
+    h.init_session(s, &[]);
+    // Apply the queued discovery mutations before any snapshot can park on
+    // the manual lane (a parked snapshot would block `apply`).
+    while let Ok(event) = h.state.events().try_recv() {
+        h.state.handle_event(event);
+    }
+    let root = h
+        .state
+        .roots()
+        .workspace_roots()
+        .next()
+        .expect("the discovered project root")
+        .root;
+
+    // Fire the tail: the pass parks on the manual lane, in flight.
+    h.state.on_tick(Instant::now() + DIAGNOSTICS_DEBOUNCE * 2);
+    while let Ok(event) = h.state.events().try_recv() {
+        h.state.handle_event(event);
+    }
+    assert_eq!(manual.parked(), 1, "the diagnostics pass is parked");
+    assert!(h.state.root_state(root).unwrap().diagnostics_in_flight);
+
+    // Another thread's query panic unwinds the pass.
+    h.state.handle_event(OwnerEvent::DiagnosticsResult {
+        root,
+        outcome: Err(TaskFailure::Cancelled(salsa::Cancelled::PropagatedPanic)),
+    });
+
+    let root_state = h.state.root_state(root).unwrap();
+    assert!(!root_state.diagnostics_in_flight);
+    assert!(
+        root_state.diagnostics_due.is_none(),
+        "no timer was re-armed"
+    );
+    assert!(
+        h.state.events().try_recv().is_err(),
+        "no DiagnosticsDue was reposted"
+    );
+    assert!(
+        h.state.root_state(root).unwrap().fence.is_dirty(),
+        "the root still owes a publication — the next edit retries"
+    );
+
+    // Cleanup: run the parked pass so its snapshot drops before the state.
+    manual.run_all();
 }
