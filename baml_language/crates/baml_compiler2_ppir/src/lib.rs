@@ -195,7 +195,7 @@ fn make_raw_attr_no_args(name: &str) -> ast::RawAttribute {
 /// the generated companion on the class while SDK lowering can hide it.
 fn synthesize_llm_stream_companion(
     func: &ast::FunctionDef,
-    ctx: &ExpandCtx<'_>,
+    ctx: &ExpandCtx<'_, '_>,
 ) -> Option<ast::FunctionDef> {
     let Some(ast::DeclarativeMeta::Llm(llm)) = &func.declarative_meta else {
         return None;
@@ -408,6 +408,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     .iter()
                     .filter_map(|method| {
                         let ctx = ExpandCtx {
+                            db,
                             package_name: &package_name,
                             namespace_path: &pkg_info.namespace_path,
                             package_items,

@@ -2843,7 +2843,7 @@ mod reserved_name_tests {
     }
 
     /// Contextual keywords are rejected as declaration names with the keyword
-    /// flavor of E0164 - the same set the runtime constructors enforce.
+    /// flavor of E0170 - the same set the runtime constructors enforce.
     #[test]
     fn contextual_keywords_are_rejected_as_declaration_names() {
         for name in ["true", "false", "map", "const", "with", "as", "unreflect"] {
@@ -2853,6 +2853,33 @@ mod reserved_name_tests {
                     .iter()
                     .any(|(_, n, r)| n == name && *r == ReservedNameKind::Keyword),
                 "`{name}` as a class must be a keyword error, got {found:?}",
+            );
+        }
+    }
+
+    /// Generic parameters shadow builtins lexically in EVERY frame that
+    /// declares them - interface method signatures and `implement ... for`
+    /// blocks included, not just named items.
+    #[test]
+    fn generic_params_are_checked_on_every_declaring_frame() {
+        for source in [
+            "interface I { function f<string>(self) -> int }
+",
+            "interface I { function f<string>(self) -> int { 1 } }
+",
+            "implement<string> I for Foo { }
+",
+            "implement I for Foo { function f<string>(self) -> int { 1 } }
+",
+        ] {
+            let found = reserved_diags(source);
+            assert!(
+                found.iter().any(|(kind, n, r)| {
+                    kind == "a generic parameter"
+                        && n == "string"
+                        && *r == ReservedNameKind::BuiltinType
+                }),
+                "generic param `string` must error in: {source}got {found:?}",
             );
         }
     }

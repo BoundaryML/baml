@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] E0164
+  [hir] E0170
 
   × `type` is a keyword and cannot be used as a type alias name
    ╭─[type_malformed.baml:7:1]

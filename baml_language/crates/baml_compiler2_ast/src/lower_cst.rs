@@ -321,7 +321,7 @@ fn lower_file_with_path_and_test_owner_impl(
     (items, diags, env_var_refs)
 }
 
-// ── Reserved declaration names (E0164) ─────────────────────────
+// ── Reserved declaration names (E0170) ─────────────────────────
 
 /// Why `name` may not be introduced by a declaration, if it may not be.
 ///
@@ -419,6 +419,12 @@ fn check_reserved_declaration_names(items: &[Item], diags: &mut Vec<LoweringDiag
             Item::Interface(interface) => {
                 check_full(diags, "an interface", &interface.name, interface.name_span);
                 check_generics(diags, &interface.generic_params, interface.name_span);
+                for method in &interface.required_methods {
+                    check_generics(diags, &method.generic_params, method.name_span);
+                }
+                for method in &interface.default_methods {
+                    check_generics(diags, &method.generic_params, method.name_span);
+                }
             }
             Item::Function(func) => {
                 if func.metadata.origin == crate::ast::FunctionOrigin::UserDefined {
@@ -432,13 +438,18 @@ fn check_reserved_declaration_names(items: &[Item], diags: &mut Vec<LoweringDiag
             Item::Let(let_def) => {
                 check_full(diags, "a value", &let_def.name, let_def.name_span);
             }
+            // An `implement ... for ...` block introduces no name of its
+            // own, but its generic parameters (and its methods') shadow
+            // builtins lexically like any other frame.
+            Item::ImplementsFor(imp) => {
+                check_generics(diags, &imp.generic_params, imp.span);
+                for method in &imp.methods {
+                    check_generics(diags, &method.generic_params, method.name_span);
+                }
+            }
             // Test names are quoted strings; template strings and retry
-            // policies are removed syntax with their own migration errors;
-            // `implement ... for ...` introduces no name.
-            Item::Test(_)
-            | Item::TemplateString(_)
-            | Item::RetryPolicy(_)
-            | Item::ImplementsFor(_) => {}
+            // policies are removed syntax with their own migration errors.
+            Item::Test(_) | Item::TemplateString(_) | Item::RetryPolicy(_) => {}
         }
     }
 }

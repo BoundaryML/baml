@@ -288,14 +288,24 @@ impl PpirTy {
                             },
                         },
                         // `json` is expanded to `baml.json.json` at AST
-                        // lowering (sugar), and the intrinsics have no
-                        // addressable definition, so none of these can be a
-                        // bare written path.
-                        BuiltinTypeName::Json
-                        | BuiltinTypeName::Void
+                        // lowering (sugar), so a bare `json` path never comes
+                        // from parsed source - but that invariant lives in
+                        // another crate, so recover to the same canonical
+                        // path the sugar produces rather than panicking.
+                        BuiltinTypeName::Json => PpirTy::Named {
+                            path: vec![Name::new("baml"), Name::new("json"), Name::new("json")],
+                            generic_args: vec![],
+                            associated_type_bindings: vec![],
+                            attrs,
+                        },
+                        // The intrinsics have no addressable definition and
+                        // are filtered out of the builtin scope itself
+                        // (`builtin_definition_path` is None), so this guard
+                        // cannot yield them.
+                        BuiltinTypeName::Void
                         | BuiltinTypeName::Never
                         | BuiltinTypeName::Unknown => {
-                            unreachable!("not in the builtin type scope as a bare path")
+                            unreachable!("intrinsics are not in the builtin type scope")
                         }
                     };
                 }

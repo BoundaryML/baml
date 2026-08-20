@@ -7,7 +7,7 @@ use baml_base::{ClientOptionsValidationError, FileId, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity};
 use text_size::TextRange;
 
-/// Why a declared name is reserved - which message family E0164 renders.
+/// Why a declared name is reserved - which message family E0170 renders.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReservedNameKind {
     /// The builtin type scope's names (`string`, `int`, `json`, ...), the

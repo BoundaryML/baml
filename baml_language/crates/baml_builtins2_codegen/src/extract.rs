@@ -730,6 +730,11 @@ fn written_primitive(ty: &TypeExpr) -> Option<baml_type::PrimitiveType> {
     }
 }
 
+/// Whether a written or synthesized type expression is the null type.
+fn is_null_type_expr(ty: &TypeExpr) -> bool {
+    ty.kind.is_null()
+}
+
 /// Map a `for` target type expression to the receiver class name whose
 /// extraction logic the codegen already knows. Returns `None` for targets that
 /// are not native-backed primitives/containers.
@@ -770,7 +775,6 @@ fn type_expr_to_baml_type_with_self(
     generics: &[String],
     self_baml: &BamlType,
 ) -> BamlType {
-    use baml_type::PrimitiveType as P;
     let recurse = |inner: &TypeExpr| type_expr_to_baml_type_with_self(inner, generics, self_baml);
     match &ty.kind {
         TypeExprKind::Path { segments, .. }
@@ -784,10 +788,7 @@ fn type_expr_to_baml_type_with_self(
             BamlType::Map(Box::new(recurse(key)), Box::new(recurse(value)))
         }
         TypeExprKind::Union { variants, .. } => {
-            let non_null: Vec<_> = variants
-                .iter()
-                .filter(|v| written_primitive(v) != Some(P::Null))
-                .collect();
+            let non_null: Vec<_> = variants.iter().filter(|v| !is_null_type_expr(v)).collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(recurse(non_null[0])))
             } else {
@@ -954,10 +955,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         }
 
         TypeExprKind::Union { variants, .. } => {
-            let non_null: Vec<_> = variants
-                .iter()
-                .filter(|v| written_primitive(v) != Some(P::Null))
-                .collect();
+            let non_null: Vec<_> = variants.iter().filter(|v| !is_null_type_expr(v)).collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(type_expr_to_baml_type(non_null[0], generics)))
             } else {

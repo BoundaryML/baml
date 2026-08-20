@@ -213,6 +213,24 @@ impl std::ops::DerefMut for TypeExpr {
 }
 
 impl TypeExprKind {
+    /// Whether this node denotes the null type: the dedicated leaf
+    /// (synthesized trees), or the bare `null` path parsed source produces.
+    /// Treating the path spelling as null here IS resolution, not a guess:
+    /// a single-segment builtin name resolves in the resolution chain's
+    /// builtin scope ahead of every scoped layer, so it is context-free
+    /// (a shadowing declaration is only addressable as `root.null`).
+    pub fn is_null(&self) -> bool {
+        match self {
+            TypeExprKind::Null { .. } => true,
+            TypeExprKind::Path { segments, .. } => {
+                matches!(segments.as_slice(), [single]
+                    if baml_type::PrimitiveType::from_alias(single.as_str())
+                        == Some(baml_type::PrimitiveType::Null))
+            }
+            _ => false,
+        }
+    }
+
     /// Pair this node with its source span. `TypeExprKind::Int { .. }.at(span)`.
     pub fn at(self, span: TextRange) -> TypeExpr {
         TypeExpr { kind: self, span }

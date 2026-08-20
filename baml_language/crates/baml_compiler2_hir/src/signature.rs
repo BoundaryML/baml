@@ -224,15 +224,16 @@ fn elaborate_callback_param_root(
         TypeExprKind::Union { variants, attrs }
             if variants
                 .iter()
-                .filter(|variant| !matches!(variant.kind, TypeExprKind::Null { .. }))
+                .filter(|variant| !variant.kind.is_null())
                 .count()
                 == 1 =>
         {
             let variants = variants
                 .into_iter()
-                .map(|variant| match variant.kind {
-                    TypeExprKind::Null { .. } => variant,
-                    _ => {
+                .map(|variant| {
+                    if variant.kind.is_null() {
+                        variant
+                    } else {
                         elaborate_callback_param_root(variant, used_names, synthetic_effect_params)
                     }
                 })
