@@ -209,6 +209,10 @@ mod tests {
             "test_detailed_help",
             normalize_snapshot(&render_for_test(&["test"]))
         );
+        insta::assert_snapshot!(
+            "describe_detailed_help",
+            normalize_snapshot(&render_for_test(&["describe"]))
+        );
     }
 
     fn normalize_snapshot(help: &str) -> String {

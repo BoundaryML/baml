@@ -16,6 +16,9 @@ pub(crate) mod bytecode_cache;
 mod cache_test_support;
 pub(crate) mod check_command;
 pub(crate) mod commands;
+pub(crate) mod describe_command;
+#[cfg(test)]
+mod describe_command_tests;
 pub(crate) mod diagnostics_cache;
 #[cfg(test)]
 mod diagnostics_cache_oracle;
@@ -31,6 +34,7 @@ pub(crate) mod lsp;
 pub(crate) mod manifest;
 pub(crate) mod output;
 pub(crate) mod pack_command;
+pub(crate) mod paint;
 pub(crate) mod project_load;
 pub(crate) mod project_session;
 pub mod reporter;

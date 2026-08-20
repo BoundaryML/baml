@@ -137,6 +137,9 @@ pub(crate) enum Commands {
     #[command(about = "Check BAML source files for compiler errors")]
     Check(crate::check_command::CheckArgs),
 
+    #[command(about = "Describe a BAML symbol", name = "describe")]
+    Describe(crate::describe_command::DescribeArgs),
+
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
     // Serve(baml_runtime::cli::serve::ServeArgs),
 
@@ -364,6 +367,7 @@ impl RuntimeCli {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
             Commands::Check(args) => args.run(),
+            Commands::Describe(args) => args.run(),
             Commands::Run(args) => args.run(),
             Commands::Pack(args) => args.run(),
             Commands::Ide(args) => args.run(),
@@ -394,6 +398,7 @@ impl Commands {
         match self {
             Self::Check(args) => args.from.is_some(),
             Self::Format(args) => args.from.is_some(),
+            Self::Describe(args) => args.from.is_some(),
             Self::Generate(args) => args.has_legacy_project(),
             Self::Test(args) => args.from.is_some(),
             Self::Run(args) => args.from.is_some(),
@@ -413,6 +418,7 @@ impl Commands {
         match self {
             Self::Check(args) => args.from = Some(project.clone()),
             Self::Format(args) => args.from = Some(project.clone()),
+            Self::Describe(args) => args.from = Some(project.clone()),
             Self::Generate(args) => args.apply_project(&project),
             Self::Test(args) => args.from = Some(project.clone()),
             Self::Run(args) => args.from = Some(project.clone()),
@@ -463,6 +469,7 @@ mod tests {
     const PUBLIC_COMMAND_PATHS: &[&[&str]] = &[
         &[],
         &["check"],
+        &["describe"],
         &["auth"],
         &["auth", "login"],
         &["auth", "whoami"],
@@ -772,6 +779,12 @@ mod tests {
             &["baml", "auth", "logout"],
             &["baml", "auth", "login"],
             &["baml", "auth", "login", "--no-open"],
+            &["baml", "describe"],
+            &["baml", "describe", "baml"],
+            &["baml", "describe", "baml.json"],
+            &["baml", "describe", "Array"],
+            &["baml", "describe", "String.split"],
+            &["baml", "describe", "match"],
             &["baml", "test", "--list"],
             &["baml", "test", "-i", "root.payments::*"],
             &["baml", "test", "-i", "*::integration::*", "-x", "slow"],

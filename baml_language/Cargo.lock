@@ -710,6 +710,7 @@ name = "baml_lsp_server"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "baml_builtins2",
  "baml_lsp",
  "baml_version",
  "crossbeam-channel",

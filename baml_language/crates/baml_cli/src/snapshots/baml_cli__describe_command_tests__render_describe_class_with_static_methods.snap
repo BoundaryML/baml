@@ -1,0 +1,18 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+assertion_line: 790
+expression: output
+---
+class Counter  methods.baml:15-25
+
+class Counter {
+    count: int,
+}
+
+methods:
+  function increment(self) -> Counter throws never  methods.baml:18-20
+
+static_methods:
+  function make() -> Counter throws never  methods.baml:22-24
+
+references (0):

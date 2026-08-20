@@ -1,0 +1,12 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+class Config  (root.llm.Config)  ns_llm/models.baml:2-5
+
+class Config {
+    model: string,
+    temperature: float,
+}
+
+references (0):

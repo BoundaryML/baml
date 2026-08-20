@@ -1,0 +1,21 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+type — Creates a type alias, and declares associated type members inside interfaces.
+
+Syntax:
+  type UserId = string
+  type Result = string | int
+  type MaybeInt = int?
+  interface Iterator {
+    type Item
+    type Error extends string = string
+  }
+  class IntIterator {
+    implements Iterator {
+      type Item = int
+    }
+  }
+
+At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`.

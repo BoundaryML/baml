@@ -1,0 +1,13 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+enum Color  types.baml:7-11
+
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+references (0):

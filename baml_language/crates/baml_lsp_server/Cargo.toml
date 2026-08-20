@@ -8,6 +8,7 @@ description = "Native stdio host for the BAML language server: transport, admiss
 workspace = true
 
 [dependencies]
+baml_builtins2 = { workspace = true }
 baml_lsp = { workspace = true }
 baml_version = { workspace = true }
 anyhow = { workspace = true }

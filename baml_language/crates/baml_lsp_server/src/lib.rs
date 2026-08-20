@@ -334,8 +334,11 @@ pub fn version() -> &'static str {
 
 /// Where the materialized stdlib stubs live, so goto-definition into the
 /// stdlib can open a real file: `BAML_STDLIB_DIR`, else `<exe dir>/../stdlib`
-/// when that exists, else none (the protocol layer then declines stdlib
-/// navigation targets). Runs before `initialize`, so a client-supplied
+/// (the toolchain copy `baml ide install` writes), else the in-repo
+/// `baml_std/` checkout the binary was built from (a compile-time path, so it
+/// exists only on the build machine — the dev fallback), else none (the
+/// protocol layer then declines stdlib navigation targets). Runs before
+/// `initialize`, so a client-supplied
 /// `initializationOptions.bamlClient.stdlibDir` — if the protocol layer
 /// consumes one — is its concern, not the host's.
 fn resolve_stdlib_dir() -> Option<PathBuf> {
@@ -349,11 +352,17 @@ fn resolve_stdlib_dir() -> Option<PathBuf> {
             "BAML_STDLIB_DIR is not a directory; ignoring it"
         );
     }
-    let exe = std::env::current_exe().ok()?;
-    let candidate = exe.parent()?.join("..").join("stdlib");
-    candidate
+    let toolchain = std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.join("..").join("stdlib")))
+        .filter(|candidate| candidate.is_dir());
+    if let Some(candidate) = toolchain {
+        return Some(std::fs::canonicalize(&candidate).unwrap_or(candidate));
+    }
+    let checkout = PathBuf::from(baml_builtins2::BAML_STD_DIR);
+    checkout
         .is_dir()
-        .then(|| std::fs::canonicalize(&candidate).unwrap_or(candidate))
+        .then(|| std::fs::canonicalize(&checkout).unwrap_or(checkout))
 }
 
 /// Run the native BAML LSP server over stdio until the client exits.

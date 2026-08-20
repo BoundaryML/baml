@@ -1,0 +1,13 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+interface Named  interfaces.baml:2-5
+
+interface Named {
+    name: string
+    function label(self) -> string
+}
+
+references (1):
+  interfaces.baml:9  implements Named {

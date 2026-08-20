@@ -1,0 +1,26 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+blanket — Explains generic out-of-body implementations such as `implements<T> I for Box<T>`.
+
+Syntax:
+  interface Named {
+    name: string
+  }
+  
+  interface Printable {
+    function print(self) -> string
+  }
+  
+  class Box<T> {
+    value: T
+  }
+  
+  implements<T extends Named> Printable for Box<T> {
+    function print(self) -> string {
+      return self.value.name
+    }
+  }
+
+A blanket implementation is a generic `implements` rule that applies to every type matching the `for` target and bounds. The binder goes immediately after `implements`, before the interface target: `implements<T extends Bound> Interface for Wrapper<T> { ... }`. Each implementation generic parameter must appear in the `for` type, and associated type bindings go inside the block with `type Name = ...`.

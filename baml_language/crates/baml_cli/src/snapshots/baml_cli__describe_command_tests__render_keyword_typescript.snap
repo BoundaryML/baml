@@ -1,0 +1,25 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+typescript — Use BAML from TypeScript / Node.js via a generated SDK.
+
+Syntax:
+  npm install @boundaryml/baml-bridge   # the runtime
+  
+  # baml.toml — declare a generator:
+  [generator.app]
+  output_type = "typescript/node"
+  output_dir  = "../app"
+  naming_convention = "preserve-case"
+  
+  baml generate                            # emits the `baml_sdk` package into output_dir
+
+Import the generated package (its index initializes the runtime), then call
+the exported functions with native TypeScript types (LLM calls are async):
+
+  import "./app/baml_sdk/index.js";
+  import { ClassifyTicket } from "./app/baml_sdk/index.js";
+  const ticket = await ClassifyTicket("login is broken");
+
+See also: `baml describe baml_sdk`, `baml describe python`.

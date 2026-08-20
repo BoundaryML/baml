@@ -1,0 +1,14 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+if — Conditional branching — executes a block if the condition is true.
+
+Syntax:
+  if x > 0 {
+    "positive"
+  } else if x == 0 {
+    "zero"
+  } else {
+    "negative"
+  }

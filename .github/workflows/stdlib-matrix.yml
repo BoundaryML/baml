@@ -91,19 +91,22 @@ jobs:
       - name: "Build the BAML CLI"
         run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
 
-      # `baml describe` is deleted while the IDE layer is rebuilt on the new
-      # database foundation; the whole matrix is describe-based, so skip
+      # `baml describe --export` is still down while the IDE layer's
+      # package-surface export is rebuilt on the new database foundation (the
+      # rest of `describe` is back); the whole matrix is export-based, so skip
       # cleanly (report simply not refreshed) instead of dying on an unknown
-      # subcommand. Remove this gate when describe returns.
+      # flag. Probe the real invocation, not `--help`: the subcommand existing
+      # does not mean the export does. Remove this gate when `--export`
+      # returns.
       - name: "Describe available?"
         id: describe
         run: |
           set -euo pipefail
-          if baml_language/target/debug/baml-cli describe --help >/dev/null 2>&1; then
+          if baml_language/target/debug/baml-cli describe baml --export >/dev/null 2>&1; then
             echo "have=true" >> "$GITHUB_OUTPUT"
           else
             echo "have=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::baml describe unavailable (IDE layer rebuild in progress); skipping the stdlib matrix refresh"
+            echo "::notice::baml describe --export unavailable (IDE layer rebuild in progress); skipping the stdlib matrix refresh"
           fi
 
       # Two workspaces, deliberately. The extractor reads the repo-pinned
