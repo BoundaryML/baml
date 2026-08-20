@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.testset_basic.$init_test_ns_fixtures_ns_testset_basic_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_set_at("root.fixtures.tes...", "basic group", (testset: testing.TestCollector) -> void { { testset.register_test("first", () -> { {  } assert.is_true(true) }, null); testset.register_test("second", () -> { {  } assert.is_true(true) }, null) } null }, null) } null
+}

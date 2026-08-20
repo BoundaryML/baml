@@ -1,8 +1,7 @@
-use bex_heap::TlabHolder;
 use bex_vm_types::types::{Object, TypeValue, Value};
 use indexmap::IndexMap;
 
-use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, copy, resolve};
+use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, resolve};
 use crate::{BexVm, errors::VmRustFnError};
 
 impl BamlNamespaceType for PackageBamlImpl {
@@ -31,9 +30,6 @@ impl BamlNamespaceType for PackageBamlImpl {
                 },
             ));
         };
-        // Not `alloc_static_type`: a reconstructed type can name a runtime
-        // declaration — directly, or through a compiled generic's arguments
-        // (`Box<RuntimeFoo>`) or a container's element type.
         let ty = bex_vm_types::RealizedTy::from(ty);
         Ok(Value::object(vm.tlab.alloc_type(TypeValue::new(ty))))
     }
@@ -76,37 +72,15 @@ impl BamlClassTypeValue for PackageBamlImpl {
         docstring: Option<&bex_str::BexStr>,
         other: Option<&IndexMap<bex_str::BexStr, Value>>,
     ) -> Value {
-        fn opt_string(vm: &mut BexVm, value: Option<&bex_str::BexStr>) -> Value {
-            value.map_or(Value::NULL, |s| Value::object(vm.alloc_string(s.clone())))
-        }
-
-        let entries = other
-            .into_iter()
-            .flatten()
-            .map(|(key, value)| {
-                let value = vm
-                    .as_string(value)
-                    .expect("map<string, string> value checked by native glue")
-                    .clone();
-                (key.clone(), Value::object(vm.alloc_string(value)))
-            })
-            .collect();
-        let other = Value::object(vm.alloc_map(
-            bex_vm_types::RealizedTy::string(),
-            bex_vm_types::RealizedTy::string(),
-            entries,
-        ));
-        let alias = opt_string(vm, alias);
-        let description = opt_string(vm, description);
-        let docstring = opt_string(vm, docstring);
-        copy::reflect::WithMeta {
-            ty: *self_value,
-            alias,
-            description,
-            docstring,
-            other,
-        }
-        .to_value(vm)
+        let other = super::type_kinds::string_map_rows(vm, other);
+        super::type_kinds::alloc_with_meta(
+            vm,
+            *self_value,
+            alias.map(bex_str::BexStr::as_str),
+            description.map(bex_str::BexStr::as_str),
+            docstring.map(bex_str::BexStr::as_str),
+            &other,
+        )
     }
 
     fn kind(_vm: &BexVm, self_value: &Value) -> Value {
@@ -158,26 +132,46 @@ impl BamlClassTypeValue for PackageBamlImpl {
             _ => "output".to_string(),
         };
         let mut visited = std::collections::HashSet::new();
-        let Some((field, open_ty)) = first_open_interface(vm, &type_value.ty, &root, &mut visited)
-        else {
-            if let Some(name) = first_conflicting_render_name(vm, &type_value.ty) {
-                let diagnostic = super::type_kinds::compiler_diagnostic(
-                    baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
-                    format!(
-                        "type `{name}` has non-equivalent definitions in the same LLM render context"
-                    ),
-                );
-                return Err(VmRustFnError::Thrown(
-                    super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-                ));
-            }
-            return Ok(());
-        };
-        let diagnostic =
-            baml_compiler_diagnostics::runtime_type::open_interface_at_render(&field, &open_ty);
-        Err(VmRustFnError::Thrown(
-            super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-        ))
+        if let Some((field, open_ty)) =
+            first_open_interface(vm, &type_value.ty, &root, &mut visited)
+        {
+            let diagnostic =
+                baml_compiler_diagnostics::runtime_type::open_interface_at_render(&field, &open_ty);
+            return Err(VmRustFnError::Thrown(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
+
+        if let Some(name) = first_conflicting_render_name(vm, &type_value.ty) {
+            let diagnostic = super::type_kinds::compiler_diagnostic(
+                baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
+                format!(
+                    "type `{name}` has non-equivalent definitions in the same LLM render context"
+                ),
+            );
+            return Err(VmRustFnError::Thrown(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
+
+        let mut visited = std::collections::HashSet::new();
+        if let Some((path, non_data_ty)) =
+            first_non_data_type(vm, &type_value.ty, &root, &mut visited)
+        {
+            let diagnostic = if path == root {
+                baml_compiler_diagnostics::runtime_type::non_data_type_at_render(&non_data_ty)
+            } else {
+                baml_compiler_diagnostics::runtime_type::non_data_field_at_render(
+                    &path,
+                    &non_data_ty,
+                )
+            };
+            return Err(VmRustFnError::Thrown(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
+
+        Ok(())
     }
 
     /// Returns the `RealizedTy`'s display name.  Includes namespaces and (for
@@ -663,7 +657,7 @@ fn first_open_interface(
             let Object::Class(class) = vm.get_object(head.ptr()) else {
                 return None;
             };
-            for field in &class.fields {
+            for field in class.fields.iter().filter(|field| !field.skip) {
                 let child_path = format!("{path}.{}", field.name);
                 if let Some(runtime) = &field.runtime_type {
                     if let Some(found) = first_open_interface(vm, &runtime.ty, &child_path, visited)
@@ -717,6 +711,129 @@ fn first_open_interface(
                 .and_then(|alias| first_open_interface(vm, &alias, path, visited))
         }
         _ => None,
+    }
+}
+
+/// Find the first type that has no output-format representation.
+///
+/// This match is exhaustive over `RealizedTy` so a newly added runtime type
+/// must make an explicit renderability decision at the shared LLM boundary.
+fn is_non_data_render_type(ty: &bex_vm_types::RealizedTy) -> bool {
+    match ty {
+        bex_vm_types::RealizedTy::Uint8Array { .. }
+        | bex_vm_types::RealizedTy::EnumVariant(..)
+        | bex_vm_types::RealizedTy::Function { .. }
+        | bex_vm_types::RealizedTy::Future(..)
+        | bex_vm_types::RealizedTy::RustType { .. }
+        | bex_vm_types::RealizedTy::Type { .. }
+        | bex_vm_types::RealizedTy::Resource { .. }
+        | bex_vm_types::RealizedTy::PromptAst { .. }
+        | bex_vm_types::RealizedTy::Void { .. }
+        | bex_vm_types::RealizedTy::BuiltinUnknown { .. }
+        | bex_vm_types::RealizedTy::Never { .. } => true,
+        bex_vm_types::RealizedTy::Int { .. }
+        | bex_vm_types::RealizedTy::Bigint { .. }
+        | bex_vm_types::RealizedTy::Float { .. }
+        | bex_vm_types::RealizedTy::String { .. }
+        | bex_vm_types::RealizedTy::Bool { .. }
+        | bex_vm_types::RealizedTy::Null { .. }
+        | bex_vm_types::RealizedTy::Media(..)
+        | bex_vm_types::RealizedTy::Literal(..)
+        | bex_vm_types::RealizedTy::Class(..)
+        | bex_vm_types::RealizedTy::Interface(..)
+        | bex_vm_types::RealizedTy::Enum(..)
+        | bex_vm_types::RealizedTy::List(..)
+        | bex_vm_types::RealizedTy::Map { .. }
+        | bex_vm_types::RealizedTy::Union(..)
+        | bex_vm_types::RealizedTy::TypeAlias(..) => false,
+    }
+}
+
+fn first_non_data_type(
+    vm: &BexVm,
+    ty: &bex_vm_types::RealizedTy,
+    path: &str,
+    visited: &mut std::collections::HashSet<bex_vm_types::HeapPtr>,
+) -> Option<(String, String)> {
+    if is_non_data_render_type(ty) {
+        return Some((path.to_string(), ty.to_string()));
+    }
+
+    match ty {
+        bex_vm_types::RealizedTy::Class(head, args, _) => {
+            if !visited.insert(head.ptr()) {
+                return None;
+            }
+            let Object::Class(class) = vm.get_object(head.ptr()) else {
+                return None;
+            };
+            // The output formatter currently walks `ClassField::field_type`,
+            // whose class-generic leaves are intentionally unsubstituted.
+            // Reject this path before rendering can silently erase the schema;
+            // substituting class arguments in `sys_ops` is a separate fix.
+            if class.generic_param_count > 0 {
+                return Some((path.to_string(), ty.to_string()));
+            }
+            for field in class.fields.iter().filter(|field| !field.skip) {
+                let child_path = format!("{path}.{}", field.name);
+                if let Some(runtime) = &field.runtime_type {
+                    if let Some(found) = first_non_data_type(vm, &runtime.ty, &child_path, visited)
+                    {
+                        return Some(found);
+                    }
+                    continue;
+                }
+                let field_ty =
+                    field.field_template.substitute(args, vm).ok().or_else(|| {
+                        bex_vm_types::RealizedTy::try_from(field.field_type.clone()).ok()
+                    });
+                if let Some(field_ty) = field_ty
+                    && let Some(found) = first_non_data_type(vm, &field_ty, &child_path, visited)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        bex_vm_types::RealizedTy::List(element, _) => {
+            first_non_data_type(vm, element, path, visited)
+        }
+        bex_vm_types::RealizedTy::Map { key, value, .. } => {
+            first_non_data_type(vm, key, path, visited)
+                .or_else(|| first_non_data_type(vm, value, path, visited))
+        }
+        bex_vm_types::RealizedTy::Union(members, _) => members
+            .iter()
+            .find_map(|member| first_non_data_type(vm, member, path, visited)),
+        bex_vm_types::RealizedTy::TypeAlias(head, _) => {
+            if !visited.insert(head.ptr()) {
+                return None;
+            }
+            vm.type_alias_definition(head.ptr())
+                .cloned()
+                .and_then(|alias| first_non_data_type(vm, &alias, path, visited))
+        }
+        bex_vm_types::RealizedTy::Int { .. }
+        | bex_vm_types::RealizedTy::Bigint { .. }
+        | bex_vm_types::RealizedTy::Float { .. }
+        | bex_vm_types::RealizedTy::String { .. }
+        | bex_vm_types::RealizedTy::Bool { .. }
+        | bex_vm_types::RealizedTy::Null { .. }
+        | bex_vm_types::RealizedTy::Uint8Array { .. }
+        | bex_vm_types::RealizedTy::Media(..)
+        | bex_vm_types::RealizedTy::Literal(..)
+        | bex_vm_types::RealizedTy::Interface(..)
+        | bex_vm_types::RealizedTy::Enum(..)
+        | bex_vm_types::RealizedTy::EnumVariant(..)
+        | bex_vm_types::RealizedTy::Function { .. }
+        | bex_vm_types::RealizedTy::Future(..)
+        | bex_vm_types::RealizedTy::RustType { .. }
+        | bex_vm_types::RealizedTy::Type { .. }
+        | bex_vm_types::RealizedTy::Resource { .. }
+        | bex_vm_types::RealizedTy::PromptAst { .. }
+        | bex_vm_types::RealizedTy::Void { .. }
+        | bex_vm_types::RealizedTy::BuiltinUnknown { .. }
+        | bex_vm_types::RealizedTy::Never { .. } => None,
     }
 }
 
@@ -1016,5 +1133,89 @@ fn reflected_interface(vm: &BexVm, value: Value) -> Option<RealizedInterfaceInst
             Some((*head, args.clone(), associated_bindings.clone()))
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod renderability_tests {
+    use super::*;
+
+    fn attr() -> baml_type::TyAttr {
+        baml_type::TyAttr::default()
+    }
+
+    #[test]
+    fn full_realized_type_family_has_an_explicit_renderability_classification() {
+        // Heads never reach the classifier — it matches on variant shape alone —
+        // so an unresolved one is the honest stand-in for "some declaration".
+        let name = bex_vm_types::TypeHead::of_name(&baml_type::TypeName::local(
+            baml_type::Name::new("Example"),
+        ));
+        let non_data = vec![
+            bex_vm_types::RealizedTy::Uint8Array { attr: attr() },
+            bex_vm_types::RealizedTy::EnumVariant(name, baml_type::Name::new("VALUE"), attr()),
+            bex_vm_types::RealizedTy::Function {
+                params: vec![],
+                ret: Box::new(bex_vm_types::RealizedTy::int()),
+                throws: Box::new(bex_vm_types::RealizedTy::never()),
+                attr: attr(),
+            },
+            bex_vm_types::RealizedTy::Future(
+                Box::new(bex_vm_types::RealizedTy::int()),
+                Box::new(bex_vm_types::RealizedTy::never()),
+                attr(),
+            ),
+            bex_vm_types::RealizedTy::RustType { attr: attr() },
+            bex_vm_types::RealizedTy::Type { attr: attr() },
+            bex_vm_types::RealizedTy::Resource { attr: attr() },
+            bex_vm_types::RealizedTy::PromptAst { attr: attr() },
+            bex_vm_types::RealizedTy::Void { attr: attr() },
+            bex_vm_types::RealizedTy::unknown(),
+            bex_vm_types::RealizedTy::never(),
+        ];
+        for ty in non_data {
+            assert!(
+                is_non_data_render_type(&ty),
+                "expected `{ty}` to be rejected before output-format rendering"
+            );
+        }
+
+        let data = vec![
+            bex_vm_types::RealizedTy::int(),
+            bex_vm_types::RealizedTy::Bigint { attr: attr() },
+            bex_vm_types::RealizedTy::Float { attr: attr() },
+            bex_vm_types::RealizedTy::string(),
+            bex_vm_types::RealizedTy::Bool { attr: attr() },
+            bex_vm_types::RealizedTy::null(),
+            bex_vm_types::RealizedTy::Media(baml_type::MediaKind::Image, attr()),
+            bex_vm_types::RealizedTy::Literal(
+                baml_type::Literal::String("value".to_string()),
+                baml_type::Freshness::Regular,
+                attr(),
+            ),
+            bex_vm_types::RealizedTy::Class(name, vec![], attr()),
+            bex_vm_types::RealizedTy::Interface(name, vec![], vec![], attr()),
+            bex_vm_types::RealizedTy::Enum(name, attr()),
+            bex_vm_types::RealizedTy::list(bex_vm_types::RealizedTy::string()),
+            bex_vm_types::RealizedTy::Map {
+                key: Box::new(bex_vm_types::RealizedTy::string()),
+                value: Box::new(bex_vm_types::RealizedTy::int()),
+                attr: attr(),
+            },
+            bex_vm_types::RealizedTy::Union(
+                vec![
+                    bex_vm_types::RealizedTy::string(),
+                    bex_vm_types::RealizedTy::null(),
+                ],
+                attr(),
+            ),
+            bex_vm_types::RealizedTy::TypeAlias(name, attr()),
+        ];
+        for ty in data {
+            assert!(
+                !is_non_data_render_type(&ty),
+                "expected `{ty}` to remain eligible for output-format rendering"
+            );
+        }
     }
 }

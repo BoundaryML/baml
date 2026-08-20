@@ -1,0 +1,45 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.numeric_invariance_ok.BigintFieldOk() -> <unresolved type #33873568942532> {
+    load_const 1n
+    init_instance user.fixtures.numeric_invariance_ok.BigintCounter .count
+    return
+}
+
+function fixtures.numeric_invariance_ok.BigintLiteralArray() -> bigint[] {
+    load_const 1n
+    load_const 2n
+    load_type bigint
+    alloc_array 2
+    return
+}
+
+function fixtures.numeric_invariance_ok.BigintMapLiteral() -> map<string, bigint> {
+    load_const 1n
+    load_const "a"
+    load_type string
+    load_type bigint
+    alloc_map 1
+    return
+}
+
+function fixtures.numeric_invariance_ok.EmptyBigintArray() -> bigint[] {
+    load_type bigint
+    alloc_array 0
+    return
+}
+
+function fixtures.numeric_invariance_ok.EvolvingRetype() -> bigint[] {
+    load_type bigint
+    alloc_array 0
+    return
+}
+
+function fixtures.numeric_invariance_ok.IntArrayIdentity() -> int[] {
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    return
+}

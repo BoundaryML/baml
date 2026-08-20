@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.json_to_from_string_composite_generic.decode_container(s: string) -> <unresolved type #87056953237806><<unresolved type #70830865254272>> {
+    load_type fixtures.json_to_from_string_composite_generic.Container<fixtures.json_to_from_string_composite_generic.User>
+    load_var s
+    call baml.json.from_string
+    return
+}

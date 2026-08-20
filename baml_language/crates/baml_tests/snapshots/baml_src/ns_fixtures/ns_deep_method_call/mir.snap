@@ -1,0 +1,63 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.deep_method_call.B.greet(self: fixtures.deep_method_call.B) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.deep_method_call.B // self // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.deep_method_call.test_deep_method(a: fixtures.deep_method_call.A) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.deep_method_call.A // a // param
+    let _2: (fixtures.deep_method_call.B) -> string throws never
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = call const fn user.fixtures.deep_method_call.B.greet(copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.deep_method_call.test_deep_field(a: fixtures.deep_method_call.A) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.deep_method_call.A // a // param
+
+    bb0: {
+        _0 = copy _1.0.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.deep_method_call.test_direct_method(b: fixtures.deep_method_call.B) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.deep_method_call.B // b // param
+
+    bb0: {
+        _0 = call const fn user.fixtures.deep_method_call.B.greet(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}

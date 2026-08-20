@@ -1,0 +1,421 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function middleware.$init_test_ns_middleware_middleware(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.middleware"
+    load_const "identity_transformer"
+    make_closure .<lambda($init_test_ns_middleware_middleware, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.middleware"
+    load_const "options_as_transformer"
+    make_closure .<lambda($init_test_ns_middleware_middleware, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.middleware"
+    load_const "body_wrapping_transformer"
+    make_closure .<lambda($init_test_ns_middleware_middleware, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.middleware"
+    load_const "chained_transformers_apply_left_to_right"
+    make_closure .<lambda($init_test_ns_middleware_middleware, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.middleware"
+    load_const "custom_with_retry"
+    make_closure .<lambda($init_test_ns_middleware_middleware, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.middleware"
+    load_const "type_changing_fallback_transformer"
+    make_closure .<lambda($init_test_ns_middleware_middleware, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.middleware"
+    load_const "throwing_transformer_throws_at_spawn_site"
+    make_closure .<lambda($init_test_ns_middleware_middleware, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.middleware"
+    load_const "variable_bound_transformer_still_applies"
+    make_closure .<lambda($init_test_ns_middleware_middleware, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function middleware.body_wrapping_transformer() -> int {
+    make_closure .<lambda(body_wrapping_transformer, 0)>, 0
+    store_var _2
+    load_type never
+    call user.middleware.withDouble
+    store_var _4
+    load_var _2
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _4
+    call_indirect
+    store_var _6
+    load_var _2
+    load_const null
+    load_var _6
+    load_type int
+    load_type never
+    spawn
+    store_var _7
+    load_var _7
+    await
+    return
+}
+
+function middleware.chained_transformers_apply_left_to_right() -> int {
+    make_closure .<lambda(chained_transformers_apply_left_to_right, 0)>, 0
+    store_var _2
+    load_type never
+    call user.middleware.withDouble
+    store_var _4
+    load_var _2
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _4
+    call_indirect
+    store_var _6
+    load_type never
+    call user.middleware.withAddOne
+    store_var _7
+    load_var2 3 4
+    call_indirect
+    store_var _9
+    load_var _2
+    load_const null
+    load_var _9
+    load_type int
+    load_type never
+    spawn
+    store_var _10
+    load_var _10
+    await
+    return
+}
+
+function middleware.custom_with_retry() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type int
+    alloc_array 0
+    store_deref ?1
+    load_var calls
+    make_closure .<lambda(custom_with_retry, 0)>, 1
+    store_var _3
+    load_type int
+    load_type string
+    load_const 5
+    call user.middleware.withRetry
+    store_var _6
+    load_var _3
+    load_const "retry-test"
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _6
+    call_indirect
+    store_var _9
+    load_var _3
+    load_const "retry-test"
+    load_var _9
+    load_type int
+    load_type string
+    spawn
+    store_var _10
+    load_var _10
+    await
+    return
+}
+
+function middleware.flaky(n: int) -> int {
+    load_var n
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var n
+    return
+
+  L1:
+    load_const "boom"
+    throw
+}
+
+function middleware.flaky_then_42(calls: int[]) -> int {
+    load_type int
+    load_var calls
+    load_const 1
+    call baml.Array.push
+    pop 1
+    load_var calls
+    container_len
+    store_var _5
+    load_var _5
+    load_const 3
+    cmp_int_op <
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 42
+    return
+
+  L1:
+    load_const "flaky"
+    throw
+}
+
+function middleware.ident() -> (<unresolved type #29716594952623><#0, #1>) -> <unresolved type #29716594952623><#0, #1> throws never {
+    load_type #0
+    load_type #1
+    make_closure .<lambda(ident, 0)>, captures=0, ntypeargs=2
+    return
+}
+
+function middleware.identity_transformer() -> int {
+    make_closure .<lambda(identity_transformer, 0)>, 0
+    store_var _2
+    load_type int
+    load_type never
+    call user.middleware.ident
+    store_var _4
+    load_var _2
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _4
+    call_indirect
+    store_var _7
+    load_var _2
+    load_const null
+    load_var _7
+    load_type int
+    load_type never
+    spawn
+    store_var _8
+    load_var _8
+    await
+    return
+}
+
+function middleware.options_as_transformer() -> int {
+    make_closure .<lambda(options_as_transformer, 0)>, 0
+    store_var _2
+    load_type int
+    load_type never
+    load_const <omitted>
+    load_const <omitted>
+    load_const false
+    call baml.spawn.options
+    store_var _5
+    load_var _2
+    load_const "opted"
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _5
+    call_indirect
+    store_var _8
+    load_var _2
+    load_const "opted"
+    load_var _8
+    load_type int
+    load_type never
+    spawn
+    store_var _9
+    load_var _9
+    await
+    return
+}
+
+function middleware.throwing_transformer_throws_at_spawn_site() -> string {
+    make_closure .<lambda(throwing_transformer_throws_at_spawn_site, 0)>, 0
+    store_var _3
+    load_type int
+    load_type never
+    call user.middleware.withBomb
+    store_var _5
+    load_var _3
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _5
+    call_indirect
+    store_var _8
+    jump L2
+    load_var e
+    store_var _10
+    load_var _10
+    narrow_bind string, slot=6
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var _10
+    jump L3
+
+  L2:
+    load_var _3
+    load_const null
+    load_var _8
+    load_type int
+    load_type never
+    spawn
+    store_var _9
+    load_var _9
+
+  L3:
+    store_var _12
+    load_var _12
+    narrow_bind string, slot=7
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const "wrong"
+    jump L6
+
+  L5:
+    load_var _12
+
+  L6:
+    return
+}
+
+function middleware.type_changing_fallback_transformer() -> int {
+    make_closure .<lambda(type_changing_fallback_transformer, 0)>, 0
+    store_var _2
+    load_type int
+    load_type string
+    load_const 99
+    call user.middleware.withFallback
+    store_var _4
+    load_var _2
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _4
+    call_indirect
+    store_var _7
+    load_var _2
+    load_const null
+    load_var _7
+    load_type int
+    load_type never
+    spawn
+    store_var _8
+    load_var _8
+    await
+    return
+}
+
+function middleware.variable_bound_transformer_still_applies() -> int {
+    load_type never
+    call user.middleware.withDouble
+    store_var t
+    make_closure .<lambda(variable_bound_transformer_still_applies, 0)>, 0
+    store_var_load_var _4
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var t
+    call_indirect
+    store_var _7
+    load_var _4
+    load_const null
+    load_var _7
+    load_type int
+    load_type never
+    spawn
+    store_var _8
+    load_var _8
+    await
+    return
+}
+
+function middleware.withAddOne() -> (<unresolved type #29716594952623><int, #0>) -> <unresolved type #29716594952623><int, #0> throws never {
+    load_type #0
+    make_closure .<lambda(withAddOne, 0)>, captures=0, ntypeargs=1
+    return
+}
+
+function middleware.withBomb() -> (<unresolved type #29716594952623><#0, #1>) -> <unresolved type #29716594952623><#0, #1> throws string {
+    load_type #0
+    load_type #1
+    make_closure .<lambda(withBomb, 0)>, captures=0, ntypeargs=2
+    return
+}
+
+function middleware.withDouble() -> (<unresolved type #29716594952623><int, #0>) -> <unresolved type #29716594952623><int, #0> throws never {
+    load_type #0
+    make_closure .<lambda(withDouble, 0)>, captures=0, ntypeargs=1
+    return
+}
+
+function middleware.withFallback(default_value: #0) -> (<unresolved type #29716594952623><#0, #1>) -> <unresolved type #29716594952623><#0, never> throws never {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type #0
+    load_type #1
+    load_var default_value
+    make_closure .<lambda(withFallback, 0)>, captures=1, ntypeargs=2
+    return
+}
+
+function middleware.withRetry(n: int) -> (<unresolved type #29716594952623><#0, #1>) -> <unresolved type #29716594952623><#0, #1> throws never {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type #0
+    load_type #1
+    load_var n
+    make_closure .<lambda(withRetry, 0)>, captures=1, ntypeargs=2
+    return
+}

@@ -1,0 +1,32 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.generic_match_typevar_arm.unwrap_or(o: fixtures.generic_match_typevar_arm.Non | fixtures.generic_match_typevar_arm.Opt<T>, default: T) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: fixtures.generic_match_typevar_arm.Non | fixtures.generic_match_typevar_arm.Opt<T> // o // param
+    let _2: T // default // param
+    let _3: fixtures.generic_match_typevar_arm.Non | fixtures.generic_match_typevar_arm.Opt<T>
+    let _4: fixtures.generic_match_typevar_arm.Opt<T> // s
+
+    bb0: {
+        _3 = copy _1;
+        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Local, namespace: ["fixtures", "generic_match_typevar_arm"], name: "Opt" }, [TypeArgRef(0)], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = copy _2;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _4 = copy _3;
+        _0 = copy _4.0;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}

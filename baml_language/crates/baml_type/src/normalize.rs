@@ -62,6 +62,42 @@ fn is_any_function<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
         .is_some_and(|any_function| *head == any_function)
 }
 
+/// The compiler-derived interface every class value inhabits.
+static ANY_CLASS: std::sync::LazyLock<QualifiedTypeName> = std::sync::LazyLock::new(|| {
+    QualifiedTypeName::new(Name::new("baml"), Vec::new(), Name::new("AnyClass"))
+});
+
+/// [`is_any_function`] for [`ANY_CLASS`].
+fn is_any_class<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
+    ctx.head_lookup(&ANY_CLASS)
+        .is_some_and(|any_class| *head == any_class)
+}
+
+/// Whether a nominal class head inhabits `baml.AnyClass`. Ordinary classes do.
+/// Within the sealed reflection-kind family, only the class-kind value view is
+/// intentionally admitted.
+///
+/// Decided by identity against the heads `ctx` uses for the kind classes, not
+/// by inspecting `head` — the head-generic counterpart of
+/// [`crate::type_kind::class_inhabits_any_class`]. Only reached when the
+/// supertype is `AnyClass` itself, so the walk over the nine is not on any hot
+/// path.
+fn head_inhabits_any_class<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
+    let mut is_kind_view = false;
+    for kind in crate::type_kind::TypeKind::ALL {
+        let Some(kind_head) = ctx.head_lookup(&kind.class_name()) else {
+            continue;
+        };
+        if *head == kind_head {
+            is_kind_view = true;
+            if matches!(kind, crate::type_kind::TypeKind::Class) {
+                return true;
+            }
+        }
+    }
+    !is_kind_view
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTEXT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1949,6 +1985,22 @@ impl<H: Head> NormalTy<H> {
                                 .is_subtype_of(sup, ctx, assumptions)
                         })
                 })
+            }
+
+            // `baml.AnyClass` is compiler-derived for class values. The stdlib
+            // blanket impl supplies default-method dispatch, but cannot define
+            // membership by itself without also admitting primitives and
+            // containers. Keep this before the general impl-registry arm so
+            // static coercion and the VM's shared runtime type matcher agree.
+            // Of the nine sealed reflection-kind classes, only the class-kind
+            // view is admitted by the ratified surface.
+            (sub, NormalTy::Interface(qn, _, _))
+                if is_any_class(qn, ctx) && !matches!(sub, NormalTy::Interface(..)) =>
+            {
+                matches!(
+                    sub,
+                    NormalTy::Class(head, _) if head_inhabits_any_class(head, ctx)
+                )
             }
 
             // BEP-062: `baml.AnyFunction` is a compiler builtin implemented by

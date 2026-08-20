@@ -1,0 +1,73 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+// Lambda with fully annotated params and return type
+function test_annotated() -> int {
+    let double = (x: int) -> int {
+        x * 2
+    };
+    double(21)
+}
+
+// Lambda with inferred return type (omitted after ->)
+function test_inferred_return() -> int {
+    let double = (x: int) -> {
+        x * 2
+    };
+    double(21)
+}
+
+// Zero-param lambda
+function test_zero_param() -> int {
+    let constant = () -> int {
+        42
+    };
+    constant()
+}
+
+// Lambda passed to higher-order function with inferred param types
+function test_map_inferred() -> int[] {
+    let items: int[] = [1, 2, 3];
+    items.map((x) -> {
+        x * 2
+    })
+}
+
+// Lambda with throws clause
+function test_throws() -> int {
+    let risky = (x: int) -> int throws string {
+        if (x < 0) {
+            throw "negative"
+        }
+        x
+    };
+    risky(42)
+}
+
+// Lambda capturing outer scope variable
+function test_capture() -> int {
+    let offset = 10;
+    let add_offset = (x: int) -> int {
+        x + offset
+    };
+    add_offset(32)
+}
+
+// Nested lambdas
+function test_nested() -> int {
+    let outer = (x: int) -> {
+        let inner = (y: int) -> int {
+            x + y
+        };
+        inner(1)
+    };
+    outer(41)
+}
+
+// Multi-param lambda
+function test_multi_param() -> int {
+    let add = (a: int, b: int) -> int {
+        a + b
+    };
+    add(20, 22)
+}

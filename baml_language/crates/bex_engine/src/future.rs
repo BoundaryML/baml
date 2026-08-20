@@ -609,7 +609,11 @@ mod tests {
         guard: &mut FutureManagerGuard<'_>,
         cancel: CancellationToken,
     ) -> (FutureId, HeapPtr) {
-        guard.new_future(RealizedTy::int(), RealizedTy::never(), cancel)
+        guard.new_future(
+            bex_vm_types::RealizedTy::int(),
+            bex_vm_types::RealizedTy::never(),
+            cancel,
+        )
     }
 
     #[tokio::test]

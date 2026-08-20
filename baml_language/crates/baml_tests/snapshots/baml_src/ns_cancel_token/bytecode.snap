@@ -1,0 +1,167 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function cancel_token.$init_test_ns_cancel_token_cancel_token(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.cancel_token"
+    load_const "await_token_cancelled_catches"
+    make_closure .<lambda($init_test_ns_cancel_token_cancel_token, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.cancel_token"
+    load_const "uncancelled_token_completes"
+    make_closure .<lambda($init_test_ns_cancel_token_cancel_token, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.cancel_token"
+    load_const "token_is_cancelled_reflects_cancel"
+    make_closure .<lambda($init_test_ns_cancel_token_cancel_token, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.cancel_token"
+    load_const "detached_spawn_completes"
+    make_closure .<lambda($init_test_ns_cancel_token_cancel_token, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function cancel_token.await_token_cancelled_catches() -> int {
+    call baml.spawn.CancelToken.new
+    store_var tok
+    make_closure .<lambda(await_token_cancelled_catches, 0)>, 0
+    store_var _3
+    load_type int
+    load_type baml.errors.Io
+    load_const <omitted>
+    load_var tok
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _5
+    load_var _3
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _5
+    call_indirect
+    store_var _9
+    load_var _3
+    load_const null
+    load_var _9
+    load_type int
+    load_type baml.errors.Io
+    spawn
+    store_var _10
+    load_var tok
+    call baml.spawn.CancelToken.cancel
+    pop 1
+    load_var _10
+    await
+    jump L2
+    load_var e
+    is_type baml.panics.Cancelled
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 0
+
+  L2:
+    return
+}
+
+function cancel_token.detached_spawn_completes() -> int {
+    make_closure .<lambda(detached_spawn_completes, 0)>, 0
+    store_var _2
+    load_type int
+    load_type never
+    load_const <omitted>
+    load_const <omitted>
+    load_const true
+    call baml.spawn.options
+    store_var _4
+    load_var _2
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _4
+    call_indirect
+    store_var _7
+    load_var _2
+    load_const null
+    load_var _7
+    load_type int
+    load_type never
+    spawn
+    store_var _8
+    load_var _8
+    await
+    return
+}
+
+function cancel_token.token_is_cancelled_reflects_cancel() -> bool[] {
+    call baml.spawn.CancelToken.new
+    store_var tok
+    load_var tok
+    call baml.spawn.CancelToken.is_cancelled
+    store_var before
+    load_var tok
+    call baml.spawn.CancelToken.cancel
+    pop 1
+    load_var tok
+    call baml.spawn.CancelToken.is_cancelled
+    store_var after
+    load_var2 2 3
+    load_type bool
+    alloc_array 2
+    return
+}
+
+function cancel_token.uncancelled_token_completes() -> int {
+    call baml.spawn.CancelToken.new
+    store_var tok
+    make_closure .<lambda(uncancelled_token_completes, 0)>, 0
+    store_var _3
+    load_type int
+    load_type never
+    load_const <omitted>
+    load_var tok
+    load_const <omitted>
+    call baml.spawn.options
+    store_var _5
+    load_var _3
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _5
+    call_indirect
+    store_var _9
+    load_var _3
+    load_const null
+    load_var _9
+    load_type int
+    load_type never
+    spawn
+    store_var _10
+    load_var _10
+    await
+    return
+}

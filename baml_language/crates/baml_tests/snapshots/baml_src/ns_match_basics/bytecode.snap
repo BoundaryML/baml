@@ -1,0 +1,1131 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function match_basics.$init_test_ns_match_basics_match_basics(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_catch_all_underscore"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_catch_all_named_binding"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_catch_all_with_variable"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_literal_int_first_arm"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_literal_int_second_arm"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_literal_int_fallback"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_literal_int_single_arm"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_literal_null"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_literal_bool_true"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_literal_bool_false"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_literal_bool_exhaustive_constant"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_union_literal_first"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_union_literal_second"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_union_large"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_union_client_error"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_union_with_duplicates"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_as_expression_in_arithmetic"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_nested"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_string_literal_first_arm"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_string_literal_second_arm"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_string_literal_fallback"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_string_four_arms"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_string_literal_with_typed_fallback"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_catch_all_binding_with_int_patterns"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_negative_int_with_variable"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_negative_int_first_arm"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_three_levels_nested"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_three_levels_nested_middle"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_optional_null_pattern"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_optional_value_pattern"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_optional_with_literal_and_typed"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_arithmetic_scrutinee"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_function_call_scrutinee"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_computed_discriminant"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_in_loop"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_dense_with_catch_all_via_call"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_mixed_instanceof_and_literal"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_bool_variable_exhaustive"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_or_wildcard_bool_is_exhaustive"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_basics"
+    load_const "match_string_many_arms"
+    make_closure .<lambda($init_test_ns_match_basics_match_basics, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function match_basics.as_expression_in_arithmetic() -> int {
+    load_const 2
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const 2
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_const 20
+    jump L4
+
+  L3:
+    load_const 10
+
+  L4:
+    load_const 1
+    bin_op +
+    return
+}
+
+function match_basics.catch_all_binding_with_int_patterns() -> int {
+    load_const 99
+    jump_table [L4, L3, L2, L1], default L0
+
+  L0:
+    load_const 99
+    load_const 10
+    mul_int
+    jump L5
+
+  L1: 3
+    load_const 3
+    jump L5
+
+  L2: 2
+    load_const 2
+    jump L5
+
+  L3: 1
+    load_const 1
+    jump L5
+
+  L4: 0
+    load_const 0
+
+  L5:
+    return
+}
+
+function match_basics.catch_all_with_variable() -> int {
+    load_const 42
+    load_const 1
+    add_int
+    return
+}
+
+function match_basics.check_bool(flag: bool) -> string {
+    load_var flag
+    is_type true
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "no"
+    jump L2
+
+  L1:
+    load_const "yes"
+
+  L2:
+    return
+}
+
+function match_basics.check_or_wildcard(flag: bool) -> int {
+    load_const 1
+    return
+}
+
+function match_basics.classify_by_call() -> string {
+    call user.match_basics.helper_42
+    load_const 42
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "other"
+    jump L2
+
+  L1:
+    load_const "answer"
+
+  L2:
+    return
+}
+
+function match_basics.classify_dense(n: int) -> int {
+    load_var n
+    jump_table [L4, L3, L2, L1], default L0
+
+  L0:
+    load_const -1
+    jump L5
+
+  L1: 3
+    load_const 3
+    jump L5
+
+  L2: 2
+    load_const 2
+    jump L5
+
+  L3: 1
+    load_const 1
+    jump L5
+
+  L4: 0
+    load_const 0
+
+  L5:
+    return
+}
+
+function match_basics.classify_string(s: string) -> int {
+    load_var s
+    is_type "hello"
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var s
+    is_type "world"
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_const 200
+    jump L4
+
+  L3:
+    load_const 100
+
+  L4:
+    return
+}
+
+function match_basics.classify_string_four_arms(s: string) -> int {
+    load_var s
+    is_type "a"
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var s
+    is_type "b"
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var s
+    is_type "c"
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var s
+    is_type "d"
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    jump L8
+
+  L4:
+    load_const 4
+    jump L8
+
+  L5:
+    load_const 3
+    jump L8
+
+  L6:
+    load_const 2
+    jump L8
+
+  L7:
+    load_const 1
+
+  L8:
+    return
+}
+
+function match_basics.classify_string_many(s: string) -> int {
+    load_var s
+    is_type "alpha"
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var s
+    is_type "beta"
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var s
+    is_type "gamma"
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var s
+    is_type "delta"
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    jump L8
+
+  L4:
+    load_const 4
+    jump L8
+
+  L5:
+    load_const 3
+    jump L8
+
+  L6:
+    load_const 2
+    jump L8
+
+  L7:
+    load_const 1
+
+  L8:
+    return
+}
+
+function match_basics.classify_string_typed_fallback(s: string) -> int {
+    load_var s
+    is_type "ok"
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var s
+    is_type "error"
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_const 500
+    jump L4
+
+  L3:
+    load_const 200
+
+  L4:
+    return
+}
+
+function match_basics.classify_sum(a: int, b: int) -> string {
+    load_var2 1 2
+    add_int
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var2 1 2
+    add_int
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "other"
+    jump L4
+
+  L2:
+    load_const "one"
+    jump L4
+
+  L3:
+    load_const "zero"
+
+  L4:
+    return
+}
+
+function match_basics.classify_three(x: int, y: int, z: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "x nonzero"
+    jump L6
+
+  L1:
+    load_var y
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "y nonzero"
+    jump L6
+
+  L3:
+    load_var z
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const "z nonzero"
+    jump L6
+
+  L5:
+    load_const "all zero"
+
+  L6:
+    return
+}
+
+function match_basics.get_value() -> int {
+    load_const 2
+    return
+}
+
+function match_basics.helper_42() -> int {
+    load_const 42
+    return
+}
+
+function match_basics.literal_bool_false() -> string {
+    load_const false
+    is_type true
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "no"
+    jump L2
+
+  L1:
+    load_const "yes"
+
+  L2:
+    return
+}
+
+function match_basics.literal_bool_true() -> string {
+    load_const true
+    is_type true
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "no"
+    jump L2
+
+  L1:
+    load_const "yes"
+
+  L2:
+    return
+}
+
+function match_basics.literal_int_fallback() -> int {
+    load_const 999
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const 999
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_const 200
+    jump L4
+
+  L3:
+    load_const 100
+
+  L4:
+    return
+}
+
+function match_basics.literal_int_first_arm() -> int {
+    load_const 1
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const 1
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_const 200
+    jump L4
+
+  L3:
+    load_const 100
+
+  L4:
+    return
+}
+
+function match_basics.literal_int_second_arm() -> int {
+    load_const 2
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const 2
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L4
+
+  L2:
+    load_const 200
+    jump L4
+
+  L3:
+    load_const 100
+
+  L4:
+    return
+}
+
+function match_basics.literal_null() -> string {
+    load_const "was null"
+    return
+}
+
+function match_basics.match_in_loop_helper() -> int {
+    load_const 0
+    store_var sum
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 5
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var sum
+    return
+
+  L2:
+    load_var sum
+    store_var _5
+    load_var i
+    jump_table [L7, L6, L5, L4], default L3
+
+  L3:
+    load_const 50
+    store_var _6
+    jump L8
+
+  L4: 3
+    load_const 40
+    store_var _6
+    jump L8
+
+  L5: 2
+    load_const 30
+    store_var _6
+    jump L8
+
+  L6: 1
+    load_const 20
+    store_var _6
+    jump L8
+
+  L7: 0
+    load_const 10
+    store_var _6
+
+  L8:
+    load_var2 3 4
+    bin_op +
+    store_var sum
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function match_basics.mixed_instanceof_and_literal() -> int {
+    load_const 200
+    init_instance user.match_basics.MatchResult .code
+    load_field .code
+    return
+}
+
+function match_basics.negative_int_first_arm() -> string {
+    load_const -1
+    load_const -1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_const -1
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_const -1
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "other"
+    jump L6
+
+  L3:
+    load_const "one"
+    jump L6
+
+  L4:
+    load_const "zero"
+    jump L6
+
+  L5:
+    load_const "negative one"
+
+  L6:
+    return
+}
+
+function match_basics.negative_int_with_variable() -> string {
+    load_const -1
+    load_const -1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const -1
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "other"
+    jump L4
+
+  L2:
+    load_const "zero"
+    jump L4
+
+  L3:
+    load_const "negative one"
+
+  L4:
+    return
+}
+
+function match_basics.nested_match() -> int {
+    load_const 1
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const 1
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const 0
+    jump L8
+
+  L2:
+    load_const 20
+    jump L8
+
+  L3:
+    load_const 2
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_const 2
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_const 10
+    jump L8
+
+  L6:
+    load_const 12
+    jump L8
+
+  L7:
+    load_const 11
+
+  L8:
+    return
+}
+
+function match_basics.process_optional(x: int | null) -> string {
+    load_var x
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "some"
+    jump L2
+
+  L1:
+    load_const "none"
+
+  L2:
+    return
+}
+
+function match_basics.process_optional_with_zero(x: int | null) -> string {
+    load_var x
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var x
+    is_type 0
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "other"
+    jump L4
+
+  L2:
+    load_const "zero"
+    jump L4
+
+  L3:
+    load_const "none"
+
+  L4:
+    return
+}
+
+function match_basics.union_client_error() -> string {
+    load_const 404
+    dense_tag [200, 201, 202, 204, 400, 401, 403, 404, 500, 501, 502, 503]
+    jump_table [L3, L3, L3, L3, L2, L2, L2, L2, L1, L1, L1, L1], default L0
+
+  L0:
+    load_const "other"
+    jump L4
+
+  L1: 503
+    load_const "server error"
+    jump L4
+
+  L2: 404
+    load_const "client error"
+    jump L4
+
+  L3: 204
+    load_const "success"
+
+  L4:
+    return
+}
+
+function match_basics.union_large() -> string {
+    load_const 204
+    dense_tag [200, 201, 202, 204, 400, 401, 403, 404, 500, 501, 502, 503]
+    jump_table [L3, L3, L3, L3, L2, L2, L2, L2, L1, L1, L1, L1], default L0
+
+  L0:
+    load_const "other"
+    jump L4
+
+  L1: 503
+    load_const "server error"
+    jump L4
+
+  L2: 404
+    load_const "client error"
+    jump L4
+
+  L3: 204
+    load_const "success"
+
+  L4:
+    return
+}
+
+function match_basics.union_literal_first() -> string {
+    load_const 200
+    dense_tag [200, 201, 400, 404]
+    jump_table [L2, L2, L1, L1], default L0
+
+  L0:
+    load_const "other"
+    jump L3
+
+  L1: 404
+    load_const "client error"
+    jump L3
+
+  L2: 201
+    load_const "success"
+
+  L3:
+    return
+}
+
+function match_basics.union_literal_second() -> string {
+    load_const 201
+    dense_tag [200, 201, 400, 404]
+    jump_table [L2, L2, L1, L1], default L0
+
+  L0:
+    load_const "other"
+    jump L3
+
+  L1: 404
+    load_const "client error"
+    jump L3
+
+  L2: 201
+    load_const "success"
+
+  L3:
+    return
+}
+
+function match_basics.union_with_duplicates() -> string {
+    load_const 1
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_const 1
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_const 1
+    load_const 3
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "other"
+    jump L5
+
+  L3:
+    load_const "three"
+    jump L5
+
+  L4:
+    load_const "one or two"
+
+  L5:
+    return
+}

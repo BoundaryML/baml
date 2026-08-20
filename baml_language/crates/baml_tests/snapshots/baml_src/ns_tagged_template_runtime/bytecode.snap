@@ -1,0 +1,452 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function tagged_template_runtime.$init_test_ns_tagged_template_runtime_tagged_template_runtime(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_parts_built_in_order"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_captures_enclosing_local"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_outer_local_captured_through_user_lambda"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_body_param_injection"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_body_param_captured_by_nested_lambda"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_for_loop_flattens"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_for_loop_empty_collection"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_if_block_taken_and_skipped"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_mixed_static_and_for"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_cstyle_for_flattens"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_for_body_interp_with_nested_lambda_capturing_loop_local"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_for_body_interp_nested_lambda_uses_loop_local_in_let"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.tagged_template_runtime"
+    load_const "tagged_template_nested_for_in_if"
+    make_closure .<lambda($init_test_ns_tagged_template_runtime_tagged_template_runtime, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function tagged_template_runtime.tt_body_param_captured_by_nested_lambda_main() -> string {
+    make_closure .<tagged(tt_body_param_captured_by_nested_lambda_main, 0)>, 0
+    call user.tagged_template_runtime.tt_fmt
+    return
+}
+
+function tagged_template_runtime.tt_body_param_injection_main() -> string {
+    make_closure .<tagged(tt_body_param_injection_main, 0)>, 0
+    call user.tagged_template_runtime.tt_fmt
+    return
+}
+
+function tagged_template_runtime.tt_cap(body: () -> <unresolved type #35460019031336> throws never) -> string {
+    load_var body
+    call_indirect
+    store_var t
+    load_var t
+    load_field .values
+    load_const 0
+    load_array_element
+    store_var _6
+    load_var _6
+    narrow_bind string, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "?"
+    jump L2
+
+  L1:
+    load_var t
+    load_field .parts
+    load_const 0
+    load_array_element
+    load_var _6
+    bin_op +
+    load_var t
+    load_field .parts
+    load_const 1
+    load_array_element
+    bin_op +
+
+  L2:
+    return
+}
+
+function tagged_template_runtime.tt_captures_enclosing_local_main() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "X-"
+    store_deref ?1
+    load_var p
+    make_closure .<tagged(tt_captures_enclosing_local_main, 0)>, 1
+    call user.tagged_template_runtime.tt_cap
+    return
+}
+
+function tagged_template_runtime.tt_cstyle_for_flattens_main() -> string {
+    make_closure .<tagged(tt_cstyle_for_flattens_main, 0)>, 0
+    call user.tagged_template_runtime.tt_render
+    return
+}
+
+function tagged_template_runtime.tt_fmt(body: (string) -> <unresolved type #35460019031336> throws never) -> string {
+    load_const "World"
+    load_var body
+    call_indirect
+    store_var t
+    load_var t
+    load_field .values
+    load_const 0
+    load_array_element
+    store_var _6
+    load_var _6
+    narrow_bind string, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "?"
+    jump L2
+
+  L1:
+    load_var t
+    load_field .parts
+    load_const 0
+    load_array_element
+    load_var _6
+    bin_op +
+    load_var t
+    load_field .parts
+    load_const 1
+    load_array_element
+    bin_op +
+
+  L2:
+    return
+}
+
+function tagged_template_runtime.tt_for_body_nested_lambda_capturing_loop_local_main() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_const "O"
+    store_deref ?1
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    store_deref ?2
+    load_var2 2 1
+    make_closure .<tagged(tt_for_body_nested_lambda_capturing_loop_local_main, 0)>, 2
+    call user.tagged_template_runtime.tt_render
+    return
+}
+
+function tagged_template_runtime.tt_for_body_nested_lambda_loop_local_in_let_main() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    store_deref ?1
+    load_var xs
+    make_closure .<tagged(tt_for_body_nested_lambda_loop_local_in_let_main, 0)>, 1
+    call user.tagged_template_runtime.tt_render
+    return
+}
+
+function tagged_template_runtime.tt_for_loop_empty_collection_main() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type string
+    alloc_array 0
+    store_deref ?1
+    load_var items
+    make_closure .<tagged(tt_for_loop_empty_collection_main, 0)>, 1
+    call user.tagged_template_runtime.tt_render
+    return
+}
+
+function tagged_template_runtime.tt_for_loop_flattens_main() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    store_deref ?1
+    load_var items
+    make_closure .<tagged(tt_for_loop_flattens_main, 0)>, 1
+    call user.tagged_template_runtime.tt_render
+    return
+}
+
+function tagged_template_runtime.tt_if_block_skipped_main() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_const false
+    store_deref ?1
+    load_const "Y"
+    store_deref ?2
+    load_var2 1 2
+    make_closure .<tagged(tt_if_block_skipped_main, 0)>, 2
+    call user.tagged_template_runtime.tt_render
+    return
+}
+
+function tagged_template_runtime.tt_if_block_taken_main() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_const true
+    store_deref ?1
+    load_const "Y"
+    store_deref ?2
+    load_var2 1 2
+    make_closure .<tagged(tt_if_block_taken_main, 0)>, 2
+    call user.tagged_template_runtime.tt_render
+    return
+}
+
+function tagged_template_runtime.tt_mixed_static_and_for_main() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_const "A"
+    store_deref ?1
+    load_const "1"
+    load_const "2"
+    load_type string
+    alloc_array 2
+    store_deref ?2
+    load_var2 1 2
+    make_closure .<tagged(tt_mixed_static_and_for_main, 0)>, 2
+    call user.tagged_template_runtime.tt_render
+    return
+}
+
+function tagged_template_runtime.tt_nested_for_in_if_main() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_const true
+    store_deref ?1
+    load_const "p"
+    load_const "q"
+    load_type string
+    alloc_array 2
+    store_deref ?2
+    load_var2 1 2
+    make_closure .<tagged(tt_nested_for_in_if_main, 0)>, 2
+    call user.tagged_template_runtime.tt_render
+    return
+}
+
+function tagged_template_runtime.tt_outer_local_through_user_lambda_main() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "OUT"
+    store_deref ?1
+    load_var outer
+    make_closure .<lambda(tt_outer_local_through_user_lambda_main, 0)>, 1
+    call_indirect
+    return
+}
+
+function tagged_template_runtime.tt_parts_built_in_order_main() -> string {
+    make_closure .<tagged(tt_parts_built_in_order_main, 0)>, 0
+    call user.tagged_template_runtime.tt_probe
+    return
+}
+
+function tagged_template_runtime.tt_probe(body: () -> <unresolved type #35460019031336> throws never) -> string {
+    load_var body
+    call_indirect
+    store_var t
+    load_var t
+    load_field .parts
+    load_const 0
+    load_array_element
+    load_const "|"
+    bin_op +
+    load_var t
+    load_field .parts
+    load_const 1
+    load_array_element
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var t
+    load_field .parts
+    load_const 2
+    load_array_element
+    bin_op +
+    return
+}
+
+function tagged_template_runtime.tt_render(body: () -> <unresolved type #35460019031336> throws never) -> string {
+    load_var body
+    call_indirect
+    store_var t
+    load_const ""
+    store_var out
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    store_var _6
+    load_var t
+    load_field .values
+    container_len
+    store_var _7
+    load_var2 5 6
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var out
+    store_var _22
+    load_var t
+    load_field .parts
+    store_var _24
+    load_var t
+    load_field .values
+    container_len
+    store_var _25
+    load_var2 9 10
+    load_var _25
+    load_array_element
+    bin_op +
+    return
+
+  L2:
+    load_var t
+    load_field .values
+    load_var i
+    load_array_element
+    store_var _13
+    load_var _13
+    narrow_bind string, slot=8
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "?"
+    store_var v
+    jump L5
+
+  L4:
+    load_var _13
+    store_var v
+
+  L5:
+    load_var2 3 2
+    load_field .parts
+    load_var i
+    load_array_element
+    bin_op +
+    load_var v
+    bin_op +
+    store_var out
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}

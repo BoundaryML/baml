@@ -542,3 +542,66 @@ function ptu_main() -> string {
 test "positional_typevar_union_interface_args_dispatch" {
     assert.equal(ptu_main(), "multi:x")
 }
+
+// ── Ported from tests/interfaces.rs ──────────────────────────────────────────
+
+// The dispatch cache keys on the *realized* interface arguments, not just the
+// interface's nominal identity: two `Tagged<...>` instantiations on one class
+// must select different implementations from the same fact-poor structural
+// context.
+interface VdcAnimal {}
+
+class VdcDog {
+    implements VdcAnimal {}
+}
+
+interface VdcTagged<T> {
+    function tag(self) -> string throws never
+}
+
+class VdcBoth {
+    implements VdcTagged<VdcAnimal> {
+        function tag(self) -> string { return "animal" }
+    }
+    implements VdcTagged<VdcAnimal | VdcDog> {
+        function tag(self) -> string { return "animal-or-dog" }
+    }
+}
+
+function vdc_read_tag<T>(value: VdcTagged<T>) -> string {
+    return value.tag()
+}
+
+function vdc_dispatch_distinguishes_instantiations() -> string {
+    let value = VdcBoth {};
+    return vdc_read_tag<VdcAnimal>(value) + "|" + vdc_read_tag<VdcAnimal | VdcDog>(value)
+}
+
+test "virtual_dispatch_cache_distinguishes_generic_interface_instantiations" {
+    assert.equal(vdc_dispatch_distinguishes_instantiations(), "animal|animal-or-dog")
+}
+
+// Union dispatch resolves per-member: a receiver that only has an inherent
+// method must not be sent through the interface vtable selected for the other
+// member of the union.
+interface HudSpeaker {
+    function speak(self) -> string throws never
+}
+
+class HudA {
+    implements HudSpeaker {
+        function speak(self) -> string { return "interface" }
+    }
+}
+
+class HudB {
+    function speak(self) -> string { return "inherent" }
+}
+
+function hud_speak(x: HudA | HudB) -> string {
+    return x.speak()
+}
+
+test "heterogeneous_union_dispatch_calls_inherent_non_implementor_method" {
+    assert.equal(hud_speak(HudB {}), "inherent")
+}

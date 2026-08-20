@@ -1,0 +1,129 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.json_alias_basic.MakeWrapper() -> <unresolved type #108931323217917> {
+    load_const null
+    init_instance user.fixtures.json_alias_basic.Wrapper .data
+    return
+}
+
+function fixtures.json_alias_basic.MatchJson(j: <unresolved type #1888633819501>) -> string {
+    load_var j
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var j
+    store_var _3
+    load_var _3
+    narrow_bind bool, slot=2
+    pop_jump_if_false L1
+    jump L10
+
+  L1:
+    load_var j
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=3
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var j
+    store_var _5
+    load_var _5
+    narrow_bind float, slot=4
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var j
+    store_var _6
+    load_var _6
+    narrow_bind string, slot=5
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var j
+    store_var _7
+    load_var _7
+    narrow_bind baml.json.json[], slot=6
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_const "map"
+    jump L12
+
+  L6:
+    load_const "array"
+    jump L12
+
+  L7:
+    load_const "string"
+    jump L12
+
+  L8:
+    load_const "float"
+    jump L12
+
+  L9:
+    load_const "int"
+    jump L12
+
+  L10:
+    load_const "bool"
+    jump L12
+
+  L11:
+    load_const "null"
+
+  L12:
+    return
+}
+
+function fixtures.json_alias_basic.ReturnArray() -> <unresolved type #1888633819501> {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type baml.json.json
+    alloc_array 3
+    return
+}
+
+function fixtures.json_alias_basic.ReturnBool() -> <unresolved type #1888633819501> {
+    load_const true
+    return
+}
+
+function fixtures.json_alias_basic.ReturnFloat() -> <unresolved type #1888633819501> {
+    load_const 3.14
+    return
+}
+
+function fixtures.json_alias_basic.ReturnInt() -> <unresolved type #1888633819501> {
+    load_const 42
+    return
+}
+
+function fixtures.json_alias_basic.ReturnMap() -> <unresolved type #1888633819501> {
+    load_const "value"
+    load_const "key"
+    load_type string
+    load_type baml.json.json
+    alloc_map 1
+    return
+}
+
+function fixtures.json_alias_basic.ReturnNull() -> <unresolved type #1888633819501> {
+    load_const null
+    return
+}
+
+function fixtures.json_alias_basic.ReturnString() -> <unresolved type #1888633819501> {
+    load_const "hello"
+    return
+}

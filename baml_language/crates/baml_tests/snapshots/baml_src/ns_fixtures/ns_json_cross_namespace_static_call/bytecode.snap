@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.json_cross_namespace_static_call.decode_auto(j: <unresolved type #1888633819501>) -> <unresolved type #131264375514565><int> {
+    load_type fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox<int>
+    load_var j
+    call baml.json.to
+    return
+}
+
+function fixtures.json_cross_namespace_static_call.decode_plain(j: <unresolved type #1888633819501>) -> <unresolved type #64628420658681> {
+    load_type fixtures.json_cross_namespace_static_call.pkg.inner.Plain
+    load_var j
+    call baml.json.to
+    return
+}
+
+function fixtures.json_cross_namespace_static_call.decode_root(j: <unresolved type #1888633819501>) -> <unresolved type #80179070227352><int> {
+    load_type fixtures.json_cross_namespace_static_call.pkg.inner.Box<int>
+    load_var j
+    call baml.json.to
+    return
+}

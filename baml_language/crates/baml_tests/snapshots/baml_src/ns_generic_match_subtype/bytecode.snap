@@ -1,0 +1,263 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function generic_match_subtype.$init_test_ns_generic_match_subtype_generic_match_subtype(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.generic_match_subtype"
+    load_const "generic_match_subtype_narrow_default"
+    make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_subtype"
+    load_const "generic_match_widened_default"
+    make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_subtype"
+    load_const "generic_match_falls_through_on_non"
+    make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_subtype"
+    load_const "generic_match_concrete_discriminates_int"
+    make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_subtype"
+    load_const "generic_match_concrete_discriminates_string"
+    make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_subtype"
+    load_const "generic_match_switch_discriminates_int"
+    make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_subtype"
+    load_const "generic_match_switch_discriminates_string"
+    make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_match_subtype"
+    load_const "generic_match_switch_prims_still_dispatch"
+    make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function generic_match_subtype.Sq.Shape.area(self: <unresolved type #123891639230900>) -> int {
+    load_var self
+    load_field .s
+    load_var self
+    load_field .s
+    mul_int
+    return
+}
+
+function generic_match_subtype.concrete_discriminates_int_fn() -> string {
+    load_const 1
+    load_type int
+    init_instance<1> user.generic_match_subtype.Foo .value
+    call user.generic_match_subtype.pick_concrete
+    return
+}
+
+function generic_match_subtype.concrete_discriminates_string_fn() -> string {
+    load_const "x"
+    load_type string
+    init_instance<1> user.generic_match_subtype.Foo .value
+    call user.generic_match_subtype.pick_concrete
+    return
+}
+
+function generic_match_subtype.concrete_switch_int_fn() -> string {
+    load_const 1
+    load_type int
+    init_instance<1> user.generic_match_subtype.Foo .value
+    call user.generic_match_subtype.pick_concrete_switch
+    return
+}
+
+function generic_match_subtype.concrete_switch_prim_fn() -> string {
+    load_const "hello"
+    call user.generic_match_subtype.pick_concrete_switch
+    return
+}
+
+function generic_match_subtype.concrete_switch_string_fn() -> string {
+    load_const "x"
+    load_type string
+    init_instance<1> user.generic_match_subtype.Foo .value
+    call user.generic_match_subtype.pick_concrete_switch
+    return
+}
+
+function generic_match_subtype.generic_match_falls_through_on_non_fn() -> int {
+    load_type generic_match_subtype.Shape
+    alloc_instance user.generic_match_subtype.Non
+    load_const 7
+    init_instance user.generic_match_subtype.Sq .s
+    call user.generic_match_subtype.unwrap_or
+    load_type generic_match_subtype.Shape
+    load_const "area"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function generic_match_subtype.generic_match_subtype_narrow_default_fn() -> int {
+    load_type generic_match_subtype.Shape
+    load_const 5
+    init_instance user.generic_match_subtype.Sq .s
+    call user.generic_match_subtype.mk
+    store_var o
+    load_type generic_match_subtype.Shape
+    load_var o
+    load_const 0
+    init_instance user.generic_match_subtype.Sq .s
+    call user.generic_match_subtype.unwrap_or
+    load_type generic_match_subtype.Shape
+    load_const "area"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function generic_match_subtype.generic_match_widened_default_fn() -> int {
+    load_type generic_match_subtype.Shape
+    load_const 5
+    init_instance user.generic_match_subtype.Sq .s
+    call user.generic_match_subtype.mk
+    store_var o
+    load_type generic_match_subtype.Shape
+    load_var o
+    load_const 0
+    init_instance user.generic_match_subtype.Sq .s
+    call user.generic_match_subtype.unwrap_or
+    load_type generic_match_subtype.Shape
+    load_const "area"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function generic_match_subtype.mk(v: #0) -> <unresolved type #137737937352485><#0> | <unresolved type #64070550835183> {
+    load_var v
+    load_type #0
+    init_instance<1> user.generic_match_subtype.Opt .value
+    return
+}
+
+function generic_match_subtype.pick_concrete(x: <unresolved type #36583403442708><int> | <unresolved type #36583403442708><string>) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind generic_match_subtype.Foo<...>, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "string"
+    jump L2
+
+  L1:
+    load_const "int"
+
+  L2:
+    return
+}
+
+function generic_match_subtype.pick_concrete_switch(x: <unresolved type #36583403442708><int> | <unresolved type #36583403442708><string> | int | string | bool) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind generic_match_subtype.Foo<...>, slot=2
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var x
+    store_var _3
+    load_var _3
+    narrow_bind generic_match_subtype.Foo<...>, slot=3
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var x
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=4
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var x
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=5
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "prim bool"
+    jump L8
+
+  L4:
+    load_const "prim string"
+    jump L8
+
+  L5:
+    load_const "prim int"
+    jump L8
+
+  L6:
+    load_const "string"
+    jump L8
+
+  L7:
+    load_const "int"
+
+  L8:
+    return
+}
+
+function generic_match_subtype.unwrap_or(o: <unresolved type #137737937352485><#0> | <unresolved type #64070550835183>, default: #0) -> #0 {
+    load_var o
+    store_var _3
+    load_var _3
+    narrow_bind generic_match_subtype.Opt<...>, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var default
+    jump L2
+
+  L1:
+    load_var _3
+    load_field .value
+
+  L2:
+    return
+}

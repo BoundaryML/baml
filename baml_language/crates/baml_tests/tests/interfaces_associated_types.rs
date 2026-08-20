@@ -103,6 +103,44 @@ fn assert_compile_error_contains(source: &str, needle: &str) {
     );
 }
 
+/// Build the pool into an (unsealed) heap and bind every head, so rendered
+/// metadata reflects what the runtime shows: the loader always binds before
+/// anything can display a type, and an unbound head renders as its tag.
+///
+/// Float constants are boxed into the pool first, exactly as the engine's
+/// load path does — `resolve_function_constants` (inside the heap build)
+/// refuses a raw `ConstValue::Float`.
+fn bound_pool(program: &bex_vm_types::Program) -> bex_heap::BexHeap {
+    let mut objects = program.objects.0.clone();
+    for index in 0..objects.len() {
+        let Object::Function(function) = &objects[index] else {
+            continue;
+        };
+        let floats: Vec<(usize, f64)> = function
+            .bytecode
+            .constants
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, constant)| match constant {
+                bex_vm_types::ConstValue::Float(value) => Some((slot, *value)),
+                _ => None,
+            })
+            .collect();
+        for (slot, value) in floats {
+            let boxed = objects.len();
+            objects.push(Object::Float(value));
+            let Object::Function(function) = &mut objects[index] else {
+                unreachable!("the object at `index` was a function above");
+            };
+            function.bytecode.constants[slot] =
+                bex_vm_types::ConstValue::Object(bex_vm_types::ObjectIndex::from_raw(boxed));
+        }
+    }
+    let mut heap = bex_heap::BexHeap::build_unsealed_default(objects);
+    heap.bind_type_heads();
+    heap
+}
+
 fn compiled_function_metadata(source: &str, display_name_suffix: &str) -> (Vec<String>, String) {
     let program = compile_source_with_opt(source, OptLevel::One);
     let matches: Vec<_> = program
@@ -125,7 +163,11 @@ fn compiled_function_metadata(source: &str, display_name_suffix: &str) -> (Vec<S
     );
 
     let (name, idx) = matches[0];
-    let Some(Object::Function(function)) = program.objects.get(*idx) else {
+    let heap = bound_pool(&program);
+    let ptr = heap.compile_time_ptr(*idx);
+    // SAFETY: `ptr` indexes the pool the heap was just built from, and the
+    // unsealed heap outlives every read below.
+    let Object::Function(function) = (unsafe { ptr.get() }) else {
         panic!("`{name}` did not point at a function object");
     };
 

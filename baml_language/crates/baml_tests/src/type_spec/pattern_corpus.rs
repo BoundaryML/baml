@@ -66,7 +66,7 @@ fn generic_rigid_coverage_corpus() {
 fn patterns_new_corpus() {
     insta::assert_snapshot!(
         "corpus__patterns_new",
-        corpus_verdicts("projects/compiles/patterns_new/patterns_new.baml")
+        corpus_verdicts("baml_src/ns_fixtures/ns_patterns_new/patterns_new.baml")
     );
 }
 
@@ -75,7 +75,7 @@ fn generic_match_typevar_arm_corpus() {
     insta::assert_snapshot!(
         "corpus__generic_match_typevar_arm",
         corpus_verdicts(
-            "projects/compiles/generic_match_typevar_arm/generic_match_typevar_arm.baml"
+            "baml_src/ns_fixtures/ns_generic_match_typevar_arm/generic_match_typevar_arm.baml"
         )
     );
 }

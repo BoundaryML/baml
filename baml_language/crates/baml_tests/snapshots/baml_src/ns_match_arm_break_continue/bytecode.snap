@@ -1,0 +1,134 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function match_arm_break_continue.$init_test_ns_match_arm_break_continue_match_arm_break_continue(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.match_arm_break_continue"
+    load_const "bare_break_and_continue_arms_control_the_loop"
+    make_closure .<lambda($init_test_ns_match_arm_break_continue_match_arm_break_continue, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_arm_break_continue"
+    load_const "bare_break_in_value_position_unifies_and_breaks"
+    make_closure .<lambda($init_test_ns_match_arm_break_continue_match_arm_break_continue, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_arm_break_continue"
+    load_const "bare_continue_in_value_position_unifies_and_skips"
+    make_closure .<lambda($init_test_ns_match_arm_break_continue_match_arm_break_continue, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function match_arm_break_continue.countdown_sum(start: int) -> int {
+    load_const 0
+    store_var total
+    load_var start
+    store_var i
+
+  L0:
+    load_const true
+    pop_jump_if_false L2
+    load_var i
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var i
+    store_var step
+    load_var2 2 4
+    add_int
+    store_var total
+    load_var i
+    load_const 1
+    sub_int
+    store_var i
+    jump L0
+
+  L2:
+    load_var total
+    return
+}
+
+function match_arm_break_continue.sum_1_to_5_skip_3() -> int {
+    load_const 0
+    store_var total
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 5
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var total
+    return
+
+  L2:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    load_var i
+    load_const 3
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L0
+
+  L3:
+    load_var i
+    store_var add
+    load_var2 1 3
+    add_int
+    store_var total
+    jump L0
+}
+
+function match_arm_break_continue.sum_skip_three_break_at_six() -> int {
+    load_const 0
+    store_var total
+    load_const 0
+    store_var i
+
+  L0:
+    load_const true
+    pop_jump_if_false L3
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    load_var i
+    load_const 6
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_var i
+    load_const 3
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L0
+
+  L2:
+    load_var2 1 2
+    add_int
+    store_var total
+    jump L0
+
+  L3:
+    load_var total
+    return
+}

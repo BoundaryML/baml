@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  ⚠ empty interpolation ${} has no expression
+     ╭─[backtick_strings.baml:253:7]
+ 253 │     `a${}b`
+     ·       ─┬─
+     ·        ╰── expected an expression inside ${…}
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[backtick_strings.baml:447:12]
+ 447 │     `x: ${ throw "boom" }`
+     ·            ────────────
+     ╰────

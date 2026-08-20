@@ -1,0 +1,8 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.patterns_class_destructure_namespaces.llm.openai.DestructureBareInNamespace(response: <unresolved type #97611890827908>) -> int {
+    load_var response
+    load_field .score
+    return
+}

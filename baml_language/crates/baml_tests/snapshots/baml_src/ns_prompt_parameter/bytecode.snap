@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function prompt_parameter.$init_test_ns_prompt_parameter_prompt_parameter(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.prompt_parameter"
+    load_const "prompt parameter expression bodies"
+    make_closure .<lambda($init_test_ns_prompt_parameter_prompt_parameter, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function prompt_parameter.Echo.echo(self: <unresolved type #30340993782301>, prompt: string) -> string {
+    load_var prompt
+    return
+}
+
+function prompt_parameter.add_suffix(prefix: string, prompt: string, suffix: string) -> string {
+    load_var2 1 2
+    bin_op +
+    load_var suffix
+    bin_op +
+    return
+}
+
+function prompt_parameter.call_then_prompt_then_string(client: (string) -> string throws never, prompt: string) -> string {
+    load_const "ignored"
+    load_var client
+    call_indirect
+    pop 1
+    load_const "tail"
+    return
+}
+
+function prompt_parameter.echo_multiline(prompt: string) -> string {
+    load_var prompt
+    return
+}
+
+function prompt_parameter.echo_single_line(prompt: string) -> string {
+    load_var prompt
+    return
+}
+
+function prompt_parameter.prompt_then_string(prompt: string) -> string {
+    load_const "tail"
+    return
+}

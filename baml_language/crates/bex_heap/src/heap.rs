@@ -190,6 +190,12 @@ pub struct BexHeap {
     /// whose drop releases it. A [`Weak`] that fails to upgrade is a handle
     /// mid-drop, and the mint path treats it as absent.
     ///
+    /// LOCK ORDER: any path taking both maps takes `handles` first, then this
+    /// — mint, release, and GC fix-up all agree. A handle can drop on any
+    /// thread at any moment (its `Drop` takes `handles` then this), so a path
+    /// holding this lock while wanting `handles` is an AB-BA deadlock waiting
+    /// for exactly that drop.
+    ///
     /// [`HandleInner`]: bex_external_types::HandleInner
     handles_by_ptr: RwLock<HashMap<HeapPtr, (usize, Weak<bex_external_types::HandleInner>)>>,
 
@@ -459,11 +465,11 @@ impl BexHeap {
                     .iter()
                     .map(|cv| match cv {
                         bex_vm_types::ConstValue::Type(_) => bex_vm_types::Value::NULL,
-                        // ClassWithTypeArgs is NOT pre-resolved: `IsType` reads it
-                        // directly from `constants` at execution time.
-                        bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => {
-                            bex_vm_types::Value::NULL
-                        }
+                        // ClassWithTypeArgs and Literal are NOT pre-resolved:
+                        // `IsType` reads them directly from `constants` at
+                        // execution time.
+                        bex_vm_types::ConstValue::ClassWithTypeArgs { .. }
+                        | bex_vm_types::ConstValue::Literal(_) => bex_vm_types::Value::NULL,
                         other => other.to_value(resolve_idx),
                     })
                     .collect();
@@ -478,6 +484,99 @@ impl BexHeap {
                 }
             }
         }
+    }
+
+    /// Bind every [`bex_vm_types::TypeHead`] in the compile-time image to the
+    /// declaration it names.
+    ///
+    /// This is the loader's one-time serialization boundary: emit mints heads
+    /// tag-only (`TypeHead::of_name`), and this pass fills each head's pointer
+    /// off the declaration carrying that tag. The tag→pointer index is built
+    /// here and dropped here — pointer-first lookup means no tag index survives
+    /// into the VM.
+    ///
+    /// Must run after every placeholder slot is filled (impl rules carry heads
+    /// in their patterns) and before the heap seals. The closing assertion is
+    /// deliberately total and active in release builds: an unresolved head is
+    /// not a degraded mode, it is a pointer the collector cannot trace and a
+    /// dispatch that cannot resolve, so a program image that cannot bind
+    /// completely must not run at all.
+    pub fn bind_type_heads(&mut self) {
+        let mut by_tag: HashMap<baml_type::typetag::TypeTag, HeapPtr> =
+            HashMap::with_capacity(self.compile_time.len() / 4);
+        for index in 0..self.compile_time.len() {
+            let Some(tag) = Self::declaration_tag(&self.compile_time[index]) else {
+                continue;
+            };
+            let previous = by_tag.insert(tag, self.compile_time_ptr(index));
+            debug_assert!(
+                previous.is_none(),
+                "two compile-time declarations carry the tag {tag:?}: the pool must \
+                 hold each declaration exactly once for heads to have one referent",
+            );
+        }
+        for object in &mut self.compile_time {
+            bex_vm_types::head_walk::visit_object_heads_mut(object, &mut |head| {
+                if !head.is_resolved()
+                    && let Some(&declaration) = by_tag.get(&head.tag())
+                {
+                    head.resolve(declaration);
+                }
+            });
+        }
+        let mut unbound: Vec<String> = Vec::new();
+        for object in &self.compile_time {
+            bex_vm_types::head_walk::visit_object_heads(object, &mut |head| {
+                if head.is_resolved() {
+                    return;
+                }
+                let context = match object {
+                    Object::Class(class) => format!("class {}", class.name),
+                    Object::Enum(enm) => format!("enum {}", enm.name),
+                    Object::Interface(interface) => format!("interface {}", interface.name),
+                    Object::TypeAlias(alias) => format!("type alias {}", alias.name),
+                    Object::Function(function) => format!("function {}", function.name),
+                    Object::ImplRule(rule) => format!("impl rule at {:?}", rule.interface_head),
+                    other => format!("{:?} object", bex_vm_types::ObjectType::of(other)),
+                };
+                unbound.push(format!(
+                    "  {context}: head {:?} (tag {:?})",
+                    head.declared_name(),
+                    head.tag(),
+                ));
+            });
+        }
+        assert!(
+            unbound.is_empty(),
+            "compile-time image contains heads nothing declares:\n{}",
+            unbound.join("\n"),
+        );
+    }
+
+    /// The tag under which `object` can head a nominal type, or `None` when it
+    /// is not a declaration.
+    pub fn declaration_tag(object: &Object) -> Option<baml_type::typetag::TypeTag> {
+        match object {
+            Object::Class(class) => Some(class.type_tag),
+            Object::Enum(enm) => Some(enm.type_tag),
+            Object::Interface(interface) => Some(interface.type_tag),
+            Object::TypeAlias(alias) => Some(alias.type_tag),
+            _ => None,
+        }
+    }
+
+    /// A transient tag → declaration index over the compile-time pool, for a
+    /// caller running its own bind over freshly grafted objects (the runtime
+    /// twin of [`Self::bind_type_heads`]). Built per call and dropped by the
+    /// caller: pointer-first lookup means no tag index survives into the VM.
+    pub fn compile_time_declaration_index(&self) -> HashMap<baml_type::typetag::TypeTag, HeapPtr> {
+        let mut by_tag = HashMap::with_capacity(self.compile_time.len() / 4);
+        for index in 0..self.compile_time.len() {
+            if let Some(tag) = Self::declaration_tag(&self.compile_time[index]) {
+                by_tag.insert(tag, self.compile_time_ptr(index));
+            }
+        }
+        by_tag
     }
 
     /// Get the number of compile-time objects.
@@ -1124,9 +1223,15 @@ impl BexHeap {
     /// access to heap objects. Handles are GC roots - objects reachable
     /// from handles will not be collected.
     pub fn create_handle(self: &Arc<Self>, ptr: HeapPtr) -> Handle {
-        // One key per object, not per call — see `handles_by_ptr`. The write
-        // lock spans the check and the mint so a concurrent release cannot
+        // One key per object, not per call — see `handles_by_ptr`. Both write
+        // locks span the check and the mint so a concurrent release cannot
         // retire the entry in between and leave two keys for one object.
+        //
+        // LOCK ORDER: `handles` before `handles_by_ptr` — the order every
+        // other two-lock path takes (`release_handle`, `update_handles`).
+        // Taking `handles_by_ptr` first here deadlocked against a concurrent
+        // `Handle` drop (AB-BA), which the future-cleanup stress test caught.
+        let mut handles = self.handles.write().expect("handles lock poisoned");
         let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
         if let Some((_, weak)) = by_ptr.get(&ptr)
             && let Some(inner) = weak.upgrade()
@@ -1137,10 +1242,7 @@ impl BexHeap {
         }
 
         let handle_key = self.next_handle_key.fetch_add(1, Ordering::Relaxed);
-        {
-            let mut handles = self.handles.write().expect("handles lock poisoned");
-            handles.insert(handle_key, ptr);
-        }
+        handles.insert(handle_key, ptr);
         // Handle no longer stores idx - always resolves through table
         let handle = Handle::new(handle_key, Arc::clone(self) as Arc<dyn WeakHeapRef>);
         by_ptr.insert(ptr, (handle_key, handle.downgrade_inner()));

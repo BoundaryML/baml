@@ -1,0 +1,159 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function await_union.$init_test_ns_await_union_await_union(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.await_union"
+    load_const "await_union_of_futures_value_side"
+    make_closure .<lambda($init_test_ns_await_union_await_union, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.await_union"
+    load_const "await_union_of_futures_error_side"
+    make_closure .<lambda($init_test_ns_await_union_await_union, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function await_union.as_int() -> int {
+    load_const 41
+    return
+}
+
+function await_union.as_string() -> string {
+    load_const "x"
+    return
+}
+
+function await_union.await_union_of_futures_error_side() -> int {
+    load_const false
+    call user.await_union.pick_error
+    return
+}
+
+function await_union.await_union_of_futures_value_side() -> int {
+    load_const true
+    call user.await_union.pick_value
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const -1
+    jump L2
+
+  L1:
+    load_var _2
+    load_const 1
+    add_int
+
+  L2:
+    return
+}
+
+function await_union.bad_a() -> int {
+    load_const "a"
+    throw
+}
+
+function await_union.bad_b() -> int {
+    load_const 7
+    throw
+}
+
+function await_union.pick_error(use_a: bool) -> int {
+    load_var use_a
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    make_closure .<lambda(pick_error, 1)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type int
+    spawn
+    store_var _6
+    load_var _6
+    jump L2
+
+  L1:
+    make_closure .<lambda(pick_error, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type string
+    spawn
+    store_var _4
+    load_var _4
+
+  L2:
+    await
+    jump L7
+    load_var e
+    store_var _9
+    load_var _9
+    narrow_bind string, slot=5
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var e
+    store_var _10
+    load_var _10
+    narrow_bind int, slot=6
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var e
+    rethrow
+
+  L5:
+    load_var _10
+    jump L7
+
+  L6:
+    load_const 1
+
+  L7:
+    return
+}
+
+function await_union.pick_value(use_int: bool) -> int | string {
+    load_var use_int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    make_closure .<lambda(pick_value, 1)>, 0
+    load_const null
+    load_const null
+    load_type string
+    load_type never
+    spawn
+    store_var _6
+    load_var _6
+    jump L2
+
+  L1:
+    make_closure .<lambda(pick_value, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type never
+    spawn
+    store_var _4
+    load_var _4
+
+  L2:
+    await
+    return
+}

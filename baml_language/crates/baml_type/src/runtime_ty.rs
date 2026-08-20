@@ -309,8 +309,16 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
                 // Expand non-recursive aliases inline
                 lower_to_runtime(target, resolved)?
             } else {
-                // Unknown alias (e.g. from another package) — keep opaque
-                RuntimeTy::TypeAlias(qtn.clone(), attr.clone())
+                // An alias the environment cannot see is a name nothing will
+                // ever declare: it cannot be expanded here and, unlike a
+                // recursive alias, no pooled declaration will exist for the
+                // runtime to resolve it against. Carrying it opaque bakes a
+                // dangling reference into the program image, so the completeness
+                // precondition (own package + every dependency; see
+                // `TypeContext::alias_def`) is enforced rather than assumed.
+                return Err(NotRuntimeTy {
+                    variant: "TypeAlias (not in the resolved-alias environment)",
+                });
             }
         }
 

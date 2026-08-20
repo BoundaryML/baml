@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.json_cross_namespace_static_call.decode_root(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> fixtures.json_cross_namespace_static_call.pkg.inner.Box<int> {
+    // Locals:
+    let _0: fixtures.json_cross_namespace_static_call.pkg.inner.Box<int> // _0 // return
+    let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(fixtures.json_cross_namespace_static_call.pkg.inner.Box<int>);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.json_cross_namespace_static_call.decode_auto(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox<int> {
+    // Locals:
+    let _0: fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox<int> // _0 // return
+    let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox<int>);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.json_cross_namespace_static_call.decode_plain(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> fixtures.json_cross_namespace_static_call.pkg.inner.Plain {
+    // Locals:
+    let _0: fixtures.json_cross_namespace_static_call.pkg.inner.Plain // _0 // return
+    let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(fixtures.json_cross_namespace_static_call.pkg.inner.Plain);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}

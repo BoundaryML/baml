@@ -1,0 +1,2857 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function backtick_strings.$init_test_ns_backtick_strings_backtick_strings(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_one_liner_evaluates_to_string"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_multiline_dedents_at_runtime"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_escapes_decoded_at_runtime"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_simple_interpolation_evaluates_at_runtime"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_multiple_interpolations_evaluate_at_runtime"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_block_body_with_let_renders_tail_expression"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_interpolation_calls_function"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_interpolation_with_loop_in_block_body"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_interpolation_with_let_bound_if_else_expression"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_inline_if_expression_renders"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_inline_if_int_union_renders"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_cross_site_let_leaks_to_later_segment"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_void_tail_renders_empty"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_nested_in_interpolation"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_interpolation_with_recursive_call"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_interpolation_int_auto_to_string"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_interpolation_bool_auto_to_string"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_interpolation_float_auto_to_string"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_interpolation_mixed_types_auto_to_string"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_c_empty_interp_renders_empty"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_d_statement_only_block_renders_empty"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_cross_site_let_binds_into_concat_scope"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_cross_site_let_chain_with_text"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_cross_site_let_reassign_evaluation_order"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_f_adjacent_interpolations"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_g_interp_at_start"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_h_interp_at_end"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_i_multi_tick_with_interpolation"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_j_user_class_with_to_string"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_interp_class_without_to_string_renders_structurally"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_k_default_parameter_value"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_l_expression_statement"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_m_two_backticks_concatenated"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_n_passed_as_function_argument"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_o_array_index_in_interp"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_p_method_chain_on_let_bound"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_case_q_throw_in_interp_body"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_extended_escape_backspace"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_extended_escape_vertical_tab"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_extended_escape_form_feed"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_block_comment_inside_interp"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_line_comment_inside_interp"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 41)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_trailing_dollar_is_literal"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 42)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_for_loop_basic"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 43)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_for_loop_with_text_around"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 44)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_if_block_tag_true_branch"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 45)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_if_block_tag_false_branch_empty"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 46)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_if_else_chain"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 47)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_nested_for_in_if"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 48)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_for_with_interp_in_body"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 49)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_ws_case1_items_on_own_lines"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 50)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_ws_case2_inline_concatenation"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 51)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_ws_case3_blank_line_between_iterations"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 52)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_ws_case6_if_full_line_block"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 53)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_ws_case7_if_introduces_content_only_when_true"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 54)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_ws_case8_nested_loops_preserving_structure"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 55)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_for_loop_over_empty_collection"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 56)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_for_loop_empty_body"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 57)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_for_loop_over_array_literal"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 58)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_cstyle_for_basic"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 59)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_cstyle_for_bound_by_outer_local"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 60)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_cstyle_for_step_by_two"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 61)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_nested_if_in_for"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 62)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_ws_case4_blank_line_after_block"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 63)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_ws_case5_conditional_inline"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 64)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_ws_mid_line_indented_for_keeps_indent_literal"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 65)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_ws_tag_at_literal_start"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 66)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_for_loop_shadows_outer_let"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 67)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_if_with_complex_condition"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 68)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_for_inside_if_branch"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 69)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_block_tag_directly_after_interp"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 70)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_if_empty_true_body"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 71)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_if_else_one_branch_has_for"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 72)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_for_accumulator_does_not_capture_user_binding"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 73)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_m3_if_no_parens_bare_identifier_cond"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 74)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_multi_tick_ladder_preserves_inner_ticks_at_runtime"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 75)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_keeps_trailing_escaped_newline"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 76)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_keeps_repeated_trailing_escaped_newlines"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 77)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_escape_does_not_look_like_indentation"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 78)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_multiline_keeps_trailing_escaped_newline"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 79)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.backtick_strings"
+    load_const "backtick_blank_line_before_closer_is_content"
+    make_closure .<lambda($init_test_ns_backtick_strings_backtick_strings, 80)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function backtick_strings.Person.baml.ToString.to_string(self: <unresolved type #83813457989906>) -> string {
+    load_var self
+    load_field .name
+    return
+}
+
+function backtick_strings.bt_bangs(n: int) -> string {
+    load_var n
+    load_const 0
+    cmp_int_op <=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var n
+    load_const 1
+    sub_int
+    call user.backtick_strings.bt_bangs
+    store_var _3
+    load_const "!"
+    load_var _3
+    bin_op +
+    jump L2
+
+  L1:
+    load_const ""
+
+  L2:
+    return
+}
+
+function backtick_strings.bt_blank_line_before_closer() -> string {
+    load_const "line one\n"
+    return
+}
+
+function backtick_strings.bt_block_body_tail() -> string {
+    load_type string
+    load_const "hi "
+    load_const "there"
+    bin_op +
+    call baml.String.from
+    store_var _2
+    load_const "result: "
+    load_var _2
+    bin_op +
+    load_const "!"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_block_comment_interp() -> string {
+    load_type string
+    load_const "Ada"
+    call baml.String.from
+    store_var _2
+    load_const "hi "
+    load_var _2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_case_c() -> string {
+    load_const ""
+    store_var_load_var  __m3_concat
+    load_const "a"
+    bin_op +
+    store_var_load_var  __m3_concat
+    load_const "b"
+    bin_op +
+    store_var  __m3_concat
+    load_var  __m3_concat
+    return
+}
+
+function backtick_strings.bt_case_d() -> string {
+    load_const ""
+    store_var_load_var  __m3_concat
+    load_const "a"
+    bin_op +
+    store_var_load_var  __m3_concat
+    load_const "b"
+    bin_op +
+    store_var  __m3_concat
+    load_var  __m3_concat
+    return
+}
+
+function backtick_strings.bt_case_f() -> string {
+    load_type string
+    load_const "ab"
+    call baml.String.from
+    store_var _3
+    load_type string
+    load_const "cd"
+    call baml.String.from
+    store_var _6
+    load_var2 1 2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_case_g() -> string {
+    load_type string
+    load_const "hi"
+    call baml.String.from
+    load_const "!"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_case_h() -> string {
+    load_type string
+    load_const "hi"
+    call baml.String.from
+    store_var _2
+    load_const "!"
+    load_var _2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_case_i() -> string {
+    load_type string
+    load_const "Y"
+    call baml.String.from
+    store_var _3
+    load_const "X "
+    load_var _3
+    bin_op +
+    load_const " Z"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_case_j() -> string {
+    load_type backtick_strings.Person
+    load_const "Ada"
+    init_instance user.backtick_strings.Person .name
+    call baml.String.from
+    store_var _2
+    load_const "meet "
+    load_var _2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_case_k() -> string {
+    load_const "world"
+    load_const <omitted>
+    call user.backtick_strings.bt_case_k_greet
+    return
+}
+
+function backtick_strings.bt_case_k_greet(name: string, prefix: string) -> string {
+    load_var prefix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "Hello, "
+    store_var prefix
+
+  L0:
+    load_var2 2 1
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_case_l() -> int {
+    load_const 42
+    return
+}
+
+function backtick_strings.bt_case_m() -> string {
+    load_const "ab"
+    return
+}
+
+function backtick_strings.bt_case_n() -> string {
+    load_type string
+    load_const "Ada"
+    call baml.String.from
+    store_var _3
+    load_const "Hello "
+    load_var _3
+    bin_op +
+    call user.backtick_strings.bt_case_n_shout
+    return
+}
+
+function backtick_strings.bt_case_n_shout(s: string) -> string {
+    load_var s
+    load_const "!"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_case_o() -> string {
+    load_type string
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_const 0
+    load_array_element
+    call baml.String.from
+    store_var _2
+    load_const "first: "
+    load_var _2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_case_p() -> string {
+    load_const "hello"
+    call baml.String.to_upper_case
+    store_var r
+    load_type string
+    load_var r
+    call baml.String.from
+    store_var _2
+    load_const "upper: "
+    load_var _2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_case_q() -> string {
+    load_const ""
+    store_var_load_var  __m3_concat
+    load_const "x: "
+    bin_op +
+    store_var  __m3_concat
+    load_const "boom"
+    throw
+}
+
+function backtick_strings.bt_cstyle_for_basic() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 3
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    return
+
+  L2:
+    load_var  __m3_for
+    store_var _5
+    load_type int
+    load_var i
+    call baml.String.from
+    store_var _8
+    load_var _5
+    load_const "["
+    load_var _8
+    bin_op +
+    load_const "]"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function backtick_strings.bt_cstyle_for_outer_local() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 4
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    return
+
+  L2:
+    load_var  __m3_for
+    store_var _7
+    load_type int
+    load_var i
+    call baml.String.from
+    store_var _9
+    load_var2 3 4
+    load_const ","
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function backtick_strings.bt_cstyle_for_step_two() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 6
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    return
+
+  L2:
+    load_var  __m3_for
+    store_var _5
+    load_type int
+    load_var i
+    call baml.String.from
+    store_var _7
+    load_var2 3 4
+    load_const " "
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    load_var i
+    load_const 2
+    add_int
+    store_var i
+    jump L0
+}
+
+function backtick_strings.bt_escape_backspace() -> string {
+    load_const "a\u{8}b"
+    return
+}
+
+function backtick_strings.bt_escape_form_feed() -> string {
+    load_const "a\u{c}b"
+    return
+}
+
+function backtick_strings.bt_escape_not_indentation() -> string {
+    load_const " a\n b\t "
+    return
+}
+
+function backtick_strings.bt_escape_vertical_tab() -> string {
+    load_const "a\u{b}b"
+    return
+}
+
+function backtick_strings.bt_escapes_decoded() -> string {
+    load_const "a\nb`c${d}e"
+    return
+}
+
+function backtick_strings.bt_icf_main() -> string {
+    load_const "hi"
+    call user.backtick_strings.bt_icf_shout
+    store_var _4
+    load_type string
+    load_var _4
+    call baml.String.from
+    store_var _3
+    load_const "bye"
+    call user.backtick_strings.bt_icf_shout
+    store_var _7
+    load_type string
+    load_var _7
+    call baml.String.from
+    store_var _6
+    load_const "Loud: "
+    load_var _3
+    bin_op +
+    load_const " and "
+    bin_op +
+    load_var _6
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_icf_shout(s: string) -> string {
+    load_var s
+    load_const "!!!"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_inline_if_classify(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "neg"
+    store_var _2
+    jump L2
+
+  L1:
+    load_const "pos"
+    store_var _2
+
+  L2:
+    load_type string
+    load_var _2
+    call baml.String.from
+    return
+}
+
+function backtick_strings.bt_inline_if_int_main() -> string {
+    load_const 5
+    call user.backtick_strings.bt_inline_if_int_pick
+    store_var _2
+    load_const -1
+    call user.backtick_strings.bt_inline_if_int_pick
+    store_var _3
+    load_var _2
+    load_const "/"
+    bin_op +
+    load_var _3
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_inline_if_int_pick(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 2
+    store_var _2
+    jump L2
+
+  L1:
+    load_const 1
+    store_var _2
+
+  L2:
+    load_type int
+    load_var _2
+    call baml.String.from
+    return
+}
+
+function backtick_strings.bt_inline_if_main() -> string {
+    load_const 5
+    call user.backtick_strings.bt_inline_if_classify
+    store_var _2
+    load_const -1
+    call user.backtick_strings.bt_inline_if_classify
+    store_var _3
+    load_var _2
+    load_const "/"
+    bin_op +
+    load_var _3
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_interp_bool() -> string {
+    load_type bool
+    load_const true
+    call baml.String.from
+    store_var _2
+    load_const "status: "
+    load_var _2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_interp_float() -> string {
+    load_type float
+    load_const 3.14
+    call baml.String.from
+    store_var _2
+    load_const "pi ~ "
+    load_var _2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_interp_int() -> string {
+    load_type int
+    load_const 42
+    call baml.String.from
+    store_var _2
+    load_const "count: "
+    load_var _2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_interp_mixed() -> string {
+    load_type int
+    load_const 7
+    call baml.String.from
+    store_var _11
+    load_type bool
+    load_const false
+    call baml.String.from
+    store_var _14
+    load_type float
+    load_const 1.5
+    call baml.String.from
+    store_var _17
+    load_type string
+    load_const "test"
+    call baml.String.from
+    store_var _20
+    load_const "n="
+    load_var _11
+    bin_op +
+    load_const ", ok="
+    bin_op +
+    load_var _14
+    bin_op +
+    load_const ", r="
+    bin_op +
+    load_var _17
+    bin_op +
+    load_const ", name="
+    bin_op +
+    load_var _20
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_keeps_repeated_trailing_escaped_newlines() -> string {
+    load_const "LANG=C\n\n"
+    return
+}
+
+function backtick_strings.bt_keeps_trailing_escaped_newline() -> string {
+    load_type string
+    load_const "alpha"
+    call baml.String.from
+    load_const "\n"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_let_bound_if_else() -> string {
+    load_const true
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "guest"
+    store_var r
+    jump L2
+
+  L1:
+    load_const "user"
+    store_var r
+
+  L2:
+    load_type string
+    load_var r
+    call baml.String.from
+    store_var _2
+    load_const "welcome "
+    load_var _2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_line_comment_interp() -> string {
+    load_type string
+    load_const "Ada"
+    call baml.String.from
+    store_var _2
+    load_const "hi "
+    load_var _2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_loop_in_block() -> string {
+    load_const ""
+    store_var acc
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 3
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_type string
+    load_var acc
+    call baml.String.from
+    store_var _2
+    load_const "loop result: "
+    load_var _2
+    bin_op +
+    load_const "!"
+    bin_op +
+    return
+
+  L2:
+    load_var acc
+    load_const "x"
+    bin_op +
+    store_var acc
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function backtick_strings.bt_m3_block_tag_after_interp() -> string {
+    load_const "Alice"
+    load_const true
+    call user.backtick_strings.bt_m3_block_tag_after_interp_greet
+    store_var _2
+    load_const "Bob"
+    load_const false
+    call user.backtick_strings.bt_m3_block_tag_after_interp_greet
+    store_var _3
+    load_var _2
+    load_const "|"
+    bin_op +
+    load_var _3
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_block_tag_after_interp_greet(name: string, extra: bool) -> string {
+    load_type string
+    load_var name
+    call baml.String.from
+    store_var _4
+    load_var extra
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    store_var _6
+    jump L2
+
+  L1:
+    load_const "!"
+    store_var _6
+
+  L2:
+    load_const "Hi "
+    load_var _4
+    bin_op +
+    load_var _6
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_for_accumulator_no_capture() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+
+  L0:
+    load_var _5
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _10
+    load_type string
+    load_var _6
+    call baml.String.from
+    store_var _15
+    load_type string
+    load_const "OUTER"
+    call baml.String.from
+    store_var _18
+    load_var _10
+    load_const "<"
+    load_var _15
+    bin_op +
+    load_const ":"
+    bin_op +
+    load_var _18
+    bin_op +
+    load_const ">"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_var  __m3_for
+    return
+}
+
+function backtick_strings.bt_m3_for_array_literal() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const 10
+    load_const 20
+    load_const 30
+    load_type int
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _8
+    load_type int
+    load_var _4
+    call baml.String.from
+    store_var _10
+    load_var2 4 5
+    load_const " "
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_var  __m3_for
+    return
+}
+
+function backtick_strings.bt_m3_for_basic() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _9
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _12
+    load_var _9
+    load_const "- "
+    load_var _12
+    bin_op +
+    load_const "\n"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_var  __m3_for
+    return
+}
+
+function backtick_strings.bt_m3_for_empty_body() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _7
+    store_var _x
+    load_var  __m3_for
+    load_const ""
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_const "["
+    load_var  __m3_for
+    bin_op +
+    load_const "]"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_for_empty_collection() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_type string
+    alloc_array 0
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _11
+    load_type string
+    load_var _7
+    call baml.String.from
+    store_var _14
+    load_var _11
+    load_const "- "
+    load_var _14
+    bin_op +
+    load_const "\n"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_const "before|"
+    load_var  __m3_for
+    bin_op +
+    load_const "|after"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_for_inside_if() -> string {
+    load_const true
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    call user.backtick_strings.bt_m3_for_inside_if_render
+    store_var _2
+    load_const false
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    call user.backtick_strings.bt_m3_for_inside_if_render
+    store_var _4
+    load_var _2
+    load_const "|"
+    bin_op +
+    load_var _4
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_for_inside_if_render(show: bool, xs: string[]) -> string {
+    load_var show
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "hidden"
+    jump L5
+
+  L1:
+    load_const ""
+    store_var  __m3_for
+    load_var xs
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L2:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var  __m3_for
+    store_var _9
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _12
+    load_var _9
+    load_const "<"
+    load_var _12
+    bin_op +
+    load_const ">"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L2
+
+  L4:
+    load_var  __m3_for
+
+  L5:
+    return
+}
+
+function backtick_strings.bt_m3_for_interp_body() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _9
+    load_type int
+    load_var _5
+    call baml.String.from
+    store_var _11
+    load_var2 4 5
+    load_const ","
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_var  __m3_for
+    return
+}
+
+function backtick_strings.bt_m3_for_shadows_outer_let() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _11
+    load_type string
+    load_var _7
+    call baml.String.from
+    store_var _13
+    load_var2 4 5
+    load_const ","
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_var  __m3_for
+    load_const "|"
+    bin_op +
+    load_const "OUTER"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_for_text_around() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const "x"
+    load_const "y"
+    load_type string
+    alloc_array 2
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _11
+    load_type string
+    load_var _7
+    call baml.String.from
+    store_var _13
+    load_var2 4 5
+    load_const ", "
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_const "header\n"
+    load_var  __m3_for
+    bin_op +
+    load_const "done"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_if_bare_cond() -> string {
+    load_const true
+    call user.backtick_strings.bt_m3_if_bare_cond_gate
+    store_var _2
+    load_const false
+    call user.backtick_strings.bt_m3_if_bare_cond_gate
+    store_var _3
+    load_var _2
+    load_const "|"
+    bin_op +
+    load_var _3
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_if_bare_cond_gate(enabled: bool) -> string {
+    load_var enabled
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "off"
+    jump L2
+
+  L1:
+    load_const "on"
+
+  L2:
+    return
+}
+
+function backtick_strings.bt_m3_if_complex_cond() -> string {
+    load_const 1
+    load_const 1
+    call user.backtick_strings.bt_m3_if_complex_cond_f
+    store_var _4
+    load_const -1
+    load_const 0
+    call user.backtick_strings.bt_m3_if_complex_cond_f
+    store_var _5
+    load_const 0
+    load_const 0
+    call user.backtick_strings.bt_m3_if_complex_cond_f
+    store_var _6
+    load_var _4
+    load_const "|"
+    bin_op +
+    load_var _5
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _6
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_if_complex_cond_f(a: int, b: int) -> string {
+    load_var a
+    load_const 0
+    cmp_int_op >
+    jump_if_false L0
+    pop 1
+    load_var b
+    load_const 0
+    cmp_int_op >
+
+  L0:
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var a
+    load_const 0
+    cmp_int_op <
+    jump_if_false L2
+    jump L3
+
+  L2:
+    pop 1
+    load_var b
+    load_const 0
+    cmp_int_op <
+
+  L3:
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const "zero"
+    jump L7
+
+  L5:
+    load_const "neg"
+    jump L7
+
+  L6:
+    load_const "pos"
+
+  L7:
+    return
+}
+
+function backtick_strings.bt_m3_if_else_branch_for() -> string {
+    load_const false
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    call user.backtick_strings.bt_m3_if_else_branch_for_render
+    store_var _2
+    load_const true
+    load_const "a"
+    load_type string
+    alloc_array 1
+    call user.backtick_strings.bt_m3_if_else_branch_for_render
+    store_var _4
+    load_var _2
+    load_const "|"
+    bin_op +
+    load_var _4
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_if_else_branch_for_render(empty: bool, xs: string[]) -> string {
+    load_var empty
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_const ""
+    store_var  __m3_for
+    load_var xs
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L1:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var  __m3_for
+    store_var _9
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _11
+    load_var2 6 7
+    load_const ","
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L1
+
+  L3:
+    load_var  __m3_for
+    jump L5
+
+  L4:
+    load_const "<none>"
+
+  L5:
+    return
+}
+
+function backtick_strings.bt_m3_if_else_chain() -> string {
+    load_const 5
+    call user.backtick_strings.bt_m3_if_else_chain_classify
+    store_var _4
+    load_const -3
+    call user.backtick_strings.bt_m3_if_else_chain_classify
+    store_var _5
+    load_const 0
+    call user.backtick_strings.bt_m3_if_else_chain_classify
+    store_var _6
+    load_var _4
+    load_const " "
+    bin_op +
+    load_var _5
+    bin_op +
+    load_const " "
+    bin_op +
+    load_var _6
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_if_else_chain_classify(n: int) -> string {
+    load_var n
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var n
+    load_const 0
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "zero"
+    jump L4
+
+  L2:
+    load_const "neg"
+    jump L4
+
+  L3:
+    load_const "pos"
+
+  L4:
+    return
+}
+
+function backtick_strings.bt_m3_if_empty_true_body() -> string {
+    load_const false
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    store_var _3
+    jump L2
+
+  L1:
+    load_const "should_not_appear"
+    store_var _3
+
+  L2:
+    load_const "[|"
+    load_var _3
+    bin_op +
+    load_const "]"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_if_false() -> string {
+    load_const false
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    jump L2
+
+  L1:
+    load_const "welcome"
+
+  L2:
+    load_const "!"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_if_true() -> string {
+    load_const true
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    jump L2
+
+  L1:
+    load_const "welcome"
+
+  L2:
+    return
+}
+
+function backtick_strings.bt_m3_nested_for_in_if() -> string {
+    load_const true
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    jump L5
+
+  L1:
+    load_const ""
+    store_var  __m3_for
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L2:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var  __m3_for
+    store_var _11
+    load_type string
+    load_var _7
+    call baml.String.from
+    store_var _14
+    load_var _11
+    load_const "- "
+    load_var _14
+    bin_op +
+    load_const "\n"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L2
+
+  L4:
+    load_var  __m3_for
+
+  L5:
+    return
+}
+
+function backtick_strings.bt_m3_nested_if_in_for() -> string {
+    load_const true
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    call user.backtick_strings.bt_m3_nested_if_in_for_go
+    store_var _2
+    load_const false
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    call user.backtick_strings.bt_m3_nested_if_in_for_go
+    store_var _4
+    load_var _2
+    load_const "|"
+    bin_op +
+    load_var _4
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_nested_if_in_for_go(flag: bool, xs: string[]) -> string {
+    load_const ""
+    store_var  __m3_for
+    load_var xs
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_var _5
+    store_var x
+    load_var  __m3_for
+    store_var _9
+    load_var flag
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_type string
+    load_var x
+    call baml.String.from
+    store_var _15
+    load_const "-"
+    load_var _15
+    bin_op +
+    store_var _11
+    jump L4
+
+  L3:
+    load_type string
+    load_var x
+    call baml.String.from
+    store_var _12
+    load_const "+"
+    load_var _12
+    bin_op +
+    store_var _11
+
+  L4:
+    load_var2 7 8
+    load_const " "
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L5:
+    load_var  __m3_for
+    return
+}
+
+function backtick_strings.bt_m3_ws_case1() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _9
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _12
+    load_var _9
+    load_const "  - "
+    load_var _12
+    bin_op +
+    load_const "\n"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_var  __m3_for
+    return
+}
+
+function backtick_strings.bt_m3_ws_case2() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _9
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _10
+    load_var2 4 5
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_var  __m3_for
+    return
+}
+
+function backtick_strings.bt_m3_ws_case3() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _9
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _12
+    load_var _9
+    load_const "- "
+    load_var _12
+    bin_op +
+    load_const "\n\n"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_var  __m3_for
+    return
+}
+
+function backtick_strings.bt_m3_ws_case4() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+
+  L0:
+    load_var _5
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _10
+    load_type string
+    load_var _6
+    call baml.String.from
+    store_var _13
+    load_var _10
+    load_const "- "
+    load_var _13
+    bin_op +
+    load_const "\n"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_var  __m3_for
+    load_const "\nFooter"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_ws_case5() -> string {
+    load_const true
+    call user.backtick_strings.bt_m3_ws_case5_greet
+    store_var _2
+    load_const false
+    call user.backtick_strings.bt_m3_ws_case5_greet
+    store_var _3
+    load_var _2
+    load_const "|"
+    bin_op +
+    load_var _3
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_ws_case5_greet(formal: bool) -> string {
+    load_var formal
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    store_var _3
+    jump L2
+
+  L1:
+    load_const ", sir"
+    store_var _3
+
+  L2:
+    load_const "Hello"
+    load_var _3
+    bin_op +
+    load_const "!"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_ws_case6() -> string {
+    load_const true
+    call user.backtick_strings.bt_m3_ws_case6_classify
+    store_var _2
+    load_const false
+    call user.backtick_strings.bt_m3_ws_case6_classify
+    store_var _3
+    load_var _2
+    load_const "|"
+    bin_op +
+    load_var _3
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_ws_case6_classify(extra: bool) -> string {
+    load_var extra
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    store_var _3
+    jump L2
+
+  L1:
+    load_const "Extra\n"
+    store_var _3
+
+  L2:
+    load_const "Header\n"
+    load_var _3
+    bin_op +
+    load_const "Footer"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_ws_case7() -> string {
+    load_const true
+    call user.backtick_strings.bt_m3_ws_case7_show
+    store_var _2
+    load_const false
+    call user.backtick_strings.bt_m3_ws_case7_show
+    store_var _3
+    load_var _2
+    load_const "|"
+    bin_op +
+    load_var _3
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_ws_case7_show(extra: bool) -> string {
+    load_var extra
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    store_var _3
+    jump L2
+
+  L1:
+    load_const "\nExtra line"
+    store_var _3
+
+  L2:
+    load_const "Header"
+    load_var _3
+    bin_op +
+    load_const "\nFooter"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_ws_case8() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const "Fruits"
+    load_const "apple"
+    load_const "banana"
+    load_type string
+    alloc_array 2
+    init_instance user.backtick_strings.Group .name, .items
+    load_const "Drinks"
+    load_const "coffee"
+    load_type string
+    alloc_array 1
+    init_instance user.backtick_strings.Group .name, .items
+    load_type backtick_strings.Group
+    alloc_array 2
+    load_type baml.iter.Iterable<Error = never, Item = backtick_strings.Group>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _8
+
+  L0:
+    load_var _8
+    load_type baml.iter.Iterator<Error = never, Item = backtick_strings.Group>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+    load_var _9
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_var _9
+    store_var g
+    load_var  __m3_for
+    store_var _13
+    load_type string
+    load_var g
+    load_field .name
+    call baml.String.from
+    store_var _17
+    load_const ""
+    store_var  __m3_for
+    load_var g
+    load_field .items
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _23
+
+  L2:
+    load_var _23
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _24
+    load_var _24
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var  __m3_for
+    store_var _28
+    load_type string
+    load_var _24
+    call baml.String.from
+    store_var _31
+    load_var _28
+    load_const "  - "
+    load_var _31
+    bin_op +
+    load_const "\n"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L2
+
+  L4:
+    load_var _13
+    load_const "Group: "
+    load_var _17
+    bin_op +
+    load_const "\n"
+    bin_op +
+    load_var  __m3_for
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L5:
+    load_var  __m3_for
+    return
+}
+
+function backtick_strings.bt_m3_ws_mid_line_indented_for() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const "a"
+    load_const "b"
+    load_const "c"
+    load_type string
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _11
+    load_type string
+    load_var _7
+    call baml.String.from
+    store_var _13
+    load_var2 4 5
+    load_const " "
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_const "Prefix:\n    "
+    load_var  __m3_for
+    bin_op +
+    load_const "Suffix"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_m3_ws_tag_at_literal_start() -> string {
+    load_const ""
+    store_var  __m3_for
+    load_const "x"
+    load_const "y"
+    load_type string
+    alloc_array 2
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+
+  L0:
+    load_var _5
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var  __m3_for
+    store_var _10
+    load_type string
+    load_var _6
+    call baml.String.from
+    store_var _12
+    load_var2 4 5
+    load_const "\n"
+    bin_op +
+    bin_op +
+    store_var  __m3_for
+    jump L0
+
+  L2:
+    load_var  __m3_for
+    load_const "done"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_multi_interp() -> string {
+    load_type string
+    load_const "ada"
+    call baml.String.from
+    store_var _5
+    load_type string
+    load_const "lovelace"
+    call baml.String.from
+    store_var _8
+    load_var _5
+    load_const " "
+    bin_op +
+    load_var _8
+    bin_op +
+    load_const " writes code"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_multi_tick_ladder() -> string {
+    load_const "inline `code` here"
+    return
+}
+
+function backtick_strings.bt_multiline_dedent() -> string {
+    load_const "line one\nline two"
+    return
+}
+
+function backtick_strings.bt_multiline_keeps_trailing_escaped_newline() -> string {
+    load_const "line one\nline two\n"
+    return
+}
+
+function backtick_strings.bt_nested_interp() -> string {
+    load_type string
+    load_const "x"
+    call baml.String.from
+    store_var _2
+    load_type string
+    load_const "inner-"
+    load_var _2
+    bin_op +
+    call baml.String.from
+    store_var _5
+    load_const "outer["
+    load_var _5
+    bin_op +
+    load_const "]"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_one_liner() -> string {
+    load_const "hello world"
+    return
+}
+
+function backtick_strings.bt_point_structural() -> string {
+    load_type backtick_strings.Point
+    load_const 1
+    load_const 2
+    init_instance user.backtick_strings.Point .x, .y
+    call baml.String.from
+    store_var _2
+    load_const "p = "
+    load_var _2
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_recursive_main() -> string {
+    load_const 5
+    call user.backtick_strings.bt_bangs
+    store_var _2
+    load_type string
+    load_var _2
+    call baml.String.from
+    store_var _1
+    load_const "done"
+    load_var _1
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_simple_interp() -> string {
+    load_type string
+    load_const "world"
+    call baml.String.from
+    store_var _3
+    load_const "Hello, "
+    load_var _3
+    bin_op +
+    load_const "!"
+    bin_op +
+    return
+}
+
+function backtick_strings.bt_trailing_dollar() -> string {
+    load_const "cost: $"
+    return
+}
+
+function backtick_strings.bt_void_tail() -> string {
+    load_const ""
+    store_var_load_var  __m3_concat
+    load_const "a"
+    bin_op +
+    store_var  __m3_concat
+    load_const false
+    pop_jump_if_false L0
+
+  L0:
+    load_var  __m3_concat
+    load_const "b"
+    bin_op +
+    store_var  __m3_concat
+    load_var  __m3_concat
+    return
+}
+
+function backtick_strings.bt_xslet_chain() -> string {
+    load_const ""
+    store_var_load_var  __m3_concat
+    load_const "a"
+    bin_op +
+    store_var_load_var  __m3_concat
+    load_const "b"
+    bin_op +
+    store_var  __m3_concat
+    load_var  __m3_concat
+    store_var _5
+    load_type string
+    load_const "X"
+    call baml.String.from
+    store_var _6
+    load_var2 2 3
+    bin_op +
+    store_var_load_var  __m3_concat
+    load_const "c"
+    bin_op +
+    store_var_load_var  __m3_concat
+    load_const "d"
+    bin_op +
+    store_var  __m3_concat
+    load_var  __m3_concat
+    store_var _13
+    load_type string
+    load_const "X"
+    load_const "Y"
+    bin_op +
+    call baml.String.from
+    store_var _14
+    load_var2 4 5
+    bin_op +
+    store_var_load_var  __m3_concat
+    load_const "e"
+    bin_op +
+    store_var  __m3_concat
+    load_var  __m3_concat
+    return
+}
+
+function backtick_strings.bt_xslet_concat_scope() -> string {
+    load_const ""
+    store_var  __m3_concat
+    load_var  __m3_concat
+    store_var _3
+    load_type string
+    load_const "hi"
+    call baml.String.from
+    store_var _4
+    load_var2 2 3
+    bin_op +
+    store_var  __m3_concat
+    load_var  __m3_concat
+    return
+}
+
+function backtick_strings.bt_xslet_f(items: int[]) -> string {
+    load_const ""
+    store_var_load_var  __m3_concat
+    load_const "count: "
+    bin_op +
+    store_var  __m3_concat
+    load_var items
+    container_len
+    store_var n
+    load_var  __m3_concat
+    store_var _5
+    load_type int
+    load_var n
+    call baml.String.from
+    store_var _6
+    load_var2 4 5
+    bin_op +
+    store_var_load_var  __m3_concat
+    load_const " items"
+    bin_op +
+    store_var  __m3_concat
+    load_var  __m3_concat
+    return
+}
+
+function backtick_strings.bt_xslet_main() -> string {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    call user.backtick_strings.bt_xslet_f
+    return
+}
+
+function backtick_strings.bt_xslet_reassign() -> string {
+    load_const 0
+    store_var n
+    load_const ""
+    store_var  __m3_concat
+    load_var n
+    load_const 1
+    add_int
+    store_var n
+    load_var  __m3_concat
+    store_var _4
+    load_type int
+    load_var n
+    call baml.String.from
+    store_var _5
+    load_var2 3 4
+    bin_op +
+    store_var_load_var  __m3_concat
+    load_const "-"
+    bin_op +
+    store_var  __m3_concat
+    load_var n
+    load_const 1
+    add_int
+    store_var n
+    load_var  __m3_concat
+    store_var _10
+    load_type int
+    load_var n
+    call baml.String.from
+    store_var _11
+    load_var2 5 6
+    bin_op +
+    store_var  __m3_concat
+    load_var  __m3_concat
+    return
+}

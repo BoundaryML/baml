@@ -206,3 +206,110 @@ async fn unreflect_runtime_escape_does_not_accept_ordinary_values() {
         "#
     );
 }
+
+/// B-1582 item 5: a recursive field could be built and an ordinary field could
+/// carry metadata, but not both — `PendingType` had no `meta`, so a recursive
+/// reference could not be aliased or described.
+#[tokio::test]
+async fn recursive_pending_fields_carry_metadata() {
+    let output = baml_test!(
+        r#"
+        function main() -> string throws unknown {
+            let node = reflect.class.builder("Node")
+            let next = node.type().optional()
+            node.field("label", type.of<string>())
+            node.field(
+                "next",
+                next.meta(alias = "child", description = "Recursive child"),
+            )
+
+            let built = node.build().as_type().as_class() ?? throw "expected class"
+            let fields = built.fields()
+            let label = fields.at(0) ?? throw "expected label field"
+            let child = fields.at(1) ?? throw "expected next field"
+
+            let label_alias = label.meta.alias ?? "none"
+            let child_alias = child.meta.alias ?? "none"
+            let child_description = child.meta.description ?? "none"
+            `${label.name}|${label_alias}|${child.name}|${child_alias}|${child_description}`
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "label|none|next|child|Recursive child".into()
+        ))
+    );
+}
+
+/// The alias a recursive field carries is the key the LLM schema serializes it
+/// under, so it has to survive the atomic group build all the way to render.
+#[tokio::test]
+async fn recursive_pending_field_metadata_reaches_the_rendered_schema() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        function Extract<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> string throws unknown {
+            let node = reflect.class.builder("Node")
+            let next = node.type().optional()
+            node.field("label", type.of<string>())
+            node.field(
+                "next",
+                next.meta(alias = "child", description = "Recursive child"),
+            )
+            let built = node.build().as_type()
+            Extract$render_prompt<unreflect(built)>().text()
+        }
+        "##
+    );
+    let BexExternalValue::String(rendered) = output.result.expect("render should succeed") else {
+        panic!("expected a string")
+    };
+    let rendered = rendered.to_string();
+    assert!(rendered.contains("child"), "missing alias: {rendered}");
+    assert!(
+        rendered.contains("Recursive child"),
+        "missing description: {rendered}"
+    );
+    assert!(
+        !rendered.contains("next"),
+        "aliased field leaked its source name: {rendered}"
+    );
+}
+
+/// A metadata-wrapped pending reference whose group is already frozen resolves
+/// to an ordinary type; the metadata must not be dropped on that path.
+#[tokio::test]
+async fn metadata_survives_an_already_resolved_pending_reference() {
+    let output = baml_test!(
+        r#"
+        function main() -> string throws unknown {
+            let inner = reflect.class.builder("Inner")
+            inner.field("value", type.of<string>())
+            let pending = inner.type()
+            inner.build()
+
+            let outer = reflect.class.builder("Outer")
+            outer.field("nested", pending.meta(alias = "kid", description = "Frozen child"))
+            let built = outer.build().as_type().as_class() ?? throw "expected class"
+            let field = built.fields().at(0) ?? throw "expected field"
+            `${field.name}|${field.meta.alias ?? "none"}|${field.meta.description ?? "none"}`
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("nested|kid|Frozen child".into()))
+    );
+}

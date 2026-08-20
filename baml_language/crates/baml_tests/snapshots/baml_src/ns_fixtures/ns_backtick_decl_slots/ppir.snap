@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.backtick_decl_slots.Greet(name: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(Greet$spec(name)).value
+}
+function user.fixtures.backtick_decl_slots.Greet$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
+}
+function user.fixtures.backtick_decl_slots.Greet$render_prompt(name: string) -> ai.Prompt  [expr] {
+  Greet$spec(name).prompt(output_format = ai.wire.render_output_format(type.of()))
+}
+function user.fixtures.backtick_decl_slots.Greet$spec(name: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "Greet", args: map { "name": name }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Say hello to ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } name);  __tt_cur =  __tt_cur Add ".";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Fast) }
+}
+function user.fixtures.backtick_decl_slots.Greet$stream(name: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(Greet$spec(name), client = client)
+}
+function user.fixtures.backtick_decl_slots.Header(title: string) -> string  [expr] {
+  {  } `...`
+}
+
+--- captures ---
+lambda ( __spec_output_format) in Greet$spec: captures [name]

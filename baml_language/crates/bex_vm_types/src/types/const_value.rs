@@ -44,6 +44,21 @@ pub enum ConstValue {
         /// no match-any holes).
         type_args_templates: Vec<crate::TyTemplate>,
     },
+    /// A singleton-type `IsType` check constant: membership in the literal
+    /// type `1`, `"go"`, `true`, `1n`.
+    ///
+    /// Membership in a singleton is decided by the value's *own* identity, so
+    /// unlike every other `IsType` constant this one is compared against the
+    /// value rather than against a type the value reconstructs. It is a
+    /// specialization of `ConstValue::Type(TyTemplate::Literal(..))`, which
+    /// decides the same question through the canonical algebra: the two must
+    /// agree, and `literal_membership_agrees_with_algebra` in `type_match`
+    /// pins that.
+    ///
+    /// Like `Type` and `ClassWithTypeArgs`, this constant is **not**
+    /// pre-resolved at load time — the `IsType` dispatch reads it straight from
+    /// the raw constant pool.
+    Literal(baml_base::Literal),
 }
 
 impl ConstValue {
@@ -77,6 +92,12 @@ impl ConstValue {
             ConstValue::ClassWithTypeArgs { .. } => {
                 panic!(
                     "ConstValue::ClassWithTypeArgs must not be pre-resolved via to_value — \
+                     use the IsType instruction instead"
+                )
+            }
+            ConstValue::Literal(_) => {
+                panic!(
+                    "ConstValue::Literal must not be pre-resolved via to_value — \
                      use the IsType instruction instead"
                 )
             }

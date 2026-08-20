@@ -68,7 +68,13 @@ use sha2::{Digest, Sha256};
 /// Option<ObjectIndex>` — a default method's pooled body, relocated by the
 /// linker like any other object operand and bound to a pointer at load, so
 /// runtime implementors inherit defaults without naming anything.
-pub const FORMAT_VERSION: u32 = 6;
+///
+/// Version 7: every type-bearing wire field is head-inline rather than
+/// name-headed, and the bytecode gained `OpCode::Truthy` plus
+/// `ConstValue::Literal`. Both landed while 6 was current — on different
+/// branches — so a 6 image can be either shape and neither can be told from
+/// the other. The bump is what makes the ambiguity unreachable.
+pub const FORMAT_VERSION: u32 = 7;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

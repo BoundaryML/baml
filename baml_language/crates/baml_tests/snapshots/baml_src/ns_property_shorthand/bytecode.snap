@@ -1,0 +1,338 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function property_shorthand.$init_test_ns_property_shorthand_property_shorthand(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.property_shorthand"
+    load_const "class properties use shorthand"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand"
+    load_const "map entries use shorthand"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand"
+    load_const "shorthand mixes with explicit properties and nests"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand"
+    load_const "shorthand works across multiple nested classes"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand"
+    load_const "if let binders work in explicit and shorthand map entries"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand"
+    load_const "shorthand uses every lexical binder scope"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.property_shorthand"
+    load_const "class shorthand sees if let binders"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function property_shorthand.property_shorthand_catch() -> string {
+    call user.property_shorthand.property_shorthand_throw
+    jump L2
+    load_var error
+    is_type property_shorthand.PropertyShorthandError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var error
+    rethrow
+
+  L1:
+    load_var error
+    load_field .message
+
+  L2:
+    return
+}
+
+function property_shorthand.property_shorthand_class(mode: string, retries: int, label: string) -> <unresolved type #56204083479140> {
+    load_var mode
+    load_const "mode"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_var2 2 3
+    init_instance user.property_shorthand.PropertyShorthandRequest .options, .retries, .label
+    return
+}
+
+function property_shorthand.property_shorthand_class_if_let(input: string | null) -> string {
+    load_var input
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    jump L2
+
+  L1:
+    load_var _2
+    init_instance user.property_shorthand.PropertyShorthandBinder .value
+    load_field .value
+
+  L2:
+    return
+}
+
+function property_shorthand.property_shorthand_destructure() -> string {
+    load_type string
+    load_type string
+    load_const "destructured"
+    init_instance user.property_shorthand.PropertyShorthandBinder .value
+    load_field .value
+    load_const "value"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_const "value"
+    call baml.Map.get
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const ""
+    store_var _6
+
+  L0:
+    load_var _6
+    return
+}
+
+function property_shorthand.property_shorthand_for(names: string[]) -> string {
+    load_const ""
+    store_var output
+    load_var names
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_var output
+    store_var _10
+    load_type string
+    load_type string
+    load_var _4
+    load_const "name"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_const "name"
+    call baml.Map.get
+    store_var_load_var _12
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const ""
+    store_var _12
+
+  L2:
+    load_var2 5 6
+    bin_op +
+    store_var output
+    jump L0
+
+  L3:
+    load_var output
+    return
+}
+
+function property_shorthand.property_shorthand_if_let(input: string | null) -> string {
+    load_var input
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    jump L4
+
+  L1:
+    load_var _2
+    store_var_load_var name
+    load_const "name"
+    load_type string
+    load_type string
+    alloc_map 1
+    store_var shorthand
+    load_type string
+    load_type string
+    load_var name
+    load_const "name"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_const "name"
+    call baml.Map.get
+    store_var_load_var _9
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const ""
+    store_var _9
+
+  L2:
+    load_var _9
+    store_var _8
+    load_type string
+    load_type string
+    load_var shorthand
+    load_const "name"
+    call baml.Map.get
+    store_var_load_var _15
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const ""
+    store_var _15
+
+  L3:
+    load_var2 5 7
+    bin_op +
+
+  L4:
+    return
+}
+
+function property_shorthand.property_shorthand_map(count: int, retries: int) -> map<string, int> {
+    load_var2 1 2
+    load_const "count"
+    load_const "retries"
+    load_type string
+    load_type int
+    alloc_map 2
+    return
+}
+
+function property_shorthand.property_shorthand_match(input: string | null) -> string {
+    load_var input
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    jump L3
+
+  L1:
+    load_type string
+    load_type string
+    load_var _2
+    load_const "name"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_const "name"
+    call baml.Map.get
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const ""
+    store_var _6
+
+  L2:
+    load_var _6
+
+  L3:
+    return
+}
+
+function property_shorthand.property_shorthand_mixed(mode: string, retries: int, label: string) -> <unresolved type #128392965457575> {
+    load_var mode
+    load_const "mode"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_var retries
+    load_const 1
+    add_int
+    load_var label
+    init_instance user.property_shorthand.PropertyShorthandRequest .options, .retries, .label
+    init_instance user.property_shorthand.PropertyShorthandEnvelope .request
+    return
+}
+
+function property_shorthand.property_shorthand_multi_nested(value: string) -> <unresolved type #33251328606030> {
+    load_var value
+    init_instance user.property_shorthand.PropertyShorthandLeaf .value
+    init_instance user.property_shorthand.PropertyShorthandMiddle .leaf
+    init_instance user.property_shorthand.PropertyShorthandOuter .middle
+    return
+}
+
+function property_shorthand.property_shorthand_nested_block() -> string {
+    load_type string
+    load_type string
+    load_const "nested"
+    load_const "name"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_const "name"
+    call baml.Map.get
+    store_var_load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const ""
+    store_var _4
+
+  L0:
+    load_var _4
+    return
+}
+
+function property_shorthand.property_shorthand_throw() -> string {
+    load_const "caught"
+    init_instance user.property_shorthand.PropertyShorthandError .message
+    throw
+}

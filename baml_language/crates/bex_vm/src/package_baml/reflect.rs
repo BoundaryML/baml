@@ -416,6 +416,50 @@ fn function_type(vm: &mut BexVm, package: HeapPtr, name: &LocalName) -> Option<V
     ))
 }
 
+/// The `F` contract check `Package.get_function` runs: the callable's
+/// reconstructed function type must be a subtype of the contract the caller
+/// asked for.
+///
+/// A runtime package roots the subtype context at itself so its own impls are
+/// visible; a statically compiled callable has no such root and uses the VM's
+/// lexical world.
+fn check_function_contract(
+    vm: &mut BexVm,
+    package: HeapPtr,
+    name: &str,
+    signature: &CallableSignature,
+) -> Result<(), VmRustFnError> {
+    let actual = callee_fn_ty(signature);
+    // The caller's `F`. Erasing a missing one to `unknown` would make the
+    // subtype check below vacuously true — every function would satisfy every
+    // requested signature — so an absent type argument is reported as the
+    // frame-seeding bug it is.
+    let Some(expected) = vm.current_call_type_args().first().cloned() else {
+        return Err(VmRustFnError::InternalError(
+            bex_vm_types::errors::VmInternalError::MissingNativeFunction {
+                name: "baml.reflect.Package.get_function: missing type argument".to_string(),
+            },
+        ));
+    };
+    let sub = Ty::from(actual.clone());
+    let sup = Ty::from(expected.clone());
+    let matches = if package.is_null() {
+        normalize::is_subtype(&sub, &sup, vm)
+    } else {
+        normalize::is_subtype(&sub, &sup, &PackageSubtypeContext { vm, package })
+    };
+    if matches {
+        return Ok(());
+    }
+    Err(compilation_error(
+        vm,
+        DiagnosticId::TypeMismatch,
+        format!(
+            "function `{name}` has type `{actual}`, which is not a subtype of requested contract `{expected}`"
+        ),
+    ))
+}
+
 fn dependency_object(vm: &BexVm, package: HeapPtr, local: &str) -> Option<HeapPtr> {
     let Object::Package(package) = vm.get_object(package) else {
         return None;
@@ -731,6 +775,15 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             }
             objects.push(vm.alloc(object));
         }
+        // Runtime identities are generative: remint before anything reads a
+        // declaration's tag, so every downstream read sees the real identity.
+        let owned_declarations: Vec<HeapPtr> = objects
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !external_objects.contains_key(index))
+            .map(|(_, ptr)| *ptr)
+            .collect();
+        let reminted = remint_grafted_declarations(vm, &owned_declarations);
 
         // Compile-time heap construction resolves `ConstValue::Object` into
         // stable pointers before execution. Dynamic functions need the same
@@ -755,7 +808,8 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             for constant in constants {
                 let value = match constant {
                     bex_vm_types::ConstValue::Type(_)
-                    | bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => Value::NULL,
+                    | bex_vm_types::ConstValue::ClassWithTypeArgs { .. }
+                    | bex_vm_types::ConstValue::Literal(_) => Value::NULL,
                     bex_vm_types::ConstValue::Float(value) => {
                         let ptr = vm.alloc_float(value);
                         objects.push(ptr);
@@ -869,6 +923,23 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 pointers.push(pointer);
             }
             impl_rules.insert(interface_ptr, pointers);
+        }
+        // Every owned object now exists — including the impl rules, whose
+        // patterns carry heads — so the graft can bind and prove totality.
+        let owned_for_bind: Vec<HeapPtr> = objects
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !external_objects.contains_key(index))
+            .map(|(_, ptr)| *ptr)
+            .collect();
+        let mut named_surfaces = Vec::new();
+        for (alias, &dep_ptr) in &dependencies {
+            dependency_named_declarations(vm, alias, dep_ptr, &mut named_surfaces);
+        }
+        if let Err(error) =
+            bind_graft_type_heads(vm, &objects, &owned_for_bind, &named_surfaces, &reminted)
+        {
+            return error.into();
         }
         let functions = program_package
             .functions
@@ -1070,41 +1141,30 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             return Ok(None);
         };
         let Some(signature) = vm.callable_signature(function_value) else {
+            if vm
+                .unspecialized_generic_callable_name(function_value)
+                .is_some()
+            {
+                let diagnostic =
+                    runtime_type::unspecialized_reflected_generic(&display_local_name(&local));
+                return Err(VmRustFnError::Thrown(
+                    super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+                ));
+            }
             return Ok(None);
         };
-        let actual = callee_fn_ty(&signature);
-        // The caller's `T`. Erasing a missing one to `unknown` would make the
-        // subtype check below vacuously true — every function would satisfy
-        // every requested signature — so an absent type argument is reported
-        // as the frame-seeding bug it is.
-        let Some(expected) = vm.current_call_type_args().first().cloned() else {
-            return Err(VmRustFnError::InternalError(
-                bex_vm_types::errors::VmInternalError::MissingNativeFunction {
-                    name: "baml.reflect.Package.get_function: missing type argument".to_string(),
-                },
-            ));
-        };
-        let context = PackageSubtypeContext {
-            vm,
-            package: package_ptr,
-        };
-        let matches = normalize::is_subtype(
-            &Ty::from(actual.clone()),
-            &Ty::from(expected.clone()),
-            &context,
-        );
-        if !matches {
-            let diagnostic = super::type_kinds::compiler_diagnostic(
-                DiagnosticId::TypeMismatch,
-                format!(
-                    "function `{}` has type `{actual}`, which is not a subtype of requested contract `{expected}`",
-                    name.as_str()
-                ),
-            );
+        // Signature reconstruction only sees the declared surface. A companion
+        // whose surface is free of its parent's `T` gets this far and would be
+        // handed out as an ordinary function value — and calling one directly
+        // fails inside its body as a VM internal error no `catch` can see. Refuse
+        // it here, where the caller still has a diagnostic channel.
+        if let Some(name) = vm.generic_callable_body_needs_type_args(function_value) {
+            let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
             return Err(VmRustFnError::Thrown(
                 super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
             ));
         }
+        check_function_contract(vm, package_ptr, name.as_str(), &signature)?;
         Ok(Some(function_value))
     }
 
@@ -1189,8 +1249,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         functions
             .into_iter()
             .filter_map(|name| {
-                function_type(vm, ptr, &name)
-                    .map(|r#type| (display_local_name(&name).into(), r#type))
+                function_type(vm, ptr, &name).map(|ty| (display_local_name(&name).into(), ty))
             })
             .collect()
     }
@@ -1236,6 +1295,192 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             .map(|diagnostic| diagnostic_value(vm, diagnostic))
             .collect()
     }
+}
+
+/// Give every owned grafted declaration its own runtime identity.
+///
+/// A runtime-compiled declaration is generative: two compiles of one source
+/// are two types, and a declaration spelled like a static one is not that
+/// static type (`TYPE_SYSTEM.md` — nominal identity is the declaration, not the
+/// spelling). Emit content-addresses tags from names, so without this two
+/// same-named declarations would be tag-equal — reminting to a counter tag
+/// makes each graft's declarations identity-distinct by construction.
+///
+/// Safe against baked bytecode: jump tables carry only the coarse kind tags
+/// (`realized_type_tag` answers `None` for declared heads), and class/enum
+/// match arms compare `IsType` pointers, which the graft resolved to these
+/// same objects.
+///
+/// Returns the `old content tag → reminted head` rows the head bind uses to
+/// bridge the plan's internal references onto the new identities.
+fn remint_grafted_declarations(
+    vm: &mut BexVm,
+    owned: &[HeapPtr],
+) -> Vec<(baml_type::typetag::TypeTag, bex_vm_types::TypeHead)> {
+    let mut reminted = Vec::new();
+    for &ptr in owned {
+        let fresh = baml_type::typetag::TypeTag::fresh_dynamic();
+        let old = match vm.get_object_mut(ptr) {
+            Object::Class(class) => std::mem::replace(&mut class.type_tag, fresh),
+            Object::Enum(enm) => std::mem::replace(&mut enm.type_tag, fresh),
+            Object::Interface(interface) => std::mem::replace(&mut interface.type_tag, fresh),
+            Object::TypeAlias(alias) => std::mem::replace(&mut alias.type_tag, fresh),
+            _ => continue,
+        };
+        reminted.push((old, bex_vm_types::TypeHead::new(ptr, fresh)));
+    }
+    reminted
+}
+
+/// Collect every declaration a graft can legitimately name through `alias`,
+/// as `(fq_name, declaration)` rows for [`bind_graft_type_heads`]'s
+/// named-surface bridge: the dependency's exported declarations and its
+/// mounted types (whose values are `Object::Type`s wrapping the declaration's
+/// own head). Non-declarations are filtered by the bind itself.
+fn dependency_named_declarations(
+    vm: &BexVm,
+    alias: &str,
+    package_ptr: HeapPtr,
+    out: &mut Vec<(String, HeapPtr)>,
+) {
+    let Object::Package(package) = vm.get_object(package_ptr) else {
+        return;
+    };
+    let fq = |local: &bex_vm_types::types::LocalName| -> String {
+        std::iter::once(alias)
+            .chain(local.namespace.iter().map(baml_type::Name::as_str))
+            .chain(std::iter::once(local.name.as_str()))
+            .collect::<Vec<_>>()
+            .join(".")
+    };
+    for (local, &ptr) in package
+        .classes
+        .iter()
+        .chain(&package.enums)
+        .chain(&package.interfaces)
+        .chain(&package.type_aliases)
+    {
+        out.push((fq(local), ptr));
+    }
+    for (name, &type_ptr) in &package.mounted_types {
+        let Object::Type(value) = vm.get_object(type_ptr) else {
+            continue;
+        };
+        let head = match &value.ty {
+            RealizedTy::Class(head, _, _) => head,
+            RealizedTy::Enum(head, _) => head,
+            RealizedTy::Interface(head, _, _, _) => head,
+            RealizedTy::TypeAlias(head, _) => head,
+            _ => continue,
+        };
+        if head.is_resolved() {
+            out.push((format!("{alias}.{name}"), head.ptr()));
+        }
+    }
+}
+
+/// Bind every type head an owned grafted object carries to the declaration it
+/// names — the runtime-package twin of [`bex_heap::BexHeap::bind_type_heads`].
+///
+/// A runtime compile's emit mints heads tag-only, exactly like the static
+/// emit, so each grafted object arrives carrying unresolved heads. Tags
+/// resolve against the plan pool first (`plan_objects` spans it — its own
+/// declarations *and* the live external ones its symbols imported, so a
+/// reference into an earlier eval lands on that eval's object), then against
+/// a transient index over the compile-time pool for the type-only references
+/// no import symbol carries. Both indices are built here and dropped here.
+///
+/// A tag nothing declares is a link error, not a head to leave dangling: an
+/// unresolved head is untraceable by the collector and unresolvable by
+/// dispatch.
+fn bind_graft_type_heads(
+    vm: &mut BexVm,
+    plan_objects: &[HeapPtr],
+    owned: &[HeapPtr],
+    named_surfaces: &[(String, HeapPtr)],
+    reminted: &[(baml_type::typetag::TypeTag, bex_vm_types::TypeHead)],
+) -> Result<(), VmRustFnError> {
+    // Every entry carries BOTH halves off the target declaration: a head that
+    // lands here adopts the declaration's identity, not just its address. For
+    // a plan-local or compile-time target the two tags coincide; for a
+    // runtime-created target reached by name they do not, and the live tag is
+    // the identity.
+    let mut by_tag: std::collections::HashMap<baml_type::typetag::TypeTag, bex_vm_types::TypeHead> =
+        std::collections::HashMap::new();
+    // Reminted rows first: a plan-internal reference spells its sibling by the
+    // emit-time content tag, and must land on the reminted identity — the
+    // plan's own declaration wins that spelling over any same-named surface.
+    for &(old_tag, head) in reminted {
+        by_tag.insert(old_tag, head);
+        by_tag.insert(head.tag(), head);
+    }
+    for &ptr in plan_objects {
+        if let Some(tag) = bex_heap::BexHeap::declaration_tag(vm.get_object(ptr)) {
+            by_tag
+                .entry(tag)
+                .or_insert_with(|| bex_vm_types::TypeHead::new(ptr, tag));
+        }
+    }
+    // A declaration reachable by *name* — a dependency's export, a mounted
+    // type, an earlier eval's declaration — may be runtime-created, in which
+    // case its live tag is a counter mint while the head naming it carries a
+    // content tag. Emit spells such a reference by whichever name it resolved
+    // to — the surface's mount name or the declaration's own (synthesized)
+    // name — so each declaration is indexed under both spellings' tags, plus
+    // its live tag for a head that already carries the identity.
+    for (fq_name, ptr) in named_surfaces {
+        let object = vm.get_object(*ptr);
+        let Some(live_tag) = bex_heap::BexHeap::declaration_tag(object) else {
+            continue;
+        };
+        let bound = bex_vm_types::TypeHead::new(*ptr, live_tag);
+        let declared = match object {
+            Object::Class(class) => Some(&class.name),
+            Object::Enum(enm) => Some(&enm.name),
+            Object::Interface(interface) => Some(&interface.name),
+            Object::TypeAlias(alias) => Some(&alias.name),
+            _ => None,
+        };
+        if let Some(name) = declared {
+            by_tag
+                .entry(baml_type::typetag::TypeTag::of_head(
+                    &name.render_dotted(false),
+                ))
+                .or_insert(bound);
+        }
+        by_tag
+            .entry(baml_type::typetag::TypeTag::of_head(fq_name))
+            .or_insert(bound);
+        by_tag.entry(live_tag).or_insert(bound);
+    }
+    let compile_time = vm.heap.compile_time_declaration_index();
+    let mut unbound: Vec<baml_type::typetag::TypeTag> = Vec::new();
+    for &ptr in owned {
+        bex_vm_types::head_walk::visit_object_heads_mut(vm.get_object_mut(ptr), &mut |head| {
+            if head.is_resolved() {
+                return;
+            }
+            if let Some(&bound) = by_tag.get(&head.tag()) {
+                *head = bound;
+            } else if let Some(&declaration) = compile_time.get(&head.tag()) {
+                // The compile-time index is keyed by each declaration's own
+                // tag, so the head's tag already is the identity.
+                head.resolve(declaration);
+            } else {
+                unbound.push(head.tag());
+            }
+        });
+    }
+    if unbound.is_empty() {
+        return Ok(());
+    }
+    unbound.sort_unstable();
+    unbound.dedup();
+    Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+        message: format!(
+            "runtime link produced type references nothing declares (tags {unbound:?})"
+        ),
+    }))
 }
 
 /// Bind each freshly grafted interface's default-method bodies from the pool
@@ -1500,6 +1745,10 @@ fn graft_session_submission(
             owned.push(pointer);
         }
     }
+    // Runtime identities are generative: remint before anything reads a
+    // declaration's tag (`allocate_runtime_declaration_types` builds this
+    // eval's `type` values off them below).
+    let reminted = remint_grafted_declarations(vm, &owned);
     let mut object_map = vec![0usize; objects.len()];
     let mut appended_objects = Vec::new();
     for (index, pointer) in objects.iter().copied().enumerate() {
@@ -1556,7 +1805,8 @@ fn graft_session_submission(
         for constant in constants {
             let value = match constant {
                 bex_vm_types::ConstValue::Type(_)
-                | bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => Value::NULL,
+                | bex_vm_types::ConstValue::ClassWithTypeArgs { .. }
+                | bex_vm_types::ConstValue::Literal(_) => Value::NULL,
                 bex_vm_types::ConstValue::Float(value) => {
                     let pointer = vm.alloc_float(value);
                     extra_owned.push(pointer);
@@ -1668,6 +1918,27 @@ fn graft_session_submission(
         }
         new_impl_rules.insert(interface, pointers);
     }
+    // Every owned object now exists — including the impl rules, whose patterns
+    // carry heads — so the graft can bind and prove totality. `extra_owned`'s
+    // boxed floats carry no heads and pass through the walk untouched.
+    let bind_set: Vec<HeapPtr> = owned.iter().chain(&extra_owned).copied().collect();
+    let mut named_surfaces = Vec::new();
+    for (alias, &dep_ptr) in &dependencies {
+        dependency_named_declarations(vm, alias, dep_ptr, &mut named_surfaces);
+    }
+    // A session's earlier evals published their declarations under fully
+    // qualified names; a later eval's type positions name them the same way.
+    if let Object::Package(package) = vm.get_object(package_ptr)
+        && let Some(runtime) = package.runtime.as_ref()
+    {
+        named_surfaces.extend(
+            runtime
+                .object_names
+                .iter()
+                .map(|(name, &ptr)| (name.clone(), ptr)),
+        );
+    }
+    bind_graft_type_heads(vm, &objects, &bind_set, &named_surfaces, &reminted)?;
 
     let mut object_name_updates = IndexMap::new();
     for (name, index) in &plan.program.function_indices {
@@ -2128,7 +2399,7 @@ fn prepare_call_any_argument(vm: &mut BexVm, value: Value, expected: &RealizedTy
     value_fits(vm, value, expected).then_some(value)
 }
 
-/// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError`.
+/// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError | CompilationError`.
 ///
 /// Every argument is keyed by parameter name; a nameless positional is
 /// addressed by the same `$argN` placeholder `reflect.signature` reports, so
@@ -2149,8 +2420,27 @@ fn call_any_impl(
         return non_callable_error("reflect.call_any").into();
     };
     let Some(sig) = vm.callable_signature(f_val) else {
+        if let Some(name) = vm.unspecialized_generic_callable_name(f_val) {
+            let diagnostic = runtime_type::unspecialized_reflected_generic(&name);
+            return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+                vm,
+                &[diagnostic],
+            ))
+            .into();
+        }
         return non_callable_error("reflect.call_any").into();
     };
+    // A generic whose signature happens to be free of its own type parameters
+    // reconstructs above and would otherwise be entered with an empty frame,
+    // failing inside its body as a VM internal error.
+    if let Some(name) = vm.generic_callable_body_needs_type_args(f_val) {
+        let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
+        return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+            vm,
+            &[diagnostic],
+        ))
+        .into();
+    }
 
     // Walk the parameters in declaration order, resolving each from the map
     // by its addressable name and assembling the callee's frame as we go.

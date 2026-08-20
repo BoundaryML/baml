@@ -169,7 +169,8 @@ macro_rules! visit_bytecode_index_operands {
                 | ConstValue::Int(_)
                 | ConstValue::Float(_)
                 | ConstValue::Bool(_)
-                | ConstValue::Type(_) => {}
+                | ConstValue::Type(_)
+                | ConstValue::Literal(_) => {}
             }
         }
         // Each class-init plan carries one class-object reference.

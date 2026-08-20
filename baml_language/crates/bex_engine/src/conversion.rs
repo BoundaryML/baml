@@ -255,12 +255,16 @@ fn host_call_parameter_types<'a>(
 
 #[cfg(test)]
 mod host_call_parameter_type_tests {
-    use baml_type::{FunctionParamMode, Name, RealizedFunctionParamTy, RealizedTy, TyAttr};
+    use baml_type::{FunctionParamMode, Name, TyAttr};
 
     use super::*;
 
-    fn param(name: &str, mode: FunctionParamMode, ty: RealizedTy) -> RealizedFunctionParamTy {
-        RealizedFunctionParamTy {
+    fn param(
+        name: &str,
+        mode: FunctionParamMode,
+        ty: bex_vm_types::RealizedTy,
+    ) -> bex_vm_types::RealizedFunctionParamTy {
+        bex_vm_types::RealizedFunctionParamTy {
             name: Some(Name::new(name)),
             ty,
             mode,
@@ -269,8 +273,11 @@ mod host_call_parameter_type_tests {
 
     #[test]
     fn resolves_required_and_exact_optional_wire_names() {
-        let union = RealizedTy::Union(
-            vec![RealizedTy::int(), RealizedTy::string()],
+        let union = bex_vm_types::RealizedTy::Union(
+            vec![
+                bex_vm_types::RealizedTy::int(),
+                bex_vm_types::RealizedTy::string(),
+            ],
             TyAttr::default(),
         );
         let params = vec![
@@ -285,8 +292,16 @@ mod host_call_parameter_type_tests {
     #[test]
     fn rejects_malformed_required_arity_and_optional_name() {
         let params = vec![
-            param("value", FunctionParamMode::Required, RealizedTy::int()),
-            param("foo_bar", FunctionParamMode::Optional, RealizedTy::string()),
+            param(
+                "value",
+                FunctionParamMode::Required,
+                bex_vm_types::RealizedTy::int(),
+            ),
+            param(
+                "foo_bar",
+                FunctionParamMode::Optional,
+                bex_vm_types::RealizedTy::string(),
+            ),
         ];
         let arity = host_call_parameter_types(&params, 0, std::iter::empty::<&str>()).unwrap_err();
         assert!(arity.contains("count 0"));
@@ -4674,7 +4689,7 @@ mod union_container_selection_tests {
             docstring: None,
             other: indexmap::IndexMap::new(),
             ty_attr: TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
         let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
         let broad = RuntimeTy::Enum(mood, TyAttr::default());

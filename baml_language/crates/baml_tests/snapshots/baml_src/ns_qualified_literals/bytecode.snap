@@ -1,0 +1,48 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function qualified_literals.$init_test_ns_qualified_literals_qualified_literals(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.qualified_literals"
+    load_const "qualified struct literals parse inside array literals"
+    make_closure .<lambda($init_test_ns_qualified_literals_qualified_literals, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function qualified_literals.first_x(points: <unresolved type #15031518682030>[]) -> int {
+    load_type qualified_literals.QualPoint
+    load_var points
+    load_const 0
+    call baml.Array.at
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type qualified_literals.QualPoint
+    load_var points
+    load_const 0
+    call baml.Array.at
+    load_field .0
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    store_var_load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const -1
+    store_var _2
+
+  L3:
+    load_var _2
+    return
+}

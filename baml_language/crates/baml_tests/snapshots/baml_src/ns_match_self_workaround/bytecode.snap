@@ -1,0 +1,232 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function match_self_workaround.$init_test_ns_match_self_workaround_match_self_workaround(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.match_self_workaround"
+    load_const "self_workaround_match_captures_enclosing_type"
+    make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_self_workaround"
+    load_const "self_workaround_match_rejects_other_type"
+    make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_self_workaround"
+    load_const "self_workaround_is_enclosing_type"
+    make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_self_workaround"
+    load_const "self_workaround_is_rejects_other_type"
+    make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_self_workaround"
+    load_const "self_workaround_generic_match_captures_own_instantiation"
+    make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_self_workaround"
+    load_const "self_workaround_generic_match_rejects_other_type"
+    make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_self_workaround"
+    load_const "self_workaround_generic_is_own_instantiation"
+    make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_self_workaround"
+    load_const "self_workaround_generic_is_rejects_other_instantiation"
+    make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_self_workaround"
+    load_const "self_workaround_generic_is_rejects_other_type"
+    make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function match_self_workaround.BoxG.is_own_instantiation(self: <unresolved type #125582216548363><#0>, other: unknown) -> bool {
+    load_var other
+    is_type match_self_workaround.BoxG<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function match_self_workaround.BoxG.same_box(self: <unresolved type #125582216548363><#0>, other: <unresolved type #125582216548363><#0> | int) -> string {
+    load_var other
+    store_var _3
+    load_var _3
+    narrow_bind match_self_workaround.BoxG<...>, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "other"
+    jump L2
+
+  L1:
+    load_const "box"
+
+  L2:
+    return
+}
+
+function match_self_workaround.Shape.is_shape(self: <unresolved type #48002735689154>, other: <unresolved type #48002735689154> | int) -> bool {
+    load_var other
+    is_type match_self_workaround.Shape
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function match_self_workaround.Shape.same_kind(self: <unresolved type #48002735689154>, other: <unresolved type #48002735689154> | int) -> string {
+    load_var other
+    store_var _3
+    load_var _3
+    narrow_bind match_self_workaround.Shape, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "other"
+    jump L2
+
+  L1:
+    load_const "shape"
+
+  L2:
+    return
+}
+
+function match_self_workaround.box_is_not_int_fn() -> bool {
+    load_type int
+    load_const 3
+    load_type int
+    init_instance<1> user.match_self_workaround.BoxG .value
+    load_const 7
+    call user.match_self_workaround.BoxG.is_own_instantiation
+    return
+}
+
+function match_self_workaround.box_is_other_instantiation_fn() -> bool {
+    load_type int
+    load_const 3
+    load_type int
+    init_instance<1> user.match_self_workaround.BoxG .value
+    load_const "s"
+    load_type string
+    init_instance<1> user.match_self_workaround.BoxG .value
+    call user.match_self_workaround.BoxG.is_own_instantiation
+    return
+}
+
+function match_self_workaround.box_is_own_instantiation_fn() -> bool {
+    load_type int
+    load_const 3
+    load_type int
+    init_instance<1> user.match_self_workaround.BoxG .value
+    load_const 4
+    load_type int
+    init_instance<1> user.match_self_workaround.BoxG .value
+    call user.match_self_workaround.BoxG.is_own_instantiation
+    return
+}
+
+function match_self_workaround.box_matches_int_fn() -> string {
+    load_type int
+    load_const 3
+    load_type int
+    init_instance<1> user.match_self_workaround.BoxG .value
+    load_const 42
+    call user.match_self_workaround.BoxG.same_box
+    return
+}
+
+function match_self_workaround.box_matches_own_instantiation_fn() -> string {
+    load_type int
+    load_const 3
+    load_type int
+    init_instance<1> user.match_self_workaround.BoxG .value
+    load_const 4
+    load_type int
+    init_instance<1> user.match_self_workaround.BoxG .value
+    call user.match_self_workaround.BoxG.same_box
+    return
+}
+
+function match_self_workaround.shape_is_not_int_fn() -> bool {
+    load_const 3
+    init_instance user.match_self_workaround.Shape .sides
+    load_const 7
+    call user.match_self_workaround.Shape.is_shape
+    return
+}
+
+function match_self_workaround.shape_is_shape_fn() -> bool {
+    load_const 3
+    init_instance user.match_self_workaround.Shape .sides
+    load_const 4
+    init_instance user.match_self_workaround.Shape .sides
+    call user.match_self_workaround.Shape.is_shape
+    return
+}
+
+function match_self_workaround.shape_matches_int_fn() -> string {
+    load_const 3
+    init_instance user.match_self_workaround.Shape .sides
+    load_const 42
+    call user.match_self_workaround.Shape.same_kind
+    return
+}
+
+function match_self_workaround.shape_matches_shape_fn() -> string {
+    load_const 3
+    init_instance user.match_self_workaround.Shape .sides
+    load_const 4
+    init_instance user.match_self_workaround.Shape .sides
+    call user.match_self_workaround.Shape.same_kind
+    return
+}

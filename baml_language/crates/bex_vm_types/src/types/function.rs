@@ -377,8 +377,7 @@ pub struct BoundMethod {
 /// Unlike `Closure`/`BoundMethod`, the base function is referenced by its
 /// **global slot** (`GlobalIndex`), not a `HeapPtr` — so a `GenericFunction`
 /// can live in the immutable compile-time object pool and be interned by
-/// `(function, type_args)`, giving pointer-stable identity. Both fields are
-/// non-pointer data, so GC treats this as a leaf (nothing to trace or fix up).
+/// `(function, type_args)`, giving pointer-stable identity.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct GenericFunction {
     /// Global slot of the underlying `Object::Function` (resolved at call time

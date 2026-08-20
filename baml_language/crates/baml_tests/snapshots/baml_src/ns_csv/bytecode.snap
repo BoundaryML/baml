@@ -1,0 +1,6221 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function csv.$init_test_ns_csv_csv(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_parse_line_endings"
+    make_closure .<lambda($init_test_ns_csv_csv, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_parse_quotes"
+    make_closure .<lambda($init_test_ns_csv_csv, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_parse_no_phantom_record"
+    make_closure .<lambda($init_test_ns_csv_csv, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_quoting_disabled"
+    make_closure .<lambda($init_test_ns_csv_csv, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_escape_dialect"
+    make_closure .<lambda($init_test_ns_csv_csv, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_tsv"
+    make_closure .<lambda($init_test_ns_csv_csv, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_papaparse_quote_boundaries"
+    make_closure .<lambda($init_test_ns_csv_csv, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_papaparse_empty_field_edges"
+    make_closure .<lambda($init_test_ns_csv_csv, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_papaparse_comment_runs"
+    make_closure .<lambda($init_test_ns_csv_csv, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_papaparse_line_endings_inside_quotes"
+    make_closure .<lambda($init_test_ns_csv_csv, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_spectrum_core_fixtures"
+    make_closure .<lambda($init_test_ns_csv_csv, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_bom_stripped_by_default"
+    make_closure .<lambda($init_test_ns_csv_csv, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_comment_lines"
+    make_closure .<lambda($init_test_ns_csv_csv, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_skip_lines"
+    make_closure .<lambda($init_test_ns_csv_csv, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_blank_records"
+    make_closure .<lambda($init_test_ns_csv_csv, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_trim_all"
+    make_closure .<lambda($init_test_ns_csv_csv, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_trim_preserves_quoted"
+    make_closure .<lambda($init_test_ns_csv_csv, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_encoding_strict_throws"
+    make_closure .<lambda($init_test_ns_csv_csv, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_encoding_lossy"
+    make_closure .<lambda($init_test_ns_csv_csv, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_null_semantics_empty_unquoted"
+    make_closure .<lambda($init_test_ns_csv_csv, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_null_semantics_quoted_empty"
+    make_closure .<lambda($init_test_ns_csv_csv, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_null_values_option"
+    make_closure .<lambda($init_test_ns_csv_csv, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_decode_all_cell_types"
+    make_closure .<lambda($init_test_ns_csv_csv, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_decode_positional"
+    make_closure .<lambda($init_test_ns_csv_csv, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_decode_headers_override"
+    make_closure .<lambda($init_test_ns_csv_csv, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_decode_missing_column_is_header_error"
+    make_closure .<lambda($init_test_ns_csv_csv, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_decode_extra_columns_ignored"
+    make_closure .<lambda($init_test_ns_csv_csv, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_duplicate_column_matched_is_header_error"
+    make_closure .<lambda($init_test_ns_csv_csv, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_decode_error_details"
+    make_closure .<lambda($init_test_ns_csv_csv, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_decode_rejects_locale_numbers"
+    make_closure .<lambda($init_test_ns_csv_csv, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_decode_rejects_nonfinite_floats"
+    make_closure .<lambda($init_test_ns_csv_csv, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_ragged_strict"
+    make_closure .<lambda($init_test_ns_csv_csv, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_ragged_pad"
+    make_closure .<lambda($init_test_ns_csv_csv, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_ragged_truncate"
+    make_closure .<lambda($init_test_ns_csv_csv, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_reader_resumes_after_throw"
+    make_closure .<lambda($init_test_ns_csv_csv, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_unterminated_quote_exhausts"
+    make_closure .<lambda($init_test_ns_csv_csv, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_skip_mode_diagnostics"
+    make_closure .<lambda($init_test_ns_csv_csv, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_on_skip_observer"
+    make_closure .<lambda($init_test_ns_csv_csv, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_skip_mode_typed_decode"
+    make_closure .<lambda($init_test_ns_csv_csv, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_decode_optional_cases"
+    make_closure .<lambda($init_test_ns_csv_csv, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_decode_one_cases"
+    make_closure .<lambda($init_test_ns_csv_csv, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_record_api"
+    make_closure .<lambda($init_test_ns_csv_csv, 41)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_record_get_decode_error"
+    make_closure .<lambda($init_test_ns_csv_csv, 42)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_record_get_without_headers"
+    make_closure .<lambda($init_test_ns_csv_csv, 43)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_record_decode_single"
+    make_closure .<lambda($init_test_ns_csv_csv, 44)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_record_snapshot_outlives_reader"
+    make_closure .<lambda($init_test_ns_csv_csv, 45)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_headers_variants"
+    make_closure .<lambda($init_test_ns_csv_csv, 46)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_reader_limit"
+    make_closure .<lambda($init_test_ns_csv_csv, 47)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_reader_position"
+    make_closure .<lambda($init_test_ns_csv_csv, 48)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_reader_close"
+    make_closure .<lambda($init_test_ns_csv_csv, 49)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_rows_validates_eagerly"
+    make_closure .<lambda($init_test_ns_csv_csv, 50)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_rows_rejects_nested_class"
+    make_closure .<lambda($init_test_ns_csv_csv, 51)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_iterator_adapters"
+    make_closure .<lambda($init_test_ns_csv_csv, 52)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_options_validation"
+    make_closure .<lambda($init_test_ns_csv_csv, 53)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_buffer_basics"
+    make_closure .<lambda($init_test_ns_csv_csv, 54)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_quote_styles"
+    make_closure .<lambda($init_test_ns_csv_csv, 55)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_crlf_and_null_value"
+    make_closure .<lambda($init_test_ns_csv_csv, 56)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_headers_override"
+    make_closure .<lambda($init_test_ns_csv_csv, 57)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_explicit_header"
+    make_closure .<lambda($init_test_ns_csv_csv, 58)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_write_record_raw"
+    make_closure .<lambda($init_test_ns_csv_csv, 59)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_float_canonical"
+    make_closure .<lambda($init_test_ns_csv_csv, 60)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_nonfinite_float_throws"
+    make_closure .<lambda($init_test_ns_csv_csv, 61)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_sanitize_formulas"
+    make_closure .<lambda($init_test_ns_csv_csv, 62)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_bom"
+    make_closure .<lambda($init_test_ns_csv_csv, 63)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_text_on_file_writer_throws"
+    make_closure .<lambda($init_test_ns_csv_csv, 64)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_closed_throws"
+    make_closure .<lambda($init_test_ns_csv_csv, 65)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_stringify_records_roundtrip"
+    make_closure .<lambda($init_test_ns_csv_csv, 66)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_file_roundtrip"
+    make_closure .<lambda($init_test_ns_csv_csv, 67)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_open_streams_file"
+    make_closure .<lambda($init_test_ns_csv_csv, 68)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_create_then_fs_read"
+    make_closure .<lambda($init_test_ns_csv_csv, 69)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_to_markdown_truncation"
+    make_closure .<lambda($init_test_ns_csv_csv, 70)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_to_markdown_nonfinite"
+    make_closure .<lambda($init_test_ns_csv_csv, 71)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_to_markdown_records_with_headers"
+    make_closure .<lambda($init_test_ns_csv_csv, 72)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_to_markdown_records_default_headers"
+    make_closure .<lambda($init_test_ns_csv_csv, 73)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_excel_profile"
+    make_closure .<lambda($init_test_ns_csv_csv, 74)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_malformed_header_exhausts_reader"
+    make_closure .<lambda($init_test_ns_csv_csv, 75)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_malformed_header_failure_is_terminal_for_headers"
+    make_closure .<lambda($init_test_ns_csv_csv, 76)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_header_encoding_failure_is_terminal_for_headers"
+    make_closure .<lambda($init_test_ns_csv_csv, 77)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_state_survives_encode_error"
+    make_closure .<lambda($init_test_ns_csv_csv, 78)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_writer_bom_survives_encode_error"
+    make_closure .<lambda($init_test_ns_csv_csv, 79)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_write_rows_batch_is_atomic"
+    make_closure .<lambda($init_test_ns_csv_csv, 80)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_caller_owned_handles_stay_open"
+    make_closure .<lambda($init_test_ns_csv_csv, 81)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "csv_plaindate_cells_roundtrip"
+    make_closure .<lambda($init_test_ns_csv_csv, 82)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function csv.$init_test_ns_csv_csv_smoke(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.csv"
+    load_const "parse_quoted_cells"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "decode_typed_rows"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "decode_user_enum_rows"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "reader_streaming_get"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "stringify_round_trip"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "record_error_resumes"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "on_error_skip"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "to_markdown_table"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.csv"
+    load_const "typed_returns_probe"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function csv.csv_blank_records() -> string {
+    load_const "a\n\n1\n\n2\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    container_len
+    store_var skipped
+    load_const "a\n\n1\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    container_len
+    store_var kept
+    load_var skipped
+    call baml.json.stringify
+    store_var _8
+    load_var kept
+    call baml.json.stringify
+    store_var _10
+    load_var _8
+    load_const ":"
+    bin_op +
+    load_var _10
+    bin_op +
+    return
+}
+
+function csv.csv_bom_stripped_by_default() -> string {
+    load_const b"\xef\xbb\xbf\x69\x64\x0a\x37\x0a"
+    call baml.deep_copy
+    load_const <omitted>
+    call baml.csv.parse
+    store_var rows
+    load_const b"\xef\xbb\xbf\x69\x64\x0a\x37\x0a"
+    call baml.deep_copy
+    load_const <omitted>
+    call baml.csv.reader
+    call baml.csv.CsvReader.headers
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    alloc_array 0
+    store_var _6
+
+  L0:
+    load_var _6
+    store_var h
+    load_var rows
+    call user.csv.grid
+    store_var _10
+    load_var h
+    load_const "|"
+    call user.csv.join
+    store_var _12
+    load_var _10
+    load_const "/"
+    bin_op +
+    load_var _12
+    bin_op +
+    return
+}
+
+function csv.csv_caller_owned_handles_stay_open() -> string {
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _4
+    load_type bigint
+    load_var _4
+    call baml.String.from
+    store_var _3
+    load_const "/tmp/baml_csv_caller_owned_"
+    load_var _3
+    bin_op +
+    load_const ".csv"
+    bin_op +
+    store_var_load_var path
+    load_const "w"
+    sys_op baml.fs.open
+    store_var wf
+    load_var wf
+    load_const <omitted>
+    call baml.csv.writer
+    store_var w
+    load_var w
+    load_const "x"
+    load_const 1
+    load_type null | bool | int | bigint | float | string
+    alloc_array 2
+    call baml.csv.CsvWriter.write_record
+    pop 1
+    load_var w
+    call baml.csv.CsvWriter.close
+    pop 1
+    load_var wf
+    load_const "tail\n"
+    sys_op baml.fs.File.write
+    store_var appended
+    load_var wf
+    sys_op baml.fs.File.close
+    pop 1
+    load_var path
+    sys_op baml.fs.read
+    store_var content
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var appended
+    load_const 0
+    cmp_int_op >
+    call baml.json.stringify
+    load_const "#"
+    bin_op +
+    load_var content
+    bin_op +
+    return
+}
+
+function csv.csv_comment_lines() -> string {
+    load_const "# note\n1,2\n# more\n3,4\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const "#"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    call user.csv.grid
+    store_var with_comment
+    load_const "# note\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    call user.csv.grid
+    store_var without
+    load_var with_comment
+    load_const " / "
+    bin_op +
+    load_var without
+    bin_op +
+    return
+}
+
+function csv.csv_create_then_fs_read() -> string {
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _4
+    load_type bigint
+    load_var _4
+    call baml.String.from
+    store_var _3
+    load_const "/tmp/baml_csv_create_read_"
+    load_var _3
+    bin_op +
+    load_const ".csv"
+    bin_op +
+    store_var_load_var path
+    load_const <omitted>
+    call baml.csv.create
+    store_var w
+    load_var w
+    load_const "k"
+    load_const "v"
+    load_type string
+    alloc_array 2
+    call baml.csv.CsvWriter.write_header
+    pop 1
+    load_var w
+    load_const "x"
+    load_const 1
+    load_type null | bool | int | bigint | float | string
+    alloc_array 2
+    call baml.csv.CsvWriter.write_record
+    pop 1
+    load_var w
+    call baml.csv.CsvWriter.close
+    pop 1
+    load_var path
+    sys_op baml.fs.read
+    store_var content
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var content
+    return
+}
+
+function csv.csv_decode_all_cell_types() -> string {
+    load_type csv.FullRow
+    load_const "name,count,big,ratio,flag,verdict,at\nx,+42,123456789012345678901234567890,2.5e-1,TRUE,Approve,2026-01-02T03:04:05Z\n"
+    load_const <omitted>
+    call baml.csv.decode
+    store_var _3
+    load_type csv.FullRow
+    load_var _3
+    load_const 0
+    call baml.Array.at
+    store_var _2
+    load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_var _2
+    store_var r
+    load_type string
+    alloc_array 0
+    store_var parts
+    load_type string
+    load_var2 4 3
+    load_field .name
+    call baml.Array.push
+    pop 1
+    load_var r
+    load_field .count
+    call baml.json.stringify
+    store_var _14
+    load_type string
+    load_var2 4 5
+    call baml.Array.push
+    pop 1
+    load_var r
+    load_field .big
+    load_const 123456789012345678901234567890n
+    cmp_bigint_op ==
+    call baml.json.stringify
+    store_var _18
+    load_type string
+    load_var2 4 6
+    call baml.Array.push
+    pop 1
+    load_var r
+    load_field .ratio
+    call baml.json.stringify
+    store_var _23
+    load_type string
+    load_var2 4 7
+    call baml.Array.push
+    pop 1
+    load_var r
+    load_field .flag
+    call baml.json.stringify
+    store_var _27
+    load_type string
+    load_var2 4 8
+    call baml.Array.push
+    pop 1
+    load_var r
+    load_field .verdict
+    discriminant
+    load_const Verdict.Approve
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "Reject"
+    store_var _31
+    jump L3
+
+  L2:
+    load_const "Approve"
+    store_var _31
+
+  L3:
+    load_type string
+    load_var2 4 9
+    call baml.Array.push
+    pop 1
+    load_var r
+    load_field .at
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _36
+    load_type string
+    load_var2 4 10
+    call baml.Array.push
+    pop 1
+    load_var parts
+    load_const " "
+    call user.csv.join
+    jump L5
+
+  L4:
+    load_const "missing"
+
+  L5:
+    return
+}
+
+function csv.csv_decode_error_details() -> string {
+    load_type csv.IntRow
+    load_const "n\n1\noops\n"
+    load_const <omitted>
+    call baml.csv.decode
+    pop 1
+    jump L3
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var _10
+    load_var e
+    load_field .line
+    load_const "?"
+    call user.csv.int_or
+    store_var _12
+    load_var e
+    load_field .record
+    load_const "?"
+    call user.csv.int_or
+    store_var _14
+    load_var e
+    load_field .column
+    store_var_load_var _17
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const "?"
+    store_var _17
+
+  L2:
+    load_var _10
+    load_const " line="
+    bin_op +
+    load_var _12
+    bin_op +
+    load_const " record="
+    bin_op +
+    load_var _14
+    bin_op +
+    load_const " column="
+    bin_op +
+    load_var _17
+    bin_op +
+    jump L4
+
+  L3:
+    load_const "no-throw"
+
+  L4:
+    return
+}
+
+function csv.csv_decode_extra_columns_ignored() -> string {
+    load_type csv.OnlyFirst
+    load_const "first,extra1,extra2\nx,y,z\n"
+    load_const <omitted>
+    call baml.csv.decode
+    store_var _2
+    load_type csv.OnlyFirst
+    load_var _2
+    load_const 0
+    call baml.Array.at
+    store_var _1
+    load_var _1
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _1
+    load_field .first
+    jump L2
+
+  L1:
+    load_const "missing"
+
+  L2:
+    return
+}
+
+function csv.csv_decode_headers_override() -> string {
+    load_type csv.Pos
+    load_const "Display Name,amount ($)\nx,7\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "first"
+    load_const "second"
+    load_type string
+    alloc_array 2
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.decode
+    store_var renamed
+    load_type csv.Pos
+    load_var renamed
+    load_const 0
+    call baml.Array.at
+    store_var _6
+    load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _6
+    store_var p
+    load_var p
+    load_field .first
+    store_var _10
+    load_var p
+    load_field .second
+    call baml.json.stringify
+    store_var _11
+    load_var2 5 6
+    bin_op +
+    store_var a
+    jump L2
+
+  L1:
+    load_const "missing"
+    store_var a
+
+  L2:
+    load_type csv.Pos
+    load_const "9,y\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const "second"
+    load_const "first"
+    load_type string
+    alloc_array 2
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.decode
+    store_var supplied
+    load_type csv.Pos
+    load_var supplied
+    load_const 0
+    call baml.Array.at
+    store_var _18
+    load_var _18
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _18
+    store_var p
+    load_var p
+    load_field .first
+    store_var _22
+    load_var p
+    load_field .second
+    call baml.json.stringify
+    store_var _23
+    load_var2 11 12
+    bin_op +
+    store_var b
+    jump L5
+
+  L4:
+    load_const "missing"
+    store_var b
+
+  L5:
+    load_var a
+    load_const "/"
+    bin_op +
+    load_var b
+    bin_op +
+    return
+}
+
+function csv.csv_decode_missing_column_is_header_error() -> string {
+    load_type csv.Pos
+    load_const "first,other\nx,y\n"
+    load_const <omitted>
+    call baml.csv.decode
+    pop 1
+    jump L3
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var _6
+    load_var e
+    load_field .column
+    store_var_load_var _9
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const "?"
+    store_var _9
+
+  L2:
+    load_var _6
+    load_const ":"
+    bin_op +
+    load_var _9
+    bin_op +
+    jump L4
+
+  L3:
+    load_const "no-throw"
+
+  L4:
+    return
+}
+
+function csv.csv_decode_one_cases() -> string {
+    load_type csv.IntRow
+    load_const "n\n"
+    load_const <omitted>
+    call baml.csv.decode_one
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var zero
+    jump L3
+
+  L2:
+    load_const "no-throw"
+    store_var zero
+
+  L3:
+    load_type csv.IntRow
+    load_const "n\n7\n"
+    load_const <omitted>
+    call baml.csv.decode_one
+    load_field .n
+    call baml.json.stringify
+    store_var one
+    load_type csv.IntRow
+    load_const "9\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.decode_one
+    load_field .n
+    call baml.json.stringify
+    store_var bare
+    load_type csv.IntRow
+    load_const "n\n1\n2\n"
+    load_const <omitted>
+    call baml.csv.decode_one
+    pop 1
+    jump L6
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var e
+    rethrow
+
+  L5:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var two
+    jump L7
+
+  L6:
+    load_const "no-throw"
+    store_var two
+
+  L7:
+    load_var zero
+    load_const "/"
+    bin_op +
+    load_var one
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var bare
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var two
+    bin_op +
+    return
+}
+
+function csv.csv_decode_optional_cases() -> string {
+    load_type csv.IntRow
+    load_const "n\n"
+    load_const <omitted>
+    call baml.csv.decode_optional
+    store_var _2
+    load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _2
+    load_field .n
+    call baml.json.stringify
+    store_var zero
+    jump L2
+
+  L1:
+    load_const "null"
+    store_var zero
+
+  L2:
+    load_type csv.IntRow
+    load_const "n\n7\n"
+    load_const <omitted>
+    call baml.csv.decode_optional
+    store_var _8
+    load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _8
+    load_field .n
+    call baml.json.stringify
+    store_var one
+    jump L5
+
+  L4:
+    load_const "null"
+    store_var one
+
+  L5:
+    load_type csv.IntRow
+    load_const "n\n1\n2\n"
+    load_const <omitted>
+    call baml.csv.decode_optional
+    pop 1
+    jump L8
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var e
+    rethrow
+
+  L7:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var two
+    jump L9
+
+  L8:
+    load_const "no-throw"
+    store_var two
+
+  L9:
+    load_var zero
+    load_const "/"
+    bin_op +
+    load_var one
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var two
+    bin_op +
+    return
+}
+
+function csv.csv_decode_positional() -> string {
+    load_type csv.Pos
+    load_const "a,1\nb,2\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.decode
+    store_var rows
+    load_type csv.Pos
+    load_var rows
+    load_const 1
+    call baml.Array.at
+    store_var _4
+    load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _4
+    store_var p
+    load_var p
+    load_field .first
+    store_var _8
+    load_var p
+    load_field .second
+    call baml.json.stringify
+    store_var _9
+    load_var2 4 5
+    bin_op +
+    jump L2
+
+  L1:
+    load_const "missing"
+
+  L2:
+    return
+}
+
+function csv.csv_decode_rejects_locale_numbers() -> string {
+    load_type csv.IntRow
+    load_const "n\n\"1,000\"\n"
+    load_const <omitted>
+    call baml.csv.decode
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var one
+    jump L3
+
+  L2:
+    load_const "no-throw"
+    store_var one
+
+  L3:
+    load_type csv.IntRow
+    load_const "n\n 5\n"
+    load_const <omitted>
+    call baml.csv.decode
+    pop 1
+    jump L6
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var e
+    rethrow
+
+  L5:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var two
+    jump L7
+
+  L6:
+    load_const "no-throw"
+    store_var two
+
+  L7:
+    load_var one
+    load_const "/"
+    bin_op +
+    load_var two
+    bin_op +
+    return
+}
+
+function csv.csv_decode_rejects_nonfinite_floats() -> string {
+    load_type csv.FloatRow
+    load_const "x\nNaN\n"
+    load_const <omitted>
+    call baml.csv.decode
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    jump L3
+
+  L2:
+    load_const "no-throw"
+
+  L3:
+    return
+}
+
+function csv.csv_duplicate_column_matched_is_header_error() -> string {
+    load_type csv.OnlyFirst
+    load_const "first,first\nx,y\n"
+    load_const <omitted>
+    call baml.csv.decode
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var err
+    jump L3
+
+  L2:
+    load_const "no-throw"
+    store_var err
+
+  L3:
+    load_const "first,first\nx,y\n"
+    load_const <omitted>
+    call baml.csv.reader
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+    load_var _9
+    is_type baml.iter.Done
+    pop_jump_if_false L4
+    jump L6
+
+  L4:
+    load_type string
+    load_var _9
+    load_const 1
+    call baml.csv.CsvRecord.get_at
+    store_var_load_var _12
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    load_const "<null>"
+    store_var _12
+
+  L5:
+    load_var _12
+    store_var positional
+    jump L7
+
+  L6:
+    load_const "none"
+    store_var positional
+
+  L7:
+    load_var err
+    load_const "/"
+    bin_op +
+    load_var positional
+    bin_op +
+    return
+}
+
+function csv.csv_encoding_lossy() -> int {
+    load_const b"\x61\x2c\x62\x0a\xff\x2c\x32\x0a"
+    call baml.deep_copy
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "utf8-lossy"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    load_const 0
+    load_array_element
+    load_const 0
+    load_array_element
+    call baml.String.length
+    return
+}
+
+function csv.csv_encoding_strict_throws() -> string {
+    load_const b"\x61\x0a\xff\x0a"
+    call baml.deep_copy
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    pop 1
+    load_const "expected Encoding error"
+    call baml.sys.panic
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+
+  L2:
+    return
+}
+
+function csv.csv_escape_dialect() -> string {
+    load_const "\"x\\\"y\",2\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const "\\"
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    call user.csv.grid
+    return
+}
+
+function csv.csv_excel_profile() -> string {
+    load_const "a;b\n1;2\n"
+    load_const ";"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "utf8-lossy"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    store_var rows
+    load_const "x"
+    load_type null | bool | int | bigint | float | string
+    alloc_array 1
+    load_type (null | bool | int | bigint | float | string)[]
+    alloc_array 1
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "crlf"
+    load_const null
+    load_const null
+    load_const null
+    load_const true
+    load_const true
+    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
+    call baml.csv.stringify_records
+    store_var out
+    load_var rows
+    call user.csv.grid
+    store_var _12
+    load_var out
+    call baml.String.length
+    call baml.json.stringify
+    store_var _14
+    load_var out
+    load_const 1
+    load_const 2
+    call baml.String.slice
+    store_var _16
+    load_var out
+    load_const 2
+    load_const 3
+    call baml.String.slice
+    store_var _17
+    load_var _12
+    load_const "#"
+    bin_op +
+    load_var _14
+    bin_op +
+    load_const ":"
+    bin_op +
+    load_var _16
+    bin_op +
+    load_const ":"
+    bin_op +
+    load_var _17
+    bin_op +
+    return
+}
+
+function csv.csv_file_roundtrip() -> string {
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _4
+    load_type bigint
+    load_var _4
+    call baml.String.from
+    store_var _3
+    load_const "/tmp/baml_csv_file_roundtrip_"
+    load_var _3
+    bin_op +
+    load_const ".csv"
+    bin_op +
+    store_var path
+    load_type csv.OutRow
+    load_var path
+    load_const 1
+    load_const "hello"
+    init_instance user.csv.OutRow .id, .note
+    load_const 2
+    load_const null
+    init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
+    alloc_array 2
+    load_const <omitted>
+    call baml.csv.write
+    store_var bytes
+    load_type csv.OutRow
+    load_var path
+    load_const <omitted>
+    call baml.csv.read
+    store_var back
+    load_type csv.OutRow
+    load_var back
+    load_const 0
+    call baml.Array.at
+    store_var _17
+    load_var _17
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var _17
+    load_field .note
+    store_var_load_var _21
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const "<null>"
+    store_var _21
+
+  L1:
+    load_var _21
+    store_var first_note
+    jump L3
+
+  L2:
+    load_const "missing"
+    store_var first_note
+
+  L3:
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var bytes
+    load_const 0
+    cmp_int_op >
+    call baml.json.stringify
+    store_var _29
+    load_var back
+    container_len
+    store_var _33
+    load_var _33
+    call baml.json.stringify
+    store_var _32
+    load_var _29
+    load_const ":"
+    bin_op +
+    load_var _32
+    bin_op +
+    load_const ":"
+    bin_op +
+    load_var first_note
+    bin_op +
+    return
+}
+
+function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
+    load_const b"\xff\x2c\x68\x32\x0a\x61\x2c\x62\x0a\x63\x2c\x64\x0a"
+    call baml.deep_copy
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _5
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var first
+    jump L4
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    rethrow
+
+  L2:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var _11
+    load_const "<"
+    load_var _11
+    bin_op +
+    load_const ">"
+    bin_op +
+    store_var first
+    jump L4
+
+  L3:
+    load_const "done"
+    store_var first
+
+  L4:
+    load_var r
+    call baml.csv.CsvReader.headers
+    store_var _15
+    load_var _15
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    jump L8
+
+  L5:
+    load_var _15
+    load_const "|"
+    call user.csv.join
+    store_var headers_after
+    jump L9
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var e
+    rethrow
+
+  L7:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var _21
+    load_const "<"
+    load_var _21
+    bin_op +
+    load_const ">"
+    bin_op +
+    store_var headers_after
+    jump L9
+
+  L8:
+    load_const "<null>"
+    store_var headers_after
+
+  L9:
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _24
+    load_var _24
+    is_type baml.iter.Done
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var _24
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var next_after
+    jump L12
+
+  L11:
+    load_const "done"
+    store_var next_after
+
+  L12:
+    load_var first
+    load_const "/"
+    bin_op +
+    load_var headers_after
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var next_after
+    bin_op +
+    return
+}
+
+function csv.csv_headers_variants() -> string {
+    load_const "a,b\n1,2\n"
+    load_const <omitted>
+    call baml.csv.reader
+    call baml.csv.CsvReader.headers
+    store_var_load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "<null>"
+    load_type string
+    alloc_array 1
+    store_var _3
+
+  L0:
+    load_var _3
+    load_const "|"
+    call user.csv.join
+    store_var with_header
+    load_const "1,2\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    call baml.csv.CsvReader.headers
+    store_var _8
+    load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _8
+    load_const "|"
+    call user.csv.join
+    store_var no_header
+    jump L3
+
+  L2:
+    load_const "<null>"
+    store_var no_header
+
+  L3:
+    load_const ""
+    load_const <omitted>
+    call baml.csv.reader
+    call baml.csv.CsvReader.headers
+    store_var _15
+    load_var _15
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var _15
+    load_const "|"
+    call user.csv.join
+    store_var empty_input
+    jump L6
+
+  L5:
+    load_const "<null>"
+    store_var empty_input
+
+  L6:
+    load_var with_header
+    load_const " / "
+    bin_op +
+    load_var no_header
+    bin_op +
+    load_const " / "
+    bin_op +
+    load_var empty_input
+    bin_op +
+    return
+}
+
+function csv.csv_iterator_adapters() -> int {
+    load_const "n\n1\n2\n3\n4\n"
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_type csv.IntRow
+    load_var r
+    call baml.csv.CsvReader.rows
+    store_var _4
+    load_type int
+    load_type never
+    load_var _4
+    make_closure .<lambda(csv_iterator_adapters, 0)>, 0
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
+    load_const "map"
+    virtual_call nargs=2 ntypeargs=2
+    store_var _3
+    load_var _3
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = int>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var doubled
+    load_const 0
+    store_var total
+    load_var doubled
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _11
+
+  L0:
+    load_var _11
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _12
+    load_var _12
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 5 7
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    return
+}
+
+function csv.csv_malformed_header_exhausts_reader() -> string {
+    load_const "\"h1\"x,h2\na,b\nc,d\n"
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _4
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var first
+    jump L4
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    rethrow
+
+  L2:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var _10
+    load_const "<"
+    load_var _10
+    bin_op +
+    load_const ">"
+    bin_op +
+    store_var first
+    jump L4
+
+  L3:
+    load_const "done"
+    store_var first
+
+  L4:
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _13
+    load_var _13
+    is_type baml.iter.Done
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var _13
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var second
+    jump L7
+
+  L6:
+    load_const "done"
+    store_var second
+
+  L7:
+    load_var first
+    load_const "/"
+    bin_op +
+    load_var second
+    bin_op +
+    return
+}
+
+function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
+    load_const "\"h1\"x,h2\na,b\nc,d\n"
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _4
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var first
+    jump L4
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    rethrow
+
+  L2:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var _10
+    load_const "<"
+    load_var _10
+    bin_op +
+    load_const ">"
+    bin_op +
+    store_var first
+    jump L4
+
+  L3:
+    load_const "done"
+    store_var first
+
+  L4:
+    load_var r
+    call baml.csv.CsvReader.headers
+    store_var _14
+    load_var _14
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    jump L8
+
+  L5:
+    load_var _14
+    load_const "|"
+    call user.csv.join
+    store_var headers_after
+    jump L9
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var e
+    rethrow
+
+  L7:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var _20
+    load_const "<"
+    load_var _20
+    bin_op +
+    load_const ">"
+    bin_op +
+    store_var headers_after
+    jump L9
+
+  L8:
+    load_const "<null>"
+    store_var headers_after
+
+  L9:
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _23
+    load_var _23
+    is_type baml.iter.Done
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var _23
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var next_after
+    jump L12
+
+  L11:
+    load_const "done"
+    store_var next_after
+
+  L12:
+    load_var first
+    load_const "/"
+    bin_op +
+    load_var headers_after
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var next_after
+    bin_op +
+    return
+}
+
+function csv.csv_null_semantics_empty_unquoted() -> string {
+    load_type csv.NullProbe
+    load_const "a,s,so,io\nx,,,\n"
+    load_const <omitted>
+    call baml.csv.decode
+    store_var rows
+    load_type csv.NullProbe
+    load_var rows
+    load_const 0
+    call baml.Array.at
+    store_var _3
+    load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var _3
+    store_var_load_var p
+    load_field .so
+    store_var_load_var _13
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const "<null>"
+    store_var _13
+
+  L1:
+    load_const "s="
+    load_var p
+    load_field .s
+    bin_op +
+    load_const " so="
+    bin_op +
+    load_var _13
+    bin_op +
+    load_const " io="
+    bin_op +
+    store_var _7
+    load_var p
+    load_field .io
+    load_const "<null>"
+    call user.csv.int_or
+    store_var _16
+    load_var2 4 6
+    bin_op +
+    jump L3
+
+  L2:
+    load_const "missing"
+
+  L3:
+    return
+}
+
+function csv.csv_null_semantics_quoted_empty() -> string {
+    load_type csv.NullProbe
+    load_const "a,s,so,io\nx,\"\",\"\",1\n"
+    load_const <omitted>
+    call baml.csv.decode
+    store_var _3
+    load_type csv.NullProbe
+    load_var _3
+    load_const 0
+    call baml.Array.at
+    store_var _2
+    load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var _2
+    load_field .so
+    store_var_load_var _9
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const "<null>"
+    store_var _9
+
+  L1:
+    load_const "so="
+    load_var _9
+    bin_op +
+    store_var ok
+    jump L3
+
+  L2:
+    load_const "missing"
+    store_var ok
+
+  L3:
+    load_type csv.NullProbe
+    load_const "a,s,so,io\nx,,,\"\"\n"
+    load_const <omitted>
+    call baml.csv.decode
+    pop 1
+    jump L6
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var e
+    rethrow
+
+  L5:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var err
+    jump L7
+
+  L6:
+    load_const "no-throw"
+    store_var err
+
+  L7:
+    load_var ok
+    load_const "/"
+    bin_op +
+    load_var err
+    bin_op +
+    return
+}
+
+function csv.csv_null_values_option() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "N/A"
+    load_type string
+    alloc_array 1
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    store_var opts
+    load_type csv.NullProbe
+    load_const "a,s,so,io\nx,y,N/A,N/A\n"
+    load_var opts
+    call baml.csv.decode
+    store_var _5
+    load_type csv.NullProbe
+    load_var _5
+    load_const 0
+    call baml.Array.at
+    store_var _4
+    load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var _4
+    store_var_load_var p
+    load_field .so
+    store_var_load_var _14
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const "<null>"
+    store_var _14
+
+  L1:
+    load_const "so="
+    load_var _14
+    bin_op +
+    load_const " io="
+    bin_op +
+    store_var _11
+    load_var p
+    load_field .io
+    load_const "<null>"
+    call user.csv.int_or
+    store_var _17
+    load_var2 6 8
+    bin_op +
+    store_var ok
+    jump L3
+
+  L2:
+    load_const "missing"
+    store_var ok
+
+  L3:
+    load_type csv.NullProbe
+    load_const "a,s,so,io\nx,N/A,,\n"
+    load_var opts
+    call baml.csv.decode
+    pop 1
+    jump L6
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var e
+    rethrow
+
+  L5:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var err
+    jump L7
+
+  L6:
+    load_const "no-throw"
+    store_var err
+
+  L7:
+    load_type csv.NullProbe
+    load_const "a,s,so,io\nx,y,\"N/A\",\n"
+    load_var opts
+    call baml.csv.decode
+    store_var _28
+    load_type csv.NullProbe
+    load_var _28
+    load_const 0
+    call baml.Array.at
+    store_var _27
+    load_var _27
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L8
+    jump L10
+
+  L8:
+    load_var _27
+    load_field .so
+    store_var_load_var _34
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L9
+    load_const "<null>"
+    store_var _34
+
+  L9:
+    load_var _34
+    store_var quoted
+    jump L11
+
+  L10:
+    load_const "missing"
+    store_var quoted
+
+  L11:
+    load_var ok
+    load_const "/"
+    bin_op +
+    load_var err
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var quoted
+    bin_op +
+    return
+}
+
+function csv.csv_on_skip_observer() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type string
+    alloc_array 0
+    store_deref ?1
+    load_const "a,b\n1\n2,3\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "skip"
+    load_var log
+    make_closure .<lambda(csv_on_skip_observer, 0)>, 1
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    load_const 0
+    store_var count
+    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+
+  L0:
+    load_var _7
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _8
+    load_var _8
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _8
+    store_var rec
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+    jump L0
+
+  L2:
+    load_var count
+    call baml.json.stringify
+    store_var _13
+    load_deref ?1
+    load_const ","
+    call user.csv.join
+    store_var _15
+    load_var _13
+    load_const ":"
+    bin_op +
+    load_var _15
+    bin_op +
+    return
+}
+
+function csv.csv_open_streams_file() -> string {
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _4
+    load_type bigint
+    load_var _4
+    call baml.String.from
+    store_var _3
+    load_const "/tmp/baml_csv_open_streams_"
+    load_var _3
+    bin_op +
+    load_const ".csv"
+    bin_op +
+    store_var_load_var path
+    load_const "n\n10\n20\n30\n"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    load_const <omitted>
+    call baml.csv.open
+    store_var r
+    load_const 0
+    store_var total
+    load_type csv.IntRow
+    load_var r
+    call baml.csv.CsvReader.rows
+    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _14
+
+  L0:
+    load_var _14
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _15
+    load_var _15
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 5 7
+    load_field .n
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var r
+    call baml.csv.CsvReader.close
+    pop 1
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var total
+    call baml.json.stringify
+    return
+}
+
+function csv.csv_options_validation() -> string {
+    load_const "a\n"
+    load_const "ab"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var multi
+    jump L3
+
+  L2:
+    load_const "no-throw"
+    store_var multi
+
+  L3:
+    load_const "a\n"
+    load_const "\""
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    pop 1
+    jump L6
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var e
+    rethrow
+
+  L5:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var clash
+    jump L7
+
+  L6:
+    load_const "no-throw"
+    store_var clash
+
+  L7:
+    load_var multi
+    load_const "/"
+    bin_op +
+    load_var clash
+    bin_op +
+    return
+}
+
+function csv.csv_papaparse_comment_runs() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const "#"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    store_var opts
+    load_const "#comment1\n#comment2\n#comment3\na,b,c"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var at_beginning
+    load_const "a,b,c\n#comment1\n#comment2\nd,e,f"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var in_middle
+    load_const "a,b,c\n#comment1\n#comment2"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var at_end
+    load_const "#comment1\n#comment2\n#comment3"
+    load_var opts
+    call baml.csv.parse
+    container_len
+    store_var only_comments
+    load_var only_comments
+    call baml.json.stringify
+    store_var _22
+    load_var at_beginning
+    load_const " / "
+    bin_op +
+    load_var in_middle
+    bin_op +
+    load_const " / "
+    bin_op +
+    load_var at_end
+    bin_op +
+    load_const " / only="
+    bin_op +
+    load_var _22
+    bin_op +
+    return
+}
+
+function csv.csv_papaparse_empty_field_edges() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    store_var opts
+    load_const ","
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var delimiter_only
+    load_const "a,b,,,c,d\n,,e,,,f"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var consecutive
+    load_const ",b,c\n\"d\",e,f"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var starts_empty
+    load_const "a,b,\"\"\na,b,\"\""
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var quoted_empty_eof
+    load_var delimiter_only
+    load_const " / "
+    bin_op +
+    load_var consecutive
+    bin_op +
+    load_const " / "
+    bin_op +
+    load_var starts_empty
+    bin_op +
+    load_const " / "
+    bin_op +
+    load_var quoted_empty_eof
+    bin_op +
+    return
+}
+
+function csv.csv_papaparse_line_endings_inside_quotes() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    store_var opts
+    load_const "A,\"B\r\nB\",C"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var crlf
+    load_const "A,\"B\rB\",C"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var cr
+    load_const "A,\"B\nB\",C"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var lf
+    load_var crlf
+    load_const " / "
+    bin_op +
+    load_var cr
+    bin_op +
+    load_const " / "
+    bin_op +
+    load_var lf
+    bin_op +
+    return
+}
+
+function csv.csv_papaparse_quote_boundaries() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    store_var opts
+    load_const "A,\"\"\"B\"\"\",C"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var boundaries
+    load_const "A,\"\"\",\"\"\",C"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var around_delimiter
+    load_const "\"1\",\"cnonce=\"\"\"\",nc=\"\"\"\"\",\"2\""
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var dense_quotes
+    load_var boundaries
+    load_const " / "
+    bin_op +
+    load_var around_delimiter
+    bin_op +
+    load_const " / "
+    bin_op +
+    load_var dense_quotes
+    bin_op +
+    return
+}
+
+function csv.csv_parse_line_endings() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    store_var opts
+    load_const "a,b\r\n1,2\r\n"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var crlf
+    load_const "a,b\r1,2"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var bare_cr
+    load_const "a,b\n1,2"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var lf
+    load_var crlf
+    load_const " / "
+    bin_op +
+    load_var bare_cr
+    bin_op +
+    load_const " / "
+    bin_op +
+    load_var lf
+    bin_op +
+    return
+}
+
+function csv.csv_parse_no_phantom_record() -> int {
+    load_const "a\n1\n"
+    load_const <omitted>
+    call baml.csv.parse
+    container_len
+    store_var with_nl
+    load_const "a\n1"
+    load_const <omitted>
+    call baml.csv.parse
+    container_len
+    store_var without_nl
+    load_var with_nl
+    load_const 10
+    mul_int
+    load_var without_nl
+    add_int
+    return
+}
+
+function csv.csv_parse_quotes() -> string {
+    load_const "\"x,y\",\"l1\nl2\",\"say \"\"hi\"\"\""
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    call user.csv.grid
+    return
+}
+
+function csv.csv_plaindate_cells_roundtrip() -> string {
+    load_type csv.DatedRow
+    load_const "day,at\n2026-06-11,2026-06-11T08:30:00\n"
+    load_const <omitted>
+    call baml.csv.decode
+    store_var rows
+    load_type csv.DatedRow
+    load_var rows
+    load_const 0
+    call baml.Array.at
+    store_var _4
+    load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _4
+    store_var_load_var r
+    load_field .day
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+    load_var r
+    load_field .at
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _11
+    load_var _9
+    load_const " "
+    bin_op +
+    load_var _11
+    bin_op +
+    store_var rendered
+    jump L2
+
+  L1:
+    load_const "missing"
+    store_var rendered
+
+  L2:
+    load_type csv.DatedRow
+    load_var rows
+    load_const <omitted>
+    call baml.csv.stringify
+    store_var back
+    load_type csv.DatedRow
+    load_const "day,at\nnot-a-date,2026-06-11T08:30:00\n"
+    load_const <omitted>
+    call baml.csv.decode
+    pop 1
+    jump L5
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var e
+    rethrow
+
+  L4:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var bad
+    jump L6
+
+  L5:
+    load_const "no-throw"
+    store_var bad
+
+  L6:
+    load_var rendered
+    load_const "#"
+    bin_op +
+    load_var back
+    bin_op +
+    load_const "#"
+    bin_op +
+    load_var bad
+    bin_op +
+    return
+}
+
+function csv.csv_quoting_disabled() -> string {
+    load_const "\"a\",b\n"
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    call user.csv.grid
+    return
+}
+
+function csv.csv_ragged_pad() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "pad"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    store_var opts
+    load_const "a,b\n1\n"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var short
+    load_const "a,b\n1,2,3\n"
+    load_var opts
+    call baml.csv.parse
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var long
+    jump L3
+
+  L2:
+    load_const "no-throw"
+    store_var long
+
+  L3:
+    load_var short
+    load_const "/"
+    bin_op +
+    load_var long
+    bin_op +
+    return
+}
+
+function csv.csv_ragged_strict() -> string {
+    load_const "a,b\n1\n"
+    load_const <omitted>
+    call baml.csv.parse
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var _7
+    load_var e
+    load_field .expected
+    load_const "?"
+    call user.csv.int_or
+    store_var _9
+    load_var e
+    load_field .found
+    load_const "?"
+    call user.csv.int_or
+    store_var _11
+    load_var _7
+    load_const " expected="
+    bin_op +
+    load_var _9
+    bin_op +
+    load_const " found="
+    bin_op +
+    load_var _11
+    bin_op +
+    jump L3
+
+  L2:
+    load_const "no-throw"
+
+  L3:
+    return
+}
+
+function csv.csv_ragged_truncate() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "truncate"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    store_var opts
+    load_const "a,b\n1,2,3\n"
+    load_var opts
+    call baml.csv.parse
+    call user.csv.grid
+    store_var long
+    load_const "a,b\n1\n"
+    load_var opts
+    call baml.csv.parse
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var short
+    jump L3
+
+  L2:
+    load_const "no-throw"
+    store_var short
+
+  L3:
+    load_var long
+    load_const "/"
+    bin_op +
+    load_var short
+    bin_op +
+    return
+}
+
+function csv.csv_reader_close() -> string {
+    load_const "a\n1\n"
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    pop 1
+    load_var r
+    call baml.csv.CsvReader.close
+    pop 1
+    load_var r
+    call baml.csv.CsvReader.close
+    pop 1
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    jump L3
+
+  L2:
+    load_const "no-throw"
+
+  L3:
+    load_const ":"
+    bin_op +
+    store_var _12
+    load_var r
+    call baml.csv.CsvReader.skipped_count
+    call baml.json.stringify
+    store_var _14
+    load_var r
+    call baml.csv.CsvReader.position
+    load_field .record
+    call baml.json.stringify
+    store_var _16
+    load_var2 3 4
+    bin_op +
+    load_const ":"
+    bin_op +
+    load_var _16
+    bin_op +
+    return
+}
+
+function csv.csv_reader_limit() -> int {
+    load_const "a\n1\n2\n3\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const 2
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    container_len
+    return
+}
+
+function csv.csv_reader_position() -> string {
+    load_const "a,b\n1,2\n3,4\n"
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_var r
+    call baml.csv.CsvReader.headers
+    pop 1
+    load_var r
+    call baml.csv.CsvReader.position
+    store_var p1
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    pop 1
+    load_var r
+    call baml.csv.CsvReader.position
+    store_var p2
+    load_var p1
+    load_field .byte
+    call baml.json.stringify
+    store_var _16
+    load_var p1
+    load_field .line
+    call baml.json.stringify
+    store_var _18
+    load_var p1
+    load_field .record
+    call baml.json.stringify
+    store_var _20
+    load_var p2
+    load_field .byte
+    call baml.json.stringify
+    store_var _22
+    load_var p2
+    load_field .line
+    call baml.json.stringify
+    store_var _24
+    load_var p2
+    load_field .record
+    call baml.json.stringify
+    store_var _26
+    load_const "byte="
+    load_var _16
+    bin_op +
+    load_const " line="
+    bin_op +
+    load_var _18
+    bin_op +
+    load_const " record="
+    bin_op +
+    load_var _20
+    bin_op +
+    load_const " then byte="
+    bin_op +
+    load_var _22
+    bin_op +
+    load_const " line="
+    bin_op +
+    load_var _24
+    bin_op +
+    load_const " record="
+    bin_op +
+    load_var _26
+    bin_op +
+    return
+}
+
+function csv.csv_reader_resumes_after_throw() -> string {
+    load_const "a,b\n1,2\n3\n4,5\n"
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_type string
+    alloc_array 0
+    store_var seen
+    load_const 0
+    store_var bad
+
+  L0:
+    load_const true
+    pop_jump_if_false L7
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _6
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var step
+    jump L5
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var e
+    rethrow
+
+  L3:
+    load_var bad
+    load_const 1
+    add_int
+    store_var bad
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var _12
+    load_const "<"
+    load_var _12
+    bin_op +
+    load_const ">"
+    bin_op +
+    store_var step
+    jump L5
+
+  L4:
+    load_const "done"
+    store_var step
+
+  L5:
+    load_var step
+    load_const "done"
+    cmp_op ==
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_type string
+    load_var2 2 4
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L7:
+    load_var seen
+    load_const ";"
+    call user.csv.join
+    store_var _20
+    load_var bad
+    call baml.json.stringify
+    store_var _22
+    load_var _20
+    load_const " bad="
+    bin_op +
+    load_var _22
+    bin_op +
+    return
+}
+
+function csv.csv_record_api() -> string {
+    load_const "name,score\nalice,9\n"
+    load_const <omitted>
+    call baml.csv.reader
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+    load_var _2
+    is_type baml.iter.Done
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_var _2
+    store_var rec
+    load_type string
+    alloc_array 0
+    store_var parts
+    load_var rec
+    call baml.csv.CsvRecord.length
+    call baml.json.stringify
+    store_var _7
+    load_type string
+    load_var2 3 4
+    call baml.Array.push
+    pop 1
+    load_var rec
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var _11
+    load_type string
+    load_var2 3 5
+    call baml.Array.push
+    pop 1
+    load_type string
+    load_var rec
+    load_const "name"
+    call baml.csv.CsvRecord.get
+    store_var_load_var _16
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const "<null>"
+    store_var _16
+
+  L1:
+    load_type string
+    load_var2 3 6
+    call baml.Array.push
+    pop 1
+    load_type int
+    load_var rec
+    load_const "score"
+    call baml.csv.CsvRecord.get
+    load_const "<null>"
+    call user.csv.int_or
+    store_var _22
+    load_type string
+    load_var2 3 7
+    call baml.Array.push
+    pop 1
+    load_type string
+    load_var rec
+    load_const "absent"
+    call baml.csv.CsvRecord.get
+    store_var_load_var _28
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const "<absent-null>"
+    store_var _28
+
+  L2:
+    load_type string
+    load_var2 3 8
+    call baml.Array.push
+    pop 1
+    load_type string
+    load_var rec
+    load_const 99
+    call baml.csv.CsvRecord.get_at
+    store_var_load_var _35
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const "<oob-null>"
+    store_var _35
+
+  L3:
+    load_type string
+    load_var2 3 9
+    call baml.Array.push
+    pop 1
+    load_var rec
+    call baml.csv.CsvRecord.to_map
+    store_var m
+    load_type string
+    load_var2 3 10
+    load_const "name"
+    load_map_element
+    call baml.Array.push
+    pop 1
+    load_var parts
+    load_const " "
+    call user.csv.join
+    jump L5
+
+  L4:
+    load_const "none"
+
+  L5:
+    return
+}
+
+function csv.csv_record_decode_single() -> string {
+    load_const "n\n5\n"
+    load_const <omitted>
+    call baml.csv.reader
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+    load_var _2
+    is_type baml.iter.Done
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type csv.IntRow
+    load_var _2
+    call baml.csv.CsvRecord.decode
+    load_field .n
+    call baml.json.stringify
+    jump L2
+
+  L1:
+    load_const "none"
+
+  L2:
+    return
+}
+
+function csv.csv_record_get_decode_error() -> string {
+    load_const "n\noops\n"
+    load_const <omitted>
+    call baml.csv.reader
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    is_type baml.iter.Done
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_type int
+    load_var _3
+    load_const "n"
+    call baml.csv.CsvRecord.get
+    pop 1
+    jump L4
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    rethrow
+
+  L2:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var _10
+    load_var e
+    load_field .column
+    store_var_load_var _13
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const "?"
+    store_var _13
+
+  L3:
+    load_var _10
+    load_const ":"
+    bin_op +
+    load_var _13
+    bin_op +
+    jump L6
+
+  L4:
+    load_const "no-throw"
+    jump L6
+
+  L5:
+    load_const "none"
+
+  L6:
+    return
+}
+
+function csv.csv_record_get_without_headers() -> string {
+    load_const "1,2\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_type int
+    load_var _4
+    load_const "n"
+    call baml.csv.CsvRecord.get
+    pop 1
+    jump L3
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    rethrow
+
+  L2:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    jump L5
+
+  L3:
+    load_const "no-throw"
+    jump L5
+
+  L4:
+    load_const "none"
+
+  L5:
+    return
+}
+
+function csv.csv_record_snapshot_outlives_reader() -> string {
+    load_const "a\nfirst\nsecond\n"
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_type baml.csv.CsvRecord
+    alloc_array 0
+    store_var kept
+    load_var r
+    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_type baml.csv.CsvRecord
+    load_var2 2 4
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_type string
+    alloc_array 0
+    store_var parts
+    load_var kept
+    load_type baml.iter.Iterable<Error = never, Item = baml.csv.CsvRecord>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _14
+
+  L3:
+    load_var _14
+    load_type baml.iter.Iterator<Error = never, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _15
+    load_var _15
+    is_type baml.iter.Done
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var _15
+    call baml.csv.CsvRecord.fields
+    store_var _21
+    load_type string
+    load_var2 5 8
+    load_const 0
+    load_array_element
+    call baml.Array.push
+    pop 1
+    jump L3
+
+  L5:
+    load_var parts
+    load_const ","
+    call user.csv.join
+    return
+}
+
+function csv.csv_rows_rejects_nested_class() -> string {
+    load_const "inner\nx\n"
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_type csv.Nested
+    load_var r
+    call baml.csv.CsvReader.rows
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    jump L3
+
+  L2:
+    load_const "no-throw"
+
+  L3:
+    return
+}
+
+function csv.csv_rows_validates_eagerly() -> string {
+    load_const "other\nx\n"
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_type csv.IntRow
+    load_var r
+    call baml.csv.CsvReader.rows
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    jump L3
+
+  L2:
+    load_const "no-throw"
+
+  L3:
+    return
+}
+
+function csv.csv_skip_lines() -> string {
+    load_const "junk preamble\n```csv\na,b\n1,2\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const 2
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    call user.csv.grid
+    return
+}
+
+function csv.csv_skip_mode_diagnostics() -> string {
+    load_const "a,b\n1,2\nbad\n3,4\nworse\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "skip"
+    load_const null
+    load_const 1
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    store_var r
+    load_const 0
+    store_var count
+    load_var r
+    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+
+  L0:
+    load_var _5
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _6
+    store_var rec
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+    jump L0
+
+  L2:
+    load_var r
+    call baml.csv.CsvReader.skipped
+    store_var _12
+    load_type baml.csv.CsvError
+    load_var _12
+    load_const 0
+    call baml.Array.at
+    store_var _11
+    load_var _11
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _11
+    load_field .line
+    load_const "?"
+    call user.csv.int_or
+    store_var first_line
+    jump L5
+
+  L4:
+    load_const "?"
+    store_var first_line
+
+  L5:
+    load_var count
+    call baml.json.stringify
+    store_var _22
+    load_var r
+    call baml.csv.CsvReader.skipped_count
+    call baml.json.stringify
+    store_var _24
+    load_var r
+    call baml.csv.CsvReader.skipped
+    container_len
+    store_var _27
+    load_var _27
+    call baml.json.stringify
+    store_var _26
+    load_var _22
+    load_const " skipped="
+    bin_op +
+    load_var _24
+    bin_op +
+    load_const " retained="
+    bin_op +
+    load_var _26
+    bin_op +
+    load_const " first_line="
+    bin_op +
+    load_var first_line
+    bin_op +
+    return
+}
+
+function csv.csv_skip_mode_typed_decode() -> string {
+    load_const "n\n1\noops\n3\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "skip"
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    store_var r
+    load_const 0
+    store_var total
+    load_type csv.IntRow
+    load_var r
+    call baml.csv.CsvReader.rows
+    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 2 4
+    load_field .n
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    call baml.json.stringify
+    store_var _13
+    load_var r
+    call baml.csv.CsvReader.skipped_count
+    call baml.json.stringify
+    store_var _15
+    load_var _13
+    load_const ":"
+    bin_op +
+    load_var _15
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_decode_typed_rows() -> string {
+    load_type csv.CsvSmokeLead
+    load_const "company,score\nAcme,0.5\nGlobex,\n"
+    load_const <omitted>
+    call baml.csv.decode
+    store_var leads
+    load_type csv.CsvSmokeLead
+    load_var leads
+    load_const 1
+    call baml.Array.at
+    store_var _4
+    load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _4
+    store_var l
+    load_var l
+    load_field .score
+    store_var_load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _8
+    call baml.json.stringify
+    store_var _14
+    load_var l
+    load_field .company
+    load_const ":"
+    bin_op +
+    load_var _14
+    bin_op +
+    store_var second
+    jump L4
+
+  L2:
+    load_var l
+    load_field .company
+    load_const ":null"
+    bin_op +
+    store_var second
+    jump L4
+
+  L3:
+    load_const "missing"
+    store_var second
+
+  L4:
+    load_var leads
+    container_len
+    store_var _18
+    load_var _18
+    call baml.json.stringify
+    load_const ":"
+    bin_op +
+    load_var second
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_decode_user_enum_rows() -> string {
+    load_type csv.CsvSmokeEnumRow
+    load_const "name,color\nsky,Blue\ngrass,Green\n"
+    load_const <omitted>
+    call baml.csv.decode
+    load_const ""
+    store_var out
+    load_type baml.iter.Iterable<Error = never, Item = csv.CsvSmokeEnumRow>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+
+  L0:
+    load_var _5
+    load_type baml.iter.Iterator<Error = never, Item = csv.CsvSmokeEnumRow>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L7
+
+  L1:
+    load_var _6
+    store_var_load_var r
+    load_field .color
+    discriminant
+    load_const CsvSmokeColor.Red
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var r
+    load_field .color
+    discriminant
+    load_const CsvSmokeColor.Green
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "Blue"
+    store_var c
+    jump L6
+
+  L4:
+    load_const "Green"
+    store_var c
+    jump L6
+
+  L5:
+    load_const "Red"
+    store_var c
+
+  L6:
+    load_var2 1 4
+    load_field .name
+    bin_op +
+    load_const "="
+    bin_op +
+    load_var c
+    bin_op +
+    load_const ";"
+    bin_op +
+    store_var out
+    jump L0
+
+  L7:
+    load_var out
+    return
+}
+
+function csv.csv_smoke_on_error_skip() -> string {
+    load_const "a,b\n1,2\n3\n4,5\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "skip"
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    store_var r
+    load_const 0
+    store_var count
+    load_var r
+    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+
+  L0:
+    load_var _5
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _6
+    store_var rec
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+    jump L0
+
+  L2:
+    load_var count
+    call baml.json.stringify
+    store_var _11
+    load_var r
+    call baml.csv.CsvReader.skipped_count
+    call baml.json.stringify
+    store_var _13
+    load_var _11
+    load_const ":"
+    bin_op +
+    load_var _13
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_parse_quoted_cells() -> string {
+    load_const "a,b\n1,\"x,\ny\"\n2,plain\n"
+    load_const <omitted>
+    call baml.csv.parse
+    store_var rows
+    load_var rows
+    container_len
+    store_var _4
+    load_var _4
+    call baml.json.stringify
+    load_const ":"
+    bin_op +
+    load_var rows
+    load_const 0
+    load_array_element
+    load_const 1
+    load_array_element
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_reader_streaming_get() -> int {
+    load_const "n\n1\n2\n3\n"
+    load_const <omitted>
+    call baml.csv.reader
+    load_const 0
+    store_var total
+    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_type int
+    load_var _5
+    load_const "n"
+    call baml.csv.CsvRecord.get
+    store_var _10
+    load_var _10
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _10
+    jump L4
+
+  L3:
+    load_const 0
+
+  L4:
+    load_var total
+    add_int
+    store_var total
+    jump L0
+
+  L5:
+    load_var total
+    return
+}
+
+function csv.csv_smoke_record_error_resumes() -> string {
+    load_const "a,b\n1,2\n\"oops,9\n3,4\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "pad"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    store_var r
+    load_const ""
+    store_var seen
+    load_const 0
+    store_var bad
+
+  L0:
+    load_const true
+    pop_jump_if_false L11
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _7
+    call baml.csv.CsvRecord.fields
+    jump L7
+    load_var _
+    is_type baml.csv.CsvError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    rethrow
+
+  L3:
+    load_var _
+    load_field .2
+    store_var line
+    load_var bad
+    load_const 1
+    add_int
+    store_var bad
+    load_var line
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var line
+    call baml.json.stringify
+    store_var _15
+    jump L6
+
+  L5:
+    load_const "?"
+    store_var _15
+
+  L6:
+    load_const "err@"
+    load_var _15
+    bin_op +
+    store_var step
+    jump L9
+
+  L7:
+    load_const 0
+    load_array_element
+    store_var step
+    jump L9
+
+  L8:
+    load_const "done"
+    store_var step
+
+  L9:
+    load_var step
+    load_const "done"
+    cmp_op ==
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var2 2 4
+    bin_op +
+    load_const ";"
+    bin_op +
+    store_var seen
+    jump L0
+
+  L11:
+    load_var seen
+    load_const "bad="
+    bin_op +
+    store_var _24
+    load_var bad
+    call baml.json.stringify
+    store_var _26
+    load_var2 9 10
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_stringify_round_trip() -> string {
+    load_type csv.CsvSmokeVerdict
+    load_const 1
+    load_const "ok, fine"
+    init_instance user.csv.CsvSmokeVerdict .id, .label
+    load_const 2
+    load_const "bad"
+    init_instance user.csv.CsvSmokeVerdict .id, .label
+    load_type csv.CsvSmokeVerdict
+    alloc_array 2
+    load_const <omitted>
+    call baml.csv.stringify
+    store_var text
+    load_type csv.CsvSmokeVerdict
+    load_var text
+    load_const <omitted>
+    call baml.csv.decode
+    container_len
+    store_var _12
+    load_var _12
+    call baml.json.stringify
+    store_var _11
+    load_var text
+    load_const "|"
+    bin_op +
+    load_var _11
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_to_markdown_table() -> string {
+    load_type csv.CsvSmokeKpi
+    load_const "growth|rate"
+    load_const 1.5
+    init_instance user.csv.CsvSmokeKpi .metric, .q1
+    load_type csv.CsvSmokeKpi
+    alloc_array 1
+    load_const <omitted>
+    call baml.csv.to_markdown
+    return
+}
+
+function csv.csv_smoke_typed_returns_probe() -> string {
+    load_const "name,n\nalice,1\nbob,2\n"
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    is_type baml.iter.Done
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_type string
+    load_var _3
+    load_const "name"
+    call baml.csv.CsvRecord.get
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const "<null>"
+    store_var _6
+
+  L1:
+    load_var _6
+    store_var rec_name
+    jump L3
+
+  L2:
+    load_const "none"
+    store_var rec_name
+
+  L3:
+    load_const 0
+    store_var total
+    load_type csv.CsvSmokeIntRow
+    load_var r
+    call baml.csv.CsvReader.rows
+    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.CsvSmokeIntRow>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _13
+
+  L4:
+    load_var _13
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.CsvSmokeIntRow>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _14
+    load_var _14
+    is_type baml.iter.Done
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var2 5 7
+    load_field .n
+    add_int
+    store_var total
+    jump L4
+
+  L6:
+    load_var rec_name
+    load_const ":"
+    bin_op +
+    store_var _19
+    load_var total
+    call baml.json.stringify
+    store_var _21
+    load_var2 8 9
+    bin_op +
+    return
+}
+
+function csv.csv_spectrum_core_fixtures() -> string {
+    load_type csv.SpectrumAddress
+    load_const "first,last,address,city,zip\nJohn,Doe,120 any st.,\"Anytown, WW\",08123"
+    load_const <omitted>
+    call baml.csv.decode
+    store_var comma
+    load_type csv.SpectrumAB
+    load_const "a,b\n1,\"ha \"\"ha\"\" ha\"\n3,4"
+    load_const <omitted>
+    call baml.csv.decode
+    store_var escaped
+    load_type csv.SpectrumAB
+    load_const "a,b\n1,\"ha \n\"\"ha\"\" \nha\"\n3,4"
+    load_const <omitted>
+    call baml.csv.decode
+    store_var quotes_newlines
+    load_type csv.SpectrumAddress
+    load_var comma
+    load_const 0
+    call baml.Array.at
+    store_var _8
+    load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _8
+    store_var_load_var row
+    load_field .city
+    load_const ":"
+    bin_op +
+    load_var row
+    load_field .zip
+    bin_op +
+    store_var city
+    jump L2
+
+  L1:
+    load_const "missing"
+    store_var city
+
+  L2:
+    load_type csv.SpectrumAB
+    load_var escaped
+    load_const 0
+    call baml.Array.at
+    store_var _16
+    load_var _16
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _16
+    load_field .b
+    store_var escaped_b
+    jump L5
+
+  L4:
+    load_const "missing"
+    store_var escaped_b
+
+  L5:
+    load_type csv.SpectrumAB
+    load_var quotes_newlines
+    load_const 0
+    call baml.Array.at
+    store_var _21
+    load_var _21
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var _21
+    load_field .b
+    store_var newline_b
+    jump L8
+
+  L7:
+    load_const "missing"
+    store_var newline_b
+
+  L8:
+    load_var city
+    load_const " / "
+    bin_op +
+    store_var _31
+    load_var escaped
+    container_len
+    store_var _34
+    load_var _34
+    call baml.json.stringify
+    store_var _33
+    load_var2 12 13
+    bin_op +
+    load_const ":"
+    bin_op +
+    load_var escaped_b
+    bin_op +
+    load_const " / "
+    bin_op +
+    store_var _27
+    load_var quotes_newlines
+    container_len
+    store_var _37
+    load_var _37
+    call baml.json.stringify
+    store_var _36
+    load_var2 11 15
+    bin_op +
+    load_const ":"
+    bin_op +
+    load_var newline_b
+    bin_op +
+    return
+}
+
+function csv.csv_stringify_records_roundtrip() -> string {
+    load_const "a"
+    load_const "b"
+    load_type null | bool | int | bigint | float | string
+    alloc_array 2
+    load_const "1"
+    load_const "x\ny"
+    load_type null | bool | int | bigint | float | string
+    alloc_array 2
+    load_type (null | bool | int | bigint | float | string)[]
+    alloc_array 2
+    load_const <omitted>
+    call baml.csv.stringify_records
+    store_var text
+    load_var text
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    call user.csv.grid
+    store_var _10
+    load_var text
+    load_const "#"
+    bin_op +
+    load_var _10
+    bin_op +
+    return
+}
+
+function csv.csv_to_markdown_nonfinite() -> string {
+    call baml.Float.nan
+    store_var _3
+    load_type csv.MdRow
+    load_const "nan"
+    load_var _3
+    init_instance user.csv.MdRow .metric, .value
+    load_type csv.MdRow
+    alloc_array 1
+    load_const <omitted>
+    call baml.csv.to_markdown
+    return
+}
+
+function csv.csv_to_markdown_records_default_headers() -> string {
+    load_const "1"
+    load_const "x"
+    load_type string
+    alloc_array 2
+    load_type string[]
+    alloc_array 1
+    load_const <omitted>
+    load_const <omitted>
+    call baml.csv.to_markdown_records
+    return
+}
+
+function csv.csv_to_markdown_records_with_headers() -> string {
+    load_const "1"
+    load_const "x"
+    load_type string
+    alloc_array 2
+    load_type string[]
+    alloc_array 1
+    load_const "id"
+    load_const "name"
+    load_type string
+    alloc_array 2
+    load_const <omitted>
+    call baml.csv.to_markdown_records
+    return
+}
+
+function csv.csv_to_markdown_truncation() -> string {
+    load_type csv.MdRow
+    load_const "a"
+    load_const 1.0
+    init_instance user.csv.MdRow .metric, .value
+    load_const "b"
+    load_const 2.0
+    init_instance user.csv.MdRow .metric, .value
+    load_const "c"
+    load_const 3.0
+    init_instance user.csv.MdRow .metric, .value
+    load_type csv.MdRow
+    alloc_array 3
+    load_const 2
+    call baml.csv.to_markdown
+    return
+}
+
+function csv.csv_trim_all() -> string {
+    load_const "  name , score \n  alice ,  9 \n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "all"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    store_var r
+    load_var r
+    call baml.csv.CsvReader.headers
+    store_var_load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    alloc_array 0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_const "|"
+    call user.csv.join
+    store_var h
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _10
+    load_var _10
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _10
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var row
+    jump L3
+
+  L2:
+    load_const "none"
+    store_var row
+
+  L3:
+    load_var h
+    load_const "/"
+    bin_op +
+    load_var row
+    bin_op +
+    return
+}
+
+function csv.csv_trim_preserves_quoted() -> string {
+    load_const " \" a \" ,b\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const "fields"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    call user.csv.grid
+    return
+}
+
+function csv.csv_tsv() -> string {
+    load_const "a\tb\n1\t2\n"
+    load_const "\t"
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    call user.csv.grid
+    return
+}
+
+function csv.csv_unterminated_quote_exhausts() -> string {
+    load_const "a\n\"open\n1\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    store_var r
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _4
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var first
+    jump L2
+
+  L1:
+    load_const "done"
+    store_var first
+
+  L2:
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _10
+    load_var _10
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _10
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var second
+    jump L7
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var e
+    rethrow
+
+  L5:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var second
+    jump L7
+
+  L6:
+    load_const "done"
+    store_var second
+
+  L7:
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _17
+    load_var _17
+    is_type baml.iter.Done
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_var _17
+    call baml.csv.CsvRecord.fields
+    load_const "|"
+    call user.csv.join
+    store_var third
+    jump L10
+
+  L9:
+    load_const "done"
+    store_var third
+
+  L10:
+    load_var first
+    load_const "/"
+    bin_op +
+    load_var second
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var third
+    bin_op +
+    return
+}
+
+function csv.csv_write_rows_batch_is_atomic() -> string {
+    load_const <omitted>
+    call baml.csv.buffer
+    store_var w
+    call baml.Float.nan
+    store_var _8
+    load_type csv.MdRow
+    load_var w
+    load_const "good"
+    load_const 1.0
+    init_instance user.csv.MdRow .metric, .value
+    load_const "bad"
+    load_var _8
+    init_instance user.csv.MdRow .metric, .value
+    load_type csv.MdRow
+    alloc_array 2
+    call baml.csv.CsvWriter.write_rows
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    jump L3
+
+  L2:
+    load_const "no-throw"
+
+  L3:
+    load_const "#"
+    bin_op +
+    store_var _14
+    load_var w
+    call baml.csv.CsvWriter.text
+    store_var _16
+    load_var w
+    call baml.csv.CsvWriter.records_written
+    call baml.json.stringify
+    store_var _17
+    load_var2 4 5
+    bin_op +
+    load_const "#"
+    bin_op +
+    load_var _17
+    bin_op +
+    return
+}
+
+function csv.csv_writer_bom() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const true
+    load_const null
+    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
+    call baml.csv.buffer
+    store_var w
+    load_var w
+    load_const "x"
+    load_type null | bool | int | bigint | float | string
+    alloc_array 1
+    call baml.csv.CsvWriter.write_record
+    pop 1
+    load_var w
+    call baml.csv.CsvWriter.text
+    store_var out
+    load_var out
+    call baml.String.length
+    call baml.json.stringify
+    store_var _10
+    load_var out
+    load_const 1
+    load_const 2
+    call baml.String.slice
+    store_var _12
+    load_var out
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.parse
+    call user.csv.grid
+    store_var _13
+    load_var _10
+    load_const ":"
+    bin_op +
+    load_var _12
+    bin_op +
+    load_const ":"
+    bin_op +
+    load_var _13
+    bin_op +
+    return
+}
+
+function csv.csv_writer_bom_survives_encode_error() -> string {
+    load_const null
+    load_const null
+    load_const "never"
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const true
+    load_const null
+    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
+    call baml.csv.buffer
+    store_var w
+    load_var w
+    load_const "a,b"
+    load_type null | bool | int | bigint | float | string
+    alloc_array 1
+    call baml.csv.CsvWriter.write_record
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var caught
+    jump L3
+
+  L2:
+    load_const "no-throw"
+    store_var caught
+
+  L3:
+    load_var w
+    load_const "x"
+    load_type null | bool | int | bigint | float | string
+    alloc_array 1
+    call baml.csv.CsvWriter.write_record
+    pop 1
+    load_var w
+    call baml.csv.CsvWriter.text
+    store_var out
+    load_var caught
+    load_const "#"
+    bin_op +
+    store_var _16
+    load_var out
+    call baml.String.length
+    call baml.json.stringify
+    store_var _18
+    load_var out
+    load_const 1
+    load_const 2
+    call baml.String.slice
+    store_var _20
+    load_var2 5 6
+    bin_op +
+    load_const ":"
+    bin_op +
+    load_var _20
+    bin_op +
+    return
+}
+
+function csv.csv_writer_buffer_basics() -> string {
+    load_const <omitted>
+    call baml.csv.buffer
+    store_var w
+    load_type csv.OutRow
+    load_var w
+    load_const 1
+    load_const "needs, quoting"
+    init_instance user.csv.OutRow .id, .note
+    load_const 2
+    load_const null
+    init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
+    alloc_array 2
+    call baml.csv.CsvWriter.write_rows
+    pop 1
+    load_var w
+    call baml.csv.CsvWriter.text
+    store_var _8
+    load_var w
+    call baml.csv.CsvWriter.records_written
+    call baml.json.stringify
+    store_var _9
+    load_var _8
+    load_const "#"
+    bin_op +
+    load_var _9
+    bin_op +
+    return
+}
+
+function csv.csv_writer_closed_throws() -> string {
+    load_const <omitted>
+    call baml.csv.buffer
+    store_var w
+    load_type csv.Pos2
+    load_var w
+    load_const 1
+    load_const 2
+    init_instance user.csv.Pos2 .a, .b
+    call baml.csv.CsvWriter.write_row
+    pop 1
+    load_var w
+    call baml.csv.CsvWriter.close
+    pop 1
+    load_var w
+    call baml.csv.CsvWriter.close
+    pop 1
+    load_type csv.Pos2
+    load_var w
+    load_const 3
+    load_const 4
+    init_instance user.csv.Pos2 .a, .b
+    call baml.csv.CsvWriter.write_row
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    jump L3
+
+  L2:
+    load_const "no-throw"
+
+  L3:
+    load_const ":"
+    bin_op +
+    store_var _14
+    load_var w
+    call baml.csv.CsvWriter.records_written
+    call baml.json.stringify
+    store_var _16
+    load_var2 3 4
+    bin_op +
+    return
+}
+
+function csv.csv_writer_crlf_and_null_value() -> string {
+    load_type csv.OutRow
+    load_const 1
+    load_const null
+    init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
+    alloc_array 1
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "crlf"
+    load_const false
+    load_const null
+    load_const "NULL"
+    load_const null
+    load_const null
+    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
+    call baml.csv.stringify
+    return
+}
+
+function csv.csv_writer_explicit_header() -> string {
+    load_const <omitted>
+    call baml.csv.buffer
+    store_var w
+    load_var w
+    load_const "a"
+    load_const "b"
+    load_type string
+    alloc_array 2
+    call baml.csv.CsvWriter.write_header
+    pop 1
+    load_type csv.Pos2
+    load_var w
+    load_const 1
+    load_const 2
+    init_instance user.csv.Pos2 .a, .b
+    call baml.csv.CsvWriter.write_row
+    pop 1
+    load_var w
+    load_const "x"
+    load_type string
+    alloc_array 1
+    call baml.csv.CsvWriter.write_header
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var after_data
+    jump L3
+
+  L2:
+    load_const "no-throw"
+    store_var after_data
+
+  L3:
+    load_var w
+    call baml.csv.CsvWriter.text
+    load_const "#"
+    bin_op +
+    load_var after_data
+    bin_op +
+    return
+}
+
+function csv.csv_writer_float_canonical() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
+    call baml.csv.buffer
+    store_var w
+    load_var w
+    load_const 2.0
+    load_const 0.1
+    load_type null | bool | int | bigint | float | string
+    alloc_array 2
+    call baml.csv.CsvWriter.write_record
+    pop 1
+    load_var w
+    call baml.csv.CsvWriter.text
+    return
+}
+
+function csv.csv_writer_headers_override() -> string {
+    load_type csv.OutRow
+    load_const 1
+    load_const "x"
+    init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
+    alloc_array 1
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "ID"
+    load_const "Note"
+    load_type string
+    alloc_array 2
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
+    call baml.csv.stringify
+    return
+}
+
+function csv.csv_writer_nonfinite_float_throws() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
+    call baml.csv.buffer
+    store_var w
+    call baml.Float.nan
+    store_var _4
+    load_var2 1 2
+    load_type null | bool | int | bigint | float | string
+    alloc_array 1
+    call baml.csv.CsvWriter.write_record
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    jump L3
+
+  L2:
+    load_const "no-throw"
+
+  L3:
+    return
+}
+
+function csv.csv_writer_quote_styles() -> string {
+    load_type csv.OutRow
+    load_const 1
+    load_const "x"
+    init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
+    alloc_array 1
+    load_const null
+    load_const null
+    load_const "all"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
+    call baml.csv.stringify
+    store_var all
+    load_type csv.OutRow
+    load_const 1
+    load_const "a,b"
+    init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
+    alloc_array 1
+    load_const null
+    load_const null
+    load_const "never"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
+    call baml.csv.stringify
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var never_err
+    jump L3
+
+  L2:
+    load_const "no-throw"
+    store_var never_err
+
+  L3:
+    load_var all
+    load_const "#"
+    bin_op +
+    load_var never_err
+    bin_op +
+    return
+}
+
+function csv.csv_writer_sanitize_formulas() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const true
+    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
+    call baml.csv.buffer
+    store_var w
+    load_var w
+    load_const "=SUM(A1)"
+    load_const "safe"
+    load_type null | bool | int | bigint | float | string
+    alloc_array 2
+    call baml.csv.CsvWriter.write_record
+    pop 1
+    load_var w
+    call baml.csv.CsvWriter.text
+    return
+}
+
+function csv.csv_writer_state_survives_encode_error() -> string {
+    load_const <omitted>
+    call baml.csv.buffer
+    store_var w
+    call baml.Float.nan
+    store_var _6
+    load_type csv.MdRow
+    load_var w
+    load_const "bad"
+    load_var _6
+    init_instance user.csv.MdRow .metric, .value
+    call baml.csv.CsvWriter.write_row
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var caught
+    jump L3
+
+  L2:
+    load_const "no-throw"
+    store_var caught
+
+  L3:
+    load_type csv.MdRow
+    load_var w
+    load_const "ok"
+    load_const 1.5
+    init_instance user.csv.MdRow .metric, .value
+    call baml.csv.CsvWriter.write_row
+    pop 1
+    load_var caught
+    load_const "#"
+    bin_op +
+    store_var _15
+    load_var w
+    call baml.csv.CsvWriter.text
+    store_var _17
+    load_var w
+    call baml.csv.CsvWriter.records_written
+    call baml.json.stringify
+    store_var _18
+    load_var2 5 6
+    bin_op +
+    load_const "#"
+    bin_op +
+    load_var _18
+    bin_op +
+    return
+}
+
+function csv.csv_writer_text_on_file_writer_throws() -> string {
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _4
+    load_type bigint
+    load_var _4
+    call baml.String.from
+    store_var _3
+    load_const "/tmp/baml_csv_text_on_file_"
+    load_var _3
+    bin_op +
+    load_const ".csv"
+    bin_op +
+    store_var_load_var path
+    load_const <omitted>
+    call baml.csv.create
+    store_var w
+    load_var w
+    call baml.csv.CsvWriter.text
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.csv.CsvError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .kind
+    call user.csv.kind_name
+    store_var err
+    jump L3
+
+  L2:
+    load_const "no-throw"
+    store_var err
+
+  L3:
+    load_var w
+    call baml.csv.CsvWriter.close
+    pop 1
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var err
+    return
+}
+
+function csv.csv_writer_write_record_raw() -> string {
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
+    call baml.csv.buffer
+    store_var w
+    load_var w
+    load_const null
+    load_const true
+    load_const 7
+    load_const 12345678901234567890123n
+    load_const 2.5
+    load_const "txt"
+    load_type null | bool | int | bigint | float | string
+    alloc_array 6
+    call baml.csv.CsvWriter.write_record
+    pop 1
+    load_var w
+    call baml.csv.CsvWriter.text
+    return
+}
+
+function csv.grid(rows: string[][]) -> string {
+    load_type string
+    alloc_array 0
+    store_var out
+    load_var rows
+    load_type baml.iter.Iterable<Error = never, Item = string[]>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = string[]>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _4
+    load_const "|"
+    call user.csv.join
+    store_var _9
+    load_type string
+    load_var2 2 5
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_var out
+    load_const ";"
+    call user.csv.join
+    return
+}
+
+function csv.int_or(v: int | null, fallback: string) -> string {
+    load_var v
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    call baml.json.stringify
+    jump L2
+
+  L1:
+    load_var fallback
+
+  L2:
+    return
+}
+
+function csv.join(parts: string[], sep: string) -> string {
+    load_const ""
+    store_var out
+    load_const true
+    store_var first
+    load_var parts
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+
+  L0:
+    load_var _5
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _6
+    store_var p
+    load_var first
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var2 3 2
+    bin_op +
+    load_var p
+    bin_op +
+    store_var out
+    jump L0
+
+  L3:
+    load_var p
+    store_var out
+    load_const false
+    store_var first
+    jump L0
+
+  L4:
+    load_var out
+    return
+}
+
+function csv.kind_name(k: <unresolved type #129839178998711>) -> string {
+    load_var k
+    discriminant
+    jump_table [L9, L8, L7, L6, L5, L4, L3, L2, L1, L0], default L11
+
+  L0: CsvErrorKind.Closed
+    load_const "Closed"
+    jump L10
+
+  L1: CsvErrorKind.TooManyRows
+    load_const "TooManyRows"
+    jump L10
+
+  L2: CsvErrorKind.NotFound
+    load_const "NotFound"
+    jump L10
+
+  L3: CsvErrorKind.Encode
+    load_const "Encode"
+    jump L10
+
+  L4: CsvErrorKind.Decode
+    load_const "Decode"
+    jump L10
+
+  L5: CsvErrorKind.Header
+    load_const "Header"
+    jump L10
+
+  L6: CsvErrorKind.Encoding
+    load_const "Encoding"
+    jump L10
+
+  L7: CsvErrorKind.FieldCount
+    load_const "FieldCount"
+    jump L10
+
+  L8: CsvErrorKind.Quote
+    load_const "Quote"
+    jump L10
+
+  L9: CsvErrorKind.Options
+    load_const "Options"
+
+  L10:
+    return
+
+  L11:
+    unreachable
+}

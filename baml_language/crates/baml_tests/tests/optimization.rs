@@ -238,7 +238,7 @@ fn combined_constant_fold_and_struct() {
         }
     "#;
     insta::assert_snapshot!(unoptimized(source), @r#"
-    function main() -> Result {
+    function main() -> <unresolved type #55062759600785> {
         load_const 2
         load_const 3
         add_int
@@ -248,7 +248,7 @@ fn combined_constant_fold_and_struct() {
     }
     "#);
     insta::assert_snapshot!(optimized(source), @r#"
-    function main() -> Result {
+    function main() -> <unresolved type #55062759600785> {
         load_const 5
         load_const "sum"
         init_instance user.Result .value, .label

@@ -1,0 +1,32 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.lambda_basic.test_annotated() -> int  [expr] {
+  { let double = (x: int) -> int { {  } x Mul 2 } } double(21)
+}
+function user.fixtures.lambda_basic.test_capture() -> int  [expr] {
+  { let offset = 10; let add_offset = (x: int) -> int { {  } x Add offset } } add_offset(32)
+}
+function user.fixtures.lambda_basic.test_inferred_return() -> int  [expr] {
+  { let double = (x: int) -> { {  } x Mul 2 } } double(21)
+}
+function user.fixtures.lambda_basic.test_map_inferred() -> int[]  [expr] {
+  { let items: int[] = [1, 2, 3] } items.map((x) -> { {  } x Mul 2 })
+}
+function user.fixtures.lambda_basic.test_multi_param() -> int  [expr] {
+  { let add = (a: int, b: int) -> int { {  } a Add b } } add(20, 22)
+}
+function user.fixtures.lambda_basic.test_nested() -> int  [expr] {
+  { let outer = (x: int) -> { { let inner = (y: int) -> int { {  } x Add y } } inner(1) } } outer(41)
+}
+function user.fixtures.lambda_basic.test_throws() -> int  [expr] {
+  { let risky = (x: int) -> int throws string { { if (x Lt 0) { throw "negative" } } x } } risky(42)
+}
+function user.fixtures.lambda_basic.test_zero_param() -> int  [expr] {
+  { let constant = () -> int { {  } 42 } } constant()
+}
+
+--- captures ---
+lambda (x) in test_capture: captures [offset]
+lambda (y) in ?: captures [x]

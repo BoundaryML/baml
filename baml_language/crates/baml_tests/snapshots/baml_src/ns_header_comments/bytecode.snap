@@ -1,0 +1,38 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function header_comments.$init_test_ns_header_comments_header_comments(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.header_comments"
+    load_const "header comments parse in expression positions"
+    make_closure .<lambda($init_test_ns_header_comments_header_comments, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function header_comments.Dog.Sound.sound(self: <unresolved type #119338406835464>) -> string {
+    load_const "woof"
+    return
+}
+
+function header_comments.classify(n: int) -> string {
+    load_var n
+    jump_table [L2, L1, L1, L1], default L0
+
+  L0:
+    load_const "big"
+    jump L3
+
+  L1: 3
+    load_const "small"
+    jump L3
+
+  L2: 0
+    load_const "zero"
+
+  L3:
+    return
+}

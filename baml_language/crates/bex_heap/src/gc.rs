@@ -757,13 +757,13 @@ impl BexHeap {
                     worklist.push(alias.owner);
                 }
             }
-            // A `type` value is exactly the type it denotes: every edge it has
-            // is a head, walked below.
-            Object::Type(_)
-            | Object::String(_)
+            Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
+            // A `type` value is exactly the type it denotes: every edge it has
+            // is a head, walked below.
+            | Object::Type(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
         }

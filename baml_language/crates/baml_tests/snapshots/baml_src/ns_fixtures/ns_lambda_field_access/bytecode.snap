@@ -1,0 +1,70 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.lambda_field_access.test_captured_field_access(obj: <unresolved type #98198871176098>) -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var obj
+    make_closure .<lambda(test_captured_field_access, 0)>, 1
+    call_indirect
+    return
+}
+
+function fixtures.lambda_field_access.test_captured_nested_field(obj: <unresolved type #98198871176098>) -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var obj
+    make_closure .<lambda(test_captured_nested_field, 0)>, 1
+    call_indirect
+    return
+}
+
+function fixtures.lambda_field_access.test_lambda_param_and_capture(obj: <unresolved type #98198871176098>) -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 10
+    load_var obj
+    make_closure .<lambda(test_lambda_param_and_capture, 0)>, 1
+    call_indirect
+    return
+}
+
+function fixtures.lambda_field_access.test_nested_lambda_capture(obj: <unresolved type #98198871176098>) -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var obj
+    make_closure .<lambda(test_nested_lambda_capture, 0)>, 1
+    call_indirect
+    return
+}
+
+function fixtures.lambda_field_access.test_no_leak_after_lambda(obj: <unresolved type #98198871176098>) -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var obj
+    make_closure .<lambda(test_no_leak_after_lambda, 0)>, 1
+    call_indirect
+    store_var v
+    load_deref ?1
+    load_field .name
+    return
+}
+
+function fixtures.lambda_field_access.test_sequential_lambdas(obj: <unresolved type #98198871176098>) -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var obj
+    make_closure .<lambda(test_sequential_lambdas, 0)>, 1
+    call_indirect
+    store_var n
+    load_var obj
+    make_closure .<lambda(test_sequential_lambdas, 1)>, 1
+    call_indirect
+    return
+}

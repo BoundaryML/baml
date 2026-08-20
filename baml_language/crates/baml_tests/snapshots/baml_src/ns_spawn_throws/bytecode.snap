@@ -1,0 +1,208 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function spawn_throws.$init_test_ns_spawn_throws_spawn_throws(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.spawn_throws"
+    load_const "await_uncaught_bubbles_to_host"
+    make_closure .<lambda($init_test_ns_spawn_throws_spawn_throws, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.spawn_throws"
+    load_const "await_rethrows_caught_by_user_catch"
+    make_closure .<lambda($init_test_ns_spawn_throws_spawn_throws, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.spawn_throws"
+    load_const "caught_after_sleep_not_double_surfaced"
+    make_closure .<lambda($init_test_ns_spawn_throws_spawn_throws, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.spawn_throws"
+    load_const "racing_caught_not_double_surfaced"
+    make_closure .<lambda($init_test_ns_spawn_throws_spawn_throws, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.spawn_throws"
+    load_const "racing_successful_spawn_returns_cleanly"
+    make_closure .<lambda($init_test_ns_spawn_throws_spawn_throws, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.spawn_throws"
+    load_const "caught_not_preempted_by_unrelated_await"
+    make_closure .<lambda($init_test_ns_spawn_throws_spawn_throws, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function spawn_throws.await_rethrows_caught_by_user_catch_fn() -> int {
+    make_closure .<lambda(await_rethrows_caught_by_user_catch_fn, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type baml.errors.Io
+    spawn
+    store_var _3
+    load_var _3
+    await
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 99
+
+  L2:
+    return
+}
+
+function spawn_throws.await_uncaught_spawns_io_fn() -> int {
+    make_closure .<lambda(await_uncaught_spawns_io_fn, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type baml.errors.Io
+    spawn
+    store_var _3
+    load_var _3
+    await
+    return
+}
+
+function spawn_throws.boom_io() -> int {
+    load_const "boom"
+    init_instance baml.errors.Io .message
+    throw
+}
+
+function spawn_throws.boom_io_x() -> int {
+    load_const "x"
+    init_instance baml.errors.Io .message
+    throw
+}
+
+function spawn_throws.caught_after_sleep_not_double_surfaced_fn() -> int {
+    make_closure .<lambda(caught_after_sleep_not_double_surfaced_fn, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type baml.errors.Io
+    spawn
+    store_var _3
+    load_const 30n
+    call baml.time.Duration.from_milliseconds
+    sys_op baml.sys.sleep
+    pop 1
+    load_var _3
+    await
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 99
+
+  L2:
+    return
+}
+
+function spawn_throws.caught_not_preempted_by_unrelated_await_fn() -> int {
+    make_closure .<lambda(caught_not_preempted_by_unrelated_await_fn, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type baml.errors.Io
+    spawn
+    store_var _3
+    make_closure .<lambda(caught_not_preempted_by_unrelated_await_fn, 1)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type baml.errors.Io
+    spawn
+    store_var _6
+    load_var _6
+    await
+    pop 1
+    load_var _3
+    await
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 99
+
+  L2:
+    return
+}
+
+function spawn_throws.racing_caught_not_double_surfaced_fn() -> int {
+    make_closure .<lambda(racing_caught_not_double_surfaced_fn, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type baml.errors.Io
+    spawn
+    store_var _3
+    load_var _3
+    await
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 99
+
+  L2:
+    return
+}
+
+function spawn_throws.racing_successful_spawn_returns_cleanly_fn() -> int {
+    make_closure .<lambda(racing_successful_spawn_returns_cleanly_fn, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type never
+    spawn
+    pop 1
+    load_const 7
+    return
+}

@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.test_expr_basic.$init_test_ns_fixtures_ns_test_expr_basic_main(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.fixtures.test_expr_basic"
+    load_const "simple test"
+    make_closure .<lambda($init_test_ns_fixtures_ns_test_expr_basic_main, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.fixtures.test_expr_basic"
+    load_const "with not_null"
+    make_closure .<lambda($init_test_ns_fixtures_ns_test_expr_basic_main, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}

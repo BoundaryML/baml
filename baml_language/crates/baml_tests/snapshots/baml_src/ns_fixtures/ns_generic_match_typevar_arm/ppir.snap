@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.generic_match_typevar_arm.Non {
+}
+class user.fixtures.generic_match_typevar_arm.Non$stream {
+}
+class user.fixtures.generic_match_typevar_arm.Opt {
+  value: T
+}
+class user.fixtures.generic_match_typevar_arm.Opt$stream {
+  value: T | null
+}
+function user.fixtures.generic_match_typevar_arm.unwrap_or(o: user.fixtures.generic_match_typevar_arm.Opt<T> | user.fixtures.generic_match_typevar_arm.Non, default: T) -> T  [expr] {
+  {  } match (o) { s: user.fixtures.generic_match_typevar_arm.Opt<T> => s.value, _ => default }
+}

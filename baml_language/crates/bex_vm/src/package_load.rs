@@ -530,6 +530,10 @@ pub fn build_heap_with_packages(
     let layout = reserve_package_slots(&mut compile_time_objects, packages);
     let mut heap = BexHeap::build_unsealed_default(compile_time_objects);
     let index = fill_package_slots(&mut heap, packages, &layout);
+    // Every slot is now real (impl rules carry heads in their patterns), so
+    // this is the one point where the whole image can bind — and prove it
+    // bound — before anything can dereference a head.
+    heap.bind_type_heads();
     (heap.seal(), index)
 }
 

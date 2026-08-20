@@ -1,0 +1,324 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function shell.$init_test_ns_shell_shell(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.shell"
+    load_const "shell_echo"
+    make_closure .<lambda($init_test_ns_shell_shell, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "shell_failing_command"
+    make_closure .<lambda($init_test_ns_shell_shell, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "shell_with_variable"
+    make_closure .<lambda($init_test_ns_shell_shell, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "shell_ok_method_success"
+    make_closure .<lambda($init_test_ns_shell_shell, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "shell_ok_method_failure"
+    make_closure .<lambda($init_test_ns_shell_shell, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "shell_stdout_bytes"
+    make_closure .<lambda($init_test_ns_shell_shell, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "shell_nonexistent_command"
+    make_closure .<lambda($init_test_ns_shell_shell, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "b251_concat_println_then_shell"
+    make_closure .<lambda($init_test_ns_shell_shell, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "b251_println_twice_then_shell"
+    make_closure .<lambda($init_test_ns_shell_shell, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "b251_multi_let_then_shell"
+    make_closure .<lambda($init_test_ns_shell_shell, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "b251_println_discarded_then_shell"
+    make_closure .<lambda($init_test_ns_shell_shell, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "exec_echo"
+    make_closure .<lambda($init_test_ns_shell_shell, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "pid_is_positive"
+    make_closure .<lambda($init_test_ns_shell_shell, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.shell"
+    load_const "pid_is_stable"
+    make_closure .<lambda($init_test_ns_shell_shell, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function shell.b251_concat_println_shell_fn() -> bool {
+    call user.shell.b251_payload
+    store_var _2
+    load_const "echo "
+    load_var _2
+    bin_op +
+    store_var cmd
+    load_const "-> "
+    load_var cmd
+    bin_op +
+    sys_op baml.io.println
+    pop 1
+    load_var cmd
+    load_const null
+    sys_op baml.sys.shell
+    load_field .stdout
+    call baml.Uint8Array.baml.ToString.to_string
+    store_var out
+    load_var out
+    call baml.String.length
+    load_const 0
+    cmp_int_op >
+    jump_if_false L0
+    pop 1
+    load_var out
+    load_const "hello_world"
+    call baml.String.includes
+
+  L0:
+    return
+}
+
+function shell.b251_multi_let_fn() -> bool {
+    call user.shell.b251_payload
+    store_var payload
+    load_const "echo "
+    load_var payload
+    bin_op +
+    store_var cmd
+    load_const "-> "
+    load_var cmd
+    bin_op +
+    sys_op baml.io.println
+    pop 1
+    load_var cmd
+    load_const null
+    sys_op baml.sys.shell
+    load_field .stdout
+    call baml.Uint8Array.baml.ToString.to_string
+    store_var out
+    load_var out
+    call baml.String.length
+    load_const 0
+    cmp_int_op >
+    jump_if_false L0
+    pop 1
+    load_var out
+    load_const "hello_world"
+    call baml.String.includes
+
+  L0:
+    return
+}
+
+function shell.b251_payload() -> string {
+    load_const "hello_world_b251_then_padding_past_the_54_byte_inline_cap"
+    return
+}
+
+function shell.b251_println_discarded_fn() -> bool {
+    call user.shell.b251_payload
+    store_var _2
+    load_const "echo "
+    load_var _2
+    bin_op +
+    store_var cmd
+    load_const "-> "
+    load_var cmd
+    bin_op +
+    sys_op baml.io.println
+    pop 1
+    load_var cmd
+    load_const null
+    sys_op baml.sys.shell
+    load_field .stdout
+    call baml.Uint8Array.baml.ToString.to_string
+    store_var out
+    load_var out
+    call baml.String.length
+    load_const 0
+    cmp_int_op >
+    jump_if_false L0
+    pop 1
+    load_var out
+    load_const "hello_world"
+    call baml.String.includes
+
+  L0:
+    return
+}
+
+function shell.b251_println_twice_fn() -> bool {
+    call user.shell.b251_payload
+    store_var _2
+    load_const "echo "
+    load_var _2
+    bin_op +
+    store_var cmd
+    load_const "-> "
+    load_var cmd
+    bin_op +
+    sys_op baml.io.println
+    pop 1
+    load_const "-> still "
+    load_var cmd
+    bin_op +
+    sys_op baml.io.println
+    pop 1
+    load_var cmd
+    load_const null
+    sys_op baml.sys.shell
+    load_field .stdout
+    call baml.Uint8Array.baml.ToString.to_string
+    store_var out
+    load_var out
+    call baml.String.length
+    load_const 0
+    cmp_int_op >
+    jump_if_false L0
+    pop 1
+    load_var out
+    load_const "hello_world"
+    call baml.String.includes
+
+  L0:
+    return
+}
+
+function shell.exec_echo_fn() -> bool {
+    load_const "echo"
+    load_const "Hello From Exec!"
+    load_type string
+    alloc_array 1
+    load_const null
+    sys_op baml.sys.exec
+    load_field .stdout
+    call baml.Uint8Array.baml.ToString.to_string
+    load_const "Hello From Exec!"
+    call baml.String.includes
+    return
+}
+
+function shell.shell_echo_fn() -> bool {
+    load_const "echo hello_from_shell"
+    load_const null
+    sys_op baml.sys.shell
+    load_field .stdout
+    call baml.Uint8Array.baml.ToString.to_string
+    load_const "hello_from_shell"
+    call baml.String.includes
+    return
+}
+
+function shell.shell_failing_command_fn() -> int {
+    load_const "exit 1"
+    load_const null
+    sys_op baml.sys.shell
+    load_field .exit_code
+    return
+}
+
+function shell.shell_nonexistent_command_fn() -> bool {
+    load_const "nonexistent_command_12345"
+    load_const null
+    sys_op baml.sys.shell
+    load_field .exit_code
+    load_const 0
+    cmp_int_op !=
+    return
+}
+
+function shell.shell_ok_failure_fn() -> bool {
+    load_const "exit 1"
+    load_const null
+    sys_op baml.sys.shell
+    call baml.sys.ShellOutput.ok
+    return
+}
+
+function shell.shell_ok_success_fn() -> bool {
+    load_const "echo hi"
+    load_const null
+    sys_op baml.sys.shell
+    call baml.sys.ShellOutput.ok
+    return
+}
+
+function shell.shell_stdout_bytes_fn() -> bool {
+    load_const "echo hello"
+    load_const null
+    sys_op baml.sys.shell
+    load_field .stdout
+    call baml.Uint8Array.baml.ToString.to_string
+    load_const "hello"
+    call baml.String.includes
+    return
+}
+
+function shell.shell_with_variable_fn() -> bool {
+    load_const "echo dynamic_value"
+    load_const null
+    sys_op baml.sys.shell
+    load_field .stdout
+    call baml.Uint8Array.baml.ToString.to_string
+    load_const "dynamic_value"
+    call baml.String.includes
+    return
+}

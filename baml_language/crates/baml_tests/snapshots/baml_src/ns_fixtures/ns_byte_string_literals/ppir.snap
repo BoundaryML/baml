@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.byte_string_literals.ByteStringBasic() -> int  [expr] {
+  { let data = b"<5 bytes>" } data.length()
+}
+function user.fixtures.byte_string_literals.ByteStringDirectIndexRead() -> int  [expr] {
+  { let data = b"<3 bytes>" } data[0]
+}
+function user.fixtures.byte_string_literals.ByteStringEmpty() -> int  [expr] {
+  { let data = b"<0 bytes>" } data.length()
+}
+function user.fixtures.byte_string_literals.ByteStringEquality() -> bool  [expr] {
+  {  } b"<3 bytes>" Eq b"<3 bytes>"
+}
+function user.fixtures.byte_string_literals.ByteStringHexEscapes() -> int  [expr] {
+  { let data = b"<5 bytes>" } data.length()
+}
+function user.fixtures.byte_string_literals.ByteStringInCondition() -> int  [expr] {
+  {  } if (b"<3 bytes>".length() Gt 0) {  } 1 else {  } 0
+}
+function user.fixtures.byte_string_literals.ByteStringIndexAccess() -> int?  [expr] {
+  { let data = b"<3 bytes>" } data.at(0)
+}
+function user.fixtures.byte_string_literals.ByteStringLiteralAsArg() -> int  [expr] {
+  {  } ByteStringPassAndReturn(b"<3 bytes>")
+}
+function user.fixtures.byte_string_literals.ByteStringMutate() -> int?  [expr] {
+  { let data = b"<3 bytes>"; data[0] = 42 } data.at(0)
+}
+function user.fixtures.byte_string_literals.ByteStringPassAndReturn(data: uint8array) -> int  [expr] {
+  {  } data.length()
+}
+function user.fixtures.byte_string_literals.ByteStringStandardEscapes() -> int  [expr] {
+  { let data = b"<6 bytes>" } data.length()
+}

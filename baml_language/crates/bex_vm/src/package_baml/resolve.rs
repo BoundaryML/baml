@@ -14,7 +14,11 @@
 
 use std::borrow::Cow;
 
-use baml_type::{Literal, Name, normalize::TypeContext, type_kind::is_type_kind_tag};
+use baml_type::{
+    Literal, Name,
+    normalize::TypeContext,
+    type_kind::{is_type_kind_tag, tag_inhabits_any_class},
+};
 use bex_vm_types::{
     RealizedTy, TyTemplate, TypeHead, errors::VmInternalError, types::RuntimeImplRule,
 };
@@ -98,6 +102,13 @@ impl<'vm> ImplResolver<'vm> {
     fn rules_for(self, iface: TypeHead) -> Vec<RuntimeImplRuleCandidate<'vm>> {
         // The head *is* the canonical `Object::Interface` pointer that keys
         // every package's `impl_rules` — no name lookup on the dispatch path.
+        //
+        // This is also why a rooted resolver needs no viewpoint choice here. A
+        // goal can name an interface the inspected package declares itself or
+        // one it borrowed from a mounted dependency; resolving that *name*
+        // would have to pick which of two same-named interfaces to key on. The
+        // head carries the identity the goal was built from, so there is
+        // nothing left to disambiguate.
         let iface_ptr = iface.ptr();
         let mut pointers = Vec::new();
         pointers.extend(self.vm.packages.impl_rules_of(iface_ptr));
@@ -324,6 +335,23 @@ impl<'vm> ImplResolver<'vm> {
         requested_assoc: &[(Name, RealizedTy)],
         stack: &mut Vec<Obligation>,
     ) -> bool {
+        // The blanket stdlib impl exists to supply AnyClass's default-method
+        // dispatch. Membership is narrower: class values only, and among the
+        // sealed reflection-kind views only `reflect.class.Type`. Keep the
+        // carve-out at the recursive proof seam so nested bounds cannot observe
+        // the blanket rule's broader receiver.
+        let any_class = self
+            .vm
+            .declaration_head(&baml_type::QualifiedTypeName::from_dotted_path(
+                "baml.AnyClass",
+            ));
+        if any_class.is_some_and(|head| head == iface) {
+            return matches!(
+                concrete_ty,
+                RealizedTy::Class(head, _, _) if tag_inhabits_any_class(head.tag())
+            );
+        }
+
         // Key on the normalized (literal/enum-variant → base) type so `1` and `int`
         // are the same goal for cycle purposes.
         let goal: Obligation = (

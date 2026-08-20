@@ -1,0 +1,468 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function promptast_accessors.$init_test_ns_promptast_accessors_promptast_accessors(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.promptast_accessors"
+    load_const "text_renders_role_headed_prompt"
+    make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.promptast_accessors"
+    load_const "to_string_is_readable_not_rust_debug"
+    make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.promptast_accessors"
+    load_const "messages_expose_role_and_content"
+    make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.promptast_accessors"
+    load_const "messages_yields_promptmessage_instances"
+    make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.promptast_accessors"
+    load_const "message_metadata_survives_prompt_assembly"
+    make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.promptast_accessors"
+    load_const "message_parts_preserve_all_media_structurally"
+    make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function promptast_accessors.pa_message_metadata_survives_assembly() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "system"
+    load_const "ephemeral"
+    load_const "type"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_const "cache_control"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    init_instance ai.Role .name, .metadata
+    store_deref ?1
+    load_var cached
+    make_closure .<tagged(pa_message_metadata_survives_assembly, 0)>, 1
+    call ai.prompt
+    store_var render
+    load_type string
+    alloc_array 0
+    store_var out
+    load_const "c"
+    load_const "anthropic"
+    load_const "user"
+    load_const "system"
+    load_const "user"
+    load_type string
+    alloc_array 2
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    call ai.Prompt.messages
+    load_type baml.iter.Iterable<Error = never, Item = ai.PromptMessage>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _16
+
+  L0:
+    load_var _16
+    load_type baml.iter.Iterator<Error = never, Item = ai.PromptMessage>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _17
+    load_var _17
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _17
+    store_var m
+    load_type string
+    load_var m
+    load_field .role
+    call baml.String.from
+    store_var _24
+    load_type map<string, baml.json.json>
+    load_var m
+    load_field .metadata
+    call baml.json.to_json
+    call baml.json.stringify
+    store_var _28
+    load_type string
+    load_var _28
+    call baml.String.from
+    store_var _27
+    load_type string
+    load_var2 3 7
+    load_const "="
+    bin_op +
+    load_var _27
+    bin_op +
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_type string
+    load_var out
+    load_const ";"
+    call baml.Array.join
+    return
+}
+
+function promptast_accessors.pa_message_parts_preserve_media() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_var ?4
+    make_cell
+    store_var ?4
+    load_const "https://example.com/photo.png"
+    load_const "image/png"
+    call baml.media.Image.from_url
+    store_deref ?1
+    load_const "https://example.com/sound.mp3"
+    load_const "audio/mpeg"
+    call baml.media.Audio.from_url
+    store_deref ?2
+    load_const "https://example.com/movie.mp4"
+    load_const "video/mp4"
+    call baml.media.Video.from_url
+    store_deref ?3
+    load_const "https://example.com/document.pdf"
+    load_const "application/pdf"
+    call baml.media.Pdf.from_url
+    store_deref ?4
+    load_var2 1 2
+    load_var2 3 4
+    make_closure .<tagged(pa_message_parts_preserve_media, 0)>, 4
+    call ai.prompt
+    store_var render
+    load_type string
+    alloc_array 0
+    store_var kinds
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    call ai.Prompt.messages
+    load_const 0
+    load_array_element
+    load_field .parts
+    load_type baml.iter.Iterable<Error = never, Item = string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _20
+
+  L0:
+    load_var _20
+    load_type baml.iter.Iterator<Error = never, Item = string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _21
+    load_var _21
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L14
+
+  L1:
+    load_var _21
+    store_var part
+    load_var part
+    store_var _26
+    load_var _26
+    narrow_bind string, slot=10
+    pop_jump_if_false L2
+    jump L13
+
+  L2:
+    load_var part
+    store_var _33
+    load_var _33
+    narrow_bind baml.media.Image, slot=12
+    pop_jump_if_false L3
+    jump L11
+
+  L3:
+    load_var part
+    store_var _43
+    load_var _43
+    narrow_bind baml.media.Audio, slot=15
+    pop_jump_if_false L4
+    jump L9
+
+  L4:
+    load_var part
+    store_var _53
+    load_var _53
+    narrow_bind baml.media.Video, slot=18
+    pop_jump_if_false L5
+    jump L7
+
+  L5:
+    load_var part
+    call baml.media.Pdf.url
+    store_var_load_var _67
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L6
+    load_const ""
+    store_var _67
+
+  L6:
+    load_type string
+    load_var _67
+    call baml.String.from
+    store_var _65
+    load_type string
+    load_var kinds
+    load_const "pdf="
+    load_var _65
+    bin_op +
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L7:
+    load_var _53
+    call baml.media.Video.url
+    store_var_load_var _58
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L8
+    load_const ""
+    store_var _58
+
+  L8:
+    load_type string
+    load_var _58
+    call baml.String.from
+    store_var _56
+    load_type string
+    load_var kinds
+    load_const "video="
+    load_var _56
+    bin_op +
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L9:
+    load_var _43
+    call baml.media.Audio.url
+    store_var_load_var _48
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L10
+    load_const ""
+    store_var _48
+
+  L10:
+    load_type string
+    load_var _48
+    call baml.String.from
+    store_var _46
+    load_type string
+    load_var kinds
+    load_const "audio="
+    load_var _46
+    bin_op +
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L11:
+    load_var _33
+    call baml.media.Image.url
+    store_var_load_var _38
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L12
+    load_const ""
+    store_var _38
+
+  L12:
+    load_type string
+    load_var _38
+    call baml.String.from
+    store_var _36
+    load_type string
+    load_var kinds
+    load_const "image="
+    load_var _36
+    bin_op +
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L13:
+    load_type string
+    load_var _26
+    call baml.String.from
+    store_var _29
+    load_type string
+    load_var kinds
+    load_const "text="
+    load_var _29
+    bin_op +
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L14:
+    load_type string
+    load_var kinds
+    load_const "|"
+    call baml.Array.join
+    return
+}
+
+function promptast_accessors.paa_fold_messages_fn() -> string {
+    load_const ""
+    store_var out
+    call user.promptast_accessors.paa_render_ast
+    call ai.Prompt.messages
+    load_type baml.iter.Iterable<Error = never, Item = ai.PromptMessage>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = ai.PromptMessage>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _5
+    store_var m
+    load_var2 1 4
+    load_field .role
+    load_const "="
+    bin_op +
+    load_var m
+    load_field .content
+    bin_op +
+    load_const ";"
+    bin_op +
+    bin_op +
+    store_var out
+    jump L0
+
+  L2:
+    load_var out
+    return
+}
+
+function promptast_accessors.paa_render_ast() -> <unresolved type #135172864440005> {
+    make_closure .<tagged(paa_render_ast, 0)>, 0
+    call ai.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "system"
+    load_const "system"
+    load_const "user"
+    load_type string
+    alloc_array 2
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    return
+}
+
+function promptast_accessors.paa_single_message_fn() -> <unresolved type #45063328831484>[] {
+    make_closure .<tagged(paa_single_message_fn, 0)>, 0
+    call ai.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "system"
+    load_const "system"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    call ai.Prompt.messages
+    return
+}
+
+function promptast_accessors.paa_text_fn() -> string {
+    call user.promptast_accessors.paa_render_ast
+    call ai.Prompt.text
+    return
+}
+
+function promptast_accessors.paa_to_string_fn() -> string {
+    call user.promptast_accessors.paa_render_ast
+    store_var _1
+    load_type ai.Prompt
+    load_var _1
+    call baml.String.from
+    return
+}

@@ -1,0 +1,228 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.namespaces_type_resolution.auth.AuthAliasParam(t: <unresolved type #62089447019303>) -> string {
+    load_var t
+    load_field .value
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthConstruct(provider: string) -> <unresolved type #108104746875348> {
+    load_var provider
+    load_const "s3cret"
+    init_instance user.fixtures.namespaces_type_resolution.auth.Config .provider, .secret
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthEnumMatch(r: <unresolved type #45379476450178>) -> string {
+    load_var r
+    discriminant
+    load_const Role.Admin
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var r
+    discriminant
+    load_const Role.User
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "guest"
+    jump L4
+
+  L2:
+    load_const "user"
+    jump L4
+
+  L3:
+    load_const "admin"
+
+  L4:
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthEnumReturn() -> <unresolved type #45379476450178> {
+    load_const user.fixtures.namespaces_type_resolution.auth.Role.Admin
+    alloc_variant user.fixtures.namespaces_type_resolution.auth.Role
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthIdentity(cfg: <unresolved type #108104746875348>) -> <unresolved type #108104746875348> {
+    load_var cfg
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthMakeToken(v: string) -> <unresolved type #62089447019303> {
+    load_var v
+    load_const user.fixtures.namespaces_type_resolution.auth.Role.User
+    alloc_variant user.fixtures.namespaces_type_resolution.auth.Role
+    init_instance user.fixtures.namespaces_type_resolution.auth.Token .value, .role
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthMatchesLlmStatus(s: <unresolved type #127535337431579>) -> string {
+    load_var s
+    discriminant
+    load_const Status.Ready
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var s
+    discriminant
+    load_const Status.Generating
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "done"
+    jump L4
+
+  L2:
+    load_const "generating"
+    jump L4
+
+  L3:
+    load_const "ready"
+
+  L4:
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthMatchesRootStatus(s: <unresolved type #86032342827612>) -> string {
+    load_var s
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var s
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "pending"
+    jump L4
+
+  L2:
+    load_const "failed"
+    jump L4
+
+  L3:
+    load_const "ok"
+
+  L4:
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthMixedConfigs(auth_cfg: <unresolved type #108104746875348>, root_cfg: <unresolved type #95568016566388>, llm_cfg: <unresolved type #56181504664899>) -> string {
+    load_var auth_cfg
+    load_field .provider
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthMixedErrors(auth_err: <unresolved type #35037536625220>, root_err: <unresolved type #41883823745380>, llm_err: <unresolved type #137713710482013>) -> string {
+    load_var auth_err
+    load_field .realm
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthThrowClass(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const "auth failed"
+    load_const true
+    init_instance user.fixtures.namespaces_type_resolution.auth.Error .realm, .expired
+    throw
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthThrowEnum(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const user.fixtures.namespaces_type_resolution.auth.Role.Guest
+    alloc_variant user.fixtures.namespaces_type_resolution.auth.Role
+    throw
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthThrowsRootError(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const 403
+    load_const "forbidden"
+    init_instance user.fixtures.namespaces_type_resolution.Error .code, .message
+    throw
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthUsesLlmConfig(cfg: <unresolved type #56181504664899>) -> string {
+    load_var cfg
+    load_field .model
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthUsesLlmResponse(r: <unresolved type #8324156647274>) -> string {
+    load_var r
+    load_field .text
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthUsesLlmStatus() -> <unresolved type #127535337431579> {
+    load_const user.fixtures.namespaces_type_resolution.llm.Status.Ready
+    alloc_variant user.fixtures.namespaces_type_resolution.llm.Status
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthUsesNestedClient(c: <unresolved type #52592337154916>) -> string {
+    load_var c
+    load_field .api_key
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthUsesRootConfig(cfg: <unresolved type #95568016566388>) -> string {
+    load_var cfg
+    load_field .key
+    return
+}
+
+function fixtures.namespaces_type_resolution.auth.AuthUsesRootStatus() -> <unresolved type #86032342827612> {
+    load_const user.fixtures.namespaces_type_resolution.Status.Pending
+    alloc_variant user.fixtures.namespaces_type_resolution.Status
+    return
+}

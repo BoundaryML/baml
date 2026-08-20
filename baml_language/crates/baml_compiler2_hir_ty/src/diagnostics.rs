@@ -16,6 +16,9 @@
 use std::fmt;
 
 use baml_base::{FileId, Name, SourceFile};
+use baml_compiler_diagnostics::runtime_type::{
+    RuntimeTypeNameRewrite, runtime_type_must_be_named_help,
+};
 use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId, TypeAnnotId};
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -133,6 +136,12 @@ pub enum TirTypeError {
     /// A value name was written bare in a generic slot. Runtime-computed
     /// slots require the whole-slot `unreflect(value)` marker.
     ComputedGenericArgumentRequiresUnreflect { name: Name },
+    /// An inline `unreflect(value)` type argument would escape its call: the
+    /// runtime parameter is rigid for that one call, but the callee's result
+    /// type still mentions it, so the value the call produces would carry a
+    /// name that no longer means anything. The lexical `type T = unreflect(v)`
+    /// binding is the spelling that outlives a call.
+    RuntimeTypeMustBeNamed,
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
@@ -157,6 +166,12 @@ pub enum TirTypeError {
     /// with an object literal.
     CannotConstructReflectionKind {
         class_name: baml_type::QualifiedTypeName,
+    },
+    /// Builtin companion carriers (`baml.Int`, `baml.Map`, …) hold no fields
+    /// and cannot be constructed with an object literal.
+    CannotConstructBuiltinCompanion {
+        class_name: baml_type::QualifiedTypeName,
+        companion: baml_type::type_kind::BuiltinCompanion,
     },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
@@ -460,6 +475,9 @@ pub enum TirTypeError {
     /// BEP-049 §11: an untagged `${expr}` interpolates a value whose type has
     /// no `to_string` method, so it can't be implicitly stringified.
     TypeNotInterpolatable { ty: Ty },
+    /// B-1563 truthiness: a non-literal condition whose static type decides
+    /// the branch - the test is constant, so one arm is dead.
+    ConditionAlwaysConstant { ty: Ty, always_true: bool },
 
     /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
     /// a method declared by two or more interfaces — the receiver carries
@@ -874,6 +892,11 @@ impl fmt::Display for TirTypeError {
                     );
                 f.write_str(diagnostic.message.as_str())
             }
+            TirTypeError::RuntimeTypeMustBeNamed => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named();
+                f.write_str(diagnostic.message.as_str())
+            }
             TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
                 if suggestions.is_empty() {
                     write!(
@@ -938,6 +961,19 @@ impl fmt::Display for TirTypeError {
                 let diagnostic =
                     baml_compiler_diagnostics::runtime_type::cannot_construct_reflection_kind(
                         &class_name.render_user_facing(),
+                    );
+                f.write_str(diagnostic.message.as_str())
+            }
+            TirTypeError::CannotConstructBuiltinCompanion {
+                class_name,
+                companion,
+            } => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::cannot_construct_builtin_companion(
+                        &class_name.render_user_facing(),
+                        companion.builtin,
+                        companion.origin,
+                        companion.carries_methods,
                     );
                 f.write_str(diagnostic.message.as_str())
             }
@@ -1449,6 +1485,18 @@ impl fmt::Display for TirTypeError {
                 "cannot interpolate a value of type `{}` — it may be null; coalesce with `?? \"…\"` or unwrap it first",
                 ty.render_user_facing()
             ),
+            TirTypeError::ConditionAlwaysConstant { ty, always_true } => {
+                let (always, never) = if *always_true {
+                    ("truthy", "falsy")
+                } else {
+                    ("falsy", "truthy")
+                };
+                write!(
+                    f,
+                    "this condition is always {always}: a value of type `{}` can never be {never}",
+                    ty.render_user_facing()
+                )
+            }
             TirTypeError::TypeNotInterpolatable { ty } => write!(
                 f,
                 "cannot interpolate a value of type `{}` — it has no `to_string` method",
@@ -2063,6 +2111,14 @@ pub enum DiagnosticLocation {
     /// `(object_expr, field_value_expr)` resolves through
     /// `object_field_name_span` at render time.
     ObjectFieldName(ExprId, ExprId),
+    /// A whole `unreflect(carrier)` type-argument slot, named by its carrier
+    /// expression, inside the expression that wrote it. E0168 reports at the
+    /// slot and quotes `enclosing` back with the slot renamed, so both spans
+    /// travel together to the renderer, which is where the file text lives.
+    UnreflectArg {
+        carrier: ExprId,
+        enclosing: ExprId,
+    },
     Span(TextRange),
 }
 
@@ -2128,10 +2184,13 @@ impl<'db> TirDiagnostic<'db> {
             DiagnosticLocation::TypeRef(id) => type_ref_spans
                 .map(|spans| spans.span(*id))
                 .unwrap_or_default(),
+            DiagnosticLocation::UnreflectArg { carrier, .. } => source_map
+                .map(|sm| sm.unreflect_arg_span(*carrier))
+                .unwrap_or_default(),
             DiagnosticLocation::Span(range) => *range,
         };
 
-        let related = self
+        let mut related: Vec<RenderedRelatedInformation> = self
             .related
             .iter()
             .filter_map(|note| {
@@ -2144,6 +2203,36 @@ impl<'db> TirDiagnostic<'db> {
                 )
             })
             .collect();
+
+        // E0168's suggestion quotes the author's own line back at them. This
+        // is the first point that holds both the file text and the resolved
+        // spans, so the rewrite is assembled here rather than in inference,
+        // which sees arena ids and no source at all.
+        if let DiagnosticLocation::UnreflectArg { enclosing, .. } = &self.primary
+            && let Some(source_map) = source_map
+        {
+            let enclosing = source_map.expr_span(*enclosing);
+            let rewrite = if enclosing.contains_range(primary_range) {
+                let text = scope_file.text(db);
+                let start = usize::from(enclosing.start());
+                text.get(start..usize::from(enclosing.end()))
+                    .map(|written| {
+                        RuntimeTypeNameRewrite::from_source(
+                            written,
+                            usize::from(primary_range.start()) - start
+                                ..usize::from(primary_range.end()) - start,
+                        )
+                    })
+                    .unwrap_or_default()
+            } else {
+                RuntimeTypeNameRewrite::default()
+            };
+            related.push(RenderedRelatedInformation {
+                file_id: scope_file.file_id(db),
+                range: primary_range,
+                message: runtime_type_must_be_named_help(&rewrite),
+            });
+        }
 
         RenderedTirDiagnostic {
             error: self.error.clone(),

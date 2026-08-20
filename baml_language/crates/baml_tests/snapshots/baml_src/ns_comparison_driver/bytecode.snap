@@ -1,0 +1,1094 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function comparison_driver.$init_test_ns_comparison_driver_comparison_driver(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "driver_primitives_and_gate"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "driver_enum_identity"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "driver_structural_classes"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "driver_containers"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "driver_non_reflexive_nan"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "bool_compare_is_reflexive"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "driver_dispatches_custom_class_equals"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "driver_custom_equals_nested_in_structural_class"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "driver_dispatches_generic_class_equals"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "driver_distinct_generic_instantiations_are_unequal"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "driver_dispatches_custom_enum_equals"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "bool_ordering_operators_dispatch_compare"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "user_class_ordering_dispatches_compare"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "user_class_ordering_honors_gt_override"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "enum_ordering_dispatches_compare"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "bounded_typevar_ordering_dispatches_at_runtime"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.comparison_driver"
+    load_const "driver_union_type_args_order_insensitive"
+    make_closure .<lambda($init_test_ns_comparison_driver_comparison_driver, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function comparison_driver.CdMoney.baml.ops.Compare.lt(self: <unresolved type #131488010237563>, other: <unresolved type #131488010237563>) -> bool {
+    load_var self
+    load_field .cents
+    load_var other
+    load_field .0
+    cmp_int_op <
+    return
+}
+
+function comparison_driver.CdMoney.baml.ops.Equals.eq(self: <unresolved type #131488010237563>, other: <unresolved type #131488010237563>) -> bool {
+    load_var self
+    load_field .cents
+    load_var other
+    load_field .0
+    cmp_int_op ==
+    return
+}
+
+function comparison_driver.CdNestedTag.baml.ops.Equals.eq(self: <unresolved type #6629893405934>, other: <unresolved type #6629893405934>) -> bool {
+    load_var self
+    load_field .id
+    load_var other
+    load_field .0
+    cmp_int_op ==
+    return
+}
+
+function comparison_driver.CdOdd.baml.ops.Compare.gt(self: <unresolved type #130000690493562>, other: <unresolved type #130000690493562>) -> bool {
+    load_const true
+    return
+}
+
+function comparison_driver.CdOdd.baml.ops.Compare.lt(self: <unresolved type #130000690493562>, other: <unresolved type #130000690493562>) -> bool {
+    load_var self
+    load_field .n
+    load_var other
+    load_field .0
+    cmp_int_op <
+    return
+}
+
+function comparison_driver.CdOdd.baml.ops.Equals.eq(self: <unresolved type #130000690493562>, other: <unresolved type #130000690493562>) -> bool {
+    load_var self
+    load_field .n
+    load_var other
+    load_field .0
+    cmp_int_op ==
+    return
+}
+
+function comparison_driver.CdTag.baml.ops.Equals.eq(self: <unresolved type #22247835027199>, other: <unresolved type #22247835027199>) -> bool {
+    load_var self
+    load_field .id
+    load_var other
+    load_field .0
+    cmp_int_op ==
+    return
+}
+
+function comparison_driver.baml.ops.Compare$for$CdOrderedEnum.lt(self: <unresolved type #113032218238947>, other: <unresolved type #113032218238947>) -> bool {
+    load_const true
+    return
+}
+
+function comparison_driver.baml.ops.Equals$for$CdBox<T>.eq(self: <unresolved type #7955956455006><#0>, other: <unresolved type #7955956455006><#0>) -> bool {
+    load_var self
+    load_field .v
+    load_var other
+    load_field .0
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.baml.ops.Equals$for$CdOrderedEnum.eq(self: <unresolved type #113032218238947>, other: <unresolved type #113032218238947>) -> bool {
+    load_const false
+    return
+}
+
+function comparison_driver.baml.ops.Equals$for$CdTotalEq.eq(self: <unresolved type #136566816286215>, other: <unresolved type #136566816286215>) -> bool {
+    load_const true
+    return
+}
+
+function comparison_driver.cd_box_int_one() -> <unresolved type #7955956455006><int> {
+    load_const 1
+    load_type int
+    init_instance<1> user.comparison_driver.CdBox .v
+    return
+}
+
+function comparison_driver.cd_box_str_one() -> <unresolved type #7955956455006><string> {
+    load_const "1"
+    load_type string
+    init_instance<1> user.comparison_driver.CdBox .v
+    return
+}
+
+function comparison_driver.cd_cheaper() -> bool {
+    load_const 1
+    call user.comparison_driver.cd_money
+    store_var _1
+    load_const 2
+    call user.comparison_driver.cd_money
+    store_var _2
+    load_var2 2 3
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_eq_arr_diff() -> bool {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_const 1
+    load_const 2
+    load_const 4
+    load_type int
+    alloc_array 3
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_arr_len() -> bool {
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_arr_nested() -> bool {
+    load_const 1
+    load_type int
+    alloc_array 1
+    load_const 2
+    load_type int
+    alloc_array 1
+    load_type int[]
+    alloc_array 2
+    load_const 1
+    load_type int
+    alloc_array 1
+    load_const 2
+    load_type int
+    alloc_array 1
+    load_type int[]
+    alloc_array 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_arr_of_class() -> bool {
+    load_const 1
+    load_const 2
+    call user.comparison_driver.cd_mk_point
+    store_var _2
+    load_const 1
+    load_const 2
+    call user.comparison_driver.cd_mk_point
+    store_var _4
+    load_var _2
+    load_type comparison_driver.CdPoint
+    alloc_array 1
+    load_var _4
+    load_type comparison_driver.CdPoint
+    alloc_array 1
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_arr_same() -> bool {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_arr_vs_scalar() -> bool {
+    load_const 1
+    load_type int
+    alloc_array 1
+    load_const 1
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_bool() -> bool {
+    load_const true
+    load_const true
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_box_int_diff() -> bool {
+    load_const 5
+    call user.comparison_driver.cd_mk_box_int
+    store_var _1
+    load_const 6
+    call user.comparison_driver.cd_mk_box_int
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_box_int_same() -> bool {
+    load_const 5
+    call user.comparison_driver.cd_mk_box_int
+    store_var _1
+    load_const 5
+    call user.comparison_driver.cd_mk_box_int
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_class_diff() -> bool {
+    load_const 1
+    load_const 2
+    call user.comparison_driver.cd_mk_point
+    store_var _1
+    load_const 1
+    load_const 3
+    call user.comparison_driver.cd_mk_point
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_class_nested() -> bool {
+    load_const 0
+    load_const 0
+    load_const 1
+    load_const 1
+    call user.comparison_driver.cd_mk_line
+    store_var _1
+    load_const 0
+    load_const 0
+    load_const 1
+    load_const 1
+    call user.comparison_driver.cd_mk_line
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_class_nested_diff() -> bool {
+    load_const 0
+    load_const 0
+    load_const 1
+    load_const 1
+    call user.comparison_driver.cd_mk_line
+    store_var _1
+    load_const 0
+    load_const 0
+    load_const 9
+    load_const 1
+    call user.comparison_driver.cd_mk_line
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_class_same() -> bool {
+    load_const 1
+    load_const 2
+    call user.comparison_driver.cd_mk_point
+    store_var _1
+    load_const 1
+    load_const 2
+    call user.comparison_driver.cd_mk_point
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_cross_type() -> bool {
+    load_const 1
+    load_const "1"
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_diff_id() -> bool {
+    load_const 1
+    load_const "a"
+    call user.comparison_driver.cd_mk_tag
+    store_var _1
+    load_const 2
+    load_const "a"
+    call user.comparison_driver.cd_mk_tag
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_diff_variants() -> bool {
+    load_const user.comparison_driver.CdTotalEq.A
+    alloc_variant user.comparison_driver.CdTotalEq
+    load_const user.comparison_driver.CdTotalEq.B
+    alloc_variant user.comparison_driver.CdTotalEq
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_enum_diff() -> bool {
+    load_const user.comparison_driver.CdColor.Red
+    alloc_variant user.comparison_driver.CdColor
+    load_const user.comparison_driver.CdColor.Green
+    alloc_variant user.comparison_driver.CdColor
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_enum_same() -> bool {
+    load_const user.comparison_driver.CdColor.Red
+    alloc_variant user.comparison_driver.CdColor
+    load_const user.comparison_driver.CdColor.Red
+    alloc_variant user.comparison_driver.CdColor
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_float_same() -> bool {
+    load_const 1.5
+    load_type float
+    alloc_array 1
+    load_const 1.5
+    load_type float
+    alloc_array 1
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_int_diff() -> bool {
+    load_const 1
+    load_const 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_int_same() -> bool {
+    load_const 1
+    load_const 1
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_int_vs_str() -> bool {
+    call user.comparison_driver.cd_box_int_one
+    store_var _1
+    call user.comparison_driver.cd_box_str_one
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_map_diff() -> bool {
+    load_const 1
+    load_const "a"
+    load_type string
+    load_type int
+    alloc_map 1
+    load_const 2
+    load_const "a"
+    load_type string
+    load_type int
+    alloc_map 1
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_map_same() -> bool {
+    load_const 1
+    load_const 2
+    load_const "a"
+    load_const "b"
+    load_type string
+    load_type int
+    alloc_map 2
+    load_const 2
+    load_const 1
+    load_const "b"
+    load_const "a"
+    load_type string
+    load_type int
+    alloc_map 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_nan_pair() -> bool {
+    call baml.Float.nan
+    store_var _2
+    call baml.Float.nan
+    store_var _4
+    load_var _2
+    load_type float
+    alloc_array 1
+    load_var _4
+    load_type float
+    alloc_array 1
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_nan_self() -> bool {
+    call baml.Float.nan
+    load_type float
+    alloc_array 1
+    store_var_load_var arr
+    load_var arr
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_nested_label_differs() -> bool {
+    load_const 1
+    load_const "a"
+    load_const "L"
+    call user.comparison_driver.cd_mk_wrapper
+    store_var _1
+    load_const 1
+    load_const "a"
+    load_const "M"
+    call user.comparison_driver.cd_mk_wrapper
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_nested_tag_custom() -> bool {
+    load_const 1
+    load_const "a"
+    load_const "L"
+    call user.comparison_driver.cd_mk_wrapper
+    store_var _1
+    load_const 1
+    load_const "b"
+    load_const "L"
+    call user.comparison_driver.cd_mk_wrapper
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_reordered_union() -> bool {
+    call user.comparison_driver.cd_mk_ubox_a
+    store_var _1
+    call user.comparison_driver.cd_mk_ubox_b
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_same() -> bool {
+    load_const 7
+    load_const "x"
+    call user.comparison_driver.cd_mk_tag
+    store_var _1
+    load_const 7
+    load_const "x"
+    call user.comparison_driver.cd_mk_tag
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_same_id_diff_note() -> bool {
+    load_const 1
+    load_const "a"
+    call user.comparison_driver.cd_mk_tag
+    store_var _1
+    load_const 1
+    load_const "b"
+    call user.comparison_driver.cd_mk_tag
+    store_var _2
+    load_var2 1 2
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_string_diff() -> bool {
+    load_const "hi"
+    load_const "ho"
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_eq_string_same() -> bool {
+    load_const "hi"
+    load_const "hi"
+    call baml.ops.equals_equals
+    return
+}
+
+function comparison_driver.cd_ge_equal() -> bool {
+    load_const 1
+    call user.comparison_driver.cd_money
+    store_var _1
+    load_const 1
+    call user.comparison_driver.cd_money
+    store_var _2
+    load_var2 2 3
+    load_type baml.ops.Compare
+    load_const "ge"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_ge_smaller() -> bool {
+    load_const 1
+    call user.comparison_driver.cd_money
+    store_var _1
+    load_const 2
+    call user.comparison_driver.cd_money
+    store_var _2
+    load_var2 2 3
+    load_type baml.ops.Compare
+    load_const "ge"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_generic_bool() -> bool {
+    load_const false
+    load_const true
+    call user.comparison_driver.cd_lt_bool
+    return
+}
+
+function comparison_driver.cd_generic_int() -> bool {
+    load_const 1
+    load_const 2
+    call user.comparison_driver.cd_lt_int
+    return
+}
+
+function comparison_driver.cd_generic_money() -> bool {
+    load_const 1
+    call user.comparison_driver.cd_money
+    store_var _1
+    load_const 2
+    call user.comparison_driver.cd_money
+    store_var _2
+    load_var2 1 2
+    call user.comparison_driver.cd_lt_money
+    return
+}
+
+function comparison_driver.cd_generic_money_rev() -> bool {
+    load_const 2
+    call user.comparison_driver.cd_money
+    store_var _1
+    load_const 1
+    call user.comparison_driver.cd_money
+    store_var _2
+    load_var2 1 2
+    call user.comparison_driver.cd_lt_money
+    return
+}
+
+function comparison_driver.cd_gt_bigger() -> bool {
+    load_const 2
+    call user.comparison_driver.cd_money
+    store_var _1
+    load_const 1
+    call user.comparison_driver.cd_money
+    store_var _2
+    load_var2 2 3
+    load_type baml.ops.Compare
+    load_const "gt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_gt_self() -> bool {
+    load_const 1
+    call user.comparison_driver.cd_odd
+    store_var _1
+    load_const 1
+    call user.comparison_driver.cd_odd
+    store_var _2
+    load_var2 2 3
+    load_type baml.ops.Compare
+    load_const "gt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_gt_variants() -> bool {
+    load_const user.comparison_driver.CdOrderedEnum.A
+    alloc_variant user.comparison_driver.CdOrderedEnum
+    load_const user.comparison_driver.CdOrderedEnum.B
+    alloc_variant user.comparison_driver.CdOrderedEnum
+    load_type baml.ops.Compare
+    load_const "gt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_le_equal() -> bool {
+    load_const 1
+    call user.comparison_driver.cd_money
+    store_var _1
+    load_const 1
+    call user.comparison_driver.cd_money
+    store_var _2
+    load_var2 2 3
+    load_type baml.ops.Compare
+    load_const "le"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_le_self() -> bool {
+    load_const 1
+    call user.comparison_driver.cd_odd
+    store_var _1
+    load_const 1
+    call user.comparison_driver.cd_odd
+    store_var _2
+    load_var2 2 3
+    load_type baml.ops.Compare
+    load_const "le"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_lt_bool(a: bool, b: bool) -> bool {
+    load_type bool
+    load_var2 1 2
+    call user.comparison_driver.cd_lt_g
+    return
+}
+
+function comparison_driver.cd_lt_g(a: #0, b: #0) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_lt_int(a: int, b: int) -> bool {
+    load_type int
+    load_var2 1 2
+    call user.comparison_driver.cd_lt_g
+    return
+}
+
+function comparison_driver.cd_lt_money(a: <unresolved type #131488010237563>, b: <unresolved type #131488010237563>) -> bool {
+    load_type comparison_driver.CdMoney
+    load_var2 1 2
+    call user.comparison_driver.cd_lt_g
+    return
+}
+
+function comparison_driver.cd_lt_variants() -> bool {
+    load_const user.comparison_driver.CdOrderedEnum.A
+    alloc_variant user.comparison_driver.CdOrderedEnum
+    load_const user.comparison_driver.CdOrderedEnum.B
+    alloc_variant user.comparison_driver.CdOrderedEnum
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_m_ge_b(a: bool, b: bool) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "ge"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_m_ge_false_false() -> bool {
+    load_const false
+    load_const false
+    call user.comparison_driver.cd_m_ge_b
+    return
+}
+
+function comparison_driver.cd_m_ge_false_true() -> bool {
+    load_const false
+    load_const true
+    call user.comparison_driver.cd_m_ge_b
+    return
+}
+
+function comparison_driver.cd_m_ge_true_false() -> bool {
+    load_const true
+    load_const false
+    call user.comparison_driver.cd_m_ge_b
+    return
+}
+
+function comparison_driver.cd_m_le_b(a: bool, b: bool) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "le"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_m_le_false_true() -> bool {
+    load_const false
+    load_const true
+    call user.comparison_driver.cd_m_le_b
+    return
+}
+
+function comparison_driver.cd_m_le_true_false() -> bool {
+    load_const true
+    load_const false
+    call user.comparison_driver.cd_m_le_b
+    return
+}
+
+function comparison_driver.cd_m_le_true_true() -> bool {
+    load_const true
+    load_const true
+    call user.comparison_driver.cd_m_le_b
+    return
+}
+
+function comparison_driver.cd_mk_box_int(v: int) -> <unresolved type #7955956455006><int> {
+    load_var v
+    load_type int
+    init_instance<1> user.comparison_driver.CdBox .v
+    return
+}
+
+function comparison_driver.cd_mk_line(ax: int, ay: int, bx: int, by: int) -> <unresolved type #4586761045907> {
+    load_var2 1 2
+    call user.comparison_driver.cd_mk_point
+    load_var2 3 4
+    call user.comparison_driver.cd_mk_point
+    init_instance user.comparison_driver.CdLine .start, .end
+    return
+}
+
+function comparison_driver.cd_mk_point(x: int, y: int) -> <unresolved type #129432543625357> {
+    load_var2 1 2
+    init_instance user.comparison_driver.CdPoint .x, .y
+    return
+}
+
+function comparison_driver.cd_mk_tag(id: int, note: string) -> <unresolved type #22247835027199> {
+    load_var2 1 2
+    init_instance user.comparison_driver.CdTag .id, .note
+    return
+}
+
+function comparison_driver.cd_mk_ubox_a() -> <unresolved type #81222006667797><int | string> {
+    load_const 1
+    load_type int | string
+    init_instance<1> user.comparison_driver.CdUBox .v
+    return
+}
+
+function comparison_driver.cd_mk_ubox_b() -> <unresolved type #81222006667797><string | int> {
+    load_const 1
+    load_type string | int
+    init_instance<1> user.comparison_driver.CdUBox .v
+    return
+}
+
+function comparison_driver.cd_mk_wrapper(id: int, note: string, label: string) -> <unresolved type #103106759389104> {
+    load_var2 1 2
+    init_instance user.comparison_driver.CdNestedTag .id, .note
+    load_var label
+    init_instance user.comparison_driver.CdWrapper .tag, .label
+    return
+}
+
+function comparison_driver.cd_money(c: int) -> <unresolved type #131488010237563> {
+    load_var c
+    init_instance user.comparison_driver.CdMoney .cents
+    return
+}
+
+function comparison_driver.cd_not_cheaper() -> bool {
+    load_const 2
+    call user.comparison_driver.cd_money
+    store_var _1
+    load_const 1
+    call user.comparison_driver.cd_money
+    store_var _2
+    load_var2 2 3
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_odd(n: int) -> <unresolved type #130000690493562> {
+    load_var n
+    init_instance user.comparison_driver.CdOdd .n
+    return
+}
+
+function comparison_driver.cd_op_ge_b(a: bool, b: bool) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "ge"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_op_ge_false_true() -> bool {
+    load_const false
+    load_const true
+    call user.comparison_driver.cd_op_ge_b
+    return
+}
+
+function comparison_driver.cd_op_ge_same() -> bool {
+    load_const true
+    load_const true
+    call user.comparison_driver.cd_op_ge_b
+    return
+}
+
+function comparison_driver.cd_op_gt_b(a: bool, b: bool) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "gt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_op_gt_same() -> bool {
+    load_const true
+    load_const true
+    call user.comparison_driver.cd_op_gt_b
+    return
+}
+
+function comparison_driver.cd_op_gt_true_false() -> bool {
+    load_const true
+    load_const false
+    call user.comparison_driver.cd_op_gt_b
+    return
+}
+
+function comparison_driver.cd_op_le_b(a: bool, b: bool) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "le"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_op_le_false_true() -> bool {
+    load_const false
+    load_const true
+    call user.comparison_driver.cd_op_le_b
+    return
+}
+
+function comparison_driver.cd_op_le_same() -> bool {
+    load_const false
+    load_const false
+    call user.comparison_driver.cd_op_le_b
+    return
+}
+
+function comparison_driver.cd_op_le_true_false() -> bool {
+    load_const true
+    load_const false
+    call user.comparison_driver.cd_op_le_b
+    return
+}
+
+function comparison_driver.cd_op_lt_b(a: bool, b: bool) -> bool {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "lt"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparison_driver.cd_op_lt_false_true() -> bool {
+    load_const false
+    load_const true
+    call user.comparison_driver.cd_op_lt_b
+    return
+}
+
+function comparison_driver.cd_op_lt_same() -> bool {
+    load_const true
+    load_const true
+    call user.comparison_driver.cd_op_lt_b
+    return
+}
+
+function comparison_driver.cd_op_lt_true_false() -> bool {
+    load_const true
+    load_const false
+    call user.comparison_driver.cd_op_lt_b
+    return
+}

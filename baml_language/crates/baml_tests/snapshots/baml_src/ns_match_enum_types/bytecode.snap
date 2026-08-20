@@ -1,0 +1,218 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function match_enum_types.$init_test_ns_match_enum_types_match_enum_types(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.match_enum_types"
+    load_const "match_enum_type_color"
+    make_closure .<lambda($init_test_ns_match_enum_types_match_enum_types, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_enum_types"
+    load_const "match_enum_type_status"
+    make_closure .<lambda($init_test_ns_match_enum_types_match_enum_types, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_enum_types"
+    load_const "is_status_is_not_color"
+    make_closure .<lambda($init_test_ns_match_enum_types_match_enum_types, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_enum_types"
+    load_const "match_switch_enum_status"
+    make_closure .<lambda($init_test_ns_match_enum_types_match_enum_types, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_enum_types"
+    load_const "match_switch_enum_prims_still_dispatch"
+    make_closure .<lambda($init_test_ns_match_enum_types_match_enum_types, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_enum_types"
+    load_const "match_single_enum_switch_color"
+    make_closure .<lambda($init_test_ns_match_enum_types_match_enum_types, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function match_enum_types.classify(x: <unresolved type #126280542156092> | <unresolved type #108634737545907>) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind match_enum_types.Color, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "status"
+    jump L2
+
+  L1:
+    load_const "color"
+
+  L2:
+    return
+}
+
+function match_enum_types.classify_color_fn() -> string {
+    load_const user.match_enum_types.Color.Red
+    alloc_variant user.match_enum_types.Color
+    call user.match_enum_types.classify
+    return
+}
+
+function match_enum_types.classify_one_enum(x: <unresolved type #126280542156092> | int | string | bool) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind match_enum_types.Color, slot=2
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var x
+    store_var _3
+    load_var _3
+    narrow_bind int, slot=3
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var x
+    store_var _4
+    load_var _4
+    narrow_bind string, slot=4
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "bool"
+    jump L6
+
+  L3:
+    load_const "string"
+    jump L6
+
+  L4:
+    load_const "int"
+    jump L6
+
+  L5:
+    load_const "color"
+
+  L6:
+    return
+}
+
+function match_enum_types.classify_one_enum_color_fn() -> string {
+    load_const user.match_enum_types.Color.Green
+    alloc_variant user.match_enum_types.Color
+    call user.match_enum_types.classify_one_enum
+    return
+}
+
+function match_enum_types.classify_status_fn() -> string {
+    load_const user.match_enum_types.Status.Active
+    alloc_variant user.match_enum_types.Status
+    call user.match_enum_types.classify
+    return
+}
+
+function match_enum_types.classify_switch(x: <unresolved type #126280542156092> | <unresolved type #108634737545907> | int | string | bool) -> string {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind match_enum_types.Color, slot=2
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var x
+    store_var _3
+    load_var _3
+    narrow_bind match_enum_types.Status, slot=3
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var x
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=4
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var x
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=5
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "bool"
+    jump L8
+
+  L4:
+    load_const "string"
+    jump L8
+
+  L5:
+    load_const "int"
+    jump L8
+
+  L6:
+    load_const "status"
+    jump L8
+
+  L7:
+    load_const "color"
+
+  L8:
+    return
+}
+
+function match_enum_types.classify_switch_int_fn() -> string {
+    load_const 7
+    call user.match_enum_types.classify_switch
+    return
+}
+
+function match_enum_types.classify_switch_status_fn() -> string {
+    load_const user.match_enum_types.Status.Inactive
+    alloc_variant user.match_enum_types.Status
+    call user.match_enum_types.classify_switch
+    return
+}
+
+function match_enum_types.status_is_color_fn() -> bool {
+    load_const user.match_enum_types.Status.Active
+    alloc_variant user.match_enum_types.Status
+    is_type match_enum_types.Color
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}

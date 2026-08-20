@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.namespaces_basic.llm.MakeResponse(cfg: <unresolved type #62717553232679>) -> <unresolved type #112098456780997> {
+    load_const "ok"
+    load_var cfg
+    load_field .model
+    init_instance user.fixtures.namespaces_basic.llm.Response .text, .model
+    return
+}

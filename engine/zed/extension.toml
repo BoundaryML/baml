@@ -3,7 +3,7 @@ name = "BAML v0"
 description = "BAML v0 — Zed extension"
 # Both Cargo.toml and extension.toml's version strings
 # are consumed by the Zed extension publishing logic
-version = "0.225.0"
+version = "0.226.1"
 schema_version = 1
 authors = ["Boundary <contact@boundaryml.com>"]
 repository = "https://github.com/BoundaryML/zed-baml"

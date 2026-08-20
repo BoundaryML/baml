@@ -1,0 +1,219 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.namespaces_type_resolution.llm.LlmAliasParam(cfg: <unresolved type #56181504664899>) -> string {
+    load_var cfg
+    load_field .model
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmConstruct(model: string) -> <unresolved type #56181504664899> {
+    load_var model
+    load_const 0.7
+    init_instance user.fixtures.namespaces_type_resolution.llm.Config .model, .temperature
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmEnumMatch(s: <unresolved type #127535337431579>) -> string {
+    load_var s
+    discriminant
+    load_const Status.Ready
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var s
+    discriminant
+    load_const Status.Generating
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "done"
+    jump L4
+
+  L2:
+    load_const "generating"
+    jump L4
+
+  L3:
+    load_const "ready"
+
+  L4:
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmEnumReturn() -> <unresolved type #127535337431579> {
+    load_const user.fixtures.namespaces_type_resolution.llm.Status.Ready
+    alloc_variant user.fixtures.namespaces_type_resolution.llm.Status
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmIdentity(cfg: <unresolved type #56181504664899>) -> <unresolved type #56181504664899> {
+    load_var cfg
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmMatchesRootStatus(s: <unresolved type #86032342827612>) -> string {
+    load_var s
+    discriminant
+    load_const Status.Ok
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var s
+    discriminant
+    load_const Status.Failed
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "pending"
+    jump L4
+
+  L2:
+    load_const "failed"
+    jump L4
+
+  L3:
+    load_const "ok"
+
+  L4:
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmMixedConfigs(llm_cfg: <unresolved type #56181504664899>, root_cfg: <unresolved type #95568016566388>, auth_cfg: <unresolved type #108104746875348>) -> string {
+    load_var llm_cfg
+    load_field .model
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmResponseConstruct(text: string) -> <unresolved type #8324156647274> {
+    load_var text
+    load_const 42
+    init_instance user.fixtures.namespaces_type_resolution.llm.Response .text, .tokens
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmThrowClass(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const "llm failed"
+    load_const true
+    init_instance user.fixtures.namespaces_type_resolution.llm.Error .reason, .retryable
+    throw
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmThrowEnum(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const user.fixtures.namespaces_type_resolution.llm.Status.Done
+    alloc_variant user.fixtures.namespaces_type_resolution.llm.Status
+    throw
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmThrowsRootEnum(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const user.fixtures.namespaces_type_resolution.Status.Failed
+    alloc_variant user.fixtures.namespaces_type_resolution.Status
+    throw
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmThrowsRootError(x: int) -> string {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const 404
+    load_const "not found"
+    init_instance user.fixtures.namespaces_type_resolution.Error .code, .message
+    throw
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmUsesAuthConfig(cfg: <unresolved type #108104746875348>) -> string {
+    load_var cfg
+    load_field .provider
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmUsesAuthError(e: <unresolved type #35037536625220>) -> string {
+    load_var e
+    load_field .realm
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmUsesAuthRole() -> <unresolved type #45379476450178> {
+    load_const user.fixtures.namespaces_type_resolution.auth.Role.Admin
+    alloc_variant user.fixtures.namespaces_type_resolution.auth.Role
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmUsesNestedClient(c: <unresolved type #52592337154916>) -> string {
+    load_var c
+    load_field .api_key
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmUsesRootAlias(cfg: <unresolved type #95568016566388>) -> string {
+    load_var cfg
+    load_field .key
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmUsesRootConfig(cfg: <unresolved type #95568016566388>) -> string {
+    load_var cfg
+    load_field .key
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmUsesRootError(e: <unresolved type #41883823745380>) -> string {
+    load_var e
+    load_field .message
+    return
+}
+
+function fixtures.namespaces_type_resolution.llm.LlmUsesRootStatus() -> <unresolved type #86032342827612> {
+    load_const user.fixtures.namespaces_type_resolution.Status.Ok
+    alloc_variant user.fixtures.namespaces_type_resolution.Status
+    return
+}

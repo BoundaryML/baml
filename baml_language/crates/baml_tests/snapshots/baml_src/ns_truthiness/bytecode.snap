@@ -1,0 +1,856 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function truthiness.$init_test_ns_truthiness_truthiness(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.truthiness"
+    load_const "int_zero_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "int_nonzero_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "int_negative_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "float_zero_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "float_neg_zero_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "float_nonzero_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "float_nan_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "bigint_zero_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "bigint_nonzero_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "string_empty_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "string_nonempty_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "string_space_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "list_empty_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "list_nonempty_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "map_empty_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "map_nonempty_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "bytes_empty_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "bytes_nonempty_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "bool_false_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "bool_true_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "bool_null_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "instance_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "instance_null_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "variant_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "closure_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "narrow_some"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "narrow_null"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "narrow_empty"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "narrow_not_some"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "narrow_not_null"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "and_both_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "and_lhs_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "and_rhs_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "and_empty_lhs_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "or_lhs_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "or_rhs_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "or_both_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "not_null_true"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "not_empty_true"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "not_value_false"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "while_int_counts_to_zero"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "while_zero_skips"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 41)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "guard_truthy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 42)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "guard_null_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 43)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "guard_empty_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 44)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "generic_call_conditions_coerce"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 45)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "literal_union_truthy_member"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 46)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "literal_union_empty_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 47)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.truthiness"
+    load_const "literal_union_null_falsy"
+    make_closure .<lambda($init_test_ns_truthiness_truthiness, 48)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function truthiness.tr_and(a: string | null, b: int) -> bool {
+    load_var a
+    unary_op truthy
+    jump_if_false L0
+    pop 1
+    jump L1
+
+  L0:
+    store_var _0
+    jump L2
+
+  L1:
+    load_var b
+    store_var _0
+    load_var _0
+    unary_op truthy
+    store_var _0
+
+  L2:
+    load_var _0
+    return
+}
+
+function truthiness.tr_bigint(v: bigint) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_bytes(v: uint8array) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_closure(v: ((int) -> int throws never) | null) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_countdown(n: int) -> int {
+    load_const 0
+    store_var steps
+    load_var n
+    store_var remaining
+
+  L0:
+    load_var remaining
+    unary_op truthy
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var steps
+    return
+
+  L2:
+    load_var remaining
+    load_const 1
+    sub_int
+    store_var remaining
+    load_var steps
+    load_const 1
+    add_int
+    store_var steps
+    jump L0
+}
+
+function truthiness.tr_float(v: float) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_float_nan() -> string {
+    call baml.Float.nan
+    call user.truthiness.tr_float
+    return
+}
+
+function truthiness.tr_frag(instructions: string | null) -> string {
+    load_var instructions
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    jump L2
+
+  L1:
+    load_type string
+    load_var instructions
+    call baml.String.from
+    store_var _4
+    load_const "<x>"
+    load_var _4
+    bin_op +
+    load_const "</x>"
+    bin_op +
+
+  L2:
+    return
+}
+
+function truthiness.tr_frag_not(instructions: string | null) -> string {
+    load_var instructions
+    unary_op !
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type string
+    load_var instructions
+    call baml.String.from
+    store_var _4
+    load_const "<x>"
+    load_var _4
+    bin_op +
+    load_const "</x>"
+    bin_op +
+    jump L2
+
+  L1:
+    load_const ""
+
+  L2:
+    return
+}
+
+function truthiness.tr_generic_conditions() -> string {
+    load_const ""
+    store_var r
+    load_type int
+    load_const 0
+    call user.truthiness.tr_id
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var r
+    load_const "i0-F;"
+    bin_op +
+    store_var r
+    jump L2
+
+  L1:
+    load_var r
+    load_const "i0-T;"
+    bin_op +
+    store_var r
+
+  L2:
+    load_type string
+    load_const ""
+    call user.truthiness.tr_id
+    unary_op truthy
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var r
+    load_const "s-F;"
+    bin_op +
+    store_var r
+    jump L5
+
+  L4:
+    load_var r
+    load_const "s-T;"
+    bin_op +
+    store_var r
+
+  L5:
+    load_type string
+    load_const "x"
+    call user.truthiness.tr_id
+    unary_op truthy
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var r
+    load_const "x-F;"
+    bin_op +
+    store_var r
+    jump L8
+
+  L7:
+    load_var r
+    load_const "x-T;"
+    bin_op +
+    store_var r
+
+  L8:
+    load_type int
+    load_const 0
+    call user.truthiness.tr_id
+    unary_op !
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var r
+    load_const "n0-F;"
+    bin_op +
+    store_var r
+    jump L11
+
+  L10:
+    load_var r
+    load_const "n0-T;"
+    bin_op +
+    store_var r
+
+  L11:
+    load_var r
+    return
+}
+
+function truthiness.tr_guard(v: int, label: string | null) -> string {
+    load_var label
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type int
+    load_var v
+    call baml.String.from
+    load_const "-plain"
+    bin_op +
+    jump L2
+
+  L1:
+    load_type int
+    load_var v
+    call baml.String.from
+    load_const "-labeled"
+    bin_op +
+
+  L2:
+    return
+}
+
+function truthiness.tr_id(v: #0) -> #0 {
+    load_var v
+    return
+}
+
+function truthiness.tr_instance(v: <unresolved type #133281062360525> | null) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_int(v: int) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_list(v: int[]) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_literal_union(v: "" | "x" | null) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "none"
+    jump L2
+
+  L1:
+    load_type "x"
+    load_var v
+    call baml.String.from
+    store_var _4
+    load_const "<"
+    load_var _4
+    bin_op +
+    load_const ">"
+    bin_op +
+
+  L2:
+    return
+}
+
+function truthiness.tr_map(v: map<string, int>) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_not(v: string | null) -> bool {
+    load_var v
+    unary_op !
+    return
+}
+
+function truthiness.tr_opt_bool(v: bool | null) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_or(a: string | null, b: int) -> bool {
+    load_var a
+    unary_op truthy
+    jump_if_false L0
+    store_var _0
+    jump L1
+
+  L0:
+    pop 1
+    load_var b
+    store_var _0
+    load_var _0
+    unary_op truthy
+    store_var _0
+
+  L1:
+    load_var _0
+    return
+}
+
+function truthiness.tr_pick(v: bool) -> string {
+    load_var v
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_run_closure() -> string {
+    make_closure .<lambda(tr_run_closure, 0)>, 0
+    call user.truthiness.tr_closure
+    return
+}
+
+function truthiness.tr_run_map_empty() -> string {
+    load_type string
+    load_type int
+    alloc_map 0
+    call user.truthiness.tr_map
+    return
+}
+
+function truthiness.tr_run_map_nonempty() -> string {
+    load_const 0
+    load_const "a"
+    load_type string
+    load_type int
+    alloc_map 1
+    call user.truthiness.tr_map
+    return
+}
+
+function truthiness.tr_string(v: string) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}
+
+function truthiness.tr_variant(v: <unresolved type #120507817984244> | null) -> string {
+    load_var v
+    unary_op truthy
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "F"
+    jump L2
+
+  L1:
+    load_const "T"
+
+  L2:
+    return
+}

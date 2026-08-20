@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.test_old_and_new.$init_test_ns_fixtures_ns_test_old_and_new_main(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.fixtures.test_old_and_new"
+    load_const "new style"
+    make_closure .<lambda($init_test_ns_fixtures_ns_test_old_and_new_main, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function fixtures.test_old_and_new.Greet(name: string) -> string {
+    load_const "Hello, {name}!"
+    return
+}
