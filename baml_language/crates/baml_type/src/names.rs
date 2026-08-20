@@ -276,14 +276,21 @@ impl QualifiedTypeName {
         } else {
             &self.namespace
         };
+        self.dotted(segments, user_facing && self.is_local())
+    }
+
+    /// Join `[package.]segments.name`, eliding the package when asked. The one
+    /// place the dotted spelling is assembled — every renderer picks which
+    /// namespace segments to show and whether the package is elided, and shares
+    /// this.
+    fn dotted(&self, segments: &[Name], elide_package: bool) -> String {
         let namespace = segments
             .iter()
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join(".");
-        let elide = user_facing && self.is_local();
         let pkg = self.package();
-        match (elide, namespace.is_empty()) {
+        match (elide_package, namespace.is_empty()) {
             (true, true) => self.name.to_string(),
             (true, false) => format!("{namespace}.{}", self.name),
             (false, true) => format!("{}.{}", pkg, self.name),
@@ -296,6 +303,28 @@ impl QualifiedTypeName {
     /// Call this instead of post-processing the canonical string.
     pub fn render_user_facing(&self) -> String {
         self.render_dotted(true)
+    }
+
+    /// The package-qualified spelling with the runtime mint elided: a minted
+    /// `user.$dyn.7.Item` renders `user.Item`, and every unminted name renders
+    /// exactly as [`fmt::Display`] does.
+    ///
+    /// A mint is an identity token, never a spelling. Surfaces that print a
+    /// package-qualified name to somebody outside the VM — a coercion or decode
+    /// error, a host SDK's `class_name`, a trace value — go through this so a
+    /// minted declaration reads the way the same declaration read before it was
+    /// minted. `Display` keeps the discriminator, because dumps and identity
+    /// comparisons are the one audience that needs to tell two `Item`s apart.
+    pub fn render_source_dotted(&self) -> String {
+        self.source_spelling().to_string()
+    }
+
+    /// [`render_source_dotted`](Self::render_source_dotted) as a borrowing
+    /// [`fmt::Display`] adapter, so an error message can interpolate it
+    /// (`format!("class `{}` not found", qtn.source_spelling())`) without
+    /// building a `String` first.
+    pub fn source_spelling(&self) -> SourceSpelling<'_> {
+        SourceSpelling(self)
     }
 
     /// Return the primitive represented by a builtin companion class.
@@ -369,6 +398,16 @@ impl fmt::Display for QualifiedTypeName {
     }
 }
 
+/// [`fmt::Display`] adapter for [`QualifiedTypeName::source_spelling`]: the
+/// package-qualified name with the runtime mint elided.
+pub struct SourceSpelling<'a>(&'a QualifiedTypeName);
+
+impl fmt::Display for SourceSpelling<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.dotted(self.0.source_namespace(), false))
+    }
+}
+
 #[cfg(test)]
 mod runtime_mint_tests {
     use baml_base::Name;
@@ -392,11 +431,41 @@ mod runtime_mint_tests {
         assert!(minted.has_runtime_mint(7));
         assert!(!minted.has_runtime_mint(8));
         assert_eq!(minted.source_namespace(), [Name::new("models")]);
-        // Canonical form keys the definition; user-facing form is the spelling
-        // the source wrote.
+        // Canonical form keys the definition; every rendered form is the
+        // spelling the source wrote.
         assert_eq!(minted.to_string(), "user.$dyn.7.models.Item");
         assert_eq!(minted.render_user_facing(), "models.Item");
         assert_eq!(minted.display_name().as_str(), "models.Item");
+        assert_eq!(minted.render_source_dotted(), "user.models.Item");
+    }
+
+    /// The package-qualified surfaces (a host SDK's `class_name`, a coercion or
+    /// decode error) must read exactly as they read before the name was minted.
+    #[test]
+    fn the_source_spelling_matches_the_unminted_name() {
+        for plain in [local_ns(&[], "Item"), local_ns(&["models"], "Item")] {
+            let minted = plain.to_runtime_local(7).expect("mintable");
+            assert_eq!(minted.render_source_dotted(), plain.to_string());
+            assert_eq!(minted.source_spelling().to_string(), plain.to_string());
+            assert_eq!(minted.render_user_facing(), plain.render_user_facing());
+        }
+    }
+
+    /// An unminted name renders identically through both spellings, so a call
+    /// site can mask unconditionally without a `is_runtime_minted` guard.
+    #[test]
+    fn an_unminted_name_renders_the_same_either_way() {
+        for name in [
+            local_ns(&[], "Item"),
+            local_ns(&["models"], "Item"),
+            QualifiedTypeName::new(
+                Name::new("baml"),
+                vec![Name::new("json")],
+                Name::new("json"),
+            ),
+        ] {
+            assert_eq!(name.render_source_dotted(), name.to_string());
+        }
     }
 
     #[test]

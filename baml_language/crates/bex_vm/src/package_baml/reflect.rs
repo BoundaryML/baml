@@ -817,7 +817,9 @@ pub(super) fn descriptor_specialize(
                 // A bound that cannot be realized against a complete frame is
                 // a bound this specialization cannot discharge. Report it as
                 // the failure it is rather than raising an internal error.
-                _ => bound.interface.to_string(),
+                // A runtime-minted interface names itself the way its source
+                // did, as it does everywhere a person reads it.
+                _ => bound.interface.render_source_dotted(),
             };
             let supplied_ty = actual.to_string();
             let name = callable.name(vm);

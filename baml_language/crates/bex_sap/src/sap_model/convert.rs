@@ -17,7 +17,14 @@ use crate::sap_model::{
     TypeRefDb, UnionTy,
 };
 
-impl crate::sap_model::TypeIdent for TypeName {}
+impl crate::sap_model::TypeIdent for TypeName {
+    /// A runtime-minted declaration reads as the name its source wrote: the
+    /// mint is an identity token the parser keys on, not a spelling anyone
+    /// asked for.
+    fn render(&self) -> Cow<'static, str> {
+        Cow::Owned(self.render_source_dotted())
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertError {

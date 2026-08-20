@@ -426,7 +426,12 @@ impl BexEngine {
                         .collect();
 
                 Ok(BexExternalValue::Instance {
-                    class_name: class.name.to_string(),
+                    // A runtime-minted declaration crosses the host boundary
+                    // under the name its source wrote — the mint keys identity
+                    // inside the VM and means nothing to an SDK. See
+                    // `type_name_matches_external_name`, which accepts this
+                    // spelling back.
+                    class_name: class.name.render_source_dotted(),
                     type_args: instance
                         .class_type_args
                         .iter()
@@ -449,12 +454,12 @@ impl BexEngine {
                     .ok_or_else(|| EngineError::TypeMismatch {
                         message: format!(
                             "enum '{}' has {} variants but variant index is {}",
-                            enm.name,
+                            enm.name.source_spelling(),
                             enm.variants.len(),
                             variant.index,
                         ),
                     })?;
-                let enum_name = enm.name.to_string();
+                let enum_name = enm.name.render_source_dotted();
 
                 Ok(BexExternalValue::Variant {
                     enum_name,
@@ -2482,6 +2487,11 @@ fn runtime_ty_resolves_to_exact_null<'a>(
 fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::TypeName) -> bool {
     external_name == type_name.display_name().as_str()
         || external_name == type_name.render_dotted(false)
+        // A minted declaration leaves the VM under its source spelling, so a
+        // host echoing back the `class_name` it was handed names the type this
+        // way. The canonical form above still matches, for a host that got the
+        // name from somewhere the mint is visible.
+        || (type_name.is_runtime_minted() && external_name == type_name.render_source_dotted())
 }
 
 fn resolve_named_object<'a>(
@@ -3062,7 +3072,8 @@ impl BexEngine {
                     if !type_name_matches_external_name(class_name, tn) {
                         return Err(format!(
                             "host callable returned an instance of `{class_name}` where class \
-                             `{tn}` was declared",
+                             `{}` was declared",
+                            tn.source_spelling(),
                         ));
                     }
                     let Some(class_ptr) = self
@@ -3395,10 +3406,12 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                     }
                 }
                 Object::Instance(instance) => {
-                    // Get class name from the class object
+                    // Get class name from the class object. A runtime-minted
+                    // declaration travels under its source spelling, as it does
+                    // everywhere outside the VM.
                     let class_obj = vm.get_object(instance.class);
                     let class_name = match class_obj {
-                        Object::Class(class) => class.name.to_string(),
+                        Object::Class(class) => class.name.render_source_dotted(),
                         _ => panic!("Instance class pointer doesn't point to a Class"),
                     };
 
@@ -3442,7 +3455,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                         .map(|v| v.name.clone())
                         .unwrap_or_else(|| format!("<variant {}>", variant.index));
                     BexExternalValue::Variant {
-                        enum_name: enm.name.to_string(),
+                        enum_name: enm.name.render_source_dotted(),
                         variant_name,
                     }
                 }

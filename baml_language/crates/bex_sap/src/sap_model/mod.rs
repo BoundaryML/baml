@@ -20,7 +20,16 @@ use crate::baml_value::{
 };
 
 /// An identifier for a type. Used to look up a type in a [`TypeRefDb`].
-pub trait TypeIdent: Eq + std::hash::Hash + Display + Clone {}
+pub trait TypeIdent: Eq + std::hash::Hash + Display + Clone {
+    /// How this identifier reads in a message that leaves the parser — a
+    /// coercion failure, an unresolved-type error. `Display` by default; the
+    /// compiler's qualified name overrides it, because a runtime-minted name
+    /// carries a hidden discriminator that keys its identity and must not be
+    /// shown as if it were the name the source wrote.
+    fn render(&self) -> Cow<'static, str> {
+        Cow::Owned(self.to_string())
+    }
+}
 impl TypeIdent for &'_ str {}
 impl TypeIdent for String {}
 impl TypeIdent for Cow<'_, str> {}

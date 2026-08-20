@@ -315,7 +315,10 @@ impl TraceSnapshotBuilder {
                         })
                         .collect();
                     self.alloc(TraceValue::Instance {
-                        type_name: class.name.to_string(),
+                        // A trace is read by a person: a runtime-minted
+                        // declaration appears under the name its source wrote,
+                        // not the discriminator that keys it in the VM.
+                        type_name: class.name.render_source_dotted(),
                         type_args: instance
                             .class_type_args
                             .iter()
@@ -345,7 +348,7 @@ impl TraceSnapshotBuilder {
                     );
                 };
                 self.alloc(TraceValue::Enum {
-                    type_name: enum_.name.to_string(),
+                    type_name: enum_.name.render_source_dotted(),
                     variant: variant_def.name.clone(),
                 })
             }

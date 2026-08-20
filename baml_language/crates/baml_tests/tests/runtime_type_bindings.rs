@@ -829,3 +829,259 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
         "the diagnostic must name the package class by its source name: {diagnostic}"
     );
 }
+
+/// Binds `item_type` to a class named `Item`, compiled into a runtime package.
+/// Both origins below mint their declarations, so both must render them the
+/// same way. Two fields, so a coercion failure is reported against the class
+/// rather than being implied onto a lone field.
+const ORIGIN_COMPILED_PACKAGE: &str = r##"
+            let pkg = reflect.Package.compile({ "items.baml": #"
+class Item { value string, count int }
+              "# })
+            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+"##;
+
+/// The same `Item`, built by `reflect.class.new`.
+const ORIGIN_CLASS_NEW: &str = r##"
+            let item_type = reflect.class.new("Item", {
+                "value": type.of<string>(),
+                "count": type.of<int>(),
+            }).as_type()
+"##;
+
+/// The two error surfaces that name a class in prose: schema-aligned parsing
+/// (what an LLM's output is coerced through) and `baml.json` decoding.
+fn error_surfaces_source(origin: &str) -> String {
+    format!(
+        r##"
+        function main() -> string throws unknown {{
+            {origin}
+            type Item = unreflect(item_type)
+
+            let sap = baml.sap.parse<Item>("null") catch (e) {{
+                baml.errors.LlmClient => e.message,
+                _ => "not an LlmClient error",
+            }}
+            let sap_message = if sap is string {{ sap }} else {{ "sap accepted a null" }}
+
+            let decoded = baml.json.from_string<Item>("[1, 2]") catch (e) {{
+                baml.json.JsonDecodeError => e.message,
+                _ => "not a JsonDecodeError",
+            }}
+            let decode_message = if decoded is string {{ decoded }} else {{ "decode accepted a list" }}
+
+            `${{sap_message}}~${{decode_message}}`
+        }}
+        "##
+    )
+}
+
+/// A minted declaration reaching a *host* — the class name an SDK reads off a
+/// returned value.
+fn host_boundary_source(origin: &str) -> String {
+    format!(
+        r##"
+        function main() -> unknown throws unknown {{
+            {origin}
+            type Item = unreflect(item_type)
+            baml.json.from_string<Item>(#"{{"value": "ok", "count": 1}}"#)
+        }}
+        "##
+    )
+}
+
+/// The mint is an identity token, never a spelling: every surface that renders
+/// a minted class must show what canary showed for the same declaration before
+/// it was minted — `user.Item` where a package-qualified name was printed.
+///
+/// Schema-aligned parsing is the first of them. The failure this guards is an
+/// LLM-output coercion error reading `Expected user.$dyn.0.Item`.
+#[tokio::test]
+async fn a_coercion_error_names_a_minted_class_as_its_source_spelled_it() {
+    for origin in [ORIGIN_COMPILED_PACKAGE, ORIGIN_CLASS_NEW] {
+        let source = error_surfaces_source(origin);
+        let output = baml_test!(&source);
+        let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+            panic!("main returns a string");
+        };
+        let (sap_message, _) = rendered.split_once('~').expect("both messages");
+        assert!(
+            !sap_message.contains("$dyn"),
+            "a runtime mint leaked into a coercion error: {sap_message}"
+        );
+        assert!(
+            sap_message.contains("Expected user.Item"),
+            "a coercion error must name the class as its source spelled it: {sap_message}"
+        );
+    }
+}
+
+/// `baml.json` decoding is the second. Two things move here at once: before
+/// this change a compiled package's class could not be resolved by the decoder
+/// at all — the decode failed with "class user.Item not found" — and a
+/// `reflect.class.new` one that could be resolved was reported as
+/// `user.$dyn.0.Item`.
+#[tokio::test]
+async fn a_decode_error_names_a_minted_class_as_its_source_spelled_it() {
+    for origin in [ORIGIN_COMPILED_PACKAGE, ORIGIN_CLASS_NEW] {
+        let source = error_surfaces_source(origin);
+        let output = baml_test!(&source);
+        let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+            panic!("main returns a string");
+        };
+        let (_, decode_message) = rendered.split_once('~').expect("both messages");
+        assert!(
+            !decode_message.contains("$dyn"),
+            "a runtime mint leaked into a decode error: {decode_message}"
+        );
+        assert!(
+            decode_message.contains("expected JSON object for class `user.Item`"),
+            "a decode error must name the class as its source spelled it: {decode_message}"
+        );
+    }
+}
+
+/// The third: the `class_name` a host SDK reads off a returned instance. It is
+/// the same string a static class would carry, which is the whole contract —
+/// an SDK cannot be asked to know about a mint. That the decode *succeeds* is
+/// the other half: `baml.json` could not resolve a compiled package's class at
+/// all before this change.
+#[tokio::test]
+async fn a_minted_class_crosses_the_host_boundary_under_its_source_name() {
+    for origin in [ORIGIN_COMPILED_PACKAGE, ORIGIN_CLASS_NEW] {
+        let source = host_boundary_source(origin);
+        let output = baml_test!(&source);
+        let Ok(BexExternalValue::Instance {
+            class_name, fields, ..
+        }) = output.result
+        else {
+            panic!("expected an instance, got: {:?}", output.result);
+        };
+        assert_eq!(class_name, "user.Item");
+        assert_eq!(
+            fields.get("value"),
+            Some(&BexExternalValue::String("ok".into()))
+        );
+    }
+}
+
+/// The fourth surface: a diagnostic from a *runtime* compile that has to name a
+/// minted declaration. The compiler never sees a mint of its own — minting
+/// happens when the linked image is grafted — so the way one reaches a compile
+/// diagnostic is a mounted type: `with_types` publishes an already-minted
+/// declaration under a source name, and a package compiled against it can then
+/// be wrong about it. The message must name it the way the mount did.
+#[tokio::test]
+async fn a_runtime_compile_diagnostic_names_a_mounted_minted_class() {
+    let output = baml_test!(
+        r##"
+        function main() -> string throws unknown {
+            let item_type = reflect.class.new("Item", {
+                "value": type.of<string>(),
+            }).as_type()
+            let app = reflect.Package.current().with_types({ "Item": item_type })
+            let compiled = reflect.Package.compile({ "wrong.baml": #"
+function Run() -> int { app.Item { value: "x" } }
+              "# }, packages = { "app": app }) catch (e) {
+                baml.reflect.errors.CompilationError => e.diagnostics[0].message,
+                _ => "not a CompilationError",
+            }
+            if compiled is string { compiled } else { "the wrong program compiled" }
+        }
+        "##
+    );
+    let BexExternalValue::String(diagnostic) = output.result.expect("main must return") else {
+        panic!("main returns a string");
+    };
+    assert!(
+        !diagnostic.contains("$dyn"),
+        "a runtime mint leaked into a compile diagnostic: {diagnostic}"
+    );
+    assert_eq!(
+        diagnostic.as_str(),
+        "mismatched types: expected `int`, found `Item`"
+    );
+}
+
+/// Identity by name is what a runtime type test reads, so two compiled packages
+/// that each declare `Item` used to answer for each other: a value made by the
+/// first package matched `is` against the second package's class. Nothing
+/// reported an error — the branch simply ran on a value it was never given.
+#[tokio::test]
+async fn a_runtime_type_test_does_not_match_another_packages_same_named_class() {
+    let output = baml_test!(
+        r##"
+        function main() -> string throws unknown {
+            let first = reflect.Package.compile({ "a.baml": #"
+class Item { value string }
+function Make() -> Item { Item { value: "a" } }
+              "# })
+            let second = reflect.Package.compile({ "b.baml": #"
+class Item { value string }
+              "# })
+            type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
+            type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
+
+            let make = first.get_function<() -> First>("root.Make") ?? throw "missing root.Make"
+            let value: unknown = make()
+            let own = if value is First { "yes" } else { "no" }
+            let foreign = if value is Second { "yes" } else { "no" }
+            `${own}|${foreign}`
+        }
+        "##
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("yes|no".into())));
+}
+
+/// The LLM schema `ctx.output_format` builds is assembled from a definition
+/// overlay keyed by qualified name, so the same collision showed up there as a
+/// prompt describing the *first* package's fields under the second package's
+/// class. The model was then asked for a shape the caller never declared.
+#[tokio::test]
+async fn an_output_format_schema_describes_each_packages_own_class() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        function Render<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> string throws unknown {
+            // `next` makes each `Item` recursive, which forces the schema to
+            // hoist it under a name rather than inline its shape.
+            let first = reflect.Package.compile({ "a.baml": #"
+class Item { alpha string, next Item? }
+              "# })
+            let second = reflect.Package.compile({ "b.baml": #"
+class Item { beta int, next Item? }
+              "# })
+            type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
+            type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
+
+            `${Render$render_prompt<First[]>()}~${Render$render_prompt<Second[]>()}`
+        }
+        "##
+    );
+    let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+        panic!("main returns a string");
+    };
+    let (first, second) = rendered.split_once('~').expect("both schemas");
+    assert!(
+        !rendered.contains("$dyn"),
+        "a runtime mint leaked into an LLM schema: {rendered}"
+    );
+    assert!(
+        first.contains("alpha") && !first.contains("beta"),
+        "the first package's schema must describe its own fields: {first}"
+    );
+    assert!(
+        second.contains("beta") && !second.contains("alpha"),
+        "the second package's schema must describe its own fields: {second}"
+    );
+}
