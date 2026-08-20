@@ -121,6 +121,7 @@ async def test_cancellation_async_cancel_via_asyncio_timeout():
     _assert_fast_cancellation(start)
 
 
+# SDK_PARITY_LINT(skip): drives Python asyncio cancellation (task.cancel / wait_for)
 @pytest.mark.parametrize("mode", ["task_cancel", "asyncio_timeout"])
 async def test_cancellation_async_cancel_skips_later_step(tmp_path: Path, mode: str):
     """A cancel delivered mid-sleep must stop the run, not just detach the host.
