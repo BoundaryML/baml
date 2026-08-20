@@ -175,11 +175,11 @@ fn find_local_usages(
     let file = func.file(db);
     let index = baml_compiler2_hir::file_semantic_index(db, file);
 
-    let body = baml_compiler2_hir::body::function_body(db, func);
+    let body = baml_compiler2_ppir::function_body(db, func);
     let FunctionBody::Expr(expr_body) = body.as_ref() else {
         return Vec::new();
     };
-    let Some(source_map) = baml_compiler2_hir::body::function_body_source_map(db, func) else {
+    let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func) else {
         return Vec::new();
     };
 
@@ -372,11 +372,11 @@ fn find_member_usages(
             else {
                 continue;
             };
-            let body = baml_compiler2_hir::body::function_body(db, func_loc);
+            let body = baml_compiler2_ppir::function_body(db, func_loc);
             let FunctionBody::Expr(expr_body) = body.as_ref() else {
                 continue;
             };
-            let Some(source_map) = baml_compiler2_hir::body::function_body_source_map(db, func_loc)
+            let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func_loc)
             else {
                 continue;
             };

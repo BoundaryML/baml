@@ -146,6 +146,15 @@ pub fn symbol_at(
         return Some(target);
     }
 
+    // Literal template text is prose: it addresses the template's driver
+    // (tagged form), never a same-spelled local or item.
+    if let Some(position) = template_position_at(db, file, offset) {
+        return match position {
+            TemplatePosition::Driver(func) => Some(SymbolTarget::Item(Definition::Function(func))),
+            TemplatePosition::DefaultText => None,
+        };
+    }
+
     if let Some(target) = local_at(db, file, offset, &name) {
         return Some(target);
     }
@@ -187,6 +196,16 @@ struct MemberPosition<'db> {
     target: Option<SymbolTarget<'db>>,
 }
 
+/// One member-position claim: the owning function (and its body scope),
+/// the claiming expression, the claimed span, and the path segment index.
+type Claim<'db> = (
+    baml_compiler2_hir::loc::FunctionLoc<'db>,
+    baml_compiler2_hir::scope::ScopeId<'db>,
+    baml_compiler2_ast::ExprId,
+    TextRange,
+    Option<usize>,
+);
+
 /// Whether `offset` sits in a member position of the enclosing function
 /// body — decided purely by the *recorded spans* of member accesses, dotted
 /// path segments, and constructor keys.
@@ -196,60 +215,97 @@ fn member_position_at(
     offset: TextSize,
 ) -> Option<MemberPosition<'_>> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let scope_id = index.scope_at_offset(offset, None);
-    let func_scope = enclosing_function_scope(index, scope_id)?;
-    let func_owner = index.scope_ids[func_scope.index() as usize];
-    let item_data::ScopeOwner::Function(func_loc) = item_data::scope_owner(db, func_owner)? else {
-        return None;
-    };
-    let body = baml_compiler2_hir::body::function_body(db, func_loc);
-    let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
-        return None;
-    };
-    let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
+
+    // Desugared expressions (a template's `string.from` concat, an llm
+    // function's `baml.sap.parse` companion body) carry spans ALIASING the
+    // source they were synthesized from — template prose, prompt text. A
+    // span may claim only when the source at that span actually spells the
+    // member's name; anything else is an alias, not an access.
+    let text = file.text(db);
+    let spells =
+        |span: TextRange, name: &str| usize::from(span.end()) <= text.len() && &text[span] == name;
 
     // Innermost claim wins (`a.b(c.d)` — the argument's member span nests
-    // inside the call's expression span).
-    let mut claim: Option<(baml_compiler2_ast::ExprId, TextRange, Option<usize>)> = None;
-    let mut narrower = |candidate: (baml_compiler2_ast::ExprId, TextRange, Option<usize>)| {
-        if claim.is_none_or(|(_, previous, _)| candidate.1.len() < previous.len()) {
-            claim = Some(candidate);
+    // inside the call's expression span), searched across EVERY candidate
+    // function: an llm function's companions alias the prompt span, and the
+    // real interpolation expressions may live in any of the family.
+    let mut claim: Option<Claim<'_>> = None;
+    let mut seen: Vec<baml_compiler2_hir::loc::FunctionLoc<'_>> = Vec::new();
+    for scope_id in scope_candidates_at(db, file, index, offset) {
+        let Some(func_scope) = enclosing_function_scope(index, scope_id) else {
+            continue;
+        };
+        let func_owner = index.scope_ids[func_scope.index() as usize];
+        let Some(item_data::ScopeOwner::Function(func_loc)) =
+            item_data::scope_owner(db, func_owner)
+        else {
+            continue;
+        };
+        if seen.contains(&func_loc) {
+            continue;
         }
-    };
-    for (expr_id, expr) in expr_body.exprs.iter() {
-        match expr {
-            Expr::MemberAccess { .. } => {
-                let member_span = source_map.member_access_member_span(expr_id);
-                // The accessor falls back to the whole expression span when
-                // no member span was recorded; that would over-claim (the
-                // receiver too), so require a strict sub-span.
-                if member_span != source_map.expr_span(expr_id)
-                    && (member_span.contains(offset) || member_span.end() == offset)
+        seen.push(func_loc);
+        let body = baml_compiler2_ppir::function_body(db, func_loc);
+        let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+            continue;
+        };
+        let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func_loc) else {
+            continue;
+        };
+        let mut push_claim =
+            |expr_id: baml_compiler2_ast::ExprId, span: TextRange, seg: Option<usize>| {
+                if claim
+                    .as_ref()
+                    .is_none_or(|(_, _, _, previous, _)| span.len() < previous.len())
                 {
-                    narrower((expr_id, member_span, None));
+                    claim = Some((func_loc, func_owner, expr_id, span, seg));
                 }
-            }
-            Expr::Path(segments) if segments.len() >= 2 => {
-                for segment_idx in 1..segments.len() {
-                    let span = source_map.path_segment_span(expr_id, segment_idx);
-                    if span.contains(offset) || span.end() == offset {
-                        narrower((expr_id, span, Some(segment_idx)));
+            };
+        for (expr_id, expr) in expr_body.exprs.iter() {
+            match expr {
+                Expr::MemberAccess { member, .. } => {
+                    let member_span = source_map.member_access_member_span(expr_id);
+                    // The accessor falls back to the whole expression span
+                    // when no member span was recorded; that would over-claim
+                    // (the receiver too), so require a strict sub-span.
+                    if member_span != source_map.expr_span(expr_id)
+                        && (member_span.contains(offset) || member_span.end() == offset)
+                        && spells(member_span, member.as_str())
+                    {
+                        push_claim(expr_id, member_span, None);
                     }
                 }
-            }
-            Expr::Object { fields, .. } => {
-                for field in fields {
-                    let span = source_map.object_field_name_span(expr_id, field.value);
-                    if span.contains(offset) || span.end() == offset {
-                        narrower((expr_id, span, None));
+                Expr::Path(segments) if segments.len() >= 2 => {
+                    for (segment_idx, segment) in segments.iter().enumerate().skip(1) {
+                        let span = source_map.path_segment_span(expr_id, segment_idx);
+                        if (span.contains(offset) || span.end() == offset)
+                            && spells(span, segment.as_str())
+                        {
+                            push_claim(expr_id, span, Some(segment_idx));
+                        }
                     }
                 }
+                Expr::Object { fields, .. } => {
+                    for field in fields {
+                        let span = source_map.object_field_name_span(expr_id, field.value);
+                        if (span.contains(offset) || span.end() == offset)
+                            && spells(span, field.name.as_str())
+                        {
+                            push_claim(expr_id, span, None);
+                        }
+                    }
+                }
+                _ => {}
             }
-            _ => {}
         }
     }
 
-    let (expr_id, _, segment_idx) = claim?;
+    let (func_loc, func_owner, expr_id, _, segment_idx) = claim?;
+    let body = baml_compiler2_ppir::function_body(db, func_loc);
+    let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+        return None;
+    };
+    let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc)?;
     let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner);
     let target = match &expr_body.exprs[expr_id] {
         Expr::Object { .. } => constructor_field_at(db, offset, expr_body, &source_map, inference?),
@@ -295,6 +351,7 @@ fn member_position_at(
         // Only the three claiming kinds reach here.
         _ => None,
     };
+
     Some(MemberPosition { target })
 }
 
@@ -307,8 +364,22 @@ fn local_at<'db>(
     name: &Name,
 ) -> Option<SymbolTarget<'db>> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let scope_id = index.scope_at_offset(offset, None);
+    for scope_id in scope_candidates_at(db, file, index, offset) {
+        if let Some(target) = local_in_scope(db, index, scope_id, offset, name) {
+            return Some(target);
+        }
+    }
+    None
+}
 
+/// [`local_at`] against one candidate scope.
+fn local_in_scope<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    index: &FileSemanticIndex<'db>,
+    scope_id: FileScopeId,
+    offset: TextSize,
+    name: &Name,
+) -> Option<SymbolTarget<'db>> {
     // Declaration tokens are intentionally not visible until after their
     // initializer/statement, so identify them by their recorded name range.
     let declaration = index
@@ -344,6 +415,33 @@ fn local_at<'db>(
         func_scope,
         binding,
     })
+}
+
+/// Every scope that can own code at `offset`: the position-derived pick
+/// first (the fast, unambiguous common case), then the body scope of every
+/// function whose span covers the offset. An llm function's companions
+/// alias their parent's span — `scope_at_offset`'s single pick among that
+/// family is arbitrary, so position resolution must try them all.
+fn scope_candidates_at(
+    db: &dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    index: &FileSemanticIndex<'_>,
+    offset: TextSize,
+) -> Vec<FileScopeId> {
+    let mut out = vec![index.scope_at_offset(offset, None)];
+    for func in item_data::file_functions(db, file) {
+        let span = item_data::function_source_map(db, *func).span;
+        if !(span.contains(offset) || span.end() == offset) {
+            continue;
+        }
+        if let Some(scope) = index.item_scope(baml_compiler2_hir::scope::ItemScopeOwner::Function(
+            func.id(db),
+        )) && !out.contains(&scope)
+        {
+            out.push(scope);
+        }
+    }
+    out
 }
 
 /// The nearest enclosing `Function`-kind scope (inclusive walk from
@@ -424,15 +522,256 @@ fn member_at<'db>(
             };
 
             let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
-            let body = baml_compiler2_hir::body::function_body(db, func_loc);
+            let body = baml_compiler2_ppir::function_body(db, func_loc);
             let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
                 return None;
             };
-            let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
+            let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc)?;
 
             member_access_at(db, offset, token_text, expr_body, &source_map, inference)
                 .or_else(|| constructor_field_at(db, offset, expr_body, &source_map, inference))
         }
+    }
+}
+
+/// Where a cursor inside a backtick template's LITERAL TEXT points
+/// (BEP-049): the prose between `${…}` holes is not code, so it addresses
+/// the template machinery instead of same-spelled locals or items.
+pub(crate) enum TemplatePosition<'db> {
+    /// Tagged template (a `prompt`-tagged backtick): the tag driver — hover and
+    /// go-to-definition land on the function whose return shape the
+    /// template produces.
+    Driver(FunctionLoc<'db>),
+    /// Untagged template text (plain string interpolation), or a tagged
+    /// template whose tag did not resolve: nothing to navigate to; hover
+    /// documents the template form.
+    DefaultText,
+}
+
+/// `Some` when `offset` sits in a backtick template's literal text. The tag
+/// expression, `${…}` interpolations, and `${for}`/`${if}` headers are code
+/// — they return `None` and resolve under the normal rules.
+pub(crate) fn template_position_at(
+    db: &dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    offset: TextSize,
+) -> Option<TemplatePosition<'_>> {
+    use baml_compiler2_ast::{Expr, TemplateSegment, TemplateTag};
+
+    // Any CODE region of the template under the cursor → normal resolution.
+    fn in_code(
+        segments: &[TemplateSegment],
+        source_map: &baml_compiler2_ast::AstSourceMap,
+        hit: &dyn Fn(TextRange) -> bool,
+    ) -> bool {
+        segments.iter().any(|segment| match segment {
+            TemplateSegment::Text(_) => false,
+            TemplateSegment::Interp(expr) => hit(source_map.expr_span(*expr)),
+            TemplateSegment::For {
+                binding,
+                collection,
+                body,
+            } => {
+                hit(source_map.pattern_span(*binding))
+                    || hit(source_map.expr_span(*collection))
+                    || in_code(body, source_map, hit)
+            }
+            TemplateSegment::CStyleFor {
+                init,
+                cond,
+                step,
+                body,
+            } => {
+                hit(source_map.stmt_span(*init))
+                    || hit(source_map.expr_span(*cond))
+                    || step.is_some_and(|step| hit(source_map.stmt_span(step)))
+                    || in_code(body, source_map, hit)
+            }
+            TemplateSegment::If {
+                branches,
+                else_body,
+            } => {
+                branches.iter().any(|branch| {
+                    hit(source_map.expr_span(branch.condition))
+                        || in_code(&branch.body, source_map, hit)
+                }) || else_body
+                    .as_ref()
+                    .is_some_and(|body| in_code(body, source_map, hit))
+            }
+        })
+    }
+
+    let hit = |span: TextRange| span.contains(offset) || span.end() == offset;
+
+    // The innermost template across every function whose span holds the
+    // cursor — scope lookup alone is ambiguous here, because an llm
+    // function's synthesized companions alias the prompt's spans.
+    let mut innermost: Option<(
+        baml_compiler2_hir::loc::FunctionLoc<'_>,
+        baml_compiler2_ast::ExprId,
+        TextRange,
+    )> = None;
+    for func in item_data::file_functions(db, file) {
+        if !hit(item_data::function_source_map(db, *func).span) {
+            continue;
+        }
+        let body = baml_compiler2_ppir::function_body(db, *func);
+        let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+            continue;
+        };
+        let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, *func) else {
+            continue;
+        };
+        for (expr_id, expr) in expr_body.exprs.iter() {
+            if !matches!(expr, Expr::Template { .. }) {
+                continue;
+            }
+            let span = source_map.expr_span(expr_id);
+            if hit(span)
+                && innermost
+                    .as_ref()
+                    .is_none_or(|(_, _, previous)| span.len() < previous.len())
+            {
+                innermost = Some((*func, expr_id, span));
+            }
+        }
+    }
+    // No `Expr::Template` at the cursor: check the SPEC-LOWERED prompt form.
+    // An llm function's `prompt:` never becomes a template expression — the
+    // backtick flattens straight into the `$spec` companion ("both lower
+    // through the same prompt`…` tagged template", lower_cst) — but the
+    // synthesized prompt lambda opens a scope MARKED `is_template_body`
+    // whose range is exactly the literal. Inside it, code regions are the
+    // NON-synthetic nodes (interpolations, `${for}` headers — original
+    // spans); everything else is prompt prose, addressed to the `ai.prompt`
+    // driver the flattening mirrors.
+    let Some((func_loc, template_id, _)) = innermost else {
+        return llm_prompt_position_at(db, file, offset);
+    };
+
+    let body = baml_compiler2_ppir::function_body(db, func_loc);
+    let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+        return None;
+    };
+    let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc)?;
+    let Expr::Template { tag, segments } = &expr_body.exprs[template_id] else {
+        return None;
+    };
+
+    if in_code(segments, &source_map, &hit) {
+        return None;
+    }
+
+    match tag {
+        TemplateTag::Custom { tag, .. } => {
+            if hit(source_map.expr_span(*tag)) {
+                return None;
+            }
+            let func_owner = item_data::function_scope(db, func_loc)?;
+            let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
+            match inference.member_resolutions.get(tag) {
+                Some(baml_compiler2_hir_ty::infer::MemberResolution::Free { func }) => {
+                    Some(TemplatePosition::Driver(*func))
+                }
+                // Unresolved or non-free tags still block prose words from
+                // resolving as code; hover documents the template form.
+                _ => Some(TemplatePosition::DefaultText),
+            }
+        }
+        TemplateTag::Default { .. } => Some(TemplatePosition::DefaultText),
+    }
+}
+
+/// The tag driver of the template whose literal covers `offset` — for BOTH
+/// positions (prose and `${…}` code). The driver's `body` callback params
+/// (`ctx`, `role`) are name-injected into interpolations by inference with
+/// no binding at the use site, so hover resolves them from this signature.
+pub(crate) fn template_driver_at(
+    db: &dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    offset: TextSize,
+) -> Option<baml_compiler2_hir::loc::FunctionLoc<'_>> {
+    use baml_compiler2_ast::{Expr, TemplateTag};
+
+    let hit = |span: TextRange| span.contains(offset) || span.end() == offset;
+    // The llm `prompt:` form — recorded geometry, driver is `ai.prompt`.
+    if item_data::file_functions(db, file).iter().any(|func| {
+        item_data::llm_prompt_spans(db, *func)
+            .as_ref()
+            .is_some_and(|spans| hit(spans.literal))
+    }) {
+        let package = baml_compiler2_hir::package::PackageId::new(db, Name::new("ai"));
+        if let Some(Definition::Function(func)) =
+            baml_compiler2_ppir::package_items(db, package).lookup_value(&[], &Name::new("prompt"))
+        {
+            return Some(func);
+        }
+        return None;
+    }
+    // A tagged template expression: the recorded tag resolution.
+    for func in item_data::file_functions(db, file) {
+        if !hit(item_data::function_source_map(db, *func).span) {
+            continue;
+        }
+        let body = baml_compiler2_ppir::function_body(db, *func);
+        let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+            continue;
+        };
+        let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, *func) else {
+            continue;
+        };
+        for (expr_id, expr) in expr_body.exprs.iter() {
+            let Expr::Template {
+                tag: TemplateTag::Custom { tag, .. },
+                ..
+            } = expr
+            else {
+                continue;
+            };
+            if !hit(source_map.expr_span(expr_id)) {
+                continue;
+            }
+            let func_owner = item_data::function_scope(db, *func)?;
+            let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
+            if let Some(baml_compiler2_hir_ty::infer::MemberResolution::Free { func }) =
+                inference.member_resolutions.get(tag)
+            {
+                return Some(*func);
+            }
+        }
+    }
+    None
+}
+
+/// The spec-lowered llm-prompt arm of [`template_position_at`]: an llm
+/// function's `prompt:` never becomes a template expression (the backtick
+/// flattens straight into the `$spec` companion, whose spans alias the
+/// literal), so prose-vs-code comes from the RECORDED prompt geometry
+/// (`llm_prompt_spans`, captured at CST lowering). Prose addresses the
+/// `ai.prompt` driver — the documented lowering contract ("both lower
+/// through the same prompt`…` tagged template").
+fn llm_prompt_position_at(
+    db: &dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    offset: TextSize,
+) -> Option<TemplatePosition<'_>> {
+    let hit = |span: TextRange| span.contains(offset) || span.end() == offset;
+    let spans = item_data::file_functions(db, file)
+        .iter()
+        .find_map(|func| {
+            item_data::llm_prompt_spans(db, *func)
+                .as_ref()
+                .filter(|spans| hit(spans.literal))
+        })?;
+    if spans.code.iter().any(|&span| hit(span)) {
+        // `${…}` interpolations and block tags are code — normal rules.
+        return None;
+    }
+
+    let package = baml_compiler2_hir::package::PackageId::new(db, Name::new("ai"));
+    match baml_compiler2_ppir::package_items(db, package).lookup_value(&[], &Name::new("prompt")) {
+        Some(Definition::Function(func)) => Some(TemplatePosition::Driver(func)),
+        _ => Some(TemplatePosition::DefaultText),
     }
 }
 
@@ -496,11 +835,11 @@ fn operator_target_at(
     let item_data::ScopeOwner::Function(func_loc) = item_data::scope_owner(db, func_owner)? else {
         return None;
     };
-    let body = baml_compiler2_hir::body::function_body(db, func_loc);
+    let body = baml_compiler2_ppir::function_body(db, func_loc);
     let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
         return None;
     };
-    let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
+    let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc)?;
 
     // The innermost operator expression whose *operator gap* holds the
     // cursor: the expression's span contains the offset while no operand

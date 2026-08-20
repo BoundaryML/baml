@@ -408,6 +408,24 @@ pub fn type_at(
         return Some(info);
     }
 
+    // Literal template text first: prose that happens to spell a keyword
+    // (`for`, `in`) documents the template, not the keyword — and tagged
+    // templates hover their driver function.
+    if let Some(position) = crate::resolve::template_position_at(db, file, offset) {
+        return match position {
+            crate::resolve::TemplatePosition::Driver(func) => {
+                Some(type_info_for_definition(db, Definition::Function(func)))
+            }
+            crate::resolve::TemplatePosition::DefaultText => Some(TypeInfo::Documentation {
+                label: "template string".to_string(),
+                detail: "Backtick template literal (BEP-049). `${…}` holes interpolate \
+expressions, with `${for}`/`${if}` blocks for repetition and branching; the untagged \
+form stringifies each value and produces a `string`."
+                    .to_string(),
+            }),
+        };
+    }
+
     if token.kind().is_keyword() {
         return keyword_type_info(token.text());
     }
@@ -429,7 +447,13 @@ pub fn type_at(
 
     // Everything name-like goes through the one addressing layer, so hover
     // can never disagree with go-to-definition about what the cursor is on.
-    let target = crate::resolve::symbol_at(db, file, offset)?;
+    // A name inference injects from the template driver's `body` callback
+    // (`ctx`, `role` in prompts) has no binding at the use site: read it
+    // from the driver's resolved signature when the addressing layer has
+    // nothing.
+    let Some(target) = crate::resolve::symbol_at(db, file, offset) else {
+        return template_frame_param_info(db, file, offset, &name);
+    };
     target_type_info(db, target)
 }
 
@@ -823,6 +847,34 @@ fn method_owner_path(
             Some(render::display_owner_ty(&facts.for_ty_pattern.to_plain()))
         }
     }
+}
+
+/// Hover for a template-frame name (`ctx`, `role`): the matching parameter
+/// of the driver's `body` callback — the same signature slot inference
+/// injects interpolation names from.
+fn template_frame_param_info(
+    db: &dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    offset: TextSize,
+    name: &Name,
+) -> Option<TypeInfo> {
+    use baml_type::interned::TyKind;
+
+    let driver = crate::resolve::template_driver_at(db, file, offset)?;
+    let signature = baml_compiler2_hir_ty::lower::function_signature(db, driver);
+    let body_param = signature.params.first()?;
+    let TyKind::Function { params, .. } = body_param.ty.kind() else {
+        return None;
+    };
+    let param = params
+        .iter()
+        .find(|param| param.name.as_ref() == Some(name))?;
+    Some(TypeInfo::LocalVar {
+        name: name.as_str().to_string(),
+        ty: render::display_ty_canonical_for_file(db, file, &param.ty.to_plain()),
+        is_let: false,
+        owner: None,
+    })
 }
 
 fn first_docstring_paragraph(docstring: &str) -> Option<String> {
@@ -2241,6 +2293,158 @@ class Safe {
         let (declaration, owner, _) = symbol_parts(info_at(&test));
         assert_eq!(declaration, "function act(self) -> string throws never");
         assert_eq!(owner.as_deref(), Some("user.Safe"));
+    }
+
+    #[test]
+    fn template_literal_text_hovers_the_tag_driver() {
+        // Prose inside a tagged template addresses the DRIVER function —
+        // not `string.from`/companion machinery whose desugared spans alias
+        // the text, and not same-spelled locals.
+        let test = CursorTest::new(
+            r#"//baml:tagged_string
+/// Builds a shouted string from the template parts.
+function shout(body: () -> baml.TaggedString) -> string throws never {
+    "loud"
+}
+
+function example(name: string) -> string {
+    shout`hello na<[CURSOR]me and welcome`
+}"#,
+        );
+        let info = info_at(&test);
+        let TypeInfo::Function {
+            name, docstring, ..
+        } = &info
+        else {
+            panic!("template text hovers the driver, got: {info:?}");
+        };
+        assert_eq!(name, "shout");
+        assert!(docstring.as_deref().is_some_and(|d| d.contains("shouted")));
+    }
+
+    #[test]
+    fn default_template_text_documents_the_template_form() {
+        // Untagged template prose — including words that spell keywords —
+        // documents the template literal, never a keyword or a local.
+        let test = CursorTest::new(
+            r#"function example(name: string) -> string {
+    `thanks f<[CURSOR]or visiting ${name}`
+}"#,
+        );
+        let TypeInfo::Documentation { label, .. } = info_at(&test) else {
+            panic!("default template text documents the form");
+        };
+        assert_eq!(label, "template string");
+    }
+
+    #[test]
+    fn template_interpolations_resolve_as_ordinary_code() {
+        // Inside `${…}` the normal rules apply: the parameter hovers as a
+        // parameter even though the desugared `string.from` concat wraps it.
+        let test = CursorTest::new(
+            r#"function example(name: string) -> string {
+    `hello ${na<[CURSOR]me}!`
+}"#,
+        );
+        let info = info_at(&test);
+        let TypeInfo::LocalVar { name, ty, .. } = &info else {
+            panic!("interpolation resolves the parameter, got: {info:?}");
+        };
+        assert_eq!(name, "name");
+        assert_eq!(ty, "string");
+    }
+
+    #[test]
+    fn llm_prompt_text_hovers_the_prompt_driver() {
+        // The screenshot case: prose inside an llm function's prompt used
+        // to hover `baml.sap.parse` (a companion whose desugared spans
+        // alias the prompt). It addresses the prompt DRIVER now.
+        let test = CursorTest::new(
+            r#"function chat(message: string) -> string {
+    client "openai/gpt-4o-mini"
+    prompt `Respond help<[CURSOR]fully to ${message}.`
+}"#,
+        );
+        let info = info_at(&test);
+        let TypeInfo::Function { name, .. } = &info else {
+            panic!("prompt text hovers the prompt driver, got: {info:?}");
+        };
+        assert_eq!(name, "prompt");
+    }
+
+    #[test]
+    fn llm_prompt_hover_survives_companion_span_aliasing() {
+        // The demo-project crash: llm companions are PPIR-expansion items
+        // whose spans alias the prompt text; resolving through HIR's
+        // pre-expansion body query panicked "no entry found for key". All
+        // body reads go through PPIR's canonical accessors now.
+        let test = CursorTest::new(
+            r#"client Terra = openai.ResponsesClient.new(model = "gpt-5.6-terra");
+
+function helpful_turn(username: string, history: string[]) -> string {
+    client: Terra
+    prompt: `
+        Respond to discord user ${username}'s mes<[CURSOR]sage helpfully.
+
+        # History
+        ${for (let h in history)}
+            ${h}
+        ${endfor}
+
+        ${ctx.output_format}
+    `
+}"#,
+        );
+        let info = info_at(&test);
+        let TypeInfo::Function { name, .. } = &info else {
+            panic!("prompt prose hovers the driver, got: {info:?}");
+        };
+        assert_eq!(name, "prompt");
+    }
+
+    #[test]
+    fn llm_prompt_interpolation_resolves_the_parameter() {
+        let test = CursorTest::new(
+            r#"client Terra = openai.ResponsesClient.new(model = "gpt-5.6-terra");
+
+function helpful_turn(username: string, history: string[]) -> string {
+    client: Terra
+    prompt: `
+        Respond to ${user<[CURSOR]name} helpfully.
+        ${ctx.output_format}
+    `
+}"#,
+        );
+        let info = info_at(&test);
+        let TypeInfo::LocalVar { name, ty, .. } = &info else {
+            panic!("interpolation resolves the parameter, got: {info:?}");
+        };
+        assert_eq!(name, "username");
+        assert_eq!(ty, "string");
+    }
+
+    #[test]
+    fn prompt_ctx_hovers_the_driver_frame_param() {
+        // `ctx` has no binding at the use site — inference injects it from
+        // `ai.prompt`'s `body` callback signature, and hover reads the same
+        // slot.
+        let test = CursorTest::new(
+            r#"client Terra = openai.ResponsesClient.new(model = "gpt-5.6-terra");
+
+function helpful_turn(username: string) -> string {
+    client: Terra
+    prompt: `
+        Respond to ${username}.
+        ${ct<[CURSOR]x.output_format}
+    `
+}"#,
+        );
+        let info = info_at(&test);
+        let TypeInfo::LocalVar { name, ty, .. } = &info else {
+            panic!("ctx hovers as the frame param, got: {info:?}");
+        };
+        assert_eq!(name, "ctx");
+        assert_eq!(ty, "ai.Context");
     }
 
     #[test]

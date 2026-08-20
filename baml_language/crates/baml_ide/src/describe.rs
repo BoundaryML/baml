@@ -661,7 +661,7 @@ fn pattern_from_owner_body(
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
     stmt_id: baml_compiler2_ast::StmtId,
 ) -> Option<baml_compiler2_ast::PatId> {
-    let body = baml_compiler2_hir::body::function_body(db, func_loc);
+    let body = baml_compiler2_ppir::function_body(db, func_loc);
     let baml_compiler2_hir::body::FunctionBody::Expr(top_body) = body.as_ref() else {
         return None;
     };

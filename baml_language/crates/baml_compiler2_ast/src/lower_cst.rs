@@ -410,6 +410,25 @@ fn lower_function(
             warn_quoted_prompt_interpolation(quoted, diags);
         }
 
+        llm_body_def.prompt_spans = prompt_literal.as_ref().map(|literal| match literal {
+            LlmPromptLiteral::Backtick(lit) => crate::ast::LlmPromptSpans {
+                literal: lit.syntax().span_range(),
+                code: lit
+                    .syntax()
+                    .descendants()
+                    .filter(|node| {
+                        node.kind() == baml_compiler_syntax::SyntaxKind::BACKTICK_INTERPOLATION
+                    })
+                    .map(|node| node.span_range())
+                    .collect(),
+            },
+            // A quoted prompt is inert: the whole literal is prose.
+            LlmPromptLiteral::Quoted(lit) => crate::ast::LlmPromptSpans {
+                literal: lit.syntax().span_range(),
+                code: Vec::new(),
+            },
+        });
+
         // Resolve the client: a quoted "provider/model" string maps at
         // compile time to a provider constructor; anything else is an
         // expression evaluating to ai.Client.
@@ -761,6 +780,8 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         client,
         // Filled in by the LLM-function branch once param names are known.
         companion_bodies: Vec::new(),
+        // Filled in by the LLM-function branch from the prompt literal.
+        prompt_spans: None,
         has_tools: llm_tools_present(llm_body),
         span,
     }
