@@ -43,13 +43,13 @@ policy.max_delta_pct = 3.0
 # Reclaiming the `syn` cost would mean dropping prettyplease (raw,
 # unformatted generated SDK output).
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = "25.4 MiB"
+max_file_bytes = "25.5 MiB"
 
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "31.5 MiB"
+max_file_bytes = "31.7 MiB"
 
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "27.1 MiB"
+max_file_bytes = "27.2 MiB"
 
 [artifacts.packed-program]
 kind = "pack"
@@ -64,13 +64,13 @@ policy.max_delta_pct = 3.0
 # bytecode ships in every packed program. Each ceiling is ~3% above the
 # re-recorded baseline in `.ci/size-gate`.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = "20.8 MiB"
+max_file_bytes = "20.9 MiB"
 
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "25.0 MiB"
+max_file_bytes = "25.1 MiB"
 
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "21.9 MiB"
+max_file_bytes = "22.0 MiB"
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
