@@ -70,6 +70,13 @@ function runtime_type_binding_generic_calls.Holder.first_or_null(self: runtime_t
     return
 }
 
+function runtime_type_binding_generic_calls.Holder.matches_type(self: runtime_type_binding_generic_calls.Holder<#0>, expected: type) -> bool {
+    load_type #0
+    load_var expected
+    call baml.ops.equals_equals
+    return
+}
+
 function runtime_type_binding_generic_calls.Holder.new(items: #0[]) -> runtime_type_binding_generic_calls.Holder<#0> {
     load_var items
     load_type #0
