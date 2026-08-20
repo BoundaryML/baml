@@ -800,8 +800,11 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
             }
             let diagnostic = if contract is string { contract } else { "no diagnostic" }
 
+            // `~~` and not `|`: `to_baml()` and the LLM schema both spell a
+            // union with `|`, so a `|` join could split *inside* a surface and
+            // leave the assertions below silently comparing the wrong text.
             let schema = Render$render_prompt<Item[]>()
-            `${item_type.to_string()}|${item_type.to_baml()}|${schema}|${diagnostic}`
+            `${item_type.to_string()}~~${item_type.to_baml()}~~${schema}~~${diagnostic}`
         }
         "##
     );
@@ -812,7 +815,7 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
         !rendered.contains("$dyn"),
         "a runtime mint leaked into rendered output: {rendered}"
     );
-    let mut parts = rendered.splitn(4, '|');
+    let mut parts = rendered.splitn(4, "~~");
     assert_eq!(parts.next(), Some("Item"));
     assert_eq!(
         parts.next(),
@@ -827,6 +830,74 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
     assert!(
         diagnostic.contains("Item"),
         "the diagnostic must name the package class by its source name: {diagnostic}"
+    );
+}
+
+/// A minted name is `user.$dyn.<mint>.<name>`, and it is collision-free only
+/// because source cannot write either hidden segment. Both live in the
+/// *namespace* position, and the only thing that ever puts a segment there for
+/// user code is an `ns_<name>` folder whose suffix starts with a letter or `_`
+/// and holds nothing but alphanumerics and `_` — so `ns_$dyn` and `ns_0` are
+/// not namespaces at all, they are dropped. This pins the first rejection
+/// point: a package compiled from files under both folders declares its class
+/// at the package root, nothing answers to either hidden spelling, and it stays
+/// a different type from the statically declared `Item`.
+#[tokio::test]
+async fn a_source_path_cannot_spell_the_hidden_mint_namespace() {
+    let output = baml_test!(
+        r##"
+        class Item { value string }
+
+        function main() -> string throws unknown {
+            let pkg = reflect.Package.compile({ "ns_$dyn/ns_0/a.baml": #"
+class Item { value string }
+              "# })
+            let mint_ns = if pkg.get_class("root.$dyn.Item") == null { "absent" } else { "present" }
+            let numeric_ns = if pkg.get_class("root.0.Item") == null { "absent" } else { "present" }
+            let at_root = (pkg.get_class("root.Item") ?? throw "an ns_ folder namespaced it").as_type()
+            let identity = if at_root == type.of<Item>() { "collides" } else { "distinct" }
+            `${mint_ns}~~${numeric_ns}~~${identity}~~${at_root.to_string()}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "absent~~absent~~distinct~~Item".into()
+        ))
+    );
+}
+
+/// The second rejection point, in the *name* position. `$dyn` is a perfectly
+/// legal BAML name — the lexer takes `$`-prefixed words — so both `class $dyn`
+/// and `reflect.class.new("$dyn")` compile. Neither forges a mint: the marker
+/// means something only as a namespace segment, so the runtime-made one is
+/// minted under its own discriminator below it and the static one is not minted
+/// at all, and the two stay distinct. The other half of the hidden prefix is
+/// not even a legal name — a bare number is refused outright.
+#[tokio::test]
+async fn a_type_named_like_the_mint_marker_does_not_forge_one() {
+    let output = baml_test!(
+        r##"
+        class $dyn { value string }
+
+        function main() -> string throws unknown {
+            let made = reflect.class.new("$dyn", { "value": type.of<string>() })
+            let numeric = reflect.class.new("0", { "value": type.of<string>() }) catch (e) {
+                baml.reflect.errors.CompilationError => e.diagnostics[0].message,
+                _ => "wrong error",
+            }
+            let refused = if numeric is string { numeric } else { "a bare number was accepted" }
+            let identity = if made.as_type() == type.of<$dyn>() { "collides" } else { "distinct" }
+            `${identity}~~${made.as_type().to_string()}~~${refused}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "distinct~~$dyn~~invalid class name `0`".into()
+        ))
     );
 }
 
