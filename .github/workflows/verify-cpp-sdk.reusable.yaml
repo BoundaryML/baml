@@ -44,7 +44,7 @@ jobs:
     outputs:
       matrix: ${{ steps.derive.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
@@ -76,12 +76,12 @@ jobs:
     name: verify ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: bridge-cffi-${{ matrix.target }}
           path: runtime-dist

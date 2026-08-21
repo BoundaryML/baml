@@ -58,7 +58,7 @@ jobs:
       CONFIRMATION: ${{ inputs.confirmation }}
     steps:
       - name: Checkout one-off release tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -157,7 +157,7 @@ jobs:
         uses: ./.github/actions/setup-java
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Build plugin artifact
         run: ./gradlew --no-daemon --stacktrace clean buildPlugin -PpluginVersion="${VERSION}"

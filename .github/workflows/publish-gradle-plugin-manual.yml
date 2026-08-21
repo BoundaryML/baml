@@ -43,7 +43,7 @@ jobs:
     name: Publish com.boundaryml.baml to the Portal
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
