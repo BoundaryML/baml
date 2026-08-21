@@ -2335,17 +2335,16 @@ impl<'db> SemanticIndexBuilder<'db> {
                 ..
             } => {
                 // Allow `baml.errors.*`, `root.errors.*`, `baml.json.*`, and
-                // BEP-066's `baml.reflect.errors.*` (fully qualified).
+                // BEP-066's `reflect.errors.*` (fully qualified).
                 // `baml.json.JsonParseError` / `baml.json.JsonDecodeError` /
                 // `baml.json.JsonSerializationError` are stdlib error types just like
                 // `baml.errors.*` ones; they need the same exemption.
                 let is_core_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
                     && (segments[1].as_str() == "errors" || segments[1].as_str() == "json");
-                let is_reflection_error = segments.len() >= 4
-                    && segments[0].as_str() == "baml"
-                    && segments[1].as_str() == "reflect"
-                    && segments[2].as_str() == "errors";
+                let is_reflection_error = segments.len() >= 3
+                    && segments[0].as_str() == "reflect"
+                    && segments[1].as_str() == "errors";
                 let is_builtin_error = is_core_builtin_error || is_reflection_error;
                 // Allow single-segment class names (e.g. `JsonParseError`) in
                 // builtin files — the class is resolvable in the current namespace
@@ -2475,7 +2474,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 )
             }
             ast::TypeExprKind::BuiltinUnknown { .. } => "unknown".to_string(),
-            ast::TypeExprKind::Type { .. } => "type".to_string(),
+            ast::TypeExprKind::Type { .. } => "reflect.Type".to_string(),
             ast::TypeExprKind::Rust { .. } => "$rust_type".to_string(),
             ast::TypeExprKind::Error { .. } => "<error>".to_string(),
             ast::TypeExprKind::Unknown { .. } => "<unknown>".to_string(),

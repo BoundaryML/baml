@@ -1,24 +1,24 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.reflect_type_of_user_generic.reflect_array() -> type {
+function fixtures.reflect_type_of_user_generic.reflect_array() -> reflect.Type {
     load_type #0[]
     return
 }
 
-function fixtures.reflect_type_of_user_generic.reflect_int_array() -> type {
+function fixtures.reflect_type_of_user_generic.reflect_int_array() -> reflect.Type {
     load_type int
     call user.fixtures.reflect_type_of_user_generic.reflect_array
     return
 }
 
-function fixtures.reflect_type_of_user_generic.reflect_person() -> type {
+function fixtures.reflect_type_of_user_generic.reflect_person() -> reflect.Type {
     load_type fixtures.reflect_type_of_user_generic.Person
     call user.fixtures.reflect_type_of_user_generic.reflect_type
     return
 }
 
-function fixtures.reflect_type_of_user_generic.reflect_type() -> type {
+function fixtures.reflect_type_of_user_generic.reflect_type() -> reflect.Type {
     load_type #0
     return
 }

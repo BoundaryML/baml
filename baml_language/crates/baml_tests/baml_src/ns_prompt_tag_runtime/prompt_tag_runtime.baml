@@ -236,12 +236,12 @@ test "prompt_parent_tostring_override_owns_media_subtree" {
 // ─── ${ctx.output_format} (M5b) ───────────────────────────────────────────────
 
 // BEP-049 M5b: `${ctx.output_format}` renders the return type's schema.
-// `render_output_format(type.of<Person>())` produces the schema string
+// `render_output_format(reflect.Type.of<Person>())` produces the schema string
 // the orchestrator will later populate `Context.output_format` with; here we
 // wire it by hand and assert the assembled prompt embeds the schema.
 function pt_ctx_output_format_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let of = ai.internal.render_output_format(type.of<Person>())
+    let of = ai.internal.render_output_format(reflect.Type.of<Person>())
     let ctx = ai.Context { client: cc, tags: {}, output_format: of }
     let render = ai.prompt`Answer using this schema:
 ${ctx.output_format}`
@@ -333,7 +333,7 @@ test "spec_prompt_render_keeps_media_in_promptast" {
 // optional params called with most omitted.
 function pt_output_format_with_prefix_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let rt = type.of<Person>()
+    let rt = reflect.Type.of<Person>()
     let ctx = ai.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
     let render = ai.prompt`${ctx.output_format_with(prefix = "Use this exact schema:")}`
     render(ctx).text()
@@ -355,7 +355,7 @@ test "prompt_interpolates_ctx_output_format_with" {
 // before it) is omitted. Must render the schema, not panic.
 function pt_output_format_with_omitted_leading_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let rt = type.of<Person>()
+    let rt = reflect.Type.of<Person>()
     let ctx = ai.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
     let render = ai.prompt`${ctx.output_format_with(quote_class_fields = true)}`
     render(ctx).text()
@@ -371,7 +371,7 @@ test "prompt_output_format_with_omits_leading_optional_arg" {
 // the optional `nickname` field with `string or omit`.
 function pt_output_format_with_null_as_omit_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let rt = type.of<PersonNick>()
+    let rt = reflect.Type.of<PersonNick>()
     let ctx = ai.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
     let render = ai.prompt`${ctx.output_format_with(render_null_as = "omit")}`
     render(ctx).text()

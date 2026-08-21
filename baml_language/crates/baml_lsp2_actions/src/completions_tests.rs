@@ -598,7 +598,11 @@ function Test() -> string {
         );
         assert!(
             labels.contains(&"reflect"),
-            "Should contain the 'reflect' shorthand (baml.reflect, BEP-066), got: {labels:?}"
+            "Should contain the 'reflect' package root, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"json"),
+            "Should contain the 'json' namespace shorthand, got: {labels:?}"
         );
     }
 

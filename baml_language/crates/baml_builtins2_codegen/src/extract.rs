@@ -57,7 +57,7 @@ impl std::error::Error for ExtractNativeBuiltinsError {}
 /// own per-package extraction (`extract_native_builtins_for`, used by
 /// `bex_vm`'s build script), so nothing else about these packages is dragged
 /// into the IO codegen.
-const EXTRA_IO_PACKAGES: &[&str] = &["ai"];
+const EXTRA_IO_PACKAGES: &[&str] = &["ai", "reflect"];
 
 /// Marker whose presence in a file's source selects it for the extra-package
 /// IO scan (see `EXTRA_IO_PACKAGES`).

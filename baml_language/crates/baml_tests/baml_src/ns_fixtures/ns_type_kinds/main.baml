@@ -11,32 +11,32 @@ interface Marker {}
 
 type Callback = (value: int) -> bool throws never
 
-function classify(t: type) -> string {
+function classify(t: reflect.Type) -> string {
   match (t.kind()) {
-    baml.reflect.class.Type => "class",
-    baml.reflect.enum.Type => "enum",
-    baml.reflect.union.Type => "union",
-    baml.reflect.literal.Type => "literal",
-    baml.reflect.array.Type => "array",
-    baml.reflect.map.Type => "map",
-    baml.reflect.interface.Type => "interface",
-    baml.reflect.primitive.Type => "primitive",
-    baml.reflect.function.Type => "function"
+    reflect.class.Type => "class",
+    reflect.enum.Type => "enum",
+    reflect.union.Type => "union",
+    reflect.literal.Type => "literal",
+    reflect.array.Type => "array",
+    reflect.map.Type => "map",
+    reflect.interface.Type => "interface",
+    reflect.primitive.Type => "primitive",
+    reflect.function.Type => "function"
   }
 }
 
-function read_class(view: baml.reflect.class.Type) -> type throws never {
+function read_class(view: reflect.class.Type) -> reflect.Type throws never {
   view.as_type()
 }
 
 function exercise_all_kinds() -> bool {
-  classify(type.of<Foo>()) == "class"
-    && classify(type.of<Color>()) == "enum"
-    && classify(type.of<int | string>()) == "union"
-    && classify(type.of<"fixed">()) == "literal"
-    && classify(type.of<Foo[]>()) == "array"
-    && classify(type.of<map<string, Foo>>()) == "map"
-    && classify(type.of<Marker>()) == "interface"
-    && classify(type.of<int>()) == "primitive"
-    && classify(type.of<Callback>()) == "function"
+  classify(reflect.Type.of<Foo>()) == "class"
+    && classify(reflect.Type.of<Color>()) == "enum"
+    && classify(reflect.Type.of<int | string>()) == "union"
+    && classify(reflect.Type.of<"fixed">()) == "literal"
+    && classify(reflect.Type.of<Foo[]>()) == "array"
+    && classify(reflect.Type.of<map<string, Foo>>()) == "map"
+    && classify(reflect.Type.of<Marker>()) == "interface"
+    && classify(reflect.Type.of<int>()) == "primitive"
+    && classify(reflect.Type.of<Callback>()) == "function"
 }

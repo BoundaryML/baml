@@ -155,7 +155,7 @@ function forged_log(data: unknown) -> void {
   $compiler_intrinsic
 }
 
-function forged_type_of<T>() -> type {
+function forged_type_of<T>() -> reflect.Type {
   $compiler_intrinsic
 }
 "#,
@@ -179,8 +179,8 @@ function forged_type_of<T>() -> type {
                 name: Name::new("info"),
             },
             "forged_type_of" => ExternalCallTarget::Free {
-                package: Name::new("baml"),
-                namespace: vec![Name::new("type")],
+                package: Name::new("reflect"),
+                namespace: vec![Name::new("Type")],
                 name: Name::new("of"),
             },
             _ => continue,
@@ -201,7 +201,7 @@ function forged_type_of<T>() -> type {
     let file = db.add_file(
         "test.baml",
         r#"
-function main() -> type {
+function main() -> reflect.Type {
   dependency.forged_log("not compiler-owned")
   dependency.forged_type_of<string>()
 }
@@ -677,9 +677,9 @@ fn source_param_interface_dispatch_respects_shadowed_local_binding() {
     );
 }
 
-// ─── Phase 4: type.of concrete types ─────────────────────────────────
+// ─── Phase 4: reflect.Type.of concrete types ─────────────────────────────────
 
-/// `type.of<User>()` should lower to `_N = load_type(Concrete(User))`.
+/// `reflect.Type.of<User>()` should lower to `_N = load_type(Concrete(User))`.
 #[test]
 fn reflect_type_of_class() {
     let mut db = make_db();
@@ -687,32 +687,32 @@ fn reflect_type_of_class() {
         "test.baml",
         r#"
         class User { name string }
-        function f() -> type {
-            type.of<User>()
+        function f() -> reflect.Type {
+            reflect.Type.of<User>()
         }
         "#,
     );
     mir_snapshot!("reflect_type_of_class", render_mir(&db, file));
 }
 
-/// `type.of<int[]>()` — concrete array type.
+/// `reflect.Type.of<int[]>()` — concrete array type.
 #[test]
 fn reflect_type_of_array() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
         r#"
-        function f() -> type {
-            type.of<int[]>()
+        function f() -> reflect.Type {
+            reflect.Type.of<int[]>()
         }
         "#,
     );
     mir_snapshot!("reflect_type_of_array", render_mir(&db, file));
 }
 
-// ─── Phase 5: type.of with generic type params ───────────────────────
+// ─── Phase 5: reflect.Type.of with generic type params ───────────────────────
 
-/// `type.of<T>()` inside a generic function should lower to
+/// `reflect.Type.of<T>()` inside a generic function should lower to
 /// `_N = load_type(TypeArgRef(0))`.
 #[test]
 fn reflect_type_of_bare_typevar() {
@@ -720,15 +720,15 @@ fn reflect_type_of_bare_typevar() {
     let file = db.add_file(
         "test.baml",
         r#"
-        function f<T>() -> type {
-            type.of<T>()
+        function f<T>() -> reflect.Type {
+            reflect.Type.of<T>()
         }
         "#,
     );
     mir_snapshot!("reflect_type_of_bare_typevar", render_mir(&db, file));
 }
 
-/// `type.of<T[]>()` — composite array wrapping a type-var.
+/// `reflect.Type.of<T[]>()` — composite array wrapping a type-var.
 /// Should lower to `_N = load_type(Array(TypeArgRef(0)))`.
 #[test]
 fn reflect_type_of_array_of_typevar() {
@@ -736,8 +736,8 @@ fn reflect_type_of_array_of_typevar() {
     let file = db.add_file(
         "test.baml",
         r#"
-        function f<T>() -> type {
-            type.of<T[]>()
+        function f<T>() -> reflect.Type {
+            reflect.Type.of<T[]>()
         }
         "#,
     );
@@ -755,7 +755,7 @@ fn runtime_type_plan_operations_are_explicit() {
         r#"
 function accept<T>(value: T) -> T { value }
 
-function f(t: type, value: unknown) -> bool {
+function f(t: reflect.Type, value: unknown) -> bool {
     type T = unreflect(t)
     let result = accept<unreflect(t)>(value)
     result is T && result is unreflect(t)
@@ -791,7 +791,7 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
     let file = db.add_file(
         "test.baml",
         r#"
-function f(t: type, value: unknown) -> unknown {
+function f(t: reflect.Type, value: unknown) -> unknown {
     app.accept<unreflect(t)>(value)
 }
 "#,

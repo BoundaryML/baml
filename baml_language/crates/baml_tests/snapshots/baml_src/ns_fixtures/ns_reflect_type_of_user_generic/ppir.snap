@@ -8,15 +8,15 @@ class user.fixtures.reflect_type_of_user_generic.Person {
 class user.fixtures.reflect_type_of_user_generic.Person$stream {
   name: string | null
 }
-function user.fixtures.reflect_type_of_user_generic.reflect_array() -> type  [expr] {
-  {  } type.of()
+function user.fixtures.reflect_type_of_user_generic.reflect_array() -> reflect.Type  [expr] {
+  {  } reflect.Type.of()
 }
-function user.fixtures.reflect_type_of_user_generic.reflect_int_array() -> type  [expr] {
+function user.fixtures.reflect_type_of_user_generic.reflect_int_array() -> reflect.Type  [expr] {
   {  } reflect_array()
 }
-function user.fixtures.reflect_type_of_user_generic.reflect_person() -> type  [expr] {
+function user.fixtures.reflect_type_of_user_generic.reflect_person() -> reflect.Type  [expr] {
   {  } reflect_type()
 }
-function user.fixtures.reflect_type_of_user_generic.reflect_type() -> type  [expr] {
-  {  } type.of()
+function user.fixtures.reflect_type_of_user_generic.reflect_type() -> reflect.Type  [expr] {
+  {  } reflect.Type.of()
 }

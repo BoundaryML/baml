@@ -67,7 +67,7 @@ export declare class BamlType {
     toJSON(): never;
     toString(): string;
 }
-/** Runtime member installed as generated `reflect.type`. */
+/** Runtime member installed as generated `reflect.Type`. */
 export declare const reflectType: Readonly<{
     of(token: BamlType | BamlTypeToken): BamlType;
 }>;

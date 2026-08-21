@@ -123,8 +123,8 @@ class FunctionSpec<Out> {
         self.args
     }
 
-    function output_type(self) -> type throws baml.reflect.errors.CompilationError {
-        let output_type = type.of<Out>();
+    function output_type(self) -> reflect.Type throws reflect.errors.CompilationError {
+        let output_type = reflect.Type.of<Out>();
         root.internal.validate_output_type(output_type);
         output_type
     }

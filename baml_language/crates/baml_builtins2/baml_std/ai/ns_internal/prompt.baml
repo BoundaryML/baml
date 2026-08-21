@@ -6,15 +6,15 @@
 
 /// Reject output types that cannot be represented faithfully at the shared
 /// LLM render boundary. Both prompt preview and execution call this guard.
-function validate_output_type(return_type: type) -> void throws baml.reflect.errors.CompilationError {
+function validate_output_type(return_type: reflect.Type) -> void throws reflect.errors.CompilationError {
     return_type._validate_renderable();
     match (return_type.as_enum()) {
-        let enum_type: baml.reflect.enum.Type => {
+        let enum_type: reflect.enum.Type => {
             if (enum_type.values().length() == 0) {
                 let message = "empty enum `" + return_type.to_string() + "` cannot be rendered as an LLM output schema";
-                throw baml.reflect.errors.CompilationError {
+                throw reflect.errors.CompilationError {
                     message: message,
-                    diagnostics: [baml.reflect.Diagnostic {
+                    diagnostics: [reflect.Diagnostic {
                         code: "E0159",
                         span: null,
                         message: message,
@@ -27,7 +27,7 @@ function validate_output_type(return_type: type) -> void throws baml.reflect.err
 }
 
 /// Render a return type's schema with the default output-format options.
-function render_output_format(return_type: type) -> string throws never {
+function render_output_format(return_type: reflect.Type) -> string throws never {
     $rust_io_function
 }
 
@@ -36,7 +36,7 @@ function render_output_format(return_type: type) -> string throws never {
 type OutputFormat = root.OutputFormat;
 
 /// Build the output-format handle used by `root.Context.output_format_with`.
-function build_output_format(return_type: type) -> OutputFormat throws never {
+function build_output_format(return_type: reflect.Type) -> OutputFormat throws never {
     $rust_io_function
 }
 
@@ -48,6 +48,6 @@ function make_role(name: string) -> root.Role throws never {
 
 /// Look up an LLM function's declared return type. Retained for type-reflection
 /// compatibility; the `ai.Agent` path uses lexical type arguments instead.
-function get_return_type(function_name: string) -> type throws baml.errors.InvalidArgument {
+function get_return_type(function_name: string) -> reflect.Type throws baml.errors.InvalidArgument {
     $rust_io_function
 }

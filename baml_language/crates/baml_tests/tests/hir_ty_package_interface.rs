@@ -259,31 +259,49 @@ fn error_messages(source: &str) -> Vec<String> {
 }
 
 #[test]
-fn mounted_type_validation_and_shorthand_shadowing_are_fail_closed() {
+fn bare_type_is_not_a_value_type_annotation() {
+    let errors = error_messages("function removed(value: type) -> type { value }");
     assert!(
-        error_messages(
-            r#"
+        errors
+            .iter()
+            .filter(|message| {
+                message.contains("`type` no longer names a runtime type value")
+                    && message.contains("write `reflect.Type` instead")
+            })
+            .count()
+            >= 2,
+        "bare `type` annotations must be rejected, and must name their replacement: {errors:#?}"
+    );
+}
+
+#[test]
+fn mounted_type_validation_and_package_shadowing_are_fail_closed() {
+    let valid_errors = error_messages(
+        r#"
 function ok(
-    local: reflect.Type<int>,
+    local: root.reflect.Type<int>,
     view: app.View<int>,
     status: app.Status,
     score: app.Score,
 ) -> int throws never { 0 }
 
-function type_shorthand() -> type throws never {
-    type.of<int>()
-}
-
-function reflect_shorthand() -> type throws never {
-    reflect.literal.new(1).as_type()
-}
-
 function json_shorthand() -> string throws never {
     json.stringify(null)
 }
 "#,
-        )
-        .is_empty()
+    );
+    assert!(
+        valid_errors.is_empty(),
+        "the user reflect namespace and json shorthand should remain valid: {valid_errors:#?}"
+    );
+
+    let shadow_errors =
+        error_messages("function shadowed() -> unknown throws never { reflect.Type.of<int>() }");
+    assert!(
+        shadow_errors
+            .iter()
+            .any(|message| message.contains("unresolved name: `of`")),
+        "an ordinary package name should follow normal user-namespace shadowing: {shadow_errors:#?}"
     );
 
     let errors = error_messages(
@@ -312,7 +330,7 @@ function bad(
 }
 
 #[test]
-fn reflect_type_shorthand_requires_baml_package_access() {
+fn reflect_resolves_as_an_ordinary_builtin_package() {
     let mut db = ProjectDatabase::new();
     db.set_project_root(std::path::Path::new(
         "/hir-ty-reflect-shorthand-package-access",
@@ -331,10 +349,7 @@ fn reflect_type_shorthand_requires_baml_package_access() {
         .expect("boundary alias");
     let boundary_errors =
         baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, boundary_alias);
-    assert!(
-        !boundary_errors.is_empty(),
-        "boundary has no baml dependency, so reflect.Signature must be unresolved"
-    );
+    assert!(boundary_errors.is_empty(), "{boundary_errors:?}");
 
     let user_alias = *baml_compiler2_ppir::item_data::file_type_aliases(&db, user_file)
         .first()
@@ -346,18 +361,18 @@ fn reflect_type_shorthand_requires_baml_package_access() {
         baml_compiler2_hir_ty::lower::type_alias_value(&db, user_alias)
             .to_plain()
             .render_canonical(),
-        "baml.reflect.Signature"
+        "reflect.Signature"
     );
 }
 
 #[test]
-fn keyword_shorthands_follow_the_exported_baml_surface() {
+fn reflect_package_resolution_uses_ordinary_builtin_items() {
     let mut db = ProjectDatabase::new();
     db.set_project_root(std::path::Path::new(
-        "/hir-ty-reflect-shorthand-export-surface",
+        "/hir-ty-reflect-package-export-surface",
     ));
     db.add_compiler2_virtual_file(
-        "<builtin>/baml/ns_reflect/raw_only.baml",
+        "<builtin>/reflect/raw_only.baml",
         "interface RawOnly {}\nclient raw_only = openai.ResponsesClient.new(model = \"gpt-4\");\n",
     );
     db.add_file(
@@ -365,11 +380,11 @@ fn keyword_shorthands_follow_the_exported_baml_surface() {
         r#"
 type ExportedShorthandType = reflect.RawOnly
 
-function exported_shorthand_value() -> type throws never {
+function exported_shorthand_value() -> reflect.Type throws never {
     reflect.literal.new(1).as_type()
 }
 
-function raw_only_value_must_stay_hidden() -> string throws never {
+function raw_only_value_is_available() -> string throws never {
     reflect.raw_only
 }
 "#,
@@ -377,32 +392,32 @@ function raw_only_value_must_stay_hidden() -> string throws never {
 
     let user_pkg = PackageId::new(&db, Name::new("user"));
     let context = package_resolution_context(&db, user_pkg);
-    let baml_items =
-        baml_compiler2_ppir::package_items(&db, PackageId::new(&db, Name::new("baml")));
+    let reflect_items =
+        baml_compiler2_ppir::package_items(&db, PackageId::new(&db, Name::new("reflect")));
     assert!(
-        baml_items
-            .lookup_type(&[Name::new("reflect")], &Name::new("RawOnly"))
+        reflect_items
+            .lookup_type(&[], &Name::new("RawOnly"))
             .is_some()
     );
     assert!(
-        baml_items
-            .lookup_value(&[Name::new("reflect")], &Name::new("raw_only"))
+        reflect_items
+            .lookup_value(&[], &Name::new("raw_only"))
             .is_some()
     );
-    let exported_baml = context
+    let exported_reflect = context
         .dep_interfaces
         .iter()
-        .find(|(name, _)| name.as_str() == "baml")
+        .find(|(name, _)| name.as_str() == "reflect")
         .map(|(_, interface)| interface)
-        .expect("user package can access baml");
+        .expect("user package can access reflect");
     assert!(
-        exported_baml
-            .lookup_type(&[Name::new("reflect")], &Name::new("RawOnly"))
+        exported_reflect
+            .lookup_type(&[], &Name::new("RawOnly"))
             .is_some()
     );
     assert!(
-        exported_baml
-            .lookup_function(&[Name::new("reflect")], &Name::new("raw_only"))
+        exported_reflect
+            .lookup_function(&[], &Name::new("raw_only"))
             .is_none()
     );
 
@@ -411,14 +426,13 @@ function raw_only_value_must_stay_hidden() -> string throws never {
         .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
         .map(|diagnostic| diagnostic.message)
         .collect();
-    let shorthand_errors: Vec<_> = errors
+    let package_errors: Vec<_> = errors
         .iter()
         .filter(|message| message.contains("reflect.raw_only"))
         .collect();
-    assert_eq!(
-        shorthand_errors.len(),
-        1,
-        "the raw-only value must not leak through shorthand: {errors:#?}"
+    assert!(
+        package_errors.is_empty(),
+        "an in-tree builtin package resolves through its ordinary package items: {errors:#?}"
     );
 }
 

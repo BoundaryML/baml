@@ -513,7 +513,10 @@ fn lower_from_type_name_with_generic_args(
         // The wildcard `_` is an inference hole, not a named type. Any stray
         // generic args on it (`_<...>`, nonsensical) are dropped.
         "_" => TypeExprKind::Infer { attrs: vec![] },
-        "type" => TypeExprKind::Type { attrs: vec![] },
+        // `reflect.Type` is the source spelling of the runtime metatype. Keep
+        // the dedicated AST node so the VM representation remains a compiler
+        // primitive rather than an ordinary class instance.
+        "reflect.Type" => TypeExprKind::Type { attrs: vec![] },
         "$rust_type" => TypeExprKind::Rust { attrs: vec![] },
         "image" => TypeExprKind::Media {
             kind: baml_base::MediaKind::Image,

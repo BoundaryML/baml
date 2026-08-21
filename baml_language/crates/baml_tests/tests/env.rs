@@ -138,7 +138,7 @@ async fn runtime_constructed_openai_client_defaults_api_key_from_env() {
                     prompt: spec.prompt_template,
                     journal: ai.Journal { log: [] },
                     toolbox: ai.tools.Toolbox.new([]),
-                    output_type: type.of<string>(),
+                    output_type: reflect.Type.of<string>(),
                 };
                 openai.internal.openai_render(
                     openai.ResponsesClient.new(model = "gpt-4o"),
@@ -172,7 +172,7 @@ async fn anthropic_clients_default_api_key_from_env_at_runtime() {
                     prompt: spec.prompt_template,
                     journal: ai.Journal { log: [] },
                     toolbox: ai.tools.Toolbox.new([]),
-                    output_type: type.of<string>(),
+                    output_type: reflect.Type.of<string>(),
                 };
                 let runtime = anthropic.internal._anthropic_request(
                     anthropic.AnthropicClient.new(model = "claude-sonnet-4-20250514"),

@@ -6,7 +6,7 @@ fn user.fixtures.json_cross_namespace_static_call.decode_root(j: int | float | s
     // Locals:
     let _0: fixtures.json_cross_namespace_static_call.pkg.inner.Box<int> // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(fixtures.json_cross_namespace_static_call.pkg.inner.Box<int>);
@@ -22,7 +22,7 @@ fn user.fixtures.json_cross_namespace_static_call.decode_auto(j: int | float | s
     // Locals:
     let _0: fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox<int> // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox<int>);
@@ -38,7 +38,7 @@ fn user.fixtures.json_cross_namespace_static_call.decode_plain(j: int | float | 
     // Locals:
     let _0: fixtures.json_cross_namespace_static_call.pkg.inner.Plain // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(fixtures.json_cross_namespace_static_call.pkg.inner.Plain);

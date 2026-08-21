@@ -37,8 +37,8 @@ message InboundValue {
     BamlHandle handle = 10;
     bytes uint8array_value = 11;
     string bigint_value = 12;
-    // A reflected BAML type passed as a value (mirrors a `type`-typed BAML
-    // value, e.g. the result of `type.of<T>()`). Accepted as an
+    // A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
+    // value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
     // argument value so the host can pass types as data.
     BamlTy ty_value = 13;
     // Definition-carrying reflected type. New hosts use this for values that

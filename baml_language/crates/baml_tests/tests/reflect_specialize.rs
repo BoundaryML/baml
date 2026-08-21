@@ -1,4 +1,4 @@
-//! The reflection specialization surface on `baml.reflect.function.Type`:
+//! The reflection specialization surface on `reflect.function.Type`:
 //! `is_generic`, `generic_params`, `specialize`, and the descriptor-side
 //! `get<F>` (B-1582 item 3).
 //!
@@ -80,7 +80,7 @@ async fn is_generic_truth_table() {
 }
 
 /// Names and count, in declaration order. Bounds are deliberately absent — see
-/// the class docs on `baml.reflect.function.GenericParam`.
+/// the class docs on `reflect.function.GenericParam`.
 #[tokio::test]
 async fn generic_params_report_names_and_count() {
     let output = baml_test!(
@@ -96,7 +96,7 @@ async fn generic_params_report_names_and_count() {
                 throw "a concrete function reported type parameters"
             } else { null }
             let names = generic.generic_params().map(
-                (param: baml.reflect.function.GenericParam) -> string { param.name },
+                (param: reflect.function.GenericParam) -> string { param.name },
             )
             names.join(",")
         }
@@ -118,7 +118,7 @@ async fn specialize_with_a_static_type_extracts_and_calls() {
         function main() -> int throws unknown {
             let descriptor = reflect.Package.current().functions().get("root.identity")
                 ?? throw "identity not listed"
-            let specialized = descriptor.specialize([type.of<int>()])
+            let specialized = descriptor.specialize([reflect.Type.of<int>()])
             if (specialized.is_generic()) { throw "still generic after specialize" } else { null }
             let callable = specialized.get<IntFn>()
                 ?? throw "specialized descriptor yielded no callable"
@@ -140,11 +140,11 @@ async fn specialized_descriptor_reads_its_signature() {
         function main() -> bool throws unknown {
             let descriptor = reflect.Package.current().functions().get("root.identity")
                 ?? throw "identity not listed"
-            let specialized = descriptor.specialize([type.of<string>()])
+            let specialized = descriptor.specialize([reflect.Type.of<string>()])
             let param = specialized.params().at(0) ?? throw "no parameter"
             param.name == "value"
-                && param.type == type.of<string>()
-                && specialized.return_type() == type.of<string>()
+                && param.type == reflect.Type.of<string>()
+                && specialized.return_type() == reflect.Type.of<string>()
         }
         "#
     );
@@ -189,7 +189,7 @@ async fn specialize_preserves_the_supplied_mint() {
     let output = baml_test!(
         r#"
         function echo<T>(value: T) -> T { value }
-        function reflected<T>() -> type { type.of<T>() }
+        function reflected<T>() -> reflect.Type { reflect.Type.of<T>() }
 
         function main() -> bool throws unknown {
             let schema = reflect.Package.compile({
@@ -205,12 +205,12 @@ async fn specialize_preserves_the_supplied_mint() {
                 .specialize([minted])
             let param = echoed.params().at(0) ?? throw "no parameter"
 
-            // Callable side: the body's own `type.of<T>()` resolves to it too.
+            // Callable side: the body's own `reflect.Type.of<T>()` resolves to it too.
             let reflected = (functions.get("root.reflected") ?? throw "reflected not listed")
                 .specialize([minted])
-            let callable = reflected.get<baml.AnyFunction<Returns = type, Throws = unknown>>()
+            let callable = reflected.get<baml.AnyFunction<Returns = reflect.Type, Throws = unknown>>()
                 ?? throw "no callable"
-            let materialized = reflect.call_any<type, unknown>(callable, {})
+            let materialized = reflect.call_any<reflect.Type, unknown>(callable, {})
 
             param.type == minted && echoed.return_type() == minted && materialized == minted
         }
@@ -229,8 +229,8 @@ async fn specialize_rejects_an_arity_mismatch() {
         function main() -> string throws unknown {
             let descriptor = reflect.Package.current().functions().get("root.identity")
                 ?? throw "identity not listed"
-            let _ = descriptor.specialize([type.of<int>(), type.of<string>()]) catch (e) {
-                baml.reflect.errors.CompilationError => {
+            let _ = descriptor.specialize([reflect.Type.of<int>(), reflect.Type.of<string>()]) catch (e) {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -271,8 +271,8 @@ async fn specialize_rejects_a_bound_violation() {
         function main() -> string throws unknown {
             let descriptor = reflect.Package.current().functions().get("root.measure")
                 ?? throw "measure not listed"
-            let _ = descriptor.specialize([type.of<Loose>()]) catch (e) {
-                baml.reflect.errors.CompilationError => {
+            let _ = descriptor.specialize([reflect.Type.of<Loose>()]) catch (e) {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -301,8 +301,8 @@ async fn specialize_rejects_an_any_class_bound_violation() {
         function main() -> string throws unknown {
             let descriptor = reflect.Package.current().functions().get("root.inspect")
                 ?? throw "inspect not listed"
-            let _ = descriptor.specialize([type.of<int>()]) catch (e) {
-                baml.reflect.errors.CompilationError => {
+            let _ = descriptor.specialize([reflect.Type.of<int>()]) catch (e) {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -329,8 +329,8 @@ async fn specialize_rejects_a_non_generic_function() {
         function main() -> string throws unknown {
             let descriptor = reflect.Package.current().functions().get("root.plain")
                 ?? throw "plain not listed"
-            let _ = descriptor.specialize([type.of<int>()]) catch (e) {
-                baml.reflect.errors.CompilationError => {
+            let _ = descriptor.specialize([reflect.Type.of<int>()]) catch (e) {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -359,7 +359,7 @@ async fn unspecialized_signature_read_is_a_typed_diagnostic() {
             let descriptor = reflect.Package.current().functions().get("root.identity")
                 ?? throw "identity not listed"
             let _ = descriptor.return_type() catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -385,12 +385,12 @@ async fn a_plain_function_type_is_not_a_descriptor() {
         type Callback = (value: int) -> int throws never;
 
         function main() -> string throws unknown {
-            let view = type.of<Callback>().as_function() ?? throw "not a function type"
+            let view = reflect.Type.of<Callback>().as_function() ?? throw "not a function type"
             if (view.is_generic()) { return "reported generic" } else { null }
             if (view.generic_params().length() != 0) { return "reported params" } else { null }
             if (view.get<Callback>() != null) { return "get returned a callable" } else { null }
-            let _ = view.specialize([type.of<int>()]) catch (e) {
-                baml.reflect.errors.CompilationError => {
+            let _ = view.specialize([reflect.Type.of<int>()]) catch (e) {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -420,9 +420,9 @@ async fn descriptor_extraction_enforces_the_requested_contract() {
         function main() -> string throws unknown {
             let descriptor = reflect.Package.current().functions().get("root.identity")
                 ?? throw "identity not listed"
-            let specialized = descriptor.specialize([type.of<int>()])
+            let specialized = descriptor.specialize([reflect.Type.of<int>()])
             let _ = specialized.get<StringFn>() catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code
                 },
                 _ => return "wrong error",
@@ -455,7 +455,7 @@ async fn a_descriptor_survives_collection_between_every_step() {
             let descriptor = reflect.Package.current().functions().get("root.identity")
                 ?? throw "identity not listed"
             baml.sys.collect_garbage()
-            let specialized = descriptor.specialize([type.of<int>()])
+            let specialized = descriptor.specialize([reflect.Type.of<int>()])
             baml.sys.collect_garbage()
             let callable = specialized.get<IntFn>() ?? throw "no callable"
             baml.sys.collect_garbage()
@@ -468,14 +468,14 @@ async fn a_descriptor_survives_collection_between_every_step() {
 
 /// The other half of the same edge: a specialized callable holds the exact
 /// `type` values it was specialized with, and its body reads one back through
-/// `type.of<T>()`. Those values carry their own package owner and definition
+/// `reflect.Type.of<T>()`. Those values carry their own package owner and definition
 /// overlay, so a collection between specialization and call has to root and
 /// forward all of them.
 #[tokio::test]
 async fn a_specialized_body_reads_its_own_type_across_collection() {
     let output = baml_test!(
         r#"
-        function reflected<T>() -> type { type.of<T>() }
+        function reflected<T>() -> reflect.Type { reflect.Type.of<T>() }
 
         function main() -> bool throws unknown {
             let schema = reflect.Package.compile({
@@ -487,10 +487,10 @@ async fn a_specialized_body_reads_its_own_type_across_collection() {
             let specialized = (reflect.Package.current().functions().get("root.reflected")
                 ?? throw "reflected not listed").specialize([minted])
             baml.sys.collect_garbage()
-            let callable = specialized.get<baml.AnyFunction<Returns = type, Throws = unknown>>()
+            let callable = specialized.get<baml.AnyFunction<Returns = reflect.Type, Throws = unknown>>()
                 ?? throw "no callable"
             baml.sys.collect_garbage()
-            let materialized = reflect.call_any<type, unknown>(callable, {})
+            let materialized = reflect.call_any<reflect.Type, unknown>(callable, {})
             baml.sys.collect_garbage()
 
             let view = materialized.as_class() ?? throw "materialized type is not a class"
@@ -535,7 +535,7 @@ function measure<T extends Shaped>(value: T) -> int { 0 }
 
             let _accepted = descriptor.specialize([square.as_type()])
             let _ = descriptor.specialize([loose.as_type()]) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     return "rejected:" + e.diagnostics[0].code
                 },
                 _ => return "wrong error",
@@ -562,9 +562,9 @@ async fn respecializing_reports_that_it_is_already_bound() {
         function main() -> string throws unknown {
             let descriptor = reflect.Package.current().functions().get("root.identity")
                 ?? throw "identity not listed"
-            let specialized = descriptor.specialize([type.of<int>()])
-            let _ = specialized.specialize([type.of<string>()]) catch (e) {
-                baml.reflect.errors.CompilationError => {
+            let specialized = descriptor.specialize([reflect.Type.of<int>()])
+            let _ = specialized.specialize([reflect.Type.of<string>()]) catch (e) {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",

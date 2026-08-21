@@ -16,7 +16,7 @@ lambda user.GetBoxedInt$spec {
 block user.GetBoxedInt$spec {
 }
 function user.GetBoxedInt$render_prompt() -> ai.Prompt throws never {
-  GetBoxedInt$spec().prompt(output_format = ai.wire.render_output_format(type.of<Box<int>>())) : ai.Prompt
+  GetBoxedInt$spec().prompt(output_format = ai.wire.render_output_format(reflect.Type.of<Box<int>>())) : ai.Prompt
 }
 function user.GetBoxedInt$build_request(client: ai.Client | null = null) -> baml.http.Request throws never {
   GetBoxedInt$spec().build_request(override_client = client) : baml.http.Request

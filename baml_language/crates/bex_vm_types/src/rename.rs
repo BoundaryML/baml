@@ -9,7 +9,7 @@
 //! it holds.
 //!
 //! Once the VM mints a package it re-spells the package's *own* declarations
-//! under `user.$dyn.<mint>.…` ([`TypeName::to_runtime_local`]), which
+//! under `user.$dyn.<mint>.…` ([`baml_type::QualifiedTypeName::to_runtime_local`]), which
 //! makes the name a key again. That has to be all-or-nothing: a single
 //! reference left at the old spelling would compare unequal to the renamed
 //! declaration it names, so this module walks the linked image exhaustively
@@ -26,7 +26,7 @@
 //!   package by the name its *source* used, which reflection (`get_class(
 //!   "root.Item")`) and dependency linking both address it by. Lookups that
 //!   arrive holding a minted qualified name go through
-//!   [`TypeName::source_namespace`] instead.
+//!   [`baml_type::QualifiedTypeName::source_namespace`] instead.
 //!
 //! The rest of a linked `Program` carries no qualified name at all: the
 //! function/global index maps and `package_init_order` are keyed by *callable*

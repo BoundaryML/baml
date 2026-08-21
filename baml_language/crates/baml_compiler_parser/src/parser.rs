@@ -1487,7 +1487,7 @@ impl<'a> Parser<'a> {
 
     /// Recover from a legacy `type_builder { ... }` / `type_builder: { ... }`
     /// block (BEP-066 removed the `TypeBuilder` feature; runtime type
-    /// construction is `baml.reflect` now). `type_builder` is a plain `Word`
+    /// construction is `reflect` now). `type_builder` is a plain `Word`
     /// today, so this is a cheap text check at positions where a declaration
     /// or config entry may start. Emits E0098 and consumes the whole block
     /// inside an ERROR node. Returns true if recovery was performed.
@@ -1510,7 +1510,7 @@ impl<'a> Parser<'a> {
         let span = self.current().map(|t| t.span).unwrap_or_default();
         self.events.push(Event::RemovedFeature {
             message: "`type_builder` blocks were removed; runtime type construction is \
-                      `baml.reflect` (BEP-066)"
+                      `reflect` (BEP-066)"
                 .to_string(),
             span,
         });
@@ -1525,7 +1525,7 @@ impl<'a> Parser<'a> {
 
     /// Recover from a legacy `dynamic class Name { ... }` / `dynamic enum
     /// Name { ... }` definition (BEP-066 removed the `TypeBuilder` feature;
-    /// runtime type construction is `baml.reflect` now). `dynamic` is a
+    /// runtime type construction is `reflect` now). `dynamic` is a
     /// plain `Word` today, so this is a cheap text check at positions where
     /// a declaration or config entry may start. Emits E0098 and consumes the
     /// whole definition inside an ERROR node. Returns true if recovery was
@@ -1544,7 +1544,7 @@ impl<'a> Parser<'a> {
         self.events.push(Event::RemovedFeature {
             message: format!(
                 "`dynamic {keyword}` definitions were removed; runtime type construction is \
-                 `baml.reflect` (BEP-066)"
+                 `reflect` (BEP-066)"
             ),
             span,
         });
@@ -8587,35 +8587,31 @@ mod tests {
         );
     }
 
-    /// BEP-066 K-13 (M-9): `type` as an expression path head. `type` is a
-    /// contextual keyword, so in expression position `type.of<int>()` /
-    /// `type.of_value(x)` parse as ordinary member-call paths (a `Word` head).
-    /// Block statement dispatch uses the full `type Name =` lookahead.
+    /// `reflect.Type.of` and `reflect.Type.of_value` parse as ordinary
+    /// member-call paths while `type Name = ...` keeps its statement meaning.
     #[test]
-    fn type_as_expression_path_head_parses() {
-        let source = "function main() -> string {\n  let t = type.of<int>();\n  let u = type.of_value(1);\n  type.of<int[]>();\n  t.to_string()\n}\n";
+    fn reflect_type_expression_paths_parse() {
+        let source = "function main() -> string {\n  let t = reflect.Type.of<int>();\n  let u = reflect.Type.of_value(1);\n  reflect.Type.of<int[]>();\n  t.to_string()\n}\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
-        // The heads lower as plain path segments: WORD("type") followed by DOT.
-        let type_head_paths = root
+        let type_segments = root
             .descendants_with_tokens()
             .filter(|elem| {
                 matches!(
                     elem,
                     rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::WORD
-                        && t.text() == "type"
+                        && t.text() == "Type"
                 )
             })
             .count();
-        assert_eq!(type_head_paths, 3, "all three `type.` heads parse as words");
+        assert_eq!(type_segments, 3, "all three `reflect.Type` paths parse");
     }
 
-    /// The `type.of` expression form must not steal top-level `type X = ...`
+    /// The `reflect.Type.of` expression form must not steal top-level `type X = ...`
     /// alias declarations (their dispatch is unchanged).
     #[test]
     fn type_alias_declarations_unaffected_by_type_of() {
-        let source =
-            "type MyAlias = int | string\nfunction main() -> type {\n  type.of<MyAlias>()\n}\n";
+        let source = "type MyAlias = int | string\nfunction main() -> reflect.Type {\n  reflect.Type.of<MyAlias>()\n}\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
         let has_alias = root
@@ -8629,8 +8625,7 @@ mod tests {
 
     #[test]
     fn scoped_runtime_type_binding_parses_as_a_statement() {
-        let source =
-            "function main(t: type) -> type {\n  type T = unreflect(t);\n  type.of<T>()\n}\n";
+        let source = "function main(t: reflect.Type) -> reflect.Type {\n  type T = unreflect(t);\n  reflect.Type.of<T>()\n}\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
         assert!(
@@ -8641,7 +8636,7 @@ mod tests {
 
     #[test]
     fn top_level_runtime_type_binding_has_an_explicit_diagnostic() {
-        let source = "type T = unreflect(type.of<string>())\n";
+        let source = "type T = unreflect(reflect.Type.of<string>())\n";
         let (_root, errors) = parse_source(source);
         assert!(errors.iter().any(|error| matches!(
             error,

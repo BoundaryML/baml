@@ -4455,7 +4455,7 @@ impl BexEngine {
     /// declaration order. Empty for a non-generic function. Sourced from the
     /// `Function`'s `display_type_params`, so it includes type params that
     /// appear only in the body (e.g. `one_type_arg<T>()` whose `T` shows up
-    /// solely via `type.of<T>()`), which a signature-only scan misses.
+    /// solely via `reflect.Type.of<T>()`), which a signature-only scan misses.
     fn function_generic_params(&self, name: &str) -> Vec<String> {
         let Some(resolved) = self.resolve_function_name(name) else {
             return vec![];
@@ -5851,10 +5851,10 @@ impl BexEngine {
 
                     let runtime_type_overlay = self.runtime_type_overlay(&args, thread.proof());
                     let runtime_compile_request = match operation {
-                        SysOp::BamlReflectPackageCompile => {
+                        SysOp::ReflectPackageCompile => {
                             Some(Ok(Self::runtime_compile_request(&thread.vm, &args)?))
                         }
-                        SysOp::BamlReflectSessionCompile => {
+                        SysOp::ReflectSessionCompile => {
                             Some(Self::runtime_session_compile_request(&mut thread.vm, &args))
                         }
                         _ => None,
@@ -6838,7 +6838,7 @@ impl BexEngine {
         vm: &mut BexVm,
         args: &[Value],
     ) -> Result<bex_vm_types::RuntimeCompileRequest, OpError> {
-        let operation = SysOp::BamlReflectSessionCompile;
+        let operation = SysOp::ReflectSessionCompile;
         let invalid = |message: String| {
             OpError::new(
                 operation,
@@ -6891,7 +6891,7 @@ impl BexEngine {
             return Err(OpError::host_thrown_value(
                 operation,
                 BexExternalValue::Instance {
-                    class_name: "baml.reflect.errors.SessionBusy".to_string(),
+                    class_name: "reflect.errors.SessionBusy".to_string(),
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
                         "message".to_string() => BexExternalValue::String(
@@ -6969,7 +6969,7 @@ impl BexEngine {
                 value
                     .span
                     .map_or(BexExternalValue::Null, |span| BexExternalValue::Instance {
-                        class_name: "baml.reflect.Span".to_string(),
+                        class_name: "reflect.Span".to_string(),
                         type_args: Vec::new(),
                         fields: indexmap::indexmap! {
                             "file".to_string() => string(span.file),
@@ -6978,7 +6978,7 @@ impl BexEngine {
                         },
                     });
             BexExternalValue::Instance {
-                class_name: "baml.reflect.Diagnostic".to_string(),
+                class_name: "reflect.Diagnostic".to_string(),
                 type_args: Vec::new(),
                 fields: indexmap::indexmap! {
                     "code".to_string() => string(value.code),
@@ -7000,7 +7000,7 @@ impl BexEngine {
             };
             match compiler.compile(request) {
                 Ok(artifact) => Ok(BexExternalValue::Instance {
-                    class_name: "baml.reflect.Package".to_string(),
+                    class_name: "reflect.Package".to_string(),
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
                         "_inner".to_string() => BexExternalValue::RustData(Arc::new(artifact)),
@@ -7020,7 +7020,7 @@ impl BexEngine {
                     Err(OpError::host_thrown_value(
                         operation,
                         BexExternalValue::Instance {
-                            class_name: "baml.reflect.errors.CompilationError".to_string(),
+                            class_name: "reflect.errors.CompilationError".to_string(),
                             type_args: Vec::new(),
                             fields: indexmap::indexmap! {
                                 "message".to_string() => string(message),

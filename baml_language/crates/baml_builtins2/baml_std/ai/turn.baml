@@ -9,7 +9,7 @@ class ModelTurnInput {
     prompt: (string) -> Prompt throws never,
     journal: Journal,
     toolbox: root.tools.Toolbox,
-    output_type: type,
+    output_type: reflect.Type,
 }
 
 class ModelTurn {

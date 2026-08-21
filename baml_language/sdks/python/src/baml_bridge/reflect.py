@@ -1,4 +1,4 @@
-"""Small host-only additions to the generated ``baml.reflect`` namespace."""
+"""Small host-only additions to the generated ``reflect`` namespace."""
 
 from typing import Any
 
@@ -13,6 +13,6 @@ class _TypeNamespace:
         return BamlType._from_python(token)
 
 
-type_ = _TypeNamespace()
+Type = _TypeNamespace()
 
-__all__ = ["type_"]
+__all__ = ["Type"]

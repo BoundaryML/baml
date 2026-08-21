@@ -478,7 +478,7 @@ mod tests {
     #[test]
     fn call_unreflect_bare_path_keeps_its_operand() {
         let function = first_function(parse_and_lower(
-            "function main(t: type) -> type { return type.of<unreflect(t)>() }",
+            "function main(t: reflect.Type) -> reflect.Type { return reflect.Type.of<unreflect(t)>() }",
         ));
         let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = function.body else {
             panic!("expected expression body")
@@ -2598,7 +2598,7 @@ mod traverse_coverage_tests {
             // BEP-066 hides ordinary expression nodes inside type arguments,
             // type bindings, and patterns. Canonical traversal must still see
             // every one exactly once.
-            r#"function runtime_edges(t: type, value: int) -> int throws never {
+            r#"function runtime_edges(t: reflect.Type, value: int) -> int throws never {
   type T = unreflect(t)
   let called = identity<unreflect(t)>(value)
   let tested = value is unreflect(t)

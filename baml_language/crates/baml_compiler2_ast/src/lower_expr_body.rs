@@ -748,7 +748,7 @@ pub(crate) fn synthesize_llm_spec_body(
 
 /// Synthesize the `$render_prompt` companion body: render the spec's prompt
 /// with the return type's output-format text —
-/// `Fn$spec(p...).prompt(ai.wire.render_output_format(type.of<Out>()))`.
+/// `Fn$spec(p...).prompt(ai.wire.render_output_format(reflect.Type.of<Out>()))`.
 pub(crate) fn synthesize_spec_render_prompt_body(
     function_name: &str,
     params: &[Param],
@@ -780,7 +780,14 @@ pub(crate) fn synthesize_spec_render_prompt_body(
         },
         span,
     );
-    let type_of_callee = ctx.alloc_expr(Expr::Path(vec![Name::new("type"), Name::new("of")]), span);
+    let type_of_callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("reflect"),
+            Name::new("Type"),
+            Name::new("of"),
+        ]),
+        span,
+    );
     let type_of_call = ctx.alloc_expr(
         Expr::Call {
             callee: type_of_callee,
@@ -984,7 +991,7 @@ pub(crate) fn synthesize_spec_agent_run_body(
 /// ```
 ///
 /// `type_args` is the explicit `<STREAM_EXPANDED, ORIGINAL>` pair, so the
-/// stdlib reifies both types from its own frame via `type.of`.
+/// stdlib reifies both types from its own frame via `reflect.Type.of`.
 /// `client` is the companion's injected `ai.StreamingClient? = null`
 /// override; `from_spec` falls back to the spec's default client when it
 /// is null.
@@ -3428,7 +3435,7 @@ impl LoweringContext {
         // PATH_EXPR contains WORD (or keyword-as-ident) tokens joined by DOTs.
         //
         // When a PATH_EXPR is wrapped in another PATH_EXPR for generic-arg
-        // annotation (e.g. `type.of<User>` → outer PATH_EXPR wrapping
+        // annotation (e.g. `reflect.Type.of<User>` → outer PATH_EXPR wrapping
         // inner PATH_EXPR + GENERIC_ARGS), the outer node has no direct token
         // children. In that case, delegate to the inner PATH_EXPR node.
         let mut segments: Vec<(Name, TextRange)> = Vec::new();
@@ -5438,7 +5445,7 @@ impl LoweringContext {
             .map(|token| Name::new(token.text()))
             .unwrap_or_else(|| Name::new("<missing>"));
         // The operand may have direct-token path heads and structural postfix
-        // children (`type.of<T>()` has a GENERIC_ARGS sibling before its call),
+        // children (`reflect.Type.of<T>()` has a GENERIC_ARGS sibling before its call),
         // so selecting the first arbitrary child is not expression-safe.
         let value = node
             .children()

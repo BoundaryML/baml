@@ -22,7 +22,7 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Cli
     call user.fixtures.llm_image_outputs.GenerateImage$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>
+    load_type ai.Runner<image, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -149,7 +149,7 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.
     call user.fixtures.llm_image_outputs.GenerateImageSet$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>
+    load_type ai.Runner<image[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -276,7 +276,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
     call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<(string | image)[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>
+    load_type ai.Runner<(string | image)[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4

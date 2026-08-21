@@ -424,7 +424,7 @@ impl std::fmt::Display for TypeExprKind {
                 Ok(())
             }
             TypeExprKind::BuiltinUnknown { .. } => write!(f, "unknown"),
-            TypeExprKind::Type { .. } => write!(f, "type"),
+            TypeExprKind::Type { .. } => write!(f, "reflect.Type"),
             TypeExprKind::Rust { .. } => write!(f, "$rust_type"),
             TypeExprKind::Error { .. } => write!(f, "error"),
             TypeExprKind::Unknown { .. } => write!(f, "?"),

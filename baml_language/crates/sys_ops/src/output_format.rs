@@ -631,8 +631,10 @@ impl OutputFormatContent {
 
             // Opaque leaf types have no JSON output-format schema. They surface
             // as `UnsupportedType` named the same way `RuntimeTy`'s `Display` renders
-            // them (`type`, or the fixed qualified name).
-            RuntimeTy::Type { .. } => Err(RenderError::UnsupportedType("type".to_string())),
+            // them (`reflect.Type`, or the fixed qualified name).
+            RuntimeTy::Type { .. } => {
+                Err(RenderError::UnsupportedType("reflect.Type".to_string()))
+            }
             RuntimeTy::Resource { .. } => {
                 Err(RenderError::UnsupportedType("ai.Resource".to_string()))
             }
@@ -1851,7 +1853,7 @@ mod tests {
     fn test_render_opaque_unsupported() {
         let content = OutputFormatContent::new(RuntimeTy::type_type());
         let err = content.render(&RenderOptions::default()).unwrap_err();
-        assert!(matches!(err, RenderError::UnsupportedType(s) if s == "type"));
+        assert!(matches!(err, RenderError::UnsupportedType(s) if s == "reflect.Type"));
     }
 
     #[test]

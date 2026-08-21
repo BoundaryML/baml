@@ -22,7 +22,7 @@ function fixtures.llm_spec_mode.NamedTools(q: string, client: ai.Client | null) 
     call user.fixtures.llm_spec_mode.NamedTools$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<fixtures.llm_spec_mode.Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_spec_mode.Answer>>
+    load_type ai.Runner<fixtures.llm_spec_mode.Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_spec_mode.Answer>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -128,7 +128,7 @@ function fixtures.llm_spec_mode.PlainChat(q: string, client: ai.Client | null) -
     call user.fixtures.llm_spec_mode.PlainChat$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -255,7 +255,7 @@ function fixtures.llm_spec_mode.SpecAgent(q: string, client: ai.Client | null) -
     call user.fixtures.llm_spec_mode.SpecAgent$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<fixtures.llm_spec_mode.Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_spec_mode.Answer>>
+    load_type ai.Runner<fixtures.llm_spec_mode.Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_spec_mode.Answer>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4

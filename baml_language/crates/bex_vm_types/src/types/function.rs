@@ -395,7 +395,7 @@ pub struct GenericFunction {
     /// compile-time instantiation (`foo<int>`) needs. A callable specialized
     /// through reflection is handed real `type` values instead, and those carry
     /// a mint and a `DynTypeDefs` overlay that the body's `LoadType` must see —
-    /// otherwise `type.of<T>()` inside re-mints a bare name whose runtime
+    /// otherwise `reflect.Type.of<T>()` inside re-mints a bare name whose runtime
     /// definition nothing can resolve. When present, the call path seeds the
     /// callee's [`crate::types::TypeValue`]-carrying frame metadata from this
     /// lane (see `BexVm::execute_call_from_locals_offset`).

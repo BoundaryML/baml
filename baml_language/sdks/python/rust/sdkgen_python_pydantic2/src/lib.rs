@@ -328,6 +328,9 @@ fn to_source_code_internal(
         segments: vec!["baml".to_string()],
     });
     leaves.insert(LeafPath {
+        segments: vec!["reflect".to_string()],
+    });
+    leaves.insert(LeafPath {
         segments: Vec::new(),
     });
 
@@ -390,10 +393,8 @@ fn to_source_code_internal(
         ));
         if dir.is_empty() {
             content.push_str(
-                "\n# BEP-066 host reflection surface.\nfrom .baml import reflect as reflect\n",
+                "\n# BEP-066 host reflection surface.\nfrom . import reflect as reflect\n",
             );
-        } else if dir == &["baml".to_string(), "reflect".to_string()] {
-            content.push_str("\nfrom baml_bridge.reflect import type_ as type_\n");
         }
         out.insert(init_py_path(dir), content);
 
@@ -417,9 +418,7 @@ fn to_source_code_internal(
             true,
         ));
         if dir.is_empty() {
-            pyi_content.push_str("\nfrom .baml import reflect as reflect\n");
-        } else if dir == &["baml".to_string(), "reflect".to_string()] {
-            pyi_content.push_str("\nfrom baml_bridge.reflect import type_ as type_\n");
+            pyi_content.push_str("\nfrom . import reflect as reflect\n");
         }
         out.insert(init_pyi_path(dir), pyi_content);
     }
@@ -947,7 +946,7 @@ mod tests {
         assert!(root.contains("from . import _inlinedbaml"));
         assert!(root.contains("from ._typemap import _TYPE_MAP"));
         assert!(root.contains("set_type_map(_TYPE_MAP)"));
-        assert!(root.contains("from .baml import reflect as reflect"));
+        assert!(root.contains("from . import reflect as reflect"));
         // PEP 562 lazy re-export: root lists `baml` in `_LAZY_CHILDREN`
         // and exposes it through `__getattr__`. `to_source_code` always
         // synthesizes the `baml` leaf even when no stdlib symbols route
@@ -964,7 +963,7 @@ mod tests {
         // resolve dotted submodule access structurally.
         let root_pyi = &out[&PathBuf::from("__init__.pyi")];
         assert!(root_pyi.contains("from . import baml\n"));
-        assert!(root_pyi.contains("from .baml import reflect as reflect"));
+        assert!(root_pyi.contains("from . import reflect as reflect"));
         assert!(!root_pyi.contains("__getattr__"));
         assert!(!root_pyi.contains("BamlRuntime"));
 
@@ -1035,7 +1034,7 @@ mod tests {
         ];
 
         for (source, _) in kind_namespaces {
-            let type_name = cg_name("baml", &["reflect", source], "Type");
+            let type_name = cg_name("reflect", &[source], "Type");
             pool.insert(type_name.clone(), class(type_name));
         }
 
@@ -1051,7 +1050,7 @@ mod tests {
                     .map(|(source, _)| ClassProperty {
                         name: BaseName::new(format!("{source}_type")),
                         docstring: None,
-                        ty: class_ty(cg_name("baml", &["reflect", source], "Type"), vec![]),
+                        ty: class_ty(cg_name("reflect", &[source], "Type"), vec![]),
                     })
                     .collect(),
                 static_methods: vec![],
@@ -1061,30 +1060,28 @@ mod tests {
         );
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let reflect_pyi = &out[&PathBuf::from("baml/reflect/__init__.pyi")];
+        let reflect_pyi = &out[&PathBuf::from("reflect/__init__.pyi")];
         let consumer_py = &out[&PathBuf::from("consumer/__init__.py")];
         let consumer_pyi = &out[&PathBuf::from("consumer/__init__.pyi")];
         let typemap = &out[&PathBuf::from("_typemap.py")];
 
         for (source, routed) in kind_namespaces {
-            assert!(out.contains_key(&PathBuf::from(format!("baml/reflect/{routed}/__init__.py"))));
+            assert!(out.contains_key(&PathBuf::from(format!("reflect/{routed}/__init__.py"))));
             if source != routed {
-                assert!(
-                    !out.contains_key(&PathBuf::from(format!("baml/reflect/{source}/__init__.py")))
-                );
+                assert!(!out.contains_key(&PathBuf::from(format!("reflect/{source}/__init__.py"))));
             }
             assert!(reflect_pyi.contains(&format!("from . import {routed}\n")));
 
-            let reference = format!("baml.reflect.{routed}.Type");
+            let reference = format!("reflect.{routed}.Type");
             assert!(consumer_py.contains(&reference));
             assert!(consumer_pyi.contains(&reference));
             assert!(typemap.contains(&format!(
-                "\"baml.reflect.{source}.Type\": (\"baml_sdk.baml.reflect.{routed}\", \"Type\")"
+                "\"reflect.{source}.Type\": (\"baml_sdk.reflect.{routed}\", \"Type\")"
             )));
         }
 
-        assert!(!consumer_py.contains("baml.reflect.class.Type"));
-        assert!(!consumer_pyi.contains("baml.reflect.class.Type"));
+        assert!(!consumer_py.contains("reflect.class.Type"));
+        assert!(!consumer_pyi.contains("reflect.class.Type"));
     }
 
     #[test]

@@ -25,7 +25,7 @@ function user.fixtures.testset_vibes_nested.ClassifySentiment$parse(json: string
   baml.sap.parse(json)
 }
 function user.fixtures.testset_vibes_nested.ClassifySentiment$render_prompt(text: string) -> ai.Prompt  [expr] {
-  ClassifySentiment$spec(text).prompt(output_format = ai.wire.render_output_format(type.of()))
+  ClassifySentiment$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.Type.of()))
 }
 function user.fixtures.testset_vibes_nested.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<user.fixtures.testset_vibes_nested.Sentiment>  [expr] {
   ai.FunctionSpec { spec_name: "ClassifySentiment", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "classify ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4o) }
@@ -43,7 +43,7 @@ function user.fixtures.testset_vibes_nested.ClassifySentiment2$parse(json: strin
   baml.sap.parse(json)
 }
 function user.fixtures.testset_vibes_nested.ClassifySentiment2$render_prompt(text: string) -> ai.Prompt  [expr] {
-  ClassifySentiment2$spec(text).prompt(output_format = ai.wire.render_output_format(type.of()))
+  ClassifySentiment2$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.Type.of()))
 }
 function user.fixtures.testset_vibes_nested.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "ClassifySentiment2", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "classify ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4o) }
@@ -64,7 +64,7 @@ function user.fixtures.testset_vibes_nested.GenerateTests$parse(json: string) ->
   baml.sap.parse(json)
 }
 function user.fixtures.testset_vibes_nested.GenerateTests$render_prompt(count: int, topic: string) -> ai.Prompt  [expr] {
-  GenerateTests$spec(count, topic).prompt(output_format = ai.wire.render_output_format(type.of()))
+  GenerateTests$spec(count, topic).prompt(output_format = ai.wire.render_output_format(reflect.Type.of()))
 }
 function user.fixtures.testset_vibes_nested.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<string[]>  [expr] {
   ai.FunctionSpec { spec_name: "GenerateTests", args: map { "count": count, "topic": topic }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "generate ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } count);  __tt_cur =  __tt_cur Add " tests about ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } topic);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4o) }

@@ -45,7 +45,7 @@ const SNAPSHOT_BASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/baml
 /// The stdlib packages with dedicated phase snapshots. The remaining builtin
 /// packages (provider clients etc.) are covered indirectly through the corpus
 /// namespaces that exercise them.
-const SNAPSHOT_STDLIB_PACKAGES: &[&str] = &["baml", "testing", "assert", "ai"];
+const SNAPSHOT_STDLIB_PACKAGES: &[&str] = &["baml", "testing", "assert", "ai", "reflect"];
 
 fn baml_src_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src")

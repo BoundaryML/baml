@@ -1,0 +1,354 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR (package reflect) ===
+
+--- <builtin>/reflect/ns_array/array.baml ---
+class reflect.array.Type {
+}
+class reflect.array.Type$stream {
+}
+function reflect.array.as_type(self: ?) -> reflect.Type  [builtin]
+function reflect.array.element_type(self: ?) -> reflect.Type  [builtin]
+
+--- <builtin>/reflect/ns_class/class.baml ---
+class reflect.class.Builder {
+  _handle: $rust_type
+  _roots: unknown[]
+  _neighbors: reflect.class.Builder[]
+  _resolved: reflect.Type?
+}
+class reflect.class.Builder$stream {
+  _handle: $rust_type
+  _roots: unknown[]
+  _neighbors: reflect.class.Builder$stream[]
+  _resolved: unknown | null
+}
+class reflect.class.Field {
+  name: string
+  type: reflect.Type?
+  meta: reflect.Meta
+  _owner: unknown?
+}
+class reflect.class.Field$stream {
+  name: string | null
+  type: unknown | null
+  meta: reflect.Meta$stream | null
+  _owner: unknown | null
+}
+class reflect.class.PendingType {
+  _handle: $rust_type
+  _roots: unknown[]
+  _resolved: reflect.Type?
+}
+class reflect.class.PendingType$stream {
+  _handle: $rust_type
+  _roots: unknown[]
+  _resolved: unknown | null
+}
+class reflect.class.Type {
+}
+class reflect.class.Type$stream {
+}
+function reflect.class._build(self: ?, implementations: reflect.interface.Implementation[]) -> reflect.class.Type  [builtin]
+function reflect.class._new(name: string, fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>>, implementations: reflect.interface.Implementation[]) -> reflect.class.Type  [builtin]
+function reflect.class.array(self: ?) -> reflect.class.PendingType  [builtin]
+function reflect.class.as_type(self: ?) -> reflect.Type  [builtin]
+function reflect.class.build(self: ?, implementations: reflect.interface.Implementation[] = ...) -> reflect.class.Type  [expr] {
+  {  } self._build(implementations)
+}
+function reflect.class.builder(name: string) -> reflect.class.Builder  [builtin]
+function reflect.class.field(self: ?, name: string, ty: reflect.Type | reflect.WithMeta<reflect.Type> | reflect.class.PendingType | reflect.WithMeta<reflect.class.PendingType>) -> reflect.class.Builder  [builtin]
+function reflect.class.fields(self: ?) -> reflect.class.Field[]  [builtin]
+function reflect.class.get_field(value: unknown, name: string) -> T  [builtin]
+function reflect.class.meta(self: ?, alias: string? = null, description: string? = null, docstring: string? = null, other: map<string, string>? = null) -> reflect.WithMeta<reflect.class.PendingType>  [builtin]
+function reflect.class.meta(self: ?) -> reflect.Meta  [builtin]
+function reflect.class.metadata(self: ?) -> reflect.Meta  [expr] {
+  {  } self.meta
+}
+function reflect.class.new(name: string, fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>>, implementations: reflect.interface.Implementation[] = ...) -> reflect.class.Type  [expr] {
+  {  } _new(name, fields, implementations)
+}
+function reflect.class.optional(self: ?) -> reflect.class.PendingType  [builtin]
+function reflect.class.resolved(self: ?) -> reflect.Type?  [builtin]
+function reflect.class.type(self: ?) -> reflect.class.PendingType  [builtin]
+function reflect.class.union(self: ?, others: reflect.Type | reflect.class.PendingType[]) -> reflect.class.PendingType  [builtin]
+function reflect.class.value(self: ?) -> T?  [expr] {
+  { let owner: baml.AnyClass = self._owner } reflect.class.get_field(owner, self.name) catch (e) { reflect.errors.CompilationError { message: message } => { throw baml.errors.TypeMismatch { message: message } } }
+}
+
+--- <builtin>/reflect/ns_enum/enum.baml ---
+class reflect.enum.Type {
+}
+class reflect.enum.Type$stream {
+}
+class reflect.enum.Value {
+  name: string
+  meta: reflect.Meta
+}
+class reflect.enum.Value$stream {
+  name: string | null
+  meta: reflect.Meta$stream | null
+}
+function reflect.enum.as_type(self: ?) -> reflect.Type  [builtin]
+function reflect.enum.get_value(value: unknown) -> string  [builtin]
+function reflect.enum.meta(self: ?) -> reflect.Meta  [builtin]
+function reflect.enum.new(name: string, values: string | reflect.enum.Value[]) -> reflect.enum.Type  [builtin]
+function reflect.enum.value(name: string, alias: string? = null, description: string? = null, docstring: string? = null, other: map<string, string>? = null) -> reflect.enum.Value  [builtin]
+function reflect.enum.values(self: ?) -> reflect.enum.Value[]  [builtin]
+
+--- <builtin>/reflect/ns_errors/errors.baml ---
+class reflect.errors.CompilationError {
+  message: string
+  diagnostics: reflect.Diagnostic[]
+}
+class reflect.errors.CompilationError$stream {
+  message: string | null
+  diagnostics: reflect.Diagnostic$stream[]
+}
+class reflect.errors.EvaluationError {
+  message: string
+}
+class reflect.errors.EvaluationError$stream {
+  message: string | null
+}
+class reflect.errors.SessionBusy {
+  message: string
+}
+class reflect.errors.SessionBusy$stream {
+  message: string | null
+}
+
+--- <builtin>/reflect/ns_function/function.baml ---
+class reflect.function.GenericParam {
+  name: string
+}
+class reflect.function.GenericParam$stream {
+  name: string | null
+}
+class reflect.function.Parameter {
+  name: string?
+  type: reflect.Type
+  optional: bool
+}
+class reflect.function.Parameter$stream {
+  name: string | null
+  type: unknown
+  optional: bool | null
+}
+class reflect.function.Type {
+}
+class reflect.function.Type$stream {
+}
+function reflect.function.as_type(self: ?) -> reflect.Type  [builtin]
+function reflect.function.generic_params(self: ?) -> reflect.function.GenericParam[]  [builtin]
+function reflect.function.get(self: ?) -> F?  [builtin]
+function reflect.function.is_generic(self: ?) -> bool  [builtin]
+function reflect.function.params(self: ?) -> reflect.function.Parameter[]  [builtin]
+function reflect.function.return_type(self: ?) -> reflect.Type  [builtin]
+function reflect.function.specialize(self: ?, args: reflect.Type[]) -> reflect.function.Type  [builtin]
+
+--- <builtin>/reflect/ns_interface/interface.baml ---
+class reflect.interface.Implementation {
+  _handle: $rust_type
+}
+class reflect.interface.Implementation$stream {
+  _handle: $rust_type
+}
+class reflect.interface.Type {
+}
+class reflect.interface.Type$stream {
+}
+function reflect.interface.as_type(self: ?) -> reflect.Type  [builtin]
+function reflect.interface.field(self: ?, interface_field: string, class_field: string? = null) -> reflect.interface.Implementation  [builtin]
+function reflect.interface.implementation() -> reflect.interface.Implementation  [builtin]
+function reflect.interface.implemented_by(self: ?, other: reflect.Type) -> bool  [builtin]
+
+--- <builtin>/reflect/ns_literal/literal.baml ---
+class reflect.literal.Type {
+}
+class reflect.literal.Type$stream {
+}
+function reflect.literal.as_type(self: ?) -> reflect.Type  [builtin]
+function reflect.literal.new(value: string | int | bool) -> reflect.literal.Type  [builtin]
+
+--- <builtin>/reflect/ns_map/map.baml ---
+class reflect.map.Type {
+}
+class reflect.map.Type$stream {
+}
+function reflect.map.as_type(self: ?) -> reflect.Type  [builtin]
+function reflect.map.key_type(self: ?) -> reflect.Type  [builtin]
+function reflect.map.new(key: reflect.Type, value: reflect.Type) -> reflect.map.Type  [builtin]
+function reflect.map.value_type(self: ?) -> reflect.Type  [builtin]
+
+--- <builtin>/reflect/ns_primitive/primitive.baml ---
+class reflect.primitive.Type {
+}
+class reflect.primitive.Type$stream {
+}
+function reflect.primitive.as_type(self: ?) -> reflect.Type  [builtin]
+
+--- <builtin>/reflect/ns_union/union.baml ---
+class reflect.union.Type {
+}
+class reflect.union.Type$stream {
+}
+function reflect.union.as_type(self: ?) -> reflect.Type  [builtin]
+function reflect.union.member_types(self: ?) -> reflect.Type[]  [builtin]
+function reflect.union.new(types: reflect.Type[]) -> reflect.union.Type  [builtin]
+
+--- <builtin>/reflect/reflect.baml ---
+class reflect.Arg {
+  name: string
+  type: reflect.Type
+}
+class reflect.Arg$stream {
+  name: string | null
+  type: unknown
+}
+class reflect.Diagnostic {
+  code: string
+  span: reflect.Span?
+  message: string
+}
+class reflect.Diagnostic$stream {
+  code: string | null
+  span: reflect.Span$stream | null
+  message: string | null
+}
+class reflect.InvalidArgumentError {
+  argument: string
+  expected: reflect.Type
+  got: reflect.Type
+}
+class reflect.InvalidArgumentError$stream {
+  argument: string | null
+  expected: unknown
+  got: unknown
+}
+class reflect.Meta {
+  alias: string?
+  description: string?
+  docstring: string?
+  other: map<string, string>
+}
+class reflect.Meta$stream {
+  alias: string | null
+  description: string | null
+  docstring: string | null
+  other: map<string, string>
+}
+class reflect.Package {
+  _inner: unknown
+}
+class reflect.Package$stream {
+  _inner: unknown
+}
+class reflect.Session {
+  _inner: unknown
+}
+class reflect.Session$stream {
+  _inner: unknown
+}
+class reflect.Signature {
+  name: string?
+  args: reflect.Arg[]
+  opts: map<string, reflect.Arg>
+  returns: reflect.Type
+  errors: reflect.Type
+  docstring: string?
+}
+class reflect.Signature$stream {
+  name: string | null
+  args: reflect.Arg$stream[]
+  opts: map<string, reflect.Arg$stream>
+  returns: unknown
+  errors: unknown
+  docstring: string | null
+}
+class reflect.Span {
+  file: string?
+  start: int
+  end: int
+}
+class reflect.Span$stream {
+  file: string | null
+  start: int | null
+  end: int | null
+}
+class reflect.WithMeta {
+  ty: T
+  alias: string?
+  description: string?
+  docstring: string?
+  other: map<string, string>
+}
+class reflect.WithMeta$stream {
+  ty: T | null
+  alias: string | null
+  description: string | null
+  docstring: string | null
+  other: map<string, string>
+}
+type reflect.TypeKind = reflect.class.Type | reflect.enum.Type | reflect.union.Type | reflect.literal.Type | reflect.array.Type | reflect.map.Type | reflect.interface.Type | reflect.primitive.Type | reflect.function.Type
+type reflect.TypeKind$stream = reflect.class.Type$stream | reflect.enum.Type$stream | reflect.union.Type$stream | reflect.literal.Type$stream | reflect.array.Type$stream | reflect.map.Type$stream | reflect.interface.Type$stream | reflect.primitive.Type$stream | reflect.function.Type$stream
+function reflect._compile(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.Package  [builtin]
+function reflect._compile(self: ?, source: string) -> reflect.Package  [builtin]
+function reflect._finish(artifact: reflect.Package, packages: map<string, reflect.Package>) -> reflect.Package  [builtin]
+function reflect._finish(self: ?, artifact: reflect.Package) -> T  [builtin]
+function reflect._new(packages: map<string, reflect.Package>) -> reflect.Session  [builtin]
+function reflect.as_type(self: ?) -> reflect.Type  [missing]
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R  [builtin]
+function reflect.classes(self: ?) -> map<string, reflect.class.Type>  [builtin]
+function reflect.compile(files: map<string, string>, packages: map<string, reflect.Package> = ...) -> reflect.Package  [expr] {
+  { let artifact = Package._compile(files, packages) } Package._finish(artifact, packages)
+}
+function reflect.current() -> reflect.Package  [builtin]
+function reflect.diagnostics(self: ?) -> reflect.Diagnostic[]  [builtin]
+function reflect.diagnostics(self: ?) -> reflect.Diagnostic[]  [builtin]
+function reflect.enums(self: ?) -> map<string, reflect.enum.Type>  [builtin]
+function reflect.eval(self: ?, source: string) -> T  [expr] {
+  { let artifact = self._compile(source) } self._finish(artifact) catch (_) { _ => throw reflect.errors.EvaluationError { message: "session evaluatio..." } }
+}
+function reflect.functions(self: ?) -> map<string, reflect.function.Type>  [builtin]
+function reflect.get_class(self: ?, name: string) -> reflect.class.Type?  [builtin]
+function reflect.get_enum(self: ?, name: string) -> reflect.enum.Type?  [builtin]
+function reflect.get_function(self: ?, name: string) -> F?  [builtin]
+function reflect.get_interface(self: ?, name: string) -> reflect.interface.Type?  [builtin]
+function reflect.interfaces(self: ?) -> map<string, reflect.interface.Type>  [builtin]
+function reflect.new(packages: map<string, reflect.Package> = ...) -> reflect.Session  [expr] {
+  {  } Session._new(packages)
+}
+function reflect.signature(f: baml.AnyFunction) -> reflect.Signature  [builtin]
+function reflect.tests(self: ?) -> map<string, () -> null throws unknown>  [builtin]
+function reflect.with_types(self: ?, types: map<string, reflect.Type | reflect.TypeView>) -> reflect.Package  [builtin]
+
+--- <builtin>/reflect/type.baml ---
+class reflect.Type {
+}
+class reflect.Type$stream {
+}
+function reflect._to_string_impl(self: ?) -> string  [builtin]
+function reflect._validate_renderable(self: ?) -> void  [builtin]
+function reflect.array(self: ?) -> reflect.array.Type  [builtin]
+function reflect.as_array(self: ?) -> reflect.array.Type?  [builtin]
+function reflect.as_class(self: ?) -> reflect.class.Type?  [builtin]
+function reflect.as_enum(self: ?) -> reflect.enum.Type?  [builtin]
+function reflect.as_function(self: ?) -> reflect.function.Type?  [builtin]
+function reflect.as_interface(self: ?) -> reflect.interface.Type?  [builtin]
+function reflect.as_literal(self: ?) -> reflect.literal.Type?  [builtin]
+function reflect.as_map(self: ?) -> reflect.map.Type?  [builtin]
+function reflect.as_primitive(self: ?) -> reflect.primitive.Type?  [builtin]
+function reflect.as_union(self: ?) -> reflect.union.Type?  [builtin]
+function reflect.implemented_by(self: ?, other: reflect.Type) -> bool  [builtin]
+function reflect.implements(self: ?, other: reflect.Type) -> bool  [builtin]
+function reflect.kind(self: ?) -> reflect.TypeKind  [builtin]
+function reflect.meta(self: ?, alias: string? = null, description: string? = null, docstring: string? = null, other: map<string, string>? = null) -> reflect.WithMeta<reflect.Type>  [builtin]
+function reflect.of() -> reflect.Type  [builtin]
+function reflect.of_value(value: unknown) -> reflect.Type  [builtin]
+function reflect.optional(self: ?) -> reflect.union.Type  [builtin]
+function reflect.to_baml(self: ?) -> string  [builtin]
+function reflect.to_string(self: ?) -> string  [expr] {
+  {  } self._to_string_impl()
+}

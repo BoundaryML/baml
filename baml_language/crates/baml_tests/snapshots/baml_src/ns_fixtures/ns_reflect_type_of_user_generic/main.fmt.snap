@@ -3,10 +3,10 @@ source: crates/baml_tests/src/corpus.rs
 ---
 // Phase 6 user-facing pin.
 //
-// Phase 6's stdlib cleanup dropped `type_def: type` from `primitive.parse<T>(body)`
+// Phase 6's stdlib cleanup dropped `type_def: reflect.Type` from `primitive.parse<T>(body)`
 // because the compiler now threads `T`'s runtime type through generic call
 // boundaries automatically. The same mechanism lets user code write
-// `type.of<T>()` inside a generic function and have `T` resolve to
+// `reflect.Type.of<T>()` inside a generic function and have `T` resolve to
 // the caller-supplied type at runtime.
 //
 // This project pins the user-facing TIR/MIR shape of that auto-threading.
@@ -16,18 +16,18 @@ class Person {
     name: string,
 }
 
-function reflect_type<T>() -> type {
-    type.of<T>()
+function reflect_type<T>() -> reflect.Type {
+    reflect.Type.of<T>()
 }
 
-function reflect_array<T>() -> type {
-    type.of<T[]>()
+function reflect_array<T>() -> reflect.Type {
+    reflect.Type.of<T[]>()
 }
 
-function reflect_person() -> type {
+function reflect_person() -> reflect.Type {
     reflect_type<Person>()
 }
 
-function reflect_int_array() -> type {
+function reflect_int_array() -> reflect.Type {
     reflect_array<int>()
 }

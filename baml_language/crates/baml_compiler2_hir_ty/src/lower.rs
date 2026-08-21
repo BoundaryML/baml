@@ -93,7 +93,7 @@ pub enum TypePosition {
     Existential,
     ConstraintHead,
     /// The outer function contract supplied to the exact
-    /// `baml.reflect.Package.get_function<F>` method. It is otherwise an
+    /// `reflect.Package.get_function<F>` method. It is otherwise an
     /// existential; only an omitted OUTER `throws` differs, becoming the
     /// runtime wildcard instead of E0151 + `never` recovery.
     ExtractionContract,
@@ -1245,12 +1245,9 @@ impl<'db> LowerCtx<'db> {
             }
         }
 
-        // BEP-066 namespace shorthand: after ordinary local/package lookup
-        // fails, reinterpret `reflect.*`, `type.*`, and `json.*` under the
-        // accessible builtin `baml` package. Preserve the full written path.
-        if segments
-            .first()
-            .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
+        // `json` is the sole builtin namespace shorthand. After ordinary
+        // local/package lookup fails, reinterpret `json.*` under `baml`.
+        if segments.first().is_some_and(|root| root.as_str() == "json")
             && self.can_access_package(&Name::new("baml"))
         {
             let baml_package = Name::new("baml");
@@ -1321,9 +1318,7 @@ impl<'db> LowerCtx<'db> {
                 }
             }
         }
-        if segments
-            .first()
-            .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
+        if segments.first().is_some_and(|root| root.as_str() == "json")
             && self.can_access_package(&Name::new("baml"))
         {
             let baml_package = Name::new("baml");
@@ -1356,17 +1351,14 @@ impl<'db> LowerCtx<'db> {
         if segments.len() < 2 {
             return None;
         }
-        let (package, visible_segments) = if segments
-            .first()
-            .is_some_and(|root| matches!(root.as_str(), "reflect" | "type" | "json"))
-        {
-            // Mirror `resolve_value`'s builtin shorthand after ordinary local
-            // lookup: `type.of` is `baml.type.of`, and likewise for the other
-            // compiler-owned namespaces.
-            (Name::new("baml"), segments)
-        } else {
-            (segments[0].clone(), &segments[1..])
-        };
+        let (package, visible_segments) =
+            if segments.first().is_some_and(|root| root.as_str() == "json") {
+                // Mirror `resolve_value`'s sole builtin namespace shorthand after
+                // ordinary local lookup.
+                (Name::new("baml"), segments)
+            } else {
+                (segments[0].clone(), &segments[1..])
+            };
         if !baml_compiler2_hir::package::is_external_package(self.db, &package)
             || !self.can_access_package(&package)
         {
@@ -2102,10 +2094,14 @@ pub fn owner_impl_target<'db>(
 pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTypeError {
     use crate::diagnostics::TirTypeError;
     match kind {
-        LoweringDiagKind::Unresolved { name, suggestions } => TirTypeError::UnresolvedType {
-            name: name.clone(),
-            suggestions: suggestions.clone(),
-        },
+        LoweringDiagKind::Unresolved { name, suggestions } => {
+            crate::diagnostics::removed_reflect_spelling(name).unwrap_or(
+                TirTypeError::UnresolvedType {
+                    name: name.clone(),
+                    suggestions: suggestions.clone(),
+                },
+            )
+        }
         LoweringDiagKind::WrongArgCount {
             name,
             expected,

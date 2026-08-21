@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+type user.StillAnAlias = int | string
+type user.StillAnAlias$stream = int | string
+function user.alias_still_resolves(v: user.StillAnAlias) -> string  [expr] {
+  {  } v.to_string()
+}
+function user.old_qualified_call() -> string  [expr] {
+  {  } baml.reflect.Type.of().to_string()
+}
+function user.old_qualified_type(p: baml.reflect.Package) -> string  [expr] {
+  {  } "unused"
+}
+function user.old_type_annotation() -> type  [expr] {
+  {  } reflect.Type.of()
+}
+function user.old_type_of() -> reflect.Type  [expr] {
+  {  } type.of()
+}
+function user.type_keyword_still_works(t: reflect.Type) -> string  [expr] {
+  { type T = unreflect(t); let type = reflect.Type.of() } type.to_string()
+}

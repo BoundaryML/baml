@@ -246,6 +246,20 @@ pub enum TirTypeError {
         /// "Did you mean" candidates, each a fully qualified `root.…` path.
         suggestions: Box<[Name]>,
     },
+    /// A spelling that reflection used before it became its own package:
+    /// `baml.reflect.X`, `type.of<T>()`, or a bare `type` annotation. These
+    /// resolve nowhere now, so say what replaces them instead of reporting an
+    /// ordinary unknown name.
+    RemovedReflectSpelling {
+        /// What the source wrote.
+        written: Name,
+        /// What it should say now.
+        replacement: Name,
+        /// Set when the message should add that the `type` keyword itself is
+        /// still around — only the `type.` value prefix and the bare `type`
+        /// annotation went away.
+        mentions_type_keyword: bool,
+    },
     /// An associated-type projection's explicit `as X` qualifier resolved to a
     /// non-interface type (a class, alias, etc.). The qualifier must name an
     /// interface; without one the projection cannot be resolved, so it must not
@@ -1168,6 +1182,31 @@ impl fmt::Display for TirTypeError {
                     "ambiguous associated type `{member}`: declared by multiple interfaces \
                      ({names}); qualify the projection with `(... as Interface).{member}`"
                 )
+            }
+            TirTypeError::RemovedReflectSpelling {
+                written,
+                replacement,
+                mentions_type_keyword,
+            } => {
+                if *mentions_type_keyword {
+                    if written.as_str() == "type" {
+                        write!(f, "`type` no longer names a runtime type value — ")?;
+                    } else {
+                        write!(f, "`{written}` no longer exists — ")?;
+                    }
+                    write!(
+                        f,
+                        "write `{replacement}` instead. The `type` keyword itself is unchanged: \
+                         it still names aliases (`type UserId = string`) and scoped type \
+                         bindings (`type T = unreflect(t)`)"
+                    )
+                } else {
+                    write!(
+                        f,
+                        "`{written}` no longer exists — reflection is its own package now, so \
+                         write `{replacement}` instead"
+                    )
+                }
             }
             TirTypeError::UnresolvedType { name, suggestions } => {
                 if suggestions.is_empty() {
@@ -2130,6 +2169,37 @@ impl<'db> RelatedNote<'db> {
             message: message.into(),
         }
     }
+}
+
+/// Recognize a path that reflection used to answer to and no longer does.
+///
+/// `reflect` used to sit inside the `baml` stdlib, and runtime type values
+/// used to hang off a bare `type` prefix. Both moved: reflection is a root
+/// package, and the type-value API is `reflect.Type`. Every old spelling now
+/// resolves nowhere, which would otherwise read as an ordinary typo. Returns
+/// the error that names the replacement, or `None` for a genuinely unknown
+/// name.
+///
+/// Only failed lookups reach this: a local, parameter, or field actually named
+/// `type` still resolves normally and never gets here.
+pub fn removed_reflect_spelling(name: &Name) -> Option<TirTypeError> {
+    let written = name.as_str();
+    let (replacement, mentions_type_keyword) = if written == "type" {
+        ("reflect.Type".to_string(), true)
+    } else if let Some(rest) = written.strip_prefix("type.") {
+        (format!("reflect.Type.{rest}"), true)
+    } else if written == "baml.reflect" {
+        ("reflect".to_string(), false)
+    } else if let Some(rest) = written.strip_prefix("baml.reflect.") {
+        (format!("reflect.{rest}"), false)
+    } else {
+        return None;
+    };
+    Some(TirTypeError::RemovedReflectSpelling {
+        written: name.clone(),
+        replacement: Name::new(replacement),
+        mentions_type_keyword,
+    })
 }
 
 /// Primary location for a diagnostic — either an expression, a statement,

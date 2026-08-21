@@ -147,12 +147,12 @@ impl DynTypeDefs {
 /// a constructed type can never alias a static declaration (I-1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MintId {
-    /// A static spelling (`type.of<T>()`, a reflected signature, a wire-named
+    /// A static spelling (`reflect.Type.of<T>()`, a reflected signature, a wire-named
     /// type): the deterministic canonical-form digest computed by
     /// `baml_type::normalize::canonical_digest`. Equivalent static spellings
     /// (`string?` vs `string | null`, permuted unions) share a digest, so
     /// every reference to a static declaration is the same value with no
-    /// intern table (I-2), and re-materializations (a second `type.of<T>()`,
+    /// intern table (I-2), and re-materializations (a second `reflect.Type.of<T>()`,
     /// a sys-op round trip) rebuild the same identity.
     Static(u64),
     /// One per constructor evaluation (I-1): allocated from the monotonic
@@ -165,7 +165,7 @@ pub enum MintId {
 /// Provenance retained by a runtime-created nominal definition.
 ///
 /// The definition itself cannot include its own pointer, so `defs` contains
-/// only dependencies. `type.of_value` adds the instance/variant's definition
+/// only dependencies. `reflect.Type.of_value` adds the instance/variant's definition
 /// pointer back when reconstructing the original minted type value.
 #[derive(Debug, Clone)]
 pub struct RuntimeTypeProvenance {
@@ -211,7 +211,7 @@ pub struct TypeValue {
     /// The callable a reflected *function descriptor* was built from — an
     /// `Object::GenericFunction` — or null for every other type value.
     ///
-    /// A `baml.reflect.function.Type` handed out by `Package.functions()` is
+    /// A `reflect.function.Type` handed out by `Package.functions()` is
     /// this same `Object::Type`, so `specialize`/`get` need the callable to
     /// travel with it: a specialized descriptor is anonymous and cannot be
     /// looked up again by name. Provenance only — it is deliberately outside

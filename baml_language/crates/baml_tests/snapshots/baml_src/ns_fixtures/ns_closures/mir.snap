@@ -177,9 +177,9 @@ fn user.fixtures.closures.test_bound_mapper() -> string[] {
     let _2: (string) -> string throws never // transform
     let _3: string[]
     let _4: (string) -> string throws never
-    let _5: type
-    let _6: type
-    let _7: type
+    let _5: reflect.Type
+    let _6: reflect.Type
+    let _7: reflect.Type
 
     bb0: {
         _1 = user.fixtures.closures.Formatter { const ">> " };
@@ -203,9 +203,9 @@ fn user.fixtures.closures.test_unbound_in_map() -> string[] {
     let _1: fixtures.closures.Employee[] // employees
     let _2: fixtures.closures.Employee
     let _3: fixtures.closures.Employee
-    let _4: type
-    let _5: type
-    let _6: type
+    let _4: reflect.Type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _2 = user.fixtures.closures.Employee { const "Alice", const "Smith" };
@@ -229,9 +229,9 @@ fn user.fixtures.closures.test_bound_validator() -> bool[] {
     let _2: (int) -> bool throws never // check
     let _3: int[]
     let _4: (int) -> bool throws never
-    let _5: type
-    let _6: type
-    let _7: type
+    let _5: reflect.Type
+    let _6: reflect.Type
+    let _7: reflect.Type
 
     bb0: {
         _1 = user.fixtures.closures.RangeCheck { const 10_i64, const 50_i64 };
@@ -294,10 +294,10 @@ fn user.fixtures.closures.test_strategy() -> int[] {
     let _4: (int, int) -> int throws never // do_mul
     let _5: int
     let _6: (int, int) -> int throws never
-    let _7: type
+    let _7: reflect.Type
     let _8: int
     let _9: (int, int) -> int throws never
-    let _10: type
+    let _10: reflect.Type
 
     bb0: {
         _1 = user.fixtures.closures.Calculator { const "add" };
@@ -330,9 +330,9 @@ fn user.fixtures.closures.apply_to_each(items: fixtures.closures.Employee[], f: 
     let _0: string[] // _0 // return
     let _1: fixtures.closures.Employee[] // items // param
     let _2: (fixtures.closures.Employee) -> string throws never // f // param
-    let _3: type
-    let _4: type
-    let _5: type
+    let _3: reflect.Type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _3 = load_type(string);
@@ -352,7 +352,7 @@ fn user.fixtures.closures.test_unbound_higher_order() -> string[] {
     let _1: fixtures.closures.Employee[] // employees
     let _2: fixtures.closures.Employee
     let _3: fixtures.closures.Employee[]
-    let _4: type
+    let _4: reflect.Type
 
     bb0: {
         _2 = user.fixtures.closures.Employee { const "Alice", const "Smith" };
