@@ -65,14 +65,20 @@ jobs:
         run: cargo fetch --target wasm32-unknown-unknown
         working-directory: baml_language
 
-      # `sys_llm` (this job's original wasm-pack test target) was deleted when
-      # the provider clients went native-BAML; no crate carries wasm-gated
-      # tests today. Until one does, this gate builds the wasm bridge — the
-      # check that catches wasm-only dependency breakage (e.g. a missing
-      # `getrandom/js` feature), which is what this job's failures actually
-      # meant in practice.
-      # NOTE: if you add a crate with wasm-gated tests, restore a
-      # `wasm-pack test --node crates/<crate>` step here.
+      # Compiling for wasm is necessary but far from sufficient: the target
+      # accepts code that traps on first call (`std::time::Instant::now` is
+      # "not implemented on this platform" there). The check catches wasm-only
+      # dependency breakage (e.g. a missing `getrandom/js` feature); the test
+      # run is the only place the browser language server actually executes.
       - name: "Check wasm build (bridge_wasm)"
         run: cargo check -p bridge_wasm --target wasm32-unknown-unknown
         working-directory: baml_language
+
+      - name: "Setup Node.js and wasm-pack"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "node github:rustwasm/wasm-pack"
+
+      - name: "Run wasm tests (bridge_wasm)"
+        run: wasm-pack test --node
+        working-directory: baml_language/crates/bridge_wasm

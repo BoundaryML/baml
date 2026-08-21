@@ -12,12 +12,16 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, atomic::AtomicUsize},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use baml_base::{SourceRoot, SourceRootKind};
 use baml_db::{ProjectDatabase, SourceRootSpec};
 use lsp_types::Url;
+// `std::time::Instant::now()` panics on `wasm32-unknown-unknown`; `web_time`
+// is `std::time` everywhere else and `performance.now()` in a browser, so the
+// debounce deadlines below work in both hosts on one code path.
+use web_time::Instant;
 
 use crate::{
     diagnostics,

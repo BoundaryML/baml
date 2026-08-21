@@ -757,6 +757,7 @@ dependencies = [
  "text-size",
  "thiserror 2.0.18",
  "tracing",
+ "web-time",
 ]
 
 [[package]]
@@ -1380,15 +1381,43 @@ dependencies = [
 name = "bridge_wasm"
 version = "0.1.0"
 dependencies = [
+ "baml_db",
+ "baml_ide",
+ "baml_lsp",
  "baml_version",
  "base64",
+ "bex_events",
+ "bex_heap",
  "bex_project",
+ "bex_vm_types",
+ "bridge_ctypes",
+ "bytes",
  "console_error_panic_hook",
+ "futures",
  "getrandom 0.3.4",
+ "indexmap",
+ "js-sys",
  "log",
+ "lsp-server",
+ "lsp-types",
+ "num-bigint",
+ "num-traits",
+ "prost",
+ "reqwest",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sys_glob",
+ "sys_ops",
+ "sys_types",
+ "sys_wasm",
+ "thiserror 2.0.18",
+ "tsify",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "wasm-logger",
+ "web-time",
 ]
 
 [[package]]
@@ -2524,6 +2553,19 @@ dependencies = [
  "log",
  "regex-automata",
  "regex-syntax 0.8.10",
+]
+
+[[package]]
+name = "gloo-utils"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b5555354113b18c547c1d3a98fbf7fb32a9ff4f6fa112ce823a21641a0ba3aa"
+dependencies = [
+ "js-sys",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -5371,6 +5413,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_derive_internals"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "serde_json"
 version = "1.0.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6301,6 +6354,32 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "tsify"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a1a69a9adf75b6573e392dda05bbda166c7675006f6f77c20150751df4efad0"
+dependencies = [
+ "gloo-utils",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tsify-macros",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "tsify-macros"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e0661ff4d3ece0ba317dc0475994fea84bfe8ed4abf25568b8f9a458454049b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde_derive_internals",
+ "syn 2.0.117",
+]
 
 [[package]]
 name = "tungstenite"
