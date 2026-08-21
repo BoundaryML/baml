@@ -29,6 +29,7 @@ baml_type = { workspace = true }
 baml_version = { workspace = true }
 bex_cache = { workspace = true }
 bex_engine = { workspace = true }
+bex_events = { workspace = true }
 bex_project = { workspace = true }
 bex_vm_types = { workspace = true }
 sdkgen_cpp = { workspace = true }

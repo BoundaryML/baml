@@ -4,7 +4,7 @@ use std::io;
 
 use prost::Message;
 
-use crate::value::{LogRecord, ValueFileRecord, ValueRecord, pb};
+use crate::value::{LogRecord, ValueFileRecord, pb};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BamlvalueContents {
@@ -65,7 +65,6 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
     if has_lifecycle
         && (record.metadata.is_some()
             || !record.body.is_empty()
-            || record.capture.is_some()
             || has_log_event
             || has_capture_loss
             || record.blob.is_some())
@@ -82,7 +81,7 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
         return Ok(ValueFileRecord::RunCompleted(completed.try_into()?));
     }
     if let Some(loss) = record.capture_loss {
-        if record.metadata.is_some() || has_log_event || record.capture.is_some() {
+        if record.metadata.is_some() || has_log_event {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "value record mixed capture loss metadata with body metadata",
@@ -93,12 +92,6 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
     let metadata = record.metadata.ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidData, "value record omitted metadata")
     })?;
-    if has_log_event && record.capture.is_some() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "value record mixed log metadata with value capture metadata",
-        ));
-    }
     if let Some(log_event) = record.log_event {
         return Ok(ValueFileRecord::LogEvent(LogRecord {
             value_ref: metadata.try_into()?,
@@ -107,12 +100,10 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
             event: log_event.try_into()?,
         }));
     }
-    Ok(ValueFileRecord::CapturedValue(ValueRecord {
-        value_ref: metadata.try_into()?,
-        body: record.body,
-        blob_ref: record.blob.map(TryInto::try_into).transpose()?,
-        capture: record.capture.map(TryInto::try_into).transpose()?,
-    }))
+    Err(io::Error::new(
+        io::ErrorKind::InvalidData,
+        "body record omitted log metadata",
+    ))
 }
 
 #[cfg(test)]
@@ -122,8 +113,8 @@ mod tests {
     use crate::{
         ids::BoundaryId,
         value::{
-            ValueCodec, ValueRecord, ValueRef,
-            encode::{encode_header, encode_record},
+            LogEventRecord, LogRecord, ValueCodec, ValueRef,
+            encode::{encode_header, encode_log_event},
             pb,
         },
     };
@@ -190,14 +181,25 @@ mod tests {
     fn trailing_partial_record_is_reported_as_truncated() {
         let mut bytes = Vec::new();
         encode_header(&mut bytes, BoundaryId::from_bytes([3; 16])).unwrap();
-        let record = ValueRecord {
+        let record = LogRecord {
             value_ref: ValueRef::available("value_1", ValueCodec::BamlOutboundValue, 3, 3),
             body: vec![1, 2, 3],
             blob_ref: None,
-            capture: None,
+            event: LogEventRecord {
+                call: crate::run::TraceCallKey {
+                    process_euid: crate::ids::ProcessEuid([1; 16]),
+                    engine_id: crate::ids::EngineId(1),
+                    thread_id: crate::ids::BexThreadId(1),
+                    call_id: crate::ids::BexCallId(1),
+                },
+                level: None,
+                source: None,
+                timestamp_ms: 1,
+                message_preview: None,
+            },
         };
         let start = bytes.len();
-        encode_record(&mut bytes, &record).unwrap();
+        encode_log_event(&mut bytes, &record).unwrap();
         bytes.truncate(start + 2);
 
         let parsed = super::read_bamlvalue_from_bytes(&bytes).unwrap();
@@ -223,7 +225,6 @@ mod tests {
             &pb::ValueRecordV1 {
                 metadata: None,
                 body: Vec::new(),
-                capture: None,
                 run_started: Some(run_started_proto()),
                 run_completed: Some(run_completed_proto()),
                 log_event: None,
@@ -240,7 +241,6 @@ mod tests {
             pb::ValueRecordV1 {
                 metadata: None,
                 body: vec![1, 2, 3],
-                capture: None,
                 run_started: Some(run_started_proto()),
                 run_completed: None,
                 log_event: None,
@@ -250,25 +250,6 @@ mod tests {
             pb::ValueRecordV1 {
                 metadata: None,
                 body: Vec::new(),
-                capture: Some(pb::ValueCaptureV1 {
-                    kind: pb::ValueCaptureKind::RootOutput as i32,
-                    call: Some(pb::TraceCallKeyV1 {
-                        process_id: vec![1; 16],
-                        engine_id: 1,
-                        thread_id: 1,
-                        call_id: 1,
-                    }),
-                }),
-                run_started: None,
-                run_completed: Some(run_completed_proto()),
-                log_event: None,
-                capture_loss: None,
-                blob: None,
-            },
-            pb::ValueRecordV1 {
-                metadata: None,
-                body: Vec::new(),
-                capture: None,
                 run_started: Some(run_started_proto()),
                 run_completed: None,
                 log_event: None,
@@ -282,7 +263,6 @@ mod tests {
             pb::ValueRecordV1 {
                 metadata: Some(value_metadata_proto()),
                 body: Vec::new(),
-                capture: None,
                 run_started: None,
                 run_completed: Some(run_completed_proto()),
                 log_event: None,

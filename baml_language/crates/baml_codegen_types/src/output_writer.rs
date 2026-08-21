@@ -1496,6 +1496,17 @@ mod tests {
     }
 
     #[test]
+    fn baml_sdk_transaction_paths_use_the_target_stem() {
+        let root = TempDir::new().unwrap();
+        let paths = transaction_paths(&root.path().join("baml_sdk")).unwrap();
+        let canonical_root = fs::canonicalize(root.path()).unwrap();
+
+        assert_eq!(paths.target, canonical_root.join("baml_sdk"));
+        assert_eq!(paths.staging, canonical_root.join(".baml_sdk.baml-staging"));
+        assert_eq!(paths.backup, canonical_root.join(".baml_sdk.baml-backup"));
+    }
+
+    #[test]
     fn writes_gitignore_and_removes_only_stale_owned_files() {
         let root = TempDir::new().unwrap();
         let output = root.path().join("sdk");

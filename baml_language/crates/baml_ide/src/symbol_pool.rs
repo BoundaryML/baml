@@ -199,6 +199,14 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     continue;
                 }
 
+                // `$spec` is a BAML-side recipe value, not a host-callable
+                // SDK method. Keep class methods in lockstep with the
+                // top-level function path below: `$build_request`,
+                // `$render_prompt`, `$parse`, and `$stream` remain visible.
+                if method.name.as_str().ends_with("$spec") {
+                    continue;
+                }
+
                 // Interface-impl methods are not part of the generated surface.
                 // Interfaces themselves are never emitted — host languages differ
                 // too much on trait/protocol/interface semantics — so a method
@@ -267,11 +275,31 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 let method_defaults =
                     baml_compiler2_ppir::function_parameter_defaults(db, method_loc);
 
+                // The compiler injects a trailing `client` override on LLM
+                // methods and on the `$build_request`/`$stream` companions.
+                // It is an interface-typed BAML implementation detail and
+                // must not leak into generated host SDK method signatures.
+                let param_count = sig.params.len();
+                let drop_injected_client = sig
+                    .params
+                    .last()
+                    .is_some_and(|p| p.name.as_str() == "client")
+                    && (baml_compiler2_ppir::item_data::function_llm_meta(db, method_loc)
+                        .is_some()
+                        || method.name.as_str().ends_with("$stream")
+                        || method.name.as_str().ends_with("$build_request"));
+                let visible_params = if drop_injected_client {
+                    param_count - 1
+                } else {
+                    param_count
+                };
+
                 let arguments: Vec<cg::FunctionArgument> = sig
                     .params
                     .iter()
                     .enumerate()
                     .skip(usize::from(is_instance))
+                    .take(visible_params.saturating_sub(usize::from(is_instance)))
                     .map(|(index, param)| cg::FunctionArgument {
                         name: param.name.clone(),
                         docstring: None,
@@ -435,8 +463,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // The `$spec` companion returns `ai.FunctionSpec<Out>` — a BAML-side
             // recipe value for custom runners, not something a host language can
             // use (and not something every generator can even classify: the C#
-            // generator hard-errors on it rather than skipping). The useful
-            // companions — `$render_prompt`, `$parse`, `$stream` — stay.
+            // generator hard-errors on it rather than skipping). The request
+            // builder is host-callable and stays with the other useful
+            // companions — `$render_prompt`, `$parse`, `$stream`.
             if func.name.as_str().ends_with("$spec") {
                 continue;
             }
@@ -504,7 +533,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 .last()
                 .is_some_and(|p| p.name.as_str() == "client")
                 && (baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()
-                    || func.name.as_str().ends_with("$stream"));
+                    || func.name.as_str().ends_with("$stream")
+                    || func.name.as_str().ends_with("$build_request"));
             let visible_params = if drop_injected_client {
                 param_count - 1
             } else {
@@ -854,8 +884,10 @@ mod tests {
         // deliberately absent — it returns a BAML-side `ai.FunctionSpec`.
         for expected in [
             "extract_resume",
+            "extract_resume$build_request",
             "extract_resume$render_prompt",
             "extract_resume$parse",
+            "extract_resume$stream",
         ] {
             let key = pool
                 .keys()
@@ -894,8 +926,10 @@ function extract_resume(resume: string) -> Resume {
         // must expose the user's own parameters only.
         for (bare, expected) in [
             ("extract_resume", &["resume"][..]),
+            ("extract_resume$build_request", &["resume"][..]),
             ("extract_resume$render_prompt", &["resume"][..]),
             ("extract_resume$parse", &["json"][..]),
+            ("extract_resume$stream", &["resume"][..]),
         ] {
             let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
             let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
@@ -903,6 +937,106 @@ function extract_resume(resume: string) -> Resume {
             };
             let arg_names: Vec<&str> = func.arguments.iter().map(|a| a.name.as_str()).collect();
             assert_eq!(arg_names, expected, "arguments for {bare}");
+        }
+    }
+
+    #[test]
+    fn test_llm_class_method_companions_hide_spec_and_injected_client() {
+        let root = Path::new("/tmp/llm_class_method_companions");
+        let mut db = ProjectDatabase::new();
+        db.workspace(root);
+        db.file(
+            root.join("main.baml").as_path(),
+            r##"
+class Extractor {
+  function extract(self, text: string, suffix: string = "!") -> string {
+    client: "openai/gpt-4o"
+    prompt: `Extract ${text}${suffix} ${ctx.output_format}`
+  }
+  function summarize(text: string, suffix: string = "!") -> string {
+    client: "openai/gpt-4o"
+    prompt: `Summarize ${text}${suffix} ${ctx.output_format}`
+  }
+}
+"##,
+        );
+
+        let pool = build_symbol_pool(&db);
+        let key = cg::Name::new(Name::new("user"), vec![], Name::new("Extractor"));
+        let Some(cg::Symbol::Class(class)) = pool.get(&key) else {
+            panic!("Extractor must be a Class");
+        };
+
+        let find_method = |name: &str| {
+            class
+                .instance_methods
+                .iter()
+                .chain(class.static_methods.iter())
+                .find(|method| method.name.as_str() == name)
+                .unwrap_or_else(|| panic!("missing class method {name}"))
+        };
+
+        assert!(
+            class
+                .instance_methods
+                .iter()
+                .any(|method| method.name.as_str() == "extract$stream")
+        );
+        assert!(
+            class
+                .static_methods
+                .iter()
+                .any(|method| method.name.as_str() == "summarize$stream")
+        );
+
+        for name in [
+            "extract",
+            "extract$build_request",
+            "extract$render_prompt",
+            "extract$parse",
+        ] {
+            let method = find_method(name);
+            assert!(
+                method
+                    .arguments
+                    .iter()
+                    .all(|arg| arg.name.as_str() != "client"),
+                "injected client leaked into {name}: {:?}",
+                method
+                    .arguments
+                    .iter()
+                    .map(|arg| arg.name.as_str())
+                    .collect::<Vec<_>>()
+            );
+        }
+        assert!(
+            class
+                .instance_methods
+                .iter()
+                .chain(class.static_methods.iter())
+                .all(|method| !method.name.as_str().ends_with("$spec")),
+            "$spec must stay out of class SDK methods"
+        );
+
+        let expected = [
+            ("extract", vec!["text", "suffix"]),
+            ("extract$build_request", vec!["text", "suffix"]),
+            ("extract$render_prompt", vec!["text", "suffix"]),
+            ("extract$parse", vec!["json"]),
+            ("extract$stream", vec!["text", "suffix"]),
+            ("summarize", vec!["text", "suffix"]),
+            ("summarize$build_request", vec!["text", "suffix"]),
+            ("summarize$render_prompt", vec!["text", "suffix"]),
+            ("summarize$parse", vec!["json"]),
+            ("summarize$stream", vec!["text", "suffix"]),
+        ];
+        for (name, expected_args) in expected {
+            let actual: Vec<&str> = find_method(name)
+                .arguments
+                .iter()
+                .map(|arg| arg.name.as_str())
+                .collect();
+            assert_eq!(actual, expected_args, "arguments for {name}");
         }
     }
 

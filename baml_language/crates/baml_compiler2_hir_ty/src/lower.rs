@@ -34,7 +34,7 @@ use baml_type::{
     Freshness, Name, ParamTy, TyAttr, TypeName,
     interned::{FunctionParam, Ty, TyKind},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Debug, Clone)]
 enum ResolvedTypeDefinition<'db> {
@@ -564,7 +564,12 @@ impl<'db> LowerCtx<'db> {
         member: &Name,
     ) -> Option<baml_type::interned::InterfaceRef> {
         let declares = |target: &baml_type::interned::InterfaceRef| {
-            crate::interfaces::interface_declares_member(self.db, &target.name, member)
+            crate::interfaces::interface_declares_member(
+                self.db,
+                &target.name,
+                member,
+                crate::interfaces::MemberNamespace::Type,
+            )
         };
         match base.kind() {
             TyKind::TypeVar(param, _) => {
@@ -2118,6 +2123,33 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
     }
 }
 
+/// Whether a declared throws clause is an open contract: it names `unknown`
+/// directly, through a union member, or through a type alias. An open
+/// contract deliberately admits any thrown value, so throws-coverage
+/// analysis (E0097 extraneous-declaration warnings) does not apply to it.
+pub(crate) fn is_open_throws_contract(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> bool {
+    fn visit(
+        facts: &crate::facts::Facts<'_>,
+        ty: &Ty,
+        seen_aliases: &mut FxHashSet<TypeName>,
+    ) -> bool {
+        match ty.kind() {
+            TyKind::Unknown { .. } => true,
+            TyKind::Union(members, _) => members
+                .iter()
+                .any(|member| visit(facts, member, seen_aliases)),
+            TyKind::TypeAlias(name, _) if seen_aliases.insert(name.clone()) => {
+                baml_type::normalize::TypeContext::alias_def(facts, name)
+                    .map(|target| visit(facts, &Ty::from_plain(&target), seen_aliases))
+                    .unwrap_or(false)
+            }
+            _ => false,
+        }
+    }
+
+    visit(&crate::facts::Facts::new(db), ty, &mut FxHashSet::default())
+}
+
 pub fn signature_lowering_diagnostics<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
@@ -2531,7 +2563,7 @@ pub fn interface_lowering_diagnostics<'db>(
     }
     // Every interface method — required or default — must declare its
     // `throws` clause explicitly: the signature is a dispatch contract, so
-    // it is never inferred (`TYPE_SYSTEM.md` rule 1). E0167.
+    // it is never inferred (`TYPE_SYSTEM.md` rule 1). E0170.
     for &method in &data.methods {
         let function = baml_compiler2_ppir::item_data::function_data(db, method);
         if function.metadata.is_language_internal {

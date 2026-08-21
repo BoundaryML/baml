@@ -118,9 +118,9 @@ impl Script {
 }
 
 /// `[generator.<name>]` — code-generation configuration. Values are kept as
-/// raw `Spanned<String>` here; the string→enum validation (and the spans for
-/// any diagnostics) is performed by `generate.rs`, so non-codegen tooling
-/// never needs to know codegen rules.
+/// spanned values here; validation (and the spans for any diagnostics) is
+/// performed by `generate.rs`, so non-codegen tooling never needs to know
+/// codegen rules.
 #[derive(Debug, Deserialize)]
 pub(crate) struct GeneratorManifest {
     /// e.g. `"python/pydantic"`, `"typescript/node"`, `"go"`. Required for codegen;

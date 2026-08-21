@@ -45,6 +45,7 @@ walkdir = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_fmt = { workspace = true }
+bex_events = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 borsh = { workspace = true }

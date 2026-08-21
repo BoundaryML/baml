@@ -1,0 +1,523 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.o1_allowed_roles.AskO1(question: string, client: null | ai.Client) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // question // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.RunResult<string>
+    let _5: ai.Agent<string>
+    let _6: type
+    let _7: ai.FunctionSpec<string>
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = load_type(string);
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+    }
+
+    bb3: {
+        _7 = call const fn user.fixtures.o1_allowed_roles.AskO1$spec(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _4.0;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskO1$build_request(question: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // question // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.o1_allowed_roles.AskO1$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskO1$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(string);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskO1$render_prompt(question: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // question // param
+    let _2: ai.FunctionSpec<string>
+    let _3: string
+    let _4: type
+    let _5: type
+
+    bb0: {
+        _2 = call const fn user.fixtures.o1_allowed_roles.AskO1$spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _3 = call const fn ai.wire.render_output_format(copy _4) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _5>(copy _2, copy _3) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskO1$spec(question: string) -> ai.FunctionSpec<string> {
+    // Locals:
+    let _0: ai.FunctionSpec<string> // _0 // return
+    let _1: string // question // param [captured]
+    let _2: map<string, unknown>
+    let _3: (string) -> ai.Prompt throws never
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+    let _6: ai.Client
+
+    bb0: {
+        _2 = { const "question": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+    }
+
+    bb1: {
+        _6 = call const fn ai.clients.resolve(const item user.fixtures.o1_allowed_roles.O1Client) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<string> { const "AskO1", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(AskO1$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: baml.TaggedString //  __spec_tagged_prompt
+    let _3: string[] //  __tt_parts
+    let _4: unknown[] //  __tt_values
+    let _5: string //  __tt_cur
+    let _6: int
+    let _7: string[]
+    let _8: string
+    let _9: type
+    let _10: int
+    let _11: unknown[]
+    let _12: string
+    let _13: type
+    let _14: int
+    let _15: string[]
+    let _16: ""
+    let _17: type
+    let _18: string[]
+    let _19: unknown[]
+    let _20: string[]
+    let _21: baml.TaggedString
+    let _22: unknown[]
+    let _23: baml.TaggedString
+
+    bb0: {
+        _3 = []: string[];
+        _4 = []: unknown[];
+        _5 = const "";
+        _7 = copy _3;
+        _8 = copy _5;
+        _9 = load_type(string);
+        _6 = call const fn baml.Array.push<copy _9>(copy _7, copy _8) -> [bb1];
+    }
+
+    bb1: {
+        _5 = const "";
+        _11 = copy _4;
+        _12 = copy capture[0];
+        _13 = load_type(unknown);
+        _10 = call const fn baml.Array.push<copy _13>(copy _11, copy _12) -> [bb2];
+    }
+
+    bb2: {
+        _15 = copy _3;
+        _16 = copy _5;
+        _17 = load_type(string);
+        _14 = call const fn baml.Array.push<copy _17>(copy _15, copy _16) -> [bb3];
+    }
+
+    bb3: {
+        _18 = copy _3;
+        _19 = copy _4;
+        _2 = baml.TaggedString { copy _18, copy _19 };
+        _21 = copy _2;
+        _20 = copy _21.0;
+        _23 = copy _2;
+        _22 = copy _23.1;
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _20, copy _22) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskO1$stream(question: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<string | null, string> {
+    // Locals:
+    let _0: ai.stream.Stream<string | null, string> // _0 // return
+    let _1: string // question // param
+    let _2: null | ai.stream.StreamingClient // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: type
+    let _6: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.o1_allowed_roles.AskO1$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string | null);
+        _6 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskGpt4o(question: string, client: null | ai.Client) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // question // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.RunResult<string>
+    let _5: ai.Agent<string>
+    let _6: type
+    let _7: ai.FunctionSpec<string>
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = load_type(string);
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+    }
+
+    bb3: {
+        _7 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _4.0;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskGpt4o$build_request(question: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // question // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskGpt4o$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(string);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskGpt4o$render_prompt(question: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // question // param
+    let _2: ai.FunctionSpec<string>
+    let _3: string
+    let _4: type
+    let _5: type
+
+    bb0: {
+        _2 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _3 = call const fn ai.wire.render_output_format(copy _4) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _5>(copy _2, copy _3) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string> {
+    // Locals:
+    let _0: ai.FunctionSpec<string> // _0 // return
+    let _1: string // question // param [captured]
+    let _2: map<string, unknown>
+    let _3: (string) -> ai.Prompt throws never
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+    let _6: ai.Client
+
+    bb0: {
+        _2 = { const "question": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+    }
+
+    bb1: {
+        _6 = call const fn ai.clients.resolve(const item user.fixtures.o1_allowed_roles.Gpt4oClient) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<string> { const "AskGpt4o", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(AskGpt4o$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: baml.TaggedString //  __spec_tagged_prompt
+    let _3: string[] //  __tt_parts
+    let _4: unknown[] //  __tt_values
+    let _5: string //  __tt_cur
+    let _6: int
+    let _7: string[]
+    let _8: string
+    let _9: type
+    let _10: int
+    let _11: unknown[]
+    let _12: string
+    let _13: type
+    let _14: int
+    let _15: string[]
+    let _16: ""
+    let _17: type
+    let _18: string[]
+    let _19: unknown[]
+    let _20: string[]
+    let _21: baml.TaggedString
+    let _22: unknown[]
+    let _23: baml.TaggedString
+
+    bb0: {
+        _3 = []: string[];
+        _4 = []: unknown[];
+        _5 = const "";
+        _7 = copy _3;
+        _8 = copy _5;
+        _9 = load_type(string);
+        _6 = call const fn baml.Array.push<copy _9>(copy _7, copy _8) -> [bb1];
+    }
+
+    bb1: {
+        _5 = const "";
+        _11 = copy _4;
+        _12 = copy capture[0];
+        _13 = load_type(unknown);
+        _10 = call const fn baml.Array.push<copy _13>(copy _11, copy _12) -> [bb2];
+    }
+
+    bb2: {
+        _15 = copy _3;
+        _16 = copy _5;
+        _17 = load_type(string);
+        _14 = call const fn baml.Array.push<copy _17>(copy _15, copy _16) -> [bb3];
+    }
+
+    bb3: {
+        _18 = copy _3;
+        _19 = copy _4;
+        _2 = baml.TaggedString { copy _18, copy _19 };
+        _21 = copy _2;
+        _20 = copy _21.0;
+        _23 = copy _2;
+        _22 = copy _23.1;
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _20, copy _22) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.o1_allowed_roles.AskGpt4o$stream(question: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<string | null, string> {
+    // Locals:
+    let _0: ai.stream.Stream<string | null, string> // _0 // return
+    let _1: string // question // param
+    let _2: null | ai.stream.StreamingClient // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: type
+    let _6: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string | null);
+        _6 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}

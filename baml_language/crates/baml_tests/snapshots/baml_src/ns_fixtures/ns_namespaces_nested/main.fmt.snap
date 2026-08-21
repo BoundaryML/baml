@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+// Root namespace: references a type from a nested namespace
+class AppConfig {
+    api_key: string,
+}
+
+function CallOpenAI(cfg: AppConfig) -> root.fixtures.namespaces_nested.llm.openai.OpenAIResponse {
+    root.fixtures.namespaces_nested.llm.openai.OpenAIResponse { text: "response", model: "gpt-4" }
+}

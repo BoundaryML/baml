@@ -1,0 +1,334 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function match_call_scrutinee.$init_test_ns_match_call_scrutinee_match_call_scrutinee(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.match_call_scrutinee"
+    load_const "call_scrutinee_first_arm"
+    make_closure .<lambda($init_test_ns_match_call_scrutinee_match_call_scrutinee, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_call_scrutinee"
+    load_const "call_scrutinee_second_arm_ignores_enum_local"
+    make_closure .<lambda($init_test_ns_match_call_scrutinee_match_call_scrutinee, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_call_scrutinee"
+    load_const "call_scrutinee_third_arm_ignores_enum_local"
+    make_closure .<lambda($init_test_ns_match_call_scrutinee_match_call_scrutinee, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_call_scrutinee"
+    load_const "call_scrutinee_second_arm_with_closure_local"
+    make_closure .<lambda($init_test_ns_match_call_scrutinee_match_call_scrutinee, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_call_scrutinee"
+    load_const "call_scrutinee_int_chain"
+    make_closure .<lambda($init_test_ns_match_call_scrutinee_match_call_scrutinee, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_call_scrutinee"
+    load_const "call_scrutinee_two_arm_exhaustive"
+    make_closure .<lambda($init_test_ns_match_call_scrutinee_match_call_scrutinee, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_call_scrutinee"
+    load_const "call_scrutinee_jump_table"
+    make_closure .<lambda($init_test_ns_match_call_scrutinee_match_call_scrutinee, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.match_call_scrutinee"
+    load_const "param_scrutinee_control"
+    make_closure .<lambda($init_test_ns_match_call_scrutinee_match_call_scrutinee, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function match_call_scrutinee.deal(which: int) -> match_call_scrutinee.Hand {
+    load_var which
+    jump_table [L4, L3, L2, L1], default L0
+
+  L0:
+    load_const user.match_call_scrutinee.Hand.Five
+    alloc_variant user.match_call_scrutinee.Hand
+    jump L5
+
+  L1: 4
+    load_const user.match_call_scrutinee.Hand.Four
+    alloc_variant user.match_call_scrutinee.Hand
+    jump L5
+
+  L2: 3
+    load_const user.match_call_scrutinee.Hand.Three
+    alloc_variant user.match_call_scrutinee.Hand
+    jump L5
+
+  L3: 2
+    load_const user.match_call_scrutinee.Hand.Two
+    alloc_variant user.match_call_scrutinee.Hand
+    jump L5
+
+  L4: 1
+    load_const user.match_call_scrutinee.Hand.One
+    alloc_variant user.match_call_scrutinee.Hand
+
+  L5:
+    return
+}
+
+function match_call_scrutinee.decide(which: int) -> match_call_scrutinee.Decision {
+    load_var which
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var which
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const user.match_call_scrutinee.Decision.Gamma
+    alloc_variant user.match_call_scrutinee.Decision
+    jump L4
+
+  L2:
+    load_const user.match_call_scrutinee.Decision.Beta
+    alloc_variant user.match_call_scrutinee.Decision
+    jump L4
+
+  L3:
+    load_const user.match_call_scrutinee.Decision.Alpha
+    alloc_variant user.match_call_scrutinee.Decision
+
+  L4:
+    return
+}
+
+function match_call_scrutinee.decide_int() -> int {
+    load_const 2
+    return
+}
+
+function match_call_scrutinee.flip(which: int) -> match_call_scrutinee.Coin {
+    load_var which
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const user.match_call_scrutinee.Coin.Tails
+    alloc_variant user.match_call_scrutinee.Coin
+    jump L2
+
+  L1:
+    load_const user.match_call_scrutinee.Coin.Heads
+    alloc_variant user.match_call_scrutinee.Coin
+
+  L2:
+    return
+}
+
+function match_call_scrutinee.pick_int_chain() -> string {
+    call user.match_call_scrutinee.decide_int
+    store_var _1
+    load_var _1
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _1
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "other"
+    jump L4
+
+  L2:
+    load_const "two"
+    jump L4
+
+  L3:
+    load_const "one"
+
+  L4:
+    return
+}
+
+function match_call_scrutinee.pick_jump_table(other: match_call_scrutinee.Hand) -> string {
+    load_const 4
+    call user.match_call_scrutinee.deal
+    discriminant
+    jump_table [L4, L3, L2, L1, L0], default L6
+
+  L0: Hand.Five
+    load_const "5"
+    jump L5
+
+  L1: Hand.Four
+    load_const "4"
+    jump L5
+
+  L2: Hand.Three
+    load_const "3"
+    jump L5
+
+  L3: Hand.Two
+    load_const "2"
+    jump L5
+
+  L4: Hand.One
+    load_const "1"
+
+  L5:
+    return
+
+  L6:
+    unreachable
+}
+
+function match_call_scrutinee.pick_param(d: match_call_scrutinee.Decision, other: match_call_scrutinee.Decision) -> string {
+    load_var d
+    discriminant
+    load_const Decision.Alpha
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var d
+    discriminant
+    load_const Decision.Beta
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "gamma"
+    jump L4
+
+  L2:
+    load_const "beta"
+    jump L4
+
+  L3:
+    load_const "alpha"
+
+  L4:
+    return
+}
+
+function match_call_scrutinee.pick_two_arms(other: match_call_scrutinee.Coin) -> string {
+    load_const 2
+    call user.match_call_scrutinee.flip
+    discriminant
+    load_const Coin.Heads
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "tails"
+    jump L2
+
+  L1:
+    load_const "heads"
+
+  L2:
+    return
+}
+
+function match_call_scrutinee.pick_with_closure_local(which: int, cb: () -> void throws never) -> string {
+    load_var which
+    call user.match_call_scrutinee.decide
+    store_var _3
+    load_var _3
+    discriminant
+    load_const Decision.Alpha
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _3
+    discriminant
+    load_const Decision.Beta
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "gamma"
+    jump L4
+
+  L2:
+    load_const "beta"
+    jump L4
+
+  L3:
+    load_const "alpha"
+
+  L4:
+    return
+}
+
+function match_call_scrutinee.pick_with_enum_local(which: int, other: match_call_scrutinee.Decision) -> string {
+    load_var which
+    call user.match_call_scrutinee.decide
+    store_var _3
+    load_var _3
+    discriminant
+    load_const Decision.Alpha
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _3
+    discriminant
+    load_const Decision.Beta
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "gamma"
+    jump L4
+
+  L2:
+    load_const "beta"
+    jump L4
+
+  L3:
+    load_const "alpha"
+
+  L4:
+    return
+}

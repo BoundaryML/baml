@@ -1,0 +1,49 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.arm_header_comments._thrower() -> int {
+    load_const "nope"
+    call baml.Int.parse
+    return
+}
+
+function fixtures.arm_header_comments.catch_with_headers() -> int {
+    call user.fixtures.arm_header_comments._thrower
+    jump L2
+    load_var e
+    store_var _2
+    load_var _2
+    narrow_bind baml.errors.ParseError, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw_if_panic
+    load_const 0
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}
+
+function fixtures.arm_header_comments.match_with_headers(x: int) -> int {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 2
+    jump L2
+
+  L1:
+    load_const 1
+
+  L2:
+    return
+}

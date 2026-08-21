@@ -580,10 +580,10 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Four conflicts: greet, greet$spec, greet$render_prompt, greet$parse.
-        // Each LLM function expands to AST-level companions, all duplicated
-        // across 3 files.
-        assert_eq!(ns.conflicts().len(), 4);
+        // Five conflicts: greet, greet$spec, greet$render_prompt,
+        // greet$build_request, and greet$parse. Each LLM function expands to
+        // AST-level companions, all duplicated across 3 files.
+        assert_eq!(ns.conflicts().len(), 5);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
         }
@@ -1875,6 +1875,67 @@ function foo(user: User) -> string {
             sig.params[0].ty.to_string(),
             "(value: int) -> string throws __effect_param_0"
         );
+    }
+
+    /// An optional callback parameter is a callback root too: the `?` is a
+    /// call-site shape, not a nesting that hides the slot, so its omitted
+    /// throws opens exactly like the immediate form.
+    #[test]
+    fn function_type_throws_optional_callback_param_opens() {
+        let mut db = make_db();
+        let file = db.file(
+            "callback.baml",
+            "function opt(cb: ((value: int) -> string)?) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "opt"));
+
+        assert!(sig.user_generic_params.is_empty());
+        assert_eq!(
+            sig.synthetic_effect_params,
+            vec![Name::new("__effect_param_0")]
+        );
+        assert_eq!(
+            sig.params[0].ty.to_string(),
+            "((value: int) -> string throws __effect_param_0)?"
+        );
+    }
+
+    /// `T | null` denotes the same type as `T?`, so the longhand spelling of
+    /// an optional callback opens identically.
+    #[test]
+    fn function_type_throws_null_union_callback_param_opens() {
+        let mut db = make_db();
+        let file = db.file(
+            "callback.baml",
+            "function opt(cb: ((value: int) -> string) | null) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "opt"));
+
+        assert_eq!(
+            sig.synthetic_effect_params,
+            vec![Name::new("__effect_param_0")]
+        );
+        assert_eq!(
+            sig.params[0].ty.to_string(),
+            "((value: int) -> string throws __effect_param_0) | null"
+        );
+    }
+
+    /// A class field is not a callback root — a stored callback has no single
+    /// call site to instantiate an effect against, so `?` does not open it.
+    #[test]
+    fn function_type_throws_optional_class_field_stays_closed() {
+        let mut db = make_db();
+        let file = db.file(
+            "holder.baml",
+            "class Holder {\n  cb ((value: int) -> string)?\n}\nfunction take(h: Holder) -> string { return \"ok\"; }",
+        );
+
+        let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "take"));
+
+        assert!(sig.synthetic_effect_params.is_empty());
     }
 
     #[test]

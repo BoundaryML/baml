@@ -2,10 +2,7 @@
 
 use std::{future::Future, io::Write as _, time::Duration};
 
-use bex_engine::{
-    CaptureDefaults, FunctionCallContext, FunctionCallContextBuilder,
-    value_capture::{TraceCaptureConfig, TraceCaptureProducer},
-};
+use bex_engine::{FunctionCallContext, FunctionCallContextBuilder, logger::TraceLogger};
 use clap::ValueEnum;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
@@ -54,27 +51,21 @@ impl LogOutput {
     pub(crate) fn call_context(
         self,
         builder: FunctionCallContextBuilder,
-    ) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
+    ) -> (FunctionCallContext, Option<TraceLogger>) {
         if self.level == LogLevel::Off {
             return (builder.build(), None);
         }
 
-        let producer = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(100_000));
-        let context = builder
-            .with_capture_defaults(CaptureDefaults {
-                values_enabled: false,
-                logs_enabled: true,
-            })
-            .with_value_capture(producer.clone())
-            .build();
-        (context, Some(producer))
+        let logger = TraceLogger::bounded(100_000);
+        let context = builder.with_logger(logger.clone()).build();
+        (context, Some(logger))
     }
 
-    pub(crate) fn print(self, producer: Option<&TraceCaptureProducer>) {
-        let Some(producer) = producer else {
+    pub(crate) fn print(self, logger: Option<&TraceLogger>) {
+        let Some(logger) = logger else {
             return;
         };
-        let report = producer.drain_rendered_logs();
+        let report = logger.drain_rendered_logs();
         for log in report.logs {
             if self.level.allows(log.metadata.level.as_deref()) {
                 let level = log
@@ -99,9 +90,9 @@ impl LogOutput {
         self,
         rt: &tokio::runtime::Runtime,
         future: impl Future<Output = T>,
-        producer: Option<&TraceCaptureProducer>,
+        logger: Option<&TraceLogger>,
     ) -> T {
-        let Some(producer) = producer else {
+        let Some(logger) = logger else {
             return rt.block_on(future);
         };
         rt.block_on(async {
@@ -111,10 +102,10 @@ impl LogOutput {
             loop {
                 tokio::select! {
                     result = &mut future => {
-                        self.print(Some(producer));
+                        self.print(Some(logger));
                         break result;
                     }
-                    _ = interval.tick() => self.print(Some(producer)),
+                    _ = interval.tick() => self.print(Some(logger)),
                 }
             }
         })

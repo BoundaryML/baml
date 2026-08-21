@@ -83,7 +83,7 @@ jobs:
             --manifest product-package/native-manifest.sha256 \
             --package "$package"
           scripts/baml-csharp-release-contract verify-generated-sources \
-            --root product-package/baml_client \
+            --root product-package/baml_sdk \
             --manifest product-package/generated-sources.sha256
 
           digest="$(sha256sum "$package" | cut -d ' ' -f 1)"
@@ -156,10 +156,10 @@ jobs:
           consumer="$RUNNER_TEMP/public-csharp-consumer"
           packages="$RUNNER_TEMP/public-csharp-packages"
           publish="$RUNNER_TEMP/public-csharp-publish"
-          mkdir -p "$consumer/baml_client" "$packages" "$publish"
+          mkdir -p "$consumer/baml_sdk" "$packages" "$publish"
           cp product-package/documentation/Baml.Bridge.DocumentationConsumer.csproj "$consumer/"
           cp product-package/documentation/Program.cs "$consumer/"
-          cp -R product-package/baml_client/. "$consumer/baml_client/"
+          cp -R product-package/baml_sdk/. "$consumer/baml_sdk/"
           printf '%s\n' \
             '<?xml version="1.0" encoding="utf-8"?>' \
             '<configuration>' \
@@ -181,7 +181,7 @@ jobs:
               --no-cache \
               -p:NuGetAudit=false \
               -p:BamlBridgePackageVersion="$VERSION" \
-              -p:BamlGeneratedSourceRoot="$consumer/baml_client"; then
+              -p:BamlGeneratedSourceRoot="$consumer/baml_sdk"; then
               restored=true
               break
             fi
@@ -201,7 +201,7 @@ jobs:
             --output "$publish" \
             -p:NuGetAudit=false \
             -p:BamlBridgePackageVersion="$VERSION" \
-            -p:BamlGeneratedSourceRoot="$consumer/baml_client"
+            -p:BamlGeneratedSourceRoot="$consumer/baml_sdk"
           test -f "$publish/libbridge_cffi.so"
           env -u BAML_BRIDGE_CSHARP_NATIVE_LIBRARY \
             dotnet "$publish/Baml.Bridge.DocumentationConsumer.dll" \

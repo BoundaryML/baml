@@ -1,0 +1,60 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.generic_intersection_bounds.Both {
+  name: string
+}
+class user.fixtures.generic_intersection_bounds.Both$stream {
+  name: string | null
+}
+class user.fixtures.generic_intersection_bounds.Holder {
+  item: T
+}
+class user.fixtures.generic_intersection_bounds.Holder$stream {
+  item: T | null
+}
+class user.fixtures.generic_intersection_bounds.Registered {
+  items: user.fixtures.generic_intersection_bounds.Both[]
+}
+class user.fixtures.generic_intersection_bounds.Registered$stream {
+  items: user.fixtures.generic_intersection_bounds.Both$stream[]
+}
+function user.fixtures.generic_intersection_bounds.describe(item: T) -> string  [expr] {
+  {  } item.name Add ":" Add item.size().to_string()
+}
+function user.fixtures.generic_intersection_bounds.display(self: ?) -> string  [missing]
+function user.fixtures.generic_intersection_bounds.display(self: ?) -> string  [expr] {
+  {  } describe(self)
+}
+function user.fixtures.generic_intersection_bounds.field_into_call_arg(item: T) -> string  [expr] {
+  { let out = shout(item.name) } out
+}
+function user.fixtures.generic_intersection_bounds.field_into_switch(item: T) -> int  [expr] {
+  {  } match (item.name) { "a" => 1, _ => 0 }
+}
+function user.fixtures.generic_intersection_bounds.label_of(item: T) -> string  [expr] {
+  {  } item.tag()
+}
+function user.fixtures.generic_intersection_bounds.main() -> string  [expr] {
+  { let both = user.fixtures.generic_intersection_bounds.Both { name: "b" }; let holder = user.fixtures.generic_intersection_bounds.Holder { item: both }; let printable: Printable = both; let registry = user.fixtures.generic_intersection_bounds.Registered { items: [both] } } describe(both) Add "/" Add field_into_call_arg(both) Add "/" Add field_into_switch(both).to_string() Add "/" Add label_of(both) Add "/" Add holder.item.name Add "/" Add printable.display() Add "/" Add registry.summarize(both)
+}
+function user.fixtures.generic_intersection_bounds.put(self: ?, item: T) -> void  [missing]
+function user.fixtures.generic_intersection_bounds.put(self: ?, item: user.fixtures.generic_intersection_bounds.Both) -> void  [expr] {
+  {  }
+}
+function user.fixtures.generic_intersection_bounds.shout(text: string) -> string  [expr] {
+  {  } text Add "!"
+}
+function user.fixtures.generic_intersection_bounds.size(self: ?) -> int  [missing]
+function user.fixtures.generic_intersection_bounds.size(self: ?) -> int  [expr] {
+  {  } 7
+}
+function user.fixtures.generic_intersection_bounds.summarize(self: ?, other: U) -> string  [missing]
+function user.fixtures.generic_intersection_bounds.summarize(self: ?, other: U) -> string  [expr] {
+  {  } describe(other)
+}
+function user.fixtures.generic_intersection_bounds.tag(self: ?) -> Self.Label  [missing]
+function user.fixtures.generic_intersection_bounds.tag(self: ?) -> string  [expr] {
+  {  } self.name
+}

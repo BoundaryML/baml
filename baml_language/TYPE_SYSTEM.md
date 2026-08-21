@@ -371,7 +371,22 @@ function foo/*<E>*/(arg: () -> void /* throws E */) -> void /* throws E */ {
 }
 ```
 
-5. Otherwise, the `throws` clause MUST be declared.
+   - An **optional** callback argument is a callback slot too, so it opens the
+     same way: `arg: (() -> void)?` (and its longhand `(() -> void) | null`)
+     gets the same implicit effect parameter, instantiated per call site.
+     Passing `null` leaves it unconstrained, which defaults to `never`.
+
+```baml
+function bar/*<E>*/(arg: (() -> void /* throws E */)? = null) -> void /* throws E */ {
+	if (arg != null) { arg() }
+}
+```
+
+5. Otherwise, the `throws` clause MUST be declared. In particular, a function
+   type nested any deeper than an argument's callback root — a list element, a
+   map value, a class field, an alias body, a returned function type, or a
+   callback's own parameter — is a stored/structural position with no single
+   call site to instantiate an effect against, and must declare its `throws`.
 
 As previously noted, BAML function declarations may include generics. However, all function calls and function-values must have their type parameters specified — or unambiguously inferable from context — to enable monomorphization at call-time:
 

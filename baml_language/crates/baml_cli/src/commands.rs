@@ -137,6 +137,9 @@ pub(crate) enum Commands {
     #[command(about = "Check BAML source files for compiler errors")]
     Check(crate::check_command::CheckArgs),
 
+    #[command(about = "Remove segmented local profiler data")]
+    Clean(crate::clean_command::CleanArgs),
+
     #[command(about = "Describe a BAML symbol", name = "describe")]
     Describe(crate::describe_command::DescribeArgs),
 
@@ -373,6 +376,7 @@ impl RuntimeCli {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
             Commands::Check(args) => args.run(),
+            Commands::Clean(args) => args.run(),
             Commands::Describe(args) => args.run(),
             Commands::Run(args) => args.run(),
             Commands::Pack(args) => args.run(),
@@ -404,6 +408,7 @@ impl Commands {
     fn has_legacy_project(&self) -> bool {
         match self {
             Self::Check(args) => args.from.is_some(),
+            Self::Clean(args) => args.from.is_some(),
             Self::Format(args) => args.from.is_some(),
             Self::Describe(args) => args.from.is_some(),
             Self::Generate(args) => args.has_legacy_project(),
@@ -425,6 +430,7 @@ impl Commands {
         let project = project.to_path_buf();
         match self {
             Self::Check(args) => args.from = Some(project.clone()),
+            Self::Clean(args) => args.from = Some(project.clone()),
             Self::Format(args) => args.from = Some(project.clone()),
             Self::Describe(args) => args.from = Some(project.clone()),
             Self::Generate(args) => args.apply_project(&project),

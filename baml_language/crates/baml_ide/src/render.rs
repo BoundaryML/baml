@@ -63,15 +63,25 @@ impl TyDisplayContext<'_> {
         // Everything non-bare spells the full canonical path — real package
         // names, never the `root.` source shorthand (correct only inside the
         // defining package, and signatures are read from outside it).
-        qtn.to_string()
+        //
+        // Through `source_spelling`, not `Display`: a runtime-minted
+        // declaration carries a hidden `$dyn.<mint>` discriminator that keys
+        // its identity in the VM, and no user can write it. Below the
+        // discriminator the name is the one the source wrote, which is what
+        // every reader of this path — hover, describe, completions, and the
+        // diagnostics a runtime compile hands back — must be shown.
+        qtn.source_spelling().to_string()
     }
 
     fn can_use_bare_name(&self, qtn: &QualifiedTypeName) -> bool {
-        if qtn.namespace() == &self.current_namespace {
+        // Namespace comparisons read `source_namespace` for the same reason
+        // the spelling does: the discriminator is identity, not a namespace
+        // the current file could ever sit in.
+        if qtn.source_namespace() == self.current_namespace {
             return true;
         }
 
-        if qtn.namespace().is_empty() {
+        if qtn.source_namespace().is_empty() {
             return self
                 .package_items
                 .lookup_type(&self.current_namespace, qtn.name())

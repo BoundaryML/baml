@@ -1,0 +1,123 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function catch_arm_return.$init_test_ns_catch_arm_return_catch_arm_return(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.catch_arm_return"
+    load_const "catch_arm_braceless_return_fires_on_throw"
+    make_closure .<lambda($init_test_ns_catch_arm_return_catch_arm_return, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.catch_arm_return"
+    load_const "catch_arm_braceless_return_skipped_when_no_throw"
+    make_closure .<lambda($init_test_ns_catch_arm_return_catch_arm_return, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.catch_arm_return"
+    load_const "catch_arm_braceless_return_mixed_arm_types"
+    make_closure .<lambda($init_test_ns_catch_arm_return_catch_arm_return, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.catch_arm_return"
+    load_const "match_arm_braceless_return_fires"
+    make_closure .<lambda($init_test_ns_catch_arm_return_catch_arm_return, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.catch_arm_return"
+    load_const "match_arm_braceless_return_other_arm"
+    make_closure .<lambda($init_test_ns_catch_arm_return_catch_arm_return, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function catch_arm_return.car_throws(x: int) -> int {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    return
+
+  L1:
+    load_const "boom"
+    throw
+}
+
+function catch_arm_return.catch_arm_return_mixed(x: int) -> int {
+    load_var x
+    call user.catch_arm_return.car_throws
+    jump L2
+    load_var e
+    store_var _4
+    load_var _4
+    narrow_bind string, slot=3
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var _4
+    call baml.String.length
+    jump L3
+
+  L2:
+    load_const 100
+    add_int
+
+  L3:
+    return
+}
+
+function catch_arm_return.catch_arm_returns(x: int) -> int {
+    load_var x
+    call user.catch_arm_return.car_throws
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const -1
+    jump L1
+
+  L0:
+    load_const 100
+    add_int
+
+  L1:
+    return
+}
+
+function catch_arm_return.match_arm_returns(x: int) -> int {
+    load_var x
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    load_const 100
+    add_int
+    jump L2
+
+  L1:
+    load_const -1
+
+  L2:
+    return
+}

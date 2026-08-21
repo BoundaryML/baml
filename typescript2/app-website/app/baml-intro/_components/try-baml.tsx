@@ -316,7 +316,6 @@ function bridgeLines(b: Bridge): Line[] {
     b.add === 'go'
       ? 'baml bridge add go --sdk-import-path <MODULE>/baml_sdk'
       : `baml bridge add ${b.add}`;
-  const dir = b.add === 'csharp' ? 'baml_client/' : 'baml_sdk/';
   return [
     {
       cmd: add,
@@ -326,7 +325,7 @@ function bridgeLines(b: Bridge): Line[] {
     {
       cmd: 'baml bridge generate',
       note: '# after every change to your .baml files',
-      out: [`wrote ${dir}`],
+      out: ['wrote baml_sdk/'],
     },
   ];
 }

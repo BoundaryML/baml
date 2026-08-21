@@ -1,0 +1,932 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function type_value_narrowing.$init_test_ns_type_value_narrowing_type_value_narrowing(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "type_is_type_positive_and_negatives"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "non_type_values_are_not_type"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "type_of_any_argument_is_type"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "union_holding_type_narrows_to_type"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "union_holding_int_narrows_to_int"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "union_if_let_binds_type_arm"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "union_if_let_skips_type_arm_for_int"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "union_match_type_arm_fires_for_type"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "union_match_int_arm_fires_for_int"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "reversed_match_type_arm_fires_for_type"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "reversed_match_int_arm_fires_for_int"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "three_way_union_dispatches_type"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "three_way_union_dispatches_string"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "three_way_union_dispatches_int"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "optional_type_present_narrows"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "optional_type_absent_does_not_narrow"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "mixed_list_classifies_each_element"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "mixed_list_match_renders_each_element"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "type_values_compare_structurally"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_value_narrowing"
+    load_const "narrowed_type_value_keeps_its_reflection"
+    make_closure .<lambda($init_test_ns_type_value_narrowing_type_value_narrowing, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function type_value_narrowing.classify_mixed_list() -> string {
+    load_type string
+    alloc_array 0
+    store_var out
+    load_type int
+    load_const "plain"
+    load_type bool[]
+    load_type string | type
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = string | type>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = string | type>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L7
+
+  L1:
+    load_var _7
+    is_type type
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const false
+    jump L4
+
+  L3:
+    load_const true
+
+  L4:
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_type string
+    load_var out
+    load_const "S"
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L6:
+    load_type string
+    load_var out
+    load_const "T"
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L7:
+    load_type string
+    load_var out
+    load_const ","
+    call baml.Array.join
+    return
+}
+
+function type_value_narrowing.non_type_is_not_type() -> string {
+    load_const 7
+    is_type type
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    store_var _8
+    jump L2
+
+  L1:
+    load_const true
+    store_var _8
+
+  L2:
+    load_type bool
+    load_var _8
+    call baml.String.from
+    store_var _7
+    load_const "int"
+    is_type type
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    store_var _12
+    jump L5
+
+  L4:
+    load_const true
+    store_var _12
+
+  L5:
+    load_type bool
+    load_var _12
+    call baml.String.from
+    store_var _11
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    is_type type
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_const false
+    store_var _16
+    jump L8
+
+  L7:
+    load_const true
+    store_var _16
+
+  L8:
+    load_type bool
+    load_var _16
+    call baml.String.from
+    store_var _15
+    load_var _7
+    load_const "|"
+    bin_op +
+    load_var _11
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _15
+    bin_op +
+    return
+}
+
+function type_value_narrowing.optional_type_absent() -> string {
+    load_const null
+    is_type type
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    store_var is_t
+    jump L2
+
+  L1:
+    load_const true
+    store_var is_t
+
+  L2:
+    load_const null
+    store_var _4
+    load_var _4
+    narrow_bind type, slot=2
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_type bool
+    load_var is_t
+    call baml.String.from
+    load_const "|none"
+    bin_op +
+    jump L5
+
+  L4:
+    load_var _4
+    store_var t
+    load_type bool
+    load_var is_t
+    call baml.String.from
+    store_var _7
+    load_var t
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _11
+    load_type string
+    load_var _11
+    call baml.String.from
+    store_var _10
+    load_var _7
+    load_const "|"
+    bin_op +
+    load_var _10
+    bin_op +
+
+  L5:
+    return
+}
+
+function type_value_narrowing.optional_type_present() -> string {
+    load_type float
+    store_var v
+    load_var v
+    is_type type
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    store_var is_t
+    jump L2
+
+  L1:
+    load_const true
+    store_var is_t
+
+  L2:
+    load_var v
+    store_var _4
+    load_var _4
+    narrow_bind type, slot=3
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_type bool
+    load_var is_t
+    call baml.String.from
+    load_const "|none"
+    bin_op +
+    jump L5
+
+  L4:
+    load_var _4
+    store_var t
+    load_type bool
+    load_var is_t
+    call baml.String.from
+    store_var _7
+    load_var t
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _11
+    load_type string
+    load_var _11
+    call baml.String.from
+    store_var _10
+    load_var _7
+    load_const "|"
+    bin_op +
+    load_var _10
+    bin_op +
+
+  L5:
+    return
+}
+
+function type_value_narrowing.render_mixed_list() -> string {
+    load_type string
+    alloc_array 0
+    store_var out
+    load_type int
+    load_const "plain"
+    load_type bool[]
+    load_type string | type
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = string | type>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = string | type>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _7
+    store_var item
+    load_var item
+    store_var _12
+    load_var _12
+    narrow_bind type, slot=5
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_type string
+    load_var2 1 4
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L3:
+    load_var _12
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _14
+    load_type string
+    load_var2 1 6
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L4:
+    load_type string
+    load_var out
+    load_const ","
+    call baml.Array.join
+    return
+}
+
+function type_value_narrowing.type_equality() -> string {
+    load_type int
+    store_var a
+    load_type string
+    store_var c
+    load_var a
+    load_type int
+    call baml.ops.equals_equals
+    store_var _8
+    load_type bool
+    load_var _8
+    call baml.String.from
+    store_var _7
+    load_var2 1 2
+    call baml.ops.equals_equals
+    store_var _13
+    load_type bool
+    load_var _13
+    call baml.String.from
+    store_var _12
+    load_var2 1 2
+    call baml.ops.equals_equals
+    store_var _21
+    load_type bool
+    load_var _21
+    unary_op !
+    call baml.String.from
+    store_var _17
+    load_var _7
+    load_const "|"
+    bin_op +
+    load_var _12
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _17
+    bin_op +
+    return
+}
+
+function type_value_narrowing.type_is_type() -> string {
+    load_type int
+    store_var v
+    load_var v
+    is_type type
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    store_var _6
+    jump L2
+
+  L1:
+    load_const true
+    store_var _6
+
+  L2:
+    load_type bool
+    load_var _6
+    call baml.String.from
+    store_var _5
+    load_var v
+    is_type int
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    store_var _10
+    jump L5
+
+  L4:
+    load_const true
+    store_var _10
+
+  L5:
+    load_type bool
+    load_var _10
+    call baml.String.from
+    store_var _9
+    load_var v
+    is_type string
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_const false
+    store_var _14
+    jump L8
+
+  L7:
+    load_const true
+    store_var _14
+
+  L8:
+    load_type bool
+    load_var _14
+    call baml.String.from
+    store_var _13
+    load_var _5
+    load_const "|"
+    bin_op +
+    load_var _9
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _13
+    bin_op +
+    return
+}
+
+function type_value_narrowing.type_of_various_is_type() -> string {
+    load_type string
+    is_type type
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    store_var _8
+    jump L2
+
+  L1:
+    load_const true
+    store_var _8
+
+  L2:
+    load_type bool
+    load_var _8
+    call baml.String.from
+    store_var _7
+    load_type int[]
+    is_type type
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    store_var _12
+    jump L5
+
+  L4:
+    load_const true
+    store_var _12
+
+  L5:
+    load_type bool
+    load_var _12
+    call baml.String.from
+    store_var _11
+    load_type map<string, int>
+    is_type type
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_const false
+    store_var _16
+    jump L8
+
+  L7:
+    load_const true
+    store_var _16
+
+  L8:
+    load_type bool
+    load_var _16
+    call baml.String.from
+    store_var _15
+    load_var _7
+    load_const "|"
+    bin_op +
+    load_var _11
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _15
+    bin_op +
+    return
+}
+
+function type_value_narrowing.type_to_string_after_narrowing() -> string {
+    load_type map<string, int>
+    store_var _2
+    load_var _2
+    narrow_bind type, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "unreachable"
+    jump L2
+
+  L1:
+    load_var _2
+    call baml.TypeValue.baml.ToString.to_string
+
+  L2:
+    return
+}
+
+function type_value_narrowing.union_holding_int_is() -> string {
+    load_const 42
+    is_type type
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    store_var _4
+    jump L2
+
+  L1:
+    load_const true
+    store_var _4
+
+  L2:
+    load_type bool
+    load_var _4
+    call baml.String.from
+    store_var _3
+    load_const 42
+    is_type int
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    store_var _8
+    jump L5
+
+  L4:
+    load_const true
+    store_var _8
+
+  L5:
+    load_type bool
+    load_var _8
+    call baml.String.from
+    store_var _7
+    load_var _3
+    load_const "|"
+    bin_op +
+    load_var _7
+    bin_op +
+    return
+}
+
+function type_value_narrowing.union_holding_type_is() -> string {
+    load_type int
+    store_var v
+    load_var v
+    is_type type
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    store_var _4
+    jump L2
+
+  L1:
+    load_const true
+    store_var _4
+
+  L2:
+    load_type bool
+    load_var _4
+    call baml.String.from
+    store_var _3
+    load_var v
+    is_type int
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    store_var _8
+    jump L5
+
+  L4:
+    load_const true
+    store_var _8
+
+  L5:
+    load_type bool
+    load_var _8
+    call baml.String.from
+    store_var _7
+    load_var _3
+    load_const "|"
+    bin_op +
+    load_var _7
+    bin_op +
+    return
+}
+
+function type_value_narrowing.union_if_let_int() -> string {
+    load_const 9
+    store_var _2
+    load_var _2
+    narrow_bind type, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "not-a-type"
+    jump L2
+
+  L1:
+    load_var _2
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _5
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _4
+    load_const "type:"
+    load_var _4
+    bin_op +
+
+  L2:
+    return
+}
+
+function type_value_narrowing.union_if_let_type() -> string {
+    load_type bool
+    store_var _2
+    load_var _2
+    narrow_bind type, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "not-a-type"
+    jump L2
+
+  L1:
+    load_var _2
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _5
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _4
+    load_const "type:"
+    load_var _4
+    bin_op +
+
+  L2:
+    return
+}
+
+function type_value_narrowing.union_match_int_first(v: type | int) -> string {
+    load_var v
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _9
+    load_type string
+    load_var _9
+    call baml.String.from
+    store_var _8
+    load_const "type:"
+    load_var _8
+    bin_op +
+    jump L2
+
+  L1:
+    load_type int
+    load_var _2
+    call baml.String.from
+    store_var _4
+    load_const "int:"
+    load_var _4
+    bin_op +
+
+  L2:
+    return
+}
+
+function type_value_narrowing.union_match_type_first(v: type | int) -> string {
+    load_var v
+    store_var _2
+    load_var _2
+    narrow_bind type, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type int
+    load_var v
+    call baml.String.from
+    store_var _8
+    load_const "int:"
+    load_var _8
+    bin_op +
+    jump L2
+
+  L1:
+    load_var _2
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _5
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _4
+    load_const "type:"
+    load_var _4
+    bin_op +
+
+  L2:
+    return
+}
+
+function type_value_narrowing.union_three_way(v: type | int | string) -> string {
+    load_var v
+    store_var _2
+    load_var _2
+    narrow_bind type, slot=2
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var v
+    store_var _7
+    load_var _7
+    narrow_bind string, slot=5
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_type int
+    load_var v
+    call baml.String.from
+    store_var _13
+    load_const "int:"
+    load_var _13
+    bin_op +
+    jump L4
+
+  L2:
+    load_type string
+    load_var _7
+    call baml.String.from
+    store_var _9
+    load_const "string:"
+    load_var _9
+    bin_op +
+    jump L4
+
+  L3:
+    load_var _2
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _5
+    load_type string
+    load_var _5
+    call baml.String.from
+    store_var _4
+    load_const "type:"
+    load_var _4
+    bin_op +
+
+  L4:
+    return
+}

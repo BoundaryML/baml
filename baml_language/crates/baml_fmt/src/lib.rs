@@ -304,6 +304,203 @@ mod redundant_paren_tests {
         );
         assert!(formatted.contains("(a && b/* keep */) && c"), "{formatted}");
     }
+
+    /// B-1562 follow-up: parens wrapping a *receiver* in a postfix chain.
+    /// `(xs).join(x)` and `((xs).join(x)).includes(y)` are pure noise — the
+    /// receiver already binds tighter than `.`. Each one used to terminate
+    /// the chain walk in `PrintChain::new`, producing one indent level per
+    /// paren.
+    #[test]
+    fn test_postfix_receiver_parens_strip() {
+        let formatted =
+            fmt("function f(xs: string[]) -> bool {\n    ((xs).join(` `)).includes(`a`)\n}\n");
+        assert!(
+            formatted.contains("    xs.join(` `).includes(`a`)\n"),
+            "{formatted}"
+        );
+        let formatted =
+            fmt("function f(xs: string[]) -> string {\n    (xs.at(0)).to_string()\n}\n");
+        assert!(
+            formatted.contains("    xs.at(0).to_string()\n"),
+            "{formatted}"
+        );
+        let formatted = fmt("function f(xs: string[]) -> int {\n    (xs).length()\n}\n");
+        assert!(formatted.contains("    xs.length()\n"), "{formatted}");
+    }
+
+    /// The single-line index path measured and printed the raw base, so
+    /// `(xs)[0]` kept its parens inline while the multiline path stripped
+    /// them. Optional receivers had the mirror problem: `PrintChain` peeled
+    /// them while `single_line_width` still counted the parens, over-measuring
+    /// by two per paren and wrapping earlier than needed.
+    #[test]
+    fn test_index_and_optional_receiver_parens_strip() {
+        let formatted = fmt("function f(xs: string[]) -> string {\n    (xs)[0]\n}\n");
+        assert!(formatted.contains("    xs[0]\n"), "{formatted}");
+        let formatted = fmt("function f(o: string?) -> int? {\n    ((o))?.length\n}\n");
+        assert!(formatted.contains("    o?.length\n"), "{formatted}");
+        let formatted = fmt("function f(o: string[]?) -> string? {\n    ((o))?.[0]\n}\n");
+        assert!(formatted.contains("    o?.[0]\n"), "{formatted}");
+        // a looser-binding index receiver still collapses to exactly one paren
+        let formatted = fmt("function f(a: string, b: string) -> string {\n    ((a ?? b))[0]\n}\n");
+        assert!(formatted.contains("    (a ?? b)[0]\n"), "{formatted}");
+    }
+
+    /// Pins the optional-receiver *width* accounting, not just the printed
+    /// text: at width 15, `o?.length` (13 cols with indent) fits but the raw
+    /// `((o))?.length` (17 cols) does not. If `single_line_width` reverts to
+    /// counting the un-peeled base, the expression wraps and this fails even
+    /// though the wide-width tests above still pass.
+    #[test]
+    fn test_optional_receiver_width_counts_effective_base() {
+        let options = FormatOptions {
+            line_width: 15,
+            ..FormatOptions::default()
+        };
+        let source = "function f(o: string?) -> int? {\n    ((o))?.length\n}\n";
+        let formatted = format(source, &options).expect("source should format");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+        assert!(formatted.contains("    o?.length\n"), "{formatted}");
+    }
+
+    /// The literal restriction exists only to stop `(1).to_string()` from
+    /// re-lexing its `.` into a float. No `.` follows a unary operand, so
+    /// literals peel there — but a literal that *is* a receiver still keeps
+    /// its parens.
+    #[test]
+    fn test_unary_operand_literal_parens_strip() {
+        let formatted = fmt("function f() -> int {\n    -((1))\n}\n");
+        assert!(formatted.contains("    -1\n"), "{formatted}");
+        let formatted = fmt("function f() -> bool {\n    !((true))\n}\n");
+        assert!(formatted.contains("    !true\n"), "{formatted}");
+        // the literal here is a postfix receiver, not a unary operand
+        let formatted = fmt("function f() -> string {\n    -(1).to_string()\n}\n");
+        assert!(formatted.contains("    -(1).to_string()\n"), "{formatted}");
+    }
+
+    /// Parens that terminate an optional chain are load-bearing, not
+    /// decoration: `(a?.b).c` evaluates `(null).c` — a `TypeError` — when `a` is
+    /// null, where `a?.b.c` short-circuits to null. Peeling them would change
+    /// runtime behavior, so they always stay, including when the `?.` sits
+    /// further down the spine (`(a?.b.c).d`).
+    #[test]
+    fn test_optional_chain_breaking_parens_are_kept() {
+        for expr in [
+            "(user?.profile).name",
+            "(items?.at(0)).to_string()",
+            "(user?.profile.name).length()",
+        ] {
+            let source = std::format!(
+                "function f(user: string?, items: string[]?) -> string {{\n    {expr}\n}}\n"
+            );
+            let formatted = fmt(&source);
+            assert!(formatted.contains(expr), "kept `{expr}`: {formatted}");
+        }
+    }
+
+    /// A `?.` off the spine — inside a call argument — is a separate chain and
+    /// does not pin the receiver's parens.
+    #[test]
+    fn test_optional_chain_off_the_spine_still_strips() {
+        let formatted = fmt(
+            "function f(a: string?, xs: string[]) -> int {\n    (xs.at(a?.length ?? 0)).to_string().length()\n}\n",
+        );
+        assert!(
+            formatted.contains("    xs.at(a?.length ?? 0).to_string().length()\n"),
+            "{formatted}"
+        );
+    }
+
+    /// A receiver that binds looser than `.` keeps exactly one paren: removing
+    /// it would re-parse against a different base, but the redundant layers
+    /// stacked around it still peel.
+    #[test]
+    fn test_looser_receiver_collapses_to_one_paren() {
+        let formatted =
+            fmt("function f(a: string, b: string) -> string {\n    ((a ?? b)).to_string()\n}\n");
+        assert!(
+            formatted.contains("    (a ?? b).to_string()\n"),
+            "{formatted}"
+        );
+        let formatted =
+            fmt("function f(a: string, b: string) -> bool {\n    !((a ?? b)).includes(`x`)\n}\n");
+        assert!(
+            formatted.contains("    !(a ?? b).includes(`x`)\n"),
+            "{formatted}"
+        );
+    }
+
+    /// A receiver that binds looser than `.` keeps its parens: removing them
+    /// would re-parse against a different base.
+    #[test]
+    fn test_postfix_receiver_clarity_parens_are_kept() {
+        for expr in ["(a ?? b).length()", "(a && b).to_string()"] {
+            let source =
+                std::format!("function f(a: string, b: string) -> string {{\n    {expr}\n}}\n");
+            let formatted = fmt(&source);
+            assert!(formatted.contains(expr), "kept `{expr}`: {formatted}");
+        }
+    }
+
+    /// A transparent paren around a unary operand that already binds tighter
+    /// than the operator carries nothing: `!(x.f())` is `!x.f()`.
+    #[test]
+    fn test_unary_operand_parens_strip() {
+        let formatted =
+            fmt("function f(xs: string[]) -> bool {\n    !((xs).join(` `).includes(`a`))\n}\n");
+        assert!(
+            formatted.contains("    !xs.join(` `).includes(`a`)\n"),
+            "{formatted}"
+        );
+    }
+
+    /// A unary operand that binds looser than the operator keeps its parens.
+    #[test]
+    fn test_unary_operand_clarity_parens_are_kept() {
+        let formatted = fmt("function f(a: bool, b: bool) -> bool {\n    !(a && b)\n}\n");
+        assert!(formatted.contains("!(a && b)"), "{formatted}");
+    }
+
+    /// The user-reported staircase: a `map`/`join`/`includes` chain nested
+    /// under `!` inside a call argument, five parens deep.
+    #[test]
+    fn test_postfix_receiver_staircase_collapses() {
+        let source = concat!(
+            "function f(sections: string[], pet_name: string) -> null {\n",
+            "    assert.is_true(\n",
+            "        (pet_name == `Bella`)\n",
+            "            && !(\n",
+            "                (\n",
+            "                    (\n",
+            "                        (sections).map((item) -> {\n",
+            "                            item.to_string()\n",
+            "                        })\n",
+            "                    )\n",
+            "                        .join(` `)\n",
+            "                )\n",
+            "                    .includes(`WarningSignsContact`)\n",
+            "            ),\n",
+            "    );\n",
+            "    null\n",
+            "}\n",
+        );
+        let formatted = fmt(source);
+        assert!(
+            formatted.contains(concat!(
+                "    assert.is_true(\n",
+                "        (pet_name == `Bella`)\n",
+                "            && !sections\n",
+                "                .map((item) -> {\n",
+                "                    item.to_string()\n",
+                "                })\n",
+                "                .join(` `)\n",
+                "                .includes(`WarningSignsContact`),\n",
+                "    );",
+            )),
+            "staircase collapses to one flat chain: {formatted}"
+        );
+    }
 }
 
 #[cfg(test)]

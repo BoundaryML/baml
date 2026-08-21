@@ -42,8 +42,22 @@ pub struct BodyTypeRefs {
     pub expr_type_args: FxHashMap<ExprId, Box<[BodyTypeArgRef]>>,
     /// `.as<T>` upcast targets.
     pub upcast_targets: FxHashMap<ExprId, TypeRefId>,
+    /// The two written halves of a `(Base as Interface).item` reference.
+    pub qualified_path_anchors: FxHashMap<ExprId, QualifiedPathTypeRefs>,
     /// Lambda signature slots, keyed by the lambda expression.
     pub lambda_signatures: FxHashMap<ExprId, LambdaTypeRefs>,
+}
+
+/// The written halves of a fully-qualified item reference. Both are always
+/// present — the parser builds the node only when it saw both — which is what
+/// distinguishes this form from the two path spellings that leave one half to
+/// inference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QualifiedPathTypeRefs {
+    /// The `Self` type: `Base` in `(Base as Interface).item`.
+    pub qself: TypeRefId,
+    /// The interface the item is projected through.
+    pub interface: TypeRefId,
 }
 
 /// One explicit expression-position type argument, preserving whether the
@@ -140,6 +154,17 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, TypeRefSourceMa
             }
             Expr::Upcast { target, .. } => {
                 refs.upcast_targets.insert(expr_id, builder.lower(target));
+            }
+            Expr::QualifiedPath {
+                qself, interface, ..
+            } => {
+                refs.qualified_path_anchors.insert(
+                    expr_id,
+                    QualifiedPathTypeRefs {
+                        qself: builder.lower(qself),
+                        interface: builder.lower(interface),
+                    },
+                );
             }
             Expr::Lambda(def) => {
                 refs.lambda_signatures.insert(

@@ -29,8 +29,9 @@ use indexmap::IndexMap;
 use super::{
     BamlClassReflectClassBuilder, BamlClassReflectClassPendingType, PackageBamlImpl,
     type_kinds::{
-        ReflectedTypeRow, WitnessField, alloc_compilation_error, compiler_diagnostic,
-        is_baml_identifier, reflected_type_row, register_class_witnesses, validate_class_witnesses,
+        ReflectedTypeRow, WitnessField, alloc_compilation_error, alloc_with_meta,
+        compiler_diagnostic, is_baml_identifier, reflected_type_row, register_class_witnesses,
+        string_map_rows, validate_class_witnesses, with_meta_row,
     },
 };
 use crate::{BexVm, errors::VmRustFnError};
@@ -69,6 +70,23 @@ enum PendingOp {
 #[derive(Clone, Copy)]
 struct PendingHandle {
     op: PendingOp,
+}
+
+/// The schema metadata a field root carries, independent of how its type is
+/// spelled. Empty for a bare `type` or a bare `PendingType`.
+#[derive(Clone, Default)]
+struct FieldMeta {
+    alias: Option<String>,
+    description: Option<String>,
+    docstring: Option<String>,
+    other: IndexMap<String, String>,
+}
+
+/// A field root that names a not-yet-frozen builder, bare or wrapped in
+/// `reflect.WithMeta`.
+struct PendingFieldRoot {
+    pending: Value,
+    meta: Option<FieldMeta>,
 }
 
 struct BuilderNode {
@@ -159,6 +177,35 @@ fn pending_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, PendingHandle), S
     Ok((ptr, handle))
 }
 
+/// Split a field root into the pending reference it names and the metadata
+/// attached to it. `None` when the root is not a pending reference at all —
+/// a `type` value or a `reflect.WithMeta<type>` row, which the ordinary
+/// resolved-field path reads.
+fn pending_field_root(vm: &BexVm, root: Value) -> Option<Result<PendingFieldRoot, String>> {
+    if class_name(vm, root).as_deref() == Some(PENDING_FQN) {
+        return Some(Ok(PendingFieldRoot {
+            pending: root,
+            meta: None,
+        }));
+    }
+    let row = match with_meta_row(vm, root)? {
+        Ok(row) => row,
+        Err(message) => return Some(Err(message)),
+    };
+    if class_name(vm, row.payload).as_deref() != Some(PENDING_FQN) {
+        return None;
+    }
+    Some(Ok(PendingFieldRoot {
+        pending: row.payload,
+        meta: Some(FieldMeta {
+            alias: row.alias,
+            description: row.description,
+            docstring: row.docstring,
+            other: row.other,
+        }),
+    }))
+}
+
 fn instance_array_field(vm: &BexVm, value: Value, index: usize) -> Result<Vec<Value>, String> {
     let instance = vm
         .as_instance(&value)
@@ -245,14 +292,14 @@ pub(crate) fn alloc_builder(vm: &mut BexVm, name: &str) -> Value {
 }
 
 fn compilation_error(vm: &mut BexVm, id: DiagnosticId, message: String) -> VmRustFnError {
-    VmRustFnError::Thrown(alloc_compilation_error(
+    VmRustFnError::thrown_fresh(alloc_compilation_error(
         vm,
         &[compiler_diagnostic(id, message)],
     ))
 }
 
 fn shared_compilation_error(vm: &mut BexVm, diagnostic: Diagnostic) -> VmRustFnError {
-    VmRustFnError::Thrown(alloc_compilation_error(vm, &[diagnostic]))
+    VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
 }
 
 impl BamlClassReflectClassBuilder for PackageBamlImpl {
@@ -286,19 +333,41 @@ impl BamlClassReflectClassBuilder for PackageBamlImpl {
             }
         }
 
-        let (stored_type, pending_builders) = if class_name(vm, *ty).as_deref() == Some(PENDING_FQN)
-        {
-            match resolve_pending_if_ready(vm, *ty)
+        let pending_root =
+            match pending_field_root(vm, *ty) {
+                Some(root) => Some(root.map_err(|message| {
+                    compilation_error(vm, DiagnosticId::TypeMismatch, message)
+                })?),
+                None => None,
+            };
+        let (stored_type, pending_builders) = if let Some(root) = pending_root {
+            match resolve_pending_if_ready(vm, root.pending)
                 .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?
             {
+                // The group this reference names is already frozen, so the
+                // field stores an ordinary type — re-wrapped so metadata the
+                // caller attached to the pending reference is not dropped.
                 Some(resolved) => {
                     reflected_type_row(vm, resolved).map_err(|message| {
                         compilation_error(vm, DiagnosticId::TypeMismatch, message)
                     })?;
-                    (resolved, Vec::new())
+                    let stored = match &root.meta {
+                        Some(meta) => alloc_with_meta(
+                            vm,
+                            resolved,
+                            meta.alias.as_deref(),
+                            meta.description.as_deref(),
+                            meta.docstring.as_deref(),
+                            &meta.other,
+                        ),
+                        None => resolved,
+                    };
+                    (stored, Vec::new())
                 }
+                // Still pending: store the root exactly as written (wrapper
+                // included) and wire the builders into one recursive group.
                 None => {
-                    let builders = direct_builders(vm, *ty).map_err(|message| {
+                    let builders = direct_builders(vm, root.pending).map_err(|message| {
                         compilation_error(vm, DiagnosticId::TypeMismatch, message)
                     })?;
                     let mut unfrozen = Vec::with_capacity(builders.len());
@@ -371,6 +440,25 @@ impl BamlClassReflectClassPendingType for PackageBamlImpl {
 
     fn resolved(vm: &mut BexVm, pendingtype: &Value) -> Option<Value> {
         resolve_pending_if_ready(vm, *pendingtype).ok().flatten()
+    }
+
+    fn meta(
+        vm: &mut BexVm,
+        pendingtype: &Value,
+        alias: Option<&bex_str::BexStr>,
+        description: Option<&bex_str::BexStr>,
+        docstring: Option<&bex_str::BexStr>,
+        other: Option<&IndexMap<bex_str::BexStr, Value>>,
+    ) -> Value {
+        let other = string_map_rows(vm, other);
+        alloc_with_meta(
+            vm,
+            *pendingtype,
+            alias.map(bex_str::BexStr::as_str),
+            description.map(bex_str::BexStr::as_str),
+            docstring.map(bex_str::BexStr::as_str),
+            &other,
+        )
     }
 }
 
@@ -490,16 +578,27 @@ fn prepare_group(
                 continue;
             };
 
-            let row = if class_name(vm, root).as_deref() == Some(PENDING_FQN) {
-                match validate_pending(vm, root, group) {
-                    Ok(()) => PreparedField {
-                        name: field.name.clone(),
-                        field_type: PreparedFieldType::Pending(root),
-                        alias: None,
-                        description: None,
-                        docstring: None,
-                        other: IndexMap::new(),
-                    },
+            let pending_root = match pending_field_root(vm, root) {
+                Some(Ok(root)) => Some(root),
+                Some(Err(message)) => {
+                    diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
+                    continue;
+                }
+                None => None,
+            };
+            let row = if let Some(pending_root) = pending_root {
+                match validate_pending(vm, pending_root.pending, group) {
+                    Ok(()) => {
+                        let meta = pending_root.meta.unwrap_or_default();
+                        PreparedField {
+                            name: field.name.clone(),
+                            field_type: PreparedFieldType::Pending(pending_root.pending),
+                            alias: meta.alias,
+                            description: meta.description,
+                            docstring: meta.docstring,
+                            other: meta.other,
+                        }
+                    }
                     Err(message) => {
                         diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
                         continue;
@@ -776,7 +875,7 @@ fn build_group(
     let prepared = match prepare_group(vm, &group) {
         Ok(prepared) => prepared,
         Err(diagnostics) => {
-            return Err(VmRustFnError::Thrown(alloc_compilation_error(
+            return Err(VmRustFnError::thrown_fresh(alloc_compilation_error(
                 vm,
                 &diagnostics,
             )));
@@ -810,7 +909,7 @@ fn build_group(
         &mut witness_diagnostics,
     );
     if !witness_diagnostics.is_empty() {
-        return Err(VmRustFnError::Thrown(alloc_compilation_error(
+        return Err(VmRustFnError::thrown_fresh(alloc_compilation_error(
             vm,
             &witness_diagnostics,
         )));
@@ -830,6 +929,15 @@ fn build_group(
             alias: None,
             docstring: None,
             other: IndexMap::new(),
+            // The tag is a digest of the name it is built from, and for a
+            // `reflect.class.new` declaration that name is already mint-unique
+            // — nothing was ever emitted against it, so there is no
+            // compiler-side digest to agree with. A compiled package is the
+            // opposite case: `bex_vm_types::rename` re-spells `Class::name` at
+            // graft but deliberately leaves `type_tag` at the digest of the
+            // *source* name, because this image's jump tables were emitted
+            // against that digest. So after a mint, `name` and `type_tag` are
+            // not derivable from one another — do not "resynchronize" them.
             type_tag: baml_type::typetag::class_type_tag(&identity.name.to_string()),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,

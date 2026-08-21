@@ -2,6 +2,19 @@
 //!
 //! This module provides common infrastructure for testing async execution
 //! of BAML programs through `bex_engine`.
+//!
+//! # Do not add plain behavior tests here
+//!
+//! An [`EngineProgram`] with an empty `fs`, empty `inputs`, and
+//! `expected: Ok(value)` is just a BAML `test` block written in Rust — and it
+//! pays a full compile per test to run. Those belong in
+//! `crates/baml_tests/baml_src/` instead; see
+//! `baml_language/TEST_INSTRUCTIONS.md` ("Where does a new test go?").
+//!
+//! This harness earns its keep only when the test needs something BAML cannot
+//! express: host argument injection via `inputs`, a virtual filesystem via
+//! `fs`, cancellation tokens, GC/heap observation, wall-clock timing, or a
+//! host-level `EngineError` (as opposed to a BAML-catchable throw).
 
 // Allow dead code since not all test files use all utilities
 #![allow(dead_code)]

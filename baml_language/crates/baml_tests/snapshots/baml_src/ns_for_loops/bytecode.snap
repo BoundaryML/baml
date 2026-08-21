@@ -1,0 +1,694 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function for_loops.$init_test_ns_for_loops_for_loops(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_sum"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_with_break"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_with_continue"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_nested"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "c_for_sum_to_ten"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_over_let_variable"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_over_let_variable_no_parens"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_final_if_without_semicolon_can_return"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_final_if_else_without_semicolon_can_mutate"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "nested_for_loop_final_if_without_semicolon_can_return"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_joined_map_arm_plain_branch"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_joined_map_arm_map_branch"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_joined_map_arm_first"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_joined_both_map_arms"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_generic_iterable_bound_over_list"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.for_loops"
+    load_const "for_loop_generic_iterable_bound_over_string"
+    make_closure .<lambda($init_test_ns_for_loops_for_loops, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function for_loops.for_loops_c_for_sum_to_ten() -> int {
+    load_const 0
+    store_var s
+    load_const 1
+    store_var i
+
+  L0:
+    load_var i
+    load_const 10
+    cmp_int_op <=
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var s
+    return
+
+  L2:
+    load_var2 1 2
+    add_int
+    store_var s
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function for_loops.for_loops_count_bounded(c: #0) -> int {
+    load_const 0
+    store_var n
+    load_var c
+    load_type baml.iter.Iterable
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _4
+    store_var y
+    load_var n
+    load_const 1
+    add_int
+    store_var n
+    jump L0
+
+  L2:
+    load_var n
+    return
+}
+
+function for_loops.for_loops_first_even(xs: int[]) -> int {
+    load_var xs
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+
+  L0:
+    load_var _2
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _3
+    store_var_load_var x
+    load_const 2
+    mod_int
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    load_var x
+    jump L3
+
+  L2:
+    load_const -1
+
+  L3:
+    return
+}
+
+function for_loops.for_loops_for_with_break(xs: int[]) -> int {
+    load_const 0
+    store_var result
+    load_var xs
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_var _4
+    store_var_load_var x
+    load_const 10
+    cmp_int_op >
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var2 2 5
+    add_int
+    store_var result
+    jump L0
+
+  L3:
+    load_var result
+    return
+}
+
+function for_loops.for_loops_for_with_continue(xs: int[]) -> int {
+    load_const 0
+    store_var result
+    load_var xs
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_var _4
+    store_var_load_var x
+    load_const 10
+    cmp_int_op >
+    pop_jump_if_false L2
+    jump L0
+
+  L2:
+    load_var2 2 5
+    add_int
+    store_var result
+    jump L0
+
+  L3:
+    load_var result
+    return
+}
+
+function for_loops.for_loops_has_empty_cell(grid: string[][]) -> bool {
+    load_var grid
+    load_type baml.iter.Iterable<Error = never, Item = string[]>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+
+  L0:
+    load_var _2
+    load_type baml.iter.Iterator<Error = never, Item = string[]>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _3
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _8
+
+  L2:
+    load_var _8
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+    load_var _9
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L0
+
+  L3:
+    load_var _9
+    load_const ""
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const true
+    jump L5
+
+  L4:
+    load_const false
+
+  L5:
+    return
+}
+
+function for_loops.for_loops_joined_both_map_arms(xs: int[], b: bool) -> int {
+    load_var b
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type int
+    load_type int
+    load_type never
+    load_var xs
+    make_closure .<lambda(for_loops_joined_both_map_arms, 1)>, 0
+    call baml.Array.map
+    jump L2
+
+  L1:
+    load_type int
+    load_type int
+    load_type never
+    load_var xs
+    make_closure .<lambda(for_loops_joined_both_map_arms, 0)>, 0
+    call baml.Array.map
+
+  L2:
+    load_const 0
+    store_var n
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _14
+
+  L3:
+    load_var _14
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _15
+    load_var _15
+    is_type baml.iter.Done
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var2 3 5
+    add_int
+    store_var n
+    jump L3
+
+  L5:
+    load_var n
+    return
+}
+
+function for_loops.for_loops_joined_map_arm(xs: int[], b: bool) -> int {
+    load_var b
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type int
+    load_type int
+    load_type never
+    load_var xs
+    make_closure .<lambda(for_loops_joined_map_arm, 0)>, 0
+    call baml.Array.map
+    jump L2
+
+  L1:
+    load_const 0
+    load_type int
+    alloc_array 1
+
+  L2:
+    load_const 0
+    store_var n
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _10
+
+  L3:
+    load_var _10
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _11
+    load_var _11
+    is_type baml.iter.Done
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var2 3 5
+    add_int
+    store_var n
+    jump L3
+
+  L5:
+    load_var n
+    return
+}
+
+function for_loops.for_loops_joined_map_arm_first(xs: int[], b: bool) -> int {
+    load_var b
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    load_type int
+    alloc_array 1
+    jump L2
+
+  L1:
+    load_type int
+    load_type int
+    load_type never
+    load_var xs
+    make_closure .<lambda(for_loops_joined_map_arm_first, 0)>, 0
+    call baml.Array.map
+
+  L2:
+    load_const 0
+    store_var n
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _10
+
+  L3:
+    load_var _10
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _11
+    load_var _11
+    is_type baml.iter.Done
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var2 3 5
+    add_int
+    store_var n
+    jump L3
+
+  L5:
+    load_var n
+    return
+}
+
+function for_loops.for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
+    load_const 0
+    store_var result
+    load_var arr_a
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var arr_b
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+
+  L2:
+    load_var _9
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _10
+    load_var _10
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L0
+
+  L3:
+    load_var2 3 5
+    load_var _10
+    mul_int
+    add_int
+    store_var result
+    jump L2
+
+  L4:
+    load_var result
+    return
+}
+
+function for_loops.for_loops_render(xs: string[]) -> string {
+    load_const ""
+    store_var result
+    load_var xs
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _4
+    store_var_load_var x
+    load_const ""
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var2 2 5
+    bin_op +
+    store_var result
+    jump L0
+
+  L3:
+    load_var result
+    load_const "."
+    bin_op +
+    store_var result
+    jump L0
+
+  L4:
+    load_var result
+    return
+}
+
+function for_loops.for_loops_sum(xs: int[]) -> int {
+    load_const 0
+    store_var result
+    load_var xs
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 2 4
+    add_int
+    store_var result
+    jump L0
+
+  L2:
+    load_var result
+    return
+}
+
+function for_loops.for_loops_sum_let_var() -> int {
+    load_const 0
+    store_var sum
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 3
+    add_int
+    store_var sum
+    jump L0
+
+  L2:
+    load_var sum
+    return
+}
+
+function for_loops.for_loops_sum_let_var_no_parens() -> int {
+    load_const 0
+    store_var sum
+    load_const 10
+    load_const 20
+    load_const 30
+    load_type int
+    alloc_array 3
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 3
+    add_int
+    store_var sum
+    jump L0
+
+  L2:
+    load_var sum
+    return
+}

@@ -1090,3 +1090,169 @@ interface Encoder {
     assert_eq!(bounds.len(), 1);
     assert_eq!(bounds[0].name.render_user_facing(), "Encoder");
 }
+
+/// An optional callback parameter is a callback slot too: its omitted
+/// `throws` opens to a synthetic effect param rather than an E0151.
+#[test]
+fn function_type_throws_inference_opens_optional_callback_param() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        "function opt(cb: ((value: int) -> string)?) -> string { let handler = cb; return \"ok\"; }",
+    );
+
+    assert_eq!(
+        expr_type_in_function(&db, file, "opt", "cb"),
+        "((int) -> string throws __effect_param_0) | null"
+    );
+}
+
+/// The effect param survives narrowing: invoking the callback through a
+/// null check calls it at the same synthetic effect.
+#[test]
+fn optional_callback_effect_survives_narrowing_and_invocation() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        r#"function apply_optional(callback: ((value: int) -> int)?, value: int) -> int {
+  if (callback != null) {
+    return callback(value)
+  }
+  value
+}"#,
+    );
+
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.apply_optional(callback: ((value: int) -> int throws __effect_param_0) | null, value: int) -> int throws never {
+      { : int
+        if (callback != null : bool) : void
+          { : never
+            return callback<__effect_param_0>(value) : int
+          }
+        value : int
+      }
+    }
+    block user.apply_optional {
+    }
+    ");
+}
+
+/// Per-call-site instantiation, the whole point of the effect param: a
+/// nonthrowing callback resolves it to `never`, `null` leaves it
+/// unconstrained (also `never`), and a throwing callback propagates its
+/// precise error type to the caller.
+#[test]
+fn optional_callback_effect_instantiates_per_call_site() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        r#"class CallbackError {}
+
+function apply_optional(callback: ((value: int) -> int)?, value: int) -> int {
+  if (callback != null) {
+    return callback(value)
+  }
+  value
+}
+
+function safe() -> int throws never {
+  apply_optional((value: int) -> int { value + 1 }, 1)
+}
+
+function absent() -> int throws never {
+  apply_optional(null, 1)
+}
+
+function risky() -> int throws never {
+  apply_optional((value: int) -> int { throw CallbackError {} }, -1)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    let violations: Vec<&str> = output
+        .lines()
+        .filter(|line| line.contains("declared throws"))
+        // Drop the `!! <start>..<end>:` span prefix — this asserts on which
+        // call sites violate and with what error type, not on byte offsets.
+        .filter_map(|line| line.split_once(": ").map(|(_, message)| message))
+        .collect();
+    // Only `risky` violates, and it names the callback's PRECISE error type
+    // — not `unknown`, which the `throws unknown` workaround would force.
+    assert_eq!(
+        violations,
+        vec!["declared throws is `never`, but this function may also throw `CallbackError`"],
+        "unexpected throws violations in:\n{output}"
+    );
+}
+
+/// A contract violation inside the callee names the optional callback
+/// parameter it flows from, exactly as the immediate form does.
+#[test]
+fn optional_callback_throws_violation_names_the_callback_param() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        r#"function opt(callback: ((value: int) -> int)?, value: int) -> int throws never {
+  if (callback != null) {
+    return callback(value)
+  }
+  value
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("this body may throw through callback `callback`"),
+        "expected the callback-named violation wording, got:\n{output}"
+    );
+}
+
+/// The synthetic effect param rides the package interface, so a consumer
+/// package instantiates it per call site too.
+#[test]
+fn function_type_throws_package_interface_exports_optional_effect_params() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        "function opt(cb: ((value: int) -> string)?) -> string { return \"ok\"; }",
+    );
+
+    let scope_id = find_function_scope_id(&db, file, "opt");
+    let _ = baml_compiler2_hir_ty::ide::infer_for_scope(&db, scope_id);
+
+    let iface = package_interface(&db, PackageId::new(&db, Name::new("user")));
+    let exported = iface
+        .lookup_function(&[], &Name::new("opt"))
+        .expect("exported function");
+
+    assert_eq!(
+        exported.generic_params,
+        vec![baml_type::ParamTy::new(0, Name::new("__effect_param_0"))]
+    );
+    assert_eq!(
+        exported.params[0].ty.render_canonical(),
+        "((value: int) -> string throws __effect_param_0) | null"
+    );
+}
+
+/// The opening stops at the callback root. A function type nested any
+/// deeper — a list element here — is a stored/structural position with no
+/// single call site to instantiate against, and keeps its E0151.
+#[test]
+fn nested_function_types_below_the_callback_root_stay_unopened() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        "function listed(cbs: ((value: int) -> int)[]) -> int { return 0; }",
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("function type must declare an explicit `throws` clause"),
+        "expected E0151 for a list of callbacks, got:\n{output}"
+    );
+    assert!(
+        !output.contains("__effect_param_"),
+        "a list element is not a callback root and must not open, got:\n{output}"
+    );
+}

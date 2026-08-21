@@ -1440,7 +1440,7 @@ pub fn resolved_function_sig_parts<'db>(
     // An omitted `throws` on a bodied function is a real, inferred contract
     // (`callable_throws`: declared-else-body-inferred) — render it instead
     // of the `_` hole. Bodyless declarations keep the hole: their `throws`
-    // is mandatory (E0167/E0151), and inventing `never` would hide the
+    // is mandatory (E0170/E0151), and inventing `never` would hide the
     // incompleteness.
     if data.throws.is_none() && item_data::function_has_body(db, func_loc) {
         parts.throws = SigSlot::ResolvedOwned(

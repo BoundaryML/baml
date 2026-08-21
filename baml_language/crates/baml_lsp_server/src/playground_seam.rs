@@ -872,7 +872,7 @@ impl PlaygroundSeam {
 
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
             .with_cancel_token(cancel)
-            .with_profile_enabled(false)
+            .suppress_internal_profile()
             .build();
         let data = match engine
             .call_function("testing.TestRegistry.serialize", vec![registry], ctx, true)
@@ -934,7 +934,7 @@ impl PlaygroundSeam {
 
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
             .with_cancel_token(cancel.clone())
-            .with_profile_enabled(false)
+            .suppress_internal_profile()
             .build();
         let expand_error = match engine
             .call_function(
@@ -962,7 +962,7 @@ impl PlaygroundSeam {
         // the UI from its loading state instead of spinning forever.
         let ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId::next())
             .with_cancel_token(cancel)
-            .with_profile_enabled(false)
+            .suppress_internal_profile()
             .build();
         let data = match engine
             .call_function(

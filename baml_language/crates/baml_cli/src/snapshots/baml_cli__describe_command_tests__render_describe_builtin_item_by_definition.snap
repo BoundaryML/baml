@@ -1,9 +1,8 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 517
 expression: output
 ---
-class String  (string)  <builtin>/baml/string.baml:5-573
+class String  (string)  <builtin>/baml/string.baml:5-584
 
 /// A UTF-8 encoded string.
 ///
@@ -16,27 +15,27 @@ methods:
   function length(self) -> int throws never  <builtin>/baml/string.baml:56-58
   /// Alias for `length()`.
   function char_count(self) -> int throws never  <builtin>/baml/string.baml:61-63
+  /// Returns true if the string has no characters.
+  function is_empty(self) -> bool throws never  <builtin>/baml/string.baml:72-74
   /// Returns the length of the string in **UTF-8 bytes**.
-  function byte_length(self) -> int throws never  <builtin>/baml/string.baml:76-78
+  function byte_length(self) -> int throws never  <builtin>/baml/string.baml:87-89
   /// Returns the string with all Unicode characters converted to lowercase.
-  function to_lower_case(self) -> string throws never  <builtin>/baml/string.baml:81-83
+  function to_lower_case(self) -> string throws never  <builtin>/baml/string.baml:92-94
   /// Returns the string with all Unicode characters converted to uppercase.
-  function to_upper_case(self) -> string throws never  <builtin>/baml/string.baml:86-88
+  function to_upper_case(self) -> string throws never  <builtin>/baml/string.baml:97-99
   /// Returns the string with leading and trailing whitespace removed.
-  function trim(self) -> string throws never  <builtin>/baml/string.baml:101-103
+  function trim(self) -> string throws never  <builtin>/baml/string.baml:112-114
   /// Returns the string with leading whitespace removed (trailing whitespace
-  function trim_start(self) -> string throws never  <builtin>/baml/string.baml:113-115
+  function trim_start(self) -> string throws never  <builtin>/baml/string.baml:124-126
   /// Returns the string with trailing whitespace removed (leading whitespace
-  function trim_end(self) -> string throws never  <builtin>/baml/string.baml:125-127
+  function trim_end(self) -> string throws never  <builtin>/baml/string.baml:136-138
   /// Returns true if `search` appears anywhere in the string.
-  function includes(self, search: string) -> bool throws never  <builtin>/baml/string.baml:130-132
+  function includes(self, search: string) -> bool throws never  <builtin>/baml/string.baml:141-143
   /// Returns true if the string starts with `prefix`.
-  function starts_with(self, prefix: string) -> bool throws never  <builtin>/baml/string.baml:135-137
-  /// Returns true if the string ends with `suffix`.
-  function ends_with(self, suffix: string) -> bool throws never  <builtin>/baml/string.baml:140-142
-  … 62 more lines (re-run with a higher `--budget` to see more; use `--budget 99` for full output)
+  function starts_with(self, prefix: string) -> bool throws never  <builtin>/baml/string.baml:146-148
+  … 64 more lines (re-run with a higher `--budget` to see more; use `--budget 101` for full output)
 
 static_methods:
-  … 6 more lines (re-run with a higher `--budget` to see more; use `--budget 99` for full output)
+  … 6 more lines (re-run with a higher `--budget` to see more; use `--budget 101` for full output)
 
 references (0):

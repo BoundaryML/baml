@@ -34,7 +34,10 @@ if (Get-Command gradle -ErrorAction SilentlyContinue) {
 Write-Host "==> cargo build -p bridge_java (native bridge library)"
 Push-Location $WorkspaceRoot
 try {
-    rustup run 1.93.0 cargo build -p bridge_java
+    # Toolchain pinning comes from the workspace rust-toolchain.toml (1.93.0);
+    # keep in sync with setup.sh, which cannot use `rustup run` (the nix CI
+    # arm's rustup owns no toolchains).
+    cargo build -p bridge_java
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
     Pop-Location

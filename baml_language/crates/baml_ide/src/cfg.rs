@@ -10,7 +10,6 @@ use std::collections::{HashMap, HashSet};
 
 use baml_base::SourceFile;
 
-/// ```
 /// Cap on the total node count of a fully-inlined control-flow graph. Callee
 /// graphs are copied into every call site, so an uncapped graph grows as
 /// `fan_out^depth` on deep call chains; once the budget is reached remaining

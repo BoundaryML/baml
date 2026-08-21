@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+type user.fixtures.throws_unknown.OpenErrors = unknown
+type user.fixtures.throws_unknown.OpenErrors$stream = unknown
+function user.fixtures.throws_unknown.aliased(flag: bool) -> null  [expr] {
+  { if (flag) { throw 42 } } null
+}
+function user.fixtures.throws_unknown.callback_boundary(callback: () -> null throws unknown) -> null  [expr] {
+  {  } callback() catch_all (error) { _ => throw baml.errors.UnknownError.from(error) }
+}
+function user.fixtures.throws_unknown.direct(flag: bool) -> null  [expr] {
+  { if (flag) { throw "boom" } } null
+}
+function user.fixtures.throws_unknown.plain_unknown(value: unknown) -> unknown  [expr] {
+  {  } value
+}
+function user.fixtures.throws_unknown.run(self: ?) -> null  [missing]
+function user.fixtures.throws_unknown.union_member(flag: bool) -> null  [expr] {
+  { if (flag) { throw "boom" } } null
+}

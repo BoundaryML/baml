@@ -1,0 +1,161 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function class_spread_runtime.$init_test_ns_class_spread_runtime_class_spread_runtime(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.class_spread_runtime"
+    load_const "generic_spread_preserves_callable_and_last_field"
+    make_closure .<lambda($init_test_ns_class_spread_runtime_class_spread_runtime, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.class_spread_runtime"
+    load_const "spread_factory_call_with_omitted_defaults_preserves_caller_frame"
+    make_closure .<lambda($init_test_ns_class_spread_runtime_class_spread_runtime, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function class_spread_runtime.csr_defaults(value: #0, transform: (#0) -> #0 throws never) -> class_spread_runtime.CsrTask<#0> {
+    load_var2 1 2
+    load_const "created"
+    load_type string
+    alloc_array 1
+    load_type #0
+    init_instance<1> user.class_spread_runtime.CsrTask .value, .transform, .events
+    return
+}
+
+function class_spread_runtime.csr_dispatch(values: int[]) -> int[] {
+    load_var values
+    return
+}
+
+function class_spread_runtime.csr_generic_spread() -> bool {
+    load_type int
+    load_const 1
+    make_closure .<lambda(csr_generic_spread, 0)>, 0
+    call user.class_spread_runtime.csr_defaults
+    store_var _2
+    load_type int
+    alloc_instance<1> user.class_spread_runtime.CsrTask
+    load_const 41
+    init_field .value
+    load_var _2
+    init_spread .transform, .events
+    store_var_load_var task
+    load_field .value
+    load_var task
+    load_field .transform
+    call_indirect
+    load_const 42
+    cmp_int_op ==
+    jump_if_false L0
+    pop 1
+    load_var task
+    load_field .events
+    load_const "created"
+    load_type string
+    alloc_array 1
+    call baml.ops.equals_equals
+
+  L0:
+    return
+}
+
+function class_spread_runtime.csr_option_defaults(tools: class_spread_runtime.CsrTool[], callback: (int[]) -> int[] throws never, registry: class_spread_runtime.CsrTool | null, hook: class_spread_runtime.CsrTool | null, observers: class_spread_runtime.CsrTool[]) -> class_spread_runtime.CsrOptions {
+    load_var registry
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var registry
+
+  L0:
+    load_var hook
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var hook
+
+  L1:
+    load_var observers
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
+    load_type class_spread_runtime.CsrTool
+    alloc_array 0
+    store_var observers
+
+  L2:
+    load_const 5
+    load_var2 1 3
+    load_var2 4 5
+    load_var callback
+    init_instance user.class_spread_runtime.CsrOptions .budget, .tools, .registry, .hook, .observers, .dispatch
+    return
+}
+
+function class_spread_runtime.csr_spread_with_omitted_defaults() -> bool {
+    call user.class_spread_runtime.csr_tool
+    load_type class_spread_runtime.CsrTool
+    alloc_array 1
+    load_const user.class_spread_runtime.csr_dispatch
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call user.class_spread_runtime.csr_option_defaults
+    store_var _2
+    alloc_instance user.class_spread_runtime.CsrOptions
+    load_const 1
+    init_field .budget
+    load_var _2
+    init_spread .tools, .registry, .hook, .observers, .dispatch
+    store_var_load_var options
+    load_field .budget
+    load_const 1
+    cmp_int_op ==
+    jump_if_false L0
+    pop 1
+    load_const 1
+    load_type int
+    alloc_array 1
+    load_var options
+    load_field .dispatch
+    call_indirect
+    container_len
+    store_var _9
+    load_var _9
+    load_const 1
+    cmp_int_op ==
+
+  L0:
+    jump_if_false L1
+    pop 1
+    load_var options
+    load_field .registry
+    load_const null
+    call baml.ops.equals_equals
+
+  L1:
+    jump_if_false L2
+    pop 1
+    load_var options
+    load_field .hook
+    load_const null
+    call baml.ops.equals_equals
+
+  L2:
+    return
+}
+
+function class_spread_runtime.csr_tool() -> class_spread_runtime.CsrTool {
+    load_const "knowledge"
+    init_instance user.class_spread_runtime.CsrTool .name
+    return
+}

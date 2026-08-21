@@ -103,6 +103,12 @@ impl<'db> InferenceContext<'db> {
                     return Attempt::Done;
                 }
                 if !ty.has_infer() && !interface_has_infer(&interface) {
+                    // One spelling, one verdict (B-1576): resolution can
+                    // ground a syntactic union after this obligation
+                    // registered. Judge the canonical form - the same
+                    // spelling finalize's mismatch filter re-judges - so
+                    // verdict and report cannot diverge.
+                    let ty = self.canonicalize_unions(&ty);
                     if *not_concrete_rejects
                         && matches!(ty.kind(), TyKind::Interface(..) | TyKind::Union(..))
                     {
@@ -115,6 +121,17 @@ impl<'db> InferenceContext<'db> {
                         return Attempt::Done;
                     }
                     if !self.implements_holds(&ty, &interface) {
+                        // BUG: this reduction launders a NOMINAL verdict ("no
+                        // impl exists") into a SUBTYPING pair — and the
+                        // mismatch finalization pass re-judges pairs with
+                        // `cached_subtype`, which holds vacuously for
+                        // `never <: I-existential`, erasing the failure.
+                        // `plain<never>(1)` under `T extends I` therefore
+                        // checks clean and dies in the VM's (correctly
+                        // nominal) impl resolver. Fix = a dedicated
+                        // does-not-implement channel whose deferred re-check
+                        // re-runs `implements_holds`, never `sub`. Full
+                        // analysis: HANDOFF_implements_not_subtyping.md.
                         let expected = interface.existential();
                         self.result
                             .type_mismatches

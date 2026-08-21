@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.namespaces_root_fallback.llm.Response {
+  text: string
+}
+class user.fixtures.namespaces_root_fallback.llm.Response$stream {
+  text: string | null
+}
+function user.fixtures.namespaces_root_fallback.llm.UseConfig(cfg: root.fixtures.namespaces_root_fallback.Config) -> user.fixtures.namespaces_root_fallback.llm.Response  [expr] {
+  {  } user.fixtures.namespaces_root_fallback.llm.Response { text: cfg.key }
+}
+function user.fixtures.namespaces_root_fallback.llm.UseRootProbe(p: root.RootFallbackProbe) -> user.fixtures.namespaces_root_fallback.llm.Response  [expr] {
+  {  } user.fixtures.namespaces_root_fallback.llm.Response { text: p.tag }
+}

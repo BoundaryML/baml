@@ -1,0 +1,18 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+method functions  <builtin>/baml/ns_reflect/reflect.baml:165-167
+
+/// Exported free-function descriptors, keyed by package-local name.
+///
+/// Every declared function is listed, including generic ones and their
+/// generated companions. A generic entry reports `is_generic() == true` and
+/// has no readable signature until `specialize(args)` supplies its type
+/// arguments; the specialized descriptor's `get<F>()` yields the callable.
+function functions(self) -> map<string, baml.reflect.function.Type> throws never
+
+container:
+  class            Package                          <builtin>/baml/ns_reflect/reflect.baml:88
+
+references (0):

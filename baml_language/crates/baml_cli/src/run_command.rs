@@ -10,7 +10,7 @@ use anyhow::{Context, Result, anyhow};
 use baml_db::{ProjectDatabase, baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use bex_engine::{
     BexEngine, FunctionCallContext, FunctionCallContextBuilder, UserFunctionInfo,
-    value_capture::TraceCaptureProducer,
+    logger::TraceLogger,
 };
 // `surface_clap_error` is defined later in this file.
 // For --log-file event sink.
@@ -259,12 +259,12 @@ pub use baml_exec::OutputFormat;
 // ============================================================================
 
 impl RunArgs {
-    fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
+    fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceLogger>) {
         let builder = FunctionCallContextBuilder::new(call_id);
         LogOutput::new(self.log, "run").call_context(builder)
     }
 
-    fn print_logs(&self, producer: Option<&TraceCaptureProducer>) {
+    fn print_logs(&self, producer: Option<&TraceLogger>) {
         LogOutput::new(self.log, "run").print(producer);
     }
 
@@ -272,7 +272,7 @@ impl RunArgs {
         &self,
         rt: &tokio::runtime::Runtime,
         future: impl std::future::Future<Output = T>,
-        producer: Option<&TraceCaptureProducer>,
+        producer: Option<&TraceLogger>,
     ) -> T {
         LogOutput::new(self.log, "run").block_on(rt, future, producer)
     }
@@ -1040,7 +1040,7 @@ impl RunArgs {
             });
         let output_format = self.output_format;
         let (call_context, logs) = self.call_context(CallId::next());
-        let capture = baml_exec::CallContextCapture::from_call_context(&call_context);
+        let helper_context = baml_exec::HelperCallContext::from_call_context(&call_context);
         let call_result = self.block_on_with_logs(
             &rt,
             engine.call_function("baml_run_expr_main__", vec![], call_context, true),
@@ -1057,7 +1057,7 @@ impl RunArgs {
                             value,
                             &return_type,
                             output_format,
-                            &capture,
+                            &helper_context,
                             || self.print_logs(logs.as_ref()),
                         )
                         .await

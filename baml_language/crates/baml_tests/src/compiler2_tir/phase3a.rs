@@ -194,6 +194,44 @@ function Greet(name: string) -> string {
 }
 
 #[test]
+fn llm_companions_name_defaulted_spec_arguments() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+client MyClient = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "k");
+
+function Greet(name: string, suffix: string = "!") -> string {
+  client: MyClient
+  prompt: `Hello ${name}${suffix}`
+}
+
+function main() -> string {
+  Greet$render_prompt("Ada").text()
+}
+"#,
+    );
+
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("!!"),
+        "defaulted LLM companions should compile without diagnostics:\n{tir}"
+    );
+    assert!(
+        tir.contains("Greet$render_prompt(name: string, suffix: string = \"!\")")
+            && tir.contains("Greet$build_request(name: string, suffix: string = \"!\", client:")
+            && tir.contains("suffix = suffix"),
+        "render-prompt/build-request companions must preserve the defaulted argument as named:\n{tir}"
+    );
+    assert!(
+        tir.contains("ai.Agent.new<string>")
+            && tir.contains("Greet$spec(name, suffix = suffix)")
+            && tir.contains("ai.stream.from_spec(Greet$spec(name, suffix = suffix)"),
+        "direct and stream companions must name the defaulted spec argument:\n{tir}"
+    );
+}
+
+#[test]
 fn new_mode_failures_have_good_diagnostics() {
     // BEP-049 M5: every way a new-mode (backtick) `prompt` can go wrong must
     // surface a diagnostic that points at the user's `${…}` source with a
@@ -807,8 +845,8 @@ function f() -> string {
 fn llm_client_override_argument_is_callable_on_function() {
     // The compiler injects a `client: ai.Client? = null` override parameter on
     // every LLM function; a call site can pass any ai.Client value for it.
-    // (The legacy `$build_request` companion — which shared the override — is
-    // gone with the legacy LLM path.)
+    // The generated `$build_request` companion shares the client override with
+    // the parent LLM function.
     let mut db = make_db();
     let file = db.file(
         "test.baml",

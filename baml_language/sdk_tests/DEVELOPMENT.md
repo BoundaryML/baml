@@ -37,7 +37,7 @@ codegen + project-loading deps only land where they're needed:
 - **`sdk_test_harness_setup`** (`[build-dependencies]`) holds the build.rs
   logic -- fixture discovery, codegen, install, scaffold emission,
   `BuildDiagnostics`. Depends on `sdkgen_python_pydantic2`, `sdkgen_typescript_shared`,
-  `sdkgen_rust`, `baml_project`, `baml_db`, `baml_workspace`, `baml_codegen_types`.
+  `sdkgen_rust`, `baml_db`, `baml_ide`, `baml_codegen_types`.
 - **`sdk_test_harness_runner`** (`[dev-dependencies]`) holds every emitted
   test's runtime side -- `run_test_cmd` / `run_test_cmd_with_env`,
   the per-generator `<generator>::test_suite!()` macros that

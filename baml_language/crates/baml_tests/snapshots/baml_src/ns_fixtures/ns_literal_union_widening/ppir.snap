@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.literal_union_widening.annotatedLiteralUnion() -> int  [expr] {
+  { let x: 1 | 2 = 1; return x }
+}
+function user.fixtures.literal_union_widening.arrayOfInts() -> int[]  [expr] {
+  { let x = [1, 2, 3]; return x }
+}
+function user.fixtures.literal_union_widening.mapOfInts() -> map<string, int>  [expr] {
+  { let m = map { "a": 1, "b": 2 }; return m }
+}
+function user.fixtures.literal_union_widening.nestedArray() -> int[][]  [expr] {
+  { let x = [[1, 2], [3, 4]]; return x }
+}

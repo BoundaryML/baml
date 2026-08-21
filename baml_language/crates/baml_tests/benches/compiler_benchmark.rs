@@ -102,12 +102,12 @@ fn bench_compile_project(bencher: Bencher, root: &Path) {
 // Benchmarks
 // ============================================================================
 
-/// Constant-overhead baseline: an empty project (the `__baml_std__` fixture,
+/// Constant-overhead baseline: an empty project (the `projects/empty` fixture,
 /// whose only file is a comment). With no user code to compile, the measured
 /// time is the compiler's fixed cost (builtin stubs, Salsa setup, empty emit).
 #[divan::bench]
 fn compile_empty_project(bencher: Bencher) {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/compiles/__baml_std__");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/empty");
     bench_compile_project(bencher, &root);
 }
 

@@ -530,7 +530,7 @@ pub fn json_parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
         match throw_json_parse_error(vm, msg) {
-            Ok(v) => VmRustFnError::Thrown(v),
+            Ok(v) => VmRustFnError::thrown_fresh(v),
             Err(e) => VmRustFnError::InternalError(e),
         }
     })?;
@@ -590,7 +590,7 @@ fn throw_json_serialization_error(
 
 fn raise_decode(vm: &mut BexVm, message: impl Into<String>, path: &str) -> VmRustFnError {
     match throw_json_decode_error(vm, message.into(), path) {
-        Ok(v) => VmRustFnError::Thrown(v),
+        Ok(v) => VmRustFnError::thrown_fresh(v),
         Err(e) => VmRustFnError::InternalError(e),
     }
 }
@@ -602,7 +602,7 @@ fn raise_serialize(
     reason: &str,
 ) -> VmRustFnError {
     match throw_json_serialization_error(vm, message.into(), path, reason) {
-        Ok(v) => VmRustFnError::Thrown(v),
+        Ok(v) => VmRustFnError::thrown_fresh(v),
         Err(e) => VmRustFnError::InternalError(e),
     }
 }
@@ -956,12 +956,16 @@ fn serialize_class_instance(
     qtn: &TypeName,
     path: &mut String,
 ) -> Result<serde_json::Value, VmRustFnError> {
+    // Decode/serialize errors name the type the way its source spelled it:
+    // a runtime mint keys identity inside the VM and is not a name anyone
+    // wrote. `qtn` itself stays the lookup key.
+    let shown = qtn.source_spelling();
     let inst_ptr = match value.as_object_ptr() {
         Some(ptr) => ptr,
         None => {
             return Err(raise_serialize(
                 vm,
-                format!("expected class instance for `{qtn}`"),
+                format!("expected class instance for `{shown}`"),
                 path,
                 "class",
             ));
@@ -976,7 +980,7 @@ fn serialize_class_instance(
         _ => {
             return Err(raise_serialize(
                 vm,
-                format!("expected class instance for `{qtn}`"),
+                format!("expected class instance for `{shown}`"),
                 path,
                 "class",
             ));
@@ -992,7 +996,7 @@ fn serialize_class_instance(
         _ => {
             return Err(raise_serialize(
                 vm,
-                format!("instance class pointer for `{qtn}` is not a class"),
+                format!("instance class pointer for `{shown}` is not a class"),
                 path,
                 "class",
             ));
@@ -1008,7 +1012,7 @@ fn serialize_class_instance(
         let Some(field_value) = field_values.get(i).copied() else {
             return Err(raise_serialize(
                 vm,
-                format!("class `{qtn}` has fewer fields than declared"),
+                format!("class `{shown}` has fewer fields than declared"),
                 path,
                 "class",
             ));
@@ -1108,7 +1112,7 @@ pub fn json_from_string_typed(
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
         match throw_json_parse_error(vm, msg) {
-            Ok(v) => VmRustFnError::Thrown(v),
+            Ok(v) => VmRustFnError::thrown_fresh(v),
             Err(e) => VmRustFnError::InternalError(e),
         }
     })?;
@@ -1323,12 +1327,14 @@ fn deserialize_class_instance(
     type_args: &[RealizedTy],
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
+    // As its source spelled it, never the mint (see `serialize_class_instance`).
+    let shown = qtn.source_spelling();
     let map = match json {
         serde_json::Value::Object(m) => m,
         _ => {
             return Err(raise_decode(
                 vm,
-                format!("expected JSON object for class `{qtn}`"),
+                format!("expected JSON object for class `{shown}`"),
                 path,
             ));
         }
@@ -1336,11 +1342,11 @@ fn deserialize_class_instance(
 
     let class_ptr = vm
         .lookup_type(qtn)
-        .ok_or_else(|| raise_decode(vm, format!("class `{qtn}` not found"), path))?;
+        .ok_or_else(|| raise_decode(vm, format!("class `{shown}` not found"), path))?;
     let class_fields = match vm.get_object(class_ptr) {
         Object::Class(c) => c.fields.clone(),
         _ => {
-            return Err(raise_decode(vm, format!("`{qtn}` is not a class"), path));
+            return Err(raise_decode(vm, format!("`{shown}` is not a class"), path));
         }
     };
 
@@ -1385,20 +1391,22 @@ fn deserialize_enum_variant(
     variant_name: &str,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
+    // As its source spelled it, never the mint (see `serialize_class_instance`).
+    let shown = qtn.source_spelling();
     let enm_ptr = vm
         .lookup_type(qtn)
-        .ok_or_else(|| raise_decode(vm, format!("enum `{qtn}` not found"), path))?;
+        .ok_or_else(|| raise_decode(vm, format!("enum `{shown}` not found"), path))?;
     let idx = match vm.get_object(enm_ptr) {
         Object::Enum(e) => e.variants.iter().position(|v| v.name == variant_name),
         _ => {
-            return Err(raise_decode(vm, format!("`{qtn}` is not an enum"), path));
+            return Err(raise_decode(vm, format!("`{shown}` is not an enum"), path));
         }
     };
     match idx {
         Some(i) => Ok(Value::object(vm.alloc_variant(enm_ptr, i))),
         None => Err(raise_decode(
             vm,
-            format!("unknown variant `{variant_name}` for enum `{qtn}`"),
+            format!("unknown variant `{variant_name}` for enum `{shown}`"),
             path,
         )),
     }
@@ -1428,6 +1436,8 @@ fn deserialize_media(
     qtn: &TypeName,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
+    // As its source spelled it, never the mint (see `serialize_class_instance`).
+    let shown = qtn.source_spelling();
     let map = match json {
         serde_json::Value::Object(m) => m,
         _ => {
@@ -1477,7 +1487,7 @@ fn deserialize_media(
 
     let class_ptr = vm
         .lookup_type(qtn)
-        .ok_or_else(|| raise_decode(vm, format!("media class `{qtn}` not found"), path))?;
+        .ok_or_else(|| raise_decode(vm, format!("media class `{shown}` not found"), path))?;
     let data_val = Value::object(vm.alloc_rust_data(media_arc));
     Ok(Value::object(vm.alloc_instance(class_ptr, vec![data_val])))
 }
@@ -1583,13 +1593,15 @@ fn class_from_json_start(
     qtn: &TypeName,
     type_args: &[RealizedTy],
 ) -> NativeCallResult {
+    // As its source spelled it, never the mint (see `serialize_class_instance`).
+    let shown = qtn.source_spelling();
     let map: IndexMap<bex_vm_types::BexStr, Value> = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
             Object::Map(m) => m.lock().iter().map(|(k, v)| (k.clone(), *v)).collect(),
             _ => {
                 return NativeCallResult::Error(raise_decode(
                     vm,
-                    format!("expected JSON object for class `{qtn}`"),
+                    format!("expected JSON object for class `{shown}`"),
                     "",
                 ));
             }
@@ -1597,7 +1609,7 @@ fn class_from_json_start(
         None => {
             return NativeCallResult::Error(raise_decode(
                 vm,
-                format!("expected JSON object for class `{qtn}`"),
+                format!("expected JSON object for class `{shown}`"),
                 "",
             ));
         }
@@ -1607,7 +1619,7 @@ fn class_from_json_start(
         None => {
             return NativeCallResult::Error(raise_decode(
                 vm,
-                format!("class `{qtn}` not found"),
+                format!("class `{shown}` not found"),
                 "",
             ));
         }
@@ -1617,7 +1629,7 @@ fn class_from_json_start(
         _ => {
             return NativeCallResult::Error(raise_decode(
                 vm,
-                format!("`{qtn}` is not a class"),
+                format!("`{shown}` is not a class"),
                 "",
             ));
         }

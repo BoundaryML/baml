@@ -1,0 +1,391 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIIdentity(c: fixtures.namespaces_type_resolution.llm.openai.Client) -> fixtures.namespaces_type_resolution.llm.openai.Client {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.llm.openai.Client // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.openai.Client // c // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIConstruct(key: string) -> fixtures.namespaces_type_resolution.llm.openai.Client {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.llm.openai.Client // _0 // return
+    let _1: string // key // param
+
+    bb0: {
+        _0 = user.fixtures.namespaces_type_resolution.llm.openai.Client { copy _1, const "org-123" };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIEnumReturn() -> fixtures.namespaces_type_resolution.llm.openai.Model {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.llm.openai.Model // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.llm.openai.Model.GPT4o;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIEnumMatch(m: fixtures.namespaces_type_resolution.llm.openai.Model) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.openai.Model // m // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Model.GPT4o: bb4, Model.GPT4oMini: bb3, Model.O3: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "o3";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "gpt4o-mini";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "gpt4o";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIThrowClass(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: fixtures.namespaces_type_resolution.llm.openai.Error
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        _2 = user.fixtures.namespaces_type_resolution.llm.openai.Error { const 429_i64, const "rate limited" };
+        throw copy _2;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIThrowEnum(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const user.fixtures.namespaces_type_resolution.llm.openai.Model.O3;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesRootConfig(cfg: fixtures.namespaces_type_resolution.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesRootStatus() -> fixtures.namespaces_type_resolution.Status {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.Status // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.Status.Ok;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesRootStatus(s: fixtures.namespaces_type_resolution.Status) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "pending";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "failed";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ok";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmConfig(cfg: fixtures.namespaces_type_resolution.llm.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmResponse(r: fixtures.namespaces_type_resolution.llm.Response) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Response // r // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmStatus() -> fixtures.namespaces_type_resolution.llm.Status {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.llm.Status // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.llm.Status.Generating;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesLlmStatus(s: fixtures.namespaces_type_resolution.llm.Status) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ready: bb4, Status.Generating: bb3, Status.Done: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "done";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "generating";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ready";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesAuthConfig(cfg: fixtures.namespaces_type_resolution.auth.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.auth.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesAuthRole() -> fixtures.namespaces_type_resolution.auth.Role {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.auth.Role // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.auth.Role.User;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesAuthRole(r: fixtures.namespaces_type_resolution.auth.Role) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.auth.Role // r // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Role.Admin: bb4, Role.User: bb3, Role.Guest: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "guest";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "user";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "admin";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIMixedErrors(openai_err: fixtures.namespaces_type_resolution.llm.openai.Error, root_err: fixtures.namespaces_type_resolution.Error, llm_err: fixtures.namespaces_type_resolution.llm.Error, auth_err: fixtures.namespaces_type_resolution.auth.Error) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.openai.Error // openai_err // param
+    let _2: fixtures.namespaces_type_resolution.Error // root_err // param
+    let _3: fixtures.namespaces_type_resolution.llm.Error // llm_err // param
+    let _4: fixtures.namespaces_type_resolution.auth.Error // auth_err // param
+
+    bb0: {
+        _0 = copy _1.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.llm.openai.OpenAIMixedModels(openai_model: fixtures.namespaces_type_resolution.llm.openai.Model, llm_model: fixtures.namespaces_type_resolution.llm.Model) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.openai.Model // openai_model // param
+    let _2: fixtures.namespaces_type_resolution.llm.Model // llm_model // param
+    let _3: int
+
+    bb0: {
+        _3 = discriminant(_1);
+        switch copy _3 [Model.GPT4o: bb4, Model.GPT4oMini: bb3, Model.O3: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "o3";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "mini";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "gpt4o";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}

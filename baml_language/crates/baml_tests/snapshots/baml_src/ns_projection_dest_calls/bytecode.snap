@@ -1,0 +1,187 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function projection_dest_calls.$init_test_ns_projection_dest_calls_projection_dest_calls(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.projection_dest_calls"
+    load_const "equality_result_assigned_to_field"
+    make_closure .<lambda($init_test_ns_projection_dest_calls_projection_dest_calls, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.projection_dest_calls"
+    load_const "virtual_call_result_assigned_to_field"
+    make_closure .<lambda($init_test_ns_projection_dest_calls_projection_dest_calls, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.projection_dest_calls"
+    load_const "method_call_result_can_be_the_base_of_nested_field_assignment"
+    make_closure .<lambda($init_test_ns_projection_dest_calls_projection_dest_calls, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function projection_dest_calls.PdcNo.PdcFlag.flag(self: projection_dest_calls.PdcNo) -> bool {
+    load_const false
+    return
+}
+
+function projection_dest_calls.PdcStore.require(self: projection_dest_calls.PdcStore) -> projection_dest_calls.PdcRecord {
+    load_var self
+    copy 0
+    load_field .calls
+    load_const 1
+    bin_op +
+    store_field .calls
+    load_var self
+    load_field .record
+    return
+}
+
+function projection_dest_calls.PdcTag.baml.ops.Equals.eq(self: projection_dest_calls.PdcTag, other: projection_dest_calls.PdcTag) -> bool {
+    load_var self
+    load_field .id
+    load_var other
+    load_field .0
+    cmp_int_op ==
+    return
+}
+
+function projection_dest_calls.PdcYes.PdcFlag.flag(self: projection_dest_calls.PdcYes) -> bool {
+    load_const true
+    return
+}
+
+function projection_dest_calls.pdc_call_base_nested_assignment() -> bool {
+    load_const null
+    init_instance user.projection_dest_calls.PdcInfo .title
+    init_instance user.projection_dest_calls.PdcRecord .info
+    load_const 0
+    init_instance user.projection_dest_calls.PdcStore .record, .calls
+    store_var store
+    load_var store
+    call user.projection_dest_calls.PdcStore.require
+    load_field .info
+    load_const "triage"
+    store_field .title
+    load_var store
+    load_field .record
+    load_field .info
+    load_field .title
+    load_const "triage"
+    call baml.ops.equals_equals
+    jump_if_false L0
+    pop 1
+    load_var store
+    load_field .calls
+    load_const 1
+    cmp_int_op ==
+
+  L0:
+    return
+}
+
+function projection_dest_calls.pdc_eq_into_field_false() -> bool {
+    load_const true
+    init_instance user.projection_dest_calls.PdcBoolBox .flag
+    store_var b
+    load_const 1
+    call user.projection_dest_calls.pdc_tag
+    store_var _2
+    load_const 2
+    call user.projection_dest_calls.pdc_tag
+    store_var _3
+    load_var2 2 3
+    call baml.ops.equals_equals
+    store_var _4
+    load_var2 1 4
+    store_field .flag
+    load_var b
+    load_field .flag
+    return
+}
+
+function projection_dest_calls.pdc_eq_into_field_true() -> bool {
+    load_const false
+    init_instance user.projection_dest_calls.PdcBoolBox .flag
+    store_var b
+    load_const 1
+    call user.projection_dest_calls.pdc_tag
+    store_var _2
+    load_const 1
+    call user.projection_dest_calls.pdc_tag
+    store_var _3
+    load_var2 2 3
+    call baml.ops.equals_equals
+    store_var _4
+    load_var2 1 4
+    store_field .flag
+    load_var b
+    load_field .flag
+    return
+}
+
+function projection_dest_calls.pdc_flag_into_field_false() -> bool {
+    load_const true
+    init_instance user.projection_dest_calls.PdcBoolBox .flag
+    store_var b
+    alloc_instance user.projection_dest_calls.PdcNo
+    load_type projection_dest_calls.PdcFlag
+    load_const "flag"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var2 1 2
+    store_field .flag
+    load_var b
+    load_field .flag
+    return
+}
+
+function projection_dest_calls.pdc_flag_into_field_true() -> bool {
+    load_const false
+    init_instance user.projection_dest_calls.PdcBoolBox .flag
+    store_var b
+    alloc_instance user.projection_dest_calls.PdcYes
+    load_type projection_dest_calls.PdcFlag
+    load_const "flag"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var2 1 2
+    store_field .flag
+    load_var b
+    load_field .flag
+    return
+}
+
+function projection_dest_calls.pdc_ne_into_field_true() -> bool {
+    load_const false
+    init_instance user.projection_dest_calls.PdcBoolBox .flag
+    store_var b
+    load_const 1
+    call user.projection_dest_calls.pdc_tag
+    store_var _2
+    load_const 2
+    call user.projection_dest_calls.pdc_tag
+    store_var _3
+    load_var2 2 3
+    call baml.ops.equals_equals
+    store_var _4
+    load_var2 1 4
+    unary_op !
+    store_field .flag
+    load_var b
+    load_field .flag
+    return
+}
+
+function projection_dest_calls.pdc_tag(id: int) -> projection_dest_calls.PdcTag {
+    load_var id
+    init_instance user.projection_dest_calls.PdcTag .id
+    return
+}

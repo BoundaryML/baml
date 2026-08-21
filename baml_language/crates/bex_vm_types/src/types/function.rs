@@ -297,7 +297,7 @@ pub struct Function {
 
     /// Per-run profiling id (`0` = unassigned), written into the BEX event
     /// stream's `CallFunction` records and resolved through the per-run
-    /// function table in the `.bamlprof` header. Assigned by the engine's
+    /// function table registered with the direct consumer. Assigned by the engine's
     /// interim provider at construction (plan §2.6); the M0 id table moves
     /// assignment to compile time. `#[borsh(skip)]` keeps it out of the pack
     /// envelope — it is runtime-only state, and skipping it leaves the wire
@@ -377,8 +377,7 @@ pub struct BoundMethod {
 /// Unlike `Closure`/`BoundMethod`, the base function is referenced by its
 /// **global slot** (`GlobalIndex`), not a `HeapPtr` — so a `GenericFunction`
 /// can live in the immutable compile-time object pool and be interned by
-/// `(function, type_args)`, giving pointer-stable identity. Both fields are
-/// non-pointer data, so GC treats this as a leaf (nothing to trace or fix up).
+/// `(function, type_args)`, giving pointer-stable identity.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct GenericFunction {
     /// Global slot of the underlying `Object::Function` (resolved at call time
@@ -389,6 +388,23 @@ pub struct GenericFunction {
     /// Owning runtime package for resolving `function` in its local globals.
     #[borsh(skip)]
     pub runtime_package: HeapPtr,
+    /// Exact BEP-066 type *values* behind [`Self::type_args`], parallel to it,
+    /// for the slots that were supplied as runtime type values.
+    ///
+    /// `type_args` is realized-type data only, which is all an ordinary
+    /// compile-time instantiation (`foo<int>`) needs. A callable specialized
+    /// through reflection is handed real `type` values instead, and those carry
+    /// a mint and a `DynTypeDefs` overlay that the body's `LoadType` must see —
+    /// otherwise `type.of<T>()` inside re-mints a bare name whose runtime
+    /// definition nothing can resolve. When present, the call path seeds the
+    /// callee's [`crate::types::TypeValue`]-carrying frame metadata from this
+    /// lane (see `BexVm::execute_call_from_locals_offset`).
+    ///
+    /// `None` for every compile-time instantiation, which keeps the pooled,
+    /// interned objects byte-identical to what emit writes. Runtime-only, so
+    /// Borsh skips it — a compiled program never contains one.
+    #[borsh(skip)]
+    pub exact_type_values: Option<Box<[Option<crate::types::TypeValue>]>>,
 }
 
 /// A host-language callable bound to a BAML function type.

@@ -1552,6 +1552,16 @@ fn new_tir_diagnostic(
             .with_primary_span(span)
             .with_phase(DiagnosticPhase::Type);
     }
+    if let TirTypeError::RuntimeTypeMustBeNamed { escape } = error {
+        // The headline says what is wrong; the label at the `unreflect(...)`
+        // slot says why the inline spelling cannot reach past this call —
+        // naming whichever published type the runtime parameter reached, the
+        // value or the error. The rewrite rides along as related info, built
+        // from the file text in `render_with_type_refs`.
+        return runtime_type::runtime_type_must_be_named()
+            .with_primary(span, escape.note())
+            .with_phase(DiagnosticPhase::Type);
+    }
     if let TirTypeError::CannotConstructReflectionKind { class_name } = error {
         return runtime_type::cannot_construct_reflection_kind(&class_name.render_user_facing())
             .with_primary_span(span)
@@ -1783,8 +1793,10 @@ fn source_aware_tir_type_error_message(
                 )
             }
         }
+        // Both spellings that write an interface qualifier report here:
+        // `x.as<T>` and `(Base as T).item`.
         TirTypeError::InvalidInterfaceUpcastTarget { target } => {
-            format!("`.as<T>` requires an interface target, got {}", ty(target))
+            format!("expected an interface qualifier, got {}", ty(target))
         }
         TirTypeError::RuntimeIdArgumentTypeMismatch { got } => format!(
             "`$id` at a call site expects `boundary.LocalId`, got {}",
@@ -1816,6 +1828,9 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
             runtime_type::computed_generic_argument_requires_unreflect(name.as_str()).id
         }
+        TirTypeError::RuntimeTypeMustBeNamed { .. } => {
+            runtime_type::runtime_type_must_be_named().id
+        }
         TirTypeError::MountedPackageCallUnsupported { path } => {
             runtime_type::mounted_package_call_unsupported(path.as_str()).id
         }
@@ -1824,6 +1839,7 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::CannotConstructBuiltinCompanion
         }
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
+        TirTypeError::ConditionAlwaysConstant { .. } => DiagnosticId::ConditionAlwaysConstant,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
         TirTypeError::SpawnWithNotATransformer { .. } => DiagnosticId::TypeMismatch,
@@ -1903,6 +1919,9 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InvalidInterfaceUpcastTarget { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::InterfaceMemberRequiresReceiver { .. } => DiagnosticId::NoSuchField,
         TirTypeError::InvalidSelfCallThroughInterface { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::SelflessMethodNeedsConcreteSelf { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::SelflessInstanceMember { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::ErasedSelfMethodValue { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::DefaultOnRequiredMethod { .. } => DiagnosticId::DefaultOnRequiredMethod,
         TirTypeError::BareDefaultKeyword => DiagnosticId::BareDefaultKeyword,
         TirTypeError::TypeDoesNotImplementInterface { .. } => DiagnosticId::TypeMismatch,
@@ -2005,6 +2024,13 @@ struct TyDisplayContext<'db> {
 }
 
 impl TyDisplayContext<'_> {
+    /// Every namespace decision below reads
+    /// [`QualifiedTypeName::source_namespace`], not `namespace()`: a
+    /// runtime-minted declaration carries a hidden `$dyn.<mint>`
+    /// discriminator that keys its identity in the VM, and rendering it would
+    /// show a path nobody can write. Below the discriminator the name is the
+    /// one the source wrote, and that is what this path — every `check_file`
+    /// diagnostic, including the ones a runtime compile hands back — shows.
     fn display_qtn(&self, qtn: &QualifiedTypeName) -> String {
         if qtn.package() != &self.current_package {
             // Cross-package: keep the dependency package prefix to disambiguate,
@@ -2017,7 +2043,7 @@ impl TyDisplayContext<'_> {
         }
 
         let path = qtn
-            .namespace()
+            .source_namespace()
             .iter()
             .chain(std::iter::once(qtn.name()))
             .map(Name::as_str)
@@ -2027,11 +2053,11 @@ impl TyDisplayContext<'_> {
     }
 
     fn can_use_bare_name(&self, qtn: &QualifiedTypeName) -> bool {
-        if qtn.namespace() == &self.current_namespace {
+        if qtn.source_namespace() == self.current_namespace {
             return true;
         }
 
-        if qtn.namespace().is_empty() {
+        if qtn.source_namespace().is_empty() {
             return self
                 .package_items
                 .lookup_type(&self.current_namespace, qtn.name())
@@ -2176,7 +2202,7 @@ function demo() -> int throws never {
     #[test]
     fn check_file_reports_interface_method_missing_throws() {
         // Interface signatures are dispatch contracts: `throws` is never
-        // inferred, for required and default methods alike (E0167).
+        // inferred, for required and default methods alike (E0170).
         let (db, file) = single_file(
             r#"interface Store {
     function get(self, key: string) -> string

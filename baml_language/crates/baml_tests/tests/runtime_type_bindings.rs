@@ -238,3 +238,926 @@ function main() -> string throws unknown {
     );
     assert_eq!(output.result, Ok(BexExternalValue::String("E0010".into())));
 }
+
+/// A scripted `ai.Client` that answers with a fixed payload, so the Agent loop
+/// runs end to end without a network or an API key.
+const PROBE_CLIENT: &str = r##"
+client DefaultClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+class ProbeClient {
+    reply: string,
+
+    implements ai.Client {
+        function id(self) -> string {
+            "probe"
+        }
+
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            let _ = input;
+            baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: "{}" }
+        }
+
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            let _ = input;
+            ai.ModelTurn {
+                content: [ai.content.Text { text: self.reply }],
+                stop_reason: ai.content.StopReason.Complete,
+                usage: null,
+            }
+        }
+    }
+}
+"##;
+
+/// B-1582 item 1: an interface-impl method reads its owner's type argument out
+/// of the resolved impl frame, which carries realized types but no runtime
+/// definition overlay. Anything that needs the *definition* — SAP, rendering,
+/// reflection — used to fail on a type the caller could use fine.
+#[tokio::test]
+async fn interface_impl_methods_keep_runtime_type_definitions() {
+    let output = baml_test!(
+        r##"
+        interface Parser<Out> {
+            function parse_it(self, text: string) -> Out throws unknown
+            function describe(self) -> string throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Parser<T> {
+                function parse_it(self, text: string) -> T throws unknown {
+                    baml.sap.parse<T>(text)
+                }
+
+                function describe(self) -> string throws never {
+                    type.of<T>().to_string()
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let output_type = reflect.class.new("RuntimeOutput", {
+                "name": type.of<string>(),
+            }).as_type()
+            type Out = unreflect(output_type)
+
+            let holder = Holder<Out>.new()
+            let parsed = holder.parse_it(#"{"name":"Pixel"}"#)
+            `${holder.describe()}|${reflect.class.get_field<string>(parsed, "name")}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("RuntimeOutput|Pixel".into()))
+    );
+}
+
+/// The ticket's Agent repro: `ai.Agent<Out>.run` is `implements Runner<Out>`, so
+/// it took the same hole — a payload `baml.sap.parse<unreflect(t)>` handled fine
+/// came back as `ai.errors.ParseFailed` through the runner.
+#[tokio::test]
+async fn agent_run_parses_a_reflected_output_type() {
+    let source = format!(
+        r##"
+        {PROBE_CLIENT}
+
+        function DynamicOutput<T>() -> T {{
+            client: DefaultClient
+            prompt: `${{ctx.output_format}}`
+        }}
+
+        function main() -> string throws unknown {{
+            let output_type = reflect.class.new("RuntimeOutput", {{
+                "name": type.of<string>(),
+            }}).as_type()
+            type Out = unreflect(output_type)
+
+            // Control: the direct SAP call has always worked.
+            let direct = baml.sap.parse<Out>(#"{{"name":"Pixel"}}"#)
+
+            let run = ai.Agent<Out>.new(
+                client = ProbeClient {{ reply: #"{{"name":"Pixel"}}"# }},
+            ).run(DynamicOutput@spec<Out>())
+
+            let direct_name = reflect.class.get_field<string>(direct, "name")
+            let agent_name = reflect.class.get_field<string>(run.value, "name")
+            `${{direct_name}}|${{agent_name}}`
+        }}
+        "##
+    );
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Pixel|Pixel".into()))
+    );
+}
+
+/// B-1582 follow-up: definitions crossed dispatch, but *identity* did not.
+/// The resolver realizes an impl frame off the receiver's `Self`, which carries
+/// realized types only, so `type.of<T>()` in the body derived a fresh mint —
+/// structurally the right type, `==`-wrong against the value the caller minted.
+/// Every identity-keyed pattern (a registry, a stored type compared with `==`)
+/// silently missed. Covered here: an implements-block method, an inherited
+/// default method, and a second dispatch out of an impl body.
+#[tokio::test]
+async fn minted_type_identity_survives_interface_dispatch() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+            function same_from_default(self, t: type) -> bool throws never {
+                type.of<Out>() == t
+            }
+        }
+
+        interface Relay<Out> {
+            function relay(self, t: type) -> bool throws unknown
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+
+            implements Relay<T> {
+                function relay(self, t: type) -> bool throws unknown {
+                    // Two-hop: the second interface operand is materialized
+                    // inside this frame, so it has to carry the identity on.
+                    Holder<T>.new().same(t)
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let output_type = reflect.class.new("RuntimeOutput", {
+                "name": type.of<string>(),
+            }).as_type()
+            type Out = unreflect(output_type)
+
+            let holder = Holder<Out>.new()
+            let impl_method = holder.same(output_type)
+            let default_method = holder.same_from_default(output_type)
+            let two_hop = holder.relay(output_type)
+            `${impl_method}|${default_method}|${two_hop}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|true|true".into()))
+    );
+}
+
+/// The pattern the identity is *for*: a registry keyed by the type value at the
+/// call site, looked up by `==` inside the impl. The second entry is the
+/// control — a separately minted class of the same shape and source name must
+/// stay a miss, so a passing lookup cannot be `==` degenerating to `true`.
+#[tokio::test]
+async fn interface_impl_methods_look_up_a_type_keyed_registry() {
+    let output = baml_test!(
+        r##"
+        class Entry {
+            key: type,
+            label: string,
+        }
+
+        interface Named<Out> {
+            function label(self, first: Entry, second: Entry) -> string throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Named<T> {
+                function label(self, first: Entry, second: Entry) -> string throws never {
+                    let wanted = type.of<T>()
+                    if (first.key == wanted) {
+                        first.label
+                    } else if (second.key == wanted) {
+                        second.label
+                    } else {
+                        "missing"
+                    }
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let first_type = reflect.class.new("Shape", {
+                "name": type.of<string>(),
+            }).as_type()
+            let second_type = reflect.class.new("Shape", {
+                "name": type.of<string>(),
+            }).as_type()
+            type First = unreflect(first_type)
+            type Second = unreflect(second_type)
+
+            let first_entry = Entry { key: first_type, label: "first" }
+            let second_entry = Entry { key: second_type, label: "second" }
+
+            let first_hit = Holder<First>.new().label(first_entry, second_entry)
+            let second_hit = Holder<Second>.new().label(first_entry, second_entry)
+            `${first_hit}|${second_hit}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("first|second".into()))
+    );
+}
+
+/// Negative control: recovery reads the mint a definition records, so two
+/// separate mints of the same shape stay distinct inside the impl, and a
+/// statically instantiated type parameter keeps deriving its static digest —
+/// the path is not taken at all when the interface operand carries no runtime
+/// definitions.
+#[tokio::test]
+async fn dispatch_identity_separates_distinct_mints_and_leaves_static_generics_alone() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let mine = reflect.class.new("Shape", {
+                "name": type.of<string>(),
+            }).as_type()
+            let other = reflect.class.new("Shape", {
+                "name": type.of<string>(),
+            }).as_type()
+            type Mine = unreflect(mine)
+
+            let holder = Holder<Mine>.new()
+            let own_mint = holder.same(mine)
+            let foreign_mint = holder.same(other)
+
+            let static_holder = Holder<string>.new()
+            let static_match = static_holder.same(type.of<string>())
+            let static_miss = static_holder.same(type.of<int>())
+            `${own_mint}|${foreign_mint}|${static_match}|${static_miss}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|false|true|false".into()))
+    );
+}
+
+/// A compiled package's declarations keep their identity across dispatch, just
+/// as `reflect.class.new`'s do. Recovery reads a definition back out of the
+/// interface operand's overlay, which is keyed by qualified name, so it works
+/// exactly as far as a name is a key — and a compiled package's declarations
+/// are re-spelled `user.$dyn.<mint>.Item` when the package is grafted, which
+/// makes them one. `name()` additionally pins that the definition still travels
+/// (#4501) and that the *rendered* name is still the source spelling.
+#[tokio::test]
+async fn runtime_package_declarations_keep_identity_across_dispatch() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+            function name(self) -> string throws never {
+                type.of<Out>().to_string()
+            }
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let pkg = reflect.Package.compile({ "items.baml": #"
+class Item { value string }
+              "# })
+            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            type Item = unreflect(item_type)
+
+            let holder = Holder<Item>.new()
+            `${holder.same(item_type)}|${holder.name()}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|Item".into()))
+    );
+}
+
+/// A STATIC class must not be answered from an overlay that happens to carry a
+/// runtime definition of the same source name. `LoadType` staples the whole
+/// frame overlay onto anything materialized in a frame that touched a runtime
+/// type, so binding a compiled package's `Item` puts that package's `Item` in
+/// this frame's overlay — and the static `Holder<Item>` dispatch below then
+/// sees it. What keeps them apart is that only one of the two is mint-spelled:
+/// the static slot is plain `user.Item` and matches nothing in the overlay.
+#[tokio::test]
+async fn static_class_slots_are_not_answered_from_a_same_named_runtime_definition() {
+    let output = baml_test!(
+        r##"
+        class Item {
+            value: string,
+        }
+
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let pkg = reflect.Package.compile({ "items.baml": #"
+class Item { value string }
+              "# })
+            let runtime_item = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            // Binding it merges `user.Item` into this frame's overlay, which is
+            // what every type materialized here from now on carries.
+            type Shadow = unreflect(runtime_item)
+            let _shadow_holder = Holder<Shadow>.new()
+
+            let holder = Holder<Item>.new()
+            `${holder.same(type.of<Item>())}|${holder.same(runtime_item)}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|false".into()))
+    );
+}
+
+/// Two compiled packages that each declare `Item` keep two identities. Their
+/// qualified names carry their packages' mints, so an overlay holding both
+/// keeps them apart and each `Holder` answers with its own — the shape that
+/// could only decline while both were spelled `user.Item` and an overlay kept
+/// the first pointer it saw per name.
+#[tokio::test]
+async fn same_named_declarations_from_two_packages_keep_separate_identities() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let first = reflect.Package.compile({ "a.baml": #"
+class Item { value string }
+              "# })
+            let second = reflect.Package.compile({ "b.baml": #"
+class Item { value string }
+              "# })
+            let first_item = (first.get_class("root.Item") ?? throw "missing A").as_type()
+            let second_item = (second.get_class("root.Item") ?? throw "missing B").as_type()
+            type First = unreflect(first_item)
+            type Second = unreflect(second_item)
+
+            let _first_holder = Holder<First>.new()
+            let holder = Holder<Second>.new()
+            // Its own, and nobody else's. The failure this guards is the
+            // SECOND value being `true` — answering with a foreign package's
+            // identity, which is worse than not knowing.
+            `${holder.same(second_item)}|${holder.same(first_item)}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|false".into()))
+    );
+}
+
+/// Owner slots and method-level slots share one lane, and the owner slots are
+/// recovered while the method slots arrive as operands. End-to-end cover for the
+/// alignment the unit tests pin: a generic method on a generic impl, each slot a
+/// different runtime mint.
+#[tokio::test]
+async fn dispatch_identity_covers_owner_and_method_slots_together() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function pair<M>(self, own: type, method: type) -> string throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function pair<M>(self, own: type, method: type) -> string throws never {
+                    `${type.of<T>() == own}|${type.of<M>() == method}|${type.of<T>() == method}`
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let owner_type = reflect.class.new("Owner", {
+                "name": type.of<string>(),
+            }).as_type()
+            let method_type = reflect.class.new("Method", {
+                "name": type.of<string>(),
+            }).as_type()
+            type Owner = unreflect(owner_type)
+            type Method = unreflect(method_type)
+
+            Holder<Owner>.new().pair<Method>(owner_type, method_type)
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|true|false".into()))
+    );
+}
+
+/// A runtime *enum* in a class-level slot takes the same road as a runtime
+/// class — the recovery has an enum arm, and nothing else exercises it.
+#[tokio::test]
+async fn dispatch_identity_covers_a_runtime_enum_slot() {
+    let output = baml_test!(
+        r##"
+        interface Probe<Out> {
+            function same(self, t: type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: type) -> bool throws never {
+                    type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string throws unknown {
+            let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
+            let other = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
+            type Choice = unreflect(choice)
+
+            let holder = Holder<Choice>.new()
+            `${holder.same(choice)}|${holder.same(other)}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("true|false".into()))
+    );
+}
+
+/// The mint that makes a compiled package's declarations identity-keyed lives
+/// in a hidden namespace segment, so it must never reach a user. Every surface
+/// that renders a type name is pinned here at once — `to_string`, `to_baml`,
+/// the LLM schema `ctx.output_format` builds, and a compiler diagnostic — and
+/// each must show the name the source wrote.
+#[tokio::test]
+async fn a_package_declarations_mint_never_reaches_rendered_output() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        function Render<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> string throws unknown {
+            // `next` makes `Item` recursive, which forces the LLM schema to
+            // hoist it under a *name* rather than inline its shape.
+            let pkg = reflect.Package.compile({ "items.baml": #"
+class Item { value string, next Item? }
+function Items() -> Item[] { [Item { value: "bound", next: null }] }
+              "# })
+            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            type Item = unreflect(item_type)
+
+            // A diagnostic that has to name the type it rejected.
+            let contract = pkg.get_function<() -> Item>("root.Items") catch (e) {
+                baml.reflect.errors.CompilationError => e.diagnostics[0].message,
+                _ => "wrong error",
+            }
+            let diagnostic = if contract is string { contract } else { "no diagnostic" }
+
+            // `~~` and not `|`: `to_baml()` and the LLM schema both spell a
+            // union with `|`, so a `|` join could split *inside* a surface and
+            // leave the assertions below silently comparing the wrong text.
+            let schema = Render$render_prompt<Item[]>()
+            `${item_type.to_string()}~~${item_type.to_baml()}~~${schema}~~${diagnostic}`
+        }
+        "##
+    );
+    let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+        panic!("main returns a string");
+    };
+    assert!(
+        !rendered.contains("$dyn"),
+        "a runtime mint leaked into rendered output: {rendered}"
+    );
+    let mut parts = rendered.splitn(4, "~~");
+    assert_eq!(parts.next(), Some("Item"));
+    assert_eq!(
+        parts.next(),
+        Some("class Item {\n  value string\n  next Item?\n}")
+    );
+    let schema = parts.next().expect("schema");
+    assert!(
+        schema.contains("Item") && schema.contains("value"),
+        "the LLM schema must describe the package class by its source name: {schema}"
+    );
+    let diagnostic = parts.next().expect("diagnostic");
+    assert!(
+        diagnostic.contains("Item"),
+        "the diagnostic must name the package class by its source name: {diagnostic}"
+    );
+}
+
+/// A minted name is `user.$dyn.<mint>.<name>`, and it is collision-free only
+/// because source cannot write either hidden segment. Both live in the
+/// *namespace* position, and the only thing that ever puts a segment there for
+/// user code is an `ns_<name>` folder whose suffix starts with a letter or `_`
+/// and holds nothing but alphanumerics and `_` — so `ns_$dyn` and `ns_0` are
+/// not namespaces at all, they are dropped. This pins the first rejection
+/// point: a package compiled from files under both folders declares its class
+/// at the package root, nothing answers to either hidden spelling, and it stays
+/// a different type from the statically declared `Item`.
+#[tokio::test]
+async fn a_source_path_cannot_spell_the_hidden_mint_namespace() {
+    let output = baml_test!(
+        r##"
+        class Item { value string }
+
+        function main() -> string throws unknown {
+            let pkg = reflect.Package.compile({ "ns_$dyn/ns_0/a.baml": #"
+class Item { value string }
+              "# })
+            let mint_ns = if pkg.get_class("root.$dyn.Item") == null { "absent" } else { "present" }
+            let numeric_ns = if pkg.get_class("root.0.Item") == null { "absent" } else { "present" }
+            let at_root = (pkg.get_class("root.Item") ?? throw "an ns_ folder namespaced it").as_type()
+            let identity = if at_root == type.of<Item>() { "collides" } else { "distinct" }
+            `${mint_ns}~~${numeric_ns}~~${identity}~~${at_root.to_string()}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "absent~~absent~~distinct~~Item".into()
+        ))
+    );
+}
+
+/// The second rejection point, in the *name* position. `$dyn` is a perfectly
+/// legal BAML name — the lexer takes `$`-prefixed words — so both `class $dyn`
+/// and `reflect.class.new("$dyn")` compile. Neither forges a mint: the marker
+/// means something only as a namespace segment, so the runtime-made one is
+/// minted under its own discriminator below it and the static one is not minted
+/// at all, and the two stay distinct. The other half of the hidden prefix is
+/// not even a legal name — a bare number is refused outright.
+#[tokio::test]
+async fn a_type_named_like_the_mint_marker_does_not_forge_one() {
+    let output = baml_test!(
+        r##"
+        class $dyn { value string }
+
+        function main() -> string throws unknown {
+            let made = reflect.class.new("$dyn", { "value": type.of<string>() })
+            let numeric = reflect.class.new("0", { "value": type.of<string>() }) catch (e) {
+                baml.reflect.errors.CompilationError => e.diagnostics[0].message,
+                _ => "wrong error",
+            }
+            let refused = if numeric is string { numeric } else { "a bare number was accepted" }
+            let identity = if made.as_type() == type.of<$dyn>() { "collides" } else { "distinct" }
+            `${identity}~~${made.as_type().to_string()}~~${refused}`
+        }
+        "##
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "distinct~~$dyn~~invalid class name `0`".into()
+        ))
+    );
+}
+
+/// Binds `item_type` to a class named `Item`, compiled into a runtime package.
+/// Both origins below mint their declarations, so both must render them the
+/// same way. Two fields, so a coercion failure is reported against the class
+/// rather than being implied onto a lone field.
+const ORIGIN_COMPILED_PACKAGE: &str = r##"
+            let pkg = reflect.Package.compile({ "items.baml": #"
+class Item { value string, count int }
+              "# })
+            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+"##;
+
+/// The same `Item`, built by `reflect.class.new`.
+const ORIGIN_CLASS_NEW: &str = r##"
+            let item_type = reflect.class.new("Item", {
+                "value": type.of<string>(),
+                "count": type.of<int>(),
+            }).as_type()
+"##;
+
+/// The two error surfaces that name a class in prose: schema-aligned parsing
+/// (what an LLM's output is coerced through) and `baml.json` decoding.
+fn error_surfaces_source(origin: &str) -> String {
+    format!(
+        r##"
+        function main() -> string throws unknown {{
+            {origin}
+            type Item = unreflect(item_type)
+
+            let sap = baml.sap.parse<Item>("null") catch (e) {{
+                baml.errors.LlmClient => e.message,
+                _ => "not an LlmClient error",
+            }}
+            let sap_message = if sap is string {{ sap }} else {{ "sap accepted a null" }}
+
+            let decoded = baml.json.from_string<Item>("[1, 2]") catch (e) {{
+                baml.json.JsonDecodeError => e.message,
+                _ => "not a JsonDecodeError",
+            }}
+            let decode_message = if decoded is string {{ decoded }} else {{ "decode accepted a list" }}
+
+            `${{sap_message}}~${{decode_message}}`
+        }}
+        "##
+    )
+}
+
+/// A minted declaration reaching a *host* — the class name an SDK reads off a
+/// returned value.
+fn host_boundary_source(origin: &str) -> String {
+    format!(
+        r##"
+        function main() -> unknown throws unknown {{
+            {origin}
+            type Item = unreflect(item_type)
+            baml.json.from_string<Item>(#"{{"value": "ok", "count": 1}}"#)
+        }}
+        "##
+    )
+}
+
+/// The mint is an identity token, never a spelling: every surface that renders
+/// a minted class must show what canary showed for the same declaration before
+/// it was minted — `user.Item` where a package-qualified name was printed.
+///
+/// Schema-aligned parsing is the first of them. The failure this guards is an
+/// LLM-output coercion error reading `Expected user.$dyn.0.Item`.
+#[tokio::test]
+async fn a_coercion_error_names_a_minted_class_as_its_source_spelled_it() {
+    for origin in [ORIGIN_COMPILED_PACKAGE, ORIGIN_CLASS_NEW] {
+        let source = error_surfaces_source(origin);
+        let output = baml_test!(&source);
+        let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+            panic!("main returns a string");
+        };
+        let (sap_message, _) = rendered.split_once('~').expect("both messages");
+        assert!(
+            !sap_message.contains("$dyn"),
+            "a runtime mint leaked into a coercion error: {sap_message}"
+        );
+        assert!(
+            sap_message.contains("Expected user.Item"),
+            "a coercion error must name the class as its source spelled it: {sap_message}"
+        );
+    }
+}
+
+/// `baml.json` decoding is the second. Two things move here at once: before
+/// this change a compiled package's class could not be resolved by the decoder
+/// at all — the decode failed with "class user.Item not found" — and a
+/// `reflect.class.new` one that could be resolved was reported as
+/// `user.$dyn.0.Item`.
+#[tokio::test]
+async fn a_decode_error_names_a_minted_class_as_its_source_spelled_it() {
+    for origin in [ORIGIN_COMPILED_PACKAGE, ORIGIN_CLASS_NEW] {
+        let source = error_surfaces_source(origin);
+        let output = baml_test!(&source);
+        let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+            panic!("main returns a string");
+        };
+        let (_, decode_message) = rendered.split_once('~').expect("both messages");
+        assert!(
+            !decode_message.contains("$dyn"),
+            "a runtime mint leaked into a decode error: {decode_message}"
+        );
+        assert!(
+            decode_message.contains("expected JSON object for class `user.Item`"),
+            "a decode error must name the class as its source spelled it: {decode_message}"
+        );
+    }
+}
+
+/// The third: the `class_name` a host SDK reads off a returned instance. It is
+/// the same string a static class would carry, which is the whole contract —
+/// an SDK cannot be asked to know about a mint. That the decode *succeeds* is
+/// the other half: `baml.json` could not resolve a compiled package's class at
+/// all before this change.
+#[tokio::test]
+async fn a_minted_class_crosses_the_host_boundary_under_its_source_name() {
+    for origin in [ORIGIN_COMPILED_PACKAGE, ORIGIN_CLASS_NEW] {
+        let source = host_boundary_source(origin);
+        let output = baml_test!(&source);
+        let Ok(BexExternalValue::Instance {
+            class_name, fields, ..
+        }) = output.result
+        else {
+            panic!("expected an instance, got: {:?}", output.result);
+        };
+        assert_eq!(class_name, "user.Item");
+        assert_eq!(
+            fields.get("value"),
+            Some(&BexExternalValue::String("ok".into()))
+        );
+    }
+}
+
+/// The fourth surface: a diagnostic from a *runtime* compile that has to name a
+/// minted declaration. The compiler never sees a mint of its own — minting
+/// happens when the linked image is grafted — so the way one reaches a compile
+/// diagnostic is a mounted type: `with_types` publishes an already-minted
+/// declaration under a source name, and a package compiled against it can then
+/// be wrong about it. The message must name it the way the mount did.
+#[tokio::test]
+async fn a_runtime_compile_diagnostic_names_a_mounted_minted_class() {
+    let output = baml_test!(
+        r##"
+        function main() -> string throws unknown {
+            let item_type = reflect.class.new("Item", {
+                "value": type.of<string>(),
+            }).as_type()
+            let app = reflect.Package.current().with_types({ "Item": item_type })
+            let compiled = reflect.Package.compile({ "wrong.baml": #"
+function Run() -> int { app.Item { value: "x" } }
+              "# }, packages = { "app": app }) catch (e) {
+                baml.reflect.errors.CompilationError => e.diagnostics[0].message,
+                _ => "not a CompilationError",
+            }
+            if compiled is string { compiled } else { "the wrong program compiled" }
+        }
+        "##
+    );
+    let BexExternalValue::String(diagnostic) = output.result.expect("main must return") else {
+        panic!("main returns a string");
+    };
+    assert!(
+        !diagnostic.contains("$dyn"),
+        "a runtime mint leaked into a compile diagnostic: {diagnostic}"
+    );
+    assert_eq!(
+        diagnostic.as_str(),
+        "mismatched types: expected `int`, found `Item`"
+    );
+}
+
+/// Identity by name is what a runtime type test reads, so two compiled packages
+/// that each declare `Item` used to answer for each other: a value made by the
+/// first package matched `is` against the second package's class. Nothing
+/// reported an error — the branch simply ran on a value it was never given.
+#[tokio::test]
+async fn a_runtime_type_test_does_not_match_another_packages_same_named_class() {
+    let output = baml_test!(
+        r##"
+        function main() -> string throws unknown {
+            let first = reflect.Package.compile({ "a.baml": #"
+class Item { value string }
+function Make() -> Item { Item { value: "a" } }
+              "# })
+            let second = reflect.Package.compile({ "b.baml": #"
+class Item { value string }
+              "# })
+            type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
+            type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
+
+            let make = first.get_function<() -> First>("root.Make") ?? throw "missing root.Make"
+            let value: unknown = make()
+            let own = if value is First { "yes" } else { "no" }
+            let foreign = if value is Second { "yes" } else { "no" }
+            `${own}|${foreign}`
+        }
+        "##
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("yes|no".into())));
+}
+
+/// The LLM schema `ctx.output_format` builds is assembled from a definition
+/// overlay keyed by qualified name, so the same collision showed up there as a
+/// prompt describing the *first* package's fields under the second package's
+/// class. The model was then asked for a shape the caller never declared.
+#[tokio::test]
+async fn an_output_format_schema_describes_each_packages_own_class() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        function Render<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> string throws unknown {
+            // `next` makes each `Item` recursive, which forces the schema to
+            // hoist it under a name rather than inline its shape.
+            let first = reflect.Package.compile({ "a.baml": #"
+class Item { alpha string, next Item? }
+              "# })
+            let second = reflect.Package.compile({ "b.baml": #"
+class Item { beta int, next Item? }
+              "# })
+            type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
+            type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
+
+            `${Render$render_prompt<First[]>()}~${Render$render_prompt<Second[]>()}`
+        }
+        "##
+    );
+    let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+        panic!("main returns a string");
+    };
+    let (first, second) = rendered.split_once('~').expect("both schemas");
+    assert!(
+        !rendered.contains("$dyn"),
+        "a runtime mint leaked into an LLM schema: {rendered}"
+    );
+    assert!(
+        first.contains("alpha") && !first.contains("beta"),
+        "the first package's schema must describe its own fields: {first}"
+    );
+    assert!(
+        second.contains("beta") && !second.contains("alpha"),
+        "the second package's schema must describe its own fields: {second}"
+    );
+}

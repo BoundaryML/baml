@@ -21,7 +21,11 @@ use lsp_server::{Message, Notification, Request, RequestId};
 use lsp_types::Url;
 use parking_lot::Mutex;
 
-const WAIT: Duration = Duration::from_secs(20);
+/// Generous on purpose: every wait below is for *behavior*, and the first
+/// one covers a cold type-check of the whole stdlib in a debug build, which
+/// is ~20s on a developer machine. The budget exists to fail a hang, not to
+/// measure speed.
+const WAIT: Duration = Duration::from_secs(60);
 
 /// The transcript's live wire: everything the server sent, in order.
 #[derive(Clone, Default)]

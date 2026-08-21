@@ -94,11 +94,38 @@ pub struct RuntimePackage {
     pub init: Option<HeapPtr>,
     /// False while `$init` may write package globals; true after commit.
     pub initialized: bool,
+    /// The mint that makes this image's own declaration names unique.
+    ///
+    /// The compiler names every runtime-compiled package's `Item` `user.Item`,
+    /// so at load the image is re-spelled `user.$dyn.<mint>.Item`
+    /// (`bex_vm_types::rename`). The package's own `LocalName` tables stay
+    /// keyed by the *source* name, so a lookup arriving with a minted qualified
+    /// name is translated back through [`Self::source_local_name`].
+    ///
+    /// `None` for an image whose declarations were never re-spelled — a Session,
+    /// whose submissions are already scoped to the one Session that owns them.
+    pub mint: Option<u64>,
 }
 
 impl RuntimePackage {
     pub fn load_global(&self, index: usize) -> Option<Value> {
         self.globals.get(index).map(AtomicValueSlot::load)
+    }
+
+    /// The key `qtn` has in this package's own declaration tables, or `None`
+    /// when `qtn` cannot name a declaration of this package.
+    ///
+    /// A name minted by *this* package drops its hidden discriminator; a name
+    /// minted by another one names a foreign declaration and is refused, which
+    /// is what keeps two packages' same-named `Item`s apart.
+    pub fn source_local_name(&self, qtn: &baml_type::TypeName) -> Option<LocalName> {
+        if qtn.is_runtime_minted() && !self.mint.is_some_and(|mint| qtn.has_runtime_mint(mint)) {
+            return None;
+        }
+        Some(LocalName {
+            namespace: qtn.source_namespace().to_vec(),
+            name: qtn.name().clone(),
+        })
     }
 }
 

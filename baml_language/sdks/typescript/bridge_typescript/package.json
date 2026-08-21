@@ -45,7 +45,7 @@
     "build:copy-proto": "node typescript_src/copy-proto.js",
     "build:debug": "pnpm build:clean && pnpm build:proto && pnpm build:napi-debug && pnpm build:copy-native-dts && pnpm build:ts_build && pnpm build:copy-proto && pnpm build:tag-generated-files",
     "build:release": "pnpm build:clean && pnpm build:proto && pnpm build:napi-release && pnpm build:copy-native-dts && pnpm build:ts_build && pnpm build:copy-proto && pnpm build:tag-generated-files",
-    "attw": "attw --pack --profile esm-only",
+    "attw": "node typescript_src/attw-check.js",
     "test": "vitest run"
   },
   "devDependencies": {

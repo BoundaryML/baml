@@ -302,6 +302,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     // relevant line is the result. Stderr inherits the parent process.
     let result = _read_result(p);
     let exit = p.wait() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw ai.errors.NetworkFailure {
                 provider: "claude-code",

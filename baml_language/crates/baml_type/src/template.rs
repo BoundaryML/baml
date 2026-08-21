@@ -36,6 +36,283 @@ use crate::{
     normalize::{ProjectionStep, TypeContext},
 };
 
+/// Symbolic realizations of the current type relative to each generic class on
+/// a render traversal's ancestry stack.
+///
+/// Renderers use this to distinguish a finite sequence of specializations from
+/// a recursive type transform whose arguments grow forever.
+#[derive(Clone, Debug, Default)]
+pub struct TyTemplateOrigins(Vec<Option<TyTemplate>>);
+
+impl TyTemplateOrigins {
+    /// No enclosing generic classes contribute symbolic origins at the root.
+    pub fn root() -> Self {
+        Self::default()
+    }
+
+    /// An origin-free value at the given ancestry depth.
+    pub fn opaque(depth: usize) -> Self {
+        Self(vec![None; depth])
+    }
+
+    /// Compose a class field template through every enclosing class transform,
+    /// then add the field's template relative to its immediate class.
+    pub fn through_field(
+        &self,
+        class_name: &TypeName,
+        class_arity: usize,
+        field: &TyTemplate,
+    ) -> Self {
+        let mut origins = self
+            .0
+            .iter()
+            .map(|origin| {
+                class_origin_args(origin.as_ref(), class_name, class_arity)
+                    .map(|type_args| compose_template(field, type_args))
+            })
+            .collect::<Vec<_>>();
+        origins.push(Some(field.clone()));
+        Self(origins)
+    }
+
+    /// Whether the class realization at `ancestry_index` contains a growing
+    /// dependency cycle among that class's generic parameter slots.
+    pub fn class_transform_expands(
+        &self,
+        ancestry_index: usize,
+        class_name: &TypeName,
+        class_arity: usize,
+    ) -> bool {
+        self.0
+            .get(ancestry_index)
+            .and_then(Option::as_ref)
+            .and_then(|origin| class_origin_args(Some(origin), class_name, class_arity))
+            .is_some_and(|type_args| transform_has_expanding_cycle(type_args, class_arity))
+    }
+
+    /// Project these origins through a list element.
+    pub fn list_element(&self) -> Self {
+        self.project(|origin| match origin {
+            TyTemplate::List(element, _) => Some(element.as_ref().clone()),
+            _ => None,
+        })
+    }
+
+    /// Project these origins through a map key.
+    pub fn map_key(&self) -> Self {
+        self.project(|origin| match origin {
+            TyTemplate::Map { key, .. } => Some(key.as_ref().clone()),
+            _ => None,
+        })
+    }
+
+    /// Project these origins through a map value.
+    pub fn map_value(&self) -> Self {
+        self.project(|origin| match origin {
+            TyTemplate::Map { value, .. } => Some(value.as_ref().clone()),
+            _ => None,
+        })
+    }
+
+    /// Project these origins through one union member.
+    pub fn union_member(&self, index: usize) -> Self {
+        self.project(|origin| match origin {
+            TyTemplate::Union(members, _) => members.get(index).cloned(),
+            _ => None,
+        })
+    }
+
+    /// Project these origins through a future's value type.
+    pub fn future_value(&self) -> Self {
+        self.project(|origin| match origin {
+            TyTemplate::Future(value, _, _) => Some(value.as_ref().clone()),
+            _ => None,
+        })
+    }
+
+    /// Project these origins through a future's error type.
+    pub fn future_error(&self) -> Self {
+        self.project(|origin| match origin {
+            TyTemplate::Future(_, error, _) => Some(error.as_ref().clone()),
+            _ => None,
+        })
+    }
+
+    /// Project these origins through a function parameter.
+    pub fn function_param(&self, index: usize) -> Self {
+        self.project(|origin| match origin {
+            TyTemplate::Function { params, .. } => params.get(index).map(|param| param.ty.clone()),
+            _ => None,
+        })
+    }
+
+    /// Project these origins through a function return type.
+    pub fn function_return(&self) -> Self {
+        self.project(|origin| match origin {
+            TyTemplate::Function { ret, .. } => Some(ret.as_ref().clone()),
+            _ => None,
+        })
+    }
+
+    /// Project these origins through a function throws type.
+    pub fn function_throws(&self) -> Self {
+        self.project(|origin| match origin {
+            TyTemplate::Function { throws, .. } => Some(throws.as_ref().clone()),
+            _ => None,
+        })
+    }
+
+    fn project(&self, mut project: impl FnMut(&TyTemplate) -> Option<TyTemplate>) -> Self {
+        Self(
+            self.0
+                .iter()
+                .map(|origin| origin.as_ref().and_then(&mut project))
+                .collect(),
+        )
+    }
+}
+
+fn compose_template(template: &TyTemplate, type_args: &[TyTemplate]) -> TyTemplate {
+    let mut composed = template.clone();
+    walk_template(&mut composed, false, &mut |template, _| {
+        if let TyTemplate::TypeArgRef(index) = template {
+            if let Some(type_arg) = type_args.get(*index as usize) {
+                *template = type_arg.clone();
+            }
+            false
+        } else {
+            true
+        }
+    });
+    composed
+}
+
+fn walk_template(
+    template: &mut TyTemplate,
+    nested: bool,
+    visitor: &mut impl FnMut(&mut TyTemplate, bool) -> bool,
+) {
+    if !visitor(template, nested) {
+        return;
+    }
+    let mut child = |template: &mut TyTemplate| walk_template(template, true, visitor);
+    match template {
+        TyTemplate::List(inner, _) => child(inner),
+        TyTemplate::Map { key, value, .. } => {
+            child(key);
+            child(value);
+        }
+        TyTemplate::Union(members, _) | TyTemplate::Class(_, members, _) => {
+            members.iter_mut().for_each(&mut child);
+        }
+        TyTemplate::Interface(_, args, associated_bindings, _) => {
+            args.iter_mut().for_each(&mut child);
+            associated_bindings
+                .iter_mut()
+                .for_each(|(_, binding)| child(binding));
+        }
+        TyTemplate::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params.iter_mut().for_each(|param| child(&mut param.ty));
+            child(ret);
+            child(throws);
+        }
+        TyTemplate::Future(value, error, _) => {
+            child(value);
+            child(error);
+        }
+        TyTemplate::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            child(base);
+            interface.generics.iter_mut().for_each(&mut child);
+            interface
+                .associated_types
+                .iter_mut()
+                .for_each(|(_, binding)| child(binding));
+        }
+        TyTemplate::TypeArgRef(_)
+        | TyTemplate::Int { .. }
+        | TyTemplate::Bigint { .. }
+        | TyTemplate::Float { .. }
+        | TyTemplate::String { .. }
+        | TyTemplate::Bool { .. }
+        | TyTemplate::Null { .. }
+        | TyTemplate::Uint8Array { .. }
+        | TyTemplate::Media(..)
+        | TyTemplate::Literal(..)
+        | TyTemplate::Enum(..)
+        | TyTemplate::EnumVariant(..)
+        | TyTemplate::RustType { .. }
+        | TyTemplate::Type { .. }
+        | TyTemplate::Resource { .. }
+        | TyTemplate::PromptAst { .. }
+        | TyTemplate::Void { .. }
+        | TyTemplate::TypeAlias(..)
+        | TyTemplate::BuiltinUnknown { .. }
+        | TyTemplate::Never { .. } => {}
+    }
+}
+
+fn class_origin_args<'a>(
+    origin: Option<&'a TyTemplate>,
+    class_name: &TypeName,
+    class_arity: usize,
+) -> Option<&'a [TyTemplate]> {
+    let Some(TyTemplate::Class(origin_name, type_args, _)) = origin else {
+        return None;
+    };
+    (origin_name == class_name && type_args.len() == class_arity).then_some(type_args)
+}
+
+fn transform_has_expanding_cycle(type_args: &[TyTemplate], arity: usize) -> bool {
+    fn reaches(
+        edges: &[Vec<(usize, bool)>],
+        current: usize,
+        target: usize,
+        visited: &mut [bool],
+    ) -> bool {
+        if current == target {
+            return true;
+        }
+        if visited[current] {
+            return false;
+        }
+        visited[current] = true;
+        edges[current]
+            .iter()
+            .any(|(next, _)| reaches(edges, *next, target, visited))
+    }
+
+    let mut edges = vec![Vec::<(usize, bool)>::new(); arity];
+    for (output, type_arg) in type_args.iter().enumerate().take(arity) {
+        let mut dependencies = Vec::new();
+        walk_template(&mut type_arg.clone(), false, &mut |template, nested| {
+            if let TyTemplate::TypeArgRef(index) = template {
+                dependencies.push((*index as usize, nested));
+                false
+            } else {
+                true
+            }
+        });
+        for (input, expanding) in dependencies {
+            if input < arity {
+                edges[input].push((output, expanding));
+            }
+        }
+    }
+
+    edges.iter().enumerate().any(|(input, outgoing)| {
+        outgoing.iter().any(|(output, expanding)| {
+            *expanding && reaches(&edges, *output, input, &mut vec![false; arity])
+        })
+    })
+}
+
 /// Why a [`TyTemplate::substitute`] failed to fully realize a template against a
 /// frame's realized type arguments.
 ///
@@ -626,6 +903,44 @@ mod tests {
             tmpl.substitute(args, &NoCtx)
                 .expect("substitution realizes"),
         )
+    }
+
+    #[test]
+    fn generic_render_origins_reject_only_growing_dependency_cycles() {
+        let step = TypeName::local(crate::Name::new("Step"));
+        let step_field = TyTemplate::class(
+            step.clone(),
+            vec![
+                TyTemplate::list(TyTemplate::TypeArgRef(1)),
+                TyTemplate::from(RealizedTy::int()),
+            ],
+        );
+        let step_origins = TyTemplateOrigins::root().through_field(&step, 2, &step_field);
+        assert!(!step_origins.class_transform_expands(0, &step, 2));
+
+        let chain = TypeName::local(crate::Name::new("Chain"));
+        let chain_field = TyTemplate::class(
+            chain.clone(),
+            vec![TyTemplate::class(
+                chain.clone(),
+                vec![TyTemplate::TypeArgRef(0)],
+            )],
+        );
+        let chain_origins = TyTemplateOrigins::root().through_field(&chain, 1, &chain_field);
+        assert!(chain_origins.class_transform_expands(0, &chain, 1));
+
+        let interface = TypeName::local(crate::Name::new("Wrapped"));
+        let interface_field = TyTemplate::class(
+            chain.clone(),
+            vec![TyTemplate::interface(
+                interface,
+                vec![TyTemplate::TypeArgRef(0)],
+                Vec::new(),
+            )],
+        );
+        let interface_origins =
+            TyTemplateOrigins::root().through_field(&chain, 1, &interface_field);
+        assert!(interface_origins.class_transform_expands(0, &chain, 1));
     }
 
     #[test]

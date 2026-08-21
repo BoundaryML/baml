@@ -1,6 +1,5 @@
 ---
 source: crates/baml_ide/src/describe.rs
-assertion_line: 2083
 expression: "project.format_description(&descs[0])"
 ---
 class String  (string)  string.baml:5
@@ -14,6 +13,8 @@ methods:
   function length(self) -> int throws never
   /// Alias for `length()`.
   function char_count(self) -> int throws never
+  /// Returns true if the string has no characters.
+  function is_empty(self) -> bool throws never
   /// Returns the length of the string in **UTF-8 bytes**.
   function byte_length(self) -> int throws never
   /// Returns the string with all Unicode characters converted to lowercase.

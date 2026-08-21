@@ -22,18 +22,28 @@ class RunResult<Out> {
 // phase).
 class Agent<Out> {
     max_steps: int,
+    // Total model invocations allowed for one schema candidate. The default
+    // preserves the existing initial attempt plus one correction re-ask.
+    schema_attempts: int,
     client: Client?,
     tool_errors: root.tools.ErrorMode,
     on_event: (root.events.Event) -> null throws never,
 
     function new(
         max_steps: int = 12,
+        schema_attempts: int = 2,
         client: Client? = null,
         tool_errors: root.tools.ErrorMode = root.tools.ErrorMode.Report,
         on_event: ((root.events.Event) -> null throws never)? = null,
     ) -> Agent<Out> {
+        if (schema_attempts < 1) {
+            throw baml.errors.InvalidArgument {
+                message: "Agent schema_attempts must be at least 1",
+            }
+        }
         Agent {
             max_steps: max_steps,
+            schema_attempts: schema_attempts,
             client: client,
             tool_errors: tool_errors,
             on_event: on_event
@@ -43,6 +53,15 @@ class Agent<Out> {
                     }
                 ),
         }
+    }
+
+    function _validated_schema_attempts(self) -> int {
+        if (self.schema_attempts < 1) {
+            throw baml.errors.InvalidArgument {
+                message: "Agent schema_attempts must be at least 1",
+            }
+        }
+        self.schema_attempts
     }
 
     // Execute one call: validate, dispatch, append the correlated result.
@@ -248,7 +267,11 @@ class Agent<Out> {
             // terminal wire outcomes are thrown here, with the turn on the record
             match (turn.stop_reason) {
                 root.content.StopReason.MaxTokens => {
-                    throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate }
+                    throw root.errors.FinishReasonError {
+                        provider: c.id(),
+                        finish_reason: turn.stop_reason,
+                        raw_output: candidate,
+                    }
                 },
                 root.content.StopReason.Refused => {
                     throw root.errors.Refused { provider: c.id(), reason: "the model declined to answer", raw_body: null }
@@ -285,9 +308,15 @@ class Agent<Out> {
 
     implements Runner<Out> {
         type Output = RunResult<Out>
-        type Error = root.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError
+        type Error = root.errors.Failure
+            | baml.errors.InvalidArgument
+            | baml.errors.Timeout
+            | baml.errors.UnknownError
+            | baml.reflect.errors.CompilationError
+            | baml.panics.Cancelled
 
         function run(self, spec: FunctionSpec<Out>) -> RunResult<Out> {
+            let schema_attempts = self._validated_schema_attempts();
             let selected = self.client ?? spec.default_client;
             let j = Journal.new(spec);
             let seen = self._emit_from(j, 0);
@@ -301,8 +330,9 @@ class Agent<Out> {
             // the futility breaker: identical repeated failures stop the run
             let fail_counts: map<string, int> = {};
             while (steps < self.max_steps) {
-                // repair re-asks happen inside the step: 1 turn + up to 1 re-asks
-                let turn = self._attempt_turn(selected, spec, j, total, 2);
+                // Repair re-asks happen inside the step and share this total
+                // schema-attempt budget.
+                let turn = self._attempt_turn(selected, spec, j, total, schema_attempts);
                 steps = steps + 1;
                 seen = self._emit_from(j, seen);
                 let calls = turn.tool_uses();
@@ -360,7 +390,10 @@ class Agent<Out> {
                     };
                     let value_json = baml.json.to_json(value) catch_all (e) {
                         _ => {
-                            throw baml.errors.UnknownError { data: e, message: [e.to_string()] }
+                            throw baml.errors.UnknownError.with_message<never>(
+                                e,
+                                "final value serialization failed",
+                            )
                         },
                     };
                     j.append_all(

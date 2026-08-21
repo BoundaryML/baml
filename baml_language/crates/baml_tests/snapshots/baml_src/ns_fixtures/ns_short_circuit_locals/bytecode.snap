@@ -1,0 +1,162 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.short_circuit_locals.chained_and(a: bool, b: bool, c: bool) -> bool {
+    load_var a
+    jump_if_false L0
+    pop 1
+    load_var b
+
+  L0:
+    jump_if_false L1
+    pop 1
+    load_var c
+
+  L1:
+    return
+}
+
+function fixtures.short_circuit_locals.conditional_short_circuit(a: bool, b: bool, cond: bool) -> bool {
+    load_const false
+    store_var x
+    load_var cond
+    pop_jump_if_false L2
+    load_var a
+    jump_if_false L0
+    pop 1
+    jump L1
+
+  L0:
+    store_var x
+    jump L2
+
+  L1:
+    load_var b
+    store_var x
+
+  L2:
+    load_var x
+    return
+}
+
+function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: int[], a: bool, b: bool) -> int {
+    load_const false
+    store_var x
+    load_const 0
+    store_var hits
+    load_var items
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_var _7
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L4
+    load_var a
+    jump_if_false L2
+    pop 1
+    jump L3
+
+  L2:
+    store_var x
+    jump L4
+
+  L3:
+    load_var b
+    store_var x
+
+  L4:
+    load_var x
+    pop_jump_if_false L0
+    load_var hits
+    load_const 1
+    add_int
+    store_var hits
+    jump L0
+
+  L5:
+    load_var hits
+    return
+}
+
+function fixtures.short_circuit_locals.initialized_local_in_branch_loop(items: int[]) -> int {
+    load_const 0
+    store_var total
+    load_var items
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_const 0
+    store_var x
+    load_var _4
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const 2
+    store_var x
+    jump L4
+
+  L3:
+    load_const 1
+    store_var x
+
+  L4:
+    load_var2 5 2
+    bin_op +
+    store_var total
+    jump L0
+
+  L5:
+    load_var total
+    return
+}
+
+function fixtures.short_circuit_locals.mixed_join(a: bool, b: bool, cond: bool) -> bool {
+    load_var cond
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_var a
+    jump_if_false L2
+    pop 1
+    load_var b
+
+  L2:
+    return
+}

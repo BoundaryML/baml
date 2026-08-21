@@ -32,9 +32,12 @@ class ContractChunk {
 // The decoder handed to `TurnStream.from_sse`: one raw SSE batch -> events.
 // `[DONE]` is this protocol's terminal event, so it yields `TurnDone` — which
 // is exactly what makes `require_terminal` meaningful for it.
-function contract_decode(batch: string) -> ai.stream.StreamEvent[] {
+function contract_decode(batch: string) -> ai.stream.StreamEvent[] throws ai.errors.InvokeError {
     let out: ai.stream.StreamEvent[] = [];
-    for (let raw in ai.stream.decode_sse_batch(batch)) {
+    let events = ai.stream.decode_sse_batch(batch) catch_all (e) {
+        _ => throw ai.errors.normalize(e),
+    };
+    for (let raw in events) {
         let data = (raw.data ?? "").trim();
         if (data == "") {
             continue;
@@ -43,7 +46,10 @@ function contract_decode(batch: string) -> ai.stream.StreamEvent[] {
             let _ = out.push(ai.stream.TurnDone {  });
             continue;
         }
-        let chunk = baml.json.from_string<ContractChunk>(data);
+        // A malformed chunk is wire corruption: classify like the real decoders.
+        let chunk = baml.json.from_string<ContractChunk>(data) catch_all (e) {
+            _ => throw ai.errors.normalize(e),
+        };
         if let text: string = chunk.delta {
             let _ = out.push(ai.stream.TextDelta { text: text });
         }

@@ -359,7 +359,9 @@ impl std::fmt::Display for ContractViolation {
 pub fn validate_sys_op_error(op: SysOp, err: &VmRustFnError) -> Result<(), ContractViolation> {
     let baml_err = match err {
         VmRustFnError::BamlError(b) => b,
-        VmRustFnError::Panic(_) | VmRustFnError::Thrown(_) | VmRustFnError::InternalError(_) => {
+        VmRustFnError::Panic(_)
+        | VmRustFnError::Thrown { .. }
+        | VmRustFnError::InternalError(_) => {
             return Ok(());
         }
     };
@@ -705,6 +707,13 @@ pub struct ClassDefinition {
 pub struct ClassFieldDefinition {
     pub name: String,
     pub field_type: baml_type::RuntimeTy,
+    /// Symbolic field type with class-level generic references preserved.
+    ///
+    /// `field_type` is intentionally erased for some runtime paths, so
+    /// output-format rendering uses this template when a class is visited
+    /// with concrete type arguments. `None` is retained for synthetic/test
+    /// definitions that only provide an already-realized `field_type`.
+    pub field_template: Option<baml_type::TyTemplate>,
     pub description: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
@@ -1033,7 +1042,7 @@ mod tests {
         let op = bex_vm_types::sys_op_for_path("baml.env.get").unwrap();
         for err in [
             bex_vm_types::errors::VmRustFnError::Panic(bex_vm_types::errors::VmPanic::Cancelled),
-            bex_vm_types::errors::VmRustFnError::Thrown(bex_vm_types::Value::NULL),
+            bex_vm_types::errors::VmRustFnError::thrown_fresh(bex_vm_types::Value::NULL),
             bex_vm_types::errors::VmRustFnError::InternalError(
                 bex_vm_types::errors::VmInternalError::UnexpectedEmptyStack,
             ),

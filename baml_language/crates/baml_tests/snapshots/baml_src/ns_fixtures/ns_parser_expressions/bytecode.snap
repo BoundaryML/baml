@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.parser_expressions.Calculate() -> int {
+    load_const 3
+    load_const 3
+    mul_int
+    store_var b
+    load_const 3
+    load_var b
+    add_int
+    load_var b
+    load_const 2
+    div_int
+    load_const 1
+    sub_int
+    mul_int
+    return
+}
+
+function fixtures.parser_expressions.FieldAccess(user: fixtures.parser_expressions.User) -> string {
+    load_var user
+    load_field .profile
+    load_field .settings
+    load_field .theme
+    return
+}
+
+function fixtures.parser_expressions.IndexAccess(users: fixtures.parser_expressions.IndexUser[]) -> string {
+    load_var users
+    load_const 0
+    load_array_element
+    load_field .name
+    return
+}
+
+function fixtures.parser_expressions.TestPrecedence() -> bool {
+    load_const true
+    jump_if_false L0
+    jump L1
+
+  L0:
+    pop 1
+    load_const false
+    jump_if_false L1
+    pop 1
+    load_const false
+
+  L1:
+    return
+}

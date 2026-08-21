@@ -1,0 +1,40 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.catch_throw.AlsoMayFail(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw "secondary error", _ => "also ok" }
+}
+function user.fixtures.catch_throw.CatchAndRethrow(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { _ => throw e }
+}
+function user.fixtures.catch_throw.CatchWithFallback(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch (e) { string => "caught string" } catch (e2) { int => "caught int fallback" }
+}
+function user.fixtures.catch_throw.CatchWithTypedArm(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { string => "caught string" }
+}
+function user.fixtures.catch_throw.ChainedCatchClauses(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch (e) { string => "first handler" } catch (e2) { int => "second handler" }
+}
+function user.fixtures.catch_throw.MayFail(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw "string error", _ => "ok" }
+}
+function user.fixtures.catch_throw.MayFailIntOrString(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw "string error", 1 => throw 1, _ => "ok" }
+}
+function user.fixtures.catch_throw.MultipleCatchArms(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch (e) { string => "caught string", int => "caught int" }
+}
+function user.fixtures.catch_throw.NestedCatch(x: int) -> string  [expr] {
+  { let inner = MayFail(x) catch (e) { _ => "inner caught" } } AlsoMayFail(x) catch (e) { _ => inner }
+}
+function user.fixtures.catch_throw.SingleCatchTyped(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { string => "caught string" }
+}
+function user.fixtures.catch_throw.SingleCatchWildcard(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { _ => "caught" }
+}
+function user.fixtures.catch_throw.ThrowStatement(x: int) -> string  [expr] {
+  { throw "error" } "unreachable"
+}

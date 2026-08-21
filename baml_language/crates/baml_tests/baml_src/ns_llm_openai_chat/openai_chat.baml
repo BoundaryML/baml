@@ -109,7 +109,7 @@ function _chat_top_keys(body: json) -> string {
 }
 
 // The failure taxonomy of one thrown error, as a comparable label.
-function _chat_failure_label(error: unknown) -> string {
+function _chat_failure_label(error: ai.errors.RaisedInClient) -> string {
     match (ai.errors.normalize(error)) {
         let f: ai.errors.RateLimited => `RateLimited/${f.retry_safety()}`,
         let f: ai.errors.InvalidRequest => `InvalidRequest/${f.status_code ?? -1}/${f.retry_safety()}`,
@@ -162,6 +162,29 @@ test "chat_openai_request_shape" {
     )
 }
 
+function chat_request_timeout_ms() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(
+                api_key = "k",
+                base_url = mock.base_url(),
+                request_timeout_ms = 20,
+            );
+            let outcome = `turn:${cl.invoke(_chat_input("hi")).terminal_text() ?? ""}` catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.request_timeout_ms ?? -1}|${outcome}`
+        },
+        response_delay_ms = 200,
+    )
+}
+
+test "chat_request_timeout_ms" {
+    assert.equal(chat_request_timeout_ms(), "20|Timeout")
+}
+
 // The prompt text itself survives role splitting.
 function chat_openai_message_text() -> string {
     root.llm_mock.mock_json_serve(
@@ -181,10 +204,10 @@ test "chat_openai_message_text" {
     assert.equal(chat_openai_message_text(), "You are terse.//Say pong.")
 }
 
-// A prompt with no `${role(...)}` marker is USER content, not a system
-// instruction — the shipped native clients' rule (PLAN §5). sys_llm defaulted
-// role-less content to `system`, which silently rewrote every unmarked prompt.
-function chat_roleless_defaults_to_user() -> string {
+// A prompt with no `${role(...)}` marker is legacy system content. The
+// compiler-generated LLM spec applies this compatibility default while the
+// standalone `prompt` tag remains role-less unless explicitly marked.
+function chat_roleless_defaults_to_system() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -205,8 +228,8 @@ function chat_roleless_defaults_to_user() -> string {
     )
 }
 
-test "chat_roleless_defaults_to_user" {
-    assert.equal(chat_roleless_defaults_to_user(), "user|1")
+test "chat_roleless_defaults_to_system" {
+    assert.equal(chat_roleless_defaults_to_system(), "system|1")
 }
 
 // First-class typed parameters lower into their wire keys; the `request_body`
@@ -415,6 +438,29 @@ test "chat_generic_collapses_text" {
     )
 }
 
+function chat_generic_request_timeout_ms() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.GenericClient.new(
+                model = "qwen3",
+                base_url = mock.base_url(),
+                request_timeout_ms = 20,
+            );
+            let outcome = `turn:${cl.invoke(_chat_input("hi")).terminal_text() ?? ""}` catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.request_timeout_ms ?? -1}|${outcome}`
+        },
+        response_delay_ms = 200,
+    )
+}
+
+test "chat_generic_request_timeout_ms" {
+    assert.equal(chat_generic_request_timeout_ms(), "20|Timeout")
+}
+
 // An unset base_url is a hard error, not a silent fallback to api.openai.com.
 function chat_generic_requires_base_url() -> string {
     let cl = openai.GenericClient.new(model = "qwen3");
@@ -536,11 +582,12 @@ testset "azure_unconfigured" {
 // ─── typed configuration failures ────────────────────────────────────────────
 //
 // A missing key / bad config must reach the caller as an `ai.errors.Failure`,
-// not a `baml.errors.InvalidArgument`. `ai.errors.normalize` flattens anything
-// that is not a Failure into an untyped `UnknownError`, and that is exactly
-// what `ai.Fallback` inspects to decide whether to try the next member.
+// not a `baml.errors.InvalidArgument`. `ai.errors.normalize` classifies every
+// raw infrastructure type into a typed Failure (config bugs land in
+// `InvalidRequest`), which is exactly what `ai.Fallback` inspects to decide
+// whether to try the next member.
 
-function _config_failure_class(e: unknown) -> string {
+function _config_failure_class(e: ai.errors.RaisedInClient) -> string {
     match (ai.errors.normalize(e)) {
         let f: ai.errors.InvalidRequest => `InvalidRequest/${f.provider}`,
         // Anything else means normalize could not keep an identity — which is
@@ -860,6 +907,72 @@ test "chat_sse_decodes_text_and_usage" {
     )
 }
 
+// The total request deadline remains active after visible deltas arrive and
+// aborts a stalled streaming body with the same typed Timeout as invoke().
+function chat_stream_total_timeout_after_delta() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(`{"choices":[{"index":0,"delta":{"content":"po"}}]}`),
+            root.llm_mock.sse_data(`{"choices":[{"index":0,"delta":{"content":"ng"}}]}`),
+            root.llm_mock.sse_data(`[DONE]`),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            // The corpus runs every leaf concurrently, so leave connection
+            // headroom while keeping the next event past the total deadline.
+            let cl = openai.ChatClient.new(
+                api_key = "k",
+                base_url = mock.base_url(),
+                request_timeout_ms = 30000,
+            );
+            let stream = cl.invoke_stream(_chat_input("hi"));
+            let first = match (stream.next()) {
+                let text: string => text,
+                let done: ai.stream.Done => "Done",
+            };
+            let outcome = `${stream.final_turn().terminal_text() ?? ""}` catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.request_timeout_ms ?? -1}|${first}|${outcome}`
+        },
+        chunk_delay_ms = 60000,
+    )
+}
+
+test "chat_stream_total_timeout_after_delta" {
+    assert.equal(chat_stream_total_timeout_after_delta(), "30000|po|Timeout")
+}
+
+// SSE comment/heartbeat bytes are transport keepalives, not tokens: they must
+// not clear TTFT before the first parsed data event arrives.
+function chat_stream_heartbeat_does_not_clear_ttft() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            ": heartbeat",
+            root.llm_mock.sse_data(`{"choices":[{"index":0,"delta":{"content":"pong"}}]}`),
+            root.llm_mock.sse_data(`[DONE]`),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ChatClient.new(
+                api_key = "k",
+                base_url = mock.base_url(),
+                request_timeout_ms = 1000,
+                time_to_first_token_timeout_ms = 20,
+            );
+            let outcome = `${cl.invoke_stream(_chat_input("hi")).final_turn().terminal_text() ?? ""}` catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+        },
+        chunk_delay_ms = 200,
+    )
+}
+
+test "chat_stream_heartbeat_does_not_clear_ttft" {
+    assert.equal(chat_stream_heartbeat_does_not_clear_ttft(), "20|Timeout")
+}
+
 // `stream_options` is first-party OpenAI only: a compatible server that does not
 // know the field would 400 on it.
 function chat_generic_omits_stream_options() -> string {
@@ -879,6 +992,33 @@ function chat_generic_omits_stream_options() -> string {
 
 test "chat_generic_omits_stream_options" {
     assert.equal(chat_generic_omits_stream_options(), "ok|model,messages,stream")
+}
+
+function chat_generic_stream_time_to_first_token_timeout_ms() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(`{"choices":[{"index":0,"delta":{"content":"ok"}}]}`),
+            root.llm_mock.sse_data(`[DONE]`),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.GenericClient.new(
+                model = "qwen3",
+                base_url = mock.base_url(),
+                request_timeout_ms = 1000,
+                time_to_first_token_timeout_ms = 20,
+            );
+            let outcome = `${cl.invoke_stream(_chat_input("hi")).final_turn().terminal_text() ?? ""}` catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+        },
+        first_event_delay_ms = 200,
+    )
+}
+
+test "chat_generic_stream_time_to_first_token_timeout_ms" {
+    assert.equal(chat_generic_stream_time_to_first_token_timeout_ms(), "20|Timeout")
 }
 
 // Streamed tool calls arrive as id/name once and argument fragments after.

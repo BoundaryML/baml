@@ -218,7 +218,6 @@ pub struct BamlWasmRuntime {
     /// so "history" is the same read API over the same process.
     pub(crate) history_store: runs::WasmHistoryStore,
     pub(crate) value_store: runs::WasmLiveValueStore,
-    pub(crate) profile_drain: runs::WasmProfileDrain,
     /// The raw playground callback, for the run paths that were salvaged
     /// around it. [`Self::playground_sender`] wraps the same function.
     pub(crate) playground_callback: send_wrapper::SendWrapper<Function>,
@@ -236,7 +235,6 @@ impl BamlWasmRuntime {
     /// Build the runtime over the host's filesystem and callbacks.
     #[wasm_bindgen]
     pub fn create(callbacks: &WasmCallbacks, vfs: WasmVfs) -> Self {
-        bex_events::prof::enable_wasm_cooperative_profile();
         let sender = Arc::new(WasmClientSender::new(
             callbacks.lsp_send_notification(),
             callbacks.lsp_send_response(),
@@ -248,7 +246,6 @@ impl BamlWasmRuntime {
             send_wrapper::SendWrapper::new(callbacks.playground_send_notification());
         let history_store = runs::new_history_store();
         let value_store = runs::new_value_store();
-        let profile_drain = runs::new_profile_drain();
         // The JS filesystem is shared by the language server's discovery and
         // by `baml.fs`/`baml.glob` at run time; one handle, not two views.
         // `js_sys` values are `!Send`; this target is single-threaded and the
@@ -287,7 +284,6 @@ impl BamlWasmRuntime {
             run_store,
             history_store,
             value_store,
-            profile_drain,
             playground_callback,
             build_owed,
         }
@@ -602,7 +598,7 @@ async fn expand_test_set(
     let call_id = sys_types::CallId::next();
     let registry_value = bex_project::BexExternalValue::Handle(lease.handle.clone());
     let context = bex_project::FunctionCallContextBuilder::new(call_id)
-        .with_profile_enabled(false)
+        .suppress_internal_profile()
         .build();
     let expand_error = match lease
         .engine
@@ -644,7 +640,7 @@ async fn serialize_registry(
     registry: bex_project::BexExternalValue,
 ) -> Vec<u8> {
     let context = bex_project::FunctionCallContextBuilder::new(sys_types::CallId::next())
-        .with_profile_enabled(false)
+        .suppress_internal_profile()
         .build();
     match engine
         .call_function(

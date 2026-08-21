@@ -38,7 +38,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface Cursor<T> {
-  function head(self) -> T throws unknown
+  function head(self) -> T throws never
 
   // Default method, inherited by every implementor. It constructs a generic
   // `SingleCursor<T>` from the interface's own `T`. The resulting instance MUST
@@ -46,7 +46,7 @@ interface Cursor<T> {
   // `take_one_then_head` resolves to `ArrayCursor.head` — which indexes an
   // `arr` field that `SingleCursor` does not have — instead of
   // `SingleCursor.head`.
-  function take_one(self) -> Cursor<T> throws unknown {
+  function take_one(self) -> Cursor<T> throws never {
     return SingleCursor<T> { value: self.head() }
   }
 }
@@ -61,7 +61,7 @@ class ArrayCursor<T> {
     }
 
     implements Cursor<T> {
-        function head(self) -> T throws unknown {
+        function head(self) -> T throws never {
             return self.arr[0];
         }
     }
@@ -71,7 +71,7 @@ class SingleCursor<T> {
     value: T,
 
     implements Cursor<T> {
-        function head(self) -> T throws unknown {
+        function head(self) -> T throws never {
             return self.value;
         }
     }
@@ -81,7 +81,7 @@ class SingleCursor<T> {
 // element via the inherited default method, then read the head back — entirely
 // through the `Cursor<int>` interface. Exercises inferred static-ctor type args
 // AND a default method that builds a generic from the interface's `T`.
-function take_one_then_head() -> int throws unknown {
+function take_one_then_head() -> int throws never {
     let cursor: Cursor<int> = ArrayCursor.of([10, 20, 30]);
     let single: Cursor<int> = cursor.take_one();
     single.head()
@@ -139,7 +139,7 @@ test "inferred_static_ctor_dispatches_to_correct_implementor" {
 // ─── Inferred static constructor + generic interface, mismatched shapes ───
 
 interface Bag<T> {
-  function first(self) -> T throws unknown
+  function first(self) -> T throws never
 }
 
 class ArrBag<T> {
@@ -151,7 +151,7 @@ class ArrBag<T> {
     }
 
     implements Bag<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.arr[0];
         }
     }
@@ -161,7 +161,7 @@ class OneBag<T> {
     only: T,
 
     implements Bag<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.only;
         }
     }
@@ -170,7 +170,7 @@ class OneBag<T> {
 // A mis-dispatch would read `only` off an `ArrBag` (or index `arr` on a
 // `OneBag`) — different layouts, so the wrong arm panics rather than silently
 // returning a bad value.
-function inferred_static_ctor_first() -> int throws unknown {
+function inferred_static_ctor_first() -> int throws never {
     let s: Bag<int> = ArrBag.make([5, 6, 7]);
     s.first()
 }
@@ -182,7 +182,7 @@ test "inferred_static_ctor_dispatches_through_generic_interface" {
 // ─── Interface default method can read the interface's type var at runtime ───
 
 interface Named<T> {
-  function first(self) -> T throws unknown
+  function first(self) -> T throws never
   function tname(self) -> string throws never {
     return type.of<T>().to_string()
   }
@@ -192,7 +192,7 @@ class ArrNamed<T> {
     arr: T[],
     idx: int,
     implements Named<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.arr[0];
         }
     }
@@ -201,7 +201,7 @@ class ArrNamed<T> {
 class OneNamed<T> {
     only: T,
     implements Named<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.only;
         }
     }
@@ -209,7 +209,7 @@ class OneNamed<T> {
 
 // `tname` is a default method dispatched through `Named<int>`; it must see
 // `T == int`, not `unknown`/`void`.
-function default_method_typevar_name() -> string throws unknown {
+function default_method_typevar_name() -> string throws never {
     let s: Named<int> = ArrNamed<int> { arr: [5, 6, 7], idx: 0 };
     s.tname()
 }
@@ -221,7 +221,7 @@ test "interface_default_method_sees_interface_type_var" {
 // ─── Class-owned (non-default) method that builds a generic from class `T` ───
 
 interface Wrap<T> {
-  function first(self) -> T throws unknown
+  function first(self) -> T throws never
 }
 
 class SrcWrap<T> {
@@ -230,12 +230,12 @@ class SrcWrap<T> {
 
     // A regular class method (not an interface default) that constructs a
     // generic `Boxed<T>` from the class-level `T`.
-    function boxed(self) -> Wrap<T> throws unknown {
+    function boxed(self) -> Wrap<T> throws never {
         return Boxed<T> { val: self.arr[0] };
     }
 
     implements Wrap<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.arr[0];
         }
     }
@@ -244,13 +244,13 @@ class SrcWrap<T> {
 class Boxed<T> {
     val: T,
     implements Wrap<T> {
-        function first(self) -> T throws unknown {
+        function first(self) -> T throws never {
             return self.val;
         }
     }
 }
 
-function class_method_builds_generic() -> int throws unknown {
+function class_method_builds_generic() -> int throws never {
     let s: SrcWrap<int> = SrcWrap<int> { arr: [5, 6, 7], idx: 0 };
     let w: Wrap<int> = s.boxed();
     w.first()
@@ -369,7 +369,7 @@ test "free_function_sees_inferred_type_arg" {
 
 // The inferred-ctor instance must pass a runtime `IsType ArrBag<int>` test —
 // NOT fall through to the wildcard arm.
-function inferred_ctor_instance_is_typed() -> int throws unknown {
+function inferred_ctor_instance_is_typed() -> int throws never {
     let s: Bag<int> = ArrBag.make([5, 6, 7]);
     match (s) {
         let a: ArrBag<int> => 1,
@@ -442,7 +442,7 @@ class LoneIter<T> {
     }
 }
 
-function inferred_ctor_collect_count() -> int throws unknown {
+function inferred_ctor_collect_count() -> int throws never {
     let it: NextIter<int, never> = ArrIter.of([1, 2, 3]);
     it.collect2().length()
 }
@@ -489,7 +489,7 @@ class EchoB {
     }
 }
 
-function nested_self_inferred_binding() -> string throws unknown {
+function nested_self_inferred_binding() -> string throws never {
     let e: SelfEcho = EchoA { n: 1 };
     e.nested_self_type()
 }

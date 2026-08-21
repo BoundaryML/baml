@@ -87,6 +87,79 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     Peekable<Self.Item, Self.Error> { source: self, buffer: Done {}, has_buffer: false }
   }
 
+  /// Creates a new iterator that yields at most the first `n` elements.
+  ///
+  /// Once `n` elements have been yielded the source is no longer advanced.
+  /// For `n <= 0`, the new iterator yields nothing. If the source ends first,
+  /// the new iterator ends with it.
+  ///
+  /// This is the usual way to bound an unbounded iterator such as
+  /// `Repeat.new(v)` or a wide `Range`:
+  ///
+  /// ```
+  /// baml.iter.Repeat.new(0).take(5).collect()   // [0, 0, 0, 0, 0]
+  /// baml.iter.Range.new(0, 10).take(3).collect() // [0, 1, 2]
+  /// ```
+  ///
+  /// Iterators are lazy (pull-based): the original iterator will not be advanced
+  /// unless something calls `next` on the produced iterator.
+  function take(self, n: int) -> Iterator<Item = Self.Item, Error = Self.Error> throws never {
+    Take<Self.Item, Self.Error> { source: self, remaining: n }
+  }
+
+  /// Creates a new iterator that discards the first `n` elements of the original
+  /// iterator and yields the rest.
+  ///
+  /// For `n <= 0`, every element is yielded. If the source has fewer than `n`
+  /// elements, the new iterator yields nothing.
+  ///
+  /// ```
+  /// baml.iter.Range.new(0, 5).skip(2).collect() // [2, 3, 4]
+  /// ```
+  ///
+  /// Iterators are lazy (pull-based): the elements are not skipped until
+  /// something calls `next` on the produced iterator.
+  function skip(self, n: int) -> Iterator<Item = Self.Item, Error = Self.Error> throws never {
+    Skip<Self.Item, Self.Error> { source: self, remaining: n }
+  }
+
+  /// Creates a new iterator that yields elements while `predicate` returns `true`,
+  /// and stops at the first element for which it returns `false`.
+  ///
+  /// The element that fails the predicate is consumed from the source and is not
+  /// yielded. Unlike `filter`, iteration **stops** at the first failure rather
+  /// than skipping it:
+  ///
+  /// ```
+  /// // stops at 5, so 6 and 8 are never yielded
+  /// [2, 4, 5, 6, 8].iter().take_while((x: int) -> bool { x % 2 == 0 }).collect() // [2, 4]
+  /// ```
+  ///
+  /// Iterators are lazy (pull-based): the original iterator will not be advanced
+  /// and the predicate will not be called unless something calls `next` on the
+  /// produced iterator.
+  function take_while<E2>(self, predicate: (Self.Item) -> bool throws E2) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
+    TakeWhile<Self.Item, Self.Error, E2> { source: self, predicate: predicate, done: false }
+  }
+
+  /// Creates a new iterator that discards leading elements while `predicate`
+  /// returns `true`, then yields every remaining element.
+  ///
+  /// The predicate is only consulted until it first returns `false`; after that
+  /// every element is yielded, including ones the predicate would have matched:
+  ///
+  /// ```
+  /// // stops skipping at 3, so the trailing 1 and 2 are kept
+  /// [1, 2, 3, 1, 2].iter().skip_while((x: int) -> bool { x < 3 }).collect() // [3, 1, 2]
+  /// ```
+  ///
+  /// Iterators are lazy (pull-based): the original iterator will not be advanced
+  /// and the predicate will not be called unless something calls `next` on the
+  /// produced iterator.
+  function skip_while<E2>(self, predicate: (Self.Item) -> bool throws E2) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
+    SkipWhile<Self.Item, Self.Error, E2> { source: self, predicate: predicate, skipping: true }
+  }
+
   /// Consumes the rest of this iterator and returns an array with all elements.
   ///
   /// Do not call this method on an infinite iterator as it will never terminate.
@@ -616,6 +689,159 @@ class Chain<T, E, E2> {
                 }
             }
             self.other.next()
+        }
+    }
+}
+
+class Take<T, E> {
+    source: Iterator<Item = T, Error = E>,
+    remaining: int,
+
+    implements Iterable {
+        type Item = T
+        type Error = E
+
+        function iter(self) -> Iterator<Item = T, Error = E> throws never {
+            self
+        }
+    }
+
+    implements Iterator {
+        type Item = T
+        type Error = E
+
+        function next(self) -> T | Done throws E {
+            if (self.remaining <= 0) {
+                return Done {  };
+            }
+            // Spend a slot only once the source has actually yielded an item.
+            // Decrementing first would lose a slot when `next` throws and the
+            // caller retries, and would leave the count live after `Done` so a
+            // later call advanced an already-finished source.
+            match (self.source.next()) {
+                Done => {
+                    self.remaining = 0;
+                },
+                let x: T => {
+                    self.remaining -= 1;
+                    return x;
+                },
+            }
+            Done {  }
+        }
+    }
+}
+
+class Skip<T, E> {
+    source: Iterator<Item = T, Error = E>,
+    remaining: int,
+
+    implements Iterable {
+        type Item = T
+        type Error = E
+
+        function iter(self) -> Iterator<Item = T, Error = E> throws never {
+            self
+        }
+    }
+
+    implements Iterator {
+        type Item = T
+        type Error = E
+
+        function next(self) -> T | Done throws E {
+            while (self.remaining > 0) {
+                // Count a skip only once the source has actually yielded an
+                // item, for the same reason as `Take`: a throw the caller
+                // retries must not consume part of the skip count, and `Done`
+                // must end the skipping phase rather than leaving it live.
+                match (self.source.next()) {
+                    Done => {
+                        self.remaining = 0;
+                        return Done {  };
+                    },
+                    let x: T => {
+                        self.remaining -= 1;
+                    },
+                }
+            }
+            self.source.next()
+        }
+    }
+}
+
+class TakeWhile<T, E, E2> {
+    source: Iterator<Item = T, Error = E>,
+    predicate: (T) -> bool throws E2,
+    done: bool,
+
+    implements Iterable {
+        type Item = T
+        type Error = E | E2
+
+        function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
+            self
+        }
+    }
+
+    implements Iterator {
+        type Item = T
+        type Error = E | E2
+
+        function next(self) -> T | Done throws E | E2 {
+            if (self.done) {
+                return Done {  };
+            }
+            match (self.source.next()) {
+                Done => {
+                    self.done = true;
+                },
+                let x: T => {
+                    if (self.predicate(x)) {
+                        return x;
+                    }
+                    self.done = true;
+                },
+            }
+            Done {  }
+        }
+    }
+}
+
+class SkipWhile<T, E, E2> {
+    source: Iterator<Item = T, Error = E>,
+    predicate: (T) -> bool throws E2,
+    skipping: bool,
+
+    implements Iterable {
+        type Item = T
+        type Error = E | E2
+
+        function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
+            self
+        }
+    }
+
+    implements Iterator {
+        type Item = T
+        type Error = E | E2
+
+        function next(self) -> T | Done throws E | E2 {
+            while (self.skipping) {
+                match (self.source.next()) {
+                    Done => {
+                        self.skipping = false;
+                        return Done {  };
+                    },
+                    let x: T => {
+                        if (!self.predicate(x)) {
+                            self.skipping = false;
+                            return x;
+                        }
+                    },
+                }
+            }
+            self.source.next()
         }
     }
 }

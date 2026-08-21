@@ -5,7 +5,7 @@
 //! id and the *current call's* id (minted unconditionally per call, plan §6
 //! invariant 5) — so `$id` works in every function, traced or not, with
 //! profiling on or off, and the ids it exposes are byte-for-byte the ids in
-//! the `.bamlprof` event stream. `CallRef` encoding happens lazily, only
+//! the structural profiling stream. `CallRef` encoding happens lazily, only
 //! when `$id` is actually read.
 
 use bex_events::ids::{BexCallId, BexThreadId, BoundaryId, CallRef, DecodeError, RuntimeId};

@@ -44,6 +44,21 @@ pub struct CatchRegion {
     pub body_entry: BlockId,
     /// Handler block that receives the exception.
     pub handler: BlockId,
+    /// Every block the protected body lowers into: `body_entry` plus the
+    /// blocks created while lowering the protected code (which includes any
+    /// nested construct's blocks — a throw in a nested handler's arm correctly
+    /// routes to THIS region's handler when no closer one covers it).
+    ///
+    /// The emitter builds the exception table from these blocks' exact PC
+    /// ranges. Coverage therefore does not depend on block layout: a
+    /// `[body_entry_pc, handler_pc)` span only works if every protected block
+    /// is laid out before the handler, and reverse-postorder layout does not
+    /// guarantee that — a direct `throw` block is a CFG leaf that sinks to the
+    /// end of the function, and a call-free block that can panic (division,
+    /// indexing) has no unwind edge to anchor it either. Both escaped their
+    /// handler when a throwing call elsewhere in the block pulled the handler
+    /// to a mid-function PC.
+    pub body_blocks: Vec<BlockId>,
     /// All blocks making up the handler body (the arms). BEP-042 cause-chain: a
     /// throw whose PC lies in any of these blocks is "during handling of"
     /// `error_local`, so that error's `ErrorContext` becomes the new error's
@@ -877,6 +892,33 @@ pub enum Rvalue {
         type_args: Vec<TyTemplate>,
     },
 
+    /// Resolve an *interface* method to an unbound callable from a `Self`
+    /// TYPE — the type-keyed twin of [`Rvalue::MakeVirtualBoundMethod`],
+    /// where `Self` is PASSED as a template rather than DERIVED from a
+    /// receiver value. The only dispatch form for a method with no `self`
+    /// receiver (`(Widget as Makeable).make`), and the value form of any
+    /// qualified item reference. The VM resolves the impl (coherence
+    /// guarantees at most one) and produces a capture-less closure carrying
+    /// the impl's realized frame.
+    MakeVirtualFunction {
+        /// The `Self` type to resolve on, pushed with `LoadType` — a typevar
+        /// `Self` (`(T as Makeable).make` in a generic caller) lowers to its
+        /// `TypeArgRef` slot and arrives at the resolver realized.
+        self_ty: TyTemplate,
+        /// The interface to resolve against, as a template the emitter pushes
+        /// with `LoadType`.
+        iface: TyTemplateInterface,
+        /// The interface method's name.
+        method: String,
+        /// Method-level type-argument OPERANDS from the reference site,
+        /// appended to the resolved impl frame by the VM. Operands rather
+        /// than templates so a runtime type argument (`m<unreflect(t)>(…)`)
+        /// flows like any other — a written static argument is materialized
+        /// by the producer as a `LoadType` temp. The VM pops each as an
+        /// `Object::Type` either way.
+        type_args: Vec<Operand>,
+    },
+
     /// Read an interface field from a receiver whose concrete type is not known
     /// statically — the field analogue of [`Terminator::VirtualCall`], and the
     /// structural twin of [`Rvalue::MakeVirtualBoundMethod`].
@@ -1180,6 +1222,9 @@ impl fmt::Display for BinOp {
 pub enum UnaryOp {
     Not,
     Neg,
+    /// Truthiness coercion (B-1563): `bool(value)` - false for `false`,
+    /// `null`, zero, and empty string/list/map/bytes; true otherwise.
+    Truthy,
 }
 
 impl fmt::Display for UnaryOp {
@@ -1187,6 +1232,7 @@ impl fmt::Display for UnaryOp {
         let s = match self {
             UnaryOp::Not => "!",
             UnaryOp::Neg => "-",
+            UnaryOp::Truthy => "truthy ",
         };
         write!(f, "{s}")
     }

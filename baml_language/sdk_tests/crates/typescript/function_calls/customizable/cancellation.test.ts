@@ -14,7 +14,10 @@ import { call_with_callback_async } from "./baml_sdk/host_callable_tests/index.j
 
 const SLEEP_FQN = "user.throws_test.SleepMs";
 const HOST_CALLBACK_FQN = "user.host_callable_tests.call_with_callback";
-const MAX_CANCELLATION_MS = 500;
+// The sleeping cancelled calls below (or the hang on a pending host
+// callback): the operation must dwarf this bound, or a regression that
+// ignored cancellation would still finish inside it and pass.
+const MAX_CANCELLATION_MS = 5000;
 
 function expectAbortError(error: unknown): void {
   expect(error).toBeInstanceOf(Error);
@@ -78,7 +81,7 @@ describe(
         callFunctionSync(
           getRuntime(),
           SLEEP_FQN,
-          { ms: 2000 },
+          { ms: 60000 },
           undefined,
           undefined,
           ctx,

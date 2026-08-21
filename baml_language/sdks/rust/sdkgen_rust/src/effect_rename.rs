@@ -69,6 +69,29 @@ fn rename_function(function: &Function, class_params: &[String]) -> Function {
     function
 }
 
+/// The callback function type at a parameter's root: the parameter type
+/// itself, or the sole function member of an optional callback (`cb: ((v:
+/// int) -> int)?`, which reaches codegen as a `Function | null` union). These
+/// are exactly the shapes the compiler opens to a synthetic effect param, so
+/// they are exactly the ones that need a readable name here.
+pub(crate) fn callback_root(ty: &Ty) -> Option<&Ty> {
+    match ty {
+        Ty::Function { .. } => Some(ty),
+        Ty::Union(members, _) => {
+            let mut callback = None;
+            for member in members {
+                match member {
+                    Ty::Null { .. } => {}
+                    Ty::Function { .. } if callback.is_none() => callback = Some(member),
+                    _ => return None,
+                }
+            }
+            callback
+        }
+        _ => None,
+    }
+}
+
 /// Build the `__effect_param_N` → readable-name map: each direct callback
 /// parameter whose inferred `throws` is a typevar absent from the declared
 /// generics contributes `<PascalCase(param)>Error`, de-collided against the
@@ -83,7 +106,7 @@ fn effect_renames(function: &Function, class_params: &[String]) -> HashMap<Strin
     let mut renames: HashMap<String, String> = HashMap::new();
     let mut taken: HashSet<String> = declared.clone();
     for arg in &function.arguments {
-        let Ty::Function { throws, .. } = &arg.ty else {
+        let Some(Ty::Function { throws, .. }) = callback_root(&arg.ty) else {
             continue;
         };
         let Ty::TypeVar(effect, _) = throws.as_ref() else {
@@ -202,5 +225,111 @@ fn rename_typevars(ty: &Ty, renames: &HashMap<String, String>) -> Ty {
         | Ty::PromptAst { .. }
         | Ty::Never { .. }
         | Ty::RustType { .. } => ty.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_base::{Name as BaseName, TyAttr};
+    use baml_codegen_types::{CallableParam, Function, FunctionArgument, Origin, ParamTy, Ty};
+
+    use super::{callback_root, rename_function};
+
+    fn int() -> Ty {
+        Ty::Int {
+            attr: TyAttr::EMPTY,
+        }
+    }
+
+    fn effect_var() -> Ty {
+        Ty::TypeVar(
+            ParamTy::new(0, BaseName::new("__effect_param_0")),
+            TyAttr::EMPTY,
+        )
+    }
+
+    fn callback_ty() -> Ty {
+        Ty::Function {
+            params: vec![CallableParam {
+                name: Some(BaseName::new("value")),
+                ty: int(),
+                mode: baml_codegen_types::CodegenFunctionParamMode::Required,
+            }],
+            ret: Box::new(int()),
+            throws: Box::new(effect_var()),
+            attr: TyAttr::EMPTY,
+        }
+    }
+
+    fn function_taking(arg_name: &str, ty: Ty) -> Function {
+        Function {
+            name: BaseName::new("apply"),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new(arg_name),
+                docstring: None,
+                ty,
+                default: None,
+            }],
+            return_type: int(),
+            throws: Some(effect_var()),
+            watchers: Vec::new(),
+            origin: Origin {
+                source_file_path: "main.baml".to_string(),
+                span_start: 0,
+            },
+        }
+    }
+
+    fn throws_name(function: &Function) -> String {
+        match function.throws.as_ref().expect("throws") {
+            Ty::TypeVar(param, _) => param.name().as_str().to_string(),
+            other => panic!("expected a type var, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn optional_callback_is_a_callback_root() {
+        let optional = Ty::Union(
+            vec![
+                callback_ty(),
+                Ty::Null {
+                    attr: TyAttr::EMPTY,
+                },
+            ],
+            TyAttr::EMPTY,
+        );
+        assert!(matches!(
+            callback_root(&optional),
+            Some(Ty::Function { .. })
+        ));
+    }
+
+    #[test]
+    fn a_list_of_callbacks_is_not_a_callback_root() {
+        let listed = Ty::List(Box::new(callback_ty()), TyAttr::EMPTY);
+        assert!(callback_root(&listed).is_none());
+    }
+
+    /// An optional callback's synthetic effect param gets the same readable
+    /// name the immediate form gets — otherwise `__effect_param_0` would leak
+    /// into the generated Rust generic.
+    #[test]
+    fn optional_callback_effect_param_is_renamed() {
+        let immediate = rename_function(&function_taking("cb", callback_ty()), &[]);
+        assert_eq!(throws_name(&immediate), "CbError");
+
+        let optional_ty = Ty::Union(
+            vec![
+                callback_ty(),
+                Ty::Null {
+                    attr: TyAttr::EMPTY,
+                },
+            ],
+            TyAttr::EMPTY,
+        );
+        let optional = rename_function(&function_taking("cb", optional_ty), &[]);
+        assert_eq!(throws_name(&optional), "CbError");
     }
 }

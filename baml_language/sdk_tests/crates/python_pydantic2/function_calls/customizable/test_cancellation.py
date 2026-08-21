@@ -4,6 +4,7 @@ import asyncio
 import sys
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -29,6 +30,13 @@ def _assert_cancelled_reason(exc: asyncio.CancelledError) -> None:
 def _assert_fast_cancellation(start: float) -> None:
     elapsed = time.monotonic() - start
     assert elapsed < _MAX_CANCELLATION_SECONDS, f"cancellation took {elapsed:.3f}s"
+
+
+async def _wait_for_marker(path: Path) -> None:
+    deadline = time.monotonic() + 2.0
+    while not path.exists():
+        assert time.monotonic() < deadline, f"timed out waiting for marker: {path.name}"
+        await asyncio.sleep(0.005)
 
 
 def test_cancellation_sync_call_returns_none():
@@ -111,3 +119,42 @@ async def test_cancellation_async_cancel_via_asyncio_timeout():
         await asyncio.wait_for(throws_test.SleepMs_async(2000), timeout=0.05)
 
     _assert_fast_cancellation(start)
+
+
+# SDK_PARITY_LINT(skip): drives Python asyncio cancellation (task.cancel / wait_for)
+@pytest.mark.parametrize("mode", ["task_cancel", "asyncio_timeout"])
+async def test_cancellation_async_cancel_skips_later_step(tmp_path: Path, mode: str):
+    """A cancel delivered mid-sleep must stop the run, not just detach the host.
+
+    Returning fast only proves the host stopped waiting. This waits out the full
+    native sleep afterwards and asserts the post-sleep step never ran, which is
+    what rules out an orphaned continuation still doing work (and still spending)
+    for a call the caller already abandoned.
+    """
+    entry = tmp_path / "entered"
+    later = tmp_path / "later"
+    sleep_ms = 2000
+
+    task = asyncio.create_task(
+        throws_test.SleepThenMarkMs_async(sleep_ms, str(entry), str(later))
+    )
+    await _wait_for_marker(entry)
+    # measured from the cancellation point: task startup and marker polling are
+    # not cancellation latency, and folding them in makes this flaky on a slow
+    # or loaded runner
+    start = time.monotonic()
+
+    if mode == "task_cancel":
+        assert task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    else:
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(task, timeout=0.05)
+
+    assert task.cancelled()
+    _assert_fast_cancellation(start)
+
+    # Past the point where the sleep would have finished on its own.
+    await asyncio.sleep((sleep_ms / 1000) + 0.2)
+    assert not later.exists(), "post-sleep step ran after cancellation"

@@ -165,11 +165,48 @@ pub(crate) fn render_project_diagnostics(
     // a diagnostic in one file may carry related spans into another.
     let mut sources = std::collections::HashMap::new();
     let mut file_paths = std::collections::HashMap::new();
+    let mut source_files = std::collections::HashMap::new();
     for source_file in baml_db::baml_compiler2_hir::compiler2_all_files(db) {
         let file_id = source_file.file_id(db);
         sources.insert(file_id, source_file.text(db).to_string());
         file_paths.insert(file_id, source_file.path(db));
+        source_files.insert(file_id, source_file);
     }
     let config = crate::output::policy().diagnostic_render_config();
-    render::render_diagnostics(diagnostics, &sources, &file_paths, &config)
+    // Colorized human output classifies the offending sources through the
+    // same compiler classifier the editor uses; every other preset renders
+    // plain, so the highlighting work is skipped entirely.
+    let mut highlights = baml_db::baml_compiler_diagnostics::SourceHighlights::new();
+    if config.color && config.format == render::DiagnosticFormat::Human {
+        let file_ids = diagnostics
+            .iter()
+            .flat_map(|diagnostic| {
+                diagnostic
+                    .annotations
+                    .iter()
+                    .map(|annotation| annotation.span.file_id)
+                    .chain(
+                        diagnostic
+                            .related_info
+                            .iter()
+                            .map(|related| related.span.file_id),
+                    )
+            })
+            .collect::<std::collections::HashSet<_>>();
+        let highlighter = crate::paint::Highlighter::new(db);
+        for file_id in file_ids {
+            if let Some(source_file) = source_files.get(&file_id) {
+                highlights.insert(file_id, highlighter.spans(*source_file));
+            }
+        }
+    }
+    let message_highlighter = crate::paint::MessageHighlighter::default();
+    render::render_diagnostics_with_highlighters(
+        diagnostics,
+        &sources,
+        &file_paths,
+        &highlights,
+        Some(&message_highlighter),
+        &config,
+    )
 }

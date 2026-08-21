@@ -547,9 +547,6 @@ fn run_server_inner(
             ..Default::default()
         },
     ));
-    let _profile_observer = bex_events::run::register_profile_observer(Arc::new(
-        playground_runs::RunStoreProfileObserver::new(run_store.clone(), broadcast_tx.clone()),
-    ));
     let env_state = Arc::new(PlaygroundEnvState::new(
         broadcast_tx.clone(),
         run_store.clone(),
@@ -602,9 +599,6 @@ fn run_server_inner(
     ));
 
     let runtimes = Arc::new(engine::RuntimeRegistry::default());
-    run_store.set_graph_runtime_overlay_span_provider(Arc::new(
-        playground_runs::ProjectGraphRuntimeOverlaySpanProvider::new(runtimes.clone()),
-    ));
     let seam = PlaygroundSeam::new(
         runtime.clone(),
         runtimes,

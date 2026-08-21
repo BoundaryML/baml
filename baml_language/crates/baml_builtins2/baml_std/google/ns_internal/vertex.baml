@@ -83,8 +83,23 @@ function _vertex_key_in_query(c: root.VertexClient) -> bool {
     c.query_params?.get("key") != null
 }
 
-function _vertex_is_express(c: root.VertexClient) -> bool {
-    _vertex_express_key(c) != null || _vertex_key_in_query(c)
+// Preview only needs to know that a key was configured. Inspecting the
+// Credential union avoids reading an env.Ref whose value may be absent or
+// secret; the live request still resolves it normally.
+function _vertex_has_configured_express_key(c: root.VertexClient) -> bool {
+    match (c.api_key) {
+        let literal: string => true,
+        let named: baml.env.Ref => true,
+        null => false,
+    }
+}
+
+function _vertex_is_express(c: root.VertexClient, preview: bool = false) -> bool {
+    if (preview) {
+        _vertex_has_configured_express_key(c) || _vertex_key_in_query(c)
+    } else {
+        _vertex_express_key(c) != null || _vertex_key_in_query(c)
+    }
 }
 
 /// The region the request is routed to: the explicit option, else
@@ -123,11 +138,12 @@ function vertex_location(c: root.VertexClient) -> string {
 /// is not a configuration of THIS client — letting it through would silently
 /// re-point a keyed client at a project-scoped URL the key cannot authorize.
 /// An explicit `project_id` option still wins, since that IS configuration.
-function vertex_project_id(c: root.VertexClient) -> string? {
-    if let explicit: string = c.project_id {
-        return explicit;
+function vertex_project_id(c: root.VertexClient, preview: bool = false) -> string? {
+    let explicit = ai.wire.resolve_credential(c.project_id, null);
+    if let configured: string = explicit {
+        return configured;
     }
-    if (_vertex_is_express(c)) {
+    if (_vertex_is_express(c, preview = preview)) {
         return null;
     }
     if let from_env: string = baml.env.get("GOOGLE_CLOUD_PROJECT") {
@@ -140,7 +156,12 @@ function vertex_project_id(c: root.VertexClient) -> string? {
             return legacy.trim();
         }
     }
-    root.internal.gcp_project_id(_vertex_credentials(c))
+    if (preview) {
+        // Do not enter the ADC/credential-file chain during a request preview.
+        "preview-project"
+    } else {
+        root.internal.gcp_project_id(_vertex_credentials(c))
+    }
 }
 
 // The publisher segment of the model path. Anthropic models are served by
@@ -164,7 +185,7 @@ function _vertex_is_multi_region(location: string) -> bool {
 //
 // An explicit base_url replaces the whole prefix (the caller owns the path),
 // which is also how a test points the client at a mock server.
-function _vertex_models_base(c: root.VertexClient) -> string {
+function _vertex_models_base(c: root.VertexClient, preview: bool = false) -> string {
     if let explicit: string = c.resolved_base_url() {
         return explicit;
     }
@@ -179,10 +200,10 @@ function _vertex_models_base(c: root.VertexClient) -> string {
     } else {
         `${location}-aiplatform.googleapis.com`
     };
-    let project = vertex_project_id(c);
+    let project = vertex_project_id(c, preview = preview);
     if let resolved: string = project {
         `https://${host}/v1/projects/${resolved}/locations/${location}/publishers/${publisher}/models`
-    } else if (_vertex_is_express(c)) {
+    } else if (_vertex_is_express(c, preview = preview)) {
         // Express mode has no project: the key selects the tenant, and the
         // request goes to the project-less global endpoint.
         `https://aiplatform.googleapis.com/v1/publishers/${publisher}/models`
@@ -211,12 +232,15 @@ function _vertex_method(c: root.VertexClient, stream: bool) -> string {
 }
 
 /// The full endpoint for one call, query parameters included.
-function vertex_url(c: root.VertexClient, stream: bool) -> string {
+function vertex_url(c: root.VertexClient, stream: bool, preview: bool = false) -> string {
     let with_params = root.internal._gm_apply_query(
-        `${_vertex_models_base(c)}/${c.model}${_vertex_method(c, stream)}`,
+        `${_vertex_models_base(c, preview = preview)}/${c.model}${_vertex_method(c, stream)}`,
         c.query_params,
     );
-    if let key: string = _vertex_express_key(c) {
+    if (preview && _vertex_has_configured_express_key(c)) {
+        let params: map<string, string> = { "key": "<PREVIEW>" };
+        root.internal._gm_apply_query(with_params, params)
+    } else if let key: string = _vertex_express_key(c) {
         let params: map<string, string> = { "key": key };
         root.internal._gm_apply_query(with_params, params)
     } else {
@@ -237,11 +261,9 @@ function _vertex_anthropic_body(
     c: root.VertexClient,
     input: ai.ModelTurnInput,
     stream: bool,
+    preview: bool = false,
 ) -> string {
-    let vertex_fields: baml.json.json = {
-        "anthropic_version": "vertex-2023-10-16",
-        "model": null,
-    };
+    let vertex_fields: baml.json.json = { "anthropic_version": "vertex-2023-10-16", "model": null };
     let params = anthropic.internal.AnthropicBodyParams {
         model: c.model,
         max_tokens: c.max_output_tokens ?? 8192,
@@ -256,12 +278,18 @@ function _vertex_anthropic_body(
         request_body: ai.wire.merge_request_body(vertex_fields, c.request_body),
         client_id: c.id(),
     };
-    anthropic.internal.anthropic_messages_body(params, input, stream)
+    anthropic.internal.anthropic_messages_body(params, input, stream, preview = preview)
 }
 
 // ai.ModelTurnInput -> one Vertex generateContent request.
 function vertex_render(c: root.VertexClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _vertex_request(c, input, false)
+    _vertex_request(c, input, false, preview = false)
+}
+
+/// The request one Vertex `render` would send. Preview skips ADC, credential
+/// file, and metadata-server access and uses a deterministic bearer marker.
+function vertex_preview(c: root.VertexClient, input: ai.ModelTurnInput) -> baml.http.Request {
+    _vertex_request(c, input, false, preview = true)
 }
 
 // The shared request builder: the Gemini body, the Vertex URL, and either a
@@ -270,9 +298,10 @@ function _vertex_request(
     c: root.VertexClient,
     input: ai.ModelTurnInput,
     stream: bool,
+    preview: bool = false,
 ) -> baml.http.Request {
     let body = if (_vertex_publisher(c) == "anthropic") {
-        _vertex_anthropic_body(c, input, stream)
+        _vertex_anthropic_body(c, input, stream, preview = preview)
     } else {
         root.internal.gemini_build_body(
             input,
@@ -292,32 +321,39 @@ function _vertex_request(
             // base64-inlined (sys_llm's `send_url` default for this backend),
             // which also keeps large media out of the inline size cap.
             fetch_url = false,
+            preview = preview,
         )
     };
-    let url = vertex_url(c, stream);
+    let url = vertex_url(c, stream, preview = preview);
     let headers: map<string, string> = { "content-type": "application/json" };
     let with_user = root.internal._gm_apply_headers(headers, c.headers);
-    if (_vertex_is_express(c)) {
+    if (_vertex_is_express(c, preview = preview)) {
         // The key rides the URL; nothing else to authenticate.
         null
     } else {
-        let credentials = _vertex_credentials(c);
-        let token = root.internal.gcp_access_token(credentials, _vertex_scope()) catch_all (e) {
-            _ => {
-                throw ai.errors.InvalidRequest {
-                    provider: "vertex",
-                    status_code: null,
-                    detail: `Vertex AI authentication failed: ${e.to_string()}`,
-                    raw_body: null,
+        if (preview) {
+            if (with_user.get("authorization") == null) {
+                let _ = with_user.set("authorization", "Bearer <PREVIEW>");
+            }
+        } else {
+            let credentials = _vertex_credentials(c);
+            let token = root.internal.gcp_access_token(credentials, _vertex_scope()) catch_all (e) {
+                _ => {
+                    throw ai.errors.InvalidRequest {
+                        provider: "vertex",
+                        status_code: null,
+                        detail: `Vertex AI authentication failed: ${e.to_string()}`,
+                        raw_body: null,
+                    }
+                },
+            };
+            let _ = with_user.set("authorization", `Bearer ${token}`);
+            // google-auth parity (`Credentials.apply`): bill quota to the
+            // configured project, unless the caller set the header themselves.
+            if (with_user.get("x-goog-user-project") == null) {
+                if let quota: string = root.internal.gcp_quota_project_id(credentials) {
+                    let _ = with_user.set("x-goog-user-project", quota);
                 }
-            },
-        };
-        let _ = with_user.set("authorization", `Bearer ${token}`);
-        // google-auth parity (`Credentials.apply`): bill quota to the
-        // configured project, unless the caller set the header themselves.
-        if (with_user.get("x-goog-user-project") == null) {
-            if let quota: string = root.internal.gcp_quota_project_id(credentials) {
-                let _ = with_user.set("x-goog-user-project", quota);
             }
         }
         null
@@ -330,11 +366,19 @@ function _vertex_request(
 function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = vertex_render(c, input);
     if (_vertex_publisher(c) == "anthropic") {
-        let resp = ai.wire.send_as<anthropic.internal.AnthropicResponse>(req, "vertex");
+        let resp = ai.wire.send_as<anthropic.internal.AnthropicResponse>(
+            req,
+            "vertex",
+            request_timeout_ms = c.request_timeout_ms,
+        );
         return anthropic.internal.anthropic_parse(resp);
     }
     let seq = input.journal.entries().length();
-    let resp = ai.wire.send_as<root.internal.GmResponse>(req, "vertex");
+    let resp = ai.wire.send_as<root.internal.GmResponse>(
+        req,
+        "vertex",
+        request_timeout_ms = c.request_timeout_ms,
+    );
     root.internal.google_parse(resp, seq, provider = "vertex")
 }
 
@@ -350,8 +394,13 @@ function vertex_invoke_stream(
     c: root.VertexClient,
     input: ai.ModelTurnInput,
 ) -> ai.stream.TurnStream {
-    let req = _vertex_request(c, input, true);
-    let sse = root.internal._gm_open_sse(req, "vertex");
+    let req = _vertex_request(c, input, true, preview = false);
+    let sse = root.internal._gm_open_sse(
+        req,
+        "vertex",
+        request_timeout_ms = c.request_timeout_ms,
+        time_to_first_token_timeout_ms = c.time_to_first_token_timeout_ms,
+    );
     // Both decoders yield an explicit `TurnDone` (Anthropic's `message_stop`,
     // Gemini's `finishReason` fragment), so both streams are strict: a
     // connection cut mid-answer raises instead of reporting the partial text
@@ -361,10 +410,20 @@ function vertex_invoke_stream(
         return ai.stream.TurnStream.from_sse(
             sse,
             (batch: string) -> {
-                anthropic.internal.anthropic_decode_batch(batch, state)
+                anthropic.internal.anthropic_decode_batch(batch, state) catch_all (e) {
+                    _ => throw ai.errors.normalize(e),
+                }
             },
             require_terminal = "vertex",
         );
     }
-    ai.stream.TurnStream.from_sse(sse, _vertex_decode_batch, require_terminal = "vertex")
+    ai.stream.TurnStream.from_sse(
+        sse,
+        (batch: string) -> {
+            _vertex_decode_batch(batch) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        },
+        require_terminal = "vertex",
+    )
 }

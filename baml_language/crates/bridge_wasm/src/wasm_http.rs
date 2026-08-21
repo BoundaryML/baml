@@ -676,11 +676,13 @@ impl IoNamespaceHttp for WasmHttp {
         self.do_send(call_id, request)
     }
 
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         request: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::async_op(SendFuture(async move {

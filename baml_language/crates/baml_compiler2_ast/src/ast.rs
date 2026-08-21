@@ -540,6 +540,11 @@ impl ExprBody {
             Expr::Upcast { base, target } => {
                 format!("{}.as<{target}>", self.display_expr_inner(*base, depth + 1))
             }
+            Expr::QualifiedPath {
+                qself,
+                interface,
+                member,
+            } => format!("({qself} as {interface}).{member}"),
             Expr::Index { base, index } => {
                 format!(
                     "{}[{}]",
@@ -654,6 +659,11 @@ pub struct AstSourceMap {
     /// For object-constructor fields, the span of the field name keyed by
     /// `(object_expr_id, value_expr_id)`.
     pub object_field_name_spans: HashMap<(ExprId, ExprId), TextRange>,
+    /// For `unreflect(value)` type-argument slots, the span of the WHOLE slot
+    /// (marker, parens and all), keyed by the carrier expression inside it.
+    /// The carrier's own span covers only `value`, so diagnostics about the
+    /// slot itself would otherwise have no range to point at.
+    pub unreflect_arg_spans: HashMap<ExprId, TextRange>,
     /// Ids of compiler-synthesized nodes — desugarings that have no
     /// user-written source of their own (e.g. the `string.from(${…})` wrapper
     /// and the concat accumulator that backtick interpolation lowers to). Their
@@ -681,6 +691,7 @@ impl AstSourceMap {
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
             object_field_name_spans: HashMap::new(),
+            unreflect_arg_spans: HashMap::new(),
             synthetic_exprs: HashSet::new(),
             synthetic_stmts: HashSet::new(),
             synthetic_patterns: HashSet::new(),
@@ -754,6 +765,16 @@ impl AstSourceMap {
             .get(&(object_id, value_id))
             .copied()
             .unwrap_or_else(|| self.expr_span(value_id))
+    }
+
+    /// Look up the span of the `unreflect(...)` type-argument slot whose
+    /// carrier expression is `id`. Falls back to the carrier's own span when
+    /// the slot was not recorded (a synthesized marker, for instance).
+    pub fn unreflect_arg_span(&self, id: ExprId) -> TextRange {
+        self.unreflect_arg_spans
+            .get(&id)
+            .copied()
+            .unwrap_or_else(|| self.expr_span(id))
     }
 
     /// Look up the source span of a pattern by its `PatId`.
@@ -980,6 +1001,21 @@ pub enum Expr {
     Upcast {
         base: ExprId,
         target: TypeExpr,
+    },
+    /// Fully-qualified item reference: `(Base as Interface).item`.
+    ///
+    /// The one spelling that pins BOTH halves of the `(Self type, interface,
+    /// item)` triple. `Base.item` and `Interface.item` denote the same triple
+    /// with one half left to inference and stay ordinary [`Expr::Path`]s —
+    /// the three forms unify in resolution, not in syntax, exactly as
+    /// rustc's `<T as Trait>::item` / `T::item` / `Trait::item` do.
+    ///
+    /// Neither half is an expression: `qself` is a type and `interface` names
+    /// an interface, so there is no base [`ExprId`] to traverse.
+    QualifiedPath {
+        qself: TypeExpr,
+        interface: TypeExpr,
+        member: Name,
     },
     /// Optional member access: `obj?.member` — short-circuits to null if base is null.
     OptionalMemberAccess {
