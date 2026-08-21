@@ -1483,15 +1483,14 @@ fn sync_directory(path: &Path) -> io::Result<()> {
     File::open(path)?.sync_all()
 }
 
+/// Windows has no directory fsync: NTFS journals directory entries itself,
+/// and `FlushFileBuffers` on a directory handle is denied unless the handle
+/// was opened for writing (a read-only backup-semantics handle fails with
+/// `PermissionDenied`, which took the whole store down at open). File data is
+/// still synced by the file handles; the directory step is a no-op here.
 #[cfg(windows)]
-fn sync_directory(path: &Path) -> io::Result<()> {
-    use std::os::windows::fs::OpenOptionsExt;
-    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
-    OpenOptions::new()
-        .read(true)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
-        .open(path)?
-        .sync_all()
+fn sync_directory(_path: &Path) -> io::Result<()> {
+    Ok(())
 }
 
 #[cfg(test)]

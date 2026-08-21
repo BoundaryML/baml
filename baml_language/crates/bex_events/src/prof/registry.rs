@@ -285,12 +285,15 @@ mod global {
             // which is the real every-stamp-postdates-the-anchor invariant.
             crate::prof::clock::init();
             // The consumer drains every registered ring; it must exist
-            // before the first event can pile up. Unreachable when profiling
-            // is off: `ring_for_engine` is only called from `is_on()` paths,
-            // so an off session never starts the consumer thread (tests drive
-            // private registries as their own consumers).
+            // before the first event can pile up. It is started only once an
+            // on session has configured the transport (§11: no consumer
+            // thread without an on session); a ring claimed on the default
+            // governor — only the global-registry tests do that — is drained
+            // by its own test, never by the process consumer.
             #[cfg(not(target_arch = "wasm32"))]
-            crate::prof::consumer::ensure_started();
+            if !TRANSPORT_DEFAULTED.load(std::sync::atomic::Ordering::Acquire) {
+                crate::prof::consumer::ensure_started();
+            }
             let handle = REGISTRY.acquire(
                 global_ctx(),
                 config.segment_bytes,
