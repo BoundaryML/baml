@@ -220,12 +220,14 @@ impl HistoryStore {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(state) = inner.boundaries.get_mut(&boundary_id) else {
+        // Remove first: a completion that fails to write must not leave the
+        // boundary (and its open writer) parked in the map forever. The
+        // error still reaches the caller.
+        let Some(mut state) = inner.boundaries.remove(&boundary_id) else {
             return Ok(());
         };
         state.writer.write_run_completed(&record)?;
         state.writer.flush()?;
-        inner.boundaries.remove(&boundary_id);
         Ok(())
     }
 
@@ -418,6 +420,10 @@ fn open_boundary_from_segments(
             .into_iter()
             .map(capture_loss_replay_diagnostic),
     );
+    // Segments are read thread-major; replay in event order so payload ids
+    // follow time, not which BEX thread wrote first. The sort is stable, so
+    // same-millisecond logs keep their on-disk order.
+    logs.sort_by_key(|record| record.event.timestamp_ms);
     let payloads = logs
         .into_iter()
         .enumerate()
@@ -880,6 +886,156 @@ mod tests {
             !walk_files(&project)
                 .iter()
                 .any(|path| path.extension().and_then(|ext| ext.to_str()) == Some("bamlprof"))
+        );
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    fn start_context(boundary_id: BoundaryId) -> StartRunContext {
+        StartRunContext {
+            boundary_id,
+            request_id: RequestId(1),
+            request: crate::run::RunRequestSummary {
+                project_id: ProjectId("project".to_string()),
+                project_generation: ProjectGeneration(1),
+                target: RunTarget::Function {
+                    function_name: "main".to_string(),
+                },
+                args_summary: None,
+                options_summary: None,
+            },
+            created_at_ms: 10,
+            time_anchor: RunTimeAnchor {
+                epoch_created_at_ms: 10,
+                trace_zero_ns: 0,
+            },
+            start_guard: StartGuard::new(),
+        }
+    }
+
+    fn log_record(thread_id: u64, timestamp_ms: u64, message: &str) -> LogEventRecord {
+        LogEventRecord {
+            call: TraceCallKey {
+                process_euid: ProcessEuid([1; 16]),
+                engine_id: EngineId(2),
+                thread_id: BexThreadId(thread_id),
+                call_id: BexCallId(4),
+            },
+            level: Some("info".to_string()),
+            source: None,
+            timestamp_ms,
+            message_preview: Some(message.to_string()),
+        }
+    }
+
+    #[test]
+    fn replay_orders_logs_chronologically_across_threads() {
+        let project = temp_dir();
+        std::fs::create_dir_all(&project).unwrap();
+        let boundary_id = BoundaryId::from_bytes([9; 16]);
+        let store = HistoryStore::new(vec![project.clone()]);
+        store.begin(&project, &start_context(boundary_id)).unwrap();
+        // Thread 1 writes its segment first on disk, but thread 2 logged
+        // earlier in time; replay must follow time.
+        for (thread, ts, msg) in [
+            (1, 30, "t1-a"),
+            (1, 50, "t1-b"),
+            (2, 20, "t2-a"),
+            (2, 40, "t2-b"),
+        ] {
+            store
+                .append_log_body(
+                    boundary_id,
+                    log_record(thread, ts, msg),
+                    ValueCodec::BamlOutboundValue,
+                    vec![0],
+                )
+                .unwrap();
+        }
+        store
+            .complete(
+                boundary_id,
+                &RunOutcome::Succeeded(RunResult {
+                    value_ref: None,
+                    renderer_hint: None,
+                    supporting_payload_ids: Vec::new(),
+                }),
+                60,
+            )
+            .unwrap();
+
+        let run = store.open(boundary_id).unwrap();
+        let order = run
+            .payloads
+            .iter()
+            .map(|payload| (payload.id.0, payload.timestamp_ms))
+            .collect::<Vec<_>>();
+        assert_eq!(order, vec![(1, 20), (2, 30), (3, 40), (4, 50)]);
+
+        // A replayed run that later takes a live log must not reuse a
+        // replayed payload id.
+        let live = crate::run::InMemoryRunStore::default();
+        assert!(live.insert_replayed_run(run));
+        live.ingest_log_value_ref(
+            boundary_id,
+            TraceCallKey {
+                process_euid: ProcessEuid([1; 16]),
+                engine_id: EngineId(2),
+                thread_id: BexThreadId(1),
+                call_id: BexCallId(4),
+            },
+            None,
+            "live".to_string(),
+            None,
+            None,
+        )
+        .unwrap();
+        let ids = live
+            .snapshot(boundary_id)
+            .unwrap()
+            .payloads
+            .iter()
+            .map(|payload| payload.id.0)
+            .collect::<Vec<_>>();
+        assert_eq!(ids, vec![1, 2, 3, 4, 5]);
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn failed_completion_does_not_leak_boundary_state() {
+        let project = temp_dir();
+        std::fs::create_dir_all(&project).unwrap();
+        let boundary_id = BoundaryId::from_bytes([7; 16]);
+        let store = HistoryStore::new(vec![project.clone()]);
+        // Rotate on every record so the completion must create a new segment
+        // file; then make that creation impossible.
+        store.inner.lock().unwrap().rotation_policy =
+            super::boundary_writer::SegmentRotationPolicy::with_max_records(1);
+        store.begin(&project, &start_context(boundary_id)).unwrap();
+        let boundary_dir = {
+            let inner = store.inner.lock().unwrap();
+            inner.boundaries[&boundary_id].path.boundary_dir.clone()
+        };
+        std::fs::remove_dir_all(&boundary_dir).unwrap();
+        std::fs::write(&boundary_dir, b"not a directory").unwrap();
+
+        let result = store.complete(
+            boundary_id,
+            &RunOutcome::Succeeded(RunResult {
+                value_ref: None,
+                renderer_hint: None,
+                supporting_payload_ids: Vec::new(),
+            }),
+            12,
+        );
+        assert!(result.is_err(), "completion must surface the write failure");
+        assert!(
+            !store
+                .inner
+                .lock()
+                .unwrap()
+                .boundaries
+                .contains_key(&boundary_id),
+            "a failed completion must not leave the boundary parked"
         );
         let _ = std::fs::remove_dir_all(project);
     }

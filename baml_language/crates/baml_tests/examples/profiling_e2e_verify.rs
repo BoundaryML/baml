@@ -83,10 +83,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let boundary_ids = boundaries(Path::new(&store_root))?;
+    // The JSON argument/output helpers run as suppressed internal roots, so a
+    // packed invocation publishes exactly one durable run: the workload.
     assert_eq!(
         boundary_ids.len(),
-        2,
-        "packed execution should produce workload and output-serialization boundaries"
+        1,
+        "packed execution should produce exactly one (workload) boundary"
     );
     let mut runs = Vec::with_capacity(boundary_ids.len());
     for boundary_id in boundary_ids {
@@ -128,11 +130,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         1,
         "workload profiling boundary is not unique"
     );
-    let serialization_index = 1_usize
-        .checked_sub(workload_index)
-        .expect("two boundary indexes");
     let (boundary_id, run, counts) = &runs[workload_index];
-    let (_, serialization, serialization_counts) = &runs[serialization_index];
 
     assert_eq!(counts.invocations[0], expected_root_calls);
     assert_eq!(counts.invocations[1], expected_call_edges);
@@ -149,17 +147,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         expected_nonroot_contexts
     );
 
-    assert_eq!(serialization.contexts.len(), 3);
-    assert_eq!(serialization_counts.contexts, [1, 2, 0]);
-    assert_eq!(serialization_counts.invocations, [1, 2, 0]);
-    assert_eq!(serialization_counts.completed, 3);
-    assert_eq!(serialization_counts.await_count, 0);
-
     let workload_end = run.end.as_ref().expect("integrity checked sealed run");
-    let serialization_end = serialization
-        .end
-        .as_ref()
-        .expect("integrity checked sealed run");
 
     println!(
         "{}",
@@ -180,17 +168,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             },
             "await_count": counts.await_count,
             "selected_spans": run.spans.len(),
-            "serialization": {
-                "contexts": serialization.contexts.len(),
-                "invocations": serialization_counts.invocations.iter().sum::<u64>(),
-                "selected_spans": serialization.spans.len(),
-            },
-            "transport_loss": run.terminal_health.structural_transport_exceeded
-                + serialization.terminal_health.structural_transport_exceeded,
-            "cct_segments": workload_end.fence.cct.segment_count
-                + serialization_end.fence.cct.segment_count,
-            "evidence_segments": workload_end.fence.evidence.segment_count
-                + serialization_end.fence.evidence.segment_count,
+            "transport_loss": run.terminal_health.structural_transport_exceeded,
+            "cct_segments": workload_end.fence.cct.segment_count,
+            "evidence_segments": workload_end.fence.evidence.segment_count,
         })
     );
     Ok(())

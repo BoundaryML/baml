@@ -19,20 +19,44 @@ pub enum ValueRole {
     Output,
 }
 
+/// Frozen wire tags (`as u8`): both evidence codecs encode the discriminant
+/// and decode through [`ValueLossReason::from_tag`]. Append only.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ValueLossReason {
-    ValueMemoryExceeded,
-    ValueAttemptTransportExceeded,
-    ErrorCaptureAttemptTransportExceeded,
-    ValueTooLarge,
-    CopyFailed,
-    EncodeFailed,
-    CasWriteFailed,
-    CasConflict,
-    DiskGuardExceeded,
-    EvidenceSegmentPublishFailed,
-    StoreUnavailable,
+    ValueMemoryExceeded = 0,
+    ValueAttemptTransportExceeded = 1,
+    ErrorCaptureAttemptTransportExceeded = 2,
+    ValueTooLarge = 3,
+    CopyFailed = 4,
+    EncodeFailed = 5,
+    CasWriteFailed = 6,
+    CasConflict = 7,
+    DiskGuardExceeded = 8,
+    EvidenceSegmentPublishFailed = 9,
+    StoreUnavailable = 10,
+}
+
+impl ValueLossReason {
+    pub(super) const ALL: [Self; 11] = [
+        Self::ValueMemoryExceeded,
+        Self::ValueAttemptTransportExceeded,
+        Self::ErrorCaptureAttemptTransportExceeded,
+        Self::ValueTooLarge,
+        Self::CopyFailed,
+        Self::EncodeFailed,
+        Self::CasWriteFailed,
+        Self::CasConflict,
+        Self::DiskGuardExceeded,
+        Self::EvidenceSegmentPublishFailed,
+        Self::StoreUnavailable,
+    ];
+
+    /// The single decode table for the frozen wire tag.
+    #[must_use]
+    pub(super) fn from_tag(tag: u8) -> Option<Self> {
+        Self::ALL.get(usize::from(tag)).copied()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -100,16 +124,36 @@ pub struct ErrorCaptureAttempt {
     pub manual_eligible: bool,
 }
 
+/// Frozen wire tags (`as u8`); decode through
+/// [`ErrorCaptureLossReason::from_tag`]. Append only.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ErrorCaptureLossReason {
-    ErrorCaptureAttemptTransportExceeded,
-    MissingStructuralJoin,
-    StartUncommitted,
-    EvidenceQueueFull,
-    EvidenceSegmentPublishFailed,
-    DiskGuardExceeded,
-    StoreUnavailable,
+    ErrorCaptureAttemptTransportExceeded = 0,
+    MissingStructuralJoin = 1,
+    StartUncommitted = 2,
+    EvidenceQueueFull = 3,
+    EvidenceSegmentPublishFailed = 4,
+    DiskGuardExceeded = 5,
+    StoreUnavailable = 6,
+}
+
+impl ErrorCaptureLossReason {
+    pub(super) const ALL: [Self; 7] = [
+        Self::ErrorCaptureAttemptTransportExceeded,
+        Self::MissingStructuralJoin,
+        Self::StartUncommitted,
+        Self::EvidenceQueueFull,
+        Self::EvidenceSegmentPublishFailed,
+        Self::DiskGuardExceeded,
+        Self::StoreUnavailable,
+    ];
+
+    /// The single decode table for the frozen wire tag.
+    #[must_use]
+    pub(super) fn from_tag(tag: u8) -> Option<Self> {
+        Self::ALL.get(usize::from(tag)).copied()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -433,25 +477,7 @@ fn value_loss_tag(reason: ValueLossReason) -> u8 {
 }
 
 fn decode_value_loss(tag: u8) -> Result<ValueLossReason, ErrorCodecError> {
-    use ValueLossReason::{
-        CasConflict, CasWriteFailed, CopyFailed, DiskGuardExceeded, EncodeFailed,
-        ErrorCaptureAttemptTransportExceeded, EvidenceSegmentPublishFailed, StoreUnavailable,
-        ValueAttemptTransportExceeded, ValueMemoryExceeded, ValueTooLarge,
-    };
-    Ok(match tag {
-        0 => ValueMemoryExceeded,
-        1 => ValueAttemptTransportExceeded,
-        2 => ErrorCaptureAttemptTransportExceeded,
-        3 => ValueTooLarge,
-        4 => CopyFailed,
-        5 => EncodeFailed,
-        6 => CasWriteFailed,
-        7 => CasConflict,
-        8 => DiskGuardExceeded,
-        9 => EvidenceSegmentPublishFailed,
-        10 => StoreUnavailable,
-        _ => return Err(ErrorCodecError::InvalidTag),
-    })
+    ValueLossReason::from_tag(tag).ok_or(ErrorCodecError::InvalidTag)
 }
 
 fn error_loss_tag(reason: ErrorCaptureLossReason) -> u8 {
@@ -459,20 +485,7 @@ fn error_loss_tag(reason: ErrorCaptureLossReason) -> u8 {
 }
 
 fn decode_error_loss(tag: u8) -> Result<ErrorCaptureLossReason, ErrorCodecError> {
-    use ErrorCaptureLossReason::{
-        DiskGuardExceeded, ErrorCaptureAttemptTransportExceeded, EvidenceQueueFull,
-        EvidenceSegmentPublishFailed, MissingStructuralJoin, StartUncommitted, StoreUnavailable,
-    };
-    Ok(match tag {
-        0 => ErrorCaptureAttemptTransportExceeded,
-        1 => MissingStructuralJoin,
-        2 => StartUncommitted,
-        3 => EvidenceQueueFull,
-        4 => EvidenceSegmentPublishFailed,
-        5 => DiskGuardExceeded,
-        6 => StoreUnavailable,
-        _ => return Err(ErrorCodecError::InvalidTag),
-    })
+    ErrorCaptureLossReason::from_tag(tag).ok_or(ErrorCodecError::InvalidTag)
 }
 
 fn put_u16(out: &mut Vec<u8>, value: u16) {
@@ -550,6 +563,32 @@ mod tests {
             process_euid: ProcessEuid([1; 16]),
             engine_id: EngineId(2),
             thread_id: BexThreadId(3),
+        }
+    }
+
+    /// Frozen-codec guard: every loss reason round-trips through its wire
+    /// tag, the tags are dense from zero, and every other byte is rejected.
+    #[test]
+    fn loss_reason_tags_round_trip_and_reject_unknown_bytes() {
+        for (index, reason) in ValueLossReason::ALL.iter().enumerate() {
+            assert_eq!(*reason as u8, u8::try_from(index).unwrap());
+            assert_eq!(value_loss_tag(*reason), *reason as u8);
+            assert_eq!(decode_value_loss(*reason as u8), Ok(*reason));
+        }
+        for (index, reason) in ErrorCaptureLossReason::ALL.iter().enumerate() {
+            assert_eq!(*reason as u8, u8::try_from(index).unwrap());
+            assert_eq!(error_loss_tag(*reason), *reason as u8);
+            assert_eq!(decode_error_loss(*reason as u8), Ok(*reason));
+        }
+        for tag in 0..=u8::MAX {
+            assert_eq!(
+                ValueLossReason::from_tag(tag).is_some(),
+                usize::from(tag) < ValueLossReason::ALL.len()
+            );
+            assert_eq!(
+                ErrorCaptureLossReason::from_tag(tag).is_some(),
+                usize::from(tag) < ErrorCaptureLossReason::ALL.len()
+            );
         }
     }
 

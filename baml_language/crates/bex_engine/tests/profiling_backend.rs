@@ -26,6 +26,10 @@ async fn off_session_preserves_identity_logging_and_existing_store_bytes() {
     std::fs::write(&sentinel, b"unchanged").unwrap();
     let before = std::fs::metadata(&sentinel).unwrap();
 
+    // §11: an off session never starts the consumer thread. Other tests in
+    // this binary may already have started it, so pin "unchanged by this
+    // run" rather than "never started in this process".
+    let consumer_started_before = bex_events::prof::consumer_thread_started();
     let (session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
         enabled: false,
         store_root: store_root.clone(),
@@ -90,6 +94,11 @@ async fn off_session_preserves_identity_logging_and_existing_store_bytes() {
         .map(|entry| entry.unwrap().file_name())
         .collect::<Vec<_>>();
     assert_eq!(entries, [std::ffi::OsString::from("sentinel")]);
+    assert_eq!(
+        bex_events::prof::consumer_thread_started(),
+        consumer_started_before,
+        "an off session must not start the profiling consumer thread"
+    );
 }
 
 fn read_evidence(store_root: &std::path::Path, boundary_id: BoundaryId) -> Vec<EvidenceFact> {

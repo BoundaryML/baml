@@ -504,6 +504,33 @@ struct PendingTerminalError {
     reservation: Reservation,
 }
 
+/// §5.2: the unresolved-join table is bounded by memory *and* entry count.
+/// Beyond this many parked facts (starts, ends, thread starts, thread ends
+/// combined) further reorder facts are charged as `JoinCapacityExceeded`
+/// instead of parked. FIFO ring registration keeps the table empty in steady
+/// state; only pathological reorder approaches this.
+const MAX_UNRESOLVED_JOIN_ENTRIES: usize = 1 << 18;
+
+/// One step of start resolution. The former mutual recursion
+/// (`consume_call_start` → `resolve_starts_for_thread` → `consume_call_start`,
+/// and `resolve_threads_for_parent` → `insert_thread` → same) is an explicit
+/// LIFO worklist of these frames, so depth is bounded by heap, never by the
+/// consumer thread's stack. Frame order preserves the recursive semantics:
+/// a call's parked descendants (spawned threads, then same-thread children,
+/// smallest call id first) are opened before its own `FinishCall`, which is
+/// what consumes its parked end.
+#[derive(Clone, Copy, Debug)]
+enum StartResolution {
+    /// Attach parked spawned threads whose parent is this call; each attached
+    /// thread then drains its ready starts.
+    SpawnedThreadsOf(CallRef),
+    /// Open ready parked starts on this thread, smallest call id first.
+    ReadyStartsOn(ThreadRef),
+    /// Per-call epilogue: runtime ids, values, error joins, parked end. Runs
+    /// only once every frame pushed above it has drained.
+    FinishCall(CallRef),
+}
+
 #[derive(Debug, Default)]
 pub(super) struct DirectDecoder {
     threads: HashMap<ThreadRef, ThreadState>,
@@ -591,7 +618,10 @@ impl DirectDecoder {
                     return;
                 };
                 self.insert_thread(resources, thread_ref, boundary, None, None);
-                self.resolve_starts_for_thread(resources, thread_ref);
+                self.drain_start_resolution(
+                    resources,
+                    vec![StartResolution::ReadyStartsOn(thread_ref)],
+                );
             }
             RawRecord::StartThreadSpawn {
                 thread_id,
@@ -956,7 +986,10 @@ impl DirectDecoder {
                 parent.context_key,
                 spawn_site,
             );
-            self.resolve_starts_for_thread(resources, thread_ref);
+            self.drain_start_resolution(
+                resources,
+                vec![StartResolution::ReadyStartsOn(thread_ref)],
+            );
         } else {
             self.insert_pending_thread(
                 resources,
@@ -970,14 +1003,35 @@ impl DirectDecoder {
     }
 
     fn consume_call_start(&mut self, resources: &DecoderResources<'_>, fact: OwnedCallStart) {
-        let thread_ref = ThreadRef {
-            process_euid: fact.call_ref.process_euid,
-            engine_id: fact.call_ref.engine_id,
-            thread_id: fact.call_ref.thread_id,
+        let thread_ref = call_thread_ref(fact.call_ref);
+        let Some(call_ref) = self.open_call_start(resources, fact) else {
+            return;
         };
+        // LIFO: spawned threads first, then same-thread children, then this
+        // call's epilogue — the order the recursion used to take.
+        self.drain_start_resolution(
+            resources,
+            vec![
+                StartResolution::FinishCall(call_ref),
+                StartResolution::ReadyStartsOn(thread_ref),
+                StartResolution::SpawnedThreadsOf(call_ref),
+            ],
+        );
+    }
+
+    /// Folds a call start into the CCT and retains its join state. Returns
+    /// the opened call, or `None` when the fact was parked or dropped. Never
+    /// resolves anything else: descendants and the epilogue are worklist
+    /// frames (`drain_start_resolution`).
+    fn open_call_start(
+        &mut self,
+        resources: &DecoderResources<'_>,
+        fact: OwnedCallStart,
+    ) -> Option<CallRef> {
+        let thread_ref = call_thread_ref(fact.call_ref);
         let Some(thread) = self.threads.get(&thread_ref) else {
             self.insert_pending_start(resources, fact);
-            return;
+            return None;
         };
         let boundary = thread.boundary;
         let (parent, parent_admission, edge_kind, call_site) = if fact.parent_call_id.0 == 0 {
@@ -1002,11 +1056,11 @@ impl DirectDecoder {
             };
             let Some(parent_call) = self.calls.get(&parent_ref) else {
                 self.insert_pending_start(resources, fact);
-                return;
+                return None;
             };
             let Some(parent_key) = parent_call.context_key else {
                 self.insert_pending_start(resources, fact);
-                return;
+                return None;
             };
             (
                 ParentContextRef::External(parent_key.0),
@@ -1048,9 +1102,7 @@ impl DirectDecoder {
                 resources.memory,
             ))
         });
-        let Some(context) = context else {
-            return;
-        };
+        let context = context?;
         let context_key = match context.context_ref() {
             ContextRef::Normal(key) => Some(ContextKeyProjection(key)),
             ContextRef::Overflow { .. } => None,
@@ -1066,7 +1118,7 @@ impl DirectDecoder {
                     .active_call_capacity_exceeded
                     .saturating_add(1);
             });
-            return;
+            return None;
         };
         let span_state = if plan.selected {
             let started_ns = resources.clock.to_ns(fact.ts_ticks);
@@ -1130,20 +1182,102 @@ impl DirectDecoder {
             },
         );
         self.flush_evidence_if_target(resources, boundary);
-        self.resolve_threads_for_parent(resources, fact.call_ref);
-        // Same-thread children may have been parked before this start when a
-        // logical thread migrated to an older ring. Resolve them while this
-        // call is still open: consuming this call's pending end below removes
-        // the context key their own starts need.
-        self.resolve_starts_for_thread(resources, thread_ref);
-        self.resolve_runtime_ids(resources, fact.call_ref);
-        self.resolve_values(resources, fact.call_ref);
+        Some(fact.call_ref)
+    }
+
+    /// The per-call epilogue of a start. Same-thread children parked before
+    /// this start (a logical thread that migrated to an older ring) must be
+    /// opened *before* this runs: consuming the call's pending end here can
+    /// remove the context key their own starts need. The worklist guarantees
+    /// that ordering.
+    fn finish_call_start(&mut self, resources: &DecoderResources<'_>, call_ref: CallRef) {
+        self.resolve_runtime_ids(resources, call_ref);
+        self.resolve_values(resources, call_ref);
         self.refresh_error_dependencies();
         self.resolve_error_attempts(resources);
         self.refresh_terminal_dependencies();
         self.resolve_terminal_errors(resources);
-        if let Some(pending) = self.pending_ends.remove(&fact.call_ref) {
+        if let Some(pending) = self.pending_ends.remove(&call_ref) {
             self.consume_call_end(resources, pending.fact);
+        }
+    }
+
+    /// Drives start resolution to a fixed point from an explicit stack. Each
+    /// frame either makes one unit of progress (and may push frames above
+    /// itself) or pops. The stack holds at most three frames per opened call,
+    /// on the heap; the process stack stays flat however deep the parked tree
+    /// is.
+    fn drain_start_resolution(
+        &mut self,
+        resources: &DecoderResources<'_>,
+        mut stack: Vec<StartResolution>,
+    ) {
+        while let Some(step) = stack.last().copied() {
+            match step {
+                StartResolution::SpawnedThreadsOf(parent_call) => {
+                    let Some(parent) = self
+                        .calls
+                        .get(&parent_call)
+                        .map(|parent| (parent.boundary, parent.context_key))
+                    else {
+                        stack.pop();
+                        continue;
+                    };
+                    let next = self.pending_threads.iter().find_map(|(key, pending)| {
+                        (pending.fact.parent_call == parent_call).then_some(*key)
+                    });
+                    let Some(key) = next else {
+                        stack.pop();
+                        continue;
+                    };
+                    let pending = self
+                        .pending_threads
+                        .remove(&key)
+                        .expect("selected pending thread exists");
+                    self.insert_thread(
+                        resources,
+                        pending.fact.thread_ref,
+                        parent.0,
+                        parent.1,
+                        pending.fact.spawn_site,
+                    );
+                    stack.push(StartResolution::ReadyStartsOn(pending.fact.thread_ref));
+                }
+                StartResolution::ReadyStartsOn(thread_ref) => {
+                    // A consumer can observe a spawned child's descendants
+                    // before the spawning thread's ring publishes the child's
+                    // entry call. Only take a fact whose parent is already
+                    // resolvable; removing and immediately re-parking an
+                    // unready fact could select the same entry forever and
+                    // livelock the sole consumer.
+                    let next = self
+                        .pending_starts
+                        .iter()
+                        .filter(|(_, pending)| {
+                            call_thread_ref(pending.fact.call_ref) == thread_ref
+                                && self.call_start_dependency_ready(&pending.fact)
+                        })
+                        .map(|(key, _)| *key)
+                        .min_by_key(|key| key.call_id.0);
+                    let Some(key) = next else {
+                        stack.pop();
+                        continue;
+                    };
+                    let pending = self
+                        .pending_starts
+                        .remove(&key)
+                        .expect("selected pending call start exists");
+                    if let Some(call_ref) = self.open_call_start(resources, pending.fact) {
+                        stack.push(StartResolution::FinishCall(call_ref));
+                        stack.push(StartResolution::ReadyStartsOn(thread_ref));
+                        stack.push(StartResolution::SpawnedThreadsOf(call_ref));
+                    }
+                }
+                StartResolution::FinishCall(call_ref) => {
+                    stack.pop();
+                    self.finish_call_start(resources, call_ref);
+                }
+            }
         }
     }
 
@@ -1461,16 +1595,25 @@ impl DirectDecoder {
         }
     }
 
+    /// Parked facts across every pending map (§5.2 entry limit).
+    fn unresolved_join_entries(&self) -> usize {
+        self.pending_starts
+            .len()
+            .saturating_add(self.pending_ends.len())
+            .saturating_add(self.pending_threads.len())
+            .saturating_add(self.pending_thread_ends.len())
+    }
+
     fn insert_pending_start(&mut self, resources: &DecoderResources<'_>, fact: OwnedCallStart) {
         if self.pending_starts.contains_key(&fact.call_ref) {
             return;
         }
-        let thread_ref = ThreadRef {
-            process_euid: fact.call_ref.process_euid,
-            engine_id: fact.call_ref.engine_id,
-            thread_id: fact.call_ref.thread_id,
-        };
+        let thread_ref = call_thread_ref(fact.call_ref);
         let boundary = self.boundary_for_thread(thread_ref);
+        if self.unresolved_join_entries() >= MAX_UNRESOLVED_JOIN_ENTRIES {
+            record_join_capacity_exceeded(resources.boundaries, boundary);
+            return;
+        }
         match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
@@ -1494,12 +1637,12 @@ impl DirectDecoder {
         if self.pending_ends.contains_key(&fact.call_ref) {
             return;
         }
-        let thread_ref = ThreadRef {
-            process_euid: fact.call_ref.process_euid,
-            engine_id: fact.call_ref.engine_id,
-            thread_id: fact.call_ref.thread_id,
-        };
+        let thread_ref = call_thread_ref(fact.call_ref);
         let boundary = self.boundary_for_thread(thread_ref);
+        if self.unresolved_join_entries() >= MAX_UNRESOLVED_JOIN_ENTRIES {
+            record_join_capacity_exceeded(resources.boundaries, boundary);
+            return;
+        }
         match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
@@ -1537,6 +1680,10 @@ impl DirectDecoder {
                     .get(&parent_thread)
                     .and_then(|thread| thread.boundary)
             });
+        if self.unresolved_join_entries() >= MAX_UNRESOLVED_JOIN_ENTRIES {
+            record_join_capacity_exceeded(resources.boundaries, boundary);
+            return;
+        }
         match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
@@ -1574,6 +1721,15 @@ impl DirectDecoder {
                     .and_then(|thread| thread.boundary)
             })
             .or_else(|| find_boundary_by_root(resources.boundaries, thread_ref));
+        if self.unresolved_join_entries() >= MAX_UNRESOLVED_JOIN_ENTRIES {
+            if let Some(boundary) = boundary {
+                with_runtime(resources.boundaries, boundary, |runtime| {
+                    runtime.health.join_capacity_exceeded =
+                        runtime.health.join_capacity_exceeded.saturating_add(1);
+                });
+            }
+            return;
+        }
         match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
@@ -1599,34 +1755,6 @@ impl DirectDecoder {
         }
     }
 
-    fn resolve_threads_for_parent(
-        &mut self,
-        resources: &DecoderResources<'_>,
-        parent_call: CallRef,
-    ) {
-        loop {
-            let next = self.pending_threads.iter().find_map(|(key, pending)| {
-                (pending.fact.parent_call == parent_call).then_some(*key)
-            });
-            let Some(key) = next else { break };
-            let pending = self
-                .pending_threads
-                .remove(&key)
-                .expect("selected pending thread exists");
-            let Some(parent) = self.calls.get(&parent_call) else {
-                break;
-            };
-            self.insert_thread(
-                resources,
-                pending.fact.thread_ref,
-                parent.boundary,
-                parent.context_key,
-                pending.fact.spawn_site,
-            );
-            self.resolve_starts_for_thread(resources, pending.fact.thread_ref);
-        }
-    }
-
     pub(super) fn resolve_thread_ends_after_sweep(&mut self) {
         let ready = self
             .pending_thread_ends
@@ -1637,37 +1765,6 @@ impl DirectDecoder {
         for thread_ref in ready {
             self.pending_thread_ends.remove(&thread_ref);
             self.threads.remove(&thread_ref);
-        }
-    }
-
-    fn resolve_starts_for_thread(
-        &mut self,
-        resources: &DecoderResources<'_>,
-        thread_ref: ThreadRef,
-    ) {
-        loop {
-            // A consumer can observe a spawned child's descendants before the
-            // spawning thread's ring publishes the child's entry call. Only
-            // remove a fact whose parent is already resolvable; removing and
-            // immediately reinserting an unready fact can otherwise select the
-            // same hash-map entry forever and livelock the sole consumer.
-            let next = self
-                .pending_starts
-                .iter()
-                .filter(|(_, pending)| {
-                    pending.fact.call_ref.thread_id == thread_ref.thread_id
-                        && pending.fact.call_ref.engine_id == thread_ref.engine_id
-                        && pending.fact.call_ref.process_euid == thread_ref.process_euid
-                        && self.call_start_dependency_ready(&pending.fact)
-                })
-                .map(|(key, _)| *key)
-                .min_by_key(|key| key.call_id.0);
-            let Some(key) = next else { break };
-            let pending = self
-                .pending_starts
-                .remove(&key)
-                .expect("selected pending call start exists");
-            self.consume_call_start(resources, pending.fact);
         }
     }
 

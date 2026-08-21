@@ -642,9 +642,15 @@ inclusive time whenever it arrives. Parent gaps remaining at final drain are
 health loss, not guessed relationships.
 
 The unresolved-join table is a transient resource governed by memory and entry
-limits. Expiry during a live run is based on an explicit age/pressure rule,
-not arrival order. Final boundary drain is the authoritative point at which
-remaining entries become `UnmatchedCallFact` or `UnmatchedThreadFact`.
+limits: every parked fact carries an `UnresolvedJoins` reservation, and the
+table as a whole (starts, ends, thread starts, thread ends) is capped at a
+fixed entry count, beyond which further reorder facts are charged as
+`JoinCapacityExceeded` instead of parked. Resolving parked facts is driven by
+an explicit worklist, never by recursion on the consumer's stack, so a burst of
+parked descendants is bounded by the table, not by stack depth. Expiry during a
+live run is based on an explicit age/pressure rule, not arrival order. Final
+boundary drain is the authoritative point at which remaining entries become
+`UnmatchedCallFact` or `UnmatchedThreadFact`.
 
 ### 5.3 Boundary final drain
 
@@ -2178,7 +2184,14 @@ handles.
 An `On` session may also return `Inactive(Suppressed)` for internal roots. The
 MVP migrates every current `.with_profile_enabled(false)` caller—test
 collection, GC finalizers, and LSP test-registry collect/expand/serialize—to
-the explicit `SuppressInternal` intent. Suppression covers that root and its
+the explicit `SuppressInternal` intent, and adds the exec JSON argument/output
+helpers (`baml.json.deserialize` / `baml.json.serialize` roots created by
+`baml run` and packed executables around the user's function; they previously
+shared the target's capture stream and never had their own profile). An
+invocation therefore publishes exactly one run, the user boundary; a
+user-written `from_json` override that runs during argument decoding is inside
+the suppressed helper root, while the same override called from the user's
+function remains profiled. Suppression covers that root and its
 descendants: no boundary registration, capture resolver, timestamps, await
 accumulator, structural/evidence hook, or artifact, while IDs and independently
 requested logs remain functional.
@@ -2275,9 +2288,12 @@ because canary is moving. It includes at least:
 Do not delete `history/boundary_writer.rs` or `.bamlvalue` ownership wholesale
 until `LogEvent`, log `CaptureLoss`, `RunStarted`, and `RunCompleted` have a
 clear non-profile home. Captured values move to evidence/CAS; logging remains
-functional with profiling off. Plain `baml clean` never deletes this mixed
-legacy history. We accept leaving unreachable legacy captured-value bytes
-rather than parsing/rewriting mixed files as a migration project.
+functional with profiling off. The post-cutover history writer and reader use
+a fresh tree, `.baml/history-v1/`, so the reader can never open a mixed
+pre-cutover file; `.baml/history/` is legacy, never discovered or read, and is
+operator-cleaned. Plain `baml clean` never deletes this mixed legacy history.
+We accept leaving unreachable legacy captured-value bytes rather than
+parsing/rewriting mixed files as a migration project.
 
 Removing legacy writer/reader code does not authorize deleting legacy files
 from disk. Plain `baml clean` is scoped to `profiles-v1` only; all legacy

@@ -39,7 +39,7 @@ mod concurrency_tests;
 
 pub use config::ProfConfig;
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
-pub use consumer::{engine_closed, flush_and_join};
+pub use consumer::{consumer_thread_started, engine_closed, flush_and_join};
 #[cfg(not(baml_loom))]
 pub use registry::ring_for_engine;
 pub use ring::{Ring, RingHandle};

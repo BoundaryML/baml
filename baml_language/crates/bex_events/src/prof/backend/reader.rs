@@ -49,6 +49,9 @@ pub enum RunReadError {
         actual: u64,
     },
     ConflictingContextDefinition(ContextKey),
+    /// A context's parent chain revisits a key: the segments verified their
+    /// checksums, so this is a forged or corrupt CCT, never a reorder.
+    CyclicContextChain(ContextKey),
     DuplicateSpanStart(CallRef),
     DuplicateSpanEnd(CallRef),
     DuplicateValueOccurrence {
@@ -489,30 +492,43 @@ impl ProfileRun {
             .errors
             .get(&id)
             .ok_or(RunReadError::MissingErrorCapture(id))?;
-        let ContextRef::Normal(mut key) = capture.throw_context_ref else {
+        let ContextRef::Normal(key) = capture.throw_context_ref else {
             return Ok(ErrorStack::StackIncomplete {
                 throw_function_id: capture.throw_function_id,
                 throw_site: capture.throw_site,
             });
         };
-        let mut stack = Vec::new();
-        loop {
-            let context = self
-                .contexts
-                .get(&key)
-                .ok_or(RunReadError::MissingContextDefinition(key))?;
-            let tuple = context
-                .tuple
-                .ok_or(RunReadError::MissingContextDefinition(key))?;
-            stack.push(tuple);
-            let Some(parent) = tuple.parent_context_key else {
-                break;
-            };
-            key = parent;
-        }
-        stack.reverse();
-        Ok(ErrorStack::Complete(stack))
+        Ok(ErrorStack::Complete(context_chain(&self.contexts, key)?))
     }
+}
+
+/// Root-first parent chain of `key`. A well-formed chain visits each context
+/// at most once, so walking more than `contexts.len()` steps proves a cycle
+/// without a visited set on the read path.
+fn context_chain(
+    contexts: &HashMap<ContextKey, MergedContext>,
+    mut key: ContextKey,
+) -> Result<Vec<ContextTuple>, RunReadError> {
+    let mut stack = Vec::new();
+    let max_depth = contexts.len();
+    loop {
+        let context = contexts
+            .get(&key)
+            .ok_or(RunReadError::MissingContextDefinition(key))?;
+        let tuple = context
+            .tuple
+            .ok_or(RunReadError::MissingContextDefinition(key))?;
+        stack.push(tuple);
+        let Some(parent) = tuple.parent_context_key else {
+            break;
+        };
+        if stack.len() >= max_depth {
+            return Err(RunReadError::CyclicContextChain(key));
+        }
+        key = parent;
+    }
+    stack.reverse();
+    Ok(stack)
 }
 
 fn validate_fence(kind: SegmentKind, fence: SegmentHighWater) -> Result<(), RunReadError> {
@@ -572,5 +588,62 @@ fn add_counters(target: &mut CctCounters, delta: CctCounters, health: &mut Count
             target.await_count = u64::MAX;
             health.await_counter_saturated = true;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::{ContextKey, ContextTuple, MergedContext, RunReadError, context_chain};
+    use crate::{
+        ids::{FunctionId, ProgramId},
+        prof::backend::{CctCounters, EdgeKind},
+    };
+
+    fn context(parent: Option<ContextKey>, edge_kind: EdgeKind) -> MergedContext {
+        MergedContext {
+            tuple: Some(ContextTuple {
+                program_id: ProgramId([0; 16]),
+                parent_context_key: parent,
+                function_id: FunctionId(1),
+                call_site: None,
+                edge_kind,
+            }),
+            counters: CctCounters::default(),
+        }
+    }
+
+    #[test]
+    fn context_chain_walks_root_first() {
+        let root = ContextKey([1; 32]);
+        let child = ContextKey([2; 32]);
+        let contexts = HashMap::from([
+            (root, context(None, EdgeKind::Root)),
+            (child, context(Some(root), EdgeKind::Call)),
+        ]);
+        let chain = context_chain(&contexts, child).unwrap();
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain[0].edge_kind, EdgeKind::Root);
+        assert_eq!(chain[1].parent_context_key, Some(root));
+    }
+
+    #[test]
+    fn context_chain_rejects_cycles_instead_of_hanging() {
+        let a = ContextKey([1; 32]);
+        let b = ContextKey([2; 32]);
+        let contexts = HashMap::from([
+            (a, context(Some(b), EdgeKind::Call)),
+            (b, context(Some(a), EdgeKind::Call)),
+        ]);
+        assert!(matches!(
+            context_chain(&contexts, a),
+            Err(RunReadError::CyclicContextChain(_))
+        ));
+        let contexts = HashMap::from([(a, context(Some(a), EdgeKind::Call))]);
+        assert!(matches!(
+            context_chain(&contexts, a),
+            Err(RunReadError::CyclicContextChain(_))
+        ));
     }
 }

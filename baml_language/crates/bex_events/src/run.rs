@@ -832,6 +832,12 @@ impl InMemoryRunStore {
         if inner.runs.contains_key(&run.boundary_id) {
             return false;
         }
+        // Replayed payload ids share the store's id space; anything appended
+        // to this run later must not collide with what was replayed.
+        let max_replayed_id = run.payloads.iter().map(|payload| payload.id.0).max();
+        if let Some(max_replayed_id) = max_replayed_id {
+            inner.next_payload_id = inner.next_payload_id.max(max_replayed_id.saturating_add(1));
+        }
         let domain_diagnostics = run.diagnostics.clone();
         inner.runs.insert(
             run.boundary_id,

@@ -363,6 +363,9 @@ impl ProfilerStore {
             source: None,
         })?;
         fs::create_dir_all(parent).map_err(open_error)?;
+        // Best effort: a project that cannot take the ignore marker still
+        // profiles. Failure here is never a reason to disable the store.
+        let _ = ensure_baml_dir_ignored(&root);
         let root_name = root
             .file_name()
             .and_then(|name| name.to_str())
@@ -1413,6 +1416,52 @@ fn write_usage_state(root: &Path, usage: u64, platform: &dyn StorePlatform) -> i
     platform.sync_dir(root)
 }
 
+/// Keeps profiler output out of user repositories: the nearest `.baml/`
+/// ancestor of `root` gets a `.gitignore` containing a standalone `*` line,
+/// created if missing and appended if present (existing rules are preserved;
+/// an existing standalone `*` is left alone). Returns `Ok(false)` when `root`
+/// is not under a `.baml/` directory (custom store roots stay user-managed).
+fn ensure_baml_dir_ignored(root: &Path) -> io::Result<bool> {
+    let Some(baml_dir) = root
+        .ancestors()
+        .find(|ancestor| ancestor.file_name().is_some_and(|name| name == ".baml"))
+    else {
+        return Ok(false);
+    };
+    fs::create_dir_all(baml_dir)?;
+    let ignore_path = baml_dir.join(".gitignore");
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&ignore_path)
+    {
+        Ok(mut file) => {
+            file.write_all(b"*\n")?;
+            Ok(true)
+        }
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+            let contents = fs::read(&ignore_path)?;
+            if has_standalone_star_line(&contents) {
+                return Ok(true);
+            }
+            let mut file = fs::OpenOptions::new().append(true).open(&ignore_path)?;
+            if contents.is_empty() || contents.ends_with(b"\n") {
+                file.write_all(b"*\n")?;
+            } else {
+                file.write_all(b"\n*\n")?;
+            }
+            Ok(true)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn has_standalone_star_line(contents: &[u8]) -> bool {
+    contents
+        .split(|byte| *byte == b'\n')
+        .any(|line| line.trim_ascii() == b"*")
+}
+
 fn open_error(source: io::Error) -> StoreOpenError {
     let reason = if source.kind() == io::ErrorKind::PermissionDenied {
         StoreFailureReason::PermissionDenied
@@ -1453,6 +1502,52 @@ mod tests {
 
     use super::*;
     use crate::ids::{BexThreadId, EngineId, ProcessEuid};
+
+    #[test]
+    fn store_open_writes_idempotent_baml_gitignore() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("project/.baml/profiles-v1");
+        let ignore = temp.path().join("project/.baml/.gitignore");
+        let disk = DiskBudget {
+            max_project_bytes: 16 * 1024 * 1024,
+            minimum_free_bytes: 0,
+        };
+
+        let store = ProfilerStore::open_native(root.clone(), disk).unwrap();
+        assert_eq!(fs::read(&ignore).unwrap(), b"*\n");
+        drop(store);
+
+        // Re-opening never duplicates the marker.
+        let store = ProfilerStore::open_native(root.clone(), disk).unwrap();
+        assert_eq!(fs::read(&ignore).unwrap(), b"*\n");
+        drop(store);
+
+        // Existing user rules are preserved and the marker is appended once.
+        fs::write(&ignore, b"# keep this\n!.keep").unwrap();
+        let store = ProfilerStore::open_native(root.clone(), disk).unwrap();
+        assert_eq!(fs::read(&ignore).unwrap(), b"# keep this\n!.keep\n*\n");
+        drop(store);
+        let _ = ProfilerStore::open_native(root, disk).unwrap();
+        assert_eq!(fs::read(&ignore).unwrap(), b"# keep this\n!.keep\n*\n");
+    }
+
+    #[test]
+    fn baml_gitignore_marker_recognizes_padded_star_and_skips_custom_roots() {
+        let temp = TempDir::new().unwrap();
+        let baml_dir = temp.path().join("project/.baml");
+        fs::create_dir_all(&baml_dir).unwrap();
+        let original = b"# keep this\n  * \r\n!.keep\n";
+        fs::write(baml_dir.join(".gitignore"), original).unwrap();
+        assert!(ensure_baml_dir_ignored(&baml_dir.join("profiles-v1")).unwrap());
+        assert_eq!(fs::read(baml_dir.join(".gitignore")).unwrap(), original);
+
+        let custom = temp.path().join("custom-profiles");
+        assert!(!ensure_baml_dir_ignored(&custom).unwrap());
+        assert!(
+            !custom.exists(),
+            "custom roots outside .baml stay user-managed"
+        );
+    }
 
     #[derive(Debug)]
     struct TestPlatform {

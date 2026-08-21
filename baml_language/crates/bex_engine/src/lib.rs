@@ -90,24 +90,26 @@ use ::bex_heap::{HeapPermit as _, Tlab};
 use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
-use bex_events::prof::backend::{
-    BoundaryEndStatus, BoundaryHandle, ProfilerSession, RootAdmission, RootProfileIntent,
-    RootProfiler, ValueLossReason, ValueRole,
-};
+use bex_events::prof::backend::{BoundaryEndStatus, ProfilerSession, RootProfiler};
+#[cfg(not(target_arch = "wasm32"))]
+use bex_events::prof::backend::{BoundaryHandle, RootAdmission, ValueLossReason, ValueRole};
 pub use bex_events::{
     FunctionMetadataTable, ProgramMetadata,
     ids::{
         BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ProgramId, ThreadRef,
     },
+    prof::backend::RootProfileIntent,
 };
 pub use bex_external_types::{BexExternalValue, RuntimeTy, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
+#[cfg(not(target_arch = "wasm32"))]
+use bex_vm::VmCallCaptureKind;
 use bex_vm::{
-    BexVm, VmCallCaptureKind, VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask,
-    VmEventSourceLocation, VmExecState,
+    BexVm, VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask, VmEventSourceLocation,
+    VmExecState,
 };
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
@@ -168,15 +170,13 @@ impl Drop for ParkRequestGuard {
     }
 }
 
+use crate::logger::{TraceLogMetadata, TraceLogger};
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
     thread::BexThread,
 };
-use crate::{
-    logger::{TraceLogMetadata, TraceLogger},
-    trace_heap::TraceHeap,
-    trace_value_encode::encode_trace_snapshot_body_bounded,
-};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::{trace_heap::TraceHeap, trace_value_encode::encode_trace_snapshot_body_bounded};
 
 const SPAWN_CLOSURE_FQN: &str = "baml.<spawn-closure>";
 const SPAWN_CLOSURE_DISPLAY_NAME: &str = "<spawn-closure>";
@@ -420,6 +420,7 @@ pub struct BexCallResult {
 
 #[derive(Clone)]
 struct RootValueCaptureContext {
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     call_ref: CallRef,
     #[cfg(not(target_arch = "wasm32"))]
     backend: BackendValueCaptureContext,
@@ -553,6 +554,7 @@ impl BackendValueCaptureContext {
 }
 
 impl CallValueCaptureContext {
+    #[cfg_attr(target_arch = "wasm32", allow(clippy::unused_self))]
     fn input_capture_hook(&self) -> Arc<dyn VmCallInputCaptureHook> {
         Arc::new(EngineCallInputCaptureHook {
             #[cfg(not(target_arch = "wasm32"))]
@@ -568,6 +570,9 @@ struct EngineCallInputCaptureHook {
 
 impl VmCallInputCaptureHook for EngineCallInputCaptureHook {
     fn capture_call_input(&self, capture: VmCallInputCapture<'_>) {
+        // wasm32 has no profiler backend: the hook is inert.
+        #[cfg(target_arch = "wasm32")]
+        let _ = capture;
         #[cfg(not(target_arch = "wasm32"))]
         self.backend.capture_with(
             CallRef {
@@ -2217,6 +2222,11 @@ impl BexEngine {
     /// migrated OS threads across the await) and before any engine-driven VM
     /// re-entry that can emit — `set_entry_point`, the loop-head exec, and
     /// `inject_sysop_throw`'s unwind all push through this snapshot.
+    ///
+    /// A denied ring (`None` while the session is on) is not accounted here:
+    /// the VM charges one structural transport loss per record it would have
+    /// pushed (`prof_ring_for_push`), so the counter reflects records lost,
+    /// not resumes taken.
     fn prof_refresh_vm_ring(&self, vm: &mut bex_vm::BexVm) {
         vm.prof_ring = if self.profiler_session.is_on() && !vm.prof_suppressed {
             bex_events::prof::ring_for_engine(self.engine_id.0)
@@ -2224,9 +2234,6 @@ impl BexEngine {
         } else {
             None
         };
-        if self.profiler_session.is_on() && !vm.prof_suppressed && vm.prof_ring.is_none() {
-            self.prof_record_transport_loss(vm.prof_boundary_handle);
-        }
     }
 
     fn prof_charge_await(
@@ -3659,6 +3666,8 @@ impl BexEngine {
         );
         if let (Some(capture), Some(entries)) = (root_capture.as_ref(), root_input_values.as_ref())
         {
+            #[cfg(target_arch = "wasm32")]
+            let _ = (capture, entries);
             #[cfg(not(target_arch = "wasm32"))]
             capture
                 .backend
@@ -4695,6 +4704,7 @@ impl BexEngine {
         Ok(())
     }
 
+    #[cfg_attr(target_arch = "wasm32", allow(clippy::unused_self, unused_variables))]
     fn capture_root_value(
         &self,
         thread: &ActiveHeapPermit<BexThread>,
@@ -4723,6 +4733,8 @@ impl BexEngine {
                     thread_id: BexThreadId(event.thread_id),
                     call_id: BexCallId(event.call_id),
                 };
+                #[cfg(target_arch = "wasm32")]
+                let _ = (capture, call_ref);
                 #[cfg(not(target_arch = "wasm32"))]
                 if event.kind == VmCallCaptureKind::Output {
                     capture.backend.capture_with(
@@ -5029,8 +5041,14 @@ impl BexEngine {
                     .await?,
             )),
             Err(bex_vm::errors::VmError::Thrown(thrown)) => Ok(Some(
-                self.route_unhandled_vm_throw(thread, call_id, thrown.value, Vec::new(), None)
-                    .await?,
+                self.route_unhandled_vm_throw(
+                    thread,
+                    call_id,
+                    thrown.value,
+                    Vec::new(),
+                    throws_type,
+                )
+                .await?,
             )),
             Err(bex_vm::errors::VmError::InternalError(err)) => {
                 Err(EngineError::VmInternalError(err))

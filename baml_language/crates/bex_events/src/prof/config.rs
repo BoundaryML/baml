@@ -14,6 +14,9 @@ pub struct ProfConfig {
     pub enabled: bool,
 }
 
+// On wasm32 the default is `false`, which clippy flags as derivable; the
+// target-dependent literal is the point.
+#[cfg_attr(target_arch = "wasm32", allow(clippy::derivable_impls))]
 impl Default for ProfConfig {
     fn default() -> Self {
         Self {

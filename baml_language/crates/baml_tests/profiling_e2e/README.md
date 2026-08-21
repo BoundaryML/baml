@@ -30,8 +30,9 @@ CPU count reported by Python. `--no-build` reuses the release-packed binary.
 JSON records. The normal reproducible check remains the default paired run.
 
 The runner verifies byte-identical output and reads every profiling-on durable
-run with `profiling_e2e_verify`. A packed invocation produces one workload
-boundary and one three-call output-serialization boundary; both are checked.
+run with `profiling_e2e_verify`. A packed invocation produces exactly one
+durable run, the workload boundary; the JSON argument/output helpers around it
+are suppressed internal roots and publish nothing.
 The verifier rejects incomplete runs, CCT shape/count
 changes, evidence mismatches, any health/loss counter, or profiler state in an
 off run. Stress call/context counts are exact; its await count has exact
@@ -46,9 +47,8 @@ fallback with alternating off/on order and identical captured output handling.
 The initial 2026-08-19 record used that fallback because Hyperfine was absent.
 After Hyperfine 1.20.0 was installed, final measurements used `--output=pipe`,
 three/two warmups, and fifteen/ten measured runs. Exact commands, results, and
-the earlier failed attempts are recorded in
-`TASK/profiling-backend-mvp-log.md`; the direct runner remains the per-run
-output and durable-invariant checker.
+the earlier failed attempts are recorded in the PR description; the direct
+runner remains the per-run output and durable-invariant checker.
 
 Peak RSS is a separate diagnostic so it cannot perturb primary wall timing.
 `rss_probe.py` launches exactly one packed child and reports that child's

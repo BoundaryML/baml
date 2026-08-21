@@ -7,11 +7,14 @@ use super::decoder::{BoundaryRuntime, DecoderResources, DirectDecoder, finalize_
 #[cfg(not(target_arch = "wasm32"))]
 use super::{BeginBoundaryResult, BoundaryRunMeta, ProfilerStore};
 use super::{
-    BoundaryHandle, BoundaryMetadata, BoundaryRegistry, CapturePlan, DerivedSizing,
-    ErrorCaptureAttempt, ErrorCaptureId, FunctionCaptureClass, LocalIdOverrides, MeasuredLayouts,
-    Owner, ProfilerConfig, ProfilerMemoryGovernor, ProfilerSizingPolicy, Reservation,
-    ReservationClass, RootBoundaryCompletionGuard, TerminalErrorTarget, ValueLossReason, ValueRole,
-    ValueState, resolve_capture_plan,
+    BoundaryHandle, BoundaryRegistry, CapturePlan, DerivedSizing, FunctionCaptureClass,
+    LocalIdOverrides, MeasuredLayouts, Owner, ProfilerConfig, ProfilerMemoryGovernor, Reservation,
+    ReservationClass, ValueLossReason, resolve_capture_plan,
+};
+#[cfg(not(target_arch = "wasm32"))]
+use super::{
+    BoundaryMetadata, ErrorCaptureAttempt, ErrorCaptureId, ProfilerSizingPolicy,
+    RootBoundaryCompletionGuard, TerminalErrorTarget, ValueRole, ValueState,
 };
 use crate::ids::{BoundaryId, ProgramId, ThreadRef};
 
@@ -189,6 +192,9 @@ pub struct AwaitClockInvalid;
 #[derive(Debug)]
 enum SessionKind {
     Off,
+    // wasm32 never constructs an on session (no store, no consumer), but the
+    // variant stays so every match site is the same on both targets.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     On(Box<OnSession>),
 }
 
@@ -201,6 +207,7 @@ impl ProfilerSession {
     /// Constructs a session from the five-input configuration. Invalid memory
     /// budgets fail to the state-free off variant and one diagnostic.
     #[must_use]
+    #[cfg_attr(target_arch = "wasm32", allow(clippy::needless_pass_by_value))]
     pub fn from_config(config: ProfilerConfig) -> (Arc<Self>, Option<SetupDiagnostic>) {
         if !config.enabled {
             return (
@@ -381,6 +388,7 @@ impl ProfilerSession {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[must_use]
     pub(crate) fn boundary_accepts_producer(&self, handle: BoundaryHandle) -> bool {
         match &self.kind {
@@ -1016,6 +1024,7 @@ impl ProfilerSession {
     /// Two-phase boundary registration: fixed runtime ownership is reserved
     /// before immutable `run.meta` publication. Only the admitted result can
     /// expose an active profiler token.
+    #[cfg_attr(target_arch = "wasm32", allow(clippy::needless_return))]
     pub fn register_root(
         &self,
         intent: RootProfileIntent,
@@ -1521,6 +1530,211 @@ mod tests {
         assert_eq!(
             run.spans[&root_call].end.map(|end| end.status),
             Some(FunctionEndStatus::Ok)
+        );
+    }
+
+    /// A.2 regression harness: one parent start and `children` child starts
+    /// (plus their ends) are parked before the root thread is known, so the
+    /// thread start resolves the whole burst at once. With the former
+    /// recursion the resolution depth equalled `children`; the worklist keeps
+    /// the consumer's stack flat. `park_parent_end` also parks the parent's
+    /// end, guarding the ordering rule that a call's parked children open
+    /// before its own pending end is consumed. Returns the elapsed time of the
+    /// resolving `StartThread` record for stress timing.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn resolve_parked_burst(
+        children: u64,
+        park_parent_end: bool,
+        process_memory_bytes: u64,
+    ) -> std::time::Duration {
+        use crate::{
+            ids::{BexCallId, BexThreadId, EngineId, FunctionId, ProcessEuid},
+            prof::{
+                backend::{DurableRunReader, EdgeKind},
+                record::{FunctionEndStatus, MAX_RECORD_LEN, RawRecord, ThreadEndStatus},
+            },
+        };
+
+        let temp = tempfile::TempDir::new().unwrap();
+        let root = temp.path().join(".baml/profiles-v1");
+        let boundary_id = BoundaryId::from_bytes([0x77; 16]);
+        let process_euid = ProcessEuid([1; 16]);
+        let engine_id = EngineId(2);
+        let root_thread = BexThreadId(3);
+        let root_thread_ref = ThreadRef {
+            process_euid,
+            engine_id,
+            thread_id: root_thread,
+        };
+        let (session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
+            enabled: true,
+            store_root: root.clone(),
+            process_memory_bytes,
+            disk: DiskBudget {
+                max_project_bytes: 64 * 1024 * 1024,
+                minimum_free_bytes: 0,
+            },
+        });
+        assert!(diagnostic.is_none());
+        let RootAdmission::Active(admission) = session.register_root(
+            RootProfileIntent::UserBoundary { boundary_id },
+            root_thread_ref,
+            ProgramId([4; 16]),
+            None,
+            None,
+        ) else {
+            panic!("root must be admitted");
+        };
+        let emit = |record: RawRecord<'_>| {
+            let mut bytes = [0; MAX_RECORD_LEN];
+            let len = record.encode(&mut bytes);
+            session.consume_raw_bytes(process_euid, engine_id, &bytes[..len]);
+        };
+        let ordinary =
+            resolve_capture_plan(false, FunctionCaptureClass::Ordinary, None).to_call_flags();
+        let call =
+            |call_id, parent_call_id, function_id, flags, ts_ticks| RawRecord::CallFunction {
+                flags,
+                thread_id: root_thread,
+                call_id: BexCallId(call_id),
+                parent_call_id: BexCallId(parent_call_id),
+                function_id: FunctionId(function_id),
+                call_site: None,
+                ts_ticks,
+            };
+        let end = |call_id, ts_ticks| RawRecord::EndFunction {
+            status: FunctionEndStatus::Ok,
+            thread_id: root_thread,
+            call_id: BexCallId(call_id),
+            ts_ticks,
+        };
+
+        // The whole burst arrives before the thread is known: children (and
+        // their ends) first, then the parent start, optionally its end.
+        for child in 0..children {
+            let call_id = 2 + child;
+            let ts = 1_000 + call_id * 4;
+            emit(call(call_id, 1, 20, ordinary, ts));
+            emit(end(call_id, ts + 1));
+        }
+        emit(call(
+            1,
+            0,
+            10,
+            resolve_capture_plan(true, FunctionCaptureClass::Ordinary, None).to_call_flags(),
+            100,
+        ));
+        let parent_end_ts = 1_000 + (2 + children) * 4 + 10;
+        if park_parent_end {
+            emit(end(1, parent_end_ts));
+        }
+
+        // Root thread start resolves everything parked above in one sweep.
+        let started = std::time::Instant::now();
+        emit(RawRecord::StartThread {
+            flags: 0,
+            thread_id: root_thread,
+            parent_thread_id: BexThreadId(0),
+            parent_call_id: BexCallId(0),
+            ts_ticks: 50,
+            name: b"",
+        });
+        let elapsed = started.elapsed();
+        if !park_parent_end {
+            emit(end(1, parent_end_ts));
+        }
+        emit(RawRecord::EndThread {
+            status: ThreadEndStatus::Completed,
+            thread_id: root_thread,
+            ts_ticks: parent_end_ts + 10,
+        });
+        // The thread end arrived after its start, so nothing is parked here;
+        // the sweep is a no-op and may report no work.
+        let _ = session.resolve_thread_ends_after_sweep();
+
+        admission.completion.complete(BoundaryEndStatus::Succeeded);
+        assert!(session.maintain_ready_boundaries());
+        assert!(session.maintain_ready_boundaries());
+
+        let run = DurableRunReader::open(root, boundary_id)
+            .unwrap()
+            .load()
+            .unwrap();
+        assert!(run.end.is_some(), "run must seal");
+        // Root context plus one shared child context (same function/site).
+        assert_eq!(run.contexts.len(), 2, "{:?}", run.contexts);
+        let (root_key, root_context) = run
+            .contexts
+            .iter()
+            .find(|(_, context)| {
+                context
+                    .tuple
+                    .is_some_and(|tuple| tuple.edge_kind == EdgeKind::Root)
+            })
+            .expect("root context");
+        assert_eq!(root_context.counters.invocations_started, 1);
+        assert_eq!(root_context.counters.completed_ok, 1);
+        let child_context = run
+            .contexts
+            .values()
+            .find(|context| {
+                context.tuple.is_some_and(|tuple| {
+                    tuple.edge_kind == EdgeKind::Call && tuple.parent_context_key == Some(*root_key)
+                })
+            })
+            .expect("child context under root");
+        assert_eq!(child_context.counters.invocations_started, children);
+        assert_eq!(child_context.counters.completed_ok, children);
+        assert_eq!(run.terminal_health.unmatched_call_facts, 0);
+        assert_eq!(run.terminal_health.unmatched_thread_facts, 0);
+        assert_eq!(run.terminal_health.join_capacity_exceeded, 0);
+        assert_eq!(run.terminal_health.active_call_capacity_exceeded, 0);
+        assert_eq!(run.terminal_health.corrupt_records, 0);
+        assert!(run.overflow.is_empty());
+        elapsed
+    }
+
+    /// Runs `body` on a thread with a deliberately small stack so the former
+    /// start-resolution recursion (depth = burst size) overflows
+    /// deterministically instead of depending on the host's default stack.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn on_small_stack(body: impl FnOnce() + Send + 'static) {
+        std::thread::Builder::new()
+            .name("profiler-consumer-256k".to_string())
+            .stack_size(256 * 1024)
+            .spawn(body)
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn burst_of_parked_children_resolves_without_recursion() {
+        on_small_stack(|| {
+            resolve_parked_burst(5_000, false, 32 * 1024 * 1024);
+        });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn burst_of_parked_children_resolves_before_parked_parent_end() {
+        on_small_stack(|| {
+            resolve_parked_burst(5_000, true, 32 * 1024 * 1024);
+        });
+    }
+
+    /// A.2 bench protocol item 2: 50k parked children, timed. Run alone:
+    /// `cargo test -p bex_events --release --lib reorder_stress -- --ignored --nocapture`.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    #[ignore = "manual reorder stress timing"]
+    fn reorder_stress_50k_parked_children() {
+        use std::io::Write as _;
+        let elapsed = resolve_parked_burst(50_000, true, 512 * 1024 * 1024);
+        let _ = writeln!(
+            std::io::stderr().lock(),
+            "reorder stress: 50k parked children resolved in {elapsed:?}"
         );
     }
 

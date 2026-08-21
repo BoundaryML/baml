@@ -114,6 +114,7 @@ impl TraceSnapshot {
         self.values.get(value_ref.0)
     }
 
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(crate) fn values(&self) -> impl Iterator<Item = &TraceValue> {
         self.values.iter()
     }
@@ -141,6 +142,22 @@ impl TraceHeap {
         Self::default()
     }
 
+    /// The unbounded (logging) copy path has no reservation, so the only
+    /// error it can see is an allocator failure. A `ValueMemoryExceeded` here
+    /// is a builder bug; `CopyFailed` is the process running out of memory,
+    /// which the profiler's bounded path reports as a loss instead.
+    fn unbounded<T>(result: Result<T, ValueLossReason>) -> T {
+        match result {
+            Ok(value) => value,
+            Err(ValueLossReason::CopyFailed) => {
+                panic!("unbounded trace snapshot copy failed: allocator returned an error")
+            }
+            Err(reason) => unreachable!(
+                "unbounded trace snapshot copy has no reservation and cannot be denied: {reason:?}"
+            ),
+        }
+    }
+
     pub fn copy_value_from_bex_heap(
         &self,
         heap: &BexHeap,
@@ -148,9 +165,7 @@ impl TraceHeap {
         value: Value,
     ) -> TraceSnapshotHandle {
         let mut builder = TraceSnapshotBuilder::default();
-        let root = builder
-            .copy_value(heap, permit, value)
-            .expect("unbounded trace snapshot copy cannot be memory-denied");
+        let root = Self::unbounded(builder.copy_value(heap, permit, value));
         self.insert_snapshot(builder.finish(root))
     }
 
@@ -192,15 +207,9 @@ impl TraceHeap {
         let items = values
             .iter()
             .copied()
-            .map(|value| {
-                builder
-                    .copy_value(heap, permit, value)
-                    .expect("unbounded trace snapshot copy cannot be memory-denied")
-            })
+            .map(|value| Self::unbounded(builder.copy_value(heap, permit, value)))
             .collect();
-        let root = builder
-            .alloc(TraceValue::Array(items))
-            .expect("unbounded trace snapshot copy cannot be memory-denied");
+        let root = Self::unbounded(builder.alloc(TraceValue::Array(items)));
         self.insert_snapshot(builder.finish(root))
     }
 
@@ -216,15 +225,11 @@ impl TraceHeap {
             .map(|(key, value)| {
                 (
                     key.clone(),
-                    builder
-                        .copy_value(heap, permit, *value)
-                        .expect("unbounded trace snapshot copy cannot be memory-denied"),
+                    Self::unbounded(builder.copy_value(heap, permit, *value)),
                 )
             })
             .collect();
-        let root = builder
-            .alloc(TraceValue::Map(entries))
-            .expect("unbounded trace snapshot copy cannot be memory-denied");
+        let root = Self::unbounded(builder.alloc(TraceValue::Map(entries)));
         self.insert_snapshot(builder.finish(root))
     }
 
@@ -513,7 +518,10 @@ impl<'a> TraceSnapshotBuilder<'a> {
             ),
         };
         if tracks_recursion {
-            debug_assert_eq!(self.in_progress.pop(), Some(ptr));
+            // The pop is the cycle-tracker's unwind and must run in every
+            // build; only the equality check is debug-only.
+            let popped = self.in_progress.pop();
+            debug_assert_eq!(popped, Some(ptr));
         }
         value_ref
     }
@@ -717,6 +725,9 @@ mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use baml_builtins2::MediaValue;
+    use bex_events::prof::backend::{
+        MeasuredLayouts, Owner, ProfilerMemoryGovernor, ProfilerSizingPolicy, ReservationClass,
+    };
     use bex_external_types::MediaKind;
     use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
     use bex_vm_types::{Object, RootHaver, Value};
@@ -881,5 +892,67 @@ mod tests {
             panic!("cycle back-edge should be omitted");
         };
         assert_eq!(cycle.reason, TraceOmissionReason::CyclicReference);
+    }
+
+    /// A container reached twice through *sibling* edges is shared, not
+    /// cyclic. The cycle tracker must unwind after each visit in every build
+    /// mode: if the unwind were debug-only, the second visit would be
+    /// reported as `CyclicReference` and the tracker's phantom growth would
+    /// keep charging the reservation.
+    #[tokio::test]
+    async fn trace_heap_shared_sibling_containers_are_not_cyclic() {
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let mut permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let shared = permit.tlab_mut().alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::int(7), Value::int(8)],
+        );
+        let outer = permit.tlab_mut().alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::object(shared), Value::object(shared)],
+        );
+        let sizing = ProfilerSizingPolicy::derive(32 * 1024 * 1024, MeasuredLayouts::V1).unwrap();
+        let governor = ProfilerMemoryGovernor::new(sizing, MeasuredLayouts::V1);
+
+        let copy = |governor: &ProfilerMemoryGovernor| {
+            let mut reservation = governor
+                .try_reserve(ReservationClass::General, Owner::Values, 1)
+                .unwrap();
+            let snapshot = TraceHeap::copy_value_bounded(
+                &heap,
+                permit.proof(),
+                Value::object(outer),
+                &mut reservation,
+            )
+            .expect("shared containers copy within budget");
+            (snapshot, reservation.accounted_bytes())
+        };
+
+        let (first, first_bytes) = copy(&governor);
+        let Some(TraceValue::Array(items)) = first.value(first.root()) else {
+            panic!("root should be an array");
+        };
+        assert_eq!(items.len(), 2);
+        for item in items {
+            let Some(TraceValue::Array(inner)) = first.value(*item) else {
+                panic!(
+                    "shared sibling must be copied, not omitted: {:?}",
+                    first.value(*item)
+                );
+            };
+            assert_eq!(inner.len(), 2);
+        }
+
+        // Accounting is deterministic: a second copy of the same value on the
+        // same heap charges exactly the same bytes.
+        let (_second, second_bytes) = copy(&governor);
+        assert_eq!(first_bytes, second_bytes);
     }
 }

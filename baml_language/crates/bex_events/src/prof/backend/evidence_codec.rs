@@ -399,20 +399,7 @@ fn decode_value_state(cursor: &mut Cursor<'_>) -> Result<ValueState, EvidenceCod
 }
 
 fn decode_value_loss(tag: u8) -> Result<ValueLossReason, EvidenceCodecError> {
-    match tag {
-        0 => Ok(ValueLossReason::ValueMemoryExceeded),
-        1 => Ok(ValueLossReason::ValueAttemptTransportExceeded),
-        2 => Ok(ValueLossReason::ErrorCaptureAttemptTransportExceeded),
-        3 => Ok(ValueLossReason::ValueTooLarge),
-        4 => Ok(ValueLossReason::CopyFailed),
-        5 => Ok(ValueLossReason::EncodeFailed),
-        6 => Ok(ValueLossReason::CasWriteFailed),
-        7 => Ok(ValueLossReason::CasConflict),
-        8 => Ok(ValueLossReason::DiskGuardExceeded),
-        9 => Ok(ValueLossReason::EvidenceSegmentPublishFailed),
-        10 => Ok(ValueLossReason::StoreUnavailable),
-        _ => Err(EvidenceCodecError::InvalidTag),
-    }
+    ValueLossReason::from_tag(tag).ok_or(EvidenceCodecError::InvalidTag)
 }
 
 fn decode_edge(tag: u8) -> Result<EdgeKind, EvidenceCodecError> {

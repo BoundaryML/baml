@@ -431,6 +431,7 @@ pub(crate) fn encode_trace_snapshot_body(snapshot: &TraceSnapshot) -> Result<Vec
     Ok(value.encode_to_vec())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn encode_trace_snapshot_body_bounded(
     snapshot: &TraceSnapshot,
     reservation: &mut bex_events::prof::backend::Reservation,
@@ -460,12 +461,14 @@ pub(crate) fn encode_trace_snapshot_body_bounded(
     Ok(bytes)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone, Copy, Default)]
 struct AllocationMetric {
     units: u64,
     bytes: u64,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl AllocationMetric {
     fn unit(mut self) -> Self {
         self.units = self.units.saturating_add(1);
@@ -486,6 +489,7 @@ impl AllocationMetric {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn encoder_scratch_bound(snapshot: &TraceSnapshot) -> u64 {
     let metric = snapshot
         .values()
@@ -501,6 +505,7 @@ fn encoder_scratch_bound(snapshot: &TraceSnapshot) -> u64 {
         .saturating_add(metric.bytes.saturating_mul(2))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn trace_value_allocation_metric(value: &TraceValue) -> AllocationMetric {
     let mut metric = AllocationMetric::default().unit();
     match value {
@@ -567,6 +572,7 @@ fn trace_value_allocation_metric(value: &TraceValue) -> AllocationMetric {
     metric
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn type_name_metric(name: &baml_type::TypeName) -> AllocationMetric {
     let mut metric = AllocationMetric::default()
         .unit()
@@ -578,6 +584,7 @@ fn type_name_metric(name: &baml_type::TypeName) -> AllocationMetric {
     metric
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn runtime_ty_allocation_metric(ty: &RuntimeTy) -> AllocationMetric {
     use baml_type::{Literal, RuntimeTy};
 

@@ -31,6 +31,13 @@ pub(crate) struct ConsumerEnv {
 
 static CONTROL_TX: OnceLock<mpsc::Sender<ControlMsg>> = OnceLock::new();
 
+/// Whether this process has started the single profiling consumer thread. An
+/// off session must never flip this; exposed so hosts and tests can pin that.
+#[must_use]
+pub fn consumer_thread_started() -> bool {
+    CONTROL_TX.get().is_some()
+}
+
 pub(crate) fn ensure_started() {
     CONTROL_TX.get_or_init(|| {
         let (tx, rx) = mpsc::channel();

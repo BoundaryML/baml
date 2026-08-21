@@ -40,6 +40,18 @@ impl Default for SegmentRotationPolicy {
     }
 }
 
+impl SegmentRotationPolicy {
+    /// Rotates after every `value_max_records` records; tests use it to force
+    /// segment creation at a chosen point.
+    #[cfg(test)]
+    pub(crate) fn with_max_records(value_max_records: u64) -> Self {
+        Self {
+            value_max_records,
+            ..Self::default()
+        }
+    }
+}
+
 impl BoundaryWriter {
     pub(crate) fn create_with_rotation_policy(
         path: BoundaryHistoryPath,

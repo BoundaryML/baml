@@ -5777,6 +5777,20 @@ impl BexVm {
         bex_events::prof::backend::record_session_transport_loss(session, handle);
     }
 
+    /// The ring to push a structural record into, or `None` after accounting
+    /// for the record that will not be pushed. `prof_ring` is `None` both
+    /// when profiling is off (no session/handle: nothing to account) and
+    /// when the transport governor denied this thread a ring segment; only the
+    /// latter owns a boundary handle, and every record it would have pushed is
+    /// one `StructuralTransportExceeded` loss (§8.4), not one per exec resume.
+    #[inline]
+    fn prof_ring_for_push(&self) -> Option<&'static bex_events::prof::Ring> {
+        if self.prof_ring.is_none() {
+            self.prof_note_transport_loss();
+        }
+        self.prof_ring
+    }
+
     /// Resolve the caller-side source span for a bytecode frame/PC pair.
     fn call_site_source_for_frame(
         &self,
@@ -5829,7 +5843,7 @@ impl BexVm {
         let parent_call_id = self.current_call_id;
         let call_id = self.mint_call_id();
         self.current_call_id = call_id;
-        let start_accepted = self.prof_ring.is_some_and(|ring| {
+        let start_accepted = self.prof_ring_for_push().is_some_and(|ring| {
             self.prof_push_record(
                 ring,
                 &bex_events::prof::record::RawRecord::CallFunction {
@@ -5868,7 +5882,7 @@ impl BexVm {
             self.id_overrides.pop();
         }
         let awaited = self.prof_take_await(call_id);
-        if let Some(ring) = self.prof_ring {
+        if let Some(ring) = self.prof_ring_for_push() {
             let ts_ticks = bex_events::prof::clock::now_ticks();
             let record = match awaited {
                 Some((await_ns, await_count)) => {
@@ -6073,7 +6087,7 @@ impl BexVm {
         let call_id = self.mint_call_id();
         self.pending_sysop_call_id = Some(call_id);
         self.pending_sysop_function_id = Some(function_id);
-        let start_accepted = self.prof_ring.is_some_and(|ring| {
+        let start_accepted = self.prof_ring_for_push().is_some_and(|ring| {
             self.prof_push_record(
                 ring,
                 &bex_events::prof::record::RawRecord::CallFunction {
@@ -6100,7 +6114,7 @@ impl BexVm {
     /// stream (tag 0x05). Gated on the ring like every emission; the
     /// override semantics themselves work with profiling off.
     pub(crate) fn prof_push_set_function_id(&mut self, call_id: u64, id: [u8; 16]) {
-        if let Some(ring) = self.prof_ring {
+        if let Some(ring) = self.prof_ring_for_push() {
             self.prof_push_record(
                 ring,
                 &bex_events::prof::record::RawRecord::SetFunctionId {
@@ -6131,7 +6145,9 @@ impl BexVm {
         // not depend on whether profiling is on (plan §6, invariant 5).
         let parent_call_id = self.current_call_id;
         let call_id = self.mint_call_id();
-        let Some(ring) = self.prof_ring else {
+        let Some(ring) = self.prof_ring_for_push() else {
+            // Two records (the pair) would have been pushed.
+            self.prof_note_transport_loss();
             return call_id;
         };
         // Both records in one push: one bounds check + one Release store
