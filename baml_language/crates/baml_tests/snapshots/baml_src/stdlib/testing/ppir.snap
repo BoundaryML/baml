@@ -26,11 +26,17 @@ class testing.LeafIdentities {
   passed: string[]
   failed: string[]
   tolerated: string[]
+  passed_ms: int[]
+  failed_ms: int[]
+  tolerated_ms: int[]
 }
 class testing.LeafIdentities$stream {
   passed: string[]
   failed: string[]
   tolerated: string[]
+  passed_ms: int[]
+  failed_ms: int[]
+  tolerated_ms: int[]
 }
 class testing.SerializedTest {
   type: string
@@ -108,13 +114,13 @@ function testing.any_pattern_matches(pats: string[], canonical_id: string) -> bo
   { for p in pats {  } if (root.glob_match(canonical_id, p)) { return true } } false
 }
 function testing.classify_selected_names(selected_names: string[], hard_failed_names: string[], all_failed_names: string[]) -> testing.LeafIdentities  [expr] {
-  { let out = testing.LeafIdentities { passed: [], failed: [], tolerated: [] }; for name in selected_names {  } if (root.failure_matches_selected(name, all_failed_names)) {  } if (root.failure_matches_selected(name, hard_failed_names)) {  } out.failed.push(name) else {  } out.tolerated.push(name) else {  } out.passed.push(name) } out
+  { let out = testing.LeafIdentities { passed: [], failed: [], tolerated: [], passed_ms: [], failed_ms: [], tolerated_ms: [] }; for name in selected_names {  } if (root.failure_matches_selected(name, all_failed_names)) {  } if (root.failure_matches_selected(name, hard_failed_names)) {  } out.failed.push(name) else {  } out.tolerated.push(name) else {  } out.passed.push(name) } out
 }
 function testing.collect_all_failed_names(report: TestSetReport, out: string[]) -> void  [expr] {
   { for name in report.failed_names {  } if (Not root.name_in(name, out)) {  } out.push(name); for child in report.results {  } match (child) { TestReport => null, nested: TestSetReport => root.collect_all_failed_names(nested, out) } }
 }
 function testing.collect_leaf_identities(report: TestSetReport, tolerated_by_parent: bool, selected_names: string[], out: testing.LeafIdentities) -> void  [expr] {
-  {  } match (report.result_names) { null => null, names: string[] => { let limit = if (names.length() Lt report.results.length()) {  } names.length() else {  } report.results.length(); { let i = 0; while i Lt limit { let name = names[i] } match (report.results[i]) { leaf: TestReport => {  } if (leaf.outcome Eq "pass") {  } out.passed.push(name) else if (tolerated_by_parent) {  } out.tolerated.push(name) else {  } out.failed.push(name), nested: TestSetReport => { let nested_tolerated = tolerated_by_parent Or nested.outcome Eq "pass" } if (nested.results.length() Gt 0) {  } root.collect_leaf_identities(nested, nested_tolerated, selected_names, out) else if (nested.failed Gt 0) { let sentinel = name Add "::(failed to expand)"; let identity = if (root.name_in(sentinel, selected_names)) {  } sentinel else if (nested.failed_names.length() Gt 0) {  } nested.failed_names[0] else {  } name Add "::(testset error)" } if (nested_tolerated) {  } out.tolerated.push(identity) else {  } out.failed.push(identity) else {  } null } } } }
+  {  } match (report.result_names) { null => null, names: string[] => { let limit = if (names.length() Lt report.results.length()) {  } names.length() else {  } report.results.length(); { let i = 0; while i Lt limit { let name = names[i] } match (report.results[i]) { leaf: TestReport => { let leaf_ms = if (leaf.runs.length() Gt 0) {  } leaf.runs[0].duration_ms else {  } Neg 1 } if (leaf.outcome Eq "pass") { out.passed.push(name) } out.passed_ms.push(leaf_ms) else if (tolerated_by_parent) { out.tolerated.push(name) } out.tolerated_ms.push(leaf_ms) else { out.failed.push(name) } out.failed_ms.push(leaf_ms), nested: TestSetReport => { let nested_tolerated = tolerated_by_parent Or nested.outcome Eq "pass" } if (nested.results.length() Gt 0) {  } root.collect_leaf_identities(nested, nested_tolerated, selected_names, out) else if (nested.failed Gt 0) { let sentinel = name Add "::(failed to expand)"; let identity = if (root.name_in(sentinel, selected_names)) {  } sentinel else if (nested.failed_names.length() Gt 0) {  } nested.failed_names[0] else {  } name Add "::(testset error)" } if (nested_tolerated) { out.tolerated.push(identity) } out.tolerated_ms.push(Neg 1) else { out.failed.push(identity) } out.failed_ms.push(Neg 1) else {  } null } } } }
 }
 function testing.collect_leaf_messages(results: ChildReport[], out: string[]) -> void  [expr] {
   { for r in results {  } match (r) { tr: TestReport => { for run in tr.runs {  } if (run.outcome Ne "pass") {  } if let m: string = run.message { out.push(m) } }, tsr: TestSetReport => { root.collect_leaf_messages(tsr.results, out) } } }
@@ -150,7 +156,7 @@ function testing.find_testset(self: ?, name: string) -> testing.TestSetRegistrat
   { for ts in self.testsets {  } if (ts.name Eq name) { return ts }; throw "TestSet not found: " Add name }
 }
 function testing.flatten_with_tolerated(report: TestSetReport, selected_names: string[]) -> FlatTestReport  [expr] {
-  { let top_tolerated = report.outcome Eq "pass"; let counts = if (report.results.length() Gt 0) {  } root.count_leaves(report.results, top_tolerated) else if (top_tolerated) {  } testing.LeafCounts { passed: report.passed, failed: 0, tolerated: report.failed, total: report.total } else {  } testing.LeafCounts { passed: report.passed, failed: report.failed, tolerated: 0, total: report.total }; let messages: string[] = []; root.collect_leaf_messages(report.results, messages); let all_failed_names: string[] = []; root.collect_all_failed_names(report, all_failed_names); let executed = testing.LeafIdentities { passed: [], failed: [], tolerated: [] }; root.collect_leaf_identities(report, top_tolerated, selected_names, executed); let identities = if (executed.passed.length() Eq counts.passed And executed.failed.length() Eq counts.failed And executed.tolerated.length() Eq counts.tolerated) {  } executed else if (selected_names.length() Eq counts.total) {  } root.classify_selected_names(selected_names, report.failed_names, all_failed_names) else {  } testing.LeafIdentities { passed: [], failed: [], tolerated: [] } } FlatTestReport { outcome: report.outcome, passed: counts.passed, failed: counts.failed, tolerated: counts.tolerated, total: counts.total, passed_names: identities.passed, failed_names: identities.failed, tolerated_names: identities.tolerated, messages: messages }
+  { let top_tolerated = report.outcome Eq "pass"; let counts = if (report.results.length() Gt 0) {  } root.count_leaves(report.results, top_tolerated) else if (top_tolerated) {  } testing.LeafCounts { passed: report.passed, failed: 0, tolerated: report.failed, total: report.total } else {  } testing.LeafCounts { passed: report.passed, failed: report.failed, tolerated: 0, total: report.total }; let messages: string[] = []; root.collect_leaf_messages(report.results, messages); let all_failed_names: string[] = []; root.collect_all_failed_names(report, all_failed_names); let executed = testing.LeafIdentities { passed: [], failed: [], tolerated: [], passed_ms: [], failed_ms: [], tolerated_ms: [] }; root.collect_leaf_identities(report, top_tolerated, selected_names, executed); let identities = if (executed.passed.length() Eq counts.passed And executed.failed.length() Eq counts.failed And executed.tolerated.length() Eq counts.tolerated) {  } executed else if (selected_names.length() Eq counts.total) {  } root.classify_selected_names(selected_names, report.failed_names, all_failed_names) else {  } testing.LeafIdentities { passed: [], failed: [], tolerated: [] } } FlatTestReport { outcome: report.outcome, passed: counts.passed, failed: counts.failed, tolerated: counts.tolerated, total: counts.total, passed_names: identities.passed, failed_names: identities.failed, tolerated_names: identities.tolerated, passed_ms: identities.passed_ms, failed_ms: identities.failed_ms, tolerated_ms: identities.tolerated_ms, messages: messages }
 }
 function testing.glob_match(subject: string, pattern: string) -> bool  [expr] {
   { let parts = pattern.split("*"); let n = parts.length(); if (n Eq 1) { return subject.index_of(pattern) Ne null }; let first = parts[0]; let last = parts[n Sub 1]; if (Not subject.starts_with(first)) { return false }; if (Not subject.ends_with(last)) { return false }; let start = first.length(); let end_limit = subject.length() Sub last.length(); if (start Gt end_limit) { return false }; let pos = start; { let i = 1; while i Lt n Sub 1 { let part = parts[i] } if (part Ne "") {  } if let idx: int = subject.slice(pos, end_limit).index_of(part) { pos = pos Add idx Add part.length() } else { return false } } } true
@@ -289,6 +295,9 @@ class testing.FlatTestReport {
   passed_names: string[]
   failed_names: string[]
   tolerated_names: string[]
+  passed_ms: int[]
+  failed_ms: int[]
+  tolerated_ms: int[]
   messages: string[]
 }
 class testing.FlatTestReport$stream {
@@ -300,6 +309,9 @@ class testing.FlatTestReport$stream {
   passed_names: string[]
   failed_names: string[]
   tolerated_names: string[]
+  passed_ms: int[]
+  failed_ms: int[]
+  tolerated_ms: int[]
   messages: string[]
 }
 class testing.NamedChildReport {
