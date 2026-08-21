@@ -738,8 +738,6 @@ name = "baml_lsp"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_compiler2_hir",
- "baml_compiler_diagnostics",
  "baml_db",
  "baml_fmt",
  "baml_ide",
@@ -1381,6 +1379,7 @@ dependencies = [
 name = "bridge_wasm"
 version = "0.1.0"
 dependencies = [
+ "baml_compiler2_visualization",
  "baml_db",
  "baml_ide",
  "baml_lsp",
@@ -1389,7 +1388,6 @@ dependencies = [
  "bex_events",
  "bex_heap",
  "bex_project",
- "bex_vm_types",
  "bridge_ctypes",
  "bytes",
  "console_error_panic_hook",

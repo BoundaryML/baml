@@ -126,7 +126,7 @@ pub struct TokenBaseline {
 #[derive(Debug)]
 pub struct PublishedFile {
     pub text_hash: u64,
-    pub diagnostics: Vec<baml_compiler_diagnostics::Diagnostic>,
+    pub diagnostics: Vec<baml_db::baml_compiler_diagnostics::Diagnostic>,
 }
 
 /// The change-detection hash for [`PublishedFile::text_hash`].
@@ -179,7 +179,7 @@ impl DiagnosticsFence {
         &self,
         path: &Path,
         text_hash: u64,
-        diagnostics: &[baml_compiler_diagnostics::Diagnostic],
+        diagnostics: &[baml_db::baml_compiler_diagnostics::Diagnostic],
     ) -> bool {
         self.last_published.get(path).is_some_and(|previous| {
             previous.text_hash == text_hash && previous.diagnostics == diagnostics
@@ -253,7 +253,7 @@ impl DiagnosticCandidate {
             .any(|diagnostic| {
                 matches!(
                     diagnostic.severity,
-                    baml_compiler_diagnostics::Severity::Error
+                    baml_db::baml_compiler_diagnostics::Severity::Error
                 )
             })
     }
@@ -264,7 +264,7 @@ pub struct CandidateFile {
     pub file_id: baml_base::FileId,
     pub path: PathBuf,
     pub text: Arc<str>,
-    pub diagnostics: Vec<baml_compiler_diagnostics::Diagnostic>,
+    pub diagnostics: Vec<baml_db::baml_compiler_diagnostics::Diagnostic>,
 }
 
 #[derive(Debug)]

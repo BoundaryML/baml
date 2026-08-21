@@ -11,12 +11,13 @@ use std::{collections::HashMap, sync::Arc};
 
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::{Bex, BexCallTraceResult};
-// The engine type itself, for hosts that manage engine lifecycles (the LSP
-// server's playground runtime): the blessed seam stays this crate rather
-// than a direct `bex_engine` dependency.
-pub use bex_engine::BexEngine;
+// The engine type itself, and the compiled program it is built from, for
+// hosts that manage engine lifecycles (the LSP server's and the browser's
+// playground runtimes): the blessed seam stays this crate rather than a
+// direct `bex_engine`/`bex_vm_types` dependency.
+pub use bex_engine::BexCallResult;
 pub use bex_engine::{
-    CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError, FunctionCallContext,
+    BexEngine, CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError, FunctionCallContext,
     FunctionCallContextBuilder, InboundUnionAmbiguityPolicy, UnhandledSpawnError,
     UnhandledSpawnErrorHandler, is_cancelled_engine_error, register_inbound_union_ambiguity_policy,
     value_capture::{
@@ -31,6 +32,7 @@ pub use bex_external_types::{
     host_release_dispatch, runtime_ty_structurally_equal, selected_arm_equal,
     try_convert_rust_data, validate_host_return,
 };
+pub use bex_vm_types::Program;
 use indexmap::IndexMap;
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};

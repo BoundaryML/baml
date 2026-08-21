@@ -54,12 +54,13 @@ fn mid_read_mutation_yields_content_modified() {
             state.request_executor(),
             snap,
             move |snap| {
-                let files = baml_compiler2_hir::compiler2_all_files(snap.db());
+                let files = baml_db::baml_compiler2_hir::compiler2_all_files(snap.db());
                 entered.wait();
                 resume.wait();
                 // Any query entry after the owner's set_* has begun unwinds.
                 for file in files {
-                    let _ = baml_compiler2_hir::file_package::file_package(snap.db(), file);
+                    let _ =
+                        baml_db::baml_compiler2_hir::file_package::file_package(snap.db(), file);
                     let _ = baml_db::check::check_file(snap.db(), file);
                 }
                 Ok(serde_json::Value::Null)
@@ -117,7 +118,7 @@ fn mid_read_mutation_yields_content_modified() {
     spawn_read(
         state.request_executor(),
         snap,
-        |snap| Ok(baml_compiler2_hir::compiler2_all_files(snap.db()).len()),
+        |snap| Ok(baml_db::baml_compiler2_hir::compiler2_all_files(snap.db()).len()),
         move |outcome| {
             tx2.send(
                 outcome
@@ -171,7 +172,7 @@ fn injected_panic_is_internal_error_and_state_survives() {
         move |snap| {
             counter2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Ok(serde_json::json!(
-                baml_compiler2_hir::compiler2_all_files(snap.db()).len()
+                baml_db::baml_compiler2_hir::compiler2_all_files(snap.db()).len()
             ))
         },
         move |outcome| {

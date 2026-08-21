@@ -22,7 +22,11 @@
 //! The playground half (engine, runs, tests) is a separate surface still
 //! being rebuilt; this file is the analysis half only.
 
-use std::{cell::RefCell, rc::Rc, sync::Arc, sync::Once};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, Once},
+};
 
 use baml_lsp::{GlobalState, SessionKey, executor::Executors};
 use js_sys::Function;
@@ -41,6 +45,7 @@ mod lsp_wire;
 mod playground;
 mod playground_notify;
 mod registry;
+mod runs;
 mod send_wrapper {
     pub(crate) use sys_wasm::{SendFuture, SendWrapper};
 }
@@ -92,29 +97,6 @@ pub fn commit_hash() -> String {
 #[wasm_bindgen(js_name = getBuildTime)]
 pub fn get_build_time() -> String {
     env!("BRIDGE_WASM_BUILD_TS").to_string()
-}
-
-/// The `HostCallId` an in-flight wasm call reports under. Ids beyond `u32`
-/// cannot be represented on the wire, and a run that cannot be addressed is
-/// better left unattached than mislabelled.
-pub(crate) fn wasm_host_call_id(call_id: sys_types::CallId) -> Option<bex_events::run::HostCallId> {
-    u32::try_from(call_id.0)
-        .ok()
-        .map(bex_events::run::HostCallId::Wasm)
-}
-
-/// Push one run patch to the host. The interposing sys-ops (fetch logs, env
-/// prompts, `baml.io`) report progress this way.
-pub(crate) fn send_run_patch(
-    callback: &send_wrapper::SendWrapper<js_sys::Function>,
-    patch: &bex_events::run::RunPatch,
-) {
-    playground_notify::send_wasm_playground_notification(
-        callback.inner(),
-        &playground_notify::PlaygroundNotification::RunPatch {
-            patch: bex_events::run::patch_to_wire(patch),
-        },
-    );
 }
 
 /// The callbacks the host installs on the runtime: the LSP's two outbound
@@ -230,6 +212,16 @@ pub struct BamlWasmRuntime {
     playground: Rc<RefCell<playground::PlaygroundState>>,
     playground_sender: playground_notify::WasmPlaygroundSender,
     sys_ops: Arc<sys_ops::SysOps>,
+    /// Live runs, and everything the host reads back about them.
+    pub(crate) run_store: Arc<bex_events::run::InMemoryRunStore>,
+    /// Terminal runs, retained in memory: the browser has no disk to spill to,
+    /// so "history" is the same read API over the same process.
+    pub(crate) history_store: runs::WasmHistoryStore,
+    pub(crate) value_store: runs::WasmLiveValueStore,
+    pub(crate) profile_drain: runs::WasmProfileDrain,
+    /// The raw playground callback, for the run paths that were salvaged
+    /// around it. [`Self::playground_sender`] wraps the same function.
+    pub(crate) playground_callback: send_wrapper::SendWrapper<Function>,
     /// Set by the owner's source observer whenever a batch lands, so `pump`
     /// knows a rebuild is owed. The observer runs *inside* `apply`, where the
     /// state is already mutably borrowed, so it can only record the fact.
@@ -252,6 +244,11 @@ impl BamlWasmRuntime {
         let playground_sender =
             playground_notify::WasmPlaygroundSender::new(callbacks.playground_send_notification());
         let run_store = Arc::new(bex_events::run::InMemoryRunStore::default());
+        let playground_callback =
+            send_wrapper::SendWrapper::new(callbacks.playground_send_notification());
+        let history_store = runs::new_history_store();
+        let value_store = runs::new_value_store();
+        let profile_drain = runs::new_profile_drain();
         // The JS filesystem is shared by the language server's discovery and
         // by `baml.fs`/`baml.glob` at run time; one handle, not two views.
         // `js_sys` values are `!Send`; this target is single-threaded and the
@@ -260,7 +257,7 @@ impl BamlWasmRuntime {
         let sys_ops = Arc::new(build_wasm_sys_ops(
             callbacks,
             &run_store,
-            &send_wrapper::SendWrapper::new(callbacks.playground_send_notification()),
+            &playground_callback,
             &vfs,
         ));
         // No materialized stdlib on the web: goto-definition into the stdlib
@@ -287,6 +284,11 @@ impl BamlWasmRuntime {
             playground: Rc::new(RefCell::new(playground::PlaygroundState::default())),
             playground_sender,
             sys_ops,
+            run_store,
+            history_store,
+            value_store,
+            profile_drain,
+            playground_callback,
             build_owed,
         }
     }
@@ -339,6 +341,104 @@ impl BamlWasmRuntime {
             .send(&playground_notify::PlaygroundNotification::UpdateProject { project, update });
     }
 
+    /// Build a function's control-flow graph and send it back.
+    #[wasm_bindgen(js_name = requestControlFlowGraph)]
+    pub fn request_control_flow_graph(
+        &self,
+        project: &str,
+        function_name: &str,
+        request_id: Option<u32>,
+    ) {
+        if !self.serves(project) {
+            return;
+        }
+        let graph = playground::control_flow_graph(&self.state.borrow(), function_name);
+        self.playground_sender.send(
+            &playground_notify::PlaygroundNotification::ControlFlowGraphResult {
+                function_name: function_name.to_owned(),
+                graph,
+                request_id,
+            },
+        );
+    }
+
+    /// Report what the cursor is inside, so the graph view can follow along.
+    #[wasm_bindgen(js_name = handleCursorPosition)]
+    pub fn handle_cursor_position(&self, file: &str, line: u32, column: u32) {
+        let Some(context) = playground::cursor_context(&self.state.borrow(), file, line, column)
+        else {
+            return;
+        };
+        self.playground_sender
+            .send(&playground_notify::PlaygroundNotification::CursorContext { context });
+    }
+
+    /// Collect the project's tests from the installed engine and send the tree.
+    ///
+    /// Fire-and-forget: the tree arrives as a `testCollectionResult`
+    /// notification, or not at all if a rebuild overtakes the collection.
+    #[wasm_bindgen(js_name = requestCollectTests)]
+    pub fn request_collect_tests(&self, project: &str) {
+        if !self.serves(project) {
+            return;
+        }
+        let Some((project, package)) = playground::workspace_root(&self.state.borrow()) else {
+            return;
+        };
+        let revision = self.state.borrow().revision();
+        let ticket = self
+            .playground
+            .borrow_mut()
+            .begin_test_collection(revision, package);
+        let Some(ticket) = ticket else {
+            log::debug!("collect_tests: no engine current with the sources");
+            return;
+        };
+        let playground = Rc::clone(&self.playground);
+        let sender = self.playground_sender.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            collect_tests(&playground, &sender, ticket, project).await;
+        });
+    }
+
+    /// Expand one lazy testset in place and re-send the tree.
+    ///
+    /// `generation` is a `u32` because `u64` crosses the wasm ABI as a JS
+    /// `bigint`, and the wire protocol declares a plain number — a `bigint`
+    /// parameter would reject every call the worker makes.
+    #[wasm_bindgen(js_name = expandTestSet)]
+    pub fn expand_test_set(&self, project: String, generation: u32, testset_name: String) {
+        if !self.serves(&project) {
+            return;
+        }
+        let generation = u64::from(generation);
+        let revision = self.state.borrow().revision();
+        let lease = self
+            .playground
+            .borrow()
+            .lease_registry(generation, revision);
+        let lease = match lease {
+            Ok(lease) => lease,
+            Err(error) => {
+                log::info!("not expanding '{testset_name}': {error}");
+                return;
+            }
+        };
+        let playground = Rc::clone(&self.playground);
+        let sender = self.playground_sender.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            expand_test_set(
+                &playground,
+                &sender,
+                lease,
+                project,
+                generation,
+                testset_name,
+            )
+            .await;
+        });
+    }
+
     /// Drop the session's state and drain its engine. The JS object itself is
     /// freed by `wasm_bindgen`.
     #[wasm_bindgen(js_name = closeSession)]
@@ -349,6 +449,22 @@ impl BamlWasmRuntime {
 }
 
 impl BamlWasmRuntime {
+    /// Whether `project` names the workspace this runtime hosts.
+    ///
+    /// One runtime, one workspace: a request naming anything else is a host
+    /// bug, and answering it with this workspace's data would be worse than
+    /// answering nothing.
+    fn serves(&self, project: &str) -> bool {
+        let Some((root, _)) = playground::workspace_root(&self.state.borrow()) else {
+            return false;
+        };
+        if root == project {
+            return true;
+        }
+        log::warn!("ignoring a playground request for {project}; this runtime hosts {root}");
+        false
+    }
+
     /// Run the owner to quiescence.
     ///
     /// Native hosts block in `select!` on the event queue and an armed timer.
@@ -390,4 +506,164 @@ impl BamlWasmRuntime {
             );
         }
     }
+}
+
+/// One collection attempt: ask the engine for the registry, install it if it
+/// is still the current build's, then serialize the tree.
+///
+/// Every emission is fenced by the ticket. A rebuild between the engine call
+/// and the answer means the tree describes code that no longer exists, and
+/// the newer build's own collection owns the UI.
+async fn collect_tests(
+    playground: &Rc<RefCell<playground::PlaygroundState>>,
+    sender: &playground_notify::WasmPlaygroundSender,
+    ticket: playground::CollectionTicket,
+    project: String,
+) {
+    let call_id = sys_types::CallId::next();
+    let generation = ticket.generation;
+    let send_tree = |data: Vec<u8>, expand_error| {
+        sender.send(
+            &playground_notify::PlaygroundNotification::TestCollectionResult {
+                project: project.clone(),
+                generation,
+                call_id: call_id.0,
+                data,
+                expand_error,
+            },
+        );
+    };
+
+    let registry = match ticket
+        .engine
+        .collect_tests(
+            &ticket.package,
+            call_id,
+            sys_types::CancellationToken::new(),
+        )
+        .await
+    {
+        Ok(registry) => registry,
+        Err(error) => {
+            // A failure for the still-current build unblocks the frontend with
+            // an empty tree instead of a spinner that never resolves.
+            log::error!("collect_tests failed: {error}");
+            if playground.borrow().ticket_is_current(&ticket) {
+                send_tree(empty_tree(), None);
+            }
+            return;
+        }
+    };
+
+    // Null means the project has no tests (`$init_test` absent), which is a
+    // different state from "not collected yet".
+    let handle = match &registry {
+        bex_project::BexExternalValue::Handle(handle) => Some(handle.clone()),
+        bex_project::BexExternalValue::Null => None,
+        other => {
+            log::error!("collect_tests returned an unexpected value: {other:?}");
+            return;
+        }
+    };
+    let has_tests = handle.is_some();
+    if !playground
+        .borrow_mut()
+        .install_collected_registry(&ticket, handle)
+    {
+        log::debug!("collect_tests: discarding a stale result (generation {generation})");
+        return;
+    }
+    if !has_tests {
+        send_tree(empty_tree(), None);
+        return;
+    }
+
+    let data = serialize_registry(&ticket.engine, registry).await;
+    // Fenced again: a rebuild during serialization means the newer build owns
+    // the tree.
+    if playground.borrow().ticket_is_current(&ticket) {
+        send_tree(data, None);
+    }
+}
+
+/// Expand one testset, then re-send the tree either way — on failure the
+/// pre-expansion tree is what unblocks the UI.
+async fn expand_test_set(
+    playground: &Rc<RefCell<playground::PlaygroundState>>,
+    sender: &playground_notify::WasmPlaygroundSender,
+    lease: playground::RegistryLease,
+    project: String,
+    generation: u64,
+    testset_name: String,
+) {
+    // Expansions mutate the registry object in place: one owner at a time.
+    let _mutation_owner = lease.expansion_gate.lock().await;
+
+    let call_id = sys_types::CallId::next();
+    let registry_value = bex_project::BexExternalValue::Handle(lease.handle.clone());
+    let context = bex_project::FunctionCallContextBuilder::new(call_id)
+        .with_profile_enabled(false)
+        .build();
+    let expand_error = match lease
+        .engine
+        .call_function(
+            "testing.TestRegistry.expand_set",
+            vec![registry_value.clone(), testset_name.as_str().into()],
+            context,
+            true,
+        )
+        .await
+    {
+        Ok(_) => None,
+        Err(error) => {
+            log::error!("expanding testset '{testset_name}' failed: {error}");
+            Some(playground_notify::TestExpandError {
+                testset_name: testset_name.clone(),
+                message: error.to_string(),
+            })
+        }
+    };
+
+    let data = serialize_registry(&lease.engine, registry_value).await;
+    if playground.borrow().lease_is_current(&lease) {
+        sender.send(
+            &playground_notify::PlaygroundNotification::TestCollectionResult {
+                project,
+                generation,
+                call_id: call_id.0,
+                data,
+                expand_error,
+            },
+        );
+    }
+}
+
+/// Serialize a registry handle to the tree the host renders.
+async fn serialize_registry(
+    engine: &Arc<bex_project::BexEngine>,
+    registry: bex_project::BexExternalValue,
+) -> Vec<u8> {
+    let context = bex_project::FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_profile_enabled(false)
+        .build();
+    match engine
+        .call_function(
+            "testing.TestRegistry.serialize",
+            vec![registry],
+            context,
+            true,
+        )
+        .await
+    {
+        Ok(serialized) => serde_json::to_vec(&playground::bex_value_to_json(&serialized))
+            .unwrap_or_else(|_| empty_tree()),
+        Err(error) => {
+            log::error!("serializing the test tree failed: {error}");
+            empty_tree()
+        }
+    }
+}
+
+fn empty_tree() -> Vec<u8> {
+    serde_json::to_vec(&serde_json::json!([])).unwrap_or_default()
 }

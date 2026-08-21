@@ -8,7 +8,7 @@
 //! current" is just "no edit has landed since". What remains is the same
 //! shape: check, emit, construct, install, report.
 
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
 use baml_lsp::{
     GlobalState, SourceRevision, diagnostics::collect_root_candidate, executor::spawn_read,
@@ -39,6 +39,10 @@ pub(crate) struct PlaygroundState {
     /// explain, scoped to the revision it happened at so a later edit stops
     /// surfacing it.
     build_failure: Option<(SourceRevision, String)>,
+    /// Fences collection results: two collections against one engine
+    /// generation must not install out of order.
+    collection_epoch: u64,
+    registry: Option<InstalledRegistry>,
 }
 
 impl PlaygroundState {
@@ -66,6 +70,9 @@ impl PlaygroundState {
             generation: self.next_generation,
             engine: Arc::new(engine),
         });
+        // The old engine's tests describe code that no longer exists.
+        self.collection_epoch += 1;
+        self.registry = None;
         self.build_failure = None;
     }
 }
@@ -76,7 +83,7 @@ struct RootCheck {
     diagnostics: Vec<ProjectDiagnostic>,
     /// `None` when the check found errors: emit is not attempted and the
     /// diagnostics are the explanation.
-    program: Option<Box<bex_vm_types::Program>>,
+    program: Option<Box<bex_project::Program>>,
     emit_error: Option<String>,
 }
 
@@ -393,4 +400,297 @@ mod tests {
             .expect("a timed function runs on the browser platform");
         assert_eq!(value, bex_project::BexExternalValue::Bool(true));
     }
+}
+
+// ── Test registry ───────────────────────────────────────────────────────────
+
+/// The collected test registry, and the identity it was collected under.
+struct InstalledRegistry {
+    generation: u64,
+    collection_epoch: u64,
+    /// `Some` when the project has tests; `None` when collection finished and
+    /// found none (`$init_test` absent) — a different state from "not yet
+    /// collected", which is `registry == None`.
+    handle: Option<bex_project::Handle>,
+    /// One mutation owner per registry: expansions mutate the registry object
+    /// on the heap in place, so they serialize here. Single-threaded is not
+    /// the same as un-interleaved — two expansions can interleave at their
+    /// await points.
+    expansion_gate: Rc<futures::lock::Mutex<()>>,
+}
+
+/// One collection attempt's identity, captured before the engine call so
+/// every later step can check it is still the one that matters.
+pub(crate) struct CollectionTicket {
+    pub(crate) generation: u64,
+    collection_epoch: u64,
+    pub(crate) engine: Arc<BexEngine>,
+    pub(crate) package: String,
+}
+
+/// A registry checked out for work (running a test, expanding a set).
+pub(crate) struct RegistryLease {
+    generation: u64,
+    collection_epoch: u64,
+    pub(crate) engine: Arc<BexEngine>,
+    pub(crate) handle: bex_project::Handle,
+    pub(crate) expansion_gate: Rc<futures::lock::Mutex<()>>,
+}
+
+/// Why a registry could not be leased.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RegistryLeaseError {
+    /// The generation asked for is not the installed one, or the installed
+    /// engine no longer matches the sources.
+    NeedsCurrentBuild,
+    /// Tests have not been collected for this build yet.
+    NoRegistry,
+    /// Collection finished and the project has no tests.
+    NoTests,
+}
+
+impl std::fmt::Display for RegistryLeaseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let message = match self {
+            Self::NeedsCurrentBuild => {
+                "the engine is not current with the sources; wait for the rebuild"
+            }
+            Self::NoRegistry => "tests have not been collected for this build yet",
+            Self::NoTests => "the project has no tests",
+        };
+        f.write_str(message)
+    }
+}
+
+impl PlaygroundState {
+    /// Open a collection attempt against the installed engine, if there is one
+    /// current with `revision`. Collecting for a dead revision produces a tree
+    /// that could never be installed.
+    pub(crate) fn begin_test_collection(
+        &mut self,
+        revision: SourceRevision,
+        package: String,
+    ) -> Option<CollectionTicket> {
+        let installed = self.installed.as_ref()?;
+        if installed.source_revision != revision {
+            return None;
+        }
+        self.collection_epoch += 1;
+        Some(CollectionTicket {
+            generation: installed.generation,
+            collection_epoch: self.collection_epoch,
+            engine: Arc::clone(&installed.engine),
+            package,
+        })
+    }
+
+    /// Install a collected registry, unless a newer build or a newer
+    /// collection got there first.
+    pub(crate) fn install_collected_registry(
+        &mut self,
+        ticket: &CollectionTicket,
+        handle: Option<bex_project::Handle>,
+    ) -> bool {
+        if !self.ticket_is_current(ticket) {
+            return false;
+        }
+        self.registry = Some(InstalledRegistry {
+            generation: ticket.generation,
+            collection_epoch: ticket.collection_epoch,
+            handle,
+            expansion_gate: Rc::new(futures::lock::Mutex::new(())),
+        });
+        true
+    }
+
+    /// Whether a collection's result is still the one the host should see.
+    pub(crate) fn ticket_is_current(&self, ticket: &CollectionTicket) -> bool {
+        self.installed
+            .as_ref()
+            .is_some_and(|installed| installed.generation == ticket.generation)
+            && self.collection_epoch == ticket.collection_epoch
+    }
+
+    /// Check out the registry for work at `generation`, requiring the engine
+    /// to still match the sources.
+    pub(crate) fn lease_registry(
+        &self,
+        generation: u64,
+        revision: SourceRevision,
+    ) -> Result<RegistryLease, RegistryLeaseError> {
+        let Some(installed) = self.installed.as_ref() else {
+            return Err(RegistryLeaseError::NeedsCurrentBuild);
+        };
+        if installed.generation != generation || installed.source_revision != revision {
+            return Err(RegistryLeaseError::NeedsCurrentBuild);
+        }
+        let Some(registry) = self.registry.as_ref() else {
+            return Err(RegistryLeaseError::NoRegistry);
+        };
+        let Some(handle) = registry.handle.clone() else {
+            return Err(RegistryLeaseError::NoTests);
+        };
+        Ok(RegistryLease {
+            generation,
+            collection_epoch: registry.collection_epoch,
+            engine: Arc::clone(&installed.engine),
+            handle,
+            expansion_gate: Rc::clone(&registry.expansion_gate),
+        })
+    }
+
+    /// Whether an expansion's result is still the one the host should see: the
+    /// engine must be the leased generation *and* the registry object must be
+    /// the leased one (a re-collection replaces it).
+    pub(crate) fn lease_is_current(&self, lease: &RegistryLease) -> bool {
+        self.installed
+            .as_ref()
+            .is_some_and(|installed| installed.generation == lease.generation)
+            && self.registry.as_ref().is_some_and(|registry| {
+                registry.generation == lease.generation
+                    && registry.collection_epoch == lease.collection_epoch
+            })
+    }
+}
+
+/// A run's engine and the generation it is pinned to, captured together.
+pub(crate) struct RunSnapshot {
+    pub(crate) generation: u64,
+    pub(crate) engine: Arc<BexEngine>,
+}
+
+impl PlaygroundState {
+    /// The engine to launch a run on, if it is current with `revision`.
+    ///
+    /// One read, not two: the old browser host fetched the engine and the
+    /// generation separately, which could pin a run to a generation the engine
+    /// no longer was. A run never silently falls back to a last-known-good
+    /// engine either — stale results are worse than a refusal the UI can
+    /// explain.
+    pub(crate) fn prepare_run(&self, revision: SourceRevision) -> Option<RunSnapshot> {
+        let installed = self.installed.as_ref()?;
+        (installed.source_revision == revision).then(|| RunSnapshot {
+            generation: installed.generation,
+            engine: Arc::clone(&installed.engine),
+        })
+    }
+
+    /// The engine a run launched on, by its pinned generation — for cancel,
+    /// which must reach the engine that owns the call even after a rebuild.
+    pub(crate) fn engine_for_generation(&self, generation: u64) -> Option<Arc<BexEngine>> {
+        self.installed
+            .as_ref()
+            .filter(|installed| installed.generation == generation)
+            .map(|installed| Arc::clone(&installed.engine))
+    }
+}
+
+/// Convert a serialized test tree (or a report) to JSON for the wire.
+///
+/// Only the primitive and structural variants that appear in test trees are
+/// represented; handles, ADTs and function refs become `null`.
+pub(crate) fn bex_value_to_json(value: &bex_project::BexExternalValue) -> serde_json::Value {
+    use bex_project::BexExternalValue as V;
+    match value {
+        V::Null => serde_json::Value::Null,
+        V::Int(i) => serde_json::json!(i),
+        // Bigints can exceed JSON number precision; emit as a decimal string.
+        V::Bigint(b) => serde_json::json!(b.to_string()),
+        V::Float(f) => serde_json::json!(f),
+        V::Bool(b) => serde_json::json!(b),
+        V::String(s) => serde_json::json!(s.as_str()),
+        V::Array { items, .. } => {
+            serde_json::Value::Array(items.iter().map(bex_value_to_json).collect())
+        }
+        V::Map { entries, .. } => serde_json::Value::Object(
+            entries
+                .iter()
+                .map(|(key, value)| (key.clone(), bex_value_to_json(value)))
+                .collect(),
+        ),
+        V::Instance {
+            class_name, fields, ..
+        } => {
+            let mut map = serde_json::Map::new();
+            map.insert("$type".to_string(), serde_json::json!(class_name));
+            for (key, value) in fields {
+                map.insert(key.clone(), bex_value_to_json(value));
+            }
+            serde_json::Value::Object(map)
+        }
+        V::Variant {
+            enum_name,
+            variant_name,
+        } => serde_json::json!({ "$enum": enum_name, "value": variant_name }),
+        V::Union { value, .. } => bex_value_to_json(value),
+        _ => serde_json::Value::Null,
+    }
+}
+
+/// The workspace root's path and package name, as the playground addresses it.
+pub(crate) fn workspace_root(state: &GlobalState) -> Option<(String, String)> {
+    read(state, |snap| {
+        snap.roots().workspace_roots().next().map(|entry| {
+            (
+                entry.path.to_string_lossy().into_owned(),
+                entry.package.to_string(),
+            )
+        })
+    })
+    .flatten()
+}
+
+/// The control-flow graph for a function, ready for the graph view.
+pub(crate) fn control_flow_graph(
+    state: &GlobalState,
+    function_name: &str,
+) -> Option<serde_json::Value> {
+    let function_name = function_name.to_owned();
+    let graph = read(state, move |snap| {
+        let db = snap.db();
+        // Workspace files only: the playground names workspace functions, and
+        // the stdlib shares this database — `compiler2_all_files` would let a
+        // stdlib function of the same name win the lookup.
+        let files = db.workspace_files();
+        baml_ide::ast_control_flow_graph(db, &files, &function_name)
+    })
+    .flatten()?;
+    let prepared =
+        baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(
+            &graph,
+        );
+    serde_json::to_value(prepared).ok()
+}
+
+/// What the cursor is inside, for the graph view's follow-along.
+///
+/// The playground's wire coordinates are fixed zero-based UTF-16, independent
+/// of the encoding the LSP session negotiated.
+pub(crate) fn cursor_context(
+    state: &GlobalState,
+    file: &str,
+    line: u32,
+    column: u32,
+) -> Option<serde_json::Value> {
+    let file = file.to_owned();
+    let context = read(state, move |snap| {
+        let db = snap.db();
+        let files = db.workspace_files();
+        let source_file = baml_ide::find_source_file(db, &files, &file)?;
+        let codec = baml_lsp::position_codec::PositionCodec::new(
+            source_file.text(db),
+            PositionEncoding::UTF16,
+        );
+        let offset = codec
+            .position_to_offset(lsp_types::Position {
+                line,
+                character: column,
+            })
+            .map_or(0, u32::from);
+        Some(baml_ide::playground_cursor_context(
+            db, &files, &file, offset,
+        ))
+    })
+    .flatten()?;
+    serde_json::to_value(context).ok()
 }

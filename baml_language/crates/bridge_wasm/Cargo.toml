@@ -18,42 +18,42 @@ description = "Browser host for the BAML playground and editor: language server,
 crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
+baml_compiler2_visualization = { workspace = true }
 baml_db = { workspace = true }
 baml_ide = { workspace = true }
+baml_lsp = { workspace = true }
+baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_heap = { workspace = true }
-bex_vm_types = { workspace = true }
+bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_glob = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
-baml_lsp = { workspace = true }
-baml_version = { workspace = true }
-bex_project = { workspace = true }
 sys_wasm = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
 console_error_panic_hook = { workspace = true, optional = true }
-getrandom_03 = { workspace = true }
 futures = { workspace = true }
+getrandom_03 = { workspace = true }
 indexmap = { workspace = true }
 js-sys = { workspace = true }
 log = { workspace = true }
+lsp-server = { workspace = true }
+lsp-types = { workspace = true }
 num-bigint = { workspace = true }
 num-traits = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }
-thiserror = { workspace = true }
-lsp-server = { workspace = true }
-lsp-types = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde-wasm-bindgen = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 tsify = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
-web-time = { workspace = true }
 wasm-logger = { workspace = true }
+web-time = { workspace = true }
 
 [dev-dependencies]
 sys_wasm = { workspace = true }

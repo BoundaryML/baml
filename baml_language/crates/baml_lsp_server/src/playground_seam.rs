@@ -276,7 +276,10 @@ impl PlaygroundSeam {
         let function_name = function_name.to_string();
         self.read(Lane::Request, move |snap| {
             let db = snap.db();
-            let files = baml_db::baml_compiler2_hir::compiler2_all_files(db);
+            // Workspace files only: the playground names workspace functions,
+            // and the stdlib is in the same database — `compiler2_all_files`
+            // would let a stdlib function of the same name win the lookup.
+            let files = db.workspace_files();
             baml_ide::ast_control_flow_graph(db, &files, &function_name)
         })
         .await
@@ -295,7 +298,7 @@ impl PlaygroundSeam {
         let file_path = file_path.to_string();
         self.read(Lane::Request, move |snap| {
             let db = snap.db();
-            let files = baml_db::baml_compiler2_hir::compiler2_all_files(db);
+            let files = db.workspace_files();
             let Some(source_file) = baml_ide::find_source_file(db, &files, &file_path) else {
                 return empty_cursor_context();
             };
@@ -364,7 +367,7 @@ impl PlaygroundSeam {
                     snapshot,
                     move |snap| {
                         let db = snap.db();
-                        let files = baml_db::baml_compiler2_hir::compiler2_all_files(db);
+                        let files = db.workspace_files();
                         Ok(baml_ide::ast_control_flow_graph(db, &files, &function_name)
                             .map(|graph| (function_name, graph)))
                     },

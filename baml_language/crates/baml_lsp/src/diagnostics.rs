@@ -17,7 +17,7 @@ use std::{
 };
 
 use baml_base::{FileId, SourceRoot};
-use baml_compiler_diagnostics::{Diagnostic, Severity};
+use baml_db::baml_compiler_diagnostics::{Diagnostic, Severity};
 use lsp_types::Url;
 
 use crate::{

@@ -9,8 +9,6 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
-baml_compiler2_hir = { workspace = true }
-baml_compiler_diagnostics = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }
 baml_ide = { workspace = true }
@@ -38,5 +36,4 @@ ignore = { workspace = true }
 percent-encoding = { workspace = true }
 
 [dev-dependencies]
-baml_compiler2_hir = { workspace = true }
 tempfile = { workspace = true }

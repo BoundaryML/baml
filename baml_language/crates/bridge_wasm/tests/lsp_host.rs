@@ -17,7 +17,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 const VFS_SOURCE: &str = r#"(() => {
   const files = new Map([
     ["/proj/baml.toml", "[package]\nname = \"web_proj\"\n"],
-    ["/proj/baml_src/main.baml", "/// Adds two numbers.\nfunction add(a: int, b: int) -> int {\n    a + b\n}\n"],
+    ["/proj/baml_src/main.baml", "/// Adds two numbers.\nfunction add(a: int, b: int) -> int {\n    a + b\n}\n\nfunction answer() -> int {\n    add(40, 2)\n}\n\ntest \"adds\" {\n    assert.is_true(add(2, 3) == 5)\n}\n"],
   ]);
   const dirs = new Set(["/proj", "/proj/baml_src"]);
   const encoder = new TextEncoder();
@@ -60,13 +60,24 @@ const VFS_SOURCE: &str = r#"(() => {
 })()"#;
 
 /// Callbacks that record what the server sent, so a test can read it back.
+/// The platform callbacks are inert: these tests exercise analysis, not the
+/// operations the runtime delegates to the host.
 const CALLBACKS_SOURCE: &str = r#"(() => {
   const notifications = [];
+  const playground = [];
   const responses = new Map();
   return {
+    fetch: () => {},
+    env: () => {},
+    input: () => {},
+    exec: () => {},
+    shell: () => {},
+    host_dispatch: () => {},
     lsp_send_notification: (n) => notifications.push(n),
     lsp_send_response: (r) => responses.set(String(r.id), r),
+    playground_send_notification: (n) => playground.push(n),
     takeNotifications: (method) => JSON.stringify(notifications.filter((n) => n.method === method)),
+    takePlayground: (type) => JSON.stringify(playground.filter((n) => n.type === type)),
     response: (id) => JSON.stringify(responses.get(String(id)) ?? null),
   };
 })()"#;
@@ -115,6 +126,12 @@ impl Host {
             method: method.to_owned(),
             params,
         });
+    }
+
+    /// Playground notifications of one type, in order.
+    fn playground(&self, kind: &str) -> Vec<serde_json::Value> {
+        let raw = self.call_js("takePlayground", &JsValue::from_str(kind));
+        serde_json::from_str(&raw).expect("playground notifications are JSON")
     }
 
     fn published(&self) -> Vec<serde_json::Value> {
@@ -232,4 +249,147 @@ fn an_edit_republishes_diagnostics_from_the_overlay() {
     // The publication carries the edit's version, so the client can tell it
     // apart from the one for the text it replaced.
     assert_eq!(latest["params"]["version"], 2);
+}
+
+/// Yield to the event loop so `spawn_local` work (engine calls) can run.
+async fn tick() {
+    let promise = js_sys::Promise::new(&mut |resolve, _reject| {
+        let global: js_sys::Object = js_sys::global().unchecked_into();
+        let set_timeout: js_sys::Function = js_sys::Reflect::get(&global, &"setTimeout".into())
+            .expect("the host has setTimeout")
+            .unchecked_into();
+        set_timeout
+            .call2(&JsValue::NULL, &resolve, &JsValue::from_f64(0.0))
+            .expect("setTimeout schedules");
+    });
+    wasm_bindgen_futures::JsFuture::from(promise)
+        .await
+        .expect("the timeout resolves");
+}
+
+/// Await a playground notification of `kind`, or give up.
+async fn await_playground(host: &Host, kind: &str) -> Vec<serde_json::Value> {
+    for _ in 0..200 {
+        let seen = host.playground(kind);
+        if !seen.is_empty() {
+            return seen;
+        }
+        tick().await;
+    }
+    panic!("no `{kind}` notification arrived");
+}
+
+/// The graph view's two synchronous questions, answered from the database.
+#[wasm_bindgen_test]
+fn the_graph_view_gets_a_control_flow_graph_and_cursor_context() {
+    let host = Host::initialized();
+    host.runtime
+        .request_control_flow_graph("/proj", "add", Some(7));
+    let graphs = host.playground("controlFlowGraphResult");
+    assert_eq!(graphs.len(), 1);
+    assert_eq!(graphs[0]["functionName"], "add");
+    assert_eq!(graphs[0]["requestId"], 7);
+    // Nodes are keyed by id, and the root is the workspace `add` — not the
+    // stdlib function of the same name that shares this database.
+    let nodes = graphs[0]["graph"]["nodes"]
+        .as_object()
+        .expect("a real graph, got: {graph}");
+    let root = nodes.values().next().expect("at least one node");
+    assert_eq!(root["label"], "add");
+    assert_eq!(
+        root["sourceSpan"]["filePath"], "/proj/baml_src/main.baml",
+        "the workspace function, got: {root}"
+    );
+
+    // Inside `add`'s body.
+    host.runtime.handle_cursor_position(MAIN_URI, 2, 6);
+    let contexts = host.playground("cursorContext");
+    assert_eq!(contexts.len(), 1);
+    assert_eq!(contexts[0]["context"]["functionName"], "add");
+
+    // One runtime hosts one workspace: a request naming another project is a
+    // host bug, and answering it with this workspace's data would be worse
+    // than answering nothing.
+    host.runtime
+        .request_control_flow_graph("/somewhere-else", "add", Some(8));
+    assert_eq!(
+        host.playground("controlFlowGraphResult").len(),
+        1,
+        "the request for another project went unanswered"
+    );
+}
+
+/// Test collection runs against the engine the source built, and the tree
+/// comes back under that engine's generation.
+#[wasm_bindgen_test]
+async fn tests_are_collected_from_the_installed_engine() {
+    let host = Host::initialized();
+    host.runtime.request_collect_tests("/proj");
+    let results = await_playground(&host, "testCollectionResult").await;
+    assert_eq!(results.len(), 1);
+    assert_eq!(
+        results[0]["generation"], 1,
+        "the first build's engine collected it"
+    );
+    let tree: serde_json::Value = serde_json::from_slice(
+        &results[0]["data"]
+            .as_array()
+            .expect("the tree is a byte array")
+            .iter()
+            .map(|byte| u8::try_from(byte.as_u64().unwrap_or_default()).unwrap_or_default())
+            .collect::<Vec<u8>>(),
+    )
+    .expect("the tree is JSON");
+    assert_eq!(
+        tree[0]["name"], "root::adds",
+        "the fixture's test, got: {tree}"
+    );
+}
+
+/// A run goes all the way through: the engine the browser built from its own
+/// filesystem executes the function, and the run store's frames reach the host
+/// on the playground callback.
+#[wasm_bindgen_test]
+async fn a_function_run_executes_and_completes() {
+    let host = Host::initialized();
+    // No arguments, so the run-args payload is empty.
+    host.runtime
+        .start_run(11, "/proj".to_owned(), "answer", &[])
+        .expect("the engine is current, so the run starts");
+
+    let started = await_playground(&host, "runStarted").await;
+    assert_eq!(started[0]["requestId"], 11);
+    assert_eq!(started[0]["run"]["target"]["functionName"], "answer");
+    let boundary_id = started[0]["run"]["boundaryId"]
+        .as_str()
+        .expect("the run has an identity")
+        .to_owned();
+
+    // Patches arrive until the run reaches a terminal status.
+    for _ in 0..400 {
+        let terminal = host.playground("runPatch").into_iter().find(|frame| {
+            frame["patch"]["boundaryId"] == serde_json::json!(boundary_id)
+                && frame["patch"]["changes"].as_array().is_some_and(|changes| {
+                    changes.iter().any(|change| {
+                        change["type"] == "setStatus" && change["status"] != "running"
+                    })
+                })
+        });
+        if let Some(frame) = terminal {
+            let status = frame["patch"]["changes"]
+                .as_array()
+                .and_then(|changes| {
+                    changes
+                        .iter()
+                        .find(|change| change["type"] == "setStatus")
+                        .and_then(|change| change["status"].as_str())
+                })
+                .unwrap_or_default()
+                .to_owned();
+            assert_eq!(status, "succeeded", "got frame: {frame}");
+            return;
+        }
+        tick().await;
+    }
+    panic!("the run never reached a terminal status");
 }
