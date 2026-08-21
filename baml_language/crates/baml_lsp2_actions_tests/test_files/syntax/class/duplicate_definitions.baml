@@ -22,7 +22,7 @@ type A = int
 //   -->  class/duplicate_definitions.baml:9
 //    |
 //  8 |
-//  9 | reflect.Type A = int
+//  9 | type A = int
 //    |
 // error: The class "A" cannot be re-defined because it is already defined as one of these: "class", "type_alias".
 //   -->  class/duplicate_definitions.baml:5
@@ -38,13 +38,13 @@ type A = int
 //   -->  class/duplicate_definitions.baml:9
 //    |
 //  8 |
-//  9 | reflect.Type A = int
+//  9 | type A = int
 //    |
 // error: The type_alias "A" cannot be re-defined because it is already defined as a class.
 //   -->  class/duplicate_definitions.baml:9
 //    |
 //  8 |
-//  9 | reflect.Type A = int
+//  9 | type A = int
 //    |
 //   -->  class/duplicate_definitions.baml:1
 //    |

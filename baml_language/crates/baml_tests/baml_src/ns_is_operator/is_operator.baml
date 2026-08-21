@@ -487,7 +487,7 @@ test "is_evaluates_scrutinee_exactly_once" {
     assert.equal(is_evaluates_scrutinee_exactly_once_fn(), 1)
 }
 
-// ── Group J: reflect.Type narrowing in if/else branches ───────────────────────────────
+// ── Group J: type narrowing in if/else branches ───────────────────────────────
 
 function narrowing_then_branch_picks_pattern_type_fn() -> int {
     let v: int | string = 7

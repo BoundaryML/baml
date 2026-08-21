@@ -7,22 +7,22 @@ class Fizz {
 }
 
 class OrderingSimple {
-  // A1: reflect.Type attr only — baseline
+  // A1: type attr only — baseline
   a1 Fizz @stream.done
 
   // A2: field attr only — baseline
   a2 Fizz @alias("a2_alias")
 
-  // A3: reflect.Type before field — works today
+  // A3: type before field — works today
   a3 Fizz @stream.done @alias("a3_alias")
 
   // A4: field before type — THE BUG
   a4 Fizz @alias("a4_alias") @stream.done
 
-  // A5: field, reflect.Type, field
+  // A5: field, type, field
   a5 Fizz @alias("a5_alias") @stream.done @description("a5 desc")
 
-  // A6: reflect.Type, field, type
+  // A6: type, field, type
   a6 Fizz @stream.done @alias("a6_alias") @stream.must_exist
 
   // A7: multiple type attrs only

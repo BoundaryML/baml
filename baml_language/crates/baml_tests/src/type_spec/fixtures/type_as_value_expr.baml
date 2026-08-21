@@ -1,4 +1,4 @@
-// A2 (S15 ledger): reflect.Type-expression nodes record their DENOTED type.
+// A2 (S15 ledger): type-expression nodes record their DENOTED type.
 //
 // Resolved during pinning: the ledger sites are ANNOTATION and
 // type-argument nodes, not bare type values (TIR rejects `let t =

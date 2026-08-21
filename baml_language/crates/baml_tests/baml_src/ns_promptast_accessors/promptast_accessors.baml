@@ -65,7 +65,7 @@ test "messages_expose_role_and_content" {
 }
 
 // The element type is the new `ai.PromptMessage` class — pinned by this
-// helper's declared return type reflect.Type-checking.
+// helper's declared return type type-checking.
 function paa_single_message_fn() -> ai.PromptMessage[] {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
     let ctx = ai.Context { client: cc, tags: {} }

@@ -78,7 +78,7 @@ function GuardedWithFallback(x: int) -> int {
 
 type Result = Success | Failure
 
-// Exhaustive: reflect.Type alias union with all members covered
+// Exhaustive: type alias union with all members covered
 function ExhaustiveTypeAlias(r: Result) -> string {
     match (r) {
         let s: Success => s.data,
@@ -86,7 +86,7 @@ function ExhaustiveTypeAlias(r: Result) -> string {
     }
 }
 
-// Exhaustive: reflect.Type alias with catch-all
+// Exhaustive: type alias with catch-all
 function ExhaustiveTypeAliasWithCatchAll(r: Result) -> string {
     match (r) {
         let s: Success => s.data,
@@ -571,7 +571,7 @@ function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
 type OkCode = 200
 type OkOrCreated = OkCode | 201
 
-// Exhaustive: reflect.Type alias of literals
+// Exhaustive: type alias of literals
 function ExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
     match (code) {
         200 => "ok",
@@ -579,7 +579,7 @@ function ExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
     }
 }
 
-// Non-exhaustive: reflect.Type alias of literals missing one
+// Non-exhaustive: type alias of literals missing one
 function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
     match (code) {
         200 => "ok"
@@ -645,7 +645,7 @@ function NonExhaustiveOverlappingAliasUnion(o: Outer) -> string {
 // Missing one member from type alias union
 // ============================================================================
 
-// Non-exhaustive: reflect.Type alias missing one member
+// Non-exhaustive: type alias missing one member
 function NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
     match (r) {
         let s: Success => s.data

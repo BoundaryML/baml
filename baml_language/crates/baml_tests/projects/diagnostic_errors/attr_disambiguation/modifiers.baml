@@ -1,4 +1,4 @@
-// Group C: reflect.Type modifiers — optional, array, generic.
+// Group C: type modifiers — optional, array, generic.
 // All cases should compile without errors.
 
 class MFoo { x int }

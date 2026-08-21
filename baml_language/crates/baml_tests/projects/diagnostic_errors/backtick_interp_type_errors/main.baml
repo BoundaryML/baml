@@ -1,4 +1,4 @@
-// B-836: reflect.Type errors inside `${...}` interpolation must surface at check
+// B-836: type errors inside `${...}` interpolation must surface at check
 // time. The untagged backtick is desugared into a `string.from(...)` concat
 // tree; inferring that tree emits the real diagnostics for each `${expr}`,
 // and none of them may be discarded. Before the fix, everything except

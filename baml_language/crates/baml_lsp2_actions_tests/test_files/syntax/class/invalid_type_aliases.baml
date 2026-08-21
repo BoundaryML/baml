@@ -29,13 +29,13 @@ type Four = int | string | b
 //   -->  class/invalid_type_aliases.baml:6
 //    |
 //  5 | // Already existing name.
-//  6 | reflect.Type One = int
+//  6 | type One = int
 //    |
 // error: The type_alias "One" cannot be re-defined because a class with that name already exists.
 //   -->  class/invalid_type_aliases.baml:6
 //    |
 //  5 | // Already existing name.
-//  6 | reflect.Type One = int
+//  6 | type One = int
 //    |
 //   -->  class/invalid_type_aliases.baml:1
 //    |
@@ -46,13 +46,13 @@ type Four = int | string | b
 //   -->  class/invalid_type_aliases.baml:12
 //    |
 // 11 | // Unknown identifier.
-// 12 | reflect.Type Three = i
+// 12 | type Three = i
 //    |
 // error: Error validating: Type alias points to unknown identifier `b`
 //   -->  class/invalid_type_aliases.baml:15
 //    |
 // 14 | // Unknown identifier in union.
-// 15 | reflect.Type Four = int | string | b
+// 15 | type Four = int | string | b
 //    |
 
 //----
