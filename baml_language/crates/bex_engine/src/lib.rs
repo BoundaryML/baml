@@ -71,6 +71,7 @@
 mod conversion;
 mod function_call_context;
 mod future;
+pub use future::LeakedFuture;
 mod inbound_config;
 pub mod logger;
 mod thread;
@@ -1583,6 +1584,55 @@ fn friendly_arg_type_mismatch(function_name: &str, arg_index: usize, detail: &st
     )
 }
 
+/// Raise the process's soft `RLIMIT_NOFILE` toward the hard limit, once.
+///
+/// BAML workloads legitimately fan out — the test runner spawns every testset
+/// child concurrently, and each mock HTTP server, socket, and open file costs
+/// a descriptor — while macOS defaults the *soft* limit to 256. Rather than
+/// asking every user and CI job to remember `ulimit -n`, do what the Go
+/// runtime does and raise the soft limit at startup. Capped at 65536 (plenty,
+/// and safely under typical hard limits); on macOS a request above the
+/// kernel's `OPEN_MAX` fails even when the hard limit is unlimited, so a
+/// failed attempt retries at 10240 (`OPEN_MAX`'s customary value). Errors are
+/// ignored: the limit stays where it was and workloads fail exactly as they
+/// would have before.
+fn raise_fd_soft_limit() {
+    #[cfg(unix)]
+    {
+        /// Cap the raised soft limit: plenty of headroom, safely under
+        /// typical hard limits.
+        const TARGET: libc::rlim_t = 65536;
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| unsafe {
+            let mut lim = libc::rlimit {
+                rlim_cur: 0,
+                rlim_max: 0,
+            };
+            if libc::getrlimit(libc::RLIMIT_NOFILE, &raw mut lim) != 0 {
+                return;
+            }
+            let want = if lim.rlim_max == libc::RLIM_INFINITY {
+                TARGET
+            } else {
+                lim.rlim_max.min(TARGET)
+            };
+            if lim.rlim_cur >= want {
+                return;
+            }
+            let mut new = libc::rlimit {
+                rlim_cur: want,
+                rlim_max: lim.rlim_max,
+            };
+            if libc::setrlimit(libc::RLIMIT_NOFILE, &raw const new) != 0
+                && cfg!(target_os = "macos")
+            {
+                new.rlim_cur = lim.rlim_cur.max(10240.min(want));
+                let _ = libc::setrlimit(libc::RLIMIT_NOFILE, &raw const new);
+            }
+        });
+    }
+}
+
 impl BexEngine {
     fn next_engine_id() -> EngineId {
         static NEXT_ENGINE_ID: AtomicU64 = AtomicU64::new(1);
@@ -1718,6 +1768,7 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
+        raise_fd_soft_limit();
         let engine = Self::new_with_deferred_profiling(bytecode_program, sys_ops, argv)?;
         engine.activate_profiling();
         Ok(engine)
@@ -2734,17 +2785,56 @@ impl BexEngine {
     }
 
     /// Shut down the engine, reporting the number of active BAML futures every
-    /// five seconds while shutdown is blocked.
+    /// five seconds while shutdown is blocked. Waits indefinitely for spawned
+    /// work; use [`Self::shutdown_with_deadline`] to bound the wait.
     pub async fn shutdown_with_progress<F>(self: &Arc<Self>, on_wait: F)
     where
         F: FnMut(usize) + Send,
     {
+        self.shutdown_with_deadline(None, on_wait, |_| {}).await;
+    }
+
+    /// Shut down the engine like [`Self::shutdown_with_progress`], but bound
+    /// the wait for *orphaned background futures* — spawned work still pending
+    /// after every active call has finished (a fire-and-forget server task
+    /// whose owning test died before cleanup, for example).
+    ///
+    /// The deadline covers only that orphan phase; in-flight calls are always
+    /// waited for (they carry their own timeouts). When `grace` elapses:
+    ///
+    /// 1. every pending future's cancellation token fires (cooperative:
+    ///    producers observing their token unwind and settle on their own),
+    /// 2. after a short follow-up wait, still-pending futures are
+    ///    force-settled to `Cancelled` (the same CAS `f.cancel()` uses), so
+    ///    the join-handle drain completes and shutdown proceeds — the
+    ///    abandoned tasks die with the process,
+    /// 3. `on_leaks` receives one [`LeakedFuture`] per
+    ///    still-pending future observed at the deadline, labeled by its spawn
+    ///    provenance, so the caller can report what leaked.
+    ///
+    /// `grace: None` preserves the wait-forever behavior. On wasm the
+    /// deadline is ignored (no timer driver); the wait is unbounded.
+    pub async fn shutdown_with_deadline<F, G>(
+        self: &Arc<Self>,
+        grace: Option<std::time::Duration>,
+        on_wait: F,
+        on_leaks: G,
+    ) where
+        F: FnMut(usize) + Send,
+        G: FnOnce(&[LeakedFuture]) + Send,
+    {
         #[cfg(not(target_arch = "wasm32"))]
         const WAIT_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+        /// How long the cooperative phase gets after the cancel tokens fire
+        /// before still-pending futures are force-settled.
+        #[cfg(not(target_arch = "wasm32"))]
+        const CANCEL_SETTLE_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
         #[cfg(not(target_arch = "wasm32"))]
         let mut on_wait = on_wait;
         #[cfg(target_arch = "wasm32")]
-        let _ = on_wait;
+        let _ = (on_wait, grace);
+        #[cfg(target_arch = "wasm32")]
+        let on_leaks: Option<G> = Some(on_leaks);
 
         let Some(shutdown) = self.begin_shutdown().await else {
             return;
@@ -2765,6 +2855,15 @@ impl BexEngine {
         #[cfg(target_arch = "wasm32")]
         self.wait_for_active_calls().await;
 
+        // tokio's `Instant`, not std's: the periodic-report and deadline tests
+        // drive this loop under tokio's paused clock, where std time stands
+        // still while tokio time advances.
+        #[cfg(not(target_arch = "wasm32"))]
+        let orphan_wait_started = tokio::time::Instant::now();
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut last_wait_report = tokio::time::Instant::now();
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut on_leaks = Some(on_leaks);
         loop {
             let handles = self
                 .futures
@@ -2780,9 +2879,41 @@ impl BexEngine {
             };
             #[cfg(not(target_arch = "wasm32"))]
             {
-                if tokio::time::timeout(WAIT_LOG_INTERVAL, wait).await.is_err() {
+                if let Some(grace) = grace
+                    && orphan_wait_started.elapsed() >= grace
+                {
+                    // Deadline reached: cancel cooperatively, give producers
+                    // one bounded window to settle, then force-settle the
+                    // rest so the drain below empties and shutdown completes.
+                    let leaks = self
+                        .futures
+                        .cancel_pending_futures(&self.heap_permit_manager)
+                        .await;
+                    let _ = tokio::time::timeout(CANCEL_SETTLE_GRACE, wait).await;
+                    let forced = self
+                        .futures
+                        .force_settle_pending(&self.heap_permit_manager)
+                        .await;
+                    tracing::warn!(
+                        leaked = leaks.len(),
+                        force_settled = forced,
+                        "shutdown deadline reached; abandoned leaked background futures"
+                    );
+                    if let Some(on_leaks) = on_leaks.take() {
+                        on_leaks(&leaks);
+                    }
+                    continue;
+                }
+                let step = match grace {
+                    Some(grace) => WAIT_LOG_INTERVAL
+                        .min(grace.saturating_sub(orphan_wait_started.elapsed()))
+                        .max(std::time::Duration::from_millis(10)),
+                    None => WAIT_LOG_INTERVAL,
+                };
+                if tokio::time::timeout(step, wait).await.is_err() {
                     let count = self.active_future_count().await;
-                    if count != 0 {
+                    if count != 0 && last_wait_report.elapsed() >= WAIT_LOG_INTERVAL {
+                        last_wait_report = tokio::time::Instant::now();
                         on_wait(count);
                     }
                 }
@@ -2791,6 +2922,10 @@ impl BexEngine {
             {
                 wait.await;
             }
+        }
+        #[cfg(target_arch = "wasm32")]
+        if let Some(on_leaks) = on_leaks {
+            on_leaks(&[]);
         }
 
         self.collect_garbage(bex_heap::CollectionLevel::Major).await;
@@ -6130,10 +6265,18 @@ impl BexEngine {
                         }
                     }
 
+                    // Provenance for shutdown leak reports: the written spawn
+                    // name when there is one, else the function this spawn
+                    // expression appears in.
+                    let spawn_origin: std::sync::Arc<str> = spawn_name
+                        .clone()
+                        .or_else(|| thread.vm.current_function_name())
+                        .unwrap_or_else(|| "<unknown spawn site>".to_string())
+                        .into();
                     let future_ptr = {
                         let mut guard = self.futures.acquire(thread.proof()).await;
                         let (future_id, future_ptr) =
-                            guard.new_future(returns, throws, child_cancel.clone());
+                            guard.new_future(returns, throws, child_cancel.clone(), spawn_origin);
                         drop(guard);
                         Arc::clone(self)
                             .spawn_thread(

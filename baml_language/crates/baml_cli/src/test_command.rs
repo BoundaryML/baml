@@ -496,6 +496,7 @@ impl TestArgs {
         // discovery/filtering/execution then happens inside that package via
         // `run_filtered` / `list_filtered`.
         reporter.spin("Discovering", "tests");
+        let discovery_started = std::time::Instant::now();
         let registry =
             match rt.block_on(engine.collect_tests("user", CallId::next(), cancel.clone())) {
                 Ok(BexExternalValue::Null) => None,
@@ -520,6 +521,17 @@ impl TestArgs {
                     });
                 }
             };
+
+        crate::reporter::print_verbose(format_args!(
+            "discovered tests in {:.2?} ({} legacy test(s); testset registry: {})",
+            discovery_started.elapsed(),
+            legacy.len(),
+            if registry.is_some() {
+                "present"
+            } else {
+                "none"
+            },
+        ));
 
         // ── 6. Filter legacy tests (testset filtering happens in BAML) ──────
         let legacy_selected: Vec<&LegacyTest> = legacy
@@ -1166,14 +1178,23 @@ fn consume_flat_report(
         return;
     }
 
-    for name in &flat.passed_names {
-        println!("PASS {name}");
+    // Duration suffixes come from the parallel `*_ms` arrays; a missing or
+    // negative entry (fallback-correlated identities, expansion sentinels)
+    // prints the bare line the output always had.
+    let with_ms = |ms: &[i64], i: usize| -> String {
+        match ms.get(i) {
+            Some(ms) if *ms >= 0 => format!(" ({ms}ms)"),
+            _ => String::new(),
+        }
+    };
+    for (i, name) in flat.passed_names.iter().enumerate() {
+        println!("PASS {name}{}", with_ms(&flat.passed_ms, i));
     }
-    for name in &flat.tolerated_names {
-        println!("TOLERATED {name}");
+    for (i, name) in flat.tolerated_names.iter().enumerate() {
+        println!("TOLERATED {name}{}", with_ms(&flat.tolerated_ms, i));
     }
-    for name in &flat.failed_names {
-        println!("FAIL {name}");
+    for (i, name) in flat.failed_names.iter().enumerate() {
+        println!("FAIL {name}{}", with_ms(&flat.failed_ms, i));
     }
 
     if flat.outcome == "pass" {
@@ -1226,6 +1247,13 @@ struct FlatReport {
     passed_names: Vec<String>,
     failed_names: Vec<String>,
     tolerated_names: Vec<String>,
+    /// Per-leaf durations parallel to the matching name arrays; may be
+    /// shorter (or empty) when identities came from the registry's fallback
+    /// correlation, and `-1` marks a leaf with no measured run — print the
+    /// duration only when a non-negative entry exists at the name's index.
+    passed_ms: Vec<i64>,
+    failed_ms: Vec<i64>,
+    tolerated_ms: Vec<i64>,
     messages: Vec<String>,
 }
 
@@ -1255,6 +1283,18 @@ fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
         .get("tolerated_names")
         .map(string_array_values)
         .unwrap_or_default();
+    let passed_ms = fields
+        .get("passed_ms")
+        .map(int_array_values)
+        .unwrap_or_default();
+    let failed_ms = fields
+        .get("failed_ms")
+        .map(int_array_values)
+        .unwrap_or_default();
+    let tolerated_ms = fields
+        .get("tolerated_ms")
+        .map(int_array_values)
+        .unwrap_or_default();
     let messages = fields
         .get("messages")
         .map(string_array_values)
@@ -1268,6 +1308,9 @@ fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
         passed_names,
         failed_names,
         tolerated_names,
+        passed_ms,
+        failed_ms,
+        tolerated_ms,
         messages,
     })
 }
@@ -1283,6 +1326,19 @@ fn string_array(items: &[String]) -> BexExternalValue {
             .iter()
             .map(|s| BexExternalValue::String(s.as_str().into()))
             .collect(),
+    }
+}
+
+fn int_array_values(value: &BexExternalValue) -> Vec<i64> {
+    match unwrap_union(value) {
+        BexExternalValue::Array { items, .. } => items
+            .iter()
+            .filter_map(|item| match unwrap_union(item) {
+                BexExternalValue::Int(i) => Some(*i),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
     }
 }
 

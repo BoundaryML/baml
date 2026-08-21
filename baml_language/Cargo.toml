@@ -406,6 +406,22 @@ panic = "abort"
 [profile.release.package.salsa]
 codegen-units = 1
 
+# Fast test runs: release-grade codegen for our own crates without the
+# release profile's ship-oriented costs — fat LTO and codegen-units=1 make
+# the BUILD dwarf the test-time win, and panic=abort breaks should_panic
+# tests. Debug assertions and overflow checks stay ON: the corpus and the
+# lowering tripwires (debug_assert) are load-bearing for correctness runs.
+# Usage: cargo nextest run --cargo-profile fasttest ...
+[profile.fasttest]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+panic = "unwind"
+opt-level = 2
+strip = false
+debug-assertions = true
+overflow-checks = true
+
 [profile.dev.package.insta]
 opt-level = 3
 

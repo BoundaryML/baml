@@ -2099,3 +2099,245 @@ async fn host_callable_with_generic_return_is_rejected() {
     );
     drop(arc);
 }
+
+// ============================================================================
+// Regression: a spawned child that AWAITS a future which settles to an
+// `InternalError` must not leak its own future as `Pending` forever.
+// ============================================================================
+
+// Root cause (engine-shutdown wedge, reproduced from the live `baml test`
+// sweep): when a spawned awaiter is PARKED on a future and that future settles
+// to `InternalError`, the engine's `Await`/`AwaitAny` arm resolves the
+// awaiter's `SetOnce` wait with an `Err(EngineError)` and propagates it via
+// `AwaitOutcome::Done(r) => r?`. That bubbles the error out of
+// `run_thread_event_loop` WITHOUT any `settle_child_*` running, so
+// `spawn_thread_inner` used to only *log* it — leaving the awaiter's heap
+// `Future` `Pending`. Its `ready` wake never fires, so ITS awaiter (and,
+// transitively, the root's B-650 end-of-run wait) parks forever: the VM did all
+// its work but the engine never observes quiescence and the process wedges.
+//
+// The live trigger was a VM `TracedVmInternalError` surfaced on live data (its
+// `Display` renders with a Python-style `Traceback (most recent call last):`
+// header — BAML's own internal-error formatter, not an actual Python
+// exception). Here we seed the SAME leak deterministically and offline with a
+// host-bridge fault (`FakeReturn::BridgeFailure`), which the engine surfaces as
+// an uncatchable `EngineError::VmInternalError { BridgeFailure }` — a permanent
+// host surface, so this regression test does not rot when unrelated language
+// features change (unlike a type-soundness-hole seed; see Linear B-797).
+//
+// The 50ms sleep forces the "awaiter parked first" ordering the leak needs.
+// The load-bearing assertion is COMPLETION, not a value: before the fix
+// `call_function` never resolves (the wedge), so the test hangs and the
+// `timeout` fires.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn spawned_awaiter_of_internal_error_future_does_not_wedge() {
+    let source = r#"
+        function main(boom: () -> string) -> string {
+            // `f` yields (so its awaiter parks) then hits an uncatchable
+            // host-bridge internal error.
+            let f = spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+                boom()
+            };
+            // `g` is a SPAWN that awaits `f`: its `r?`-propagated engine error
+            // is what used to leak. Nesting under a spawn is essential — a plain
+            // root `await` surfaces the error fine.
+            let g = spawn { await f };
+            await g
+        }
+    "#;
+
+    // The host callable faults with a fatal BridgeFailure → uncatchable
+    // `EngineError::VmInternalError` in whichever thread invokes it (here, `f`).
+    let arc = register_host_callable(|_items| FakeReturn::BridgeFailure {
+        message: "boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let call = engine.call_function(
+        "main",
+        vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        true,
+    );
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(10), call).await;
+
+    // Load-bearing: the engine future RESOLVED (no wedge).
+    let result =
+        outcome.expect("engine wedged: call_function never resolved (the spawn-leak regressed)");
+    // With the fix the uncatchable internal error propagates deterministically
+    // up the await chain, so `main` returns an internal error rather than hanging.
+    assert!(
+        matches!(
+            result,
+            Err(
+                EngineError::VmInternalError(sys_types::VmInternalError::BridgeFailure { .. })
+                    | EngineError::TracedVmInternalError {
+                        source: sys_types::VmInternalError::BridgeFailure { .. },
+                        ..
+                    }
+            )
+        ),
+        "expected the `BridgeFailure` internal error to surface after the fix, got {result:?}"
+    );
+    drop(arc);
+}
+
+/// The scenario-15 "concurrent guards" topology: children spawned inside a
+/// closure (capturing a linked `CancelToken`), joined with `baml.future.all`
+/// under a spawned parent — and ONE child hitting an uncatchable engine error
+/// while its siblings are parked. Before the spawn-leak fix this parked at
+/// 0% CPU forever (the guardrail deadlock documented in
+/// `ns_ai_scenarios/15_guardrails`); with it, the error propagates and the
+/// call resolves. Kept alongside the minimal nested-spawn repro because the
+/// closure + `all()` + cancel-token topology exercises the settle path
+/// through `future.all`'s cancel-the-rest arm as well.
+///
+/// NOTE vs #3959's verbatim form: the closure's typed effects are caught
+/// inside the spawn bodies and the futures annotated `never` — the original
+/// `Future<string, null>` claim is now rejected by (intentionally) stricter
+/// effect inference, and the host-callable `callback` effect is not nameable
+/// in user source while futures are invariant in the error parameter. The
+/// bridge fault this test pins is an UNCATCHABLE engine error, which strikes
+/// regardless of the catches. The `.map`-spawned shape itself also exercises
+/// the closure-signature deduction fix (an annotated lambda argument commits
+/// its written signature into the callee's expected function type), without
+/// which the `.map` call's `U` stays unsolved during the walk and the body
+/// miscompiles.
+#[tokio::test]
+async fn spawn_in_map_closure_with_erroring_child_does_not_wedge() {
+    let source = r#"
+        function main(boom: () -> string) -> string {
+            let parent = spawn {
+                let tok = baml.spawn.CancelToken.new();
+                let items = [1, 2, 3];
+                let futures = items.map((n: int) -> baml.future.Future<string, never> {
+                    spawn with baml.spawn.options(cancel = tok) {
+                        if (n == 2) {
+                            // parks the awaiter first, then faults the bridge
+                            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n)) catch_all (e) {
+                                _ => null
+                            };
+                            boom() catch_all (e) {
+                                _ => "boom-absorbed"
+                            }
+                        } else {
+                            baml.sys.sleep(baml.time.Duration.from_milliseconds(150n)) catch_all (e) {
+                                _ => null
+                            };
+                            "guard-" + n.to_string()
+                        }
+                    }
+                });
+                let all = (await baml.future.all(futures)) catch_all (e) {
+                    _ => ["all-failed"]
+                };
+                tok.cancel();
+                all.join(",")
+            };
+            await parent
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::BridgeFailure {
+        message: "guard boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let call = engine.call_function(
+        "main",
+        vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        true,
+    );
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(10), call).await;
+
+    // Load-bearing assertion: the engine RESOLVED (no 0%-CPU park). The exact
+    // shape of the result is secondary — an uncatchable bridge fault may
+    // surface as an engine error or be absorbed by the catch_all depending on
+    // scheduling; the deadlock is what this test pins.
+    let _result = outcome.expect(
+        "engine wedged: spawn-in-map guard topology never resolved (the spawn-leak regressed)",
+    );
+}
+
+/// Shutdown-deadline regression: a fire-and-forget spawn that outlives its
+/// call (the mock-server-leak shape — a test finishes but its background task
+/// never settles) must not park shutdown forever. With a grace of 500ms,
+/// `shutdown_with_deadline` cancels the straggler, force-settles it if it
+/// ignores the token, reports its spawn provenance, and returns. Without the
+/// deadline this waited the full sleep (60s) — the "Waiting for N remaining
+/// BAML futures" forever-loop, in miniature.
+#[tokio::test]
+async fn shutdown_deadline_abandons_leaked_spawn_and_reports_origin() {
+    let source = r#"
+        function main() -> string {
+            let _leak = spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)) catch_all (e) {
+                    _ => null
+                };
+                "never observed"
+            };
+            "done"
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("main should return");
+    assert_eq!(result, BexExternalValue::String("done".into()));
+
+    let started = std::time::Instant::now();
+    let leaks: Arc<std::sync::Mutex<Vec<bex_engine::LeakedFuture>>> = Arc::default();
+    let leaks_out = Arc::clone(&leaks);
+    let shutdown = engine.shutdown_with_deadline(
+        Some(std::time::Duration::from_millis(500)),
+        |_count| {},
+        move |observed| {
+            leaks_out
+                .lock()
+                .expect("leak sink lock")
+                .extend(observed.iter().cloned());
+        },
+    );
+    tokio::time::timeout(std::time::Duration::from_secs(20), shutdown)
+        .await
+        .expect("shutdown wedged: the deadline did not bound the leaked-spawn wait");
+    // Well under the leaked sleep's 60s: the deadline (0.5s) plus the bounded
+    // cooperative-settle window, not the sleep, decides the wall clock.
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(15),
+        "shutdown took {:?}",
+        started.elapsed()
+    );
+
+    let leaks = leaks.lock().expect("leak sink lock");
+    assert_eq!(leaks.len(), 1, "expected exactly one leaked future");
+    assert_eq!(
+        leaks[0].origin.as_ref(),
+        "user.main",
+        "leak should be attributed to the spawning function"
+    );
+}

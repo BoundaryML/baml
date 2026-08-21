@@ -5023,9 +5023,17 @@ impl LoweringContext {
                 span: slot.span_range(),
             });
         }
-        debug_assert!(!type_path_segments.is_empty());
-        // The parser only emits an object literal when a type name precedes the
-        // brace, so the segments are always present.
+        // Malformed parser-recovery shapes can still manufacture a PATH_EXPR
+        // with no constructor identifier (for example `(1)<int> { x: 2 }`).
+        // Invalid source must remain diagnostic-only: do not construct an
+        // uninhabited TypePath or panic while lowering it.
+        if type_path_segments.is_empty() {
+            self.diags
+                .push(LoweringDiagnostic::MissingObjectConstructor {
+                    span: node.span_range(),
+                });
+            return self.alloc_expr(Expr::Missing, node.span_range());
+        }
         let type_name = TypePath::new(type_path_segments);
 
         // Object fields are child nodes after L_BRACE. They come as key-value

@@ -7294,6 +7294,48 @@ impl<'db> InferenceContext<'db> {
             .as_ref()
             .and_then(|sig| sig.return_type)
             .map(|type_ref| self.lower_body_annotation(type_ref));
+        // Signature deduction from expectation (rustc's
+        // `check_supplied_sig_against_expectation`, which eq-unifies the
+        // supplied closure signature against the expected one and ignores
+        // failures; rust-analyzer's closure-sig deduction is the same): a WRITTEN
+        // annotation commits into the expected function type's corresponding
+        // slot while that slot is still an unsolved inference variable. This
+        // is what keeps a generic call's type argument "known unambiguously
+        // at the call site" (TYPE_SYSTEM.md) when the lambda spells it out —
+        // without the commit, the callee's own param (e.g. `Array.map`'s `U`)
+        // waits for the finish fixpoint while the walk continues, and a later
+        // member access on a receiver derived from it inspects a still
+        // unsolved var and silently finalizes `Error`, miscompiling
+        // downstream. A slot that already resolved structurally is left to
+        // the ordinary argument check (and unify mismatches are ignored here
+        // for the same reason: the arg check re-judges and reports them).
+        // `throws` is deliberately excluded — the effect channel owns it.
+        if let Some((exp_params, exp_ret, _)) = &expected_fn {
+            for (index, ty) in param_tys.iter().enumerate() {
+                let written = signature
+                    .as_ref()
+                    .and_then(|sig| sig.params.get(index).copied().flatten())
+                    .is_some();
+                if !written || ty.has_error() {
+                    continue;
+                }
+                let Some(expected_param) = exp_params.get(index) else {
+                    continue;
+                };
+                let expected = self.structurally_resolve(&expected_param.ty);
+                if expected.has_infer() {
+                    let _ = self.table.unify(ty, &expected);
+                }
+            }
+            if let Some(ret) = &annotated_ret
+                && !ret.has_error()
+            {
+                let expected = self.structurally_resolve(exp_ret);
+                if expected.has_infer() {
+                    let _ = self.table.unify(ret, &expected);
+                }
+            }
+        }
         let ret_expectation =
             annotated_ret.or_else(|| expected_fn.as_ref().map(|(_, ret, _)| ret.clone()));
 

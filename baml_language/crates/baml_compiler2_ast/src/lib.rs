@@ -1073,6 +1073,43 @@ function Broken(: int = 1, value: int = 2) -> int {
     }
 
     #[test]
+    fn constructorless_recovered_object_lowers_to_missing() {
+        let source = r#"
+function Broken() -> int {
+  (1)<int> { x: 2 }
+}
+"#;
+        let tokens = lex_lossless(source, FileId::new(0));
+        let (green, _errors) = parse_file(&tokens);
+
+        let root = SyntaxNode::new_root(green);
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == baml_compiler_syntax::SyntaxKind::OBJECT_LITERAL),
+            "this regression must exercise the parser's identifier-less object CST"
+        );
+        let (items, diags, _env_var_refs) = lower_file(&root);
+        let function = first_function(items);
+        let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = function.body else {
+            panic!("expected expression body")
+        };
+
+        assert!(
+            body.exprs
+                .iter()
+                .any(|(_, expr)| matches!(expr, Expr::Missing)),
+            "constructor-less recovery must lower to Expr::Missing"
+        );
+        assert!(
+            diags.iter().any(|diag| matches!(
+                diag,
+                crate::LoweringDiagnostic::MissingObjectConstructor { .. }
+            )),
+            "the recovery must remain visible as a lowering diagnostic"
+        );
+    }
+
+    #[test]
     fn ast_default_indices_skip_missing_name_slots() {
         let source = r#"
 function Broken(: int, b: string = "x") -> string {

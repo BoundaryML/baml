@@ -1381,6 +1381,7 @@ dependencies = [
  "bridge_ctypes",
  "futures",
  "indexmap",
+ "libc",
  "num-bigint",
  "prost",
  "rustc-hash 2.1.2",
