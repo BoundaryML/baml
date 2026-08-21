@@ -129,7 +129,12 @@ pub fn clean_profiles_v1(root: &Path) -> Result<bool, CleanProfilesError> {
     let store_lock = read_write_file(&parent.join(format!("{root_name}.lock")))
         .map_err(CleanProfilesError::Io)?;
     FileExt::try_lock_exclusive(&store_lock).map_err(|error| {
-        if error.kind() == io::ErrorKind::WouldBlock {
+        // Contention is `WouldBlock` on Unix but `ERROR_LOCK_VIOLATION` on
+        // Windows; `fs2` names the platform's contended error.
+        let contended = fs2::lock_contended_error();
+        if error.kind() == io::ErrorKind::WouldBlock
+            || (error.raw_os_error().is_some() && error.raw_os_error() == contended.raw_os_error())
+        {
             CleanProfilesError::InUse
         } else {
             CleanProfilesError::Io(error)
