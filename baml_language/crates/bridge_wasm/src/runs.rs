@@ -39,7 +39,6 @@ use crate::{
     BamlWasmRuntime, playground_notify::PlaygroundNotification, send_wrapper::SendWrapper,
 };
 
-
 #[derive(Debug, Deserialize)]
 struct WasmRunListFilter {
     #[serde(rename = "projectId")]
@@ -80,7 +79,6 @@ struct WasmValueRef {
 pub(crate) type WasmLiveValueStore = Rc<RefCell<LiveValueCache>>;
 /// Terminal runs, retained in memory (there is no disk here).
 pub(crate) type WasmHistoryStore = Rc<RefCell<WasmHistoryStoreInner>>;
-
 
 #[derive(Debug, Default)]
 pub(crate) struct WasmHistoryStoreInner {
@@ -748,9 +746,7 @@ impl BamlWasmRuntime {
                         &logger,
                     );
                     let outcome = match traced.value {
-                        Ok(_result) => {
-                            root_value_success_outcome(None, "baml.outbound.base64")
-                        }
+                        Ok(_result) => root_value_success_outcome(None, "baml.outbound.base64"),
                         Err(e) => runtime_error_outcome_with_ref(&e, None),
                     };
                     complete_wasm_run(&callback, &run_store, &history_store, boundary_id, outcome);
@@ -867,9 +863,7 @@ impl BamlWasmRuntime {
                         &logger,
                     );
                     let outcome = match traced.value {
-                        Ok(_result) => {
-                            root_value_success_outcome(None, "baml.outbound.base64")
-                        }
+                        Ok(_result) => root_value_success_outcome(None, "baml.outbound.base64"),
                         Err(e) => runtime_error_outcome_with_ref(&e, None),
                     };
                     complete_wasm_run(&callback, &run_store, &history_store, boundary_id, outcome);

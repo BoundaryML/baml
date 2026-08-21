@@ -130,3 +130,22 @@ fn find_lambda_by_span<'a>(
         _ => None,
     })
 }
+
+/// Every member name `receiver` exposes, enumerated in `owner`'s param env.
+///
+/// The env is the point: a rigid type variable has members only because its
+/// owner declared a bound (`T extends Compare`), so enumeration has to ask in
+/// the same [`Facts`](crate::facts::Facts) inference asked in. Keeping that
+/// pairing here means no consumer assembles a param env by hand — they pass
+/// the owner whose body they are completing inside.
+///
+/// The names come back in the resolution ladder's own precedence; see
+/// [`member_candidates`](crate::method_resolution::member_candidates).
+pub fn members_for_receiver<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    owner: BodyOwnerId<'db>,
+    receiver: &baml_type::interned::Ty,
+) -> Vec<crate::method_resolution::MemberCandidate<'db>> {
+    let facts = crate::facts::Facts::with_bounds(db, crate::infer::owner_bounds(db, owner));
+    crate::method_resolution::member_candidates(db, &facts, receiver)
+}

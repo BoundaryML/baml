@@ -17,9 +17,9 @@ pub use bex::{Bex, BexCallTraceResult};
 // direct `bex_engine`/`bex_vm_types` dependency.
 pub use bex_engine::BexCallResult;
 pub use bex_engine::{
-    BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext,
-    FunctionCallContextBuilder, InboundUnionAmbiguityPolicy, UnhandledSpawnError,
-    UnhandledSpawnErrorHandler, is_cancelled_engine_error,
+    BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
+    InboundUnionAmbiguityPolicy, UnhandledSpawnError, UnhandledSpawnErrorHandler,
+    is_cancelled_engine_error,
     logger::{TraceLogDrainReport, TraceLogMetadata, TraceLogger},
     register_inbound_union_ambiguity_policy,
 };

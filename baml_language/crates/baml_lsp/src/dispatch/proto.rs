@@ -132,3 +132,47 @@ pub(super) fn document_symbol(item: &OutlineItem, codec: &PositionCodec<'_>) -> 
         },
     }
 }
+
+/// A completion, on the wire.
+///
+/// `sort_text` carries the ide layer's ranking: the list arrives best-first,
+/// so the index IS the rank, zero-padded so the editor's lexicographic sort
+/// reproduces it. `filter_text` is the label — the edit's range starts where
+/// the fragment does, so the client filters on the same text it will replace.
+pub(super) fn completion_item(
+    item: &baml_ide::Completion,
+    rank: usize,
+    codec: &PositionCodec<'_>,
+    snippet_support: bool,
+) -> lsp_types::CompletionItem {
+    let (new_text, format) = match (&item.insert, snippet_support) {
+        (baml_ide::CompletionInsert::Snippet(snippet), true) => {
+            (snippet.clone(), Some(lsp_types::InsertTextFormat::SNIPPET))
+        }
+        // A client without snippet support gets the placeholders collapsed,
+        // never the literal `${1:…}` markers.
+        (insert, _) => (insert.plain_text(), None),
+    };
+    lsp_types::CompletionItem {
+        label: item.label.clone(),
+        kind: Some(match item.kind {
+            baml_ide::CompletionKind::Field => lsp_types::CompletionItemKind::FIELD,
+            baml_ide::CompletionKind::Method => lsp_types::CompletionItemKind::METHOD,
+        }),
+        detail: item.detail.clone(),
+        documentation: item.documentation.as_ref().map(|docs| {
+            lsp_types::Documentation::MarkupContent(lsp_types::MarkupContent {
+                kind: lsp_types::MarkupKind::Markdown,
+                value: docs.clone(),
+            })
+        }),
+        sort_text: Some(format!("{rank:04}")),
+        filter_text: Some(item.label.clone()),
+        text_edit: Some(lsp_types::CompletionTextEdit::Edit(lsp_types::TextEdit {
+            range: codec.byte_range_to_lsp(item.source_range),
+            new_text,
+        })),
+        insert_text_format: format,
+        ..Default::default()
+    }
+}

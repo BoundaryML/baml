@@ -333,6 +333,50 @@ pub enum InterfaceMemberLookup<'db> {
     NotFound,
 }
 
+/// The interfaces a SYMBOLIC receiver resolves members through, and whether
+/// the receiver is existential (which excludes members whose `Self` use makes
+/// them uncallable through one).
+///
+/// `None` means the receiver is concrete: its members come from the impls it
+/// matches, not from a bound list. This is the one derivation
+/// [`lookup_interface_member`] and [`member_candidates`] share, so the
+/// name-keyed lookup and the enumeration can never disagree about which
+/// interfaces are in play.
+pub(crate) fn member_roots<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    receiver: &Ty,
+) -> Option<(Vec<InterfaceRef>, bool)> {
+    match receiver.kind() {
+        TyKind::Interface(qtn, args, pins, _) => Some((
+            vec![InterfaceRef::new(
+                qtn.clone(),
+                (args.to_vec()).into(),
+                pins.to_vec(),
+            )],
+            true,
+        )),
+        TyKind::TypeVar(param, _) => Some((
+            baml_type::normalize::TypeContext::type_var_bound(facts, param)
+                .iter()
+                .map(InterfaceRef::from_constraint)
+                .collect(),
+            false,
+        )),
+        // A rigid, irreducible projection: rustc's alias-bound
+        // (`item_bounds`) candidates - the associated type's DECLARED
+        // bound (`type Item extends Labeled`) is what its members
+        // resolve through, realized for the projection's subject.
+        TyKind::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } => Some((assoc_bound_roots(db, facts, base, interface, member), false)),
+        _ => None,
+    }
+}
+
 /// Resolves `name` as an interface member of `receiver` - an interface
 /// existential (`Self` = the existential, one-`Self` gated) or a rigid
 /// bounded var (`Self` = the variable; `Self`-typed params are sound).
@@ -350,35 +394,10 @@ pub fn lookup_interface_member<'db>(
     receiver: &Ty,
     name: &Name,
 ) -> InterfaceMemberLookup<'db> {
-    let (roots, existential): (Vec<InterfaceRef>, bool) = match receiver.kind() {
-        TyKind::Interface(qtn, args, pins, _) => (
-            vec![InterfaceRef::new(
-                qtn.clone(),
-                (args.to_vec()).into(),
-                pins.to_vec(),
-            )],
-            true,
-        ),
-        TyKind::TypeVar(param, _) => (
-            baml_type::normalize::TypeContext::type_var_bound(facts, param)
-                .iter()
-                .map(InterfaceRef::from_constraint)
-                .collect(),
-            false,
-        ),
-        // A rigid, irreducible projection: rustc's alias-bound
-        // (`item_bounds`) candidates - the associated type's DECLARED
-        // bound (`type Item extends Labeled`) is what its members
-        // resolve through, realized for the projection's subject.
-        TyKind::AssociatedTypeProjection {
-            base,
-            interface,
-            member,
-            ..
-        } => (assoc_bound_roots(db, facts, base, interface, member), false),
+    let Some((roots, existential)) = member_roots(db, facts, receiver) else {
         // Concrete receivers resolve through the impls they match - the
         // trait-impl candidate tier (I6).
-        _ => return lookup_impl_member(db, facts, receiver, name),
+        return lookup_impl_member(db, facts, receiver, name);
     };
     let mut declarers: Vec<(InterfaceRef, InterfaceMember<'db>)> = Vec::new();
     let push = |declarers: &mut Vec<(InterfaceRef, InterfaceMember<'db>)>,
@@ -896,6 +915,248 @@ pub(crate) fn member_on_interface<'db>(
     }
 
     None
+}
+
+// ── Enumeration: the completion counterpart of the lookups above ────────────
+
+/// One member a receiver exposes, as ENUMERATION sees it.
+///
+/// Deliberately name-shaped: the member's TYPE comes from running the name
+/// back through [`lookup_method`] / [`lookup_interface_member`], so a caller
+/// can never offer a member that resolution would not find, and the two can
+/// never disagree about what it means.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MemberCandidate<'db> {
+    pub name: Name,
+    /// A method (call it) rather than a field (read it).
+    pub is_method: bool,
+    pub source: MemberSource,
+    /// Where the member is declared, as the walk that found it already knew.
+    /// Handing this back costs nothing and saves every consumer a second
+    /// by-name search through the same data to render a signature.
+    pub decl: MemberDecl<'db>,
+}
+
+/// The declaration an enumerated member came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MemberDecl<'db> {
+    /// A method with a source declaration — class-inherent, or an
+    /// interface's required/default method.
+    Method(FunctionLoc<'db>),
+    /// A field of a source class, by index into its declared field list.
+    ClassField { class: ClassLoc<'db>, index: usize },
+    /// A field of a source interface, by index into its declared field list.
+    InterfaceField {
+        interface: InterfaceLoc<'db>,
+        index: usize,
+    },
+    /// Declared by a mounted package: there is no source declaration to
+    /// point at, only the exported row.
+    Mounted,
+}
+
+/// The tier an enumerated member came from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MemberSource {
+    /// The receiver's own class declares it — the class-inherent tier.
+    Inherent,
+    /// An interface the receiver reaches declares it: through a bound, an
+    /// existential, an assoc-type bound, or an impl the receiver matches.
+    Interface(InterfaceRef),
+}
+
+/// Every member name `receiver` exposes, in the resolution ladder's own
+/// order: class-inherent first, then the interfaces the receiver reaches.
+///
+/// This walks exactly the tiers [`lookup_method`] and
+/// [`lookup_interface_member`] walk, sharing [`member_roots`] with them, and
+/// the first spelling of a name wins — which is the ladder's precedence, so
+/// what is enumerated is what would resolve. Members two interfaces declare
+/// ambiguously (E0121) are still enumerated once: the fix for an ambiguous
+/// member is to qualify it, and a completion that hid the name could not
+/// lead anyone there.
+///
+/// Language-internal members are omitted. That is not presentation: they are
+/// "outside BAML's user-facing language surface" (`FunctionMetadata`), so no
+/// source position can name one.
+pub fn member_candidates<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    receiver: &Ty,
+) -> Vec<MemberCandidate<'db>> {
+    let mut out: Vec<MemberCandidate<'db>> = Vec::new();
+
+    // Tier 1: the receiver's own class (`lookup_method`'s two branches).
+    if let Some((class, _)) = receiver_class(facts, receiver, 8) {
+        let data = baml_compiler2_ppir::item_data::class_data(db, class);
+        for (index, field) in data.fields.iter().enumerate() {
+            push_candidate(
+                &mut out,
+                field.name.clone(),
+                false,
+                MemberSource::Inherent,
+                MemberDecl::ClassField { class, index },
+            );
+        }
+        for &method in &data.methods {
+            let function = baml_compiler2_ppir::item_data::function_data(db, method);
+            if function.metadata.is_language_internal {
+                continue;
+            }
+            push_candidate(
+                &mut out,
+                function.name.clone(),
+                true,
+                MemberSource::Inherent,
+                MemberDecl::Method(method),
+            );
+        }
+    } else if let Some((qtn, _)) = external_class_for_type(facts, receiver, 8)
+        && let Some(crate::package_interface::ExportedType::Class {
+            fields, methods, ..
+        }) = crate::package_interface::mounted_type_row(db, &qtn)
+    {
+        for (name, ..) in fields {
+            push_candidate(
+                &mut out,
+                name.clone(),
+                false,
+                MemberSource::Inherent,
+                MemberDecl::Mounted,
+            );
+        }
+        for method in methods {
+            push_candidate(
+                &mut out,
+                method.name.clone(),
+                true,
+                MemberSource::Inherent,
+                MemberDecl::Mounted,
+            );
+        }
+    }
+
+    // Tier 2: the interfaces the receiver reaches — the same split the
+    // lookups make between symbolic receivers (bounds) and concrete ones
+    // (the impls they match).
+    match member_roots(db, facts, receiver) {
+        Some((roots, existential)) => {
+            for root in &roots {
+                extend_from_interface(db, facts, &mut out, root, existential);
+                for required in crate::impls::direct_requires_closure(db, root, receiver, 8) {
+                    extend_from_interface(db, facts, &mut out, &required, existential);
+                }
+            }
+        }
+        None => {
+            for resolved in crate::impls::impls_for_type(db, receiver) {
+                if !env_discharges_rigid_bounds(db, facts, &resolved) {
+                    continue;
+                }
+                let implemented = resolved.implemented();
+                extend_from_interface(db, facts, &mut out, &implemented, false);
+            }
+        }
+    }
+
+    out
+}
+
+fn push_candidate<'db>(
+    out: &mut Vec<MemberCandidate<'db>>,
+    name: Name,
+    is_method: bool,
+    source: MemberSource,
+    decl: MemberDecl<'db>,
+) {
+    if out.iter().any(|candidate| candidate.name == name) {
+        return;
+    }
+    out.push(MemberCandidate {
+        name,
+        is_method,
+        source,
+        decl,
+    });
+}
+
+fn extend_from_interface<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    out: &mut Vec<MemberCandidate<'db>>,
+    target: &InterfaceRef,
+    existential: bool,
+) {
+    for (name, is_method, decl) in interface_member_rows(db, facts, target, existential) {
+        push_candidate(
+            out,
+            name,
+            is_method,
+            MemberSource::Interface(target.clone()),
+            decl,
+        );
+    }
+}
+
+/// The member rows `target` declares, as `(name, is_method)`.
+///
+/// The row SOURCES are [`member_on_interface`]'s, branch for branch — a
+/// mounted interface row, else the source declaration — including its
+/// one-`Self` exclusion for existential receivers. Keep the two in step: this
+/// answers "what can be written", that one answers "what does it mean".
+fn interface_member_rows<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    target: &InterfaceRef,
+    existential: bool,
+) -> Vec<(Name, bool, MemberDecl<'db>)> {
+    let mut rows = Vec::new();
+    if let Some(crate::package_interface::ExportedType::Interface {
+        self_param,
+        fields,
+        required_methods,
+        default_methods,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, &target.name)
+    {
+        for (name, ..) in fields {
+            rows.push((name.clone(), false, MemberDecl::Mounted));
+        }
+        for method in required_methods.iter().chain(default_methods) {
+            let function = crate::package_interface::resolved_exported_function(
+                method,
+                Vec::new(),
+                Vec::new(),
+            );
+            if existential && exported_signature_breaks_one_self(&function, self_param) {
+                continue;
+            }
+            rows.push((method.name.clone(), true, MemberDecl::Mounted));
+        }
+        return rows;
+    }
+    let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
+        return rows;
+    };
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    for (index, field) in data.fields.iter().enumerate() {
+        rows.push((
+            field.name.clone(),
+            false,
+            MemberDecl::InterfaceField { interface, index },
+        ));
+    }
+    for &method in &data.methods {
+        let function = baml_compiler2_ppir::item_data::function_data(db, method);
+        if function.metadata.is_language_internal {
+            continue;
+        }
+        if existential && signature_breaks_one_self(crate::lower::function_signature(db, method)) {
+            continue;
+        }
+        rows.push((function.name.clone(), true, MemberDecl::Method(method)));
+    }
+    rows
 }
 
 pub(crate) fn instantiate_external_signature(

@@ -74,6 +74,15 @@ pub fn server_capabilities(encoding: PositionEncoding, open_panel: bool) -> Serv
             file_operations: None,
         }),
         diagnostic_provider: None,
+        // `.` is the only trigger character: every other position that
+        // completes does so from a typed prefix, which the editor already
+        // requests on. Items ship fully formed (signature, docs, edit), so
+        // there is nothing for a resolve round-trip to add.
+        completion_provider: Some(lsp_types::CompletionOptions {
+            trigger_characters: Some(vec![".".to_owned()]),
+            resolve_provider: Some(false),
+            ..lsp_types::CompletionOptions::default()
+        }),
         // Lenses ship fully resolved; `codeLens/resolve` is the identity so
         // clients that honour `resolveProvider` get an answer rather than
         // `MethodNotFound`.
@@ -367,6 +376,33 @@ fn file_offset(
     let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
     let offset = codec.position_to_offset(position)?;
     Ok((file, offset))
+}
+
+pub(super) fn completion(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::CompletionParams,
+) -> Result<Option<lsp_types::CompletionResponse>, LspError> {
+    let position_params = params.text_document_position;
+    let (file, offset) = file_offset(
+        snap,
+        &position_params.text_document,
+        position_params.position,
+    )?;
+    let db = snap.db();
+    let items = baml_ide::completions(db, file, offset);
+    if items.is_empty() {
+        return Ok(None);
+    }
+    let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
+    Ok(Some(lsp_types::CompletionResponse::Array(
+        items
+            .iter()
+            .enumerate()
+            .map(|(rank, item)| {
+                super::proto::completion_item(item, rank, &codec, snap.cx().snippet_support)
+            })
+            .collect(),
+    )))
 }
 
 pub(super) fn hover(

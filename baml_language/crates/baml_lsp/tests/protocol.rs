@@ -1056,6 +1056,57 @@ fn position_params(uri: &Url, position: lsp_types::Position) -> Value {
 }
 
 #[test]
+fn completion_after_a_dot_offers_the_receivers_members() {
+    let mut harness = feature_harness();
+    let uri = harness.uri("funcs.baml");
+    let response = harness
+        .request(
+            SessionKey(1),
+            "textDocument/completion",
+            position_params(&uri, pos_of(FUNCS_FIXTURE, "at(0")),
+        )
+        .expect("completion succeeds");
+    let items = response.as_array().expect("an item array");
+    let at = items
+        .iter()
+        .find(|item| item["label"] == "at")
+        .unwrap_or_else(|| panic!("`at` completes on an int[] receiver, got {items:#?}"));
+
+    assert_eq!(at["kind"], 2, "METHOD");
+    assert!(
+        at["detail"]
+            .as_str()
+            .is_some_and(|detail| detail.contains("at(self")),
+        "detail is the signature, got {:?}",
+        at["detail"]
+    );
+    // The edit is explicit: the server decides what an item replaces, never
+    // the editor's idea of a word boundary.
+    assert!(at["textEdit"]["range"].is_object(), "{at:#?}");
+    // Ranked by the ide layer; the wire preserves that order.
+    let ranks: Vec<&str> = items
+        .iter()
+        .filter_map(|item| item["sortText"].as_str())
+        .collect();
+    let mut sorted = ranks.clone();
+    sorted.sort_unstable();
+    assert_eq!(ranks, sorted, "items arrive best-first");
+}
+
+#[test]
+fn completion_is_advertised_with_the_dot_trigger() {
+    let capabilities = baml_lsp::dispatch::server_capabilities(
+        baml_lsp::position_codec::PositionEncoding::UTF16,
+        false,
+    );
+    let completion = capabilities
+        .completion_provider
+        .expect("completion is always available; it needs no host");
+    assert_eq!(completion.trigger_characters, Some(vec![".".to_owned()]));
+    assert_eq!(completion.resolve_provider, Some(false));
+}
+
+#[test]
 fn hover_renders_the_resolved_signature() {
     let mut harness = feature_harness();
     let uri = harness.uri("funcs.baml");

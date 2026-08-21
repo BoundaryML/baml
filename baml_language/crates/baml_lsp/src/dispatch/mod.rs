@@ -245,6 +245,7 @@ define_request_tables! {
     }
     snapshot {
         "textDocument/formatting" => formatting,
+        "textDocument/completion" => completion,
         "textDocument/hover" => hover,
         "textDocument/definition" => goto_definition,
         "textDocument/references" => references,

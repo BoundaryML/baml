@@ -37,10 +37,10 @@ use baml_base::SourceFile;
 use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
 use baml_compiler2_ppir::item_data::{file_functions, function_source_map};
 use baml_db::ProjectDatabase;
-
-use crate::engine::TestDbExt;
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, FunctionOrigin, Object};
+
+use crate::engine::TestDbExt;
 
 const SNAPSHOT_BASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/baml_src");
 

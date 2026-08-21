@@ -13,16 +13,17 @@
 //! mode for topic queries), [`render`] (one type/signature renderer), and
 //! the structured extraction in [`info`]; features (definitions, references,
 //! semantic tokens, outline, inlay hints, lenses) are views over that core.
-//! Completions were deliberately NOT ported from the old implementation
-//! (its context-detection heuristics were the known-broken part): they get
-//! re-implemented additively on this substrate, one context at a time,
-//! rather than patched. Consumers do presentation only: markdown lives with the
+//! [`completion`] is being rebuilt additively rather than ported — the old
+//! implementation's context detection was the known-broken part — so a
+//! position it has not classified yet offers nothing instead of guessing.
+//! Consumers do presentation only: markdown lives with the
 //! LSP protocol layer, ANSI with the CLI painter, and `--json` is serde on
 //! the structs here.
 
 pub mod actions;
 pub mod annotations;
 pub mod cfg;
+pub mod completion;
 pub mod cursor_context;
 pub mod definition;
 pub mod describe;
@@ -50,6 +51,10 @@ pub use annotations::{AnnotationKind, InlineAnnotation, file_annotations};
 // the compiler crates directly.
 pub use baml_compiler2_hir::contributions::DefinitionKind;
 pub use cfg::ast_control_flow_graph;
+pub use completion::{
+    Completion, CompletionAnalysis, CompletionInsert, CompletionKind, CompletionRelevance,
+    completions,
+};
 pub use cursor_context::{CursorContext, find_source_file, playground_cursor_context};
 pub use definition::definition_at;
 pub use describe::{

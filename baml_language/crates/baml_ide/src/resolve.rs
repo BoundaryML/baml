@@ -355,6 +355,89 @@ fn member_position_at(
     Some(MemberPosition { target })
 }
 
+/// The value whose member a `.` at `dot` reads: the body owner covering the
+/// access and the receiver's recorded type.
+///
+/// Addressing, not resolution — the member itself may not be written yet
+/// (`items.` mid-keystroke), which is exactly when completion asks. Both
+/// spellings the lowering produces are handled: a `MemberAccess` names its
+/// base directly, and a dotted `Path` records the type AFTER each segment,
+/// so the segment ending at the dot carries the receiver.
+pub fn receiver_at_dot<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    dot: TextSize,
+) -> Option<(
+    baml_compiler2_hir::body::BodyOwnerId<'db>,
+    baml_type::interned::Ty,
+)> {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let mut seen: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>> = Vec::new();
+    // Innermost wins, the same contest `member_position_at` runs: a receiver
+    // nested in an argument list claims over the call that encloses it.
+    let mut best: Option<(
+        baml_compiler2_hir::body::BodyOwnerId<'db>,
+        baml_type::interned::Ty,
+        TextRange,
+    )> = None;
+    for scope_id in scope_candidates_at(db, file, index, dot) {
+        let Some(func_scope) = enclosing_function_scope(index, scope_id) else {
+            continue;
+        };
+        let func_owner = index.scope_ids[func_scope.index() as usize];
+        let Some(item_data::ScopeOwner::Function(func_loc)) =
+            item_data::scope_owner(db, func_owner)
+        else {
+            continue;
+        };
+        if seen.contains(&func_loc) {
+            continue;
+        }
+        seen.push(func_loc);
+        let body = baml_compiler2_ppir::function_body(db, func_loc);
+        let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+            continue;
+        };
+        let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func_loc) else {
+            continue;
+        };
+        let Some(inference) = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner) else {
+            continue;
+        };
+        for (expr_id, expr) in expr_body.exprs.iter() {
+            let found = match expr {
+                Expr::MemberAccess { base, .. } => (source_map.expr_span(*base).end() == dot)
+                    .then(|| {
+                        inference
+                            .type_of_expr
+                            .get(base)
+                            .map(|ty| (ty.clone(), source_map.expr_span(*base)))
+                    })
+                    .flatten(),
+                Expr::Path(segments) => (0..segments.len()).find_map(|segment_idx| {
+                    let span = source_map.path_segment_span(expr_id, segment_idx);
+                    if span.end() != dot {
+                        return None;
+                    }
+                    let resolved = inference.path_resolutions.get(&expr_id)?;
+                    let step = resolved.segments.get(segment_idx)?;
+                    Some((step.ty.clone(), span))
+                }),
+                _ => None,
+            };
+            if let Some((ty, span)) = found
+                && let Some(owner) = baml_compiler2_hir_ty::ide::owner_for_scope(db, func_owner)
+                && best
+                    .as_ref()
+                    .is_none_or(|(_, _, previous)| span.len() < previous.len())
+            {
+                best = Some((owner, ty, span));
+            }
+        }
+    }
+    best.map(|(owner, ty, _)| (owner, ty))
+}
+
 /// The local binding at `offset`, if any: either the declaration's own name
 /// token (identified by its recorded name range) or a visible use site.
 fn local_at<'db>(

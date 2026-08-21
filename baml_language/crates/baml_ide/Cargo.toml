@@ -17,6 +17,7 @@ baml_compiler2_hir_ty = { workspace = true }
 baml_compiler2_ppir = { workspace = true }
 baml_compiler2_visualization = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
+baml_compiler_lexer = { workspace = true }
 baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 baml_db = { workspace = true }
