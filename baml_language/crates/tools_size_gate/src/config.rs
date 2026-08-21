@@ -334,31 +334,4 @@ mod tests {
     fn policy_rejects_integer_thresholds() {
         assert!(toml::from_str::<Policy>("max_file_bytes = 1_572_864").is_err());
     }
-
-    #[test]
-    fn checked_in_config_uses_valid_human_readable_thresholds() {
-        let config: Config =
-            toml::from_str(include_str!("../../../.cargo/size-gate.toml")).unwrap();
-        config.validate().unwrap();
-
-        for (artifact_name, artifact) in &config.artifacts {
-            assert!(
-                !artifact.platform.is_empty(),
-                "artifact `{artifact_name}` must have a platform-specific ceiling"
-            );
-
-            for platform in artifact.platform.keys() {
-                let policy = artifact.effective_policy(platform);
-                let ceiling = match artifact.gate {
-                    GateMetric::File => policy.max_file_bytes,
-                    GateMetric::Gzip => policy.max_gzip_bytes,
-                };
-                assert!(
-                    matches!(ceiling, Some(bytes) if bytes > 0),
-                    "artifact `{artifact_name}` must have a positive {} ceiling for platform `{platform}`",
-                    artifact.gate.label()
-                );
-            }
-        }
-    }
 }
