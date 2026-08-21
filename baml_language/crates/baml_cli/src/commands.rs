@@ -354,19 +354,6 @@ impl RuntimeCli {
         // Resolve every output dial once, before any subcommand writes.
         crate::output::init(self.output);
 
-        if matches!(
-            &self.command,
-            Commands::Check(_)
-                | Commands::Run(_)
-                | Commands::Generate(_)
-                | Commands::Test(_)
-                | Commands::Pack(_)
-                | Commands::Format(_)
-                | Commands::Playground(_)
-        ) {
-            crate::agent_command::warn_if_bootstrap_missing();
-        }
-
         match &self.command {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),

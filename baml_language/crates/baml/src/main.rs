@@ -1,5 +1,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+mod agent;
+
 use std::{
     collections::{BTreeMap, hash_map::DefaultHasher},
     env, fs,
@@ -192,6 +194,24 @@ fn run() -> Result<i32> {
             ));
         }
         return self_update().map(|()| 0);
+    }
+    if agent::install_help_requested(&args) {
+        agent::print_install_help();
+        return Ok(0);
+    }
+    if let Some(command) = agent::parse_command(&args)? {
+        return match command {
+            agent::AgentCommand::Guide {
+                bootstrap_version,
+                forwarded_args,
+            } => {
+                agent::write_version_warning(bootstrap_version)?;
+                pass_through(forwarded_args)
+            }
+            agent::AgentCommand::Install { project } => {
+                agent::run_install(project.as_deref()).map(|()| 0)
+            }
+        };
     }
     pass_through(args)
 }
@@ -419,9 +439,11 @@ fn parse_manifest_base_url(mut args: Vec<String>) -> Result<(Vec<String>, Option
 }
 
 fn pass_through(args: Vec<String>) -> Result<i32> {
+    agent::warn_if_bootstrap_missing(&args);
+    let mode = agent::pass_through_mode(&args);
     let selector = active_selector()?;
     if let Some(cli) = path_selector(&selector.selector) {
-        return exec_path_toolchain(cli, &selector, args);
+        return exec_path_toolchain(cli, &selector, args, mode);
     }
     let version = concrete_version_for_selector(&selector)?;
     let cli = toolchain_cli_path(&version);
@@ -442,25 +464,30 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
     command.env("BAML_WRAPPER_RESOLVED_TOOLCHAIN", &version);
 
     let Some(refresh) = refresh else {
-        // Common case: nothing to refresh, so the wrapper can hand the
-        // process over entirely.
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            let err = command.exec();
-            return Err(anyhow!("failed to exec baml-cli: {err}"));
+        if mode == agent::PassThroughMode::Exec {
+            // Common case: nothing to refresh or do after the command, so the
+            // wrapper can hand the process over entirely.
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                let err = command.exec();
+                return Err(anyhow!("failed to exec baml-cli: {err}"));
+            }
         }
-        #[cfg(not(unix))]
-        {
-            let status = command.status().context("failed to run baml-cli")?;
-            return Ok(status.code().unwrap_or(1));
+        let status = command.status().context("failed to run baml-cli")?;
+        if status.success() {
+            mode.after_success()?;
         }
+        return Ok(status.code().unwrap_or(1));
     };
 
     // Refresh in flight: run the command as a child (exec would kill the
     // refresh thread), then give the refresh whatever remains of its budget
     // and surface any warnings the fresh caches newly justify.
     let status = command.status().context("failed to run baml-cli")?;
+    if status.success() {
+        mode.after_success()?;
+    }
     refresh.wait();
     if !channel_warned {
         warn_if_channel_outdated(&selector, &version);
@@ -472,7 +499,12 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
 /// the wrapper did not install: no VERSION file, no channel freshness warning,
 /// and no background manifest refresh. That also keeps the exec fast path
 /// unconditional, so a local build costs nothing extra to launch.
-fn exec_path_toolchain(cli: &Path, selector: &ResolvedSelector, args: Vec<String>) -> Result<i32> {
+fn exec_path_toolchain(
+    cli: &Path,
+    selector: &ResolvedSelector,
+    args: Vec<String>,
+    mode: agent::PassThroughMode,
+) -> Result<i32> {
     let origin = path_selector_origin(&selector.source);
     verify_path_toolchain(cli, &origin)?;
     reject_self_exec(cli, &origin)?;
@@ -485,22 +517,24 @@ fn exec_path_toolchain(cli: &Path, selector: &ResolvedSelector, args: Vec<String
     // binary tell the two situations apart, which `baml ide install` needs.
     command.env("BAML_WRAPPER_LOCAL_TOOLCHAIN", cli);
 
-    // Anything verify_path_toolchain could not rule out (wrong architecture,
-    // a noexec mount, a missing interpreter) surfaces here, so this message
-    // carries the attribution too.
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        let err = command.exec();
-        Err(anyhow!("failed to exec {}: {err}{origin}", cli.display()))
+    if mode == agent::PassThroughMode::Exec {
+        // Anything verify_path_toolchain could not rule out (wrong
+        // architecture, a noexec mount, a missing interpreter) surfaces here,
+        // so this message carries the attribution too.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            let err = command.exec();
+            return Err(anyhow!("failed to exec {}: {err}{origin}", cli.display()));
+        }
     }
-    #[cfg(not(unix))]
-    {
-        let status = command
-            .status()
-            .map_err(|err| anyhow!("failed to run {}: {err}{origin}", cli.display()))?;
-        Ok(status.code().unwrap_or(1))
+    let status = command
+        .status()
+        .map_err(|err| anyhow!("failed to run {}: {err}{origin}", cli.display()))?;
+    if status.success() {
+        mode.after_success()?;
     }
+    Ok(status.code().unwrap_or(1))
 }
 
 fn active_selector() -> Result<ResolvedSelector> {
