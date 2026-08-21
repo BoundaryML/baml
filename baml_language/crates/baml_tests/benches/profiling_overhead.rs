@@ -136,6 +136,11 @@ fn bench_vm_main(bencher: Bencher, source: &str, mode: BenchMode) {
             let name = entry.unwrap().file_name().to_string_lossy().into_owned();
             let mut bytes = [0_u8; 16];
             assert_eq!(name.len(), 32, "invalid run directory {name}");
+            assert!(
+                name.bytes()
+                    .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')),
+                "run directory must be lowercase hex: {name}"
+            );
             for (index, byte) in bytes.iter_mut().enumerate() {
                 *byte = u8::from_str_radix(&name[index * 2..index * 2 + 2], 16)
                     .expect("run directory must be lowercase hex");

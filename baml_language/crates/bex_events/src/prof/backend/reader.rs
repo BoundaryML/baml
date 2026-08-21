@@ -59,6 +59,7 @@ pub enum RunReadError {
         role: ValueRole,
     },
     DuplicateErrorCapture(ErrorCaptureId),
+    DuplicateTerminalError(CallRef),
     MissingSpanStart(CallRef),
     MissingContextDefinition(ContextKey),
     MissingErrorCapture(ErrorCaptureId),
@@ -442,10 +443,18 @@ impl ProfileRun {
                     }
                 }
                 EvidenceFact::TerminalErrorRef(terminal) => {
-                    self.spans
+                    // One terminal error per call; a second one is corruption,
+                    // rejected like every other repeated fact.
+                    if self
+                        .spans
                         .entry(terminal.call_ref)
                         .or_default()
-                        .terminal_error = Some(terminal);
+                        .terminal_error
+                        .replace(terminal)
+                        .is_some()
+                    {
+                        return Err(RunReadError::DuplicateTerminalError(terminal.call_ref));
+                    }
                 }
             }
         }

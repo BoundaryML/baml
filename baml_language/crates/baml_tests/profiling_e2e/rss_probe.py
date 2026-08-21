@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import resource
+import signal
 import subprocess
 import sys
 import time
@@ -39,19 +40,25 @@ def main() -> int:
         environment[name] = value
 
     started = time.perf_counter_ns()
+    # Own session: on timeout the whole process group is killed, so a
+    # descendant that inherited the pipes cannot keep communicate() blocked.
     process = subprocess.Popen(
         arguments.command,
         cwd=arguments.cwd,
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        start_new_session=True,
     )
     timed_out = False
     try:
         stdout, stderr = process.communicate(timeout=arguments.timeout_seconds)
     except subprocess.TimeoutExpired:
         timed_out = True
-        process.kill()
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
         stdout, stderr = process.communicate()
     elapsed_seconds = (time.perf_counter_ns() - started) / 1_000_000_000
 
