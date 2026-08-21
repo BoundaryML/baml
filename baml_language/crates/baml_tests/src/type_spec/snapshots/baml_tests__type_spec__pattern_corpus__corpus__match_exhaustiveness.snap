@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/type_spec/pattern_corpus.rs
+assertion_line: 49
 expression: "corpus_verdicts(\"projects/diagnostic_errors/match_exhaustiveness/match_exhaustiveness.baml\")"
 ---
 UnreachableAfterCatchAll: hir_ty=0
@@ -28,7 +29,7 @@ BoolUnionPattern: hir_ty=0
 ExhaustiveTrueType: hir_ty=0
 ExhaustiveFalseType: hir_ty=0
 ExhaustiveCustomBool: hir_ty=0
-NonExhaustiveTrueTypeWrongLiteral: hir_ty=1
+NonExhaustiveTrueTypeWrongLiteral: hir_ty=0
 NonExhaustiveCustomBoolMissing: hir_ty=1
 ExhaustiveOptional: hir_ty=0
 OptionalWithCatchAll: hir_ty=0
@@ -71,8 +72,8 @@ NonExhaustiveClassPlusLiteralMissingLiteral: hir_ty=1
 NonExhaustiveClassPlusLiteralMissingClass: hir_ty=1
 ExhaustiveEnumWithTypedPattern: hir_ty=0
 EnumVariantAfterTypedEnum: hir_ty=0
-WrongLiteralTypeBoolWithInt: hir_ty=1
-WrongLiteralTypeIntWithString: hir_ty=1
+WrongLiteralTypeBoolWithInt: hir_ty=0
+WrongLiteralTypeIntWithString: hir_ty=0
 PartialUnionPatternCoverage: hir_ty=1
 LiteralAfterTypedPattern: hir_ty=0
 BoolLiteralAfterTypedBool: hir_ty=0
@@ -94,3 +95,5 @@ JumpTableEnumDiscriminant: hir_ty=0
 JumpTableTypeTag: hir_ty=0
 JumpTableClassTypeTag: hir_ty=0
 DistinctInstantiationWitnesses: hir_ty=1
+InvalidGenericPatternArity: hir_ty=0
+InvalidNonGenericPatternArity: hir_ty=0

@@ -1667,7 +1667,7 @@ function f(callback: ((x: int) -> int throws never)?) -> int? {
       { : never
         return callback?.(1, 2) : int | null
       }
-      !! 76..92: expected 1 argument(s), got 2
+      !! 90..91: unexpected argument; this function accepts 1 argument, remove it
     }
     ");
 }

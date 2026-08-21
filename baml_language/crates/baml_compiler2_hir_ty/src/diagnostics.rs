@@ -277,6 +277,8 @@ pub enum TirTypeError {
     },
     /// Wrong number of arguments in a function call.
     ArgumentCountMismatch { expected: usize, got: usize },
+    /// One or more positional call arguments do not correspond to parameters.
+    UnexpectedArguments { expected: usize, extra_count: usize },
     /// A positional argument appeared after a named argument in the same call.
     PositionalArgumentAfterNamed,
     /// A named argument was supplied more than once.
@@ -1192,6 +1194,23 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::ArgumentCountMismatch { expected, got } => {
                 write!(f, "expected {expected} argument(s), got {got}")
+            }
+            TirTypeError::UnexpectedArguments {
+                expected,
+                extra_count,
+            } => {
+                let argument_suffix = if *expected == 1 { "" } else { "s" };
+                if *extra_count == 1 {
+                    write!(
+                        f,
+                        "unexpected argument; this function accepts {expected} argument{argument_suffix}, remove it"
+                    )
+                } else {
+                    write!(
+                        f,
+                        "{extra_count} unexpected arguments; this function accepts {expected} argument{argument_suffix}, remove them"
+                    )
+                }
             }
             TirTypeError::PositionalArgumentAfterNamed => {
                 write!(

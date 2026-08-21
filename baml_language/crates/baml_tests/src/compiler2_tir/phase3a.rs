@@ -1055,7 +1055,7 @@ fn too_many_args() {
       { : never
         return add(1, 2, 3) : int
       }
-      !! 83..95: expected 2 argument(s), got 3
+      !! 93..94: unexpected argument; this function accepts 2 arguments, remove it
     }
     ");
 }

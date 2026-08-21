@@ -20,6 +20,18 @@ function user.BadRequiredAfterDefault(a: int = 1, b: int) -> int  [expr] {
 function user.BadUnknownNamed() -> string  [expr] {
   {  } Search(q = "cats")
 }
+function user.ExtraFirst() -> string  [expr] {
+  {  } Transform(1, "hello")
+}
+function user.ExtraLast() -> string  [expr] {
+  {  } Pair(1, "hello", true)
+}
+function user.ExtraMiddle() -> string  [expr] {
+  {  } Pair(1, true, "hello")
+}
+function user.MultipleExtras() -> string  [expr] {
+  {  } Pair(false, 1, true, "hello")
+}
 function user.OkNamedDefault() -> string  [expr] {
   {  } Search("cats", max_results = 5)
 }
@@ -32,8 +44,14 @@ function user.OkOmit() -> string  [expr] {
 function user.OkSkipFirstDefault() -> string  [expr] {
   {  } Search("cats", filter = "recent")
 }
+function user.Pair(count: int, text: string) -> string  [expr] {
+  {  } text
+}
 function user.Search(query: string, max_results: int = 10, filter: string = "none") -> string  [expr] {
   {  } query
+}
+function user.Transform(text: string) -> string  [expr] {
+  {  } text
 }
 class user.Counter {
   value: int

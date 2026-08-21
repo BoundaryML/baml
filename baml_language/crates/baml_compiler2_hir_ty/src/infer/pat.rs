@@ -84,11 +84,10 @@ impl<'db> InferenceContext<'db> {
         // catch-all arm sees the complement - the catch-residual
         // mechanism generalized to match.
         let mut residual = scrut_resolved.clone();
-        let pending_before = self.pending_diags.len();
         for &arm_id in arms {
             let arm = &body.match_arms[arm_id];
             let outcome = self.lower_pattern(body, arm.pattern, &scrut_resolved);
-            any_pattern_error |= outcome.matched_ty.has_error();
+            any_pattern_error |= self.invalid_patterns.contains(&arm.pattern);
             // A pattern irrefutable against the full scrutinee is really
             // matching the residual; typed arms take their own refinement.
             let narrow_ty = if outcome.covers_type {
@@ -137,12 +136,10 @@ impl<'db> InferenceContext<'db> {
             }
         }
         self.diverges = entry_diverges.or(all_diverge);
-        // An unknown-FIELD in some arm's class pattern makes that arm's
-        // matrix row a lie (the bad field dropped out), so usefulness
-        // verdicts are noise - same suppression as an errored pattern.
-        any_pattern_error |= self.pending_diags[pending_before..]
-            .iter()
-            .any(|pending| matches!(pending, super::PendingDiag::UnknownPatternField { .. }));
+
+        if any_pattern_error {
+            return self.join(&arm_tys);
+        }
 
         if scrut_resolved.has_error() || scrut_resolved.has_infer() {
             return Ty::error();
@@ -150,12 +147,7 @@ impl<'db> InferenceContext<'db> {
         let col_ty = scrut_resolved.to_plain();
         let ctx = HirPatCtx { infer: self };
         let report = compute_match_usefulness(&ctx, &matrix_arms, col_ty);
-        // An errored arm pattern makes the reachability verdicts noise
-        // (TIR's pattern_had_error suppression).
         for arm in &report.unreachable_arms {
-            if any_pattern_error {
-                break;
-            }
             if let Some(&arm_body) = matrix_arm_bodies.get(arm.0) {
                 self.pending_diags.push(super::PendingDiag::UnreachableArm {
                     expr: arm_body,
@@ -380,7 +372,17 @@ impl<'db> InferenceContext<'db> {
         pat: PatId,
         scrut: &Ty,
     ) -> PatternOutcome {
+        let pending_before = self.pending_diags.len();
+        let lowering_before = self.lower.diagnostic_count();
+        let invalid_before = self.invalid_patterns.len();
         let outcome = self.lower_pattern_inner(body, pat, scrut);
+        if outcome.matched_ty.has_error()
+            || self.pending_diags.len() > pending_before
+            || self.lower.diagnostic_count() > lowering_before
+            || self.invalid_patterns.len() > invalid_before
+        {
+            self.invalid_patterns.insert(pat);
+        }
         // Every pattern node records its type (TIR's pattern_types
         // single-write-point discipline); ascriptions record the WRITTEN
         // form (ruling 3) while narrowing keeps the refined one.
@@ -423,13 +425,13 @@ impl<'db> InferenceContext<'db> {
                 inner
             }
             Pattern::Type(_) => {
-                let pat_ty = self
-                    .type_refs
-                    .pattern_types
-                    .get(&pat)
-                    .copied()
+                let type_ref = self.type_refs.pattern_types.get(&pat).copied();
+                let pat_ty = type_ref
                     .map(|type_ref| self.lower_body_annotation(type_ref))
                     .unwrap_or_else(Ty::error);
+                if type_ref.is_none_or(|type_ref| self.invalid_annotations.contains(&type_ref)) {
+                    self.invalid_patterns.insert(pat);
+                }
                 self.type_pattern_outcome(pat, scrut, &pat_ty)
             }
             Pattern::Unreflect(operand) => {

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 40002
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0005
@@ -57,6 +56,38 @@ assertion_line: 40002
     ╭─[call_binding.baml:41:46]
  41 │ function BadRequiredAfterDefault(a: int = 1, b: int) -> int {
     ·                                              ──────
+    ╰────
+
+  [type] E0005
+
+  × unexpected argument; this function accepts 1 argument, remove it
+    ╭─[call_binding.baml:54:13]
+ 54 │   Transform(1, "hello")
+    ·             ─
+    ╰────
+
+  [type] E0005
+
+  × unexpected argument; this function accepts 2 arguments, remove it
+    ╭─[call_binding.baml:58:11]
+ 58 │   Pair(1, true, "hello")
+    ·           ────
+    ╰────
+
+  [type] E0005
+
+  × unexpected argument; this function accepts 2 arguments, remove it
+    ╭─[call_binding.baml:62:20]
+ 62 │   Pair(1, "hello", true)
+    ·                    ────
+    ╰────
+
+  [type] E0005
+
+  × 2 unexpected arguments; this function accepts 2 arguments, remove them
+    ╭─[call_binding.baml:66:8]
+ 66 │   Pair(false, 1, true, "hello")
+    ·        ─────
     ╰────
 
   [type] E0001

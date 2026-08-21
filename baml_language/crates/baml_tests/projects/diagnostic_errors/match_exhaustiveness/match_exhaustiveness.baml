@@ -1047,3 +1047,25 @@ function DistinctInstantiationWitnesses(x: unknown) -> int {
         WitBox<string> { v: "a" } => 2
     }
 }
+
+class InvalidArityBox<T> {
+    value T
+}
+
+class InvalidArityPlainBox {
+    value int
+}
+
+function InvalidGenericPatternArity(boxed: InvalidArityBox<int>) -> int {
+    match (boxed) {
+        InvalidArityBox<int, string> => 1,
+        _ => 0
+    }
+}
+
+function InvalidNonGenericPatternArity(boxed: InvalidArityPlainBox) -> int {
+    match (boxed) {
+        InvalidArityPlainBox<int> => 1,
+        _ => 0
+    }
+}

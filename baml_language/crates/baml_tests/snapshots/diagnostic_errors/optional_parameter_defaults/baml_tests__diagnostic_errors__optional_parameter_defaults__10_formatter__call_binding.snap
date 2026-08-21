@@ -44,3 +44,27 @@ function BadForwardRef(a: int = b, b: int = 1) -> int {
 function BadRequiredAfterDefault(a: int = 1, b: int) -> int {
     b
 }
+
+function Transform(text: string) -> string {
+    text
+}
+
+function Pair(count: int, text: string) -> string {
+    text
+}
+
+function ExtraFirst() -> string {
+    Transform(1, "hello")
+}
+
+function ExtraMiddle() -> string {
+    Pair(1, true, "hello")
+}
+
+function ExtraLast() -> string {
+    Pair(1, "hello", true)
+}
+
+function MultipleExtras() -> string {
+    Pair(false, 1, true, "hello")
+}

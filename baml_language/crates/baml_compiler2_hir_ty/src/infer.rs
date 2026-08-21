@@ -610,6 +610,136 @@ pub enum ParamBinding {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CallArgMatch {
+    RuntimeId,
+    Parameter {
+        param_index: usize,
+        fills_parameter: bool,
+    },
+    Extra,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CallArgPlan {
+    matches: Vec<CallArgMatch>,
+    slots: Vec<Option<ExprId>>,
+}
+
+impl CallArgPlan {
+    fn new(
+        params: &[baml_type::interned::FunctionParam],
+        args: &[baml_compiler2_ast::CallArg],
+    ) -> Self {
+        let matches =
+            args.iter()
+                .enumerate()
+                .map(|(index, arg)| match &arg.label {
+                    Some(label) if label.as_str() == "$id" => CallArgMatch::RuntimeId,
+                    Some(label) => match params
+                        .iter()
+                        .position(|param| param.name.as_ref() == Some(label))
+                    {
+                        Some(param_index) => CallArgMatch::Parameter {
+                            param_index,
+                            fills_parameter: true,
+                        },
+                        None => params.get(index).map_or(CallArgMatch::Extra, |_| {
+                            CallArgMatch::Parameter {
+                                param_index: index,
+                                fills_parameter: false,
+                            }
+                        }),
+                    },
+                    None => {
+                        params
+                            .get(index)
+                            .map_or(CallArgMatch::Extra, |_| CallArgMatch::Parameter {
+                                param_index: index,
+                                fills_parameter: true,
+                            })
+                    }
+                })
+                .collect();
+        let mut plan = Self {
+            matches,
+            slots: vec![None; params.len()],
+        };
+        plan.rebuild_slots(args);
+        plan
+    }
+
+    fn rebuild_slots(&mut self, args: &[baml_compiler2_ast::CallArg]) {
+        self.slots.fill(None);
+        for (arg, matched) in args.iter().zip(&self.matches) {
+            if let CallArgMatch::Parameter {
+                param_index,
+                fills_parameter: true,
+            } = *matched
+            {
+                self.slots[param_index].get_or_insert(arg.expr);
+            }
+        }
+    }
+
+    fn recover_positionals(
+        &mut self,
+        args: &[baml_compiler2_ast::CallArg],
+        arg_indices: &[usize],
+        matched_params: &[Option<usize>],
+    ) {
+        for (&arg_index, &param_index) in arg_indices.iter().zip(matched_params) {
+            self.matches[arg_index] =
+                param_index.map_or(CallArgMatch::Extra, |param_index| CallArgMatch::Parameter {
+                    param_index,
+                    fills_parameter: true,
+                });
+        }
+        self.rebuild_slots(args);
+    }
+}
+
+fn align_extra_arguments(compatibility: &[Vec<bool>]) -> Vec<Option<usize>> {
+    let arg_count = compatibility.len();
+    let param_count = compatibility.first().map_or(0, Vec::len);
+    debug_assert!(compatibility.iter().all(|row| row.len() == param_count));
+
+    // Every complete alignment skips exactly `arg_count - param_count`
+    // arguments, so minimizing incompatible bindings identifies the extras.
+    let mut costs = vec![vec![param_count + 1; param_count + 1]; arg_count + 1];
+    costs[arg_count][param_count] = 0;
+    for arg_index in (0..arg_count).rev() {
+        costs[arg_index][param_count] = 0;
+    }
+    for arg_index in (0..arg_count).rev() {
+        for param_index in (0..param_count).rev() {
+            if arg_count - arg_index < param_count - param_index {
+                continue;
+            }
+            let skip = costs[arg_index + 1][param_index];
+            let mismatch = usize::from(!compatibility[arg_index][param_index]);
+            let bind = mismatch + costs[arg_index + 1][param_index + 1];
+            costs[arg_index][param_index] = skip.min(bind);
+        }
+    }
+
+    let mut result = vec![None; arg_count];
+    let (mut arg_index, mut param_index) = (0, 0);
+    while arg_index < arg_count {
+        if param_index < param_count {
+            let mismatch = usize::from(!compatibility[arg_index][param_index]);
+            let bind = mismatch + costs[arg_index + 1][param_index + 1];
+            let skip = costs[arg_index + 1][param_index];
+            if bind <= skip {
+                result[arg_index] = Some(param_index);
+                param_index += 1;
+            }
+        }
+        arg_index += 1;
+    }
+    result
+}
+
 /// Inference side tables for one body owner, keyed by arena ids, mirroring
 /// rust-analyzer's `InferenceResult`. Types are the hash-consed
 /// `baml_type::interned` representation (this crate's native vocabulary);
@@ -816,6 +946,11 @@ enum PendingDiag<'db> {
         expr: ExprId,
         expected: usize,
         got: usize,
+    },
+    UnexpectedArguments {
+        expr: ExprId,
+        expected: usize,
+        extra_count: usize,
     },
     UnknownNamedArg {
         expr: ExprId,
@@ -1627,6 +1762,14 @@ struct InferenceContext<'db> {
     /// vars - for one `TypeRefId`. Without this, a `_` hole instantiates
     /// once per consumer and only the demand-connected copy solves.
     annotation_cache: FxHashMap<baml_compiler2_hir::type_ref::TypeRefId, Ty>,
+    /// Body annotations whose recovered type came from an invalid written
+    /// type. Kept separately from the usable recovered `Ty` so later
+    /// consumers cannot mistake successful recovery for valid source.
+    invalid_annotations: rustc_hash::FxHashSet<baml_compiler2_hir::type_ref::TypeRefId>,
+    /// Pattern roots whose lowering emitted a primary diagnostic. Match
+    /// usefulness requires every matrix row to be trustworthy, so one entry
+    /// here suppresses dependent exhaustiveness and reachability findings.
+    invalid_patterns: rustc_hash::FxHashSet<PatId>,
     /// Per-body memoization of ground canonical forms. Inference-bearing types
     /// bypass it because their meaning changes as the table solves variables.
     canonical_cache: baml_type::normalize::InternedCanonicalCache,
@@ -1763,6 +1906,8 @@ impl<'db> InferenceContext<'db> {
             pending_diags: Vec::new(),
             hole_vars: Vec::new(),
             annotation_cache: FxHashMap::default(),
+            invalid_annotations: rustc_hash::FxHashSet::default(),
+            invalid_patterns: rustc_hash::FxHashSet::default(),
             canonical_cache: baml_type::normalize::InternedCanonicalCache::default(),
             member_probe_depth: 0,
             or_probe_depth: 0,
@@ -4978,41 +5123,7 @@ impl<'db> InferenceContext<'db> {
             .remove(&call)
             .unwrap_or_default();
         let ret = ret.clone();
-        // The matching is decided ONCE, checked below and recorded as the
-        // call plan's bindings: a LABELED argument selects its parameter
-        // by NAME (`options(cancel = tok)` checks against `cancel`, not
-        // whatever sits at its position); unlabeled arguments fill
-        // positionally; an unmatched label falls back to position. The
-        // label/arity diagnostics are S17's. `$id = ...` is the runtime-id
-        // side channel (TIR's rule: not a parameter binding) - it never
-        // matches a parameter; its own LocalId check lives at the capture.
-        let matched: Vec<Option<usize>> = args
-            .iter()
-            .enumerate()
-            .map(|(index, arg)| match &arg.label {
-                Some(label) if label.as_str() == "$id" => None,
-                Some(label) => params
-                    .iter()
-                    .position(|param| param.name.as_ref() == Some(label))
-                    .or_else(|| params.get(index).map(|_| index)),
-                None => params.get(index).map(|_| index),
-            })
-            .collect();
-        // An UNKNOWN label's positional fallback types the value but
-        // never FILLS the parameter: `search(q = "cats")` still owes
-        // `query`, so both the unknown-label and missing-required
-        // diagnostics report.
-        let label_fallback: Vec<bool> = args
-            .iter()
-            .map(|arg| {
-                arg.label.as_ref().is_some_and(|label| {
-                    label.as_str() != "$id"
-                        && !params
-                            .iter()
-                            .any(|param| param.name.as_ref() == Some(label))
-                })
-            })
-            .collect();
+        let mut arg_plan = CallArgPlan::new(&params, args);
         let is_lambda_arg =
             |arg: &baml_compiler2_ast::CallArg| matches!(body.exprs[arg.expr], Expr::Lambda(_));
         for pass in 0..2 {
@@ -5020,8 +5131,10 @@ impl<'db> InferenceContext<'db> {
                 if (pass == 0) == is_lambda_arg(arg) {
                     continue;
                 }
-                match matched[index] {
-                    Some(param_index) if runtime_dependent.contains_key(&param_index) => {
+                match arg_plan.matches[index] {
+                    CallArgMatch::Parameter { param_index, .. }
+                        if runtime_dependent.contains_key(&param_index) =>
+                    {
                         // The value still participates in ordinary inference;
                         // only its runtime-dependent expectation is deferred.
                         self.infer_expr(body, arg.expr, &Expectation::None);
@@ -5036,22 +5149,56 @@ impl<'db> InferenceContext<'db> {
                                 expected,
                             });
                     }
-                    Some(param_index) => {
+                    CallArgMatch::Parameter { param_index, .. } => {
                         self.check_expr(body, arg.expr, &params[param_index].ty);
                     }
-                    None => {
+                    CallArgMatch::RuntimeId | CallArgMatch::Extra => {
                         // Extra argument: the arity diagnostic is S17's.
                         self.infer_expr(body, arg.expr, &Expectation::None);
                     }
                 }
             }
         }
-        // Parameter-ordered bindings: provided slots from the matching,
-        // omitted OPTIONAL slots as defaults (required gaps get no entry;
-        // arity is S17's).
-        let mut slots: Vec<Option<ExprId>> = vec![None; params.len()];
+
+        let provided = args
+            .iter()
+            .filter(|arg| arg.label.as_ref().map(smol_str::SmolStr::as_str) != Some("$id"))
+            .count();
+        let positional_indices: Vec<usize> = args
+            .iter()
+            .enumerate()
+            .filter_map(|(index, arg)| arg.label.is_none().then_some(index))
+            .collect();
+        if provided > params.len() && positional_indices.len() == provided {
+            let compatibility: Vec<Vec<bool>> = positional_indices
+                .iter()
+                .map(|&arg_index| {
+                    let actual = self.result.type_of_expr[&args[arg_index].expr].clone();
+                    params
+                        .iter()
+                        .map(|param| {
+                            actual.has_error()
+                                || param.ty.has_error()
+                                || actual.has_infer()
+                                || param.ty.has_infer()
+                                || self.cached_subtype(&actual, &param.ty)
+                        })
+                        .collect()
+                })
+                .collect();
+            let recovered = align_extra_arguments(&compatibility);
+            arg_plan.recover_positionals(args, &positional_indices, &recovered);
+
+            for &arg_index in &positional_indices {
+                let expr = args[arg_index].expr;
+                self.result.type_mismatches.remove(&expr);
+                self.provisional_checks
+                    .retain(|(checked, _, _)| *checked != expr);
+            }
+        }
+
         let mut runtime_id = None;
-        for (index, arg) in args.iter().enumerate() {
+        for arg in args {
             if arg
                 .label
                 .as_ref()
@@ -5089,32 +5236,36 @@ impl<'db> InferenceContext<'db> {
                 self.pending_diags
                     .push(PendingDiag::RuntimeIdArgNotLast { at: arg.expr });
             }
-            if let Some(param_index) = matched[index]
-                && slots[param_index].is_none()
-                && !label_fallback[index]
-            {
-                slots[param_index] = Some(arg.expr);
-            }
         }
         // Arity + label diagnostics (S17): counts exclude the `$id`
         // side channel; an over-supplied call reports against the full
         // parameter count, an unfilled REQUIRED slot against the
         // required count.
         {
-            let provided = args
-                .iter()
-                .filter(|arg| arg.label.as_ref().map(smol_str::SmolStr::as_str) != Some("$id"))
-                .count();
             let required = params
                 .iter()
                 .filter(|param| param.mode == baml_type::FunctionParamMode::Required)
                 .count();
             if provided > params.len() {
-                self.pending_diags.push(PendingDiag::ArgCountMismatch {
-                    expr: call,
-                    expected: params.len(),
-                    got: provided,
-                });
+                let extra = args
+                    .iter()
+                    .zip(&arg_plan.matches)
+                    .find_map(|(arg, matched)| {
+                        matches!(matched, CallArgMatch::Extra).then_some(arg.expr)
+                    });
+                if let Some(expr) = extra {
+                    self.pending_diags.push(PendingDiag::UnexpectedArguments {
+                        expr,
+                        expected: params.len(),
+                        extra_count: provided - params.len(),
+                    });
+                } else {
+                    self.pending_diags.push(PendingDiag::ArgCountMismatch {
+                        expr: call,
+                        expected: params.len(),
+                        got: provided,
+                    });
+                }
             } else {
                 let saw_named = args
                     .iter()
@@ -5122,7 +5273,7 @@ impl<'db> InferenceContext<'db> {
                 let unfilled: Vec<usize> = (0..params.len())
                     .filter(|&param_index| {
                         params[param_index].mode == baml_type::FunctionParamMode::Required
-                            && slots[param_index].is_none()
+                            && arg_plan.slots[param_index].is_none()
                     })
                     .collect();
                 if !unfilled.is_empty() {
@@ -5174,7 +5325,7 @@ impl<'db> InferenceContext<'db> {
                             .push(PendingDiag::PositionalAfterNamed { expr: arg.expr });
                     }
                     None => {
-                        if let Some(param_index) = matched[index]
+                        if let CallArgMatch::Parameter { param_index, .. } = arg_plan.matches[index]
                             && params[param_index].mode == baml_type::FunctionParamMode::Optional
                             && let Some(name) = params[param_index].name.clone()
                         {
@@ -5201,7 +5352,8 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
-        let bindings: Vec<ParamBinding> = slots
+        let bindings: Vec<ParamBinding> = arg_plan
+            .slots
             .iter()
             .enumerate()
             .filter_map(|(param_index, slot)| match slot {
@@ -9218,6 +9370,8 @@ impl<'db> InferenceContext<'db> {
         if let Some(cached) = self.annotation_cache.get(&type_ref) {
             return cached.clone();
         }
+        let lowering_before = self.lower.diagnostic_count();
+        let pending_before = self.pending_diags.len();
         let lowered = self.lower_scoped_type_ref_at(
             &self.type_refs.store,
             type_ref,
@@ -9260,6 +9414,11 @@ impl<'db> InferenceContext<'db> {
                 self.pending_diags
                     .push(PendingDiag::AnnotWf { type_ref, error });
             }
+        }
+        if self.lower.diagnostic_count() > lowering_before
+            || self.pending_diags.len() > pending_before
+        {
+            self.invalid_annotations.insert(type_ref);
         }
         let instantiated = self.instantiate_holes(&lowered, HoleAnchor::TypeRef(type_ref));
         self.annotation_cache.insert(type_ref, instantiated.clone());
@@ -10339,6 +10498,17 @@ impl<'db> InferenceContext<'db> {
                         expected,
                         got,
                     } => (TirTypeError::ArgumentCountMismatch { expected, got }, expr),
+                    PendingDiag::UnexpectedArguments {
+                        expr,
+                        expected,
+                        extra_count,
+                    } => (
+                        TirTypeError::UnexpectedArguments {
+                            expected,
+                            extra_count,
+                        },
+                        expr,
+                    ),
                     PendingDiag::UnknownNamedArg { expr, name } => {
                         (TirTypeError::UnknownNamedArgument { name }, expr)
                     }

@@ -66,15 +66,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                   ───────────────────
     ╰────
 
-  [type] E0062
-
-  × non-exhaustive match on type (int) -> int throws callback; missing: _
-    ╭─[negative.baml:31:3]
- 31 │ ╭─▶   match (cb) {
- 32 │ │       let f: (value: int) -> int => f(1)
- 33 │ ╰─▶   }
-    ╰────
-
   [type] E0151
 
   × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw

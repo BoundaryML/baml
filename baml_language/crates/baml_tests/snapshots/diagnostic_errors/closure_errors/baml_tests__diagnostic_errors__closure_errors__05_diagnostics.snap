@@ -4,19 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0005
 
-  × expected 1 argument(s), got 2
-    ╭─[closure_errors.baml:21:3]
- 21 │   transform(fmt, "hello")
-    ·   ───────────────────────
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
+  × unexpected argument; this function accepts 1 argument, remove it
     ╭─[closure_errors.baml:21:13]
  21 │   transform(fmt, "hello")
-    ·             ─┬─
-    ·              ╰── expected `string`, found `Formatter`
+    ·             ───
     ╰────
 
   [type] E0005

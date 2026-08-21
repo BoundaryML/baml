@@ -1517,6 +1517,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnknownAssociatedType { .. } => DiagnosticId::UnknownType,
         TirTypeError::AmbiguousAssociatedTypeProjection { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::ArgumentCountMismatch { .. }
+        | TirTypeError::UnexpectedArguments { .. }
         | TirTypeError::PositionalArgumentAfterNamed
         | TirTypeError::DuplicateNamedArgument { .. }
         | TirTypeError::UnknownNamedArgument { .. }

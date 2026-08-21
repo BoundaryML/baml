@@ -32,6 +32,18 @@ class user.Fish {
 class user.Fish$stream {
   name: string | null
 }
+class user.InvalidArityBox {
+  value: T
+}
+class user.InvalidArityBox$stream {
+  value: T | null
+}
+class user.InvalidArityPlainBox {
+  value: int
+}
+class user.InvalidArityPlainBox$stream {
+  value: int | null
+}
 class user.Pending {
   eta: int
 }
@@ -210,6 +222,12 @@ function user.HighLineNumberNonExhaustive(s: user.Status) -> string  [expr] {
 }
 function user.IntLiteralUnionPattern(code: user.SuccessCode) -> string  [expr] {
   {  } match (code) { 200 | 201 => "success with body", 204 => "no content" }
+}
+function user.InvalidGenericPatternArity(boxed: user.InvalidArityBox<int>) -> int  [expr] {
+  {  } match (boxed) { user.InvalidArityBox<int, string> => 1, _ => 0 }
+}
+function user.InvalidNonGenericPatternArity(boxed: user.InvalidArityPlainBox) -> int  [expr] {
+  {  } match (boxed) { user.InvalidArityPlainBox<int> => 1, _ => 0 }
 }
 function user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.Fish) -> string  [expr] {
   {  } match (pet) { c: user.Cat => "cat", d: user.Dog => "dog", b: user.Bird => "bird", f: user.Fish => "fish" }

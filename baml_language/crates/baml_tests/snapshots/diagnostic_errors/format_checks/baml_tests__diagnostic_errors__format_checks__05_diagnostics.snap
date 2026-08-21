@@ -154,20 +154,20 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                                                                                          ────────────────────────
      ╰────
 
-  [type] E0005
-
-  × expected 2 argument(s), got 3
-     ╭─[chain_expr.baml:161:5]
- 161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
-     ·     ─────────────────────────────────────────────────────────────────────────────────────────────────
-     ╰────
-
   [type] E0007
 
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:161:33]
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
      ·                                 ────────────────────────
+     ╰────
+
+  [type] E0005
+
+  × unexpected argument; this function accepts 2 arguments, remove it
+     ╭─[chain_expr.baml:161:63]
+ 161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+     ·                                                               ──────────────────────────────────────
      ╰────
 
   [type] E0007
@@ -1219,22 +1219,6 @@ source: crates/baml_tests/src/generated_tests.rs
  161 │         "bye" => "farewell",
      ·         ──┬──
      ·           ╰── expected `"hello"`, found `"bye"`
-     ╰────
-
-  [type] E0063
-
-  × unreachable arm
-     ╭─[match_exprs.baml:161:18]
- 161 │         "bye" => "farewell",
-     ·                  ──────────
-     ╰────
-
-  [type] E0063
-
-  × unreachable arm
-     ╭─[match_exprs.baml:162:14]
- 162 │         _ => "other"
-     ·              ───────
      ╰────
 
   [type] E0004

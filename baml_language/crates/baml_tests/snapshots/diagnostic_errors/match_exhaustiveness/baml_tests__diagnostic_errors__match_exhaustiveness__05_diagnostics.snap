@@ -54,15 +54,6 @@ source: crates/baml_tests/src/generated_tests.rs
  253 │ ╰─▶     }
      ╰────
 
-  [type] E0062
-
-  × non-exhaustive match on type true; missing: true
-     ╭─[match_exhaustiveness.baml:296:5]
- 296 │ ╭─▶     match (t) {
- 297 │ │           false => "wrong!"
- 298 │ ╰─▶     }
-     ╰────
-
   [type] E0001
 
   × mismatched types
@@ -283,15 +274,6 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                          ─────────────
      ╰────
 
-  [type] E0062
-
-  × non-exhaustive match on type bool; missing: true, false
-     ╭─[match_exhaustiveness.baml:774:5]
- 774 │ ╭─▶     match (b) {
- 775 │ │           42 => "wrong type"
- 776 │ ╰─▶     }
-     ╰────
-
   [type] E0001
 
   × mismatched types
@@ -299,15 +281,6 @@ source: crates/baml_tests/src/generated_tests.rs
  775 │         42 => "wrong type"
      ·         ─┬
      ·          ╰── expected `bool`, found `42`
-     ╰────
-
-  [type] E0062
-
-  × non-exhaustive match on type int; missing: _
-     ╭─[match_exhaustiveness.baml:781:5]
- 781 │ ╭─▶     match (x) {
- 782 │ │           "hello" => "wrong type"
- 783 │ ╰─▶     }
      ╰────
 
   [type] E0001
@@ -393,4 +366,20 @@ source: crates/baml_tests/src/generated_tests.rs
  1046 │ │           WitBox<int> { v: 1 } => 1,
  1047 │ │           WitBox<string> { v: "a" } => 2
  1048 │ ╰─▶     }
+      ╰────
+
+  [type] E0001
+
+  × type `InvalidArityBox` expects 1 type argument(s), got 2
+      ╭─[match_exhaustiveness.baml:1061:9]
+ 1061 │         InvalidArityBox<int, string> => 1,
+      ·         ────────────────────────────
+      ╰────
+
+  [type] E0001
+
+  × type `InvalidArityPlainBox` expects 0 type argument(s), got 1
+      ╭─[match_exhaustiveness.baml:1068:9]
+ 1068 │         InvalidArityPlainBox<int> => 1,
+      ·         ─────────────────────────
       ╰────

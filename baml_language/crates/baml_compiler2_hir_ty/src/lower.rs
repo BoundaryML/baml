@@ -212,6 +212,10 @@ impl<'db> LowerCtx<'db> {
             .unwrap_or_default()
     }
 
+    pub fn diagnostic_count(&self) -> usize {
+        self.diags.as_ref().map_or(0, |cell| cell.borrow().len())
+    }
+
     #[must_use]
     /// The in-scope rigid params (function + owner generics, `Self` in
     /// interface-owned bodies) - the overlap oracle's `vars` input.
