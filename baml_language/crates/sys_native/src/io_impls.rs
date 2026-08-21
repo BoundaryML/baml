@@ -1922,8 +1922,10 @@ fn kill_process_by_pid(pid: i64) -> Result<(), VmBamlError> {
 #[cfg(windows)]
 #[allow(unsafe_code)]
 fn kill_process_by_pid(pid: i64) -> Result<(), VmBamlError> {
-    use windows_sys::Win32::Foundation::CloseHandle;
-    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_TERMINATE, TerminateProcess};
+    use windows_sys::Win32::{
+        Foundation::CloseHandle,
+        System::Threading::{OpenProcess, PROCESS_TERMINATE, TerminateProcess},
+    };
 
     // Reject anything that is not a valid positive process ID; pid 0 is the
     // System Idle Process, which `OpenProcess` refuses anyway.
