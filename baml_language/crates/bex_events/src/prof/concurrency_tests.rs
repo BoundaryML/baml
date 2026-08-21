@@ -422,6 +422,9 @@ mod scenarios {
     }
 }
 
+// Plain std test: it drives the ring directly, so it must not run under the
+// loom cfg where the ring's primitives are loom's and need a model.
+#[cfg(not(baml_loom))]
 #[test]
 fn segment_growth_pressure_rejects_record_without_aborting() {
     let ctx = leak_ctx(segment_footprint(16));

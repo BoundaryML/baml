@@ -20,7 +20,7 @@ pub enum ValueRole {
 }
 
 /// Frozen wire tags (`as u8`): both evidence codecs encode the discriminant
-/// and decode through [`ValueLossReason::from_tag`]. Append only.
+/// and decode through `ValueLossReason::from_tag`. Append only.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ValueLossReason {
@@ -125,7 +125,7 @@ pub struct ErrorCaptureAttempt {
 }
 
 /// Frozen wire tags (`as u8`); decode through
-/// [`ErrorCaptureLossReason::from_tag`]. Append only.
+/// `ErrorCaptureLossReason::from_tag`. Append only.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ErrorCaptureLossReason {
