@@ -530,7 +530,7 @@ pub fn json_parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
         match throw_json_parse_error(vm, msg) {
-            Ok(v) => VmRustFnError::Thrown(v),
+            Ok(v) => VmRustFnError::thrown_fresh(v),
             Err(e) => VmRustFnError::InternalError(e),
         }
     })?;
@@ -590,7 +590,7 @@ fn throw_json_serialization_error(
 
 fn raise_decode(vm: &mut BexVm, message: impl Into<String>, path: &str) -> VmRustFnError {
     match throw_json_decode_error(vm, message.into(), path) {
-        Ok(v) => VmRustFnError::Thrown(v),
+        Ok(v) => VmRustFnError::thrown_fresh(v),
         Err(e) => VmRustFnError::InternalError(e),
     }
 }
@@ -602,7 +602,7 @@ fn raise_serialize(
     reason: &str,
 ) -> VmRustFnError {
     match throw_json_serialization_error(vm, message.into(), path, reason) {
-        Ok(v) => VmRustFnError::Thrown(v),
+        Ok(v) => VmRustFnError::thrown_fresh(v),
         Err(e) => VmRustFnError::InternalError(e),
     }
 }
@@ -1112,7 +1112,7 @@ pub fn json_from_string_typed(
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
         match throw_json_parse_error(vm, msg) {
-            Ok(v) => VmRustFnError::Thrown(v),
+            Ok(v) => VmRustFnError::thrown_fresh(v),
             Err(e) => VmRustFnError::InternalError(e),
         }
     })?;

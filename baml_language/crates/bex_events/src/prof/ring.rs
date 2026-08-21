@@ -2,10 +2,11 @@
 //!
 //! One ring per `(engine, os-thread)` pair. Exactly one producer thread (the
 //! claimant — see [`crate::prof::registry`] for the claim protocol) and one
-//! process-wide consumer thread. Lossless by growth: a full segment links a
-//! fresh or recycled segment; nothing ever drops or blocks. Rings are
-//! allocated once and never freed (`&'static`), which is what makes the
-//! orphan/drain/claim lifecycle race-free without epochs or hazard pointers.
+//! process-wide consumer thread. A full segment links a fresh or recycled
+//! segment while shared General/Transport capacity is available; otherwise
+//! the concrete record is rejected without blocking. Rings are allocated once
+//! and never freed (`&'static`), which makes the orphan/drain/claim lifecycle
+//! race-free without epochs or hazard pointers.
 //!
 //! # Memory-ordering map (the loom checklist, plan §3.7)
 //!
@@ -23,8 +24,9 @@
 //!   spin anywhere reachable from [`Ring::push`]. It runs holding an
 //!   `ActiveHeapPermit`; a blocked producer is an engine-wide GC stall.
 //! - The consumer never touches the GC heap or permits.
-//! - Hitting the live-memory cap is a hard process error with a clear
-//!   message (D6), never a silent drop.
+//! - Hitting the live-memory cap rejects the concrete record without blocking
+//!   or aborting BAML execution. The producer reports that loss through the
+//!   boundary's preallocated health path.
 #![allow(unsafe_code)]
 // On wasm32 there is no background consumer thread. The consumer-side helpers
 // are compiled for the cooperative drain path, but not all native-only entry
@@ -35,6 +37,8 @@ use std::{marker::PhantomData, ptr::null_mut};
 
 use crossbeam_utils::CachePadded;
 
+#[cfg(not(baml_loom))]
+use crate::prof::backend::{Owner, ProfilerMemoryGovernor, Reservation, ReservationClass};
 use crate::prof::{
     sync::{AtomicPtr, AtomicU8, AtomicU32, AtomicUsize, Buf, Ordering, UnsafeCell},
     wake::Wake,
@@ -66,15 +70,23 @@ impl RingState {
 /// Process-wide context shared by all rings: the live-memory budget and the
 /// consumer wake state.
 pub(crate) struct RingCtx {
-    budget: MemBudget,
+    budget: RingBudget,
     wake: Wake,
+}
+
+enum RingBudget {
+    #[cfg_attr(not(test), allow(dead_code, reason = "test-only fixed budget"))]
+    Fixed(MemBudget),
+    #[cfg(not(baml_loom))]
+    Governor(ProfilerMemoryGovernor),
 }
 
 impl RingCtx {
     #[cfg(not(baml_loom))]
+    #[cfg_attr(not(test), allow(dead_code, reason = "test-only fixed budget"))]
     pub(crate) const fn new(max_overflow_bytes: usize) -> Self {
         Self {
-            budget: MemBudget::new(max_overflow_bytes),
+            budget: RingBudget::Fixed(MemBudget::new(max_overflow_bytes)),
             wake: Wake::new(),
         }
     }
@@ -82,7 +94,15 @@ impl RingCtx {
     #[cfg(baml_loom)]
     pub(crate) fn new(max_overflow_bytes: usize) -> Self {
         Self {
-            budget: MemBudget::new(max_overflow_bytes),
+            budget: RingBudget::Fixed(MemBudget::new(max_overflow_bytes)),
+            wake: Wake::new(),
+        }
+    }
+
+    #[cfg(not(baml_loom))]
+    pub(crate) fn with_governor(memory: ProfilerMemoryGovernor) -> Self {
+        Self {
+            budget: RingBudget::Governor(memory),
             wake: Wake::new(),
         }
     }
@@ -96,11 +116,57 @@ impl RingCtx {
     /// only writes the budget.
     #[cfg_attr(not(test), allow(dead_code, reason = "test/telemetry accessor"))]
     pub(crate) fn live_bytes(&self) -> usize {
-        self.budget.live()
+        match &self.budget {
+            RingBudget::Fixed(budget) => budget.live(),
+            #[cfg(not(baml_loom))]
+            RingBudget::Governor(memory) => {
+                usize::try_from(memory.used_bytes(ReservationClass::General)).unwrap_or(usize::MAX)
+            }
+        }
+    }
+
+    fn try_charge(&'static self, bytes: usize) -> Option<RingCharge> {
+        match &self.budget {
+            RingBudget::Fixed(budget) => budget.try_charge(bytes).then(|| RingCharge::Fixed {
+                _charge: FixedCharge { budget, bytes },
+            }),
+            #[cfg(not(baml_loom))]
+            RingBudget::Governor(memory) => memory
+                .try_reserve(
+                    ReservationClass::General,
+                    Owner::Transport,
+                    u64::try_from(bytes).unwrap_or(u64::MAX),
+                )
+                .ok()
+                .map(|reservation| RingCharge::Governor {
+                    _reservation: reservation,
+                }),
+        }
     }
 }
 
-/// Live-memory accounting against `BAML_RING_MAX_OVERFLOW_BYTES` (D6).
+struct FixedCharge {
+    budget: &'static MemBudget,
+    bytes: usize,
+}
+
+impl Drop for FixedCharge {
+    fn drop(&mut self) {
+        self.budget.credit(self.bytes);
+    }
+}
+
+enum RingCharge {
+    Fixed {
+        _charge: FixedCharge,
+    },
+    #[cfg(not(baml_loom))]
+    Governor {
+        _reservation: Reservation,
+    },
+}
+
+/// Live-memory accounting against the sizing policy's transport reserve.
 pub(crate) struct MemBudget {
     live: AtomicUsize,
     cap: usize,
@@ -108,6 +174,7 @@ pub(crate) struct MemBudget {
 
 impl MemBudget {
     #[cfg(not(baml_loom))]
+    #[cfg_attr(not(test), allow(dead_code, reason = "test-only fixed budget"))]
     const fn new(cap: usize) -> Self {
         Self {
             live: AtomicUsize::new(0),
@@ -123,10 +190,22 @@ impl MemBudget {
         }
     }
 
-    fn charge(&self, bytes: usize) {
-        let live = self.live.fetch_add(bytes, Ordering::Relaxed) + bytes;
-        if live > self.cap {
-            overflow_abort(live, self.cap);
+    fn try_charge(&self, bytes: usize) -> bool {
+        let mut live = self.live.load(Ordering::Relaxed);
+        loop {
+            let Some(next) = live.checked_add(bytes) else {
+                return false;
+            };
+            if next > self.cap {
+                return false;
+            }
+            match self
+                .live
+                .compare_exchange_weak(live, next, Ordering::Relaxed, Ordering::Relaxed)
+            {
+                Ok(_) => return true,
+                Err(observed) => live = observed,
+            }
         }
     }
 
@@ -138,23 +217,6 @@ impl MemBudget {
     fn live(&self) -> usize {
         self.live.load(Ordering::Relaxed)
     }
-}
-
-/// D6: exceeding the cap means the consumer cannot keep up with the
-/// sustained event rate — a hard process error, stated plainly, never a
-/// silent drop (and never an opaque OOM kill later).
-#[cold]
-#[expect(clippy::print_stderr, reason = "process-fatal diagnostic")]
-fn overflow_abort(live: usize, cap: usize) -> ! {
-    eprintln!(
-        "FATAL: BAML profiling ring memory ({live} bytes) exceeded \
-         BAML_RING_MAX_OVERFLOW_BYTES ({cap} bytes).\n\
-         The profile consumer cannot keep up with the sustained event rate. \
-         Raise BAML_RING_MAX_OVERFLOW_BYTES, lower the event rate, or disable \
-         profiling (BAML_PROFILE=0). Aborting instead of growing without \
-         bound or silently dropping events."
-    );
-    std::process::abort();
 }
 
 struct SegSync {
@@ -174,29 +236,30 @@ struct Segment {
     /// and consumer polls don't false-share with the buffer pointer reads.
     sync: CachePadded<SegSync>,
     buf: Buf,
+    _charge: RingCharge,
 }
 
-fn segment_footprint(seg_bytes: usize) -> usize {
+pub(crate) fn segment_footprint(seg_bytes: usize) -> usize {
     seg_bytes + size_of::<Segment>()
 }
 
-fn alloc_segment(seg_bytes: usize, ctx: &RingCtx) -> *mut Segment {
-    ctx.budget.charge(segment_footprint(seg_bytes));
-    Box::into_raw(Box::new(Segment {
+fn alloc_segment(seg_bytes: usize, ctx: &'static RingCtx) -> Option<*mut Segment> {
+    let charge = ctx.try_charge(segment_footprint(seg_bytes))?;
+    Some(Box::into_raw(Box::new(Segment {
         sync: CachePadded::new(SegSync {
             commit_len: AtomicU32::new(0),
             next: AtomicPtr::new(null_mut()),
         }),
         buf: Buf::new(seg_bytes),
-    }))
+        _charge: charge,
+    })))
 }
 
 /// # Safety
 /// `seg` came from [`alloc_segment`], is reachable from neither the live
 /// chain nor the free list, and no thread will touch it again.
-unsafe fn free_segment(seg: *mut Segment, ctx: &RingCtx) {
-    let boxed = unsafe { Box::from_raw(seg) };
-    ctx.budget.credit(segment_footprint(boxed.buf.capacity()));
+unsafe fn free_segment(seg: *mut Segment) {
+    drop(unsafe { Box::from_raw(seg) });
 }
 
 /// Producer-only position fields (D3 group 1).
@@ -259,9 +322,9 @@ impl Ring {
         seg_bytes: usize,
         freelist_cap: usize,
         engine_id: u64,
-    ) -> *mut Ring {
-        let seg = alloc_segment(seg_bytes, ctx);
-        Box::into_raw(Box::new(Ring {
+    ) -> Option<*mut Ring> {
+        let seg = alloc_segment(seg_bytes, ctx)?;
+        Some(Box::into_raw(Box::new(Ring {
             p: CachePadded::new(UnsafeCell::new(RingProducer {
                 head: seg,
                 head_pos: 0,
@@ -279,7 +342,7 @@ impl Ring {
             seg_bytes,
             freelist_cap,
             ctx,
-        }))
+        })))
     }
 
     /// The producer hot path (§3.2): bounds check + `memcpy` + one `Release`
@@ -292,13 +355,11 @@ impl Ring {
     /// Caller is the ring's unique producer thread (it claimed the ring and
     /// the ring is `Active`), and `rec` is a whole encoded record with
     /// `0 < rec.len() <= seg_bytes`.
-    pub unsafe fn push(&self, rec: &[u8]) {
+    pub unsafe fn push(&self, rec: &[u8]) -> bool {
         debug_assert!(!rec.is_empty());
         // SAFETY: same producer contract as `push_with`; the closure copies
         // exactly `rec.len()` bytes into the (uninitialized) slot.
-        unsafe {
-            self.push_with(rec.len(), |slot| slot.copy_from_slice(rec));
-        }
+        unsafe { self.push_with(rec.len(), |slot| slot.copy_from_slice(rec)) }
     }
 
     /// Reserve `len` bytes in the ring and let the producer serialize a record
@@ -311,7 +372,7 @@ impl Ring {
     /// Same contract as [`Self::push`]: this OS thread is the ring's live producer
     /// (D5a refresh), and exec does not cross an `.await` (plan §6 inv. 4).
     #[inline]
-    pub unsafe fn push_with(&self, len: usize, write: impl FnOnce(&mut [u8])) {
+    pub unsafe fn push_with(&self, len: usize, write: impl FnOnce(&mut [u8])) -> bool {
         debug_assert!(len > 0);
         self.p.with_mut(|p| {
             let p = unsafe { &mut *p };
@@ -329,7 +390,10 @@ impl Ring {
                 // Slow path: link a recycled or fresh segment.
                 let seg = match unsafe { self.free_pop() } {
                     Some(seg) => seg,
-                    None => alloc_segment(self.seg_bytes, self.ctx),
+                    None => match alloc_segment(self.seg_bytes, self.ctx) {
+                        Some(segment) => segment,
+                        None => return false,
+                    },
                 };
                 unsafe {
                     // D2: the producer owns the reset, for recycled and fresh
@@ -347,8 +411,8 @@ impl Ring {
                 }
                 p.head = seg;
                 p.head_pos = 0;
-                // D4: wake only on segment fill, only if the consumer is
-                // parked. Wake, not wait — this cannot block.
+                // Wake on segment fill, only if the consumer is parked. This
+                // is a one-way notification and cannot block the producer.
                 self.ctx.wake.wake_if_parked();
             }
             unsafe {
@@ -363,7 +427,8 @@ impl Ring {
                     .commit_len
                     .store(p.head_pos as u32, Ordering::Release);
             }
-        });
+            true
+        })
     }
 
     /// Consumer-side drain (§3.3, with D1 baked in). Hands `sink` each newly
@@ -448,7 +513,7 @@ impl Ring {
     /// neither side can reach it again).
     unsafe fn retire(&self, seg: *mut Segment) {
         if self.s.free_len.load(Ordering::Relaxed) >= self.freelist_cap {
-            unsafe { free_segment(seg, self.ctx) };
+            unsafe { free_segment(seg) };
             return;
         }
         let mut head = self.s.free_head.load(Ordering::Relaxed);
@@ -560,13 +625,13 @@ impl Drop for Ring {
             let mut seg = self.c.with_mut(|c| (*c).tail);
             while !seg.is_null() {
                 let next = (&*seg).sync.next.load(Ordering::Relaxed);
-                free_segment(seg, self.ctx);
+                free_segment(seg);
                 seg = next;
             }
             let mut free = self.s.free_head.load(Ordering::Relaxed);
             while !free.is_null() {
                 let next = (&*free).sync.next.load(Ordering::Relaxed);
-                free_segment(free, self.ctx);
+                free_segment(free);
                 free = next;
             }
         }
@@ -608,7 +673,7 @@ impl RingHandle {
     /// (D5a): handles are re-fetched from live TLS each exec resume and
     /// never used from destructors.
     #[inline]
-    pub unsafe fn push(self, rec: &[u8]) {
+    pub unsafe fn push(self, rec: &[u8]) -> bool {
         // SAFETY: !Send pins us to the claiming thread; the caller vouches
         // the claim is still live (contract above).
         unsafe { self.ring.push(rec) }

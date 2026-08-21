@@ -6,7 +6,7 @@
 //! host-owned values.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -14,6 +14,7 @@ use std::{
 };
 
 use baml_builtins2::{MediaContent, MediaValue};
+use bex_events::prof::backend::{Reservation, ValueLossReason};
 use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, try_convert_rust_data};
 use bex_heap::{BexHeap, PermitProof};
 use bex_vm_types::{HeapPtr, Object, Value, ValueKind};
@@ -25,11 +26,6 @@ impl TraceSnapshotHandle {
     #[must_use]
     pub fn raw(self) -> u64 {
         self.0
-    }
-
-    #[cfg(test)]
-    pub(crate) fn for_test(raw: u64) -> Self {
-        Self(raw)
     }
 }
 
@@ -118,6 +114,11 @@ impl TraceSnapshot {
         self.values.get(value_ref.0)
     }
 
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub(crate) fn values(&self) -> impl Iterator<Item = &TraceValue> {
+        self.values.iter()
+    }
+
     #[cfg(test)]
     pub(crate) fn for_test(root: TraceValueRef, values: Vec<TraceValue>) -> Self {
         Self { root, values }
@@ -141,6 +142,22 @@ impl TraceHeap {
         Self::default()
     }
 
+    /// The unbounded (logging) copy path has no reservation, so the only
+    /// error it can see is an allocator failure. A `ValueMemoryExceeded` here
+    /// is a builder bug; `CopyFailed` is the process running out of memory,
+    /// which the profiler's bounded path reports as a loss instead.
+    fn unbounded<T>(result: Result<T, ValueLossReason>) -> T {
+        match result {
+            Ok(value) => value,
+            Err(ValueLossReason::CopyFailed) => {
+                panic!("unbounded trace snapshot copy failed: allocator returned an error")
+            }
+            Err(reason) => unreachable!(
+                "unbounded trace snapshot copy has no reservation and cannot be denied: {reason:?}"
+            ),
+        }
+    }
+
     pub fn copy_value_from_bex_heap(
         &self,
         heap: &BexHeap,
@@ -148,8 +165,36 @@ impl TraceHeap {
         value: Value,
     ) -> TraceSnapshotHandle {
         let mut builder = TraceSnapshotBuilder::default();
-        let root = builder.copy_value(heap, permit, value);
+        let root = Self::unbounded(builder.copy_value(heap, permit, value));
         self.insert_snapshot(builder.finish(root))
+    }
+
+    pub fn copy_value_bounded(
+        heap: &BexHeap,
+        permit: PermitProof<'_>,
+        value: Value,
+        reservation: &mut Reservation,
+    ) -> Result<TraceSnapshot, ValueLossReason> {
+        let mut builder = TraceSnapshotBuilder::bounded(reservation);
+        let root = builder.copy_value(heap, permit, value)?;
+        Ok(builder.finish(root))
+    }
+
+    pub fn copy_named_values_bounded(
+        heap: &BexHeap,
+        permit: PermitProof<'_>,
+        entries: &[(String, Value)],
+        reservation: &mut Reservation,
+    ) -> Result<TraceSnapshot, ValueLossReason> {
+        let mut builder = TraceSnapshotBuilder::bounded(reservation);
+        let mut copied = builder.vec_with_capacity(entries.len())?;
+        for (key, value) in entries {
+            let key = builder.copy_str(key)?;
+            let value = builder.copy_value(heap, permit, *value)?;
+            copied.push((key, value));
+        }
+        let root = builder.alloc(TraceValue::Map(copied))?;
+        Ok(builder.finish(root))
     }
 
     pub fn copy_values_from_bex_heap(
@@ -162,9 +207,9 @@ impl TraceHeap {
         let items = values
             .iter()
             .copied()
-            .map(|value| builder.copy_value(heap, permit, value))
+            .map(|value| Self::unbounded(builder.copy_value(heap, permit, value)))
             .collect();
-        let root = builder.alloc(TraceValue::Array(items));
+        let root = Self::unbounded(builder.alloc(TraceValue::Array(items)));
         self.insert_snapshot(builder.finish(root))
     }
 
@@ -177,9 +222,14 @@ impl TraceHeap {
         let mut builder = TraceSnapshotBuilder::default();
         let entries = entries
             .iter()
-            .map(|(key, value)| (key.clone(), builder.copy_value(heap, permit, *value)))
+            .map(|(key, value)| {
+                (
+                    key.clone(),
+                    Self::unbounded(builder.copy_value(heap, permit, *value)),
+                )
+            })
             .collect();
-        let root = builder.alloc(TraceValue::Map(entries));
+        let root = Self::unbounded(builder.alloc(TraceValue::Map(entries)));
         self.insert_snapshot(builder.finish(root))
     }
 
@@ -228,12 +278,72 @@ impl TraceHeap {
 }
 
 #[derive(Default)]
-struct TraceSnapshotBuilder {
+struct TraceSnapshotBuilder<'a> {
     values: Vec<TraceValue>,
-    in_progress: HashSet<HeapPtr>,
+    in_progress: Vec<HeapPtr>,
+    budget: Option<&'a mut Reservation>,
 }
 
-impl TraceSnapshotBuilder {
+impl<'a> TraceSnapshotBuilder<'a> {
+    fn bounded(reservation: &'a mut Reservation) -> Self {
+        Self {
+            values: Vec::new(),
+            in_progress: Vec::new(),
+            budget: Some(reservation),
+        }
+    }
+
+    fn charge(&mut self, bytes: usize) -> Result<(), ValueLossReason> {
+        let Some(reservation) = self.budget.as_deref_mut() else {
+            return Ok(());
+        };
+        reservation
+            .try_grow(u64::try_from(bytes).unwrap_or(u64::MAX))
+            .map_err(|_| ValueLossReason::ValueMemoryExceeded)
+    }
+
+    fn reserve_values(&mut self) -> Result<(), ValueLossReason> {
+        if self.values.len() < self.values.capacity() {
+            return Ok(());
+        }
+        let next_capacity = self.values.capacity().max(8).saturating_mul(2);
+        let additional = next_capacity.saturating_sub(self.values.capacity());
+        self.charge(additional.saturating_mul(std::mem::size_of::<TraceValue>()))?;
+        self.values
+            .try_reserve_exact(additional)
+            .map_err(|_| ValueLossReason::CopyFailed)
+    }
+
+    fn reserve_progress(&mut self) -> Result<(), ValueLossReason> {
+        if self.in_progress.len() < self.in_progress.capacity() {
+            return Ok(());
+        }
+        let next_capacity = self.in_progress.capacity().max(8).saturating_mul(2);
+        let additional = next_capacity.saturating_sub(self.in_progress.capacity());
+        self.charge(additional.saturating_mul(std::mem::size_of::<HeapPtr>()))?;
+        self.in_progress
+            .try_reserve_exact(additional)
+            .map_err(|_| ValueLossReason::CopyFailed)
+    }
+
+    fn vec_with_capacity<T>(&mut self, capacity: usize) -> Result<Vec<T>, ValueLossReason> {
+        self.charge(capacity.saturating_mul(std::mem::size_of::<T>()))?;
+        let mut values = Vec::new();
+        values
+            .try_reserve_exact(capacity)
+            .map_err(|_| ValueLossReason::CopyFailed)?;
+        Ok(values)
+    }
+
+    fn copy_str(&mut self, value: &str) -> Result<String, ValueLossReason> {
+        self.charge(value.len())?;
+        let mut output = String::new();
+        output
+            .try_reserve_exact(value.len())
+            .map_err(|_| ValueLossReason::CopyFailed)?;
+        output.push_str(value);
+        Ok(output)
+    }
     fn finish(self, root: TraceValueRef) -> TraceSnapshot {
         TraceSnapshot {
             root,
@@ -241,10 +351,11 @@ impl TraceSnapshotBuilder {
         }
     }
 
-    fn alloc(&mut self, value: TraceValue) -> TraceValueRef {
+    fn alloc(&mut self, value: TraceValue) -> Result<TraceValueRef, ValueLossReason> {
+        self.reserve_values()?;
         let value_ref = TraceValueRef(self.values.len());
         self.values.push(value);
-        value_ref
+        Ok(value_ref)
     }
 
     fn copy_value(
@@ -252,7 +363,7 @@ impl TraceSnapshotBuilder {
         heap: &BexHeap,
         permit: PermitProof<'_>,
         value: Value,
-    ) -> TraceValueRef {
+    ) -> Result<TraceValueRef, ValueLossReason> {
         match value.kind() {
             ValueKind::Null => self.alloc(TraceValue::Null),
             ValueKind::Bool(value) => self.alloc(TraceValue::Bool(value)),
@@ -269,61 +380,82 @@ impl TraceSnapshotBuilder {
         heap: &BexHeap,
         permit: PermitProof<'_>,
         ptr: HeapPtr,
-    ) -> TraceValueRef {
+    ) -> Result<TraceValueRef, ValueLossReason> {
         let object = unsafe { ptr.get() };
         let tracks_recursion = matches!(
             object,
             Object::Array(_) | Object::Map(_) | Object::Instance(_)
         );
-        if tracks_recursion && !self.in_progress.insert(ptr) {
+        if tracks_recursion && self.in_progress.contains(&ptr) {
             return self.omitted(TraceOmissionReason::CyclicReference, "cyclic reference");
+        }
+        if tracks_recursion {
+            self.reserve_progress()?;
+            self.in_progress.push(ptr);
         }
 
         let value_ref = match object {
-            Object::String(value) => self.alloc(TraceValue::String(value.to_string())),
-            Object::Bigint(value) => self.alloc(TraceValue::Bigint(value.to_string())),
+            Object::String(value) => {
+                let value = self.copy_str(value.as_str())?;
+                self.alloc(TraceValue::String(value))
+            }
+            Object::Bigint(value) => {
+                let maximum_decimal_bytes = usize::try_from(value.bits())
+                    .unwrap_or(usize::MAX)
+                    .saturating_add(2);
+                self.charge(maximum_decimal_bytes)?;
+                self.alloc(TraceValue::Bigint(value.to_string()))
+            }
             Object::Float(value) => self.alloc(TraceValue::Float(*value)),
-            Object::Uint8Array(bytes) => self.alloc(TraceValue::Bytes(bytes.to_vec())),
+            Object::Uint8Array(bytes) => {
+                let bytes = bytes.lock();
+                self.charge(bytes.len())?;
+                let mut copied = Vec::new();
+                copied
+                    .try_reserve_exact(bytes.len())
+                    .map_err(|_| ValueLossReason::CopyFailed)?;
+                copied.extend_from_slice(&bytes);
+                self.alloc(TraceValue::Bytes(copied))
+            }
             Object::Array(array) => {
-                let items = array
-                    .to_vec()
-                    .into_iter()
-                    .map(|value| self.copy_value(heap, permit, value))
-                    .collect();
+                let array = array.lock();
+                let mut items = self.vec_with_capacity(array.len())?;
+                for value in array.iter().copied() {
+                    items.push(self.copy_value(heap, permit, value)?);
+                }
                 self.alloc(TraceValue::Array(items))
             }
             Object::Map(map) => {
-                let entries = map
-                    .to_index_map()
-                    .into_iter()
-                    .map(|(key, value)| (key.to_string(), self.copy_value(heap, permit, value)))
-                    .collect();
+                let map = map.data.lock();
+                let mut entries = self.vec_with_capacity(map.len())?;
+                for (key, value) in map.iter() {
+                    let key = self.copy_str(key.as_str())?;
+                    let value = self.copy_value(heap, permit, *value)?;
+                    entries.push((key, value));
+                }
                 self.alloc(TraceValue::Map(entries))
             }
             Object::Instance(instance) => {
                 let class_object = unsafe { instance.class.get() };
                 if let Object::Class(class) = class_object {
-                    let fields = class
-                        .fields
-                        .iter()
-                        .zip(instance.fields.iter())
-                        .map(|(field, slot)| {
-                            (
-                                field.name.clone(),
-                                self.copy_value(heap, permit, slot.load()),
-                            )
-                        })
-                        .collect();
+                    let mut fields = self.vec_with_capacity(class.fields.len())?;
+                    for (field, slot) in class.fields.iter().zip(instance.fields.iter()) {
+                        let name = self.copy_str(&field.name)?;
+                        let value = self.copy_value(heap, permit, slot.load())?;
+                        fields.push((name, value));
+                    }
+                    let mut type_args = self.vec_with_capacity(instance.class_type_args.len())?;
+                    for type_arg in &instance.class_type_args {
+                        self.charge(realized_ty_allocation_bound(type_arg))?;
+                        type_args.push(baml_type::RuntimeTy::from(type_arg));
+                    }
+                    // A trace is read by a person: a runtime-minted
+                    // declaration appears under the name its source wrote,
+                    // not the discriminator that keys it in the VM.
+                    let type_name = self.copy_str(&class.name.render_source_dotted())?;
                     self.alloc(TraceValue::Instance {
-                        // A trace is read by a person: a runtime-minted
-                        // declaration appears under the name its source wrote,
-                        // not the discriminator that keys it in the VM.
-                        type_name: class.name.render_source_dotted(),
-                        type_args: instance
-                            .class_type_args
-                            .iter()
-                            .map(baml_type::RuntimeTy::from)
-                            .collect(),
+                        type_name,
+                        type_args,
                         fields,
                     })
                 } else {
@@ -347,10 +479,9 @@ impl TraceSnapshotBuilder {
                         "variant index was outside the enum definition",
                     );
                 };
-                self.alloc(TraceValue::Enum {
-                    type_name: enum_.name.render_source_dotted(),
-                    variant: variant_def.name.clone(),
-                })
+                let type_name = self.copy_str(&enum_.name.render_source_dotted())?;
+                let variant = self.copy_str(&variant_def.name)?;
+                self.alloc(TraceValue::Enum { type_name, variant })
             }
             Object::Function(_)
             | Object::Class(_)
@@ -387,12 +518,18 @@ impl TraceSnapshotBuilder {
             ),
         };
         if tracks_recursion {
-            self.in_progress.remove(&ptr);
+            // The pop is the cycle-tracker's unwind and must run in every
+            // build; only the equality check is debug-only.
+            let popped = self.in_progress.pop();
+            debug_assert_eq!(popped, Some(ptr));
         }
         value_ref
     }
 
-    fn copy_external_value(&mut self, value: BexExternalValue) -> TraceValueRef {
+    fn copy_external_value(
+        &mut self,
+        value: BexExternalValue,
+    ) -> Result<TraceValueRef, ValueLossReason> {
         match value {
             BexExternalValue::Adt(BexExternalAdt::Media(media)) => self.copy_media(&media),
             BexExternalValue::HostValue(host) => self.omitted(
@@ -415,15 +552,20 @@ impl TraceSnapshotBuilder {
         }
     }
 
-    fn copy_media(&mut self, media: &MediaValue) -> TraceValueRef {
+    fn copy_media(&mut self, media: &MediaValue) -> Result<TraceValueRef, ValueLossReason> {
         let content = media.read_content(|content| match content {
-            MediaContent::Url { url, .. } => TraceMediaContent::Url(url.clone()),
-            MediaContent::Base64 { base64_data } => TraceMediaContent::Base64(base64_data.clone()),
-            MediaContent::File { file, .. } => TraceMediaContent::File(file.clone()),
-        });
+            MediaContent::Url { url, .. } => self.copy_str(url).map(TraceMediaContent::Url),
+            MediaContent::Base64 { base64_data } => {
+                self.copy_str(base64_data).map(TraceMediaContent::Base64)
+            }
+            MediaContent::File { file, .. } => self.copy_str(file).map(TraceMediaContent::File),
+        })?;
+        let mime_type = media
+            .read_mime_type(|mime_type| mime_type.map(|value| self.copy_str(value)))
+            .transpose()?;
         self.alloc(TraceValue::Media(TraceMediaValue {
             kind: media.kind,
-            mime_type: media.mime_type(),
+            mime_type,
             content,
         }))
     }
@@ -431,16 +573,123 @@ impl TraceSnapshotBuilder {
     fn omitted(
         &mut self,
         reason: TraceOmissionReason,
-        message: impl Into<String>,
-    ) -> TraceValueRef {
+        message: &str,
+    ) -> Result<TraceValueRef, ValueLossReason> {
+        let message = self.copy_str(message)?;
         self.alloc(TraceValue::Omitted(TraceOmissionDescriptor {
             reason,
-            message: message.into(),
+            message,
         }))
     }
 }
 
-fn unsupported_object_message(object: &Object) -> String {
+fn realized_ty_allocation_bound(ty: &baml_type::RealizedTy) -> usize {
+    use baml_type::{Literal, RealizedTy};
+
+    fn add(left: usize, right: usize) -> usize {
+        left.saturating_add(right)
+    }
+
+    fn name_bound(name: &baml_type::Name) -> usize {
+        std::mem::size_of::<baml_type::Name>().saturating_add(name.as_str().len())
+    }
+
+    fn type_name_bound(name: &baml_type::TypeName) -> usize {
+        let namespace = name
+            .namespace()
+            .iter()
+            .fold(0usize, |total, part| add(total, name_bound(part)));
+        add(
+            add(name_bound(name.package()), name_bound(name.name())),
+            namespace,
+        )
+    }
+
+    fn literal_bound(literal: &Literal) -> usize {
+        match literal {
+            Literal::String(value) | Literal::Float(value) => value.len(),
+            Literal::Bigint(value) => {
+                usize::try_from(value.bits())
+                    .unwrap_or(usize::MAX)
+                    .saturating_add(7)
+                    / 8
+            }
+            Literal::Int(_) | Literal::Bool(_) => 0,
+        }
+    }
+
+    let node = std::mem::size_of::<baml_type::RuntimeTy>();
+    let nested = match ty {
+        RealizedTy::Literal(value, _, _) => literal_bound(value),
+        RealizedTy::Class(name, args, _) => {
+            args.iter().fold(type_name_bound(name), |total, arg| {
+                add(total, realized_ty_allocation_bound(arg))
+            })
+        }
+        RealizedTy::Interface(name, args, bindings, _) => {
+            let args = args.iter().fold(type_name_bound(name), |total, arg| {
+                add(total, realized_ty_allocation_bound(arg))
+            });
+            bindings.iter().fold(args, |total, (name, ty)| {
+                add(
+                    add(total, name_bound(name)),
+                    realized_ty_allocation_bound(ty),
+                )
+            })
+        }
+        RealizedTy::Enum(name, _) | RealizedTy::TypeAlias(name, _) => type_name_bound(name),
+        RealizedTy::EnumVariant(name, variant, _) => {
+            add(type_name_bound(name), name_bound(variant))
+        }
+        RealizedTy::List(inner, _) => realized_ty_allocation_bound(inner),
+        RealizedTy::Map { key, value, .. } | RealizedTy::Future(key, value, _) => add(
+            realized_ty_allocation_bound(key),
+            realized_ty_allocation_bound(value),
+        ),
+        RealizedTy::Union(members, _) => members.iter().fold(0usize, |total, member| {
+            add(total, realized_ty_allocation_bound(member))
+        }),
+        RealizedTy::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            let params = params.iter().fold(0usize, |total, param| {
+                let name = param.name.as_ref().map_or(0, name_bound);
+                add(
+                    add(
+                        total,
+                        std::mem::size_of::<baml_type::RuntimeFunctionParamTy>(),
+                    ),
+                    add(name, realized_ty_allocation_bound(&param.ty)),
+                )
+            });
+            add(
+                add(params, realized_ty_allocation_bound(ret)),
+                realized_ty_allocation_bound(throws),
+            )
+        }
+        RealizedTy::Int { .. }
+        | RealizedTy::Bigint { .. }
+        | RealizedTy::Float { .. }
+        | RealizedTy::String { .. }
+        | RealizedTy::Bool { .. }
+        | RealizedTy::Null { .. }
+        | RealizedTy::Uint8Array { .. }
+        | RealizedTy::Media(_, _)
+        | RealizedTy::RustType { .. }
+        | RealizedTy::Type { .. }
+        | RealizedTy::Resource { .. }
+        | RealizedTy::PromptAst { .. }
+        | RealizedTy::Void { .. }
+        | RealizedTy::BuiltinUnknown { .. }
+        | RealizedTy::Never { .. } => 0,
+    };
+    add(node, nested)
+}
+
+fn unsupported_object_message(object: &Object) -> &'static str {
     match object {
         Object::Function(_) => "function",
         Object::Class(_) => "class",
@@ -469,7 +718,6 @@ fn unsupported_object_message(object: &Object) -> String {
         | Object::Variant(_)
         | Object::Float(_) => "unsupported value",
     }
-    .to_string()
 }
 
 #[cfg(test)]
@@ -477,6 +725,9 @@ mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use baml_builtins2::MediaValue;
+    use bex_events::prof::backend::{
+        MeasuredLayouts, Owner, ProfilerMemoryGovernor, ProfilerSizingPolicy, ReservationClass,
+    };
     use bex_external_types::MediaKind;
     use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
     use bex_vm_types::{Object, RootHaver, Value};
@@ -641,5 +892,67 @@ mod tests {
             panic!("cycle back-edge should be omitted");
         };
         assert_eq!(cycle.reason, TraceOmissionReason::CyclicReference);
+    }
+
+    /// A container reached twice through *sibling* edges is shared, not
+    /// cyclic. The cycle tracker must unwind after each visit in every build
+    /// mode: if the unwind were debug-only, the second visit would be
+    /// reported as `CyclicReference` and the tracker's phantom growth would
+    /// keep charging the reservation.
+    #[tokio::test]
+    async fn trace_heap_shared_sibling_containers_are_not_cyclic() {
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let mut permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let shared = permit.tlab_mut().alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::int(7), Value::int(8)],
+        );
+        let outer = permit.tlab_mut().alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::object(shared), Value::object(shared)],
+        );
+        let sizing = ProfilerSizingPolicy::derive(32 * 1024 * 1024, MeasuredLayouts::V1).unwrap();
+        let governor = ProfilerMemoryGovernor::new(sizing, MeasuredLayouts::V1);
+
+        let copy = |governor: &ProfilerMemoryGovernor| {
+            let mut reservation = governor
+                .try_reserve(ReservationClass::General, Owner::Values, 1)
+                .unwrap();
+            let snapshot = TraceHeap::copy_value_bounded(
+                &heap,
+                permit.proof(),
+                Value::object(outer),
+                &mut reservation,
+            )
+            .expect("shared containers copy within budget");
+            (snapshot, reservation.accounted_bytes())
+        };
+
+        let (first, first_bytes) = copy(&governor);
+        let Some(TraceValue::Array(items)) = first.value(first.root()) else {
+            panic!("root should be an array");
+        };
+        assert_eq!(items.len(), 2);
+        for item in items {
+            let Some(TraceValue::Array(inner)) = first.value(*item) else {
+                panic!(
+                    "shared sibling must be copied, not omitted: {:?}",
+                    first.value(*item)
+                );
+            };
+            assert_eq!(inner.len(), 2);
+        }
+
+        // Accounting is deterministic: a second copy of the same value on the
+        // same heap charges exactly the same bytes.
+        let (_second, second_bytes) = copy(&governor);
+        assert_eq!(first_bytes, second_bytes);
     }
 }

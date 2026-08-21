@@ -12,7 +12,7 @@ use bex_engine::{
 };
 
 use crate::{
-    CallContextCapture,
+    HelperCallContext,
     output::{OutputFormat, write_output_with_context},
 };
 
@@ -103,7 +103,7 @@ pub async fn dispatch_target_with_context(
     // `find_user_function` matched, not the raw user input.
     validate_help_param(&engine, &func_info.qualified_name)?;
 
-    let capture = CallContextCapture::from_call_context(&call_context);
+    let helper_context = HelperCallContext::from_call_context(&call_context);
     let args = build_args_from_signature_with_context(
         &engine,
         cli_values,
@@ -111,7 +111,7 @@ pub async fn dispatch_target_with_context(
         &func_info.param_names,
         &func_info.param_types,
         &func_info.param_has_default,
-        &capture,
+        &helper_context,
     )
     .await?;
 
@@ -130,7 +130,7 @@ pub async fn dispatch_target_with_context(
                     value,
                     &func_info.return_type,
                     output_format,
-                    &capture,
+                    &helper_context,
                     after_call,
                 )
                 .await?;
@@ -186,7 +186,7 @@ pub async fn build_args_from_signature(
         param_names,
         param_types,
         param_has_default,
-        &CallContextCapture::disabled(),
+        &HelperCallContext::disabled(),
     )
     .await
 }
@@ -198,7 +198,7 @@ async fn build_args_from_signature_with_context(
     param_names: &[String],
     param_types: &[RuntimeTy],
     param_has_default: &[bool],
-    capture: &CallContextCapture,
+    helper_context: &HelperCallContext,
 ) -> Result<Vec<BexCallArg>> {
     let _ = param_types;
     let mut merged: HashMap<String, RawArg> = HashMap::new();
@@ -232,7 +232,7 @@ async fn build_args_from_signature_with_context(
         match merged.remove(name.as_str()) {
             Some(RawArg::Primitive(v)) => ordered.push(BexCallArg::Provided(Box::new(*v))),
             Some(RawArg::JsonText(s)) => {
-                let value = deserialize_via_baml_json(engine, &s, ty, capture)
+                let value = deserialize_via_baml_json(engine, &s, ty, helper_context)
                     .await
                     .with_context(|| format!("parameter `--{name}`"))?;
                 ordered.push(BexCallArg::Provided(Box::new(value)));
@@ -280,13 +280,13 @@ async fn deserialize_via_baml_json(
     engine: &Arc<BexEngine>,
     json_text: &str,
     ty: &RuntimeTy,
-    capture: &CallContextCapture,
+    helper_context: &HelperCallContext,
 ) -> Result<BexExternalValue> {
     let result = engine
         .call_function(
             "baml.json.deserialize",
             vec![BexExternalValue::String(json_text.into())],
-            capture.call_context(indexmap::IndexMap::from([("T".to_string(), ty.clone())])),
+            helper_context.call_context(indexmap::IndexMap::from([("T".to_string(), ty.clone())])),
             true,
         )
         .await

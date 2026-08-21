@@ -22,25 +22,32 @@ bex_external_types = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_types = { workspace = true }
 base64 = { workspace = true }
+crossbeam-channel = { workspace = true }
 crossbeam-utils = { workspace = true }
+hex = { workspace = true }
 prost = { workspace = true }
+rustc-hash = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 smallvec = { workspace = true }
 uuid = { workspace = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+fs2 = { workspace = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = [ "js" ] }
 web-time = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 # The profiling clock (prof::clock) reads raw hardware ticks in-tree (rdtsc /
 # CNTVCT_EL0 / Instant fallback) — no external time-source dependency, and
 # crucially no pre-main ctor. wasm32 uses the web-time clock for cooperative
 # drains; miri gets the stub because it cannot execute `rdtsc`/`mrs`.
 
-# The .bamlprof consumer (thread + file writer + path persistence) is
-# native-only; wasm32 still needs the generated protobuf structs for the
-# shared structural artifact contract.
+# Protobuf generation remains only for mixed host lifecycle/log history.
 
 [build-dependencies]
 prost-build = { workspace = true }

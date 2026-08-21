@@ -297,7 +297,7 @@ pub struct Function {
 
     /// Per-run profiling id (`0` = unassigned), written into the BEX event
     /// stream's `CallFunction` records and resolved through the per-run
-    /// function table in the `.bamlprof` header. Assigned by the engine's
+    /// function table registered with the direct consumer. Assigned by the engine's
     /// interim provider at construction (plan §2.6); the M0 id table moves
     /// assignment to compile time. `#[borsh(skip)]` keeps it out of the pack
     /// envelope — it is runtime-only state, and skipping it leaves the wire

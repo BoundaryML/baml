@@ -276,9 +276,8 @@ fn finalize_dispatch(
         }
     }
 
-    // Drain the profiling rings to .bamlprof before exit (no-op when
-    // BAML_PROFILE is off). NB: `baml.sys.exit()` paths bypass this — same
-    // caveat as the legacy event sink.
+    // Drain the direct profiling consumer before exit (no-op when profiling
+    // is off). `baml.sys.exit()` paths bypass this explicit host flush.
     bex_events::prof::flush_and_join(std::time::Duration::from_secs(10));
 
     match result {

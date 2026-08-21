@@ -14,7 +14,7 @@ use baml_project::ProjectDatabase;
 use baml_type::RuntimeTy;
 use bex_engine::{
     BexCallArg, BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
-    FunctionCallContextBuilder, test_arg_to_external, value_capture::TraceCaptureProducer,
+    FunctionCallContextBuilder, logger::TraceLogger, test_arg_to_external,
 };
 use clap::{Args, FromArgMatches};
 use sys_native::{CallId, SysOpsExt};
@@ -305,7 +305,7 @@ struct RunCtx<'a> {
 }
 
 impl RunCtx<'_> {
-    fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
+    fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceLogger>) {
         let builder =
             FunctionCallContextBuilder::new(call_id).with_cancel_token(self.cancel.clone());
         LogOutput::new(self.logs, "test").call_context(builder)
@@ -314,7 +314,7 @@ impl RunCtx<'_> {
     fn block_on_with_logs<T>(
         &self,
         future: impl std::future::Future<Output = T>,
-        producer: Option<&TraceCaptureProducer>,
+        producer: Option<&TraceLogger>,
     ) -> T {
         LogOutput::new(self.logs, "test").block_on(self.rt, future, producer)
     }

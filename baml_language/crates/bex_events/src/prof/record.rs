@@ -21,15 +21,20 @@ pub const MAX_THREAD_NAME_LEN: usize = 256;
 pub const CALL_FUNCTION_LEN: usize = 54;
 /// See [`CALL_FUNCTION_LEN`].
 pub const END_FUNCTION_LEN: usize = 26;
+/// Awaited call-end variant: compact end plus `await_ns: u64` and
+/// `await_count: u32`.
+pub const END_FUNCTION_AWAITED_LEN: usize = END_FUNCTION_LEN + 12;
 /// Fixed prefix of a `StartThread` record; the name bytes follow.
 pub const START_THREAD_FIXED_LEN: usize = 36;
+/// Fixed prefix of a spawned-thread start, including its source span.
+pub const START_THREAD_SPAWN_FIXED_LEN: usize = START_THREAD_FIXED_LEN + 16;
 /// See [`CALL_FUNCTION_LEN`].
 pub const END_THREAD_LEN: usize = 18;
 /// See [`CALL_FUNCTION_LEN`].
 pub const SET_FUNCTION_ID_LEN: usize = 41;
 
 /// Upper bound on any encoded record; sizes producer-side stack buffers.
-pub const MAX_RECORD_LEN: usize = START_THREAD_FIXED_LEN + MAX_THREAD_NAME_LEN;
+pub const MAX_RECORD_LEN: usize = START_THREAD_SPAWN_FIXED_LEN + MAX_THREAD_NAME_LEN;
 
 /// Caps a thread name at [`MAX_THREAD_NAME_LEN`] bytes without splitting a
 /// UTF-8 character — the producer-side capture helper for `StartThread`.
@@ -52,6 +57,8 @@ const TAG_END_FUNCTION: u8 = 0x02;
 const TAG_START_THREAD: u8 = 0x03;
 const TAG_END_THREAD: u8 = 0x04;
 const TAG_SET_FUNCTION_ID: u8 = 0x05;
+const TAG_END_FUNCTION_AWAITED: u8 = 0x06;
+const TAG_START_THREAD_SPAWN: u8 = 0x07;
 const CALL_SITE_FILE_ID_NONE: u32 = u32::MAX;
 
 /// Caller-side source span captured at a profiled call site.
@@ -131,6 +138,22 @@ pub enum RawRecord<'a> {
         /// Raw clock ticks; converted to ns by the consumer at transcode.
         ts_ticks: u64,
     },
+    /// Tag `0x06`: the alternative call-end encoding used only when the call
+    /// suspended at least once. This is one end fact, not an additional event.
+    EndFunctionAwaited {
+        /// How the frame ended.
+        status: FunctionEndStatus,
+        /// Logical BEX thread id.
+        thread_id: BexThreadId,
+        /// Matches the `CallFunction` it closes.
+        call_id: BexCallId,
+        /// Raw clock ticks; converted to ns by the consumer.
+        ts_ticks: u64,
+        /// Sum of successfully measured declared VM suspension intervals.
+        await_ns: u64,
+        /// Number of successfully measured declared VM suspension intervals.
+        await_count: u32,
+    },
     /// Tag `0x03`: a logical thread started (root or spawn).
     StartThread {
         /// Reserved flag bits (zero today).
@@ -145,6 +168,18 @@ pub enum RawRecord<'a> {
         ts_ticks: u64,
         /// User-defined thread name, ≤ [`MAX_THREAD_NAME_LEN`] bytes of UTF-8
         /// (validated only at transcode time).
+        name: &'a [u8],
+    },
+    /// Tag `0x07`: spawned logical thread start with the spawn expression's
+    /// source span. This remains distinct from root `StartThread` so the
+    /// legacy root record retains its frozen byte shape.
+    StartThreadSpawn {
+        flags: u8,
+        thread_id: BexThreadId,
+        parent_thread_id: BexThreadId,
+        parent_call_id: BexCallId,
+        ts_ticks: u64,
+        spawn_site: Option<CallSiteSourceSpan>,
         name: &'a [u8],
     },
     /// Tag `0x04`: a logical thread ended.
@@ -192,8 +227,12 @@ impl RawRecord<'_> {
         match self {
             RawRecord::CallFunction { .. } => CALL_FUNCTION_LEN,
             RawRecord::EndFunction { .. } => END_FUNCTION_LEN,
+            RawRecord::EndFunctionAwaited { .. } => END_FUNCTION_AWAITED_LEN,
             RawRecord::StartThread { name, .. } => {
                 START_THREAD_FIXED_LEN + name.len().min(MAX_THREAD_NAME_LEN)
+            }
+            RawRecord::StartThreadSpawn { name, .. } => {
+                START_THREAD_SPAWN_FIXED_LEN + name.len().min(MAX_THREAD_NAME_LEN)
             }
             RawRecord::EndThread { .. } => END_THREAD_LEN,
             RawRecord::SetFunctionId { .. } => SET_FUNCTION_ID_LEN,
@@ -266,6 +305,22 @@ impl RawRecord<'_> {
                 w.u64(call_id.0);
                 w.u64(ts_ticks);
             }
+            RawRecord::EndFunctionAwaited {
+                status,
+                thread_id,
+                call_id,
+                ts_ticks,
+                await_ns,
+                await_count,
+            } => {
+                w.u8(TAG_END_FUNCTION_AWAITED);
+                w.u8(status as u8);
+                w.u64(thread_id.0);
+                w.u64(call_id.0);
+                w.u64(ts_ticks);
+                w.u64(await_ns);
+                w.u32(await_count);
+            }
             RawRecord::StartThread {
                 flags,
                 thread_id,
@@ -281,11 +336,37 @@ impl RawRecord<'_> {
                 w.u64(parent_thread_id.0);
                 w.u64(parent_call_id.0);
                 w.u64(ts_ticks);
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "name.len() <= MAX_THREAD_NAME_LEN = 256"
-                )]
-                w.u16(name.len() as u16);
+                w.u16(u16::try_from(name.len()).expect("thread name is capped at 256 bytes"));
+                w.bytes(name);
+            }
+            RawRecord::StartThreadSpawn {
+                flags,
+                thread_id,
+                parent_thread_id,
+                parent_call_id,
+                ts_ticks,
+                spawn_site,
+                name,
+            } => {
+                let name = &name[..name.len().min(MAX_THREAD_NAME_LEN)];
+                w.u8(TAG_START_THREAD_SPAWN);
+                w.u8(flags);
+                w.u64(thread_id.0);
+                w.u64(parent_thread_id.0);
+                w.u64(parent_call_id.0);
+                w.u64(ts_ticks);
+                if let Some(spawn_site) = spawn_site {
+                    w.u32(spawn_site.file_id);
+                    w.u32(spawn_site.start_offset);
+                    w.u32(spawn_site.end_offset);
+                    w.u32(spawn_site.line);
+                } else {
+                    w.u32(CALL_SITE_FILE_ID_NONE);
+                    w.u32(0);
+                    w.u32(0);
+                    w.u32(0);
+                }
+                w.u16(u16::try_from(name.len()).expect("thread name is capped at 256 bytes"));
                 w.bytes(name);
             }
             RawRecord::EndThread {
@@ -362,6 +443,20 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
             call_id: BexCallId(r.u64()?),
             ts_ticks: r.u64()?,
         },
+        TAG_END_FUNCTION_AWAITED => RawRecord::EndFunctionAwaited {
+            status: match r.u8()? {
+                0 => FunctionEndStatus::Ok,
+                1 => FunctionEndStatus::Errored,
+                2 => FunctionEndStatus::Cancelled,
+                3 => FunctionEndStatus::Exited,
+                bad => return Err(DecodeError::InvalidStatus(bad)),
+            },
+            thread_id: BexThreadId(r.u64()?),
+            call_id: BexCallId(r.u64()?),
+            ts_ticks: r.u64()?,
+            await_ns: r.u64()?,
+            await_count: r.u32()?,
+        },
         TAG_START_THREAD => {
             let flags = r.u8()?;
             let thread_id = BexThreadId(r.u64()?);
@@ -378,6 +473,36 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
                 parent_thread_id,
                 parent_call_id,
                 ts_ticks,
+                name: r.bytes(usize::from(name_len))?,
+            }
+        }
+        TAG_START_THREAD_SPAWN => {
+            let flags = r.u8()?;
+            let thread_id = BexThreadId(r.u64()?);
+            let parent_thread_id = BexThreadId(r.u64()?);
+            let parent_call_id = BexCallId(r.u64()?);
+            let ts_ticks = r.u64()?;
+            let file_id = r.u32()?;
+            let start_offset = r.u32()?;
+            let end_offset = r.u32()?;
+            let line = r.u32()?;
+            let spawn_site = (file_id != CALL_SITE_FILE_ID_NONE).then_some(CallSiteSourceSpan {
+                file_id,
+                start_offset,
+                end_offset,
+                line,
+            });
+            let name_len = r.u16()?;
+            if usize::from(name_len) > MAX_THREAD_NAME_LEN {
+                return Err(DecodeError::NameTooLong(name_len));
+            }
+            RawRecord::StartThreadSpawn {
+                flags,
+                thread_id,
+                parent_thread_id,
+                parent_call_id,
+                ts_ticks,
+                spawn_site,
                 name: r.bytes(usize::from(name_len))?,
             }
         }
@@ -590,6 +715,14 @@ mod tests {
                 call_id: BexCallId(v),
                 ts_ticks: v,
             });
+            roundtrip(RawRecord::EndFunctionAwaited {
+                status: FunctionEndStatus::Ok,
+                thread_id: BexThreadId(v),
+                call_id: BexCallId(v),
+                ts_ticks: v,
+                await_ns: v.wrapping_mul(3),
+                await_count: v as u32,
+            });
             roundtrip(RawRecord::EndThread {
                 status: ThreadEndStatus::Cancelled,
                 thread_id: BexThreadId(v),
@@ -652,6 +785,20 @@ mod tests {
                 ts_ticks: 4,
                 name: &name,
             });
+            roundtrip(RawRecord::StartThreadSpawn {
+                flags: 1,
+                thread_id: BexThreadId(3),
+                parent_thread_id: BexThreadId(2),
+                parent_call_id: BexCallId(4),
+                ts_ticks: 5,
+                spawn_site: Some(CallSiteSourceSpan {
+                    file_id: 6,
+                    start_offset: 7,
+                    end_offset: 8,
+                    line: 9,
+                }),
+                name: &name,
+            });
         }
     }
 
@@ -696,6 +843,15 @@ mod tests {
             ts_ticks: 0,
         };
         assert_eq!(end.encode(&mut buf), 26);
+        let awaited_end = RawRecord::EndFunctionAwaited {
+            status: FunctionEndStatus::Ok,
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(1),
+            ts_ticks: 0,
+            await_ns: 7,
+            await_count: 2,
+        };
+        assert_eq!(awaited_end.encode(&mut buf), 38);
         let start_thread = RawRecord::StartThread {
             flags: 0,
             thread_id: BexThreadId(1),
@@ -705,6 +861,16 @@ mod tests {
             name: b"",
         };
         assert_eq!(start_thread.encode(&mut buf), 36);
+        let spawned_thread = RawRecord::StartThreadSpawn {
+            flags: 0,
+            thread_id: BexThreadId(2),
+            parent_thread_id: BexThreadId(1),
+            parent_call_id: BexCallId(1),
+            ts_ticks: 0,
+            spawn_site: None,
+            name: b"",
+        };
+        assert_eq!(spawned_thread.encode(&mut buf), 52);
         let end_thread = RawRecord::EndThread {
             status: ThreadEndStatus::Completed,
             thread_id: BexThreadId(1),
@@ -723,7 +889,7 @@ mod tests {
     #[test]
     fn decode_rejects_unknown_tag_and_bad_status() {
         assert_eq!(decode(&[0x00]), Err(DecodeError::UnknownTag(0x00)));
-        assert_eq!(decode(&[0x06]), Err(DecodeError::UnknownTag(0x06)));
+        assert_eq!(decode(&[0x08]), Err(DecodeError::UnknownTag(0x08)));
         assert_eq!(decode(&[]), Err(DecodeError::Truncated));
 
         let mut buf = [0u8; MAX_RECORD_LEN];
@@ -736,6 +902,57 @@ mod tests {
         .encode(&mut buf);
         buf[1] = 4; // first byte past the status range {Ok,Errored,Cancelled,Exited}
         assert_eq!(decode(&buf[..len]), Err(DecodeError::InvalidStatus(4)));
+    }
+
+    #[test]
+    fn awaited_end_golden_bytes_are_stable() {
+        let mut buf = [0u8; MAX_RECORD_LEN];
+        let len = RawRecord::EndFunctionAwaited {
+            status: FunctionEndStatus::Cancelled,
+            thread_id: BexThreadId(0x0102_0304_0506_0708),
+            call_id: BexCallId(0x1112_1314_1516_1718),
+            ts_ticks: 0x2122_2324_2526_2728,
+            await_ns: 0x3132_3334_3536_3738,
+            await_count: 0x4142_4344,
+        }
+        .encode(&mut buf);
+        assert_eq!(
+            &buf[..len],
+            &[
+                0x06, 0x02, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x18, 0x17, 0x16, 0x15,
+                0x14, 0x13, 0x12, 0x11, 0x28, 0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21, 0x38, 0x37,
+                0x36, 0x35, 0x34, 0x33, 0x32, 0x31, 0x44, 0x43, 0x42, 0x41,
+            ]
+        );
+    }
+
+    #[test]
+    fn spawned_thread_golden_bytes_are_stable() {
+        let mut buf = [0u8; MAX_RECORD_LEN];
+        let len = RawRecord::StartThreadSpawn {
+            flags: 0xAB,
+            thread_id: BexThreadId(0x0102_0304_0506_0708),
+            parent_thread_id: BexThreadId(0x1112_1314_1516_1718),
+            parent_call_id: BexCallId(0x2122_2324_2526_2728),
+            ts_ticks: 0x3132_3334_3536_3738,
+            spawn_site: Some(CallSiteSourceSpan {
+                file_id: 0x4142_4344,
+                start_offset: 0x5152_5354,
+                end_offset: 0x6162_6364,
+                line: 0x7172_7374,
+            }),
+            name: b"ok",
+        }
+        .encode(&mut buf);
+        assert_eq!(
+            &buf[..len],
+            &[
+                0x07, 0xAB, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x18, 0x17, 0x16, 0x15,
+                0x14, 0x13, 0x12, 0x11, 0x28, 0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21, 0x38, 0x37,
+                0x36, 0x35, 0x34, 0x33, 0x32, 0x31, 0x44, 0x43, 0x42, 0x41, 0x54, 0x53, 0x52, 0x51,
+                0x64, 0x63, 0x62, 0x61, 0x74, 0x73, 0x72, 0x71, 0x02, 0x00, b'o', b'k',
+            ]
+        );
     }
 
     #[test]
@@ -782,11 +999,33 @@ mod tests {
                 ts_ticks: 4,
                 name: &name,
             },
+            RawRecord::StartThreadSpawn {
+                flags: 0,
+                thread_id: BexThreadId(1),
+                parent_thread_id: BexThreadId(2),
+                parent_call_id: BexCallId(3),
+                ts_ticks: 4,
+                spawn_site: Some(CallSiteSourceSpan {
+                    file_id: 5,
+                    start_offset: 6,
+                    end_offset: 7,
+                    line: 8,
+                }),
+                name: &name,
+            },
             RawRecord::SetFunctionId {
                 thread_id: BexThreadId(1),
                 call_id: BexCallId(2),
                 id: [3; 16],
                 ts_ticks: 4,
+            },
+            RawRecord::EndFunctionAwaited {
+                status: FunctionEndStatus::Errored,
+                thread_id: BexThreadId(1),
+                call_id: BexCallId(2),
+                ts_ticks: 4,
+                await_ns: 5,
+                await_count: 6,
             },
         ];
         for rec in records {

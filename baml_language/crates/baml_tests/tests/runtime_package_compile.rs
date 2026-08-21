@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use baml_tests::baml_test;
 use bex_engine::{
-    BexEngine, BexExternalValue, CaptureDefaults, EngineError, FunctionCallContextBuilder,
-    value_capture::{TraceCaptureConfig, TraceCaptureProducer, TraceLogDrainReport},
+    BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder,
+    logger::{TraceLogDrainReport, TraceLogger},
 };
 use sys_native::SysOpsExt;
 
@@ -313,17 +313,13 @@ async fn run_main_with_logs(
         )
         .expect("runtime-package test engine"),
     );
-    let logs = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(16));
+    let logs = TraceLogger::bounded(16);
     let result = engine
         .call_function(
             "user.main",
             Vec::new(),
             FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_capture_defaults(CaptureDefaults {
-                    values_enabled: false,
-                    logs_enabled: true,
-                })
-                .with_value_capture(logs.clone())
+                .with_logger(logs.clone())
                 .build(),
             true,
         )

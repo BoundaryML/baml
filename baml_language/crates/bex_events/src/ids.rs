@@ -123,9 +123,8 @@ pub struct BoundaryId([u8; 16]);
 
 /// The value of `$id`: either the call's default [`CallRef`], or the active
 /// execution [`BoundaryId`] / explicit child boundary (`baml_id_1_…`). A
-/// boundary override applies to exactly one call — absence of a
-/// `SetFunctionId` record for a call in the `.bamlprof` stream means its
-/// `$id` is the [`CallRef`].
+/// boundary override applies to exactly one call; without a runtime-ID
+/// annotation, `$id` is the [`CallRef`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RuntimeId {
     DefaultCall(CallRef),

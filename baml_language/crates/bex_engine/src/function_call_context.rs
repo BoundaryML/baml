@@ -1,13 +1,12 @@
-use bex_events::ids::BoundaryId;
+use bex_events::{ids::BoundaryId, prof::backend::RootProfileIntent};
 use indexmap::IndexMap;
 use sys_types::{CallId, CancellationToken};
 
-use crate::value_capture::TraceCaptureProducer;
+use crate::logger::TraceLogger;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoundaryContext {
     pub boundary_id: BoundaryId,
-    pub capture_defaults: CaptureDefaults,
     pub storage_context: BoundaryStorageContext,
 }
 
@@ -16,24 +15,7 @@ impl BoundaryContext {
     pub fn new(boundary_id: BoundaryId) -> Self {
         Self {
             boundary_id,
-            capture_defaults: CaptureDefaults::disabled(),
             storage_context: BoundaryStorageContext::default(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct CaptureDefaults {
-    pub values_enabled: bool,
-    pub logs_enabled: bool,
-}
-
-impl CaptureDefaults {
-    #[must_use]
-    pub fn disabled() -> Self {
-        Self {
-            values_enabled: false,
-            logs_enabled: false,
         }
     }
 }
@@ -49,9 +31,9 @@ pub struct BoundaryStorageContext {
 pub struct FunctionCallContext {
     pub host_call_id: CallId,
     pub boundary: BoundaryContext,
-    pub value_capture: TraceCaptureProducer,
+    pub logger: TraceLogger,
     pub cancel: CancellationToken,
-    pub profile_enabled: bool,
+    pub profile_intent: RootProfileIntent,
     /// Named `TypeVar` bindings for a generic call. Each entry is
     /// `TypeVar name -> concrete type`; insertion order is the callee's De
     /// Bruijn order. Sourced from a host SDK call (`CallFunctionArgs.type_args`)
@@ -70,21 +52,24 @@ pub struct FunctionCallContext {
 pub struct FunctionCallContextBuilder {
     host_call_id: CallId,
     boundary: BoundaryContext,
-    value_capture: TraceCaptureProducer,
+    logger: TraceLogger,
     cancel: Option<CancellationToken>,
-    profile_enabled: bool,
+    profile_intent: RootProfileIntent,
     type_args: Option<IndexMap<String, baml_type::RuntimeTy>>,
     type_defs: Option<IndexMap<String, bex_vm_types::types::PortableTypeDef>>,
 }
 
 impl FunctionCallContextBuilder {
     pub fn new(host_call_id: CallId) -> Self {
+        let boundary = BoundaryContext::new(BoundaryId::new_random());
         Self {
             host_call_id,
-            boundary: BoundaryContext::new(BoundaryId::new_random()),
-            value_capture: TraceCaptureProducer::disabled(),
+            profile_intent: RootProfileIntent::UserBoundary {
+                boundary_id: boundary.boundary_id,
+            },
+            boundary,
+            logger: TraceLogger::disabled(),
             cancel: None,
-            profile_enabled: true,
             type_args: None,
             type_defs: None,
         }
@@ -95,9 +80,9 @@ impl FunctionCallContextBuilder {
         FunctionCallContext {
             host_call_id: self.host_call_id,
             boundary: self.boundary,
-            value_capture: self.value_capture,
+            logger: self.logger,
             cancel: self.cancel.unwrap_or_default(),
-            profile_enabled: self.profile_enabled,
+            profile_intent: self.profile_intent,
             type_args: self.type_args.unwrap_or_default(),
             type_defs: self.type_defs.unwrap_or_default(),
         }
@@ -106,18 +91,15 @@ impl FunctionCallContextBuilder {
     #[must_use]
     pub fn with_boundary_id(mut self, boundary_id: BoundaryId) -> Self {
         self.boundary.boundary_id = boundary_id;
+        if matches!(self.profile_intent, RootProfileIntent::UserBoundary { .. }) {
+            self.profile_intent = RootProfileIntent::UserBoundary { boundary_id };
+        }
         self
     }
 
     #[must_use]
-    pub fn with_capture_defaults(mut self, capture_defaults: CaptureDefaults) -> Self {
-        self.boundary.capture_defaults = capture_defaults;
-        self
-    }
-
-    #[must_use]
-    pub fn with_value_capture(mut self, value_capture: TraceCaptureProducer) -> Self {
-        self.value_capture = value_capture;
+    pub fn with_logger(mut self, logger: TraceLogger) -> Self {
+        self.logger = logger;
         self
     }
 
@@ -146,8 +128,8 @@ impl FunctionCallContextBuilder {
     }
 
     #[must_use]
-    pub fn with_profile_enabled(mut self, enabled: bool) -> Self {
-        self.profile_enabled = enabled;
+    pub fn suppress_internal_profile(mut self) -> Self {
+        self.profile_intent = RootProfileIntent::SuppressInternal;
         self
     }
 }
