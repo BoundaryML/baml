@@ -16,7 +16,7 @@ mod platform;
 
 use std::{
     collections::HashMap,
-    sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError, Weak},
+    sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError},
 };
 
 use bex_project::Bex;
@@ -91,14 +91,14 @@ fn source_vfs_root() -> vfs::VfsPath {
 }
 
 struct ActiveCallRoute {
-    runtime: Weak<dyn Bex>,
+    cancel: bex_project::CancellationToken,
 }
 
-static ACTIVE_CALL_RUNTIMES: LazyLock<Mutex<HashMap<u64, Arc<ActiveCallRoute>>>> =
+static ACTIVE_CALL_ROUTES: LazyLock<Mutex<HashMap<u64, Arc<ActiveCallRoute>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn active_call_runtimes() -> MutexGuard<'static, HashMap<u64, Arc<ActiveCallRoute>>> {
-    ACTIVE_CALL_RUNTIMES
+fn active_call_routes() -> MutexGuard<'static, HashMap<u64, Arc<ActiveCallRoute>>> {
+    ACTIVE_CALL_ROUTES
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
 }
@@ -110,7 +110,7 @@ pub(crate) struct ActiveCallRouteGuard {
 
 impl Drop for ActiveCallRouteGuard {
     fn drop(&mut self) {
-        let mut routes = active_call_runtimes();
+        let mut routes = active_call_routes();
         if routes
             .get(&self.call_id)
             .is_some_and(|current| Arc::ptr_eq(current, &self.route))
@@ -120,15 +120,21 @@ impl Drop for ActiveCallRouteGuard {
     }
 }
 
-pub(crate) fn register_active_call_runtime(
+pub(crate) fn register_active_call_route(
     call_id: u64,
-    runtime: &Arc<dyn Bex>,
-) -> ActiveCallRouteGuard {
-    let route = Arc::new(ActiveCallRoute {
-        runtime: Arc::downgrade(runtime),
-    });
-    active_call_runtimes().insert(call_id, Arc::clone(&route));
-    ActiveCallRouteGuard { call_id, route }
+    cancel: bex_project::CancellationToken,
+) -> Result<ActiveCallRouteGuard, BridgeError> {
+    if call_id == 0 {
+        return Err(BridgeError::InvalidCallId);
+    }
+    let route = Arc::new(ActiveCallRoute { cancel });
+    let mut routes = active_call_routes();
+    if routes.contains_key(&call_id) {
+        return Err(BridgeError::DuplicateCallId(call_id));
+    }
+    routes.insert(call_id, Arc::clone(&route));
+    drop(routes);
+    Ok(ActiveCallRouteGuard { call_id, route })
 }
 
 pub mod baml_to_host;
@@ -400,17 +406,22 @@ pub fn function_call_context_builder(
 
 /// Cancel an in-flight function call by ID.
 ///
-/// Returns true on success, false if the runtime is not initialized.
+/// Returns true on success, false if no route or initialized runtime exists.
 pub fn cancel_function_call_by_id(id: u64) -> bool {
     if id == 0 {
         return false;
     }
-    let originating_runtime = active_call_runtimes()
+    // Routed calls own their token until result delivery finishes. Cancelling
+    // it directly is safe both before engine registration and after engine
+    // completion; the latter must not create an unconsumed pre-cancel entry.
+    if let Some(cancel) = active_call_routes()
         .get(&id)
-        .and_then(|route| route.runtime.upgrade());
-    originating_runtime
-        .map(Ok)
-        .unwrap_or_else(get_runtime)
+        .map(|route| route.cancel.clone())
+    {
+        cancel.cancel();
+        return true;
+    }
+    get_runtime()
         .and_then(|runtime| {
             runtime
                 .cancel_function_call(bex_project::CallId(id))
@@ -431,6 +442,59 @@ pub extern "C" fn new_function_call() -> u64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn cancel_function_call(id: u64) -> i32 {
     if cancel_function_call_by_id(id) { 0 } else { 1 }
+}
+
+#[cfg(test)]
+mod cancellation_route_tests {
+    use super::*;
+
+    #[test]
+    fn registered_route_cancels_its_token_without_reserving_an_engine_call() {
+        let call_id = new_function_call_id();
+        let cancel = bex_project::CancellationToken::new();
+        let route = register_active_call_route(call_id, cancel.clone()).unwrap();
+
+        assert!(cancel_function_call_by_id(call_id));
+        assert!(cancel.is_cancelled());
+        assert!(active_call_routes().contains_key(&call_id));
+
+        drop(route);
+        assert!(!active_call_routes().contains_key(&call_id));
+    }
+
+    #[test]
+    fn duplicate_route_is_rejected_without_replacing_the_original() {
+        let call_id = new_function_call_id();
+        let first_cancel = bex_project::CancellationToken::new();
+        let second_cancel = bex_project::CancellationToken::new();
+        let first_route = register_active_call_route(call_id, first_cancel.clone()).unwrap();
+
+        let error = match register_active_call_route(call_id, second_cancel.clone()) {
+            Ok(_) => panic!("duplicate route unexpectedly replaced the original"),
+            Err(error) => error,
+        };
+        assert!(matches!(error, BridgeError::DuplicateCallId(id) if id == call_id));
+
+        assert!(cancel_function_call_by_id(call_id));
+        assert!(first_cancel.is_cancelled());
+        assert!(!second_cancel.is_cancelled());
+        drop(first_route);
+    }
+
+    #[test]
+    fn zero_route_is_rejected_without_registration() {
+        let cancel = bex_project::CancellationToken::new();
+
+        let error = match register_active_call_route(0, cancel.clone()) {
+            Ok(_) => panic!("zero route unexpectedly registered"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(error, BridgeError::InvalidCallId));
+        assert!(!active_call_routes().contains_key(&0));
+        assert!(!cancel.is_cancelled());
+        assert!(!cancel_function_call_by_id(0));
+    }
 }
 
 #[cfg(test)]

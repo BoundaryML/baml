@@ -8,3 +8,5 @@ BAML's typed `throws` contracts as `Result<T, baml_bridge::Error<E>>`.
 You normally don't add this crate by hand — the generated `baml_sdk` crate
 pins the matching version. See the BAML documentation for getting started:
 <https://docs.boundaryml.com>.
+
+Async calls are cancellation-safe: dropping a generated `_async` future (for example, when `tokio::time::timeout` expires) cancels the corresponding engine call instead of leaving it running detached. Completed result envelopes are limited to 32 MiB at the bridge boundary.
