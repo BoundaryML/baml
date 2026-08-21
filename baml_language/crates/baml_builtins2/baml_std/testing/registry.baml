@@ -221,7 +221,8 @@ class TestRegistry {
     function run_testset(self, name: string) -> TestSetReport {
         for (let ts in self.collector.testsets) {
             if (ts.name == name) {
-                return root.run_testset(root.testset_children(self.expand_testset_registry(ts)), ts.runner);
+                let pool = root.test_pool(0);
+                return root.run_testset(root.testset_children(self.expand_testset_registry(ts), pool), ts.runner, pool);
             }
         }
         for (let k in self.expansions.keys()) {
@@ -234,11 +235,19 @@ class TestRegistry {
     }
 
     function run_all(self) -> TestSetReport {
-        root.run_testset(root.testset_children(self), null)
+        self.run_all_pooled(root.test_pool(0))
+    }
+
+    function run_all_pooled(self, pool: TestPool) -> TestSetReport {
+        root.run_testset(root.testset_children(self, pool), null, pool)
     }
 
     function run_selected(self, names: string[]) -> TestSetReport {
-        root.run_testset(root.testset_children_selected(self, names), null)
+        self.run_selected_pooled(names, root.test_pool(0))
+    }
+
+    function run_selected_pooled(self, names: string[], pool: TestPool) -> TestSetReport {
+        root.run_testset(root.testset_children_selected(self, names, pool), null, pool)
     }
 
     // CLI entry point: glob-filter in BAML, run (honoring testset runners), and
@@ -252,20 +261,22 @@ class TestRegistry {
         profile_exclude: string[],
         cli_include: string[],
         cli_exclude: string[],
+        max_concurrency: int,
     ) -> FlatTestReport {
         // Always discover the selected leaf IDs first. Besides supplying canonical
         // console identities, this makes structural registration errors actionable
         // even when the unfiltered execution path preserves run_all semantics.
         let selected_names = root.select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude);
+        let pool = root.test_pool(max_concurrency);
         let report = if (
             profile_include.length() == 0
                 && profile_exclude.length() == 0
                 && cli_include.length() == 0
                 && cli_exclude.length() == 0
         ) {
-            self.run_all()
+            self.run_all_pooled(pool)
         } else {
-            self.run_selected(selected_names)
+            self.run_selected_pooled(selected_names, pool)
         };
         root.flatten_with_tolerated(report, selected_names)
     }
@@ -325,18 +336,18 @@ class TestRegistry {
     }
 }
 
-function testset_children(registry: TestRegistry) -> TestSetChild[] {
+function testset_children(registry: TestRegistry, pool: TestPool) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
         children.push(root.test_child(t.name, t.body, t.runner))
     }
     for (let ts in registry.collector.testsets) {
-        children.push(root.testset_child(registry, ts))
+        children.push(root.testset_child(registry, ts, pool))
     }
     children
 }
 
-function testset_children_selected(registry: TestRegistry, names: string[]) -> TestSetChild[] {
+function testset_children_selected(registry: TestRegistry, names: string[], pool: TestPool) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
         if (root._name_selected(t.name, names)) {
@@ -352,7 +363,7 @@ function testset_children_selected(registry: TestRegistry, names: string[]) -> T
         // was selected (tests and testsets dedupe in separate collections, so the
         // names can collide). Honoring that would wrongly run the whole testset.
         if (root._has_selected_descendant(ts.name, names)) {
-            children.push(root.testset_child_selected(registry, ts, names))
+            children.push(root.testset_child_selected(registry, ts, names, pool))
         } else {
             null
         }
@@ -366,14 +377,16 @@ function test_child(name: string, body: TestBody, runner: TestRunner?) -> TestSe
         run: () -> ChildReport {
             root.run_test(body, runner)
         },
+        is_container: false,
     }
 }
 
-function testset_child(registry: TestRegistry, ts: TestSetRegistration) -> TestSetChild {
+function testset_child(registry: TestRegistry, ts: TestSetRegistration, pool: TestPool) -> TestSetChild {
     TestSetChild {
         name: ts.name,
+        is_container: true,
         run: () -> ChildReport {
-            root.run_testset(root.testset_children(registry.expand_testset_registry(ts)), ts.runner) catch_all (e) {
+            root.run_testset(root.testset_children(registry.expand_testset_registry(ts), pool), ts.runner, pool) catch_all (e) {
                 baml.panics.Panic => root.expansion_error_report(ts.name),
                 _ => root.expansion_error_report(ts.name),
             }
@@ -385,13 +398,16 @@ function testset_child_selected(
     registry: TestRegistry,
     ts: TestSetRegistration,
     names: string[],
+    pool: TestPool,
 ) -> TestSetChild {
     TestSetChild {
         name: ts.name,
+        is_container: true,
         run: () -> ChildReport {
             root.run_testset(
-                root.testset_children_selected(registry.expand_testset_registry(ts), names),
+                root.testset_children_selected(registry.expand_testset_registry(ts), names, pool),
                 ts.runner,
+                pool,
             ) catch_all (e) {
                 baml.panics.Panic => root.expansion_error_report(ts.name),
                 _ => root.expansion_error_report(ts.name),
@@ -480,10 +496,69 @@ function aggregate_reports(named_results: NamedChildReport[]) -> TestSetReport {
     }
 }
 
-function run_children_parallel(children: TestSetChild[]) -> TestSetReport throws never {
+// Global gate on concurrently RUNNING leaf test bodies. A leaf acquires a
+// slot BEFORE its body is spawned, so a gated test costs nothing — no VM
+// thread, no watchdog timer — until a slot frees. One pool is shared by the
+// whole run (threaded down through every nested testset), so the limit is a
+// run-wide invariant rather than a per-testset one.
+class TestPool {
+    // Token bucket. `pop` and `push` are single locked array operations, so
+    // concurrent dispatchers race safely; an empty `pop` means "no slot free".
+    tokens: int[],
+
+    function acquire(self) -> null throws never {
+        while (true) {
+            if let _slot: int = self.tokens.pop() {
+                return null;
+            }
+            // Saturated: park briefly rather than spin. Only starved
+            // dispatchers poll, and there is at most one dispatcher per
+            // currently-expanding testset, so the wakeup load is bounded by
+            // testset nesting, not by test count.
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10)) catch (e) { _ => null };
+        }
+    }
+
+    function release(self) -> null throws never {
+        self.tokens.push(1);
+        null
+    }
+}
+
+// A pool admitting `max_concurrency` leaves at once. Zero or negative means
+// "no explicit budget": fall back to a bound that keeps a pathological
+// fan-out from creating thousands of live VM threads while staying above any
+// real machine's core count (the CLI always passes an explicit budget).
+function test_pool(max_concurrency: int) -> TestPool {
+    let limit = if (max_concurrency > 0) { max_concurrency } else { 64 };
+    let tokens: int[] = [];
+    let i = 0;
+    while (i < limit) {
+        tokens.push(1);
+        i = i + 1;
+    }
+    TestPool { tokens: tokens }
+}
+
+function run_children_parallel(children: TestSetChild[], pool: TestPool) -> TestSetReport throws never {
     let futures: baml.future.Future<NamedChildReport, never>[] = [];
     for (let child in children) {
-        futures.push(spawn { NamedChildReport { name: child.name, report: child.run() } })
+        if (child.is_container) {
+            // Containers only spawn and await; admitting them freely cannot
+            // oversubscribe the machine, and gating them could deadlock the
+            // slots their own leaves need.
+            futures.push(spawn { NamedChildReport { name: child.name, report: child.run() } })
+        } else {
+            // Acquire on the dispatcher, before the spawn exists: the whole
+            // point is that an inadmissible leaf has no thread yet.
+            pool.acquire();
+            futures.push(spawn {
+                let named = NamedChildReport { name: child.name, report: child.run() };
+                // `run` is total (`throws never`), so the slot always returns.
+                pool.release();
+                named
+            })
+        }
     }
     // No catch: the children's bodies cannot throw, so the futures are
     // `Future<NamedChildReport, never>` and awaiting them is infallible.
@@ -560,9 +635,13 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
 }
 
 // Run all children of a testset with optional runner middleware.
-function run_testset(children: TestSetChild[], runner: TestSetRunner?) -> TestSetReport {
+//
+// A custom `TestSetRunner` receives the children as a plain closure and runs
+// them however it likes, outside the pool's budget — the built-in runners are
+// sequential (inherently capped) or take a local fallback pool (`PassRate`).
+function run_testset(children: TestSetChild[], runner: TestSetRunner?, pool: TestPool) -> TestSetReport {
     match (runner) {
-        null => root.run_children_parallel(children),
+        null => root.run_children_parallel(children, pool),
         let r: TestSetRunner => r(children),
     }
 }
