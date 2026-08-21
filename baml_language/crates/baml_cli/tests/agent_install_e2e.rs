@@ -1,7 +1,7 @@
 use std::{fs, process::Command};
 
 const MAIN_GUIDE: &str = include_str!("../../../../skill/guides/main.md");
-const SKILL_STUB: &str = include_str!("../../../../skill/stub.md");
+const BOOTSTRAP: &str = include_str!("../../../../skill/bootstrap.md");
 
 fn baml_command() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_baml-cli"));
@@ -25,6 +25,13 @@ fn guide_defaults_to_main() {
         .unwrap();
     assert!(explicit.status.success());
     assert_eq!(explicit.stdout, default.stdout);
+
+    let versioned = baml_command()
+        .args(["agent", "guide", "--bootstrap-version", "1"])
+        .output()
+        .unwrap();
+    assert!(versioned.status.success());
+    assert_eq!(versioned.stdout, default.stdout);
 }
 
 #[test]
@@ -40,7 +47,31 @@ fn guide_rejects_unknown_names() {
 }
 
 #[test]
-fn install_copies_the_embedded_stub_without_network_state() {
+fn guide_warns_about_bootstrap_version_mismatches_without_withholding_the_guide() {
+    let outdated = baml_command()
+        .args(["agent", "guide", "--bootstrap-version", "0"])
+        .output()
+        .unwrap();
+    assert!(outdated.status.success());
+    let stdout = String::from_utf8(outdated.stdout).unwrap();
+    assert!(stdout.contains("bootstrap skill is outdated"), "{stdout}");
+    assert!(stdout.ends_with(MAIN_GUIDE), "{stdout}");
+
+    let newer = baml_command()
+        .args(["agent", "guide", "--bootstrap-version", "2"])
+        .output()
+        .unwrap();
+    assert!(newer.status.success());
+    let stdout = String::from_utf8(newer.stdout).unwrap();
+    assert!(
+        stdout.contains("newer than the active BAML toolchain"),
+        "{stdout}"
+    );
+    assert!(stdout.ends_with(MAIN_GUIDE), "{stdout}");
+}
+
+#[test]
+fn install_copies_the_embedded_bootstrap_without_network_state() {
     let home = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
 
@@ -58,10 +89,35 @@ fn install_copies_the_embedded_stub_without_network_state() {
 
     for skills_dir in [".agents/skills", ".claude/skills"] {
         let installed = project.path().join(skills_dir).join("baml/SKILL.md");
-        assert_eq!(fs::read_to_string(installed).unwrap(), SKILL_STUB);
+        assert_eq!(fs::read_to_string(installed).unwrap(), BOOTSTRAP);
     }
     assert!(!home.path().join("state.toml").exists());
     assert!(!home.path().join("manifest-cache/skills").exists());
+}
+
+#[test]
+fn install_detects_the_baml_project_from_the_current_directory() {
+    let project = tempfile::tempdir().unwrap();
+    fs::write(
+        project.path().join("baml.toml"),
+        "[package]\nname = \"test\"\n",
+    )
+    .unwrap();
+
+    let output = baml_command()
+        .args(["agent", "install"])
+        .current_dir(project.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "agent install failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(project.path().join(".agents/skills/baml/SKILL.md")).unwrap(),
+        BOOTSTRAP
+    );
 }
 
 #[test]
@@ -91,7 +147,7 @@ fn install_migrates_baml_core_and_is_idempotent() {
         assert!(!root.join("baml-core").exists());
         assert_eq!(
             fs::read_to_string(root.join("baml/SKILL.md")).unwrap(),
-            SKILL_STUB
+            BOOTSTRAP
         );
         assert_eq!(
             fs::read_to_string(root.join("baml-old_skills/baml-core/SKILL.md")).unwrap(),

@@ -52,8 +52,7 @@ impl Default for DefaultConfig {
 struct UpdateConfig {
     /// Whether normal commands may refresh the channel-manifest freshness
     /// cache over the network once per TTL window. Defaults to on; set
-    /// `[update] auto_check = false` to opt out. The same setting governs the
-    /// toolchain binary's agent-skill freshness check.
+    /// `[update] auto_check = false` to opt out.
     auto_check: Option<bool>,
 }
 
@@ -67,8 +66,8 @@ impl UpdateConfig {
 struct State {
     #[serde(default)]
     channels: BTreeMap<String, ChannelState>,
-    /// Sections owned by other writers (e.g. `[skills]`, written by
-    /// `baml agent install`), preserved verbatim across wrapper writes.
+    /// Sections owned by other writers, preserved verbatim across wrapper
+    /// writes.
     #[serde(flatten)]
     rest: BTreeMap<String, toml::Value>,
 }
@@ -431,10 +430,7 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
     }
     verify_toolchain_version_file(&version)?;
 
-    // Warnings from the existing caches print immediately (no network). The
-    // agent-skill warning is NOT printed here: it lives in the toolchain
-    // binary (which ships nightly, unlike the wrapper), so printing it here
-    // too would double it up.
+    // Warnings from the existing caches print immediately (no network).
     let channel_warned = warn_if_channel_outdated(&selector, &version);
     // A cache refresh (due at most once per TTL window) runs in the
     // background while the command itself runs, instead of stalling it.
@@ -960,8 +956,7 @@ fn warning_prefix() -> impl std::fmt::Display {
 /// An in-flight background refresh of the channel-manifest freshness cache.
 /// Started before the main command runs and joined after it finishes, so the
 /// network latency hides behind the command's own runtime instead of stalling
-/// it up front. (The agent-skill freshness cache is refreshed by the
-/// toolchain binary, which runs its own equivalent of this.)
+/// it up front.
 struct LazyRefresh {
     done: std::sync::mpsc::Receiver<()>,
     deadline: std::time::Instant,

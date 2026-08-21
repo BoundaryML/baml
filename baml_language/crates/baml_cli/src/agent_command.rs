@@ -1,8 +1,7 @@
 use std::{
     fs,
-    io::{self, Write},
+    io::{self, IsTerminal, Write},
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use anyhow::{Context, Result, anyhow};
@@ -13,8 +12,44 @@ use crate::ExitCode;
 const SKILL_NAME: &str = "baml";
 const LEGACY_SKILL_NAME: &str = "baml-core";
 const OLD_SKILLS_DIR: &str = "baml-old_skills";
-const SKILL_STUB: &str = include_str!("../../../../skill/stub.md");
+const BOOTSTRAP: BootstrapSpec = BootstrapSpec {
+    version: 1,
+    contents: include_str!("../../../../skill/bootstrap.md"),
+};
 const MAIN_GUIDE: &str = include_str!("../../../../skill/guides/main.md");
+
+#[derive(Clone, Copy, Debug)]
+struct BootstrapSpec {
+    version: u32,
+    contents: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InstallAction {
+    Created,
+    Updated,
+    Unchanged,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct TargetReport {
+    path: PathBuf,
+    action: InstallAction,
+    archived: Vec<PathBuf>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) struct InstallReport {
+    targets: Vec<TargetReport>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum VersionRelation {
+    Unknown,
+    Current,
+    BootstrapOutdated,
+    ToolchainOutdated,
+}
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct AgentArgs {
@@ -27,7 +62,7 @@ pub(crate) enum AgentCommand {
     #[command(about = "Print the agent guide bundled with this BAML toolchain")]
     Guide(AgentGuideArgs),
 
-    #[command(about = "Install or refresh the BAML agent skill in this project")]
+    #[command(about = "Install or refresh the BAML agent bootstrap in this project")]
     Install(AgentInstallArgs),
 }
 
@@ -43,15 +78,19 @@ pub(crate) struct AgentGuideArgs {
     /// Guide to print.
     #[arg(value_name = "GUIDE", default_value = "main")]
     pub guide: String,
+
+    /// Bootstrap protocol version reported by the installed skill.
+    #[arg(long, value_name = "VERSION", hide = true)]
+    pub bootstrap_version: Option<u32>,
 }
 
 #[derive(Args, Clone, Debug)]
 #[command(after_long_help = "\
 Examples:
-  Install the BAML skill:
+  Install the BAML agent bootstrap:
     baml agent install
 
-  Install the skill in a specific project:
+  Install the bootstrap in a specific project:
     baml agent install --project ./my-project")]
 pub(crate) struct AgentInstallArgs {
     /// Deprecated alias for `--project`.
@@ -74,6 +113,11 @@ impl AgentGuideArgs {
             "main" => MAIN_GUIDE,
             name => anyhow::bail!("unknown agent guide `{name}`; available guides: main"),
         };
+        if let Some(warning) =
+            bootstrap_warning(version_relation(self.bootstrap_version, BOOTSTRAP.version))
+        {
+            write_stdout(warning)?;
+        }
         write_stdout(guide)?;
         Ok(ExitCode::Success)
     }
@@ -85,9 +129,30 @@ impl AgentInstallArgs {
             Some(dir) => explicit_install_root(dir)?,
             None => detect_install_root()?,
         };
-        install_skill(&root)?;
-        write_stdout(&success_message(&root))?;
+        let report = install_bootstrap(&root)?;
+        write_stdout(&success_message(&root, &report))?;
         Ok(ExitCode::Success)
+    }
+}
+
+fn version_relation(reported: Option<u32>, expected: u32) -> VersionRelation {
+    match reported {
+        None => VersionRelation::Unknown,
+        Some(reported) if reported == expected => VersionRelation::Current,
+        Some(reported) if reported < expected => VersionRelation::BootstrapOutdated,
+        Some(_) => VersionRelation::ToolchainOutdated,
+    }
+}
+
+fn bootstrap_warning(relation: VersionRelation) -> Option<&'static str> {
+    match relation {
+        VersionRelation::BootstrapOutdated => Some(
+            "> [!WARNING]\n> This project's BAML bootstrap skill is outdated. Ask the user to run `baml agent install`. Continue using the guide below for this session.\n\n",
+        ),
+        VersionRelation::ToolchainOutdated => Some(
+            "> [!NOTE]\n> This project's BAML bootstrap skill is newer than the active BAML toolchain. The guide below still matches this toolchain.\n\n",
+        ),
+        VersionRelation::Unknown | VersionRelation::Current => None,
     }
 }
 
@@ -101,115 +166,120 @@ fn write_stdout(content: &str) -> Result<()> {
 }
 
 fn explicit_install_root(dir: &Path) -> Result<PathBuf> {
-    fs::create_dir_all(dir).with_context(|| format!("failed to create {}", dir.display()))?;
     dir.canonicalize()
         .with_context(|| format!("failed to resolve {}", dir.display()))
 }
 
 fn detect_install_root() -> Result<PathBuf> {
     let cwd = std::env::current_dir().context("failed to read current directory")?;
-    let canonical = cwd
-        .canonicalize()
-        .with_context(|| format!("failed to resolve {}", cwd.display()))?;
-    Ok(detect_install_root_in(
-        &canonical,
-        git_toplevel(&canonical).as_deref(),
-        user_home_dir().as_deref(),
-    ))
-}
-
-/// Pick the install root for project-local agent skills.
-///
-/// Inside a git repo, the nearest `baml.toml` owner, then the nearest
-/// `baml_src` owner, wins. The walk never leaves the repo. Outside a git repo,
-/// the walk stops before the user's home directory. All inputs must be
-/// canonicalized.
-fn detect_install_root_in(cwd: &Path, git_toplevel: Option<&Path>, home: Option<&Path>) -> PathBuf {
-    let git_toplevel = git_toplevel.filter(|toplevel| {
-        cwd.starts_with(toplevel) && !home.is_some_and(|home| home.starts_with(toplevel))
-    });
-    let ancestors: Vec<PathBuf> = match (git_toplevel, home) {
-        (Some(toplevel), _) => cwd
-            .ancestors()
-            .take_while(|dir| dir.starts_with(toplevel))
-            .map(Path::to_path_buf)
-            .collect(),
-        (None, Some(home)) => cwd
-            .ancestors()
-            .take_while(|dir| *dir != home)
-            .map(Path::to_path_buf)
-            .collect(),
-        (None, None) => vec![cwd.to_path_buf()],
-    };
-    baml_workspace::find_baml_project_root_from_ancestors(
-        ancestors,
-        |dir| dir.join(baml_workspace::BAML_TOML).is_file(),
-        |dir| dir.join(baml_workspace::BAML_SRC_DIR).is_dir(),
-    )
-    .unwrap_or_else(|| match git_toplevel {
-        Some(toplevel) => toplevel.to_path_buf(),
-        None => cwd.to_path_buf(),
+    baml_workspace::find_baml_project_root(&cwd).ok_or_else(|| {
+        anyhow!(
+            "could not find a BAML project from {}; run `baml init` or pass `--project <PATH>`",
+            cwd.display()
+        )
     })
 }
 
-fn git_toplevel(dir: &Path) -> Option<PathBuf> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .current_dir(dir)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
+pub(crate) fn warn_if_bootstrap_missing() {
+    if !io::stderr().is_terminal() {
+        return;
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let root = stdout.trim();
-    if root.is_empty() {
-        return None;
+    let Some(root) = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| baml_workspace::find_baml_project_root(&cwd))
+    else {
+        return;
+    };
+    if let Some(warning) = bootstrap_install_warning(&root) {
+        crate::reporter::print_warning(format_args!("{warning}"));
     }
-    PathBuf::from(root).canonicalize().ok()
 }
 
-fn user_home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-        .and_then(|home| home.canonicalize().ok())
+fn bootstrap_install_warning(root: &Path) -> Option<&'static str> {
+    if project_has_active_skill(root, LEGACY_SKILL_NAME) {
+        Some("the legacy BAML agent skill is outdated; run `baml agent install`")
+    } else if project_has_active_skill(root, SKILL_NAME) {
+        None
+    } else {
+        Some("the BAML agent bootstrap is not installed; run `baml agent install`")
+    }
 }
 
-fn install_skill(root: &Path) -> Result<()> {
-    install_skill_to(root, Path::new(".agents").join("skills"))?;
-    install_skill_to(root, Path::new(".claude").join("skills"))?;
-    Ok(())
+fn project_has_active_skill(root: &Path, name: &str) -> bool {
+    [".agents/skills", ".claude/skills"]
+        .into_iter()
+        .map(|skills_dir| root.join(skills_dir).join(name).join("SKILL.md"))
+        .any(|path| path.is_file())
 }
 
-fn install_skill_to(root: &Path, relative_skills_dir: PathBuf) -> Result<()> {
+pub(crate) fn install_bootstrap(root: &Path) -> Result<InstallReport> {
+    let mut targets = Vec::with_capacity(2);
+    for relative_skills_dir in [
+        Path::new(".agents").join("skills"),
+        Path::new(".claude").join("skills"),
+    ] {
+        targets.push(install_bootstrap_to(root, relative_skills_dir, &BOOTSTRAP)?);
+    }
+    Ok(InstallReport { targets })
+}
+
+fn install_bootstrap_to(
+    root: &Path,
+    relative_skills_dir: PathBuf,
+    bootstrap: &BootstrapSpec,
+) -> Result<TargetReport> {
     let skills_dir = root.join(relative_skills_dir);
     fs::create_dir_all(&skills_dir)
         .with_context(|| format!("failed to create {}", skills_dir.display()))?;
 
+    let skill_dir = skills_dir.join(SKILL_NAME);
+    let skill_path = skill_dir.join("SKILL.md");
+    let action = match fs::read(&skill_path) {
+        Ok(contents) if contents == bootstrap.contents.as_bytes() => InstallAction::Unchanged,
+        Ok(_) => InstallAction::Updated,
+        Err(err) if err.kind() == io::ErrorKind::NotFound && skill_dir.exists() => {
+            InstallAction::Updated
+        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => InstallAction::Created,
+        Err(err) => {
+            return Err(err).with_context(|| format!("failed to read {}", skill_path.display()));
+        }
+    };
+
     let tmp_dir = skills_dir.join(format!(".baml-agent-install-{}", std::process::id()));
     if tmp_dir.exists() {
-        fs::remove_dir_all(&tmp_dir)
+        remove_path(&tmp_dir)
             .with_context(|| format!("failed to remove stale {}", tmp_dir.display()))?;
     }
-    let staged_skill_dir = tmp_dir.join(SKILL_NAME);
-    fs::create_dir_all(&staged_skill_dir)
-        .with_context(|| format!("failed to create {}", staged_skill_dir.display()))?;
-    write_atomic(&staged_skill_dir.join("SKILL.md"), SKILL_STUB)?;
 
-    let result = (|| -> Result<()> {
-        replace_skill_dir(&skills_dir, &tmp_dir, SKILL_NAME)?;
-        archive_existing_skill(&skills_dir, LEGACY_SKILL_NAME)?;
-        Ok(())
+    let result = (|| -> Result<TargetReport> {
+        let mut archived = Vec::new();
+        if action != InstallAction::Unchanged {
+            let staged_skill_dir = tmp_dir.join(SKILL_NAME);
+            fs::create_dir_all(&staged_skill_dir)
+                .with_context(|| format!("failed to create {}", staged_skill_dir.display()))?;
+            write_atomic(&staged_skill_dir.join("SKILL.md"), bootstrap.contents)?;
+            if let Some(path) = replace_skill_dir(&skills_dir, &tmp_dir, SKILL_NAME)? {
+                archived.push(path);
+            }
+        }
+        if let Some(path) = archive_existing_skill(&skills_dir, LEGACY_SKILL_NAME)? {
+            archived.push(path);
+        }
+        Ok(TargetReport {
+            path: skill_path,
+            action,
+            archived,
+        })
     })();
 
-    let cleanup = fs::remove_dir_all(&tmp_dir);
+    let cleanup = remove_path(&tmp_dir);
     match (result, cleanup) {
         (Err(err), _) => Err(err),
-        (Ok(()), Err(err)) if err.kind() != std::io::ErrorKind::NotFound => {
+        (Ok(_), Err(err)) if err.kind() != std::io::ErrorKind::NotFound => {
             Err(err).context("failed to clean up temporary BAML agent skill directory")
         }
-        (Ok(()), _) => Ok(()),
+        (Ok(report), _) => Ok(report),
     }
 }
 
@@ -221,7 +291,7 @@ fn archive_existing_skill(skills_dir: &Path, name: &str) -> Result<Option<PathBu
 
     let archive_dir = skills_dir.join(OLD_SKILLS_DIR).join(name);
     if archive_dir.exists() {
-        fs::remove_dir_all(&archive_dir)
+        remove_path(&archive_dir)
             .with_context(|| format!("failed to clear {}", archive_dir.display()))?;
     }
     let archive_root = archive_dir
@@ -239,7 +309,7 @@ fn archive_existing_skill(skills_dir: &Path, name: &str) -> Result<Option<PathBu
     Ok(Some(archive_dir))
 }
 
-fn replace_skill_dir(skills_dir: &Path, tmp_dir: &Path, name: &str) -> Result<()> {
+fn replace_skill_dir(skills_dir: &Path, tmp_dir: &Path, name: &str) -> Result<Option<PathBuf>> {
     let final_dir = skills_dir.join(name);
     let next_dir = tmp_dir.join(name);
     let archive = archive_existing_skill(skills_dir, name)?;
@@ -265,7 +335,15 @@ fn replace_skill_dir(skills_dir: &Path, tmp_dir: &Path, name: &str) -> Result<()
         }
         return Err(error);
     }
-    Ok(())
+    Ok(archive)
+}
+
+fn remove_path(path: &Path) -> io::Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_dir() => fs::remove_dir_all(path),
+        Ok(_) => fs::remove_file(path),
+        Err(err) => Err(err),
+    }
 }
 
 fn write_atomic(path: &Path, content: &str) -> Result<()> {
@@ -282,9 +360,27 @@ fn write_atomic(path: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
-fn success_message(root: &Path) -> String {
+fn success_message(root: &Path, report: &InstallReport) -> String {
+    let changed = report
+        .targets
+        .iter()
+        .any(|target| target.action != InstallAction::Unchanged || !target.archived.is_empty());
+    let summary = if changed {
+        "Installed the BAML agent bootstrap"
+    } else {
+        "The BAML agent bootstrap is already current"
+    };
+    let archive_note = if report
+        .targets
+        .iter()
+        .any(|target| !target.archived.is_empty())
+    {
+        "\n\nReplaced skills are kept in baml-old_skills/ next to the installed skill."
+    } else {
+        ""
+    };
     format!(
-        "Installed the BAML agent skill in {}\n\nClaude Code:\n  .claude/skills/baml/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml/SKILL.md\n\nReplaced skills are kept in baml-old_skills/ next to the installed skill.\n\nRestart any already-running agent session to pick it up.",
+        "{summary} in {}\n\nClaude Code:\n  .claude/skills/baml/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml/SKILL.md{archive_note}\n\nRestart any already-running agent session to pick it up.",
         root.display()
     )
 }
@@ -296,9 +392,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn embedded_stub_uses_the_baml_name_and_dynamic_guide() {
-        assert!(SKILL_STUB.contains("\nname: baml\n"));
-        assert!(SKILL_STUB.contains("baml agent guide"));
+    fn embedded_bootstrap_declares_the_cli_protocol_version() {
+        assert!(BOOTSTRAP.contents.contains("\nname: baml\n"));
+        assert!(BOOTSTRAP.contents.contains(&format!(
+            "baml-bootstrap-version: \"{}\"",
+            BOOTSTRAP.version
+        )));
+        assert!(BOOTSTRAP.contents.contains(&format!(
+            "baml agent guide --bootstrap-version {}",
+            BOOTSTRAP.version
+        )));
+    }
+
+    #[test]
+    fn bootstrap_version_relation_is_total() {
+        assert_eq!(version_relation(None, 2), VersionRelation::Unknown);
+        assert_eq!(version_relation(Some(2), 2), VersionRelation::Current);
+        assert_eq!(
+            version_relation(Some(1), 2),
+            VersionRelation::BootstrapOutdated
+        );
+        assert_eq!(
+            version_relation(Some(3), 2),
+            VersionRelation::ToolchainOutdated
+        );
     }
 
     #[test]
@@ -312,15 +429,17 @@ mod tests {
         fs::create_dir_all(unrelated.parent().unwrap()).unwrap();
         fs::write(&unrelated, "keep").unwrap();
 
-        install_skill(root).unwrap();
+        let report = install_bootstrap(root).unwrap();
 
-        assert_eq!(fs::read_to_string(stale).unwrap(), SKILL_STUB);
+        assert_eq!(fs::read_to_string(stale).unwrap(), BOOTSTRAP.contents);
         assert_eq!(fs::read_to_string(unrelated).unwrap(), "keep");
         assert_eq!(
             fs::read_to_string(root.join(".agents/skills/baml-old_skills/baml/SKILL.md")).unwrap(),
             "stale"
         );
         assert!(root.join(".claude/skills/baml/SKILL.md").is_file());
+        assert_eq!(report.targets[0].action, InstallAction::Updated);
+        assert_eq!(report.targets[1].action, InstallAction::Created);
     }
 
     #[test]
@@ -332,7 +451,7 @@ mod tests {
             fs::write(legacy, "legacy").unwrap();
         }
 
-        install_skill(tmp.path()).unwrap();
+        let first = install_bootstrap(tmp.path()).unwrap();
 
         for skills_dir in [".agents/skills", ".claude/skills"] {
             let root = tmp.path().join(skills_dir);
@@ -343,63 +462,67 @@ mod tests {
             );
             assert_eq!(
                 fs::read_to_string(root.join("baml/SKILL.md")).unwrap(),
-                SKILL_STUB
+                BOOTSTRAP.contents
             );
         }
+        assert!(
+            first
+                .targets
+                .iter()
+                .all(|target| target.action == InstallAction::Created)
+        );
+
+        let second = install_bootstrap(tmp.path()).unwrap();
+        assert!(second.targets.iter().all(|target| {
+            target.action == InstallAction::Unchanged && target.archived.is_empty()
+        }));
     }
 
     #[test]
-    fn install_root_prefers_baml_toml_within_git_repo() {
+    fn project_skill_detection_ignores_archives() {
+        for name in [SKILL_NAME, LEGACY_SKILL_NAME] {
+            let tmp = tempfile::tempdir().unwrap();
+            let skill = tmp
+                .path()
+                .join(".agents/skills")
+                .join(name)
+                .join("SKILL.md");
+            fs::create_dir_all(skill.parent().unwrap()).unwrap();
+            fs::write(skill, "skill").unwrap();
+            assert!(project_has_active_skill(tmp.path(), name));
+        }
+
         let tmp = tempfile::tempdir().unwrap();
-        let toplevel = tmp.path().canonicalize().unwrap();
-        let project = toplevel.join("services/x");
-        let cwd = project.join("deep");
-        fs::create_dir_all(&cwd).unwrap();
-        fs::write(project.join("baml.toml"), "[package]\nname = \"x\"\n").unwrap();
-
-        let root = detect_install_root_in(&cwd, Some(&toplevel), None);
-
-        assert_eq!(root, project);
+        let archived = tmp
+            .path()
+            .join(".agents/skills/baml-old_skills/baml/SKILL.md");
+        fs::create_dir_all(archived.parent().unwrap()).unwrap();
+        fs::write(archived, "skill").unwrap();
+        assert!(!project_has_active_skill(tmp.path(), SKILL_NAME));
     }
 
     #[test]
-    fn install_root_never_escapes_git_repo() {
+    fn project_warning_distinguishes_missing_current_and_legacy_skills() {
         let tmp = tempfile::tempdir().unwrap();
-        let outer = tmp.path().canonicalize().unwrap();
-        fs::create_dir_all(outer.join("baml_src")).unwrap();
-        let toplevel = outer.join("repo");
-        let cwd = toplevel.join("sub");
-        fs::create_dir_all(&cwd).unwrap();
+        assert!(
+            bootstrap_install_warning(tmp.path())
+                .unwrap()
+                .contains("not installed")
+        );
 
-        let root = detect_install_root_in(&cwd, Some(&toplevel), None);
+        let current = tmp.path().join(".agents/skills/baml/SKILL.md");
+        fs::create_dir_all(current.parent().unwrap()).unwrap();
+        fs::write(&current, "bootstrap").unwrap();
+        assert_eq!(bootstrap_install_warning(tmp.path()), None);
 
-        assert_eq!(root, toplevel);
-    }
-
-    #[test]
-    fn install_root_ignores_git_toplevel_at_or_above_home() {
-        let tmp = tempfile::tempdir().unwrap();
-        let home = tmp.path().canonicalize().unwrap();
-        fs::create_dir_all(home.join("baml_src")).unwrap();
-        let cwd = home.join("nomad");
-        fs::create_dir_all(&cwd).unwrap();
-
-        let root = detect_install_root_in(&cwd, Some(&home), Some(&home));
-
-        assert_eq!(root, cwd);
-    }
-
-    #[test]
-    fn install_root_without_known_home_stays_at_cwd() {
-        let tmp = tempfile::tempdir().unwrap();
-        let base = tmp.path().canonicalize().unwrap();
-        fs::create_dir_all(base.join("baml_src")).unwrap();
-        let cwd = base.join("a/b");
-        fs::create_dir_all(&cwd).unwrap();
-
-        let root = detect_install_root_in(&cwd, None, None);
-
-        assert_eq!(root, cwd);
+        let legacy = tmp.path().join(".claude/skills/baml-core/SKILL.md");
+        fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        fs::write(legacy, "legacy").unwrap();
+        assert!(
+            bootstrap_install_warning(tmp.path())
+                .unwrap()
+                .contains("outdated")
+        );
     }
 
     #[test]
@@ -420,10 +543,23 @@ mod tests {
     }
 
     #[test]
+    fn root_detection_requires_a_baml_project() {
+        let _guard = cwd_lock().lock().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let old = std::env::current_dir().unwrap();
+        std::env::set_current_dir(tmp.path()).unwrap();
+        let error = detect_install_root().unwrap_err();
+        std::env::set_current_dir(old).unwrap();
+
+        assert!(format!("{error}").contains("could not find a BAML project"));
+    }
+
+    #[test]
     fn explicit_dir_is_used_without_walk_up() {
         let _guard = cwd_lock().lock().unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let explicit = tmp.path().join("custom");
+        fs::create_dir(&explicit).unwrap();
 
         let root = explicit_install_root(&explicit).unwrap();
 
@@ -432,7 +568,10 @@ mod tests {
 
     #[test]
     fn success_message_lists_the_single_installed_skill() {
-        let message = success_message(Path::new("/tmp/project"));
+        let report = InstallReport {
+            targets: Vec::new(),
+        };
+        let message = success_message(Path::new("/tmp/project"), &report);
         assert!(message.contains(".agents/skills/baml/SKILL.md"));
         assert!(message.contains(".claude/skills/baml/SKILL.md"));
         assert!(!message.contains("baml-*"));

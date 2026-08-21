@@ -1,7 +1,8 @@
 // `baml init` / `baml new` — scaffold a new BAML project.
 //
-// Both produce a `baml.toml` with a `[package]` table plus a
-// `baml_src/main.baml` starter file. The difference mirrors Cargo:
+// Both produce a `baml.toml` with a `[package]` table, a
+// `baml_src/main.baml` starter file, and the BAML agent bootstrap. The
+// difference mirrors Cargo:
 //   - `baml init [PATH]` initializes *in place* (`PATH` defaults to `.`)
 //     and refuses to overwrite an existing `baml.toml`.
 //   - `baml new <PATH>` creates a fresh directory at `PATH` and
@@ -22,8 +23,9 @@ use crate::reporter::Reporter;
 /// Scaffold a new BAML project under the given directory
 /// (default `.`). Refuses to clobber an existing `baml.toml`.
 ///
-/// Creates `baml.toml` and `baml_src/main.baml`. The destination directory may
-/// already exist, but it must not already contain a BAML manifest.
+/// Creates `baml.toml`, `baml_src/main.baml`, and the BAML agent bootstrap. The
+/// destination directory may already exist, but it must not already contain a
+/// BAML manifest.
 #[derive(Args, Clone, Debug)]
 #[command(after_long_help = "\
 Examples:
@@ -71,8 +73,8 @@ impl InitArgs {
 /// scaffold a project inside. Refuses to run if `<PATH>` already exists,
 /// the same way `cargo new` does.
 ///
-/// Creates the destination directory, `baml.toml`, and
-/// `baml_src/main.baml`. Use `baml init` when the directory already exists.
+/// Creates the destination directory, `baml.toml`, `baml_src/main.baml`, and
+/// the BAML agent bootstrap. Use `baml init` when the directory already exists.
 #[derive(Args, Clone, Debug)]
 #[command(after_long_help = "\
 Examples:
@@ -145,6 +147,9 @@ fn scaffold(
         std::fs::write(&main_path, STARTER_MAIN_BAML)
             .with_context(|| format!("failed to write {}", main_path.display()))?;
     }
+
+    reporter.spin("Installing", "BAML agent bootstrap");
+    crate::agent_command::install_bootstrap(canonical)?;
 
     reporter.finish(verb, format!("{} ({name})", canonical.display()));
     Ok(crate::ExitCode::Success)
@@ -222,6 +227,8 @@ mod tests {
         assert!(toml.contains("name = "));
         assert!(toml.contains("baml generate add python/pydantic2"));
         assert!(tmp.path().join("baml_src/main.baml").exists());
+        assert!(tmp.path().join(".agents/skills/baml/SKILL.md").exists());
+        assert!(tmp.path().join(".claude/skills/baml/SKILL.md").exists());
     }
 
     /// Default name comes from the directory's basename.
@@ -280,6 +287,27 @@ mod tests {
 
         let content = std::fs::read_to_string(tmp.path().join("baml_src/main.baml")).unwrap();
         assert_eq!(content, "// pre-existing content");
+    }
+
+    #[test]
+    fn init_refreshes_an_existing_agent_bootstrap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stale = tmp.path().join(".agents/skills/baml/SKILL.md");
+        std::fs::create_dir_all(stale.parent().unwrap()).unwrap();
+        std::fs::write(&stale, "stale").unwrap();
+
+        init_args(tmp.path().to_path_buf()).run().unwrap();
+
+        let installed = std::fs::read_to_string(stale).unwrap();
+        assert!(installed.contains("baml agent guide --bootstrap-version 1"));
+        assert_eq!(
+            std::fs::read_to_string(
+                tmp.path()
+                    .join(".agents/skills/baml-old_skills/baml/SKILL.md")
+            )
+            .unwrap(),
+            "stale"
+        );
     }
 
     /// Whitespace / slashes in `--name` are rejected.
@@ -369,6 +397,8 @@ mod tests {
         let toml = std::fs::read_to_string(target.join("baml.toml")).unwrap();
         assert!(toml.contains("name = \"brand-new-app\""));
         assert!(target.join("baml_src/main.baml").exists());
+        assert!(target.join(".agents/skills/baml/SKILL.md").exists());
+        assert!(target.join(".claude/skills/baml/SKILL.md").exists());
     }
 
     /// `baml new <PATH>` refuses to run if `<PATH>` already exists —

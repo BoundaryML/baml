@@ -196,7 +196,7 @@ pub(crate) enum Commands {
 
     #[command(
         about = "Print or install BAML agent guidance",
-        after_long_help = "Examples:\n  Print the guide for this toolchain:\n    baml agent guide\n\n  Install the discovery skill:\n    baml agent install\n\n  Install in a specific project:\n    baml agent install --project ./my-project"
+        after_long_help = "Examples:\n  Print the guide for this toolchain:\n    baml agent guide\n\n  Install the bootstrap skill:\n    baml agent install\n\n  Install in a specific project:\n    baml agent install --project ./my-project"
     )]
     Agent(crate::agent_command::AgentArgs),
 
@@ -353,6 +353,19 @@ impl RuntimeCli {
 
         // Resolve every output dial once, before any subcommand writes.
         crate::output::init(self.output);
+
+        if matches!(
+            &self.command,
+            Commands::Check(_)
+                | Commands::Run(_)
+                | Commands::Generate(_)
+                | Commands::Test(_)
+                | Commands::Pack(_)
+                | Commands::Format(_)
+                | Commands::Playground(_)
+        ) {
+            crate::agent_command::warn_if_bootstrap_missing();
+        }
 
         match &self.command {
             Commands::Init(args) => args.run(),
