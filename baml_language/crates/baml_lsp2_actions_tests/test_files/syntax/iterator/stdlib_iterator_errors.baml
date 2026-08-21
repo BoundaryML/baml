@@ -31,10 +31,11 @@ function wrong_error_binding() -> baml.iter.Iterator<Item = int, Error = string>
 // E0001
 //
 //   × mismatched types
-//     ╭─[iterator_stdlib_iterator_errors.baml:10:43]
-//  10 │   baml.iter.ArrayIterator.new([1, 2]).map((x: int) -> string { "not an int" })
-//     ·                                           ─────────────────┬─────────────────
-//     ·                                                            ╰── expected `(int) -> int throws never`, found `(x: int) -> string throws never`
+//     ╭─[iterator_stdlib_iterator_errors.baml:9:91]
+//   9 │ ╭─▶ function wrong_map_result() -> baml.iter.Iterator<Item = int, Error = never> throws never {
+//  10 │ │     baml.iter.ArrayIterator.new([1, 2]).map((x: int) -> string { "not an int" })
+//  11 │ ├─▶ }
+//     · ╰──── expected `baml.iter.Iterator<Error = never, Item = int>`, found `baml.iter.Iterator<Error = never, Item = string>`
 //     ╰────
 // E0006
 //

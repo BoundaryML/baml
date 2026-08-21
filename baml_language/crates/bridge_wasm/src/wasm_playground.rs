@@ -282,19 +282,6 @@ pub enum PlaygroundNotification {
     #[serde(rename_all = "camelCase")]
     RunPatch { patch: serde_json::Value },
     #[serde(rename_all = "camelCase")]
-    ProfileArtifactChunk {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        boundary_id: Option<String>,
-        engine_id: u64,
-        process_id: String,
-        bytes_base64: String,
-        retained_bytes: usize,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        max_bytes: Option<usize>,
-        dropped_bytes: usize,
-        dropped_chunks: usize,
-    },
-    #[serde(rename_all = "camelCase")]
     RunSnapshot {
         #[serde(skip_serializing_if = "Option::is_none")]
         request_id: Option<u64>,

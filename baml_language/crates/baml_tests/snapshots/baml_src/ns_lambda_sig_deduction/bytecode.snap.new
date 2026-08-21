@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/corpus.rs
+assertion_line: 160
+---
+function lambda_sig_deduction.$init_test_ns_lambda_sig_deduction_lambda_sig_deduction(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.lambda_sig_deduction"
+    load_const "map-produced futures joined by future.all, un-ascribed binding"
+    make_closure .<lambda($init_test_ns_lambda_sig_deduction_lambda_sig_deduction, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lambda_sig_deduction"
+    load_const "same shape under an outer spawn"
+    make_closure .<lambda($init_test_ns_lambda_sig_deduction_lambda_sig_deduction, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lambda_sig_deduction"
+    load_const "annotation deduces through a nested constructor slot"
+    make_closure .<lambda($init_test_ns_lambda_sig_deduction_lambda_sig_deduction, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}

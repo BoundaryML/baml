@@ -1498,7 +1498,6 @@ function arrays.sum_int_overflow_(a: int, b: int) -> int {
     load_type baml.Summable<Sum = int>
     load_const "sum"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L2
     load_var e
     is_type baml.panics.IntegerOverflow
@@ -1511,10 +1510,8 @@ function arrays.sum_int_overflow_(a: int, b: int) -> int {
 
   L1:
     load_const -1
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 

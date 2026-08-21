@@ -53,6 +53,7 @@ mod toml;
 mod type_class;
 pub(crate) mod type_kinds;
 mod uint8array;
+mod unknown_error;
 mod yaml;
 
 use std::collections::HashMap;

@@ -807,6 +807,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => elements
                 .iter()
                 .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
+            Rvalue::MakeVirtualFunction { type_args, .. } => type_args
+                .iter()
+                .any(|arg| self.operand_reads_spawn_captured_local(arg, seen)),
             Rvalue::Uint8Array(_)
             | Rvalue::LoadType(_)
             | Rvalue::CurrentPackage(_)
@@ -1919,6 +1922,38 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.set_operand(inst, OperandMeta::Callable(method.clone()));
             return;
         }
+        if let Rvalue::MakeVirtualFunction {
+            self_ty,
+            iface,
+            method,
+            type_args,
+        } = rvalue
+        {
+            // Stack layout mirrors `MakeVirtualBoundMethod` with the `Self`
+            // TYPE in the receiver's slot: `Self`, then the method-level type
+            // args (already `Object::Type` OPERANDS — a written static arg is
+            // a `LoadType` temp, a runtime `unreflect` arg any expression),
+            // then the interface type, then the method name — the opcode pops
+            // in reverse.
+            let self_const =
+                self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(self_ty)));
+            let inst = self.emit(Instruction::LoadType(self_const));
+            self.set_operand(inst, OperandMeta::Const(self_ty.to_string()));
+            for arg in type_args {
+                self.emit_operand_pull(arg);
+            }
+            let iface_const = self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(
+                &iface.to_template(),
+            )));
+            let inst = self.emit(Instruction::LoadType(iface_const));
+            self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+            self.emit_constant(&Constant::String(method.clone()));
+            let inst = self.emit(Instruction::MakeVirtualFunction {
+                ntypeargs: u16::try_from(type_args.len()).expect("ntypeargs fits in u16"),
+            });
+            self.set_operand(inst, OperandMeta::Callable(method.clone()));
+            return;
+        }
         if let Rvalue::VirtualFieldAccess {
             iface,
             receiver,
@@ -2654,22 +2689,30 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     /// Build the bytecode exception table from MIR catch regions.
     ///
-    /// Each `CatchRegion` maps a try-body entry block and handler block to PC
-    /// ranges. The try body spans from the entry block's first instruction up
-    /// to (but not including) the handler block's first instruction.
+    /// Each `CatchRegion` contributes the exact PC ranges of its protected
+    /// `body_blocks` (coalesced where the layout made them contiguous), NOT a
+    /// single `[body_entry_pc, handler_pc)` span. A span-based table is only
+    /// correct if the layout places every protected block before the handler
+    /// and every unprotected block outside the span — reverse-postorder
+    /// guarantees neither (a direct-throw block is a CFG leaf that sinks past
+    /// the handler; a panic-capable call-free block has no unwind edge to
+    /// anchor it), and both escaped their `catch` before this was made exact.
+    ///
+    /// Nested regions overlap: the protected PC set of an inner region is a
+    /// subset of every enclosing region's (inner windows nest inside outer
+    /// windows at lowering). The VM picks the innermost covering entry —
+    /// largest `start_pc`, then smallest `end_pc`, then latest table order —
+    /// which subset-nesting makes unambiguous: the inner region's coalesced
+    /// range around any PC is contained in the outer's, and for byte-identical
+    /// ranges the stable sort below preserves `catch_regions` creation order
+    /// (always outer before inner), so the last matching entry is the inner
+    /// handler.
     fn build_exception_table(&mut self, mir: &MirFunctionBody) {
         use bex_vm_types::bytecode::{ExceptionTableEntry, HandlerContextEntry};
 
         for region in &mir.catch_regions {
-            let body_entry = self.analysis.resolve_jump_target(region.body_entry);
             let handler = self.analysis.resolve_jump_target(region.handler);
 
-            let &start_pc = self.block_addresses.get(&body_entry).unwrap_or_else(|| {
-                unreachable!(
-                    "exception table: body entry block {body_entry:?} has no PC address — \
-                     catch region was emitted but its body block was dropped"
-                )
-            });
             let &handler_pc = self.block_addresses.get(&handler).unwrap_or_else(|| {
                 unreachable!(
                     "exception table: handler block {handler:?} has no PC address — \
@@ -2686,15 +2729,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 );
                 continue;
             };
-
-            // The RPO seeds the entry block first so that body_entry is
-            // always a DFS ancestor of handler, guaranteeing start_pc <
-            // handler_pc.
-            debug_assert!(
-                start_pc < handler_pc,
-                "exception table: handler {handler:?} (pc {handler_pc}) placed before \
-                 body entry {body_entry:?} (pc {start_pc}) — RPO ordering bug"
-            );
 
             let stack_trace_slot = region
                 .stack_trace_local
@@ -2729,19 +2763,43 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     });
             }
 
-            self.bytecode.exception_table.push(ExceptionTableEntry {
-                start_pc,
-                end_pc: handler_pc,
-                handler_pc,
-                error_slot,
-                stack_trace_slot,
-            });
+            // Exact protected coverage: one PC range per protected block,
+            // merged where the layout put member blocks back-to-back. Blocks
+            // dropped by layout/DCE have no addresses and nothing to protect;
+            // gaps between member fragments (e.g. an interleaved handler or
+            // post-join block) stay uncovered by construction.
+            let mut ranges: Vec<(usize, usize)> = region
+                .body_blocks
+                .iter()
+                .filter_map(|&block| {
+                    let &block_start = self.block_addresses.get(&block)?;
+                    let &block_end = self.block_end_addresses.get(&block)?;
+                    (block_start < block_end).then_some((block_start, block_end))
+                })
+                .collect();
+            ranges.sort_unstable();
+            let mut coalesced: Vec<(usize, usize)> = Vec::new();
+            for (start, end) in ranges {
+                match coalesced.last_mut() {
+                    Some(last) if start <= last.1 => last.1 = last.1.max(end),
+                    _ => coalesced.push((start, end)),
+                }
+            }
+            for (start_pc, end_pc) in coalesced {
+                self.bytecode.exception_table.push(ExceptionTableEntry {
+                    start_pc,
+                    end_pc,
+                    handler_pc,
+                    error_slot,
+                    stack_trace_slot,
+                });
+            }
         }
 
-        // Sort by start_pc so the VM can do a linear scan from most-specific
-        // (innermost) to least-specific. For nested catch blocks the inner
-        // region has a later start_pc, so reverse-sorted order gives innermost
-        // first during a reverse linear scan.
+        // Stable sort by start_pc: the VM selects the innermost covering entry
+        // by (largest start_pc, smallest end_pc, latest table order); stability
+        // keeps outer-before-inner creation order for byte-identical ranges so
+        // "latest" resolves to the inner handler (see the function doc).
         self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
     }
 
@@ -3215,6 +3273,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     Rvalue::MakeClosure { .. }
                         | Rvalue::MakeBoundMethod { .. }
                         | Rvalue::MakeVirtualBoundMethod { .. }
+                        | Rvalue::MakeVirtualFunction { .. }
                         | Rvalue::VirtualFieldAccess { .. }
                         | Rvalue::BinaryOp { .. }
                         | Rvalue::Aggregate {

@@ -858,13 +858,12 @@ function interfaces_associated_types.rmf_score(source: <unresolved type #5397176
     load_var source
     store_var _2
     load_var _2
-    narrow_bind interfaces_associated_types.RmfSource<Item = int>, slot=3
+    narrow_bind interfaces_associated_types.RmfSource<Item = int>, slot=2
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_const 0
-    store_var _0
     jump L2
 
   L1:
@@ -872,10 +871,8 @@ function interfaces_associated_types.rmf_score(source: <unresolved type #5397176
     load_type interfaces_associated_types.RmfSource<Item = int>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 

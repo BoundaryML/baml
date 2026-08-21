@@ -1536,3 +1536,123 @@ function nested_catch_inner_catches_callee_throw_fn() -> int {
 test "nested_catch_inner_catches_callee_throw" {
     assert.equal(nested_catch_inner_catches_callee_throw_fn(), 1)
 }
+
+// ============================================================================
+// §20 — Regression: direct throw escapes catch_all when block also calls a
+// throwing function
+// ============================================================================
+
+// A direct `throw` block is a leaf in the CFG. Before the fix, RPO layout sank
+// it to the END of the function — past the handler — while a throwing call's
+// unwind edge pulled the handler to a mid-function PC. The throw's PC then fell
+// outside the handler's `[start_pc, handler_pc)` exception-table range and the
+// throw ESCAPED the enclosing `catch_all` entirely (uncaught at top level).
+// `Throw`/`Rethrow` terminators now carry a layout-only unwind edge to the
+// active handler, which keeps the throw block inside the protected range.
+function s20_may_throw(n: int) -> string throws baml.errors.Io | baml.errors.ParseError {
+    if (n == 42) { throw baml.errors.Io { message: "io" } }
+    "ok"
+}
+
+function s20_guard_throw_plus_call_fn(n: int) -> string {
+    {
+        if (n == 0) { throw baml.errors.InvalidArgument { message: "guard" } }
+        s20_may_throw(n)
+    } catch_all (e) { _ => "caught" }
+}
+
+// The guard's direct throw must be caught (this escaped before the fix).
+test "catch_all_covers_direct_throw_beside_throwing_call" {
+    assert.equal(s20_guard_throw_plus_call_fn(0), "caught")
+}
+
+// The callee-originated throw keeps being caught.
+test "catch_all_covers_callee_throw_beside_direct_throw" {
+    assert.equal(s20_guard_throw_plus_call_fn(42), "caught")
+}
+
+// Neither throws: the block's normal value flows out.
+test "catch_all_direct_throw_beside_call_normal_path" {
+    assert.equal(s20_guard_throw_plus_call_fn(1), "ok")
+}
+
+// Same shape with a typed `catch` arm instead of `catch_all`: the direct
+// throw's type is matched by the arm.
+function s20_guard_throw_typed_catch_fn(n: int) -> string {
+    {
+        if (n == 0) { throw baml.errors.InvalidArgument { message: "guard" } }
+        s20_may_throw(n)
+    } catch (e) {
+        baml.errors.InvalidArgument => "guard-caught",
+        baml.errors.Io => "io-caught",
+        _ => "other"
+    }
+}
+
+test "typed_catch_covers_direct_throw_beside_throwing_call" {
+    assert.equal(s20_guard_throw_typed_catch_fn(0), "guard-caught")
+}
+
+test "typed_catch_covers_callee_throw_beside_direct_throw" {
+    assert.equal(s20_guard_throw_typed_catch_fn(42), "io-caught")
+}
+
+// The guard throw sits AFTER a `defer` in the same block, so it must unwind
+// through the defer's landing pad (running the defer) and still reach the
+// enclosing catch_all — the same leaf-block layout hazard, via the defer
+// region's exception-table range.
+function s20_defer_guard_throw_fn(n: int) -> string {
+    let log = [];
+    let r = {
+        {
+            defer { log.push("deferred") }
+            if (n == 0) { throw baml.errors.InvalidArgument { message: "guard" } }
+            s20_may_throw(n)
+        } catch_all (e) { _ => "caught" }
+    };
+    if (log.length() == 1) { r } else { "defer-did-not-run" }
+}
+
+test "catch_all_covers_direct_throw_after_defer_beside_call" {
+    assert.equal(s20_defer_guard_throw_fn(0), "caught")
+}
+
+// A runtime panic from a CALL-FREE branch (no call, no throw terminator — the
+// block has no CFG edge to the handler at all) beside a throwing call in the
+// other branch. Before exact coverage, the panicking block could be laid out
+// past the handler and the panic escaped the enclosing catch_all_panics.
+function s20_index_panic_beside_call_fn(n: int) -> int {
+    {
+        if (n == 0) {
+            let nums = [1];
+            nums[n + 5]
+        } else {
+            s20_may_throw(n);
+            7
+        }
+    } catch_all_panics (e) { _ => -1 }
+}
+
+test "catch_all_panics_covers_callfree_panic_beside_throwing_call" {
+    assert.equal(s20_index_panic_beside_call_fn(0), -1)
+}
+
+test "catch_all_panics_callfree_panic_branch_normal_path" {
+    assert.equal(s20_index_panic_beside_call_fn(1), 7)
+}
+
+// Division-by-zero variant of the same shape.
+function s20_div_panic_beside_call_fn(n: int) -> int {
+    {
+        if (n == 0) {
+            100 / n
+        } else {
+            s20_may_throw(n);
+            7
+        }
+    } catch_all_panics (e) { _ => -1 }
+}
+
+test "catch_all_panics_covers_callfree_div_panic_beside_throwing_call" {
+    assert.equal(s20_div_panic_beside_call_fn(0), -1)
+}

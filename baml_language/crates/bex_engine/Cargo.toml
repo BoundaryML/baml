@@ -66,3 +66,6 @@ heap_debug = [
   "bex_heap/heap_debug",
   "bex_vm_types/heap_debug",
 ]
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }

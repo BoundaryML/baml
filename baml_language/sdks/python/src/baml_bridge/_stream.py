@@ -19,6 +19,7 @@ Python.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Generic, TypeVar
 
 from .baml_py import BamlPyHandle
@@ -32,7 +33,9 @@ class BamlStream(Generic[TStream, TFinal]):
 
     `TStream` / `TFinal` are erased at runtime — `BamlStream[TStream, TFinal]`
     is just a `typing.Generic` subscription, handled natively by Python.
-    Codegen emits `Stream[X, Y]` annotations in generated leaves; they
+    `TStream` is the complete return type of `next` (including the generated
+    `ai.stream.Done` terminal marker); `TFinal` is the return type of `final`.
+    Codegen emits those concrete annotations in generated leaves; they
     evaluate to a parameterized alias whose `isinstance` falls back to the
     unparameterized origin, which is what `proto.py` checks against.
 
@@ -47,9 +50,7 @@ class BamlStream(Generic[TStream, TFinal]):
         self._class_fqn = class_fqn
 
     @classmethod
-    def _from_pyhandle(
-        cls, pyhandle: BamlPyHandle, class_fqn: str
-    ) -> "BamlStream":
+    def _from_pyhandle(cls, pyhandle: BamlPyHandle, class_fqn: str) -> "BamlStream":
         """Internal: build a `BamlStream` from a `BamlPyHandle`. Used by
         `proto.py::_decode_handle`, which has already dispatched on the
         wire `handle_type` tag and read the tagged handle's class FQN."""
@@ -59,16 +60,16 @@ class BamlStream(Generic[TStream, TFinal]):
         """Internal: expose the inner `BamlPyHandle` for inbound encode."""
         return self._handle
 
-    def next(self) -> Any:
+    def next(self) -> TStream:
         return self._call_sync(f"{self._class_fqn}.next")
 
-    async def next_async(self) -> Any:
+    async def next_async(self) -> TStream:
         return await self._call_async(f"{self._class_fqn}.next")
 
-    def final(self) -> Any:
+    def final(self) -> TFinal:
         return self._call_sync(f"{self._class_fqn}.final")
 
-    async def final_async(self) -> Any:
+    async def final_async(self) -> TFinal:
         return await self._call_async(f"{self._class_fqn}.final")
 
     # `proto.py` imports `BamlStream` at module load, so the call-path
@@ -89,17 +90,25 @@ class BamlStream(Generic[TStream, TFinal]):
         return decode_call_result(result_bytes)
 
     async def _call_async(self, fqn: str) -> Any:
-        from . import get_runtime
+        from . import cancel_function_call, get_runtime
         from .baml_py import new_function_call
         from .proto import decode_call_result, encode_call_args
 
         rt = get_runtime()
+        call_id = new_function_call()
         args_proto = encode_call_args(
             {"self": self},
-            new_function_call(),
+            call_id,
             function_name=fqn,
         )
-        result_bytes = await rt.call_function(args_proto, None, None)
+        try:
+            result_bytes = await rt.call_function(args_proto, None, None)
+        except asyncio.CancelledError:
+            try:
+                cancel_function_call(call_id)
+            except Exception:
+                pass
+            raise
         return decode_call_result(result_bytes)
 
     @classmethod

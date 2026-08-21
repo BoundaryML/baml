@@ -1302,27 +1302,33 @@ function testing.classify_selected_names(selected_names: string[], hard_failed_n
     alloc_array 0
     load_type string
     alloc_array 0
-    init_instance testing.LeafIdentities .passed, .failed, .tolerated
+    load_type int
+    alloc_array 0
+    load_type int
+    alloc_array 0
+    load_type int
+    alloc_array 0
+    init_instance testing.LeafIdentities .passed, .failed, .tolerated, .passed_ms, .failed_ms, .tolerated_ms
     store_var out
     load_var selected_names
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _8
+    store_var _11
 
   L0:
-    load_var _8
+    load_var _11
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _9
-    load_var _9
+    store_var _12
+    load_var _12
     is_type baml.iter.Done
     pop_jump_if_false L1
     jump L6
 
   L1:
-    load_var _9
+    load_var _12
     store_var_load_var name
     load_var all_failed_names
     call testing.failure_matches_selected
@@ -1443,7 +1449,7 @@ function testing.collect_leaf_identities(report: <unresolved type #3853998259389
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L25
+    jump L28
 
   L0:
     load_var _5
@@ -1484,7 +1490,7 @@ function testing.collect_leaf_identities(report: <unresolved type #3853998259389
 
   L5:
     load_const null
-    jump L26
+    jump L29
 
   L6:
     load_var2 6 10
@@ -1522,8 +1528,8 @@ function testing.collect_leaf_identities(report: <unresolved type #3853998259389
     load_var nested
     load_field .results
     container_len
-    store_var _42
-    load_var _42
+    store_var _61
+    load_var _61
     load_const 0
     cmp_int_op >
     pop_jump_if_false L10
@@ -1534,7 +1540,7 @@ function testing.collect_leaf_identities(report: <unresolved type #3853998259389
     load_field .failed
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L24
+    pop_jump_if_false L27
     load_var name
     load_const "::(failed to expand)"
     bin_op +
@@ -1548,8 +1554,8 @@ function testing.collect_leaf_identities(report: <unresolved type #3853998259389
     load_var nested
     load_field .failed_names
     container_len
-    store_var _54
-    load_var _54
+    store_var _73
+    load_var _73
     load_const 0
     cmp_int_op >
     pop_jump_if_false L12
@@ -1586,7 +1592,13 @@ function testing.collect_leaf_identities(report: <unresolved type #3853998259389
     load_var identity
     call baml.Array.push
     pop 1
-    jump L24
+    load_type int
+    load_var out
+    load_field .failed_ms
+    load_const -1
+    call baml.Array.push
+    pop 1
+    jump L27
 
   L17:
     load_type string
@@ -1595,65 +1607,114 @@ function testing.collect_leaf_identities(report: <unresolved type #3853998259389
     load_var identity
     call baml.Array.push
     pop 1
-    jump L24
+    load_type int
+    load_var out
+    load_field .tolerated_ms
+    load_const -1
+    call baml.Array.push
+    pop 1
+    jump L27
 
   L18:
-    load_var2 14 15
+    load_var2 17 18
     load_var2 3 4
     call testing.collect_leaf_identities
     pop 1
-    jump L24
+    jump L27
 
   L19:
     load_var _25
-    load_field .outcome
-    load_const "pass"
-    call baml.ops.equals_equals
+    store_var_load_var leaf
+    load_field .runs
+    container_len
+    store_var _29
+    load_var _29
+    load_const 0
+    cmp_int_op >
     pop_jump_if_false L20
-    jump L23
+    jump L21
 
   L20:
-    load_var tolerated_by_parent
-    pop_jump_if_false L21
+    load_const -1
+    store_var leaf_ms
     jump L22
 
   L21:
+    load_var leaf
+    load_field .runs
+    load_const 0
+    load_array_element
+    load_field .duration_ms
+    store_var leaf_ms
+
+  L22:
+    load_var leaf
+    load_field .outcome
+    load_const "pass"
+    call baml.ops.equals_equals
+    pop_jump_if_false L23
+    jump L26
+
+  L23:
+    load_var tolerated_by_parent
+    pop_jump_if_false L24
+    jump L25
+
+  L24:
     load_type string
     load_var out
     load_field .failed
     load_var name
     call baml.Array.push
     pop 1
-    jump L24
+    load_type int
+    load_var out
+    load_field .failed_ms
+    load_var leaf_ms
+    call baml.Array.push
+    pop 1
+    jump L27
 
-  L22:
+  L25:
     load_type string
     load_var out
     load_field .tolerated
     load_var name
     call baml.Array.push
     pop 1
-    jump L24
+    load_type int
+    load_var out
+    load_field .tolerated_ms
+    load_var leaf_ms
+    call baml.Array.push
+    pop 1
+    jump L27
 
-  L23:
+  L26:
     load_type string
     load_var out
     load_field .passed
     load_var name
     call baml.Array.push
     pop 1
+    load_type int
+    load_var out
+    load_field .passed_ms
+    load_var leaf_ms
+    call baml.Array.push
+    pop 1
 
-  L24:
+  L27:
     load_var i
     load_const 1
     add_int
     store_var i
     jump L4
 
-  L25:
+  L28:
     load_const null
 
-  L26:
+  L29:
     return
 }
 
@@ -2437,7 +2498,13 @@ function testing.flatten_with_tolerated(report: <unresolved type #38539982593899
     alloc_array 0
     load_type string
     alloc_array 0
-    init_instance testing.LeafIdentities .passed, .failed, .tolerated
+    load_type int
+    alloc_array 0
+    load_type int
+    alloc_array 0
+    load_type int
+    alloc_array 0
+    init_instance testing.LeafIdentities .passed, .failed, .tolerated, .passed_ms, .failed_ms, .tolerated_ms
     store_var executed
     load_var2 1 3
     load_var2 2 8
@@ -2446,7 +2513,7 @@ function testing.flatten_with_tolerated(report: <unresolved type #38539982593899
     load_var executed
     load_field .passed
     container_len
-    store_var _36
+    store_var _39
     load_var2 10 4
     load_field .passed
     cmp_int_op ==
@@ -2455,7 +2522,7 @@ function testing.flatten_with_tolerated(report: <unresolved type #38539982593899
     load_var executed
     load_field .failed
     container_len
-    store_var _39
+    store_var _42
     load_var2 11 4
     load_field .failed
     cmp_int_op ==
@@ -2466,7 +2533,7 @@ function testing.flatten_with_tolerated(report: <unresolved type #38539982593899
     load_var executed
     load_field .tolerated
     container_len
-    store_var _42
+    store_var _45
     load_var2 12 4
     load_field .tolerated
     cmp_int_op ==
@@ -2478,7 +2545,7 @@ function testing.flatten_with_tolerated(report: <unresolved type #38539982593899
   L7:
     load_var selected_names
     container_len
-    store_var _46
+    store_var _49
     load_var2 13 4
     load_field .total
     cmp_int_op ==
@@ -2492,7 +2559,10 @@ function testing.flatten_with_tolerated(report: <unresolved type #38539982593899
     alloc_array 0
     load_type string
     alloc_array 0
-    init_instance testing.LeafIdentities .passed, .failed, .tolerated
+    load_const null
+    load_const null
+    load_const null
+    init_instance testing.LeafIdentities .passed, .failed, .tolerated, .passed_ms, .failed_ms, .tolerated_ms
     store_var identities
     jump L11
 
@@ -2525,8 +2595,14 @@ function testing.flatten_with_tolerated(report: <unresolved type #38539982593899
     load_field .failed
     load_var identities
     load_field .tolerated
+    load_var identities
+    load_field .passed_ms
+    load_var identities
+    load_field .failed_ms
+    load_var identities
+    load_field .tolerated_ms
     load_var messages
-    init_instance testing.FlatTestReport .outcome, .passed, .failed, .tolerated, .total, .passed_names, .failed_names, .tolerated_names, .messages
+    init_instance testing.FlatTestReport .outcome, .passed, .failed, .tolerated, .total, .passed_names, .failed_names, .tolerated_names, .passed_ms, .failed_ms, .tolerated_ms, .messages
     return
 }
 

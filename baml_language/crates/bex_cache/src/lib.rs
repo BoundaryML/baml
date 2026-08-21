@@ -78,7 +78,13 @@ use sha2::{Digest, Sha256};
 /// Version 8: `Class.name` / `Enum.name` are `DeclarationName` (an enum over
 /// declared and anonymous), so both gained a leading discriminant byte. A 7
 /// image would decode that discriminant out of the old `TypeName` bytes.
-pub const FORMAT_VERSION: u32 = 8;
+///
+/// Version 9: the bytecode gained `OpCode::MakeVirtualFunction` (appended, so
+/// discriminants did not shift), which landed on canary while 8 was current on
+/// a branch — the same both-sides-of-a-merge ambiguity version 7 records. An
+/// 8 image without the opcode would decode fine, but one version must mean one
+/// format.
+pub const FORMAT_VERSION: u32 = 9;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

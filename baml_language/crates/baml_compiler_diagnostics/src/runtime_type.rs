@@ -196,6 +196,39 @@ pub const RUNTIME_TYPE_MUST_BE_NAMED_NOTE: &str = concat!(
     "`unreflect(...)`, but the value this expression creates would still need it afterwards",
 );
 
+/// E0168 — the same explanation for the error channel. A `throws` clause
+/// publishes the type just as a result does, and the caller reads it after the
+/// call has returned. Worded for a clause the author may never have written:
+/// an undeclared `throws` is inferred from the body, so this note has to make
+/// sense with no `throws` in sight.
+pub const RUNTIME_TYPE_MUST_BE_NAMED_THROWS_NOTE: &str = concat!(
+    "a type created at runtime only lasts for one call when written inline with ",
+    "`unreflect(...)`, but the error this call can throw would still need it afterwards",
+);
+
+/// Which published type an inline `unreflect(...)` slot escaped into. Only the
+/// note differs: the headline is the same complaint and the suggested rewrite
+/// is the same fix either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum RuntimeTypeEscape {
+    /// The value the expression produces — a result type that wraps the
+    /// parameter, a class literal, or a `?.` chain that republishes the
+    /// call's result as a nullable.
+    Value,
+    /// The error the call can throw.
+    Error,
+}
+
+impl RuntimeTypeEscape {
+    /// The note printed at the `unreflect(...)` slot.
+    pub fn note(self) -> &'static str {
+        match self {
+            Self::Value => RUNTIME_TYPE_MUST_BE_NAMED_NOTE,
+            Self::Error => RUNTIME_TYPE_MUST_BE_NAMED_THROWS_NOTE,
+        }
+    }
+}
+
 /// E0168 — an inline `unreflect(value)` type argument would escape its call.
 pub fn runtime_type_must_be_named() -> Diagnostic {
     Diagnostic::error(
@@ -425,6 +458,25 @@ mod tests {
             assert_eq!(diagnostic.code(), code);
             assert_eq!(diagnostic.message, message);
         }
+    }
+
+    #[test]
+    fn runtime_type_notes_name_the_published_type_that_would_outlive_the_call() {
+        // One complaint, one fix; the tail of the note is the only thing the
+        // reader needs to be told apart, and it names what they wrote.
+        let (value, error) = (
+            RuntimeTypeEscape::Value.note(),
+            RuntimeTypeEscape::Error.note(),
+        );
+        assert!(
+            value.ends_with("but the value this expression creates would still need it afterwards")
+        );
+        assert!(
+            error.ends_with("but the error this call can throw would still need it afterwards")
+        );
+        let shared = "a type created at runtime only lasts for one call when written inline with `unreflect(...)`, ";
+        assert!(value.starts_with(shared));
+        assert!(error.starts_with(shared));
     }
 
     #[test]

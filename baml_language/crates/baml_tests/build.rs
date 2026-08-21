@@ -104,6 +104,7 @@ fn generate_speedtest_benches(manifest_dir: &str) {
                  pub const PROF_SRC_COMPUTE_PURE_CALL_1M: &str = \"\";\n\
                  pub const PROF_SRC_COMPUTE_ARRAY_BUILD_SUM_100K: &str = \"\";\n\
                  pub const PROF_SRC_COMPUTE_FIB32_RECURSIVE: &str = \"\";\n\
+                 pub const PROF_SRC_CONCURRENCY_SPAWN_AWAIT_X10K: &str = \"\";\n\
                  pub const PROF_SRC_STRING_CONCAT_LOOP_10K: &str = \"\";\n",
             )
             .unwrap();
@@ -167,6 +168,7 @@ fn generate_speedtest_benches(manifest_dir: &str) {
         "compute::pure call 1m",
         "compute::array build sum 100k",
         "compute::fib32 recursive",
+        "concurrency::spawn await x10k",
         "string::concat loop 10k",
     ];
     let prof_consts: TokenStream = subset

@@ -8,9 +8,9 @@
 //!
 //! The flag-then-recheck dance *shrinks* but does not *close* the classic
 //! lost-wakeup window. That residual race is deliberately benign: the park
-//! timeout bounds its cost to one interval of extra ring growth (the ring
-//! grows losslessly, it never drops). Bounding that race is why the timeout
-//! exists — do not "fix" the race by adding producer-side blocking.
+//! timeout bounds its cost to one interval of buffered ring growth. Bounding
+//! that race is why the timeout exists — do not "fix" the race by adding
+//! producer-side blocking.
 
 // On wasm32 there is no background consumer to wake; cooperative drains call
 // the registry directly. Keep the types compiled so shared ring code stays

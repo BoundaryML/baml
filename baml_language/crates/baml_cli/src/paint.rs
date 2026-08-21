@@ -17,8 +17,8 @@ use std::{cell::RefCell, collections::HashMap, fmt::Write, path::Path, rc::Rc};
 use baml_db::{
     SourceFile,
     baml_compiler_diagnostics::{
-        DiagnosticIdentifierKind, DiagnosticMessageHighlighter, DiagnosticMessageKind,
-        HighlightAttributes, HighlightColor, HighlightSpan,
+        DiagnosticIdentifierKind, DiagnosticMessageHighlightError, DiagnosticMessageHighlighter,
+        DiagnosticMessageKind, HighlightAttributes, HighlightColor, HighlightSpan,
     },
 };
 use baml_lsp2_actions::{
@@ -134,11 +134,13 @@ fn highlight_name_padded(name: &str, leaf_kind: DefinitionKind, width: usize) ->
 ///
 /// Always emits color; callers go through [`Painter::fragment`], which gates.
 fn highlight_str(text: &str) -> String {
-    let toks = classify_fragment(text);
+    let toks = classify_fragment(text).unwrap_or_default();
     styled_from_tokens(text, 0, &toks)
 }
 
-fn classify_fragment(text: &str) -> Vec<SemanticToken> {
+fn classify_fragment(
+    text: &str,
+) -> Result<Vec<SemanticToken>, Vec<baml_db::baml_compiler_diagnostics::ParseError>> {
     thread_local! {
         static SCRATCH_DB: RefCell<ProjectDatabase> = RefCell::new({
             let mut db = ProjectDatabase::new();
@@ -149,19 +151,32 @@ fn classify_fragment(text: &str) -> Vec<SemanticToken> {
     SCRATCH_DB.with(|db| {
         let db = &mut *db.borrow_mut();
         let file = db.add_or_update_file(Path::new("/baml-fragment-scratch/fragment.baml"), text);
+        let errors = baml_db::baml_compiler_parser::parse_errors(db, file);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
         let mut toks = semantic_tokens(db, file).clone();
         toks.sort_by_key(|t| t.range.start());
-        toks
+        Ok(toks)
     })
 }
 
+/// One memoized highlight outcome: the spans, or the classification error
+/// that made the fragment unhighlightable (cached too, so a failing fragment
+/// is not re-parsed per render).
+type CachedHighlight = Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError>;
+
 #[derive(Default)]
 pub struct MessageHighlighter {
-    cache: RefCell<HashMap<(DiagnosticMessageKind, String), Vec<HighlightSpan>>>,
+    cache: RefCell<HashMap<(DiagnosticMessageKind, String), CachedHighlight>>,
 }
 
 impl DiagnosticMessageHighlighter for MessageHighlighter {
-    fn highlight(&self, kind: DiagnosticMessageKind, text: &str) -> Vec<HighlightSpan> {
+    fn highlight(
+        &self,
+        kind: DiagnosticMessageKind,
+        text: &str,
+    ) -> Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError> {
         let key = (kind, text.to_string());
         if let Some(cached) = self.cache.borrow().get(&key) {
             return cached.clone();
@@ -186,13 +201,13 @@ impl DiagnosticMessageHighlighter for MessageHighlighter {
                     DiagnosticIdentifierKind::EnumVariant => SemanticTokenType::EnumMember,
                     DiagnosticIdentifierKind::Attribute => SemanticTokenType::Decorator,
                 };
-                (!text.is_empty())
+                Ok((!text.is_empty())
                     .then(|| HighlightSpan {
                         range: TextRange::new(0.into(), fragment_text_size(text.len())),
                         style: semantic_highlight_style(token_type, ModifierSet::empty()),
                     })
                     .into_iter()
-                    .collect()
+                    .collect())
             }
         };
         self.cache.borrow_mut().insert(key, highlights.clone());
@@ -200,9 +215,25 @@ impl DiagnosticMessageHighlighter for MessageHighlighter {
     }
 }
 
-fn fragment_spans(source: &str, fragment_start: usize, fragment_len: usize) -> Vec<HighlightSpan> {
+fn fragment_spans(
+    source: &str,
+    fragment_start: usize,
+    fragment_len: usize,
+) -> Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError> {
     let fragment_end = fragment_start + fragment_len;
-    classify_fragment(source)
+    let tokens = match classify_fragment(source) {
+        Ok(tokens) => tokens,
+        Err(errors) => {
+            let fragment = &source[fragment_start..fragment_end];
+            report_diagnostic_highlight_error(format_args!(
+                "semantic highlighting skipped for invalid fragment {fragment:?} (parse_errors={}, first_error={:?}); rendering this diagnostic without color",
+                errors.len(),
+                errors.first(),
+            ));
+            return Err(DiagnosticMessageHighlightError);
+        }
+    };
+    Ok(tokens
         .into_iter()
         .filter_map(|token| {
             let start: usize = token.range.start().into();
@@ -217,7 +248,12 @@ fn fragment_spans(source: &str, fragment_start: usize, fragment_len: usize) -> V
                 style: semantic_highlight_style(token.token_type, token.modifiers),
             })
         })
-        .collect()
+        .collect())
+}
+
+#[allow(clippy::print_stderr)] // rendering failures must remain visible
+fn report_diagnostic_highlight_error(args: std::fmt::Arguments<'_>) {
+    eprintln!("error rendering diagnostics: {args}");
 }
 
 fn fragment_text_size(size: usize) -> TextSize {
@@ -675,8 +711,12 @@ function make(v: int) -> Point {
     #[test]
     fn diagnostic_type_fragments_use_describe_highlighting() {
         let highlighter = MessageHighlighter::default();
-        let string = highlighter.highlight(DiagnosticMessageKind::TypeExpression, "\"not an int\"");
-        let int = highlighter.highlight(DiagnosticMessageKind::TypeExpression, "int");
+        let string = highlighter
+            .highlight(DiagnosticMessageKind::TypeExpression, "\"not an int\"")
+            .expect("valid string type expression");
+        let int = highlighter
+            .highlight(DiagnosticMessageKind::TypeExpression, "int")
+            .expect("valid primitive type expression");
 
         assert_eq!(string.len(), 1);
         assert_eq!(string[0].style.foreground, Some(HighlightColor::Green));
@@ -693,9 +733,23 @@ function make(v: int) -> Point {
     #[test]
     fn diagnostic_code_fragments_use_describe_highlighting() {
         let highlighter = MessageHighlighter::default();
-        let string = highlighter.highlight(DiagnosticMessageKind::Code, "\"not an int\"");
+        let string = highlighter
+            .highlight(DiagnosticMessageKind::Code, "\"not an int\"")
+            .expect("valid code fragment");
 
         assert_eq!(string.len(), 1);
         assert_eq!(string[0].style.foreground, Some(HighlightColor::Green));
+    }
+
+    #[test]
+    fn malformed_diagnostic_code_fragments_fall_back_to_plain_text() {
+        let highlighter = MessageHighlighter::default();
+
+        let spans = highlighter.highlight(DiagnosticMessageKind::Code, r"\${...}");
+
+        assert!(
+            spans.is_err(),
+            "a malformed prose fragment must request no-color diagnostic fallback"
+        );
     }
 }

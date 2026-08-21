@@ -286,7 +286,11 @@ function _gm_strip_nulls(value: baml.json.json, opaque: bool) -> baml.json.json 
             }
             out
         },
-        let items: baml.json.json[] => items.map((item) -> { _gm_strip_nulls(item, false) }),
+        let items: baml.json.json[] => {
+            items.map((item) -> {
+                _gm_strip_nulls(item, false)
+            })
+        },
         _ => value,
     }
 }
@@ -296,8 +300,7 @@ function _gm_strip_nulls(value: baml.json.json, opaque: bool) -> baml.json.json 
 // the ones that are simply illegal in a query. Values that need more than this
 // (raw UTF-8, control characters) should be encoded by the caller.
 function _gm_encode_query(value: string) -> string {
-    value
-        .replace_all("%", "%25")
+    value.replace_all("%", "%25")
         .replace_all(" ", "%20")
         .replace_all("\"", "%22")
         .replace_all("#", "%23")
@@ -321,7 +324,8 @@ function _gm_apply_query(url: string, params: map<string, string>?) -> string {
             } else {
                 "?"
             };
-            out = `${out}${separator}${_gm_encode_query(name)}=${_gm_encode_query(items.get(name) ?? "")}`;
+            out
+                = `${out}${separator}${_gm_encode_query(name)}=${_gm_encode_query(items.get(name) ?? "")}`;
         }
         out
     } else {
@@ -427,14 +431,24 @@ function _gm_mime_for_uri(url: string, mime: string) -> string? {
 // of the inline request-size cap. Local files always become base64 and
 // existing base64 is retained on both backends, and a `_gm_is_provider_uri`
 // URL is passed through even when `fetch_url` is set.
-function _gm_media_part(media: ai.MediaPart, fetch_url: bool) -> GmPart {
+function _gm_media_part(media: ai.MediaPart, fetch_url: bool, preview: bool = false) -> GmPart {
     let source = _gm_media_url(media);
     let passthrough = if let url: string = source {
         _gm_is_provider_uri(url)
     } else {
         false
     };
-    let resolved = ai.wire.resolve_media(media, fetch_url && !passthrough);
+    let resolved = if (preview) {
+        ai.wire.resolve_media_preview(media)
+    } else {
+        ai.wire.resolve_media(media, fetch_url && !passthrough)
+    };
+    if (preview && fetch_url && !passthrough && resolved.url != null) {
+        throw ai.errors.PreviewUnsupported {
+            provider: "google",
+            detail: "the Gemini Developer API requires downloaded URL media bytes during request preview",
+        }
+    }
     if let url: string = resolved.url {
         GmPart.of_file_data(
             GmFileData { mimeType: _gm_mime_for_uri(url, resolved.mime_type), fileUri: url },
@@ -446,7 +460,11 @@ function _gm_media_part(media: ai.MediaPart, fetch_url: bool) -> GmPart {
     }
 }
 
-function _gm_prompt_parts(message: ai.PromptMessage, fetch_url: bool) -> GmPart[] {
+function _gm_prompt_parts(
+    message: ai.PromptMessage,
+    fetch_url: bool,
+    preview: bool = false,
+) -> GmPart[] {
     let parts: GmPart[] = [];
     for (let part in message.parts) {
         match (part) {
@@ -455,19 +473,19 @@ function _gm_prompt_parts(message: ai.PromptMessage, fetch_url: bool) -> GmPart[
                 null
             },
             let image: baml.media.Image => {
-                parts.push(_gm_media_part(image, fetch_url));
+                parts.push(_gm_media_part(image, fetch_url, preview = preview));
                 null
             },
             let audio: baml.media.Audio => {
-                parts.push(_gm_media_part(audio, fetch_url));
+                parts.push(_gm_media_part(audio, fetch_url, preview = preview));
                 null
             },
             let video: baml.media.Video => {
-                parts.push(_gm_media_part(video, fetch_url));
+                parts.push(_gm_media_part(video, fetch_url, preview = preview));
                 null
             },
             let pdf: baml.media.Pdf => {
-                parts.push(_gm_media_part(pdf, fetch_url));
+                parts.push(_gm_media_part(pdf, fetch_url, preview = preview));
                 null
             },
         };
@@ -486,11 +504,15 @@ class GooglePrompt {
 // ALL system messages merge into one `systemInstruction` (PLAN §5: google
 // merges, the other providers demote the 2nd+ to user) — matching sys_llm's
 // builder and the shipped native behavior.
-function google_lower_prompt(prompt: ai.Prompt, fetch_url: bool = true) -> GooglePrompt {
+function google_lower_prompt(
+    prompt: ai.Prompt,
+    fetch_url: bool = true,
+    preview: bool = false,
+) -> GooglePrompt {
     let system_parts: GmPart[] = [];
     let contents: GmContent[] = [];
     for (let message in prompt.messages()) {
-        let parts = _gm_prompt_parts(message, fetch_url);
+        let parts = _gm_prompt_parts(message, fetch_url = fetch_url, preview = preview);
         if (message.role == "system") {
             for (let part in parts) {
                 system_parts.push(part);
@@ -694,9 +716,10 @@ function gemini_build_body(
     safety_settings: root.SafetySetting[]?,
     request_body: baml.json.json?,
     fetch_url: bool = true,
+    preview: bool = false,
 ) -> string {
     let prompt = input.prompt(ai.wire.render_output_format(input.output_type));
-    let lowered = google_lower_prompt(prompt, fetch_url = fetch_url);
+    let lowered = google_lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
     let contents = lowered.contents;
     let journal = ai.wire.sanitize_for_client(input.journal, client_id);
     for (let item in google_lower_journal(journal)) {
@@ -745,9 +768,8 @@ function gemini_build_body(
             );
         }
         tools = [GmTool { functionDeclarations: declarations }];
-        tool_config = GmToolConfig {
-            functionCallingConfig: GmFunctionCallingConfig { mode: "AUTO" },
-        };
+        tool_config
+            = GmToolConfig { functionCallingConfig: GmFunctionCallingConfig { mode: "AUTO" } };
         null
     } else {
         null
@@ -866,9 +888,7 @@ function google_parse(resp: GmResponse, seq: int, provider: string = "google") -
             null
         } else if let inline: GmRespInlineData = p.inlineData {
             // Image-out models (gemini-*-image) answer with base64 media parts.
-            content.push(
-                _gm_output_media(inline.mimeType ?? "image/png", inline.data ?? ""),
-            );
+            content.push(_gm_output_media(inline.mimeType ?? "image/png", inline.data ?? ""));
             null
         } else {
             if let t: string = p.text {
@@ -920,10 +940,12 @@ function _gm_sse_failure(provider: string, error: unknown) -> ai.errors.Failure 
     // `baml.errors.Io.message` is the raw text; anything else is rendered.
     // Redacted because Vertex express mode signs the request with `?key=…` in
     // the URL, and the rendered transport error can carry the URL.
-    let text = ai.wire.redact_url_secrets(match (error) {
-        let io: baml.errors.Io => io.message,
-        _ => error.to_string(),
-    });
+    let text = ai.wire.redact_url_secrets(
+        match (error) {
+            let io: baml.errors.Io => io.message,
+            _ => error.to_string(),
+        },
+    );
     let marker = "failed with status ";
     if let start: int = text.index_of(marker) {
         let rest = text.slice(start + marker.length(), text.length());
@@ -947,11 +969,34 @@ function _gm_sse_failure(provider: string, error: unknown) -> ai.errors.Failure 
     }
 }
 
-// Open the SSE connection, classifying the failure precisely.
-function _gm_open_sse(req: baml.http.Request, provider: string) -> baml.http.SseStream {
-    baml.http.fetch_sse(req) catch_all (e) {
+// Route failures from the shared Google / Vertex stream opener. Timeout and
+// cancellation keep their typed control-flow meaning; only transport errors
+// enter the provider failure taxonomy.
+function _gm_route_sse_open(
+    provider: string,
+    open: () -> baml.http.SseStream throws unknown,
+) -> baml.http.SseStream {
+    open() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        let cancelled: baml.panics.Cancelled => throw cancelled,
         _ => throw _gm_sse_failure(provider, e),
     }
+}
+
+// Open the SSE connection, classifying the failure precisely.
+function _gm_open_sse(
+    req: baml.http.Request,
+    provider: string,
+    request_timeout_ms: int? = null,
+    time_to_first_token_timeout_ms: int? = null,
+) -> baml.http.SseStream {
+    _gm_route_sse_open(provider, () -> {
+        baml.http.fetch_sse(
+            req,
+            timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+            first_event_timeout = baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
+        )
+    })
 }
 
 // One SseStream batch -> provider-agnostic stream events.
@@ -1047,7 +1092,13 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.StreamEv
 
 // ai.ModelTurnInput -> one generateContent request.
 function google_render(c: root.GoogleClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _google_request(c, input, false)
+    _google_request(c, input, false, preview = false)
+}
+
+/// The request one `render` would send. URL media unsupported by the Gemini
+/// Developer API is rejected before any download is attempted.
+function google_preview(c: root.GoogleClient, input: ai.ModelTurnInput) -> baml.http.Request {
+    _google_request(c, input, false, preview = true)
 }
 
 // The shared request builder: identical body for both paths; streaming swaps
@@ -1056,6 +1107,7 @@ function _google_request(
     c: root.GoogleClient,
     input: ai.ModelTurnInput,
     stream: bool,
+    preview: bool = false,
 ) -> baml.http.Request {
     let body = gemini_build_body(
         input,
@@ -1070,15 +1122,20 @@ function _google_request(
         ),
         c.safety_settings,
         c.request_body,
+        preview = preview,
     );
     let base = c.resolved_base_url() ?? "https://generativelanguage.googleapis.com/v1beta";
-    let url = _gm_apply_query(
-        `${base}/models/${c.model}${gemini_method(stream)}`,
-        c.query_params,
-    );
+    let url = _gm_apply_query(`${base}/models/${c.model}${gemini_method(stream)}`, c.query_params);
     let headers: map<string, string> = { "content-type": "application/json" };
     let with_user = _gm_apply_headers(headers, c.headers);
-    let _ = with_user.set("x-goog-api-key", c.resolved_api_key());
+    if (!preview || with_user.get("x-goog-api-key") == null) {
+        let api_key = if (preview) {
+            "<PREVIEW>"
+        } else {
+            c.resolved_api_key()
+        };
+        let _ = with_user.set("x-goog-api-key", api_key);
+    }
     baml.http.Request { method: "POST", url: url, headers: with_user, body: body }
 }
 
@@ -1108,7 +1165,11 @@ function gemini_invoke_stream(
     // a connection that closes before it is a truncated turn, not an answer.
     ai.stream.TurnStream.from_sse(
         _gm_open_sse(req, "google"),
-        _google_decode_batch,
+        (batch: string) -> {
+            _google_decode_batch(batch) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        },
         require_terminal = "google",
     )
 }

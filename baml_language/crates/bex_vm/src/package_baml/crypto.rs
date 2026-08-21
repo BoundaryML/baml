@@ -253,7 +253,7 @@ fn open_error(vm: &mut BexVm, algorithm: &str, err: OpenError) -> VmRustFnError 
     };
     let algorithm = Value::object(vm.alloc_string(algorithm.to_string()));
     let reason = Value::object(vm.alloc_string(reason));
-    VmRustFnError::Thrown(Value::object(
+    VmRustFnError::thrown_fresh(Value::object(
         vm.alloc_instance(class_ptr, vec![algorithm, reason]),
     ))
 }

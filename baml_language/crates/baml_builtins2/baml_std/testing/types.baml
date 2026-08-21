@@ -91,5 +91,14 @@ class FlatTestReport {
     passed_names: string[],
     failed_names: string[],
     tolerated_names: string[],
+    /// Per-leaf durations, parallel to the matching name array, when the
+    /// executed child partition supplied them; EMPTY when the identities came
+    /// from fallback selection/failure correlation (durations unknown there).
+    /// `-1` marks an individual leaf with no measured run (an expansion
+    /// failure sentinel). Consumers must treat a shorter-than-names array as
+    /// "no duration for the tail", never index blindly.
+    passed_ms: int[],
+    failed_ms: int[],
+    tolerated_ms: int[],
     messages: string[],
 }

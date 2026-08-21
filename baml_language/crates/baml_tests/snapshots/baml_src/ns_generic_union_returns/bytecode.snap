@@ -177,15 +177,12 @@ function generic_union_returns.sap_nullable_container_types_are_preserved() -> b
     load_var statuses
     load_const 0
     call baml.Array.at
-    store_var _37
     jump L15
 
   L14:
     load_const null
-    store_var _37
 
   L15:
-    load_var _37
     load_const user.generic_union_returns.ParsedStatus.Ready
     alloc_variant user.generic_union_returns.ParsedStatus
     call baml.ops.equals_equals

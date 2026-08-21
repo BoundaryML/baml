@@ -3,33 +3,63 @@
 //! Compiler-phase and bytecode snapshots for the same corpus live in the
 //! single-compile pass in `src/corpus.rs`.
 
-/// Execute `baml test`
+/// The CLI's compile workload is allocation-dominated; its binary installs
+/// mimalloc for exactly this reason (see `baml_cli/src/main.rs`). The CLI now
+/// runs in-process here, so this test binary installs the same allocator to
+/// keep the corpus compile at the binary's speed.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+/// Execute `baml test` in-process via [`baml_cli::run_cli`].
+///
+/// In-process rather than a subprocess so the CLI is built once, as part of
+/// this test binary's own dependency graph — `cargo run -p baml_cli` re-
+/// resolves features for `baml_cli` alone and rebuilds its whole dependency
+/// chain inside the test (15+ minutes cold), serialized against every other
+/// test that shells out to cargo.
 #[test]
 fn baml_test() {
-    // Isolate the CLI's bytecode cache and home per run. Without this, the CLI
-    // writes `<project>/.baml/cache` straight into the source tree that the
-    // `corpus_snapshots`/`emit_determinism`/`link_units_oracle` tests scan
-    // concurrently, and successive runs share (and can corrupt) that cache.
-    let tmp = tempfile::tempdir().expect("tempdir for corpus cache");
-    let home = tmp.path().join("home");
-    std::fs::create_dir_all(&home).unwrap();
-    std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
-    let status = std::process::Command::new("cargo")
-        .args([
-            "run",
-            "-p",
-            "baml_cli",
-            "--",
-            "test",
-            "--from",
-            concat!(env!("CARGO_MANIFEST_DIR"), "/baml_src"),
-        ])
-        .env("BAML_CLI_ALLOW_DIRECT", "1")
-        .env("BAML_HOME", &home)
-        .env("BAML_CACHE_DIR", tmp.path().join("cache"))
-        .status()
-        .expect("baml_cli test should not fail");
-    assert!(status.success());
+    // The CLI's bytecode cache lives under the cargo target dir — outside the
+    // source tree that the `corpus_snapshots`/`emit_determinism`/
+    // `link_units_oracle` tests scan (the default would be
+    // `baml_src/.baml/cache`) — and stays warm across runs, so an unchanged
+    // corpus recompiles nothing. The cache is content-addressed with the
+    // compiler fingerprint in the key, so staleness is a miss, never a wrong
+    // hit.
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("crates/baml_tests sits two levels under the workspace root")
+        .to_path_buf();
+    let target_dir = std::env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .map(|dir| {
+            if dir.is_absolute() {
+                dir
+            } else {
+                workspace_root.join(dir)
+            }
+        })
+        .unwrap_or_else(|| workspace_root.join("target"));
+    // SAFETY: `BAML_CACHE_DIR` is only ever read back (by the CLI cache layer
+    // inside the `run_cli` call below); the one other test in this binary
+    // (`promptfiddle_demo_compiles`) touches no environment, and nothing else
+    // in this process mutates it.
+    unsafe {
+        std::env::set_var("BAML_CACHE_DIR", target_dir.join("baml-corpus-cache"));
+    }
+
+    let argv = vec![
+        "baml".to_string(),
+        "test".to_string(),
+        "--from".to_string(),
+        concat!(env!("CARGO_MANIFEST_DIR"), "/baml_src").to_string(),
+    ];
+    let code = baml_cli::run_cli(argv).expect("baml test should not error");
+    assert!(
+        matches!(code, baml_cli::ExitCode::Success),
+        "baml test exited with {code:?}"
+    );
 }
 
 #[test]

@@ -53,6 +53,18 @@ pub struct HighlightSpan {
 
 pub type SourceHighlights = HashMap<FileId, Vec<HighlightSpan>>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DiagnosticMessageHighlightError;
+
 pub trait DiagnosticMessageHighlighter {
-    fn highlight(&self, kind: DiagnosticMessageKind, text: &str) -> Vec<HighlightSpan>;
+    /// Return semantic spans for a diagnostic-message fragment.
+    ///
+    /// An error asks the human renderer to retry the entire diagnostic with its
+    /// graphical no-color theme. This preserves the source diagram and labels
+    /// when a synthesized fragment cannot be parsed safely.
+    fn highlight(
+        &self,
+        kind: DiagnosticMessageKind,
+        text: &str,
+    ) -> Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError>;
 }

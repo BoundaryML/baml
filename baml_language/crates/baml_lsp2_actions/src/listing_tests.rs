@@ -174,6 +174,7 @@ function Summarize(input: string) -> string {
     // lowered as an item, so it is deliberately absent from this listing.
     for name in [
         "Summarize$spec",
+        "Summarize$build_request",
         "Summarize$render_prompt",
         "Summarize$parse",
     ] {

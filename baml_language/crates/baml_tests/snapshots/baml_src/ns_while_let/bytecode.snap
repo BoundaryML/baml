@@ -269,11 +269,13 @@ function while_let.alternate() -> int {
 
 function while_let.body_local() -> int {
     load_const 2
+    store_var cur
 
   L0:
+    load_var cur
     store_var _3
     load_var _3
-    narrow_bind int, slot=1
+    narrow_bind int, slot=2
     pop_jump_if_false L1
     jump L2
 
@@ -290,6 +292,7 @@ function while_let.body_local() -> int {
     cmp_int_op >
     pop_jump_if_false L3
     load_const null
+    store_var cur
 
   L3:
     load_var v
@@ -302,10 +305,12 @@ function while_let.body_local() -> int {
     load_var v
     load_const 1
     sub_int
+    store_var cur
     jump L0
 
   L5:
     load_const null
+    store_var cur
     jump L0
 }
 

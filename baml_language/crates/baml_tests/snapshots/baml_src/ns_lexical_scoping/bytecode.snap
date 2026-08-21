@@ -236,7 +236,6 @@ function lexical_scoping.catch_base_uses_outer_lambda() -> int {
     make_closure .<lambda(catch_base_uses_outer_lambda, 0)>, 0
     call_indirect
     call user.lexical_scoping.throw_string_arg
-    store_var caught
     jump L2
     load_var e
     is_type string
@@ -249,10 +248,8 @@ function lexical_scoping.catch_base_uses_outer_lambda() -> int {
 
   L1:
     load_var e
-    store_var caught
 
   L2:
-    load_var caught
     is_type "base"
     pop_jump_if_false L3
     jump L4

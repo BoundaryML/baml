@@ -259,6 +259,16 @@ pub enum SyntaxKind {
     FIELD_ACCESS_EXPR,
     /// Explicit interface/static upcast projection: `<expr>.as<T>`.
     UPCAST_EXPR,
+    /// Fully-qualified item reference: `(Base as Interface).item`.
+    ///
+    /// Structure: `L_PAREN TYPE_EXPR KW_AS TYPE_EXPR R_PAREN DOT WORD` — the
+    /// value-namespace twin of the associated-type projection the same
+    /// spelling denotes in type position, and the only spelling that pins
+    /// BOTH halves of the `(Self type, interface, item)` triple. Needed
+    /// wherever neither half can be inferred: a method declared by two
+    /// implemented interfaces, or one whose `Self` appears only in return
+    /// position.
+    QUALIFIED_PATH_EXPR,
     /// LLM function spec reference: `MyFunc@spec` (postfix `@spec` on a path).
     ///
     /// Structure: `<PATH_EXPR> AT WORD("spec")`. Lowered by renaming the

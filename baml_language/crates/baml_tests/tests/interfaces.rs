@@ -2700,7 +2700,7 @@ fn as_requires_interface_target() {
             return d.as<Dog>
         }
         "#,
-        "requires an interface target",
+        "expected an interface qualifier",
     );
 }
 
@@ -3554,9 +3554,73 @@ fn inherited_generic_interface_field_construction_uses_parent_args() {
     );
 }
 
+// The success case — a generic interface's default method as a first-class
+// value through the qualifier — lives in the corpus
+// (baml_src/ns_item_projections, `generic_interface_default_method_reference`)
+// where it pins bytecode and asserts behavior. Only the diagnostic stays here.
 #[test]
-fn generic_interface_default_method_reference_compiles() {
-    assert_no_compile_errors(
+fn selfless_interface_method_is_not_reachable_through_a_value() {
+    // A static method is reached through the TYPE, never a value: the value
+    // carries nothing the call needs, and reading it as a receiver is what
+    // let it be smuggled into the first real parameter.
+    for spelling in ["g.build(1)", "let f = g.build"] {
+        let source = format!(
+            r#"
+        interface Buildable {{
+            function build(seed: int) -> Self
+        }}
+        class Gadget {{
+            implements Buildable {{
+                function build(seed: int) -> Self throws never {{ Gadget {{}} }}
+            }}
+        }}
+        function main() -> void {{
+            let g = Gadget {{}}
+            {spelling}
+        }}
+        "#
+        );
+        assert_compile_error_code(&source, "E0001");
+        // The receiver here is CONCRETE, so the member resolves through the
+        // impl rather than the interface slot. Pin the declaring interface in
+        // the message: reading it off only the symbolic declarer silently
+        // degrades this — the common case — to the un-named wording, which no
+        // code-only assertion would catch.
+        assert_compile_error_contains(&source, "on interface `Buildable`");
+    }
+}
+
+#[test]
+fn selfless_inherent_method_is_not_reachable_through_a_value() {
+    // The same rule for a class-INHERENT static, so the two kinds cannot
+    // diverge: `Widget.make(..)` is the only spelling.
+    for spelling in ["w.make(1)", "let f = w.make"] {
+        let source = format!(
+            r#"
+        class Widget {{
+            n: int
+            function make(seed: int) -> Widget throws never {{ Widget {{ n: seed }} }}
+        }}
+        function main() -> void {{
+            let w = Widget {{ n: 0 }}
+            {spelling}
+        }}
+        "#
+        );
+        assert_compile_error_code(&source, "E0001");
+        // The twin of the interface case: no interface declares `make`, so the
+        // message names the owning TYPE. Pinned so the un-named wording stays
+        // reserved for genuinely inherent statics.
+        assert_compile_error_contains(&source, "`TypeName.make(...)`");
+    }
+}
+
+#[test]
+fn bare_interface_method_value_requires_inferable_self() {
+    // With nothing pinning `Self` — the value is never called and carries no
+    // expectation — the reference is rejected (rustc's `let f = Ord::cmp;`
+    // E0790 shape) rather than emitted with an unresolved `Self` frame slot.
+    assert_compile_error_code(
         r#"
         interface Label<T> {
             function label(self) -> string throws never {
@@ -3570,6 +3634,7 @@ fn generic_interface_default_method_reference_compiles() {
             let label = Label.label
         }
         "#,
+        "E0002",
     );
 }
 

@@ -185,6 +185,9 @@ fn rewrite_catch_region_blocks(regions: &mut Vec<CatchRegion>, map: &[Option<Blo
             .iter()
             .filter_map(|b| map[b.0])
             .collect();
+        // Same for the protected body blocks (a removed block was unreachable
+        // and had nothing to protect).
+        region.body_blocks = region.body_blocks.iter().filter_map(|b| map[b.0]).collect();
         true
     });
 }
@@ -305,6 +308,10 @@ fn merge_passthrough_blocks(body: &mut MirFunctionBody) {
                 *b = new_b;
             }
         }
+        // A redirected passthrough block is empty (no instructions to
+        // protect), and remapping it to its target would wrongly extend the
+        // protected range over the target's instructions — drop it instead.
+        region.body_blocks.retain(|b| !resolved.contains_key(b));
     }
 
     // Step 5: entry block redirect (shouldn't happen since we excluded it, but be safe)
@@ -397,6 +404,11 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
             crate::Rvalue::MakeClosure { captures, .. } => {
                 for cap in captures {
                     scan_operand(cap, set);
+                }
+            }
+            crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+                for arg in type_args {
+                    scan_operand(arg, set);
                 }
             }
             crate::Rvalue::MakeBoundMethod { receiver, .. }
@@ -702,6 +714,11 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 count_in_operand(cap, uses);
+            }
+        }
+        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+            for arg in type_args {
+                count_in_operand(arg, uses);
             }
         }
         crate::Rvalue::MakeBoundMethod { receiver, .. }
@@ -1074,6 +1091,11 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
                 apply_subst_to_operand(cap, subst);
             }
         }
+        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+            for arg in type_args {
+                apply_subst_to_operand(arg, subst);
+            }
+        }
         crate::Rvalue::MakeBoundMethod { receiver, .. }
         | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. }
         | crate::Rvalue::VirtualFieldAccess { receiver, .. } => {
@@ -1379,6 +1401,11 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
                 remap_operand(cap, map);
             }
         }
+        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+            for arg in type_args {
+                remap_operand(arg, map);
+            }
+        }
         crate::Rvalue::MakeBoundMethod { receiver, .. }
         | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. }
         | crate::Rvalue::VirtualFieldAccess { receiver, .. } => {
@@ -1660,6 +1687,11 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                                 check_operand(cap, &blk);
                             }
                         }
+                        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+                            for arg in type_args {
+                                check_operand(arg, &blk);
+                            }
+                        }
                         crate::Rvalue::MakeBoundMethod { receiver, .. }
                         | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. }
                         | crate::Rvalue::VirtualFieldAccess { receiver, .. } => {
@@ -1842,6 +1874,12 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
             "dangling handler {:?} in catch_region[{i}] of MIR function {name}",
             region.handler,
         );
+        for b in &region.body_blocks {
+            assert!(
+                b.0 < num_blocks,
+                "dangling body block {b:?} in catch_region[{i}] of MIR function {name}",
+            );
+        }
         assert!(
             region.error_local.0 < num_locals,
             "dangling error_local {} in catch_region[{i}] of MIR function {name}",

@@ -55,6 +55,22 @@ class GenericBox<T> {
   function static_pair<U>(left: T, right: U) -> string {
     type.of<T | U>().to_string()
   }
+
+  // Python stub regressions: required value inference must coexist with a
+  // defaulted keyword-only argument on both instance and static methods.
+  function pair_with_default<U>(self, other: U, label: string = "default") -> U {
+    other
+  }
+
+  function new_with_default<V>(value: V, label: string = "default") -> GenericBox<V> {
+    GenericBox<V> { value: value }
+  }
+
+  // No argument can carry V, so host stubs must require `_types=` while still
+  // rendering a valid zero-argument static-method signature.
+  function static_type_name<V>() -> string {
+    type.of<V>().to_string()
+  }
 }
 
 // Static method whose TypeVar names differ from the enclosing class's params
@@ -129,6 +145,17 @@ function generic_name_collision<foo_bar, fooBar>(left: foo_bar, right: fooBar) -
 // ---------------------------------------------------------------------------
 
 function identity<T>(x: T) -> T {
+  x
+}
+
+// A required value carries T even though a later argument is defaulted.
+function identity_with_default<T>(x: T, label: string = "default") -> T {
+  x
+}
+
+// Defaulted parameters remain runtime inference positions: when omitted,
+// Rule 4 binds T to rust_type, so Python stubs may omit `_types=`.
+function optional_only<T>(x: T? = null) -> T? {
   x
 }
 
@@ -330,6 +357,12 @@ function triple_choose<T>(a: T, b: T, c: T) -> string {
 // §J multiple unconstrained TypeVars in one union: un-inferrable ⇒ reject (two
 // free vars beside a concrete `int` member have no principled split).
 function two_in_union<T, U>(x: T | U | int) -> string {
+  type.of<T | U>().to_string()
+}
+
+// The ambiguous union cannot bind either free var by itself, but separate
+// ordinary value positions can bind both before the engine's fallback gate.
+function two_in_union_with_values<T, U>(x: T | U | int, left: T, right: U) -> string {
   type.of<T | U>().to_string()
 }
 

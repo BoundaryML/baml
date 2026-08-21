@@ -118,7 +118,7 @@ fn generate_fixture(
             .unwrap_or_else(|error| panic!("C# bytecode compilation failed: {error:?}")),
     )
     .expect("C# fixture bytecode serialization failed");
-    let output_directory = fixture.join("baml_client");
+    let output_directory = fixture.join("baml_sdk");
     let embedded_baml_toml = format!(
         "[__baml_codegen]\nmetadata_version = 1\n\n[__baml_codegen.toolchain]\nversion = {:?}\n",
         baml_version::CANONICAL_VERSION
@@ -162,7 +162,7 @@ fn generate_fixture(
 }
 
 fn verify_phase6_surface(fixture: &std::path::Path) {
-    let generated = fixture.join("baml_client").join("CsharpPhase6");
+    let generated = fixture.join("baml_sdk").join("CsharpPhase6");
     let functions = fs::read_to_string(generated.join("Functions.g.cs"))
         .expect("failed to read generated Phase 6 function surface");
     let box_source = fs::read_to_string(generated.join("Box.g.cs"))
@@ -207,7 +207,7 @@ fn verify_phase6_surface(fixture: &std::path::Path) {
 }
 
 fn verify_phase11_surface(fixture: &std::path::Path) {
-    let generated = fixture.join("baml_client").join("CsharpPhase11");
+    let generated = fixture.join("baml_sdk").join("CsharpPhase11");
     let functions = fs::read_to_string(generated.join("Functions.g.cs"))
         .expect("failed to read generated Phase 11 function surface");
     let callback_box = fs::read_to_string(generated.join("CallbackBox.g.cs"))
@@ -250,7 +250,7 @@ fn verify_phase11_surface(fixture: &std::path::Path) {
 }
 
 fn verify_phase12_surface(fixture: &std::path::Path) {
-    let generated = fixture.join("baml_client").join("Baml");
+    let generated = fixture.join("baml_sdk").join("Baml");
     let file = fs::read_to_string(generated.join("Fs").join("File.g.cs"))
         .expect("failed to read generated typed File resource surface");
     let fs_functions = fs::read_to_string(generated.join("Fs").join("Functions.g.cs"))
@@ -519,7 +519,7 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
 
     let local_id = fs::read_to_string(
         fixture
-            .join("baml_client")
+            .join("baml_sdk")
             .join("Boundary")
             .join("LocalId.g.cs"),
     )
@@ -622,7 +622,7 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
 
     let boundary_functions = fs::read_to_string(
         fixture
-            .join("baml_client")
+            .join("baml_sdk")
             .join("Boundary")
             .join("Functions.g.cs"),
     )

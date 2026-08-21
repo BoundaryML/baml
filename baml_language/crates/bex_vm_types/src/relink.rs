@@ -82,6 +82,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::VirtualCall { .. }
             | I::VirtualCallWithRuntimeId { .. }
             | I::MakeVirtualBoundMethod { .. }
+            | I::MakeVirtualFunction { .. }
             | I::JumpTable(..)
             | I::Discriminant
             | I::TypeTag

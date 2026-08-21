@@ -800,6 +800,24 @@ pub enum Instruction {
         ntypeargs: u16,
     },
 
+    /// Resolve an *interface* method to a callable value from a written `Self`
+    /// TYPE — the type-keyed analogue of `MakeVirtualBoundMethod`, and the only
+    /// dispatch form for a method with no `self` receiver (there is no value to
+    /// derive `Self` from). Pops the method name, the interface type
+    /// (`Object::Type`), `ntypeargs` method-level type args, and the `Self`
+    /// type (`Object::Type`, in the receiver's stack slot); resolves `Self`'s
+    /// `implements` rule (coherence guarantees at most one) and pushes a
+    /// capture-less `Object::Closure` over the resolved method, whose
+    /// `captured_type_args` carry the callee's complete frame — the impl's
+    /// realized frame followed by the method-level args.
+    ///
+    /// Stack: `[self_type, type_args…, iface_type, method_name]` -> `[closure]`
+    MakeVirtualFunction {
+        /// Number of method-level `Object::Type` args on the stack (below the
+        /// interface type), appended to the resolved impl frame.
+        ntypeargs: u16,
+    },
+
     /// Create a generic-function value (`foo<T>`) from a base function's global
     /// index, popping `ntypeargs` `Object::Type` values from the stack into its
     /// `type_args`. Used for param-dependent instantiations; the fully-concrete
@@ -1099,6 +1117,12 @@ pub enum OpCode {
     // pop a value, push its truthiness (`false`, `null`, zero, and empty
     // string/list/map/bytes are falsy; everything else is truthy).
     Truthy,
+
+    // Virtual interface-method value resolved from a written `Self` TYPE (the
+    // type-keyed analogue of `MakeVirtualBoundMethod`): u16 method-level type
+    // arg count; `Self` type, interface type, and method name come off the
+    // stack and the resolved capture-less closure is pushed.
+    MakeVirtualFunction,
 }
 
 impl OpCode {
@@ -1229,7 +1253,9 @@ impl OpCode {
             Self::LoadCurrentPackage => 5,
 
             // 3-byte: opcode + u16
-            Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
+            Self::MakeGenericFunctionFromValue
+            | Self::MakeVirtualBoundMethod
+            | Self::MakeVirtualFunction => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
             Self::AllocInstance
@@ -1260,6 +1286,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Throw as u8 => Ok(Self::Throw),
             x if x == Self::Rethrow as u8 => Ok(Self::Rethrow),
             x if x == Self::MakeVirtualBoundMethod as u8 => Ok(Self::MakeVirtualBoundMethod),
+            x if x == Self::MakeVirtualFunction as u8 => Ok(Self::MakeVirtualFunction),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
@@ -1401,6 +1428,7 @@ impl std::fmt::Display for OpCode {
             Self::Throw => "THROW",
             Self::Rethrow => "RETHROW",
             Self::MakeVirtualBoundMethod => "MAKE_VIRTUAL_BOUND_METHOD",
+            Self::MakeVirtualFunction => "MAKE_VIRTUAL_FUNCTION",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
@@ -1724,6 +1752,9 @@ impl std::fmt::Display for Instruction {
             Instruction::MakeVirtualBoundMethod { ntypeargs } => {
                 write!(f, "MAKE_VIRTUAL_BOUND_METHOD {ntypeargs}")
             }
+            Instruction::MakeVirtualFunction { ntypeargs } => {
+                write!(f, "MAKE_VIRTUAL_FUNCTION {ntypeargs}")
+            }
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
@@ -1855,8 +1886,12 @@ pub struct DebugLocalScope {
 /// transfers control to `handler_pc`, with the exception value stored
 /// in the frame-local slot `error_slot`.
 ///
-/// Entries are sorted by `start_pc`. For nested catch blocks the innermost
-/// (narrowest range) entry appears first.
+/// One catch region contributes one entry per coalesced run of its protected
+/// blocks (block layout can fragment a region across non-contiguous PCs), so
+/// several entries may share a `handler_pc`. Entries are stably sorted by
+/// `start_pc`; the VM picks the innermost covering entry by largest
+/// `start_pc`, then smallest `end_pc`, then latest table order (identical
+/// ranges are emitted outer-region-first).
 ///
 /// All exceptions (user-thrown values and VM panics) are routed to the
 /// handler. The handler bytecode is responsible for filtering: a
@@ -2310,7 +2345,8 @@ impl Bytecode {
 
                 // ── MakeGenericFunctionFromValue: u16 ntypeargs ──────
                 Instruction::MakeGenericFunctionFromValue { ntypeargs }
-                | Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+                | Instruction::MakeVirtualBoundMethod { ntypeargs }
+                | Instruction::MakeVirtualFunction { ntypeargs } => {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
@@ -2537,6 +2573,7 @@ impl Bytecode {
             Instruction::Throw => OpCode::Throw,
             Instruction::Rethrow => OpCode::Rethrow,
             Instruction::MakeVirtualBoundMethod { .. } => OpCode::MakeVirtualBoundMethod,
+            Instruction::MakeVirtualFunction { .. } => OpCode::MakeVirtualFunction,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,

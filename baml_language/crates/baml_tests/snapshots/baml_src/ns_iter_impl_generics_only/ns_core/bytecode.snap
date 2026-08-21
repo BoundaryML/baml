@@ -75,7 +75,6 @@ function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: <unresolve
 
   L0:
     load_var _4
-    store_var _0
     jump L3
 
   L1:
@@ -89,10 +88,8 @@ function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: <unresolve
     load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L3:
-    load_var _0
     return
 }
 
@@ -659,7 +656,6 @@ function iter_impl_generics_only.core.Peekable.Iterator<T, E>.next(self: <unreso
     load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L2
 
   L1:
@@ -673,10 +669,8 @@ function iter_impl_generics_only.core.Peekable.Iterator<T, E>.next(self: <unreso
     load_const false
     store_field .has_buffer
     load_var v
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -834,7 +828,7 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: <unresolv
     store_var i
 
   L1:
-    load_var2 3 1
+    load_var2 2 1
     load_field .n
     load_const 1
     sub_int
@@ -848,7 +842,6 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: <unresolv
     load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
     jump L7
 
   L3:
@@ -872,7 +865,6 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: <unresolv
 
   L5:
     alloc_instance user.iter_impl_generics_only.core.Done
-    store_var _0
     jump L7
 
   L6:
@@ -884,10 +876,8 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: <unresolv
     load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L7:
-    load_var _0
     return
 }
 

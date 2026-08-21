@@ -40,9 +40,19 @@ class ClaudeCodeClient {
             `claude-code/${self.model}`
         }
 
+        // Claude Code is a process-backed client rather than an HTTP client;
+        // there is no wire Request to preview. Keep this explicit so adding
+        // render to ai.Client cannot accidentally invoke the CLI.
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            throw ai.errors.PreviewUnsupported {
+                provider: "claude-code",
+                detail: "claude-code has no HTTP request representation",
+            }
+        }
+
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.invoke(self, input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

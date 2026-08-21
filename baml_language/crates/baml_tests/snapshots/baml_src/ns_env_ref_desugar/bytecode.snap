@@ -87,6 +87,7 @@ function env_ref_desugar.EnvRefBadClientFn(client: <unresolved type #34575171419
   L0:
     load_type string
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -95,12 +96,29 @@ function env_ref_desugar.EnvRefBadClientFn(client: <unresolved type #34575171419
     call user.env_ref_desugar.EnvRefBadClientFn$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
     load_var _3
     load_field .value
+    return
+}
+
+function env_ref_desugar.EnvRefBadClientFn$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.env_ref_desugar.EnvRefBadClientFn$spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
     return
 }
 
@@ -210,6 +228,7 @@ function env_ref_desugar.EnvRefDesugarFn(client: <unresolved type #3457517141944
   L0:
     load_type string
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -218,12 +237,29 @@ function env_ref_desugar.EnvRefDesugarFn(client: <unresolved type #3457517141944
     call user.env_ref_desugar.EnvRefDesugarFn$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
     load_var _3
     load_field .value
+    return
+}
+
+function env_ref_desugar.EnvRefDesugarFn$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.env_ref_desugar.EnvRefDesugarFn$spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
     return
 }
 
@@ -305,6 +341,7 @@ function env_ref_desugar.EnvRefDynClientFn(client: <unresolved type #34575171419
   L0:
     load_type string
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -313,12 +350,29 @@ function env_ref_desugar.EnvRefDynClientFn(client: <unresolved type #34575171419
     call user.env_ref_desugar.EnvRefDynClientFn$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
     load_var _3
     load_field .value
+    return
+}
+
+function env_ref_desugar.EnvRefDynClientFn$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.env_ref_desugar.EnvRefDynClientFn$spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
     return
 }
 

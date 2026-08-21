@@ -122,7 +122,9 @@ function streaming_sse_primitives.sse_close_does_not_hang_fn() -> bool {
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_var sse
     sys_op baml.http.SseStream.next
@@ -173,7 +175,9 @@ function streaming_sse_primitives.sse_custom_headers_fn() -> bool {
     load_var headers
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_var sse
     sys_op baml.http.SseStream.next
@@ -232,7 +236,9 @@ function streaming_sse_primitives.sse_empty_stream_returns_null_fn() -> string {
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_var sse
     sys_op baml.http.SseStream.next
@@ -287,7 +293,9 @@ function streaming_sse_primitives.sse_event_fields_in_json_fn() -> bool {
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_var sse
     sys_op baml.http.SseStream.next
@@ -374,7 +382,9 @@ function streaming_sse_primitives.sse_event_id_null_when_not_set_fn() -> bool {
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_var sse
     sys_op baml.http.SseStream.next
@@ -453,7 +463,9 @@ function streaming_sse_primitives.sse_fetch_and_next_returns_events_fn() -> bool
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_var sse
     sys_op baml.http.SseStream.next
@@ -516,7 +528,9 @@ function streaming_sse_primitives.sse_fetch_error_on_bad_status_fn() -> bool {
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_const "expected fetch_sse on a 500 response to throw"
     call baml.sys.panic
@@ -577,7 +591,9 @@ function streaming_sse_primitives.sse_http_4xx_error_fn() -> bool {
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_const "expected fetch_sse on a 403 response to throw"
     call baml.sys.panic
@@ -651,7 +667,9 @@ function streaming_sse_primitives.sse_large_event_payload_fn() -> bool {
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_var sse
     sys_op baml.http.SseStream.next
@@ -709,7 +727,9 @@ function streaming_sse_primitives.sse_next_after_close_returns_null_fn() -> stri
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_var sse
     sys_op baml.http.SseStream.next
@@ -772,7 +792,9 @@ function streaming_sse_primitives.sse_next_returns_null_when_done_fn() -> bool {
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_var sse
     sys_op baml.http.SseStream.next
@@ -839,7 +861,9 @@ function streaming_sse_primitives.sse_post_with_body_fn() -> bool {
     alloc_map 0
     load_const "my-request-body"
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.fetch_sse
+    load_const <omitted>
+    load_const <omitted>
+    call baml.http.fetch_sse
     store_var sse
     load_var sse
     sys_op baml.http.SseStream.next

@@ -131,25 +131,25 @@ impl BamlClassTypeValue for PackageBamlImpl {
             }
             _ => "output".to_string(),
         };
+        // Run the bounded specialization analysis first: the subsequent structural
+        // interface walk keys every realization and would otherwise follow a
+        // non-regular generic transform forever.
+        if let Some(message) = first_render_schema_error(vm, &type_value.ty) {
+            let diagnostic = super::type_kinds::compiler_diagnostic(
+                baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
+                message,
+            );
+            return Err(VmRustFnError::thrown_fresh(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
         let mut visited = std::collections::HashSet::new();
         if let Some((field, open_ty)) =
             first_open_interface(vm, &type_value.ty, &root, &mut visited)
         {
             let diagnostic =
                 baml_compiler_diagnostics::runtime_type::open_interface_at_render(&field, &open_ty);
-            return Err(VmRustFnError::Thrown(
-                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-            ));
-        }
-
-        if let Some(name) = first_conflicting_render_name(vm, &type_value.ty) {
-            let diagnostic = super::type_kinds::compiler_diagnostic(
-                baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
-                format!(
-                    "type `{name}` has non-equivalent definitions in the same LLM render context"
-                ),
-            );
-            return Err(VmRustFnError::Thrown(
+            return Err(VmRustFnError::thrown_fresh(
                 super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
             ));
         }
@@ -166,7 +166,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
                     &non_data_ty,
                 )
             };
-            return Err(VmRustFnError::Thrown(
+            return Err(VmRustFnError::thrown_fresh(
                 super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
             ));
         }
@@ -232,30 +232,101 @@ enum RenderDefinition {
     TypeAlias(bex_vm_types::HeapPtr),
 }
 
+/// One realization of a generic class — the declaration's identity plus the
+/// exact arguments — so `Foo<int>` and `Foo<string>` are two entries while two
+/// mentions of `Foo<int>` are one.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct RealizedClassIdentity {
+    head: bex_vm_types::TypeHead,
+    args: Vec<bex_vm_types::RealizedTy>,
+}
+
+struct RealizedClassFrame {
+    identity: RealizedClassIdentity,
+    head: bex_vm_types::TypeHead,
+    display_name: String,
+    arity: usize,
+}
+
+struct RenderedClass {
+    identity: RealizedClassIdentity,
+    display_name: String,
+    rendered_name: String,
+    definition: RenderDefinition,
+}
+
 struct RenderDefinitionValidator<'a> {
     vm: &'a BexVm,
     by_display_name: std::collections::HashMap<String, RenderDefinition>,
     visited: std::collections::HashSet<RenderDefinition>,
+    class_ancestry: Vec<RealizedClassFrame>,
+    recursive_classes: std::collections::HashSet<RealizedClassIdentity>,
+    rendered_classes: Vec<RenderedClass>,
 }
 
+/// The origins lane used by the render walk: symbolic realizations headed by
+/// the same declaration identities the walk itself keys on.
+type RenderOrigins = baml_type::template::TyTemplateOrigins<bex_vm_types::TypeHead>;
+
 impl RenderDefinitionValidator<'_> {
-    fn visit(&mut self, ty: &bex_vm_types::RealizedTy) -> Option<String> {
+    fn visit(&mut self, ty: &bex_vm_types::RealizedTy, origins: &RenderOrigins) -> Option<String> {
         match ty {
             bex_vm_types::RealizedTy::Class(head, args, _) => {
                 let definition = RenderDefinition::Class(head.ptr());
                 if let Some(conflict) = self.check_name(&definition) {
                     return Some(conflict);
                 }
-                if !self.visited.insert(definition) {
+                let identity = RealizedClassIdentity {
+                    head: *head,
+                    args: args.clone(),
+                };
+                if let Some(start) = self
+                    .class_ancestry
+                    .iter()
+                    .position(|ancestor| ancestor.identity == identity)
+                {
+                    self.recursive_classes.extend(
+                        self.class_ancestry[start..]
+                            .iter()
+                            .map(|ancestor| ancestor.identity.clone()),
+                    );
                     return None;
                 }
+
+                let display_name = realized_class_name(*head, args);
+                for (index, ancestor) in self.class_ancestry.iter().enumerate() {
+                    if ancestor.head == *head
+                        && origins.class_transform_expands(index, head, ancestor.arity)
+                    {
+                        return Some(format!(
+                            "non-regular recursive generic class `{}` expands from `{}` to `{display_name}` and cannot be rendered as an LLM output schema",
+                            baml_type::HeadDisplay::head_display_name(head),
+                            ancestor.display_name,
+                        ));
+                    }
+                }
+
                 let class = find_render_class(self.vm, *head)?;
+                let rendered_name = rendered_realized_class_name(class, args);
+                self.rendered_classes.push(RenderedClass {
+                    identity: identity.clone(),
+                    display_name: display_name.clone(),
+                    rendered_name,
+                    definition,
+                });
+                self.class_ancestry.push(RealizedClassFrame {
+                    identity,
+                    head: *head,
+                    display_name,
+                    arity: args.len(),
+                });
                 for field in &class.fields {
                     if field.skip {
                         continue;
                     }
                     if let Some(runtime) = &field.runtime_type {
-                        if let Some(conflict) = self.visit(&runtime.ty) {
+                        let runtime_origins = RenderOrigins::opaque(self.class_ancestry.len());
+                        if let Some(conflict) = self.visit(&runtime.ty, &runtime_origins) {
                             return Some(conflict);
                         }
                         continue;
@@ -268,12 +339,15 @@ impl RenderDefinitionValidator<'_> {
                             .or_else(|| {
                                 bex_vm_types::RealizedTy::try_from(field.field_type.clone()).ok()
                             });
-                    if let Some(field_ty) = field_ty
-                        && let Some(conflict) = self.visit(&field_ty)
-                    {
-                        return Some(conflict);
+                    if let Some(field_ty) = field_ty {
+                        let field_origins =
+                            origins.through_field(head, args.len(), &field.field_template);
+                        if let Some(conflict) = self.visit(&field_ty, &field_origins) {
+                            return Some(conflict);
+                        }
                     }
                 }
+                self.class_ancestry.pop();
                 None
             }
             bex_vm_types::RealizedTy::Enum(head, _) => {
@@ -295,18 +369,24 @@ impl RenderDefinitionValidator<'_> {
                 self.vm
                     .type_alias_definition(head.ptr())
                     .cloned()
-                    .and_then(|alias| self.visit(&alias))
+                    .and_then(|alias| {
+                        let alias_origins = RenderOrigins::opaque(self.class_ancestry.len());
+                        self.visit(&alias, &alias_origins)
+                    })
             }
-            bex_vm_types::RealizedTy::List(element, _) => self.visit(element),
-            bex_vm_types::RealizedTy::Map { key, value, .. } => {
-                self.visit(key).or_else(|| self.visit(value))
+            bex_vm_types::RealizedTy::List(element, _) => {
+                self.visit(element, &origins.list_element())
             }
-            bex_vm_types::RealizedTy::Union(members, _) => {
-                members.iter().find_map(|member| self.visit(member))
-            }
-            bex_vm_types::RealizedTy::Future(value, error, _) => {
-                self.visit(value).or_else(|| self.visit(error))
-            }
+            bex_vm_types::RealizedTy::Map { key, value, .. } => self
+                .visit(key, &origins.map_key())
+                .or_else(|| self.visit(value, &origins.map_value())),
+            bex_vm_types::RealizedTy::Union(members, _) => members
+                .iter()
+                .enumerate()
+                .find_map(|(index, member)| self.visit(member, &origins.union_member(index))),
+            bex_vm_types::RealizedTy::Future(value, error, _) => self
+                .visit(value, &origins.future_value())
+                .or_else(|| self.visit(error, &origins.future_error())),
             bex_vm_types::RealizedTy::Function {
                 params,
                 ret,
@@ -314,11 +394,35 @@ impl RenderDefinitionValidator<'_> {
                 ..
             } => params
                 .iter()
-                .find_map(|param| self.visit(&param.ty))
-                .or_else(|| self.visit(ret))
-                .or_else(|| self.visit(throws)),
+                .enumerate()
+                .find_map(|(index, param)| self.visit(&param.ty, &origins.function_param(index)))
+                .or_else(|| self.visit(ret, &origins.function_return()))
+                .or_else(|| self.visit(throws, &origins.function_throws())),
             _ => None,
         }
+    }
+
+    fn first_recursive_alias_collision(&self) -> Option<String> {
+        let mut by_rendered_name = std::collections::HashMap::<&str, &RenderedClass>::new();
+        for class in self
+            .rendered_classes
+            .iter()
+            .filter(|class| self.recursive_classes.contains(&class.identity))
+        {
+            if let Some(first) = by_rendered_name.get(class.rendered_name.as_str()) {
+                let equivalent = first.identity.args == class.identity.args
+                    && render_definitions_equivalent(self.vm, &first.definition, &class.definition);
+                if first.identity != class.identity && !equivalent {
+                    return Some(format!(
+                        "classes `{}` and `{}` both render as `{}` in the same LLM render context",
+                        first.display_name, class.display_name, class.rendered_name,
+                    ));
+                }
+            } else {
+                by_rendered_name.insert(class.rendered_name.as_str(), class);
+            }
+        }
+        None
     }
 
     fn check_name(&mut self, definition: &RenderDefinition) -> Option<String> {
@@ -327,7 +431,9 @@ impl RenderDefinitionValidator<'_> {
             if previous != definition
                 && !render_definitions_equivalent(self.vm, previous, definition)
             {
-                return Some(display_name);
+                return Some(format!(
+                    "type `{display_name}` has non-equivalent definitions in the same LLM render context"
+                ));
             }
         } else {
             self.by_display_name.insert(display_name, *definition);
@@ -336,13 +442,22 @@ impl RenderDefinitionValidator<'_> {
     }
 }
 
-fn first_conflicting_render_name(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Option<String> {
+/// The first reason `ty` cannot be rendered as an LLM output schema: a display
+/// name shared by non-equivalent declarations, a non-regular recursive generic
+/// (whose specializations would grow forever), or two distinct recursive
+/// classes hoisted under one rendered name.
+fn first_render_schema_error(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Option<String> {
     let mut validator = RenderDefinitionValidator {
         vm,
         by_display_name: std::collections::HashMap::new(),
         visited: std::collections::HashSet::new(),
+        class_ancestry: Vec::new(),
+        recursive_classes: std::collections::HashSet::new(),
+        rendered_classes: Vec::new(),
     };
-    validator.visit(ty)
+    validator
+        .visit(ty, &RenderOrigins::root())
+        .or_else(|| validator.first_recursive_alias_collision())
 }
 
 fn render_definition_display_name(vm: &BexVm, definition: &RenderDefinition) -> String {
@@ -354,6 +469,44 @@ fn render_definition_display_name(vm: &BexVm, definition: &RenderDefinition) -> 
         Object::Enum(enm) => enm.name.display_name().to_string(),
         Object::TypeAlias(alias) => alias.name.display_name().to_string(),
         _ => unreachable!("a render definition points at a nominal declaration"),
+    }
+}
+
+/// The instantiation's display label: `Foo` bare, `Foo<int, string>` applied.
+/// A label, never a key — the walk keys on [`RealizedClassIdentity`].
+fn realized_class_name(head: bex_vm_types::TypeHead, args: &[bex_vm_types::RealizedTy]) -> String {
+    let base = baml_type::HeadDisplay::head_display_name(&head);
+    if args.is_empty() {
+        base
+    } else {
+        format!(
+            "{base}<{}>",
+            args.iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+/// [`realized_class_name`] as the schema renders it: the class alias wins over
+/// the declared name when one is set.
+fn rendered_realized_class_name(
+    class: &bex_vm_types::Class,
+    args: &[bex_vm_types::RealizedTy],
+) -> String {
+    let display_name = class.name.display_name();
+    let base = class.alias.as_deref().unwrap_or(display_name.as_str());
+    if args.is_empty() {
+        base.to_string()
+    } else {
+        format!(
+            "{base}<{}>",
+            args.iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 
@@ -646,12 +799,16 @@ fn first_open_interface(
     vm: &BexVm,
     ty: &bex_vm_types::RealizedTy,
     path: &str,
-    visited: &mut std::collections::HashSet<bex_vm_types::HeapPtr>,
+    visited: &mut std::collections::HashSet<bex_vm_types::RealizedTy>,
 ) -> Option<(String, String)> {
     match ty {
         bex_vm_types::RealizedTy::Interface(..) => Some((path.to_string(), ty.to_string())),
         bex_vm_types::RealizedTy::Class(head, args, _) => {
-            if !visited.insert(head.ptr()) {
+            // Deduplicate by *instantiation*, never by declaration: the walk
+            // substitutes class arguments into field templates, so `Box<int>`
+            // and `Box<OpenIface>` reach different field types — a declaration
+            // key would let whichever arrives first swallow the other's walk.
+            if !visited.insert(ty.clone()) {
                 return None;
             }
             let Object::Class(class) = vm.get_object(head.ptr()) else {
@@ -703,7 +860,7 @@ fn first_open_interface(
             .or_else(|| first_open_interface(vm, ret, path, visited))
             .or_else(|| first_open_interface(vm, throws, path, visited)),
         bex_vm_types::RealizedTy::TypeAlias(head, _) => {
-            if !visited.insert(head.ptr()) {
+            if !visited.insert(ty.clone()) {
                 return None;
             }
             vm.type_alias_definition(head.ptr())
@@ -767,13 +924,6 @@ fn first_non_data_type(
             let Object::Class(class) = vm.get_object(head.ptr()) else {
                 return None;
             };
-            // The output formatter currently walks `ClassField::field_type`,
-            // whose class-generic leaves are intentionally unsubstituted.
-            // Reject this path before rendering can silently erase the schema;
-            // substituting class arguments in `sys_ops` is a separate fix.
-            if class.generic_param_count > 0 {
-                return Some((path.to_string(), ty.to_string()));
-            }
             for field in class.fields.iter().filter(|field| !field.skip) {
                 let child_path = format!("{path}.{}", field.name);
                 if let Some(runtime) = &field.runtime_type {

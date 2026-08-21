@@ -109,7 +109,7 @@ class CSharpReleaseContractTests(unittest.TestCase):
         return json.loads(PLATFORMS.read_text(encoding="utf-8"))
 
     def write_generated_sources(self, root: Path) -> Path:
-        generated = root / "baml_client"
+        generated = root / "baml_sdk"
         sources = {
             "Baml/Generated/BamlProgram.g.cs": "program",
             "Baml/Http/Request.g.cs": "request",

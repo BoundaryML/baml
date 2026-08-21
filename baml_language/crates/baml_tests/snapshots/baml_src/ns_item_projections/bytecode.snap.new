@@ -1,0 +1,376 @@
+---
+source: crates/baml_tests/src/corpus.rs
+assertion_line: 160
+---
+function item_projections.$init_test_ns_item_projections_item_projections(registry: <unresolved type #49679510787122>) -> null {
+    load_var registry
+    load_const "root.item_projections"
+    load_const "qualifier_selects_between_same_named_methods"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "parenthesized_qualifier_halves"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "qualifier_generics_select_the_instantiation"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "selfless_static_with_written_self"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "selfless_static_with_typevar_self"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "selfless_static_with_inferred_self"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "ufcs_receiver_method_through_bare_interface"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "qualified_default_method"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "qualified_reference_as_value"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "selfless_static_is_reached_through_the_type"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "bare_interface_method_value_forms"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "bare_default_method_value_respects_overrides"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "alias_of_interface_as_qualifier"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "qualifier_without_written_associated_types"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "generic_interface_default_method_reference"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "selfless_static_on_generic_class_through_every_spelling"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "symbolic_qualifier_dispatches_per_instantiation"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "runtime_type_arguments_flow_through_qualified_spellings"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "as_remains_usable_as_an_identifier"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "keyword_named_members_are_reachable_through_the_qualifier"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.item_projections"
+    load_const "selfless_member_through_the_type_carries_the_whole_frame"
+    make_closure .<lambda($init_test_ns_item_projections_item_projections, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function item_projections.Bin.Buildable.build(seed: int) -> <unresolved type #10960285746069><#0> {
+    load_type int
+    load_var seed
+    call baml.String.from
+    store_var _3
+    load_const "bin "
+    load_var _3
+    bin_op +
+    load_type #0
+    init_instance<1> user.item_projections.Bin .label
+    return
+}
+
+function item_projections.Bin.Buildable.describe(self: <unresolved type #10960285746069><#0>) -> string {
+    load_var self
+    load_field .label
+    return
+}
+
+function item_projections.Dual.Marked<int>.mark(self: <unresolved type #87179227547218>) -> int {
+    load_const 1
+    return
+}
+
+function item_projections.Dual.Marked<string>.mark(self: <unresolved type #87179227547218>) -> string {
+    load_const "two"
+    return
+}
+
+function item_projections.Gadget.Buildable.build(seed: int) -> <unresolved type #27776547098272> {
+    load_var seed
+    load_const 10
+    mul_int
+    init_instance user.item_projections.Gadget .g
+    return
+}
+
+function item_projections.Gadget.Buildable.describe(self: <unresolved type #27776547098272>) -> string {
+    load_type int
+    load_var self
+    load_field .g
+    call baml.String.from
+    store_var _2
+    load_const "gadget "
+    load_var _2
+    bin_op +
+    return
+}
+
+function item_projections.Keyed2.Keyworded.extends(self: <unresolved type #125990819733024>) -> int {
+    load_const 2
+    return
+}
+
+function item_projections.Keyed2.Keyworded.implements(self: <unresolved type #125990819733024>) -> int {
+    load_const 1
+    return
+}
+
+function item_projections.Label.label(self: <unresolved type #76022932726954><#1>) -> string {
+    load_const "ok"
+    return
+}
+
+function item_projections.Loud.Sayer.say(self: <unresolved type #119884222509268>) -> string {
+    load_const "LOUD"
+    return
+}
+
+function item_projections.Plate.Embosser.emboss(u: #1) -> string {
+    load_type #1
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _2
+    load_const "emboss "
+    load_var _2
+    bin_op +
+    return
+}
+
+function item_projections.Plate.Embosser.fresh(seed: int) -> <unresolved type #7580447635944><#0> {
+    load_type int
+    load_var seed
+    call baml.String.from
+    load_type #0
+    init_instance<1> user.item_projections.Plate .tag
+    return
+}
+
+function item_projections.Plate.Embosser.label(self: <unresolved type #7580447635944><#0>) -> string {
+    load_const "plate "
+    load_var self
+    load_field .tag
+    bin_op +
+    return
+}
+
+function item_projections.Poly.Convert<int>.conv(self: <unresolved type #111753319151946>, other: <unresolved type #111753319151946>) -> int {
+    load_var self
+    load_field .n
+    load_var other
+    load_field .0
+    add_int
+    return
+}
+
+function item_projections.Poly.Convert<string>.conv(self: <unresolved type #111753319151946>, other: <unresolved type #111753319151946>) -> string {
+    load_const "poly"
+    return
+}
+
+function item_projections.Press.Stamper.emboss(u: #0) -> string {
+    load_type #0
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _2
+    load_const "emboss "
+    load_var _2
+    bin_op +
+    return
+}
+
+function item_projections.Press.Stamper.stamp(self: <unresolved type #13819115888355>, u: #0) -> string {
+    load_type #0
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _3
+    load_const "stamp "
+    load_var _3
+    bin_op +
+    return
+}
+
+function item_projections.Row.Keyed.key(self: <unresolved type #1063387236000>) -> int {
+    load_var self
+    load_field .id
+    return
+}
+
+function item_projections.Sayer.say(self: <unresolved type #87312228751916>) -> string {
+    load_const "default"
+    return
+}
+
+function item_projections.Sized.Sizer.pick(self: <unresolved type #119480608614235>, other: <unresolved type #119480608614235>) -> <unresolved type #119480608614235> {
+    load_var self
+    load_field .s
+    load_var other
+    load_field .0
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var other
+    jump L2
+
+  L1:
+    load_var self
+
+  L2:
+    return
+}
+
+function item_projections.Sizer.grow(self: <unresolved type #134873771409189>) -> #0 {
+    load_var2 1 1
+    load_type item_projections.Sizer
+    load_const "pick"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function item_projections.Twin.Alpha.tag(self: <unresolved type #139390953222766>, other: <unresolved type #139390953222766>) -> int {
+    load_var self
+    load_field .n
+    return
+}
+
+function item_projections.Twin.Beta.tag(self: <unresolved type #139390953222766>, other: <unresolved type #139390953222766>) -> int {
+    load_var other
+    load_field .0
+    return
+}
+
+function item_projections.Widget.Buildable.build(seed: int) -> <unresolved type #94739264436344> {
+    load_var seed
+    init_instance user.item_projections.Widget .w
+    return
+}
+
+function item_projections.Widget.Buildable.describe(self: <unresolved type #94739264436344>) -> string {
+    load_type int
+    load_var self
+    load_field .w
+    call baml.String.from
+    store_var _2
+    load_const "widget "
+    load_var _2
+    bin_op +
+    return
+}
+
+function item_projections.build_any(seed: int) -> #0 {
+    load_var seed
+    load_type #0
+    load_type item_projections.Buildable
+    load_const "build"
+    make_virtual_function ntypeargs=0
+    call_indirect
+    return
+}
+
+function item_projections.marked_via(t: #1) -> #0 {
+    load_var t
+    load_type item_projections.Marked<#0>
+    load_const "mark"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}

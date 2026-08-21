@@ -54,5 +54,9 @@ class ModelTurn {
 
 interface Client {
     function id(self) -> string throws never
-    function invoke(self, input: ModelTurnInput) -> ModelTurn throws root.errors.Failure | baml.errors.UnknownError
+    // Render the provider request shape without performing I/O. Reliability
+    // wrappers use this as a stable request-shape preview: they do not sleep,
+    // rotate, or try fallback members while rendering.
+    function render(self, input: ModelTurnInput) -> baml.http.Request throws root.errors.InvokeError
+    function invoke(self, input: ModelTurnInput) -> ModelTurn throws root.errors.InvokeError
 }

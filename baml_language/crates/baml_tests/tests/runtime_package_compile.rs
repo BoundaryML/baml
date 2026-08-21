@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use baml_tests::baml_test;
 use bex_engine::{
-    BexEngine, BexExternalValue, CaptureDefaults, EngineError, FunctionCallContextBuilder,
-    value_capture::{TraceCaptureConfig, TraceCaptureProducer, TraceLogDrainReport},
+    BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder,
+    logger::{TraceLogDrainReport, TraceLogger},
 };
 use sys_native::SysOpsExt;
 
@@ -311,17 +311,13 @@ async fn run_main_with_logs(
         )
         .expect("runtime-package test engine"),
     );
-    let logs = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(16));
+    let logs = TraceLogger::bounded(16);
     let result = engine
         .call_function(
             "user.main",
             Vec::new(),
             FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_capture_defaults(CaptureDefaults {
-                    values_enabled: false,
-                    logs_enabled: true,
-                })
-                .with_value_capture(logs.clone())
+                .with_logger(logs.clone())
                 .build(),
             true,
         )
@@ -571,9 +567,7 @@ async fn function_listing_omits_unspecialized_generics() {
 /// body still materializes `T`, so calling it dies inside `LoadType` as an
 /// internal error no `catch` can see. The companion is still *listed* — see the
 /// test below — but extracting it **by name** still reports the same reflection
-/// limit its parent does: a name lookup has nowhere to put type arguments. The
-/// route that works is the descriptor's own `specialize` then `get` (see
-/// `reflect_specialize.rs`).
+/// limit its parent does: a name lookup has nowhere to put type arguments.
 #[tokio::test]
 async fn generic_function_companion_extraction_reports_reflection_limit() {
     let output = baml_test!(

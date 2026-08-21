@@ -24,6 +24,7 @@ pub mod unify;
 
 use std::{cell::RefCell, path::PathBuf, sync::Arc};
 
+use baml_compiler_diagnostics::runtime_type::RuntimeTypeEscape;
 use baml_compiler2_ast::{
     Expr, ExprBody, ExprId, ObjectExprField, PatId, Pattern, PropertySyntax, Stmt, StmtId,
     traverse::BodyNode,
@@ -57,6 +58,32 @@ use crate::{
 /// and `null` both denote the single-value unit.
 fn is_unit(ty: &Ty) -> bool {
     matches!(ty.kind(), TyKind::Void { .. } | TyKind::Null { .. })
+}
+
+/// The function type at a callback root: `ty` itself, or the sole non-null
+/// member of an optional callback — `((v: int) -> int)?` lowers to
+/// `(...) | null`.
+///
+/// This mirrors the elaboration road in `baml_compiler2_hir::signature`,
+/// which opens exactly those two shapes to a synthetic effect param. It is
+/// also the shape a lambda argument can inhabit: a lambda literal is never
+/// `null`, so the function arm is the only expectation it can satisfy.
+fn callback_root_fn(ty: &Ty) -> Option<&Ty> {
+    match ty.kind() {
+        TyKind::Function { .. } => Some(ty),
+        TyKind::Union(members, _) => {
+            let mut callback = None;
+            for member in members {
+                match member.kind() {
+                    TyKind::Null { .. } => {}
+                    TyKind::Function { .. } if callback.is_none() => callback = Some(member),
+                    _ => return None,
+                }
+            }
+            callback
+        }
+        _ => None,
+    }
 }
 
 /// The implicit `baml.spawn.SpawnParams<V, E>` a spawn's `with` chain
@@ -93,6 +120,16 @@ fn is_spawn_params_qtn(qtn: &baml_type::TypeName) -> bool {
 enum OwnArgs {
     Call(ExprId),
     Fresh,
+}
+
+/// The written halves of a fully-qualified item reference's qualifier — the
+/// lowered `Self` type and the realized interface the determination road
+/// proved for it. Always both present or both absent: a spelling either
+/// writes the qualifier (`(Base as I).item`) or leaves the whole subject to
+/// inference (`I.item`), never half of each.
+struct WrittenQualifier<'a> {
+    qself: Ty,
+    realized: &'a baml_type::Interface,
 }
 
 /// BAML's int value range: i63 (the VM tags the low bit). One
@@ -673,6 +710,29 @@ enum PendingDiag<'db> {
         member: baml_type::Name,
         position: crate::diagnostics::SelfCallPosition,
     },
+    /// A `self`-less interface method reached through a VALUE receiver.
+    SelflessInstanceMember {
+        expr: ExprId,
+        interface_name: Option<baml_type::Name>,
+        member: baml_type::Name,
+    },
+    /// An item projection's `Self` slot, judged once inference resolves it:
+    /// erased (existential/union) `Self` is object-safety-gated for receiver
+    /// methods and rejected for `self`-less ones. Pushed for EVERY item
+    /// projection; a concrete or typevar slot passes silently.
+    ItemProjectionSelfSlot {
+        expr: ExprId,
+        var: Ty,
+        interface: baml_type::interned::InterfaceRef,
+        member: baml_type::Name,
+        takes_self: bool,
+        /// Whether the reference is a VALUE (uncalled). A receiver method
+        /// with an erased `Self` dispatches fine when CALLED (the receiver
+        /// value carries the concrete type), but a reified value has no
+        /// resolution moment — there is no thunk carrier yet, so it is
+        /// rejected.
+        value_position: bool,
+    },
     /// A member on a union receiver with no interface shared by every
     /// arm declaring it.
     UnionNoCommonInterface {
@@ -695,13 +755,16 @@ enum PendingDiag<'db> {
         name: baml_type::Name,
         class_field: baml_type::Name,
     },
-    /// `.as<T>` with a non-interface target.
-    UpcastTargetNotInterface {
+    /// A written interface qualifier that is not an interface at all:
+    /// `.as<T>`, or `(Base as T).item`.
+    QualifierNotInterface {
         expr: ExprId,
         target: Ty,
     },
-    /// `.as<I>` where the value's type does not implement `I`.
-    UpcastNotImplemented {
+    /// A written interface qualifier the subject does not implement:
+    /// `x.as<I>` where `x`'s type does not, or `(Base as I).item` where
+    /// `Base` does not.
+    QualifierNotImplemented {
         expr: ExprId,
         value: Ty,
         interface: Ty,
@@ -730,10 +793,11 @@ enum PendingDiag<'db> {
         expr: ExprId,
     },
     /// An inline `unreflect(carrier)` slot whose rigid parameter survives into
-    /// `enclosing`'s published type.
+    /// `enclosing`'s published type — as its value or as its error.
     RuntimeTypeMustBeNamed {
         carrier: ExprId,
         enclosing: ExprId,
+        escape: RuntimeTypeEscape,
     },
     CannotConstructReflectionKind {
         expr: ExprId,
@@ -1658,6 +1722,10 @@ struct InferenceContext<'db> {
     /// Carriers already reported as escaping their call (E0168), so a callee
     /// road walked twice reports once.
     reported_runtime_escapes: rustc_hash::FxHashSet<ExprId>,
+    /// Inline `unreflect(...)` carriers whose call publishes the parameter in
+    /// its RESULT — the bare `-> T` included. The `?.` check consults this at
+    /// the chain boundary, where the callee's signature is no longer reachable.
+    runtime_slots_named_by_result: rustc_hash::FxHashSet<ExprId>,
     result: InferenceResult<'db>,
 }
 
@@ -1719,6 +1787,7 @@ impl<'db> InferenceContext<'db> {
             wf_scope_env: std::cell::OnceCell::new(),
             runtime_dependent_call_params: FxHashMap::default(),
             reported_runtime_escapes: rustc_hash::FxHashSet::default(),
+            runtime_slots_named_by_result: rustc_hash::FxHashSet::default(),
             result: InferenceResult::default(),
         }
     }
@@ -2114,6 +2183,13 @@ impl<'db> InferenceContext<'db> {
                     }
                 }
             }
+            Expr::QualifiedPath { member, .. } => {
+                // A fully-qualified item reference used as a VALUE. Its own
+                // generic suffix is fresh: only a call site can spell a
+                // turbofish, exactly as for the two path spellings.
+                let member = member.clone();
+                self.qualified_path_value(expr, &member, OwnArgs::Fresh, Some(expr))
+            }
             Expr::Upcast { base, .. } => {
                 // Rust's qualified trait path (`<X as Parent<i32>>`,
                 // r-a's trait-object coercion): the value viewed through
@@ -2146,11 +2222,10 @@ impl<'db> InferenceContext<'db> {
                 if target.has_error() {
                     Ty::error()
                 } else if !matches!(target.kind(), TyKind::Interface(..)) {
-                    self.pending_diags
-                        .push(PendingDiag::UpcastTargetNotInterface {
-                            expr,
-                            target: target.clone(),
-                        });
+                    self.pending_diags.push(PendingDiag::QualifierNotInterface {
+                        expr,
+                        target: target.clone(),
+                    });
                     Ty::error()
                 } else {
                     let saved_anchor = self.obligation_anchor.replace(expr);
@@ -2160,11 +2235,12 @@ impl<'db> InferenceContext<'db> {
                         // BEP-044's dedicated form: the value's type does
                         // not implement the requested interface - clearer
                         // than the generic mismatch.
-                        self.pending_diags.push(PendingDiag::UpcastNotImplemented {
-                            expr,
-                            value: base_ty,
-                            interface: target.clone(),
-                        });
+                        self.pending_diags
+                            .push(PendingDiag::QualifierNotImplemented {
+                                expr,
+                                value: base_ty,
+                                interface: target.clone(),
+                            });
                     }
                     target
                 }
@@ -2486,6 +2562,7 @@ impl<'db> InferenceContext<'db> {
                 let ty = self.infer_expr(body, *inner, &Expectation::None);
                 let nullable = self.chain_nullable.pop().expect("pushed above");
                 if nullable {
+                    self.report_chain_null_escape(body, *inner);
                     self.union_of(&[ty, Ty::null()])
                 } else {
                     ty
@@ -2809,6 +2886,38 @@ impl<'db> InferenceContext<'db> {
             block_ty = replace_rigid_param(&block_ty, &binding.parameter, &binding.occurrence_ty);
             for ty in self.flow.values_mut() {
                 *ty = replace_rigid_param(ty, &binding.parameter, &binding.occurrence_ty);
+            }
+            // The effect channel leaves the block exactly as the value does.
+            // An undeclared `throws` is assembled from these contributions at
+            // finalize, so a rigid parameter left in one becomes part of the
+            // OWNER's published effect — a type naming a parameter that stops
+            // existing at the closing brace, which reaches lowering with no
+            // type argument to bind it to.
+            for channel in &mut self.throws_channels {
+                for (_, contribution) in channel.iter_mut() {
+                    *contribution = replace_rigid_param(
+                        contribution,
+                        &binding.parameter,
+                        &binding.occurrence_ty,
+                    );
+                }
+            }
+            // A contract violation stashed inside the block quotes the effect
+            // it saw. `extra` is a COPY of a contribution — compiler-derived,
+            // and quoted in a report about what the enclosing function may
+            // throw — so it is erased for the same reason the contribution is.
+            //
+            // `declared` deliberately is NOT. It is the clause an author WROTE
+            // at that site: only a lambda's own clause can name a block-scoped
+            // binding, its violation is anchored inside that block, and the
+            // line one row above the caret reads `throws Boom<Out>`. Erasing
+            // it would print `Boom<unknown>` next to the user's own `Out` —
+            // `a_lambda_clause_inside_the_block_is_quoted_as_written` pins
+            // both halves of that asymmetry.
+            for pending in &mut self.pending_diags {
+                if let PendingDiag::ThrowsViolation { extra, .. } = pending {
+                    *extra = replace_rigid_param(extra, &binding.parameter, &binding.occurrence_ty);
+                }
             }
         }
         self.scoped_type_bindings.truncate(checkpoint);
@@ -3317,6 +3426,35 @@ impl<'db> InferenceContext<'db> {
                 }
                 ok &= self.sub(&rets.0, &rets.1);
                 ok &= self.sub(&throws.0, &throws.1);
+                ok
+            }
+            // `baml.AnyFunction` is compiler-derived for concrete function
+            // values, rather than an ordinary impl obligation.  When a
+            // generic consumer such as `reflect.call_any<R, E>` receives a
+            // function value directly, carry its output channels into the
+            // requested associated pins so `R`/`E` are inferred from the
+            // function signature.  The generic-interface fallback below can
+            // prove conformance, but it has no way to recover these pins and
+            // leaves the call's type arguments as `Error`.
+            (
+                TyKind::Function {
+                    ret: actual_ret,
+                    throws: actual_throws,
+                    ..
+                },
+                TyKind::Interface(name, _, expected_pins, _),
+            ) if name.is_builtin_root_type("AnyFunction") => {
+                let mut ok = true;
+                for (pin, expected_pin) in expected_pins {
+                    let Some(actual_pin) = (match pin.as_str() {
+                        "Returns" => Some(actual_ret),
+                        "Throws" => Some(actual_throws),
+                        _ => None,
+                    }) else {
+                        continue;
+                    };
+                    ok &= self.sub(actual_pin, expected_pin);
+                }
                 ok
             }
             _ => {
@@ -5098,6 +5236,16 @@ impl<'db> InferenceContext<'db> {
     /// `method_resolution`; everything else is whatever the expression
     /// infers to.
     fn infer_callee(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) -> (Ty, bool) {
+        // A FULLY-qualified direct call (`(Box as Sized).pick(a, b)`): the
+        // call site supplies the turbofish, and `self` stays the written
+        // first argument (no bound receiver), the UFCS shape.
+        if let Expr::QualifiedPath { member, .. } = &body.exprs[callee] {
+            let member = member.clone();
+            let fn_ty =
+                self.qualified_path_value(callee, &member, OwnArgs::Call(call), Some(callee));
+            self.result.type_of_expr.insert(callee, fn_ty.clone());
+            return (fn_ty, false);
+        }
         // An INTERFACE-qualified direct call
         // (`IqDescribable.describe(t)`): turbofish-aware instantiation
         // with bounds registered - `Self`'s implements-bound becomes an
@@ -5409,6 +5557,13 @@ impl<'db> InferenceContext<'db> {
                 member,
             ) {
                 crate::method_resolution::UnionMemberLookup::Found(interface_member) => {
+                    // A union receiver is ERASED: a `self`-less member has
+                    // no value-derived dispatch key, exactly as through an
+                    // existential — same rejection as the value road's.
+                    if self.reject_selfless_instance_member(&interface_member, member, member_expr)
+                    {
+                        return (Ty::error(), false, None, false);
+                    }
                     let resolution = self.declarer_resolution(&interface_member.declarer, member);
                     let (ty, bound) = self.interface_member_callee(interface_member, call, true);
                     return (ty, bound, resolution, false);
@@ -5495,6 +5650,10 @@ impl<'db> InferenceContext<'db> {
                 member,
             ) {
                 crate::method_resolution::InterfaceMemberLookup::Found(interface_member) => {
+                    if self.reject_selfless_instance_member(&interface_member, member, member_expr)
+                    {
+                        return (Ty::error(), false, None, false);
+                    }
                     let resolution = self.declarer_resolution(&interface_member.declarer, member);
                     let (ty, bound) = self.interface_member_callee(interface_member, call, true);
                     return (ty, bound, resolution, false);
@@ -5617,6 +5776,9 @@ impl<'db> InferenceContext<'db> {
         };
         match candidate.source {
             crate::method_resolution::MethodCandidateSource::Source { method, class } => {
+                if self.reject_selfless_inherent_method(method, member, member_expr) {
+                    return (Ty::error(), false, None, false);
+                }
                 let signature = function_signature(self.db, method);
                 let class_count = candidate.class_args.len();
                 let own_params = signature.generic_params[class_count..].to_vec();
@@ -5787,7 +5949,11 @@ impl<'db> InferenceContext<'db> {
         call: ExprId,
         bind_self: bool,
     ) -> (Ty, bool) {
-        let bound = interface_member.is_method && bind_self;
+        // A `self`-LESS method binds no receiver whatever the spelling: the
+        // receiver named where to find the member, it is not an argument.
+        let bound = interface_member.is_method
+            && bind_self
+            && self.interface_member_takes_self(&interface_member);
         if let Some(pending) = interface_member.pending_own {
             match pending {
                 crate::method_resolution::PendingOwnGenerics::Source { method, prefix } => {
@@ -6188,46 +6354,192 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// TIER: an interface-qualified static (`Trait.method`). Bounds
-    /// register at the instantiation, whatever the spelling.
-    fn interface_static_value(
+    /// TIER: an ITEM PROJECTION - the `(Self type, interface, item)` triple,
+    /// with either half optionally left to inference. The spellings differ
+    /// only in which halves are written:
+    ///
+    /// | spelling            | `qself`  | `qualifier` |
+    /// |---------------------|----------|-------------|
+    /// | `Interface.item`    | inferred | written     |
+    /// | `(Base as I).item`  | written  | written     |
+    ///
+    /// `Self` is slot 0 of an interface method's generic frame
+    /// (`lower::interface_frame`). A written `qself` PINS it; an inferred one
+    /// leaves a fresh variable whose implements-bound rides along through
+    /// `function_generic_bounds` and is discharged by the call's arguments.
+    /// That one slot is the entire difference between the spellings - which
+    /// is why they are one tier and not two.
+    ///
+    /// A turbofish binds the slots AFTER `Self`: the method's own generics
+    /// and the interface's, never `Self` itself, which has its own written
+    /// position in the qualified spelling and is inferred in the other.
+    ///
+    /// The receiver is never bound: `self` stays the written first argument,
+    /// the UFCS shape `Type.method(recv, ..)` already uses.
+    fn item_projection_value(
         &mut self,
-        prefix: &[baml_type::Name],
+        interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        written: Option<&WrittenQualifier<'_>>,
         member: &baml_type::Name,
         own: OwnArgs,
         anchor: ExprId,
         record_at: Option<ExprId>,
     ) -> Option<Ty> {
-        let (interface, method) = self.interface_static_method(prefix, member)?;
+        let qself = written.map(|written| &written.qself);
+        let realized = written.map(|written| written.realized);
+        let method = self.interface_method_loc(interface, member)?;
         let signature = function_signature(self.db, method);
         let bounds = crate::lower::function_generic_bounds(self.db, method);
-        let instantiation = self.own_instantiation_with_bounds(
+        let Some((self_param, after_self)) = signature.generic_params.split_first() else {
+            unreachable!("an interface method's generic frame always opens with `Self`")
+        };
+        debug_assert_eq!(
+            self_param.name().as_str(),
+            "Self",
+            "interface method frame must open with the `Self` slot"
+        );
+
+        // The frame is `[Self] ++ interface generics ++ associated slots ++ the
+        // method's own generics` (`lower::interface_frame`). A written
+        // qualifier realizes the middle two groups and they are PINNED from it:
+        // `Conv<int>` and `Conv<string>` are different interfaces a type may
+        // implement both of, so leaving their slots to inference would let two
+        // calls in one body unify against the same hole. Associated slots come
+        // from the same realization rather than from the source - they need not
+        // be written, being determined once `Self` is known.
+        let interface_data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
+        let pinned = interface_data.generic_params.len() + interface_data.associated_types.len();
+        // `lower::function_generic_frame` builds an interface method's frame
+        // from this same `interface_data`, appending the method's own generics
+        // after the two groups, so the frame is always at least this long.
+        debug_assert!(
+            pinned <= after_self.len(),
+            "interface method frame is shorter than the interface it was built from"
+        );
+        // The clamp is an explicitly-marked release-mode net for that
+        // invariant, never a resolution strategy: `debug_assert` above fails
+        // the tests if it is ever load-bearing.
+        let (frame_params, own_params) = after_self.split_at(pinned.min(after_self.len()));
+
+        let mut instantiation = Vec::with_capacity(signature.generic_params.len());
+        let self_slot = match qself {
+            Some(written) => written.clone(),
+            None => self.fresh_generic_arg(self_param),
+        };
+        // Guards on the `Self` slot, deferred until inference resolves it
+        // (the inferred spelling only pins `Self` through the arguments):
+        // an ERASED `Self` — an interface-existential or a union — obeys the
+        // one-`Self` object-safety rule when the method takes a receiver
+        // (dispatch derives the concrete type from the value), and is
+        // rejected outright when it does not (type-keyed dispatch has no
+        // value to consult, and an erased type names no single impl).
+        // An UNRESOLVED `Self` is a hard error: rustc's E0790, whose fix is
+        // the fully-qualified spelling.
+        let takes_self = signature
+            .params
+            .first()
+            .is_some_and(|param| param.name.as_str() == "self");
+        let iface_ref = InterfaceRef::new(
+            crate::interfaces::interface_loc_qtn(self.db, interface)
+                .unwrap_or_else(|| unreachable!("a resolved interface item has a source QTN")),
+            // The WRITTEN arguments: `Conv<int>` and `Conv<string>` are
+            // different interfaces, so a message naming a bare `Conv` would
+            // not say which one the reference meant. Empty for the inferred
+            // spelling, which wrote none. Associated types stay empty — they
+            // are determined rather than written, and naming them would
+            // over-specify the message.
+            realized.map_or_else(Box::default, |realized| {
+                realized.generics.iter().map(Ty::from_plain).collect()
+            }),
+            Vec::new(),
+        );
+        self.pending_diags
+            .push(PendingDiag::ItemProjectionSelfSlot {
+                expr: anchor,
+                var: self_slot.clone(),
+                interface: iface_ref,
+                member: member.clone(),
+                takes_self,
+                value_position: matches!(own, OwnArgs::Fresh),
+            });
+        if qself.is_none() {
+            self.pending_diags.push(PendingDiag::UninferredCtorParam {
+                expr: anchor,
+                var: self_slot.clone(),
+                name: baml_type::Name::new("Self"),
+            });
+        }
+        instantiation.push(self_slot);
+        for (index, param) in frame_params.iter().enumerate() {
+            // Realized generics first, then realized associated types by name;
+            // an unrealized slot (the `Interface.item` spelling, which has no
+            // subject to realize against) stays a fresh variable the call's
+            // arguments solve.
+            let realized_arg = realized.and_then(|realized| {
+                // The frame's middle groups follow the DECLARED shape, so the
+                // declared generic count is the branch boundary; a realization
+                // that comes up short leaves that slot fresh rather than
+                // shifting the associated-type offset.
+                let generic_count = interface_data.generic_params.len();
+                if index < generic_count {
+                    return realized.generics.get(index).map(Ty::from_plain);
+                }
+                let assoc = interface_data
+                    .associated_types
+                    .get(index.checked_sub(generic_count)?)?;
+                realized
+                    .associated_types
+                    .iter()
+                    .find(|(name, _)| *name == assoc.name)
+                    .map(|(_, ty)| Ty::from_plain(ty))
+            });
+            instantiation.push(match realized_arg {
+                Some(arg) => arg,
+                None => {
+                    let fresh = self.fresh_generic_arg(param);
+                    // Same discipline as the `Self` slot: a frame slot the
+                    // call leaves unsolved is a hard error, never an Error
+                    // type reaching emission.
+                    self.pending_diags.push(PendingDiag::UninferredCtorParam {
+                        expr: anchor,
+                        var: fresh.clone(),
+                        name: param.name().clone(),
+                    });
+                    fresh
+                }
+            });
+        }
+        instantiation.extend(self.own_instantiation_with_bounds(
             own,
-            &signature.generic_params,
+            own_params,
             member,
             &bounds,
             crate::lower::TypePosition::Existential,
-        );
-        if let OwnArgs::Call(call) = own {
-            let instantiation = self.write_call_type_args(call, &instantiation, 0);
-            self.register_call_bounds(method, &instantiation, anchor);
-            self.record_runtime_dependent_arguments(call, signature, false);
-            if let Some(record_at) = record_at {
-                self.write_member_resolution(
-                    record_at,
-                    MemberResolution::InterfaceVirtualMethod {
-                        interface,
-                        method: member.clone(),
-                    },
-                );
+        ));
+        match own {
+            OwnArgs::Call(call) => {
+                instantiation = self.write_call_type_args(call, &instantiation, 0);
+                self.record_runtime_dependent_arguments(call, signature, false);
             }
-            return Some(function_value_ty(signature, &instantiation));
+            OwnArgs::Fresh => {
+                // A VALUE reference has no call site, but MIR still needs the
+                // (eventually solved) frame to resolve the callable — record
+                // it as a plan keyed by the reference expression itself, the
+                // same channel a call's instantiation rides. Writeback
+                // grounds it once inference finishes.
+                let plan = self.result.call_plans.entry(anchor).or_default();
+                plan.type_args.clone_from(&instantiation);
+                plan.own_offset = 0;
+            }
         }
         self.register_call_bounds(method, &instantiation, anchor);
         if let Some(record_at) = record_at {
-            // The slot is what's statically known - interface plus member,
-            // recorded uniformly for default and required methods (TIR's
-            // contract; MIR keys the fn constant / virtual dispatch on it).
+            // The slot is what is statically known - interface plus member -
+            // recorded uniformly for every spelling and for default and
+            // required methods alike. Resolving it to a concrete impl is
+            // downstream's job: the VM keys on the receiver's runtime type
+            // and caches the target. A written `Self` narrows WHICH interface
+            // slot, never who answers it.
             self.write_member_resolution(
                 record_at,
                 MemberResolution::InterfaceVirtualMethod {
@@ -6237,6 +6549,190 @@ impl<'db> InferenceContext<'db> {
             );
         }
         Some(function_value_ty(signature, &instantiation))
+    }
+
+    /// The `(Base as I).item` spelling: both halves written. Validates them
+    /// and hands the same tier its pinned `Self`.
+    ///
+    /// This is the only spelling that reaches two otherwise-unreachable
+    /// members - one declared by several implemented interfaces (the bare
+    /// `base.item` is E0121-ambiguous), and one whose `Self` appears in a
+    /// parameter (the existential `base.as<I>.item` is object-safety
+    /// rejected, and a written `Self` removes the need for a receiver).
+    fn qualified_path_value(
+        &mut self,
+        expr: ExprId,
+        member: &baml_type::Name,
+        own: OwnArgs,
+        record_at: Option<ExprId>,
+    ) -> Ty {
+        let Some(anchors) = self.type_refs.qualified_path_anchors.get(&expr).copied() else {
+            // The parser builds this node only with both halves present, so a
+            // missing anchor is a malformed body, already reported upstream.
+            return Ty::error();
+        };
+        let member = member.clone();
+
+        let lower = |this: &mut Self, type_ref, position| {
+            let ty = this.lower_scoped_type_ref_at(&this.type_refs.store, type_ref, position);
+            this.reject_expr_position_holes(&ty, expr)
+        };
+        let qself = lower(self, anchors.qself, crate::lower::TypePosition::Existential);
+        // The qualifier is a CONSTRAINT HEAD, not an existential: its
+        // associated types are determined by `Self` and need not be written,
+        // exactly as in a bound (`T extends I`). The existential position's
+        // pin-them-all demand would reject `(int as I)` for any interface
+        // with an associated type.
+        let interface = lower(
+            self,
+            anchors.interface,
+            crate::lower::TypePosition::ConstraintHead,
+        );
+        if qself.has_error() || interface.has_error() {
+            return Ty::error();
+        }
+        // The interface-view gate is a STRUCTURE demand, as it is for
+        // `.as<I>`: an alias naming an interface answers as the interface.
+        let interface = self.expand_alias_ty(&interface);
+        let Some(qualifier) = InterfaceRef::of_ty(&interface) else {
+            self.pending_diags.push(PendingDiag::QualifierNotInterface {
+                expr,
+                target: interface,
+            });
+            return Ty::error();
+        };
+        let qself = self.structurally_resolve(&qself);
+        // Determination runs the impl matcher and the canonical algebra,
+        // neither of which admits an unresolved inference variable. Both
+        // halves are WRITTEN types, ground at lowering — the only way a
+        // variable survives to here is a written hole (`(Wrapper<_> as I).m`)
+        // that `reject_expr_position_holes` already reported and replaced with
+        // a fresh var. So this bail never introduces a silent `Ty::error()`:
+        // the diagnostic invariant is upheld by construction, and the assert
+        // pins that reading.
+        if qself.has_infer() || interface.has_infer() {
+            debug_assert!(
+                self.pending_diags.iter().any(
+                    |diag| matches!(diag, PendingDiag::ExprPositionHole { expr: at } if *at == expr)
+                ),
+                "an inference variable in a written qualifier must come from a reported hole"
+            );
+            return Ty::error();
+        }
+
+        // Which half is at fault, from the SHARED determination road: the
+        // qualifier must be an interface `qself` implements, and it must
+        // declare `member` DIRECTLY (`requires` is a bound, not inheritance).
+        // Written generic arguments are load-bearing here - `Bar<int>` and
+        // `Bar<string>` are different interfaces and a type may implement
+        // both - while associated types need not be written, being uniquely
+        // determined once `Self` is known.
+        let (determination, diagnostics) = crate::interfaces::determine_member_interface_with_facts(
+            self.db,
+            &self.facts,
+            &qself.to_plain(),
+            Some(interface.to_plain()),
+            &member,
+            crate::interfaces::MemberNamespace::Value,
+        );
+        for error in diagnostics {
+            self.pending_diags.push(PendingDiag::AnnotWf {
+                type_ref: anchors.interface,
+                error,
+            });
+        }
+        let unresolved_member = |this: &mut Self| {
+            if this.member_probe_depth == 0 {
+                this.pending_diags.push(PendingDiag::UnresolvedMember {
+                    expr,
+                    base: interface.clone(),
+                    member: member.clone(),
+                });
+            }
+            Ty::error()
+        };
+        let realized = match determination {
+            crate::interfaces::Determination::Determined(realized) => realized,
+            crate::interfaces::Determination::SubjectDoesNotImplementQualifier { .. } => {
+                if self.member_probe_depth == 0 {
+                    self.pending_diags
+                        .push(PendingDiag::QualifierNotImplemented {
+                            expr,
+                            value: qself,
+                            interface,
+                        });
+                }
+                return Ty::error();
+            }
+            crate::interfaces::Determination::Undeclared { .. }
+            | crate::interfaces::Determination::Ambiguous(_) => return unresolved_member(self),
+            // Already-poisoned inputs were reported where they were lowered.
+            crate::interfaces::Determination::InvalidBase
+            | crate::interfaces::Determination::Poisoned => return Ty::error(),
+        };
+
+        // A MOUNTED interface has no source method item to instantiate, the
+        // same limit the `Interface.item` spelling has; and determination
+        // proved the member exists in the VALUE namespace, so a miss below it
+        // is a FIELD, which has no static spelling - reading one needs a
+        // receiver to read it from.
+        let Some(interface_loc) = self.interface_loc_for(&qualifier.name) else {
+            return unresolved_member(self);
+        };
+        self.item_projection_value(
+            interface_loc,
+            Some(&WrittenQualifier {
+                qself,
+                realized: &realized,
+            }),
+            &member,
+            own,
+            expr,
+            record_at,
+        )
+        .unwrap_or_else(|| unresolved_member(self))
+    }
+
+    /// The source `InterfaceLoc` a qualified type name denotes, if any.
+    fn interface_loc_for(
+        &self,
+        qtn: &baml_type::QualifiedTypeName,
+    ) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+        match self.facts.definition_of(qtn) {
+            Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) => Some(loc),
+            _ => None,
+        }
+    }
+
+    /// The interface's method item named `member`. Required and default
+    /// methods alike - they are one item kind.
+    fn interface_method_loc(
+        &self,
+        interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        member: &baml_type::Name,
+    ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
+        baml_compiler2_ppir::item_data::interface_data(self.db, interface)
+            .methods
+            .iter()
+            .copied()
+            .find(|&method| {
+                baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
+            })
+    }
+
+    /// The `Interface.item` spelling: the interface is written, `Self` is
+    /// inferred from the call's arguments. Bounds register at the
+    /// instantiation, whatever the spelling.
+    fn interface_static_value(
+        &mut self,
+        prefix: &[baml_type::Name],
+        member: &baml_type::Name,
+        own: OwnArgs,
+        anchor: ExprId,
+        record_at: Option<ExprId>,
+    ) -> Option<Ty> {
+        let (interface, _) = self.interface_static_method(prefix, member)?;
+        self.item_projection_value(interface, None, member, own, anchor, record_at)
     }
 
     /// TIER: a class-qualified static (`Array.filled`, `float.nan`,
@@ -6760,7 +7256,12 @@ impl<'db> InferenceContext<'db> {
             .cloned()
             .map(|ty| self.structurally_resolve(&ty))
             .map(|ty| self.expand_alias_ty(&ty))
-            .and_then(|ty| match ty.kind() {
+            // An OPTIONAL callback slot expects a function here just as much
+            // as an immediate one does: a lambda literal is never `null`, so
+            // the function arm is the only expectation it can satisfy. Without
+            // this the lambda's params would fall back to `Ty::error` and the
+            // slot's synthetic effect would never see the lambda's throws.
+            .and_then(|ty| match callback_root_fn(&ty)?.kind() {
                 TyKind::Function {
                     params,
                     ret,
@@ -6793,6 +7294,48 @@ impl<'db> InferenceContext<'db> {
             .as_ref()
             .and_then(|sig| sig.return_type)
             .map(|type_ref| self.lower_body_annotation(type_ref));
+        // Signature deduction from expectation (rustc's
+        // `check_supplied_sig_against_expectation`, which eq-unifies the
+        // supplied closure signature against the expected one and ignores
+        // failures; rust-analyzer's closure-sig deduction is the same): a WRITTEN
+        // annotation commits into the expected function type's corresponding
+        // slot while that slot is still an unsolved inference variable. This
+        // is what keeps a generic call's type argument "known unambiguously
+        // at the call site" (TYPE_SYSTEM.md) when the lambda spells it out —
+        // without the commit, the callee's own param (e.g. `Array.map`'s `U`)
+        // waits for the finish fixpoint while the walk continues, and a later
+        // member access on a receiver derived from it inspects a still
+        // unsolved var and silently finalizes `Error`, miscompiling
+        // downstream. A slot that already resolved structurally is left to
+        // the ordinary argument check (and unify mismatches are ignored here
+        // for the same reason: the arg check re-judges and reports them).
+        // `throws` is deliberately excluded — the effect channel owns it.
+        if let Some((exp_params, exp_ret, _)) = &expected_fn {
+            for (index, ty) in param_tys.iter().enumerate() {
+                let written = signature
+                    .as_ref()
+                    .and_then(|sig| sig.params.get(index).copied().flatten())
+                    .is_some();
+                if !written || ty.has_error() {
+                    continue;
+                }
+                let Some(expected_param) = exp_params.get(index) else {
+                    continue;
+                };
+                let expected = self.structurally_resolve(&expected_param.ty);
+                if expected.has_infer() {
+                    let _ = self.table.unify(ty, &expected);
+                }
+            }
+            if let Some(ret) = &annotated_ret
+                && !ret.has_error()
+            {
+                let expected = self.structurally_resolve(exp_ret);
+                if expected.has_infer() {
+                    let _ = self.table.unify(ret, &expected);
+                }
+            }
+        }
         let ret_expectation =
             annotated_ret.or_else(|| expected_fn.as_ref().map(|(_, ret, _)| ret.clone()));
 
@@ -7077,7 +7620,16 @@ impl<'db> InferenceContext<'db> {
         if runtime_params.is_empty() {
             return;
         }
-        self.report_runtime_type_escape(call, &Ty::from_plain(&function.return_type));
+        self.report_runtime_type_escape(
+            call,
+            &Ty::from_plain(&function.return_type),
+            RuntimeTypeEscape::Value,
+        );
+        self.report_runtime_type_escape(
+            call,
+            &Ty::from_plain(&function.callable_throws),
+            RuntimeTypeEscape::Error,
+        );
         let mut dependent = FxHashMap::default();
         for (param_index, param) in function
             .params
@@ -7263,22 +7815,55 @@ impl<'db> InferenceContext<'db> {
     /// BEP-066 ruling (A): an inline `unreflect(value)` type argument is legal
     /// only while the runtime type stays out of the expression's published
     /// type. The parameter is rigid for this call alone — the call site
-    /// publishes `occurrence_ty` in its place — so a result that still
+    /// publishes `occurrence_ty` in its place — so a published type that still
     /// mentions the parameter would be typed by a substitution the value does
     /// not actually satisfy afterwards, and every later dispatch re-derives
     /// the receiver's arguments from that published type.
     ///
-    /// The exception, and the reason this is an occurs-check on the RESULT
-    /// rather than a ban on the spelling, is a result that IS the parameter
+    /// The exception, and the reason this is an occurs-check on the published
+    /// type rather than a ban on the spelling, is a type that IS the parameter
     /// (`parse<T>(..) -> T`): occurrence-substitution then types a VALUE, the
     /// runtime tag rides on the value itself, and nothing static claims more
     /// than `unknown`. That is the supported dynamic path and stays legal.
     /// One position deeper — `Wrapper<T>`, `T[]`, `T?`, a constructed `C<T>` —
     /// the occurrence substitutes into a type CONSTRUCTOR, and the published
     /// type starts asserting something about the value.
-    fn report_runtime_type_escape(&mut self, call: ExprId, declared_ret: &Ty) {
-        let escaping: Vec<ExprId> = self
-            .result
+    ///
+    /// A call publishes two types, and the rule reads the same in both: the
+    /// result the caller binds, and the [`RuntimeTypeEscape::Error`] a
+    /// `throws` clause hands to the caller's handler — which is just as
+    /// visible after the call returns, and just as often written `Boom<T>`.
+    fn report_runtime_type_escape(
+        &mut self,
+        call: ExprId,
+        published: &Ty,
+        escape: RuntimeTypeEscape,
+    ) {
+        if escape == RuntimeTypeEscape::Value {
+            // The `?.` check runs later, at the chain boundary, where the
+            // callee's signature is long out of reach — so the one fact it
+            // needs is recorded here: does this call's RESULT name the
+            // parameter at all? A result that never mentions it (`-> bool`,
+            // `-> Wrapper<unknown>`) publishes nothing about the runtime type,
+            // and wrapping nothing in `| null` is still nothing.
+            self.runtime_slots_named_by_result.extend(
+                self.escaping_carriers(call, |parameter| ty_mentions_param(published, parameter)),
+            );
+        }
+        let escaping = self.escaping_carriers(call, |parameter| {
+            runtime_param_escapes(published, parameter)
+        });
+        self.report_escaping_carriers(call, escaping, escape);
+    }
+
+    /// The carrier expressions of `call`'s inline `unreflect(...)` slots whose
+    /// parameter `escapes`.
+    fn escaping_carriers(
+        &self,
+        call: ExprId,
+        escapes: impl Fn(&baml_type::ParamTy) -> bool,
+    ) -> Vec<ExprId> {
+        self.result
             .call_plans
             .get(&call)
             .into_iter()
@@ -7286,21 +7871,65 @@ impl<'db> InferenceContext<'db> {
             .filter_map(|slot| match slot {
                 CallTypeArgPlan::Runtime {
                     operand, parameter, ..
-                } => runtime_param_escapes_result(declared_ret, parameter).then_some(*operand),
+                } => escapes(parameter).then_some(*operand),
                 CallTypeArgPlan::Static { .. } => None,
             })
-            .collect();
-        for carrier in escaping {
+            .collect()
+    }
+
+    fn report_escaping_carriers(
+        &mut self,
+        enclosing: ExprId,
+        carriers: Vec<ExprId>,
+        escape: RuntimeTypeEscape,
+    ) {
+        for carrier in carriers {
             // A callee can be typed more than once (the interface probe
-            // re-runs the member road); the slot is reported once.
+            // re-runs the member road), and a slot can escape through more
+            // than one published type; the slot is reported once.
             if self.reported_runtime_escapes.insert(carrier) {
                 self.pending_diags
                     .push(PendingDiag::RuntimeTypeMustBeNamed {
                         carrier,
-                        enclosing: call,
+                        enclosing,
+                        escape,
                     });
             }
         }
+    }
+
+    /// The `?.` arm of the same rule, reported at the chain BOUNDARY because
+    /// that is where the wrapper appears: a short-circuiting chain republishes
+    /// its tail's result as `T | null`, so a call whose bare `-> T` result was
+    /// legal on its own stops being legal once `?.` wraps it. This is the
+    /// spelling half of the declared `-> T?` refusal — both publish `unknown?`
+    /// and both now say the same thing.
+    ///
+    /// It is still the published type that decides, never the punctuation: a
+    /// tail whose result never mentions the parameter (`-> bool`, or the
+    /// declared-erased `-> Wrapper<unknown>`) publishes nothing about the
+    /// runtime type, so the chain's `| null` has nothing to wrap and the call
+    /// stays legal. [`Self::report_runtime_type_escape`] recorded that fact
+    /// while the callee's signature was still in hand.
+    ///
+    /// Only the chain's TAIL is affected: it is the expression whose value the
+    /// chain republishes. A call in argument position, or one whose result is
+    /// consumed further along the chain (`a?.b.m<unreflect(t)>().field`),
+    /// publishes its own result unchanged and keeps whatever verdict its
+    /// signature earned.
+    fn report_chain_null_escape(&mut self, body: &ExprBody, tail: ExprId) {
+        if !matches!(
+            body.exprs[tail],
+            Expr::Call { .. } | Expr::OptionalCall { .. }
+        ) {
+            return;
+        }
+        let escaping = self.escaping_carriers(tail, |_| true);
+        let escaping: Vec<ExprId> = escaping
+            .into_iter()
+            .filter(|carrier| self.runtime_slots_named_by_result.contains(carrier))
+            .collect();
+        self.report_escaping_carriers(tail, escaping, RuntimeTypeEscape::Value);
     }
 
     fn record_runtime_dependent_arguments(
@@ -7316,7 +7945,12 @@ impl<'db> InferenceContext<'db> {
         }) {
             return;
         }
-        self.report_runtime_type_escape(call, &signature.ret);
+        self.report_runtime_type_escape(call, &signature.ret, RuntimeTypeEscape::Value);
+        // `signature.throws` is the DECLARED clause when the author wrote one
+        // and the inferred effect otherwise (S12). Both are published to the
+        // caller, so both are checked — the note is worded for a clause the
+        // author may never have spelled.
+        self.report_runtime_type_escape(call, &signature.throws, RuntimeTypeEscape::Error);
         let runtime_params = self.runtime_call_params(call);
         if runtime_params.is_empty() {
             return;
@@ -7874,6 +8508,9 @@ impl<'db> InferenceContext<'db> {
             }
             match candidate.source {
                 crate::method_resolution::MethodCandidateSource::Source { method, class } => {
+                    if self.reject_selfless_inherent_method(method, member, at) {
+                        return (Ty::error(), None);
+                    }
                     let signature = function_signature(self.db, method);
                     let mut instantiation = candidate.class_args;
                     let own: Vec<Ty> = signature.generic_params[instantiation.len()..]
@@ -7929,6 +8566,9 @@ impl<'db> InferenceContext<'db> {
             member,
         ) {
             crate::method_resolution::InterfaceMemberLookup::Found(interface_member) => {
+                if self.reject_selfless_instance_member(&interface_member, member, at) {
+                    return (Ty::error(), None);
+                }
                 let resolution = self.declarer_resolution(&interface_member.declarer, member);
                 return (self.interface_member_value(interface_member), resolution);
             }
@@ -8021,6 +8661,9 @@ impl<'db> InferenceContext<'db> {
             member,
         ) {
             crate::method_resolution::UnionMemberLookup::Found(interface_member) => {
+                if self.reject_selfless_instance_member(&interface_member, member, at) {
+                    return (Ty::error(), None);
+                }
                 let resolution = self.declarer_resolution(&interface_member.declarer, member);
                 (self.interface_member_value(interface_member), resolution)
             }
@@ -8200,6 +8843,169 @@ impl<'db> InferenceContext<'db> {
     /// An interface member in VALUE position: no turbofish, so a default
     /// method's own generics instantiate fresh; methods bind their
     /// receiver. Shared by field access and the `default.` value road.
+    /// Whether a resolved interface METHOD takes a `self` receiver. A
+    /// `self`-less method is an associated function, not an instance member:
+    /// it is reachable through the type-qualified spellings only (Rust's
+    /// E0599 "associated function, not method" split), because the receiver
+    /// spellings' lowering passes the receiver as `self` — which a
+    /// `self`-less callee has no slot for.
+    fn interface_member_takes_self(
+        &self,
+        member: &crate::method_resolution::InterfaceMember<'db>,
+    ) -> bool {
+        use crate::method_resolution::MemberDeclarer;
+        match &member.declarer {
+            MemberDeclarer::VirtualMethod { method, .. }
+            | MemberDeclarer::ImplMethod { func: method, .. } => {
+                function_signature(self.db, *method)
+                    .params
+                    .first()
+                    .is_some_and(|param| param.name.as_str() == "self")
+            }
+            MemberDeclarer::ExternalMethod(callable) => callable.takes_self,
+            // Fields have no receiver-vs-associated split.
+            MemberDeclarer::VirtualField { .. }
+            | MemberDeclarer::ImplField { .. }
+            | MemberDeclarer::ExternalVirtualField { .. } => true,
+        }
+    }
+
+    /// Reject a `self`-less interface method reached through a VALUE receiver
+    /// (`f.make(5)`, `f.as<I>.make()`, union receivers): returns `true` and
+    /// reports when the member is such a method. See
+    /// [`Self::interface_member_takes_self`] for why this cannot be allowed
+    /// to slide (the receiver would be passed into the first real parameter).
+    /// A class-INHERENT static (`function make(seed: int) -> Widget`) reached
+    /// through a value receiver. Rejected for the same reason its interface
+    /// twin is: the receiver contributes nothing the call needs, and reading
+    /// it as one is what allowed it to be smuggled into the first real
+    /// parameter. `Widget.make(..)` is the spelling.
+    fn reject_selfless_inherent_method(
+        &mut self,
+        method: baml_compiler2_hir::loc::FunctionLoc<'db>,
+        member_name: &baml_type::Name,
+        at: ExprId,
+    ) -> bool {
+        let takes_self = function_signature(self.db, method)
+            .params
+            .first()
+            .is_some_and(|param| param.name.as_str() == "self");
+        if takes_self {
+            return false;
+        }
+        if self.member_probe_depth == 0 {
+            // An in-class `implements` method resolves as an ordinary class
+            // candidate, so this road — not the member-lookup one — is where a
+            // CONCRETE receiver's interface static lands. Name its interface
+            // when it has one; `None` is reserved for genuinely inherent
+            // statics, whose spelling is the owning type.
+            let interface_name = self.declaring_interface_of_method(method);
+            self.pending_diags
+                .push(PendingDiag::SelflessInstanceMember {
+                    expr: at,
+                    interface_name,
+                    member: member_name.clone(),
+                });
+        }
+        true
+    }
+
+    /// The interface a resolved member was declared by, for the diagnostic
+    /// that names it. Both METHOD declarers can answer: a symbolic receiver
+    /// carries the interface directly, and a concrete one carries the impl's
+    /// method, whose interface target is recorded (an inherited default body
+    /// is owned by the interface itself). The FIELD declarers cannot occur
+    /// here — the only caller has already required `member.is_method`.
+    fn member_declaring_interface(
+        &self,
+        declarer: &crate::method_resolution::MemberDeclarer<'db>,
+    ) -> Option<baml_type::Name> {
+        use crate::method_resolution::MemberDeclarer;
+
+        match declarer {
+            MemberDeclarer::VirtualMethod { interface, .. } => {
+                Some(self.interface_short_name(*interface))
+            }
+            MemberDeclarer::ImplMethod { func, .. } => self.declaring_interface_of_method(*func),
+            // A mounted method's descriptor is source-less: it records
+            // `takes_self` but not the interface that declared it, so there is
+            // no name to give and the message stays the general one.
+            MemberDeclarer::ExternalMethod(_) => None,
+            // FIELD declarers cannot reach here — the only caller has already
+            // required `member.is_method`.
+            MemberDeclarer::VirtualField { .. }
+            | MemberDeclarer::ImplField { .. }
+            | MemberDeclarer::ExternalVirtualField { .. } => None,
+        }
+    }
+
+    fn interface_short_name(
+        &self,
+        interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+    ) -> baml_type::Name {
+        baml_compiler2_ppir::item_data::interface_data(self.db, interface)
+            .name
+            .clone()
+    }
+
+    /// The interface a METHOD belongs to, from the method alone: an inherited
+    /// default body is owned by the interface, and a method written inside an
+    /// `implements` block records that block's interface target. `None` for a
+    /// genuinely inherent method, which no interface declares.
+    ///
+    /// Keyed on the method rather than the resolution because BOTH `self`-less
+    /// rejections need the answer and reach it differently — a member lookup
+    /// hands back a declarer, while an in-class `implements` method resolves
+    /// as an ordinary class candidate with no declarer at all.
+    fn declaring_interface_of_method(
+        &self,
+        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    ) -> Option<baml_type::Name> {
+        if let Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(interface)) =
+            baml_compiler2_ppir::item_data::method_owner(self.db, func)
+        {
+            return Some(self.interface_short_name(interface));
+        }
+        let target =
+            baml_compiler2_ppir::item_data::method_interface_target(self.db, func).as_ref()?;
+        let target_ty = self.lower.lower_type_ref_at(
+            &target.type_refs,
+            target.target,
+            crate::lower::TypePosition::ConstraintHead,
+        );
+        match target_ty.kind() {
+            TyKind::Interface(name, ..) => Some(name.name().clone()),
+            _ => None,
+        }
+    }
+
+    /// A `self`-less member reached through a VALUE receiver. Rejected
+    /// whatever the receiver's kind — concrete, existential, or union: the
+    /// value contributes nothing the call needs, and reading it as a receiver
+    /// is what let it be smuggled into the first real parameter. The
+    /// type-qualified spellings are the only roads, so the receiver itself is
+    /// not a parameter here.
+    fn reject_selfless_instance_member(
+        &mut self,
+        member: &crate::method_resolution::InterfaceMember<'db>,
+        member_name: &baml_type::Name,
+        at: ExprId,
+    ) -> bool {
+        if !member.is_method || self.interface_member_takes_self(member) {
+            return false;
+        }
+        if self.member_probe_depth == 0 {
+            let interface_name = self.member_declaring_interface(&member.declarer);
+            self.pending_diags
+                .push(PendingDiag::SelflessInstanceMember {
+                    expr: at,
+                    interface_name,
+                    member: member_name.clone(),
+                });
+        }
+        true
+    }
+
     fn interface_member_value(
         &mut self,
         interface_member: crate::method_resolution::InterfaceMember<'db>,
@@ -8231,7 +9037,8 @@ impl<'db> InferenceContext<'db> {
                 }
             };
         }
-        if interface_member.is_method {
+        // Same rule as the call road: a `self`-less method binds nothing.
+        if interface_member.is_method && self.interface_member_takes_self(&interface_member) {
             return bind_receiver(interface_member.ty);
         }
         interface_member.ty
@@ -9110,6 +9917,7 @@ impl<'db> InferenceContext<'db> {
         if let Some(declared) = self.declared_throws.clone()
             && !self.declared_throws_open
             && !declared.has_error()
+            && !crate::lower::is_open_throws_contract(self.db, &declared)
             && let Some(root) = self.body_root
         {
             // Coverage compares WIDENED facts (TIR's fact grain: a thrown
@@ -9488,13 +10296,13 @@ impl<'db> InferenceContext<'db> {
                         },
                         object,
                     ),
-                    PendingDiag::UpcastTargetNotInterface { expr, target } => (
+                    PendingDiag::QualifierNotInterface { expr, target } => (
                         TirTypeError::InvalidInterfaceUpcastTarget {
                             target: self.finalize_ty(&target).to_plain(),
                         },
                         expr,
                     ),
-                    PendingDiag::UpcastNotImplemented {
+                    PendingDiag::QualifierNotImplemented {
                         expr,
                         value,
                         interface,
@@ -9534,9 +10342,13 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::RuntimeTypeArgumentOnIndirectCall { expr } => {
                         (TirTypeError::RuntimeTypeArgumentOnIndirectCall, expr)
                     }
-                    PendingDiag::RuntimeTypeMustBeNamed { carrier, enclosing } => {
+                    PendingDiag::RuntimeTypeMustBeNamed {
+                        carrier,
+                        enclosing,
+                        escape,
+                    } => {
                         diags.push(TirDiagnostic {
-                            error: TirTypeError::RuntimeTypeMustBeNamed,
+                            error: TirTypeError::RuntimeTypeMustBeNamed { escape },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::UnreflectArg { carrier, enclosing },
                             related: Vec::new(),
@@ -9694,6 +10506,94 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::VoidResultUsed { expr } => {
                         (TirTypeError::VoidFunctionResultUsed, expr)
+                    }
+                    PendingDiag::SelflessInstanceMember {
+                        expr,
+                        interface_name,
+                        member,
+                    } => (
+                        TirTypeError::SelflessInstanceMember {
+                            interface_name,
+                            method_name: member,
+                        },
+                        expr,
+                    ),
+                    PendingDiag::ItemProjectionSelfSlot {
+                        expr,
+                        var,
+                        interface,
+                        member,
+                        takes_self,
+                        value_position,
+                    } => {
+                        let slot = self.finalize_ty(&var);
+                        // `never` names no implementor (it satisfies any bound
+                        // vacuously by subtyping, which is exactly why it must
+                        // be caught here), and a LITERAL type is not an
+                        // implementor either — impls attach to its base, so a
+                        // `Self`-returning method would produce a base-typed
+                        // value inhabiting the literal type.
+                        if matches!(slot.kind(), TyKind::Never { .. } | TyKind::Literal(..)) {
+                            diags.push(TirDiagnostic {
+                                error: TirTypeError::SelflessMethodNeedsConcreteSelf {
+                                    interface_name: baml_type::Name::new(
+                                        self.qualified_interface_display(&interface),
+                                    ),
+                                    method_name: member,
+                                    self_ty: slot.to_plain(),
+                                },
+                                severity: DiagnosticSeverity::Error,
+                                primary: DiagnosticLocation::Expr(expr),
+                                related: Vec::new(),
+                            });
+                            continue;
+                        }
+                        if !matches!(slot.kind(), TyKind::Interface(..) | TyKind::Union(..)) {
+                            continue;
+                        }
+                        if !takes_self {
+                            (
+                                TirTypeError::SelflessMethodNeedsConcreteSelf {
+                                    interface_name: baml_type::Name::new(
+                                        self.qualified_interface_display(&interface),
+                                    ),
+                                    method_name: member,
+                                    self_ty: slot.to_plain(),
+                                },
+                                expr,
+                            )
+                        } else if let Some(position) =
+                            crate::method_resolution::declared_method_self_restriction(
+                                self.db,
+                                &self.facts,
+                                &interface,
+                                &member,
+                            )
+                        {
+                            (
+                                TirTypeError::InvalidSelfCallThroughInterface {
+                                    interface_name: baml_type::Name::new(
+                                        self.qualified_interface_display(&interface),
+                                    ),
+                                    method_name: member,
+                                    position,
+                                },
+                                expr,
+                            )
+                        } else if value_position {
+                            (
+                                TirTypeError::ErasedSelfMethodValue {
+                                    interface_name: baml_type::Name::new(
+                                        self.qualified_interface_display(&interface),
+                                    ),
+                                    method_name: member,
+                                    self_ty: slot.to_plain(),
+                                },
+                                expr,
+                            )
+                        } else {
+                            continue;
+                        }
                     }
                     PendingDiag::UninferredCtorParam { expr, var, name } => {
                         if !self.finalize_ty(&var).has_error() {
@@ -10664,7 +11564,8 @@ impl<'db> InferenceContext<'db> {
         let data = baml_compiler2_ppir::item_data::function_data(self.db, function);
         for (index, param_ty) in self.param_tys.iter().enumerate() {
             let resolved = self.table.resolve_completely(param_ty);
-            let TyKind::Function { throws, .. } = resolved.kind() else {
+            let Some(TyKind::Function { throws, .. }) = callback_root_fn(&resolved).map(Ty::kind)
+            else {
                 continue;
             };
             if matches!(throws.kind(), TyKind::TypeVar(p, _) if p == effect) {
@@ -11046,14 +11947,15 @@ fn interface_mentions_param(interface: &InterfaceRef, param: &baml_type::ParamTy
         .any(|ty| ty_mentions_param(ty, param))
 }
 
-/// Does a call-scoped runtime parameter survive into `ret` as more than the
-/// result itself? See [`InferCtx::report_runtime_type_escape`] for why the
-/// bare-parameter result is the one shape that does not escape.
-fn runtime_param_escapes_result(ret: &Ty, param: &baml_type::ParamTy) -> bool {
-    if matches!(ret.kind(), TyKind::TypeVar(candidate, _) if candidate == param) {
+/// Does a call-scoped runtime parameter survive into a type the call
+/// `published` (its result, or the error it can throw) as more than that type
+/// itself? See [`InferCtx::report_runtime_type_escape`] for why the bare
+/// parameter is the one shape that does not escape.
+fn runtime_param_escapes(published: &Ty, param: &baml_type::ParamTy) -> bool {
+    if matches!(published.kind(), TyKind::TypeVar(candidate, _) if candidate == param) {
         return false;
     }
-    ty_mentions_param(ret, param)
+    ty_mentions_param(published, param)
 }
 
 fn interface_occurrence_ty(interface: &InterfaceRef) -> Ty {
@@ -11277,5 +12179,49 @@ mod syntactic_union_tests {
         let nested = union(&[Ty::int(), Ty::string()]);
         let flat = syntactic_union(&[nested, Ty::int()]);
         assert_eq!(flat, union(&[Ty::int(), Ty::string()]));
+    }
+}
+
+#[cfg(test)]
+mod runtime_param_escape_tests {
+    use super::*;
+
+    fn param() -> baml_type::ParamTy {
+        baml_type::ParamTy::new(0x8000_0001, baml_type::Name::new("Out"))
+    }
+
+    fn var(param: &baml_type::ParamTy) -> Ty {
+        Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default()))
+    }
+
+    /// The whole rule is one boundary: the parameter ITSELF is a value's type
+    /// and does not escape; one constructor deeper it is an assertion about a
+    /// value, and does.
+    #[test]
+    fn the_bare_parameter_is_the_only_shape_that_does_not_escape() {
+        let param = param();
+        assert!(!runtime_param_escapes(&var(&param), &param));
+        assert!(!runtime_param_escapes(&Ty::int(), &param));
+        assert!(!runtime_param_escapes(&Ty::never(), &param));
+        assert!(runtime_param_escapes(
+            &Ty::intern(TyKind::List(var(&param), TyAttr::default())),
+            &param
+        ));
+        assert!(runtime_param_escapes(
+            &syntactic_union(&[var(&param), Ty::null()]),
+            &param
+        ));
+    }
+
+    /// A different parameter is a different name: an occurs-check that keyed on
+    /// shape alone would refuse every generic result.
+    #[test]
+    fn another_parameter_is_not_this_one() {
+        let other = baml_type::ParamTy::new(0x8000_0002, baml_type::Name::new("Other"));
+        assert!(!runtime_param_escapes(&var(&other), &param()));
+        assert!(!runtime_param_escapes(
+            &Ty::intern(TyKind::List(var(&other), TyAttr::default())),
+            &param()
+        ));
     }
 }

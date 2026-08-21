@@ -47,7 +47,7 @@ use crate::{
 
 fn compilation_error(vm: &mut BexVm, id: DiagnosticId, message: String) -> VmRustFnError {
     let diagnostic = super::type_kinds::compiler_diagnostic(id, message);
-    VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+    VmRustFnError::thrown_fresh(super::type_kinds::alloc_compilation_error(
         vm,
         &[diagnostic],
     ))
@@ -707,7 +707,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                     DiagnosticId::InvalidSyntax,
                     format!("package alias `{alias}` is reserved"),
                 );
-                return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+                return VmRustFnError::thrown_fresh(super::type_kinds::alloc_compilation_error(
                     vm,
                     &[diagnostic],
                 ))
@@ -1079,7 +1079,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 let diagnostic =
                     runtime_type::invalid_identifier(InvalidIdentifierKind::ExportedType, &export)
                         .with_phase(DiagnosticPhase::Hir);
-                return Err(VmRustFnError::Thrown(
+                return Err(VmRustFnError::thrown_fresh(
                     super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
                 ));
             }
@@ -1165,7 +1165,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             {
                 let diagnostic =
                     runtime_type::unspecialized_reflected_generic(&display_local_name(&local));
-                return Err(VmRustFnError::Thrown(
+                return Err(VmRustFnError::thrown_fresh(
                     super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
                 ));
             }
@@ -1178,7 +1178,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         // it here, where the caller still has a diagnostic channel.
         if let Some(name) = vm.generic_callable_body_needs_type_args(function_value) {
             let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
-            return Err(VmRustFnError::Thrown(
+            return Err(VmRustFnError::thrown_fresh(
                 super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
             ));
         }
@@ -2121,7 +2121,7 @@ impl BamlClassReflectSession for PackageBamlImpl {
                     DiagnosticId::InvalidSyntax,
                     format!("package alias `{alias}` is reserved"),
                 );
-                return Err(VmRustFnError::Thrown(
+                return Err(VmRustFnError::thrown_fresh(
                     super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
                 ));
             }
@@ -2356,7 +2356,7 @@ fn raise_invalid_argument(
         got,
     }
     .to_value(vm);
-    NativeCallResult::Error(VmRustFnError::Thrown(err))
+    NativeCallResult::Error(VmRustFnError::thrown_fresh(err))
 }
 
 /// The callee's whole function type, for arity / unknown-name mismatches.
@@ -2453,7 +2453,7 @@ fn call_any_impl(
     let Some(sig) = vm.callable_signature(f_val) else {
         if let Some(name) = vm.unspecialized_generic_callable_name(f_val) {
             let diagnostic = runtime_type::unspecialized_reflected_generic(&name);
-            return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+            return VmRustFnError::thrown_fresh(super::type_kinds::alloc_compilation_error(
                 vm,
                 &[diagnostic],
             ))
@@ -2466,7 +2466,7 @@ fn call_any_impl(
     // failing inside its body as a VM internal error.
     if let Some(name) = vm.generic_callable_body_needs_type_args(f_val) {
         let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
-        return VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+        return VmRustFnError::thrown_fresh(super::type_kinds::alloc_compilation_error(
             vm,
             &[diagnostic],
         ))

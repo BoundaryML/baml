@@ -674,6 +674,69 @@ function exceptions.$init_test_ns_exceptions_exceptions(registry: <unresolved ty
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.exceptions"
+    load_const "catch_all_covers_direct_throw_beside_throwing_call"
+    make_closure .<lambda($init_test_ns_exceptions_exceptions, 96)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.exceptions"
+    load_const "catch_all_covers_callee_throw_beside_direct_throw"
+    make_closure .<lambda($init_test_ns_exceptions_exceptions, 97)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.exceptions"
+    load_const "catch_all_direct_throw_beside_call_normal_path"
+    make_closure .<lambda($init_test_ns_exceptions_exceptions, 98)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.exceptions"
+    load_const "typed_catch_covers_direct_throw_beside_throwing_call"
+    make_closure .<lambda($init_test_ns_exceptions_exceptions, 99)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.exceptions"
+    load_const "typed_catch_covers_callee_throw_beside_direct_throw"
+    make_closure .<lambda($init_test_ns_exceptions_exceptions, 100)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.exceptions"
+    load_const "catch_all_covers_direct_throw_after_defer_beside_call"
+    make_closure .<lambda($init_test_ns_exceptions_exceptions, 101)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.exceptions"
+    load_const "catch_all_panics_covers_callfree_panic_beside_throwing_call"
+    make_closure .<lambda($init_test_ns_exceptions_exceptions, 102)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.exceptions"
+    load_const "catch_all_panics_callfree_panic_branch_normal_path"
+    make_closure .<lambda($init_test_ns_exceptions_exceptions, 103)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.exceptions"
+    load_const "catch_all_panics_covers_callfree_div_panic_beside_throwing_call"
+    make_closure .<lambda($init_test_ns_exceptions_exceptions, 104)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -3084,6 +3147,212 @@ function exceptions.s1_fails_4(mode: int) -> int {
 
   L3:
     load_const "alpha"
+    throw
+}
+
+function exceptions.s20_defer_guard_throw_fn(n: int) -> string {
+    load_type string
+    alloc_array 0
+    store_var log
+    load_var n
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L6
+
+  L0:
+    load_var n
+    call user.exceptions.s20_may_throw
+    store_var r
+    jump L1
+    load_type string
+    load_var log
+    load_const "deferred"
+    call baml.Array.push
+    pop 1
+    load_var _5
+    store_var e
+    load_var e
+    throw_if_panic
+    load_const "caught"
+    store_var r
+    jump L2
+
+  L1:
+    load_type string
+    load_var log
+    load_const "deferred"
+    call baml.Array.push
+    pop 1
+
+  L2:
+    load_var log
+    container_len
+    store_var _14
+    load_var _14
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "defer-did-not-run"
+    jump L5
+
+  L4:
+    load_var r
+
+  L5:
+    return
+
+  L6:
+    load_const "guard"
+    init_instance baml.errors.InvalidArgument .message
+    throw
+}
+
+function exceptions.s20_div_panic_beside_call_fn(n: int) -> int {
+    load_var n
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var n
+    call user.exceptions.s20_may_throw
+    pop 1
+    jump L1
+    load_const -1
+    jump L3
+
+  L1:
+    load_const 7
+    jump L3
+
+  L2:
+    load_const 100
+    load_var n
+    div_int
+
+  L3:
+    return
+}
+
+function exceptions.s20_guard_throw_plus_call_fn(n: int) -> string {
+    load_var n
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var n
+    call user.exceptions.s20_may_throw
+    jump L1
+    load_var e
+    throw_if_panic
+    load_const "caught"
+
+  L1:
+    return
+
+  L2:
+    load_const "guard"
+    init_instance baml.errors.InvalidArgument .message
+    throw
+}
+
+function exceptions.s20_guard_throw_typed_catch_fn(n: int) -> string {
+    load_var n
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L6
+
+  L0:
+    load_var n
+    call user.exceptions.s20_may_throw
+    jump L5
+    load_var e
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var e
+    throw_if_panic
+    load_const "other"
+    jump L5
+
+  L3:
+    load_const "io-caught"
+    jump L5
+
+  L4:
+    load_const "guard-caught"
+
+  L5:
+    return
+
+  L6:
+    load_const "guard"
+    init_instance baml.errors.InvalidArgument .message
+    throw
+}
+
+function exceptions.s20_index_panic_beside_call_fn(n: int) -> int {
+    load_var n
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var n
+    call user.exceptions.s20_may_throw
+    pop 1
+    jump L1
+    load_const -1
+    jump L3
+
+  L1:
+    load_const 7
+    jump L3
+
+  L2:
+    load_const 1
+    load_type int
+    alloc_array 1
+    load_var n
+    load_const 5
+    add_int
+    load_array_element
+
+  L3:
+    return
+}
+
+function exceptions.s20_may_throw(n: int) -> string {
+    load_var n
+    load_const 42
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "ok"
+    return
+
+  L1:
+    load_const "io"
+    init_instance baml.errors.Io .message
     throw
 }
 

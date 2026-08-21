@@ -409,19 +409,16 @@ function for_loops.for_loops_joined_map_arm(xs: int[], b: bool) -> int {
     load_var xs
     make_closure .<lambda(for_loops_joined_map_arm, 0)>, 0
     call baml.Array.map
-    store_var ys
     jump L2
 
   L1:
     load_const 0
     load_type int
     alloc_array 1
-    store_var ys
 
   L2:
     load_const 0
     store_var n
-    load_var ys
     load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
@@ -439,7 +436,7 @@ function for_loops.for_loops_joined_map_arm(xs: int[], b: bool) -> int {
     jump L5
 
   L4:
-    load_var2 4 6
+    load_var2 3 5
     add_int
     store_var n
     jump L3

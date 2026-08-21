@@ -116,7 +116,7 @@ namespace baml.errors:
   class StackTrace { methods: [_to_string_impl, to_string] }
   class Timeout { methods: [] }
   class TypeMismatch { methods: [] }
-  class UnknownError { methods: [] }
+  class UnknownError { methods: [from, with_message, _preserve_context, to_string] }
   class Unsupported { methods: [] }
 namespace baml.events:
 namespace baml.fs:
@@ -159,6 +159,7 @@ namespace baml.http:
   class SseStream { methods: [next, close] }
   class TlsConfig { methods: [new, _new] }
   function _fetch
+  function _fetch_sse
   function _send
   function _timeout_nanos
   function fetch
@@ -188,7 +189,11 @@ namespace baml.iter:
   class Peekable<T, E> { methods: [peek, iter, next] }
   class Range { methods: [new, iter, next] }
   class Repeat<T> { methods: [new, iter, next] }
+  class Skip<T, E> { methods: [iter, next] }
+  class SkipWhile<T, E, E2> { methods: [iter, next] }
   class StepBy<T, E> { methods: [iter, next] }
+  class Take<T, E> { methods: [iter, next] }
+  class TakeWhile<T, E, E2> { methods: [iter, next] }
   function flatten<R, E, E3, I>
 namespace baml.json:
   class JsonDecodeError { methods: [] }

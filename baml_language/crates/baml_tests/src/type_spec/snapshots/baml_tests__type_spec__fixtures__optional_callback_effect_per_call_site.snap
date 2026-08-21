@@ -1,0 +1,45 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+433..447 'apply_optional': throws __effect_param_0
+486..590 '{\n   ...  v\n}': int
+540..582 'if (f ...n    }': void
+544..545 'f': ((int) -> int throws __effect_param_0) | null
+544..553 'f != null': bool
+549..553 'null': null
+555..582 '{\n   ...n    }': never
+572..573 'f': (x: int) -> int throws __effect_param_0
+572..576 'f(v)': int
+574..575 'v': int
+587..588 'v': int
+601..605 'safe': throws never
+621..691 '{\n   ... v)\n}': int
+654..668 'apply_optional': (f: ((int) -> int throws never) | null, v: int) -> int throws never
+654..689 'apply_... }, v)': int
+669..685 '(x) ->... + 1 }': (x: int) -> int throws never
+676..685 '{ x + 1 }': int
+678..679 'x': int
+678..683 'x + 1': int
+682..683 '1': 1
+687..688 'v': int
+702..708 'absent': throws never
+724..784 '{\n   ... v)\n}': int
+759..773 'apply_optional': (f: ((int) -> int throws never) | null, v: int) -> int throws never
+759..782 'apply_...ll, v)': int
+774..778 'null': null
+780..781 'v': int
+795..800 'risky': throws "neg"
+816..911 '{\n   ... v)\n}': int
+850..864 'apply_optional': (f: ((int) -> int throws "neg") | null, v: int) -> int throws "neg"
+850..909 'apply_... }, v)': int
+865..905 '(x) ->... } x }': (x: int) -> int throws "neg"
+872..905 '{ if (... } x }': int
+874..901 'if (x ...eg"; }': void
+878..879 'x': int
+878..883 'x < 0': bool
+882..883 '0': 0
+885..901 '{ thro...eg"; }': never
+893..898 '"neg"': "neg"
+902..903 'x': int
+907..908 'v': int

@@ -128,6 +128,10 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                                     .field_type
                                     .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
                                     .unwrap_or_else(|_| ::sys_types::SapTy::unknown()),
+                                field_template: f
+                                    .field_template
+                                    .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
+                                    .ok(),
                                 description: f.description.clone(),
                                 alias: f.alias.clone(),
                                 skip: f.skip,

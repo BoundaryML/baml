@@ -565,7 +565,7 @@ pub fn build_to_host_call(
 mod tests {
     use std::sync::Arc;
 
-    use baml_type::{Freshness, Literal, TyAttr};
+    use baml_type::{Freshness, Literal, Name, TyAttr, TypeName};
     use bex_project::{
         BexExternalAdt, BexExternalValue, HostValueArc, HostValueKind, MediaContent, MediaValue,
         PromptAst, PromptAstSimple,
@@ -680,6 +680,44 @@ mod tests {
         let encoded = extract_union(
             external_to_outbound(&value, &CffiHandleTableOptions::for_in_process()).unwrap(),
         );
+        assert_eq!(encoded.selected_option_index, Some(0));
+    }
+
+    #[test]
+    fn outbound_union_encodes_selected_interface_arm() {
+        let interface_name = TypeName::from_dotted_path("user.Failure");
+        let declared = RuntimeTy::Interface(
+            interface_name.clone(),
+            vec![RuntimeTy::string()],
+            vec![
+                (Name::new("Cause"), RuntimeTy::string()),
+                (Name::new("Code"), RuntimeTy::int()),
+            ],
+            TyAttr::default(),
+        );
+        let selected = RuntimeTy::Interface(
+            interface_name,
+            vec![RuntimeTy::string()],
+            vec![
+                (Name::new("Code"), RuntimeTy::int()),
+                (Name::new("Cause"), RuntimeTy::string()),
+            ],
+            TyAttr::default(),
+        );
+        let value = BexExternalValue::union(
+            BexExternalValue::Instance {
+                class_name: "baml.errors.HostCallable".to_string(),
+                fields: IndexMap::new(),
+                type_args: Vec::new(),
+            },
+            [declared, RuntimeTy::string()],
+            selected,
+        );
+
+        let encoded = extract_union(
+            external_to_outbound(&value, &CffiHandleTableOptions::for_in_process()).unwrap(),
+        );
+
         assert_eq!(encoded.selected_option_index, Some(0));
     }
 

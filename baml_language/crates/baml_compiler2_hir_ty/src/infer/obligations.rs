@@ -121,6 +121,17 @@ impl<'db> InferenceContext<'db> {
                         return Attempt::Done;
                     }
                     if !self.implements_holds(&ty, &interface) {
+                        // BUG: this reduction launders a NOMINAL verdict ("no
+                        // impl exists") into a SUBTYPING pair — and the
+                        // mismatch finalization pass re-judges pairs with
+                        // `cached_subtype`, which holds vacuously for
+                        // `never <: I-existential`, erasing the failure.
+                        // `plain<never>(1)` under `T extends I` therefore
+                        // checks clean and dies in the VM's (correctly
+                        // nominal) impl resolver. Fix = a dedicated
+                        // does-not-implement channel whose deferred re-check
+                        // re-runs `implements_holds`, never `sub`. Full
+                        // analysis: HANDOFF_implements_not_subtyping.md.
                         let expected = interface.existential();
                         self.result
                             .type_mismatches

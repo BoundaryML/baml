@@ -2,6 +2,6 @@
 # is build.rs output — never committed; regenerated on every build.
 **/generated/
 **/.generated.baml-staging/
-**/.baml_client.baml-staging/
+**/.baml_sdk.baml-staging/
 **/.generated.baml-backup/
-**/.baml_client.baml-backup/
+**/.baml_sdk.baml-backup/

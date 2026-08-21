@@ -802,9 +802,11 @@ jobs:
       # Miri checks the raw-pointer/UnsafeCell discipline of the same
       # scenarios on real threads. Leaked rings are by design (&'static
       # lifetime model); isolation is off for park_timeout/sleep in the
-      # stress tests.
-      - name: "Miri (bex_events::prof)"
-        run: 'cargo +nightly miri test -p bex_events --lib prof::'
+      # stress tests. Scoped to the ring/registry modules: the durable
+      # store under `prof::backend` needs `statvfs`/`flock` (foreign
+      # functions Miri cannot run) and its tests are plain std tests.
+      - name: "Miri (bex_events::prof ring)"
+        run: 'cargo +nightly miri test -p bex_events --lib -- prof::concurrency_tests:: prof::ring:: prof::record:: prof::config::'
         working-directory: baml_language
         env:
           MIRIFLAGS: "-Zmiri-ignore-leaks -Zmiri-disable-isolation"

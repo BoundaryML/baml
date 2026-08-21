@@ -44,9 +44,11 @@ walkdir = { workspace = true }
 
 [dev-dependencies]
 baml_builtins2 = { workspace = true }
+baml_cli = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_fmt = { workspace = true }
 baml_type = { workspace = true }
+bex_events = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 borsh = { workspace = true }
@@ -54,6 +56,7 @@ darwin-kperf = { workspace = true }
 darwin-kperf-events = { workspace = true }
 divan = { workspace = true }
 libc = { workspace = true }
+mimalloc = { workspace = true }
 num-bigint = { workspace = true }
 rayon = { workspace = true }
 serde_json = { workspace = true }

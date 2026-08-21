@@ -169,6 +169,11 @@ pub enum LoweringDiagnostic {
     /// only fails at runtime.
     AssignmentInExpressionPosition { span: TextRange },
 
+    /// Parser recovery produced an object-literal node without a constructor
+    /// identifier. The AST cannot represent a constructor-less object, so the
+    /// expression lowers to `Missing` and this diagnostic preserves the error.
+    MissingObjectConstructor { span: TextRange },
+
     /// Top-level `implements I for T` where `T` does not match any class in the file.
     UnresolvedImplementsForTarget {
         interface_name: String,
@@ -607,6 +612,13 @@ impl LoweringDiagnostic {
                     .to_string(),
                 *span,
                 "assignment not allowed here",
+            ),
+            LoweringDiagnostic::MissingObjectConstructor { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "object construction requires a class or type name".to_string(),
+                *span,
+                "expected a constructor name before `{`",
             ),
             LoweringDiagnostic::UnresolvedImplementsForTarget {
                 interface_name,

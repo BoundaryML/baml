@@ -1197,7 +1197,6 @@ function operators.ord_catch_ge() -> bool {
     load_type baml.ops.Compare
     load_const "ge"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
     jump L2
     load_var e
     is_type baml.panics.DivisionByZero
@@ -1210,10 +1209,8 @@ function operators.ord_catch_ge() -> bool {
 
   L1:
     load_const true
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -1225,7 +1222,6 @@ function operators.ord_catch_gt() -> bool {
     load_type baml.ops.Compare
     load_const "gt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
     jump L2
     load_var e
     is_type baml.panics.DivisionByZero
@@ -1238,10 +1234,8 @@ function operators.ord_catch_gt() -> bool {
 
   L1:
     load_const true
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -1253,7 +1247,6 @@ function operators.ord_catch_le() -> bool {
     load_type baml.ops.Compare
     load_const "le"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
     jump L2
     load_var e
     is_type baml.panics.DivisionByZero
@@ -1266,10 +1259,8 @@ function operators.ord_catch_le() -> bool {
 
   L1:
     load_const true
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 
@@ -1281,7 +1272,6 @@ function operators.ord_catch_lt() -> bool {
     load_type baml.ops.Compare
     load_const "lt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
     jump L2
     load_var e
     is_type baml.panics.DivisionByZero
@@ -1294,10 +1284,8 @@ function operators.ord_catch_lt() -> bool {
 
   L1:
     load_const true
-    store_var _0
 
   L2:
-    load_var _0
     return
 }
 

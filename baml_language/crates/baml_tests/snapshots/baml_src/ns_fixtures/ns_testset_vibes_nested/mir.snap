@@ -100,7 +100,7 @@ fn .<lambda(<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main, 0)>, 1)
     let _13: string // ex
     let _14: void
     let _15: string
-    let _16: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure
+    let _16: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
         _4 = copy capture[0];
@@ -191,7 +191,7 @@ fn .<lambda(<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main, 0)>, 3)
     let _8: string // sentiments [captured]
     let _9: void
     let _10: string
-    let _11: (testing.TestCollector) -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.UnknownError | baml.reflect.errors.CompilationError | testing.InvalidTestName | ai.errors.Failure
+    let _11: (testing.TestCollector) -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | testing.InvalidTestName | ai.errors.Failure
 
     bb0: {
         _2 = [const "happy", const "sad"]: string[];
@@ -242,7 +242,7 @@ fn .<lambda(<lambda(<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main,
     let _9: string // ex
     let _10: void
     let _11: string
-    let _12: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure
+    let _12: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
         _3 = copy capture[0];
@@ -332,7 +332,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: nu
 
     bb2: {
         _6 = load_type(fixtures.testset_vibes_nested.Sentiment);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -340,7 +340,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: nu
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<fixtures.testset_vibes_nested.Sentiment, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.testset_vibes_nested.Sentiment>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<fixtures.testset_vibes_nested.Sentiment, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.testset_vibes_nested.Sentiment>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -349,6 +349,39 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: nu
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.ClassifySentiment$build_request(text: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(fixtures.testset_vibes_nested.Sentiment);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -496,7 +529,7 @@ fn .<lambda(ClassifySentiment$spec, 0)>( __spec_output_format: string) -> ai.Pro
         _21 = copy _22.0;
         _24 = copy _2;
         _23 = copy _24.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _21, copy _23) -> [bb4];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _21, copy _23) -> [bb4];
     }
 
     bb4: {
@@ -563,7 +596,7 @@ fn user.fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, c
 
     bb2: {
         _7 = load_type(string[]);
-        _6 = call const fn ai.Agent.new<copy _7>(const <omitted>, copy _3, const <omitted>, const <omitted>) -> [bb3];
+        _6 = call const fn ai.Agent.new<copy _7>(const <omitted>, const <omitted>, copy _3, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -571,7 +604,7 @@ fn user.fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, c
     }
 
     bb4: {
-        _5 = virtual_call run as ai.Runner<string[], Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string[]>>(copy _6, copy _8) -> [bb5];
+        _5 = virtual_call run as ai.Runner<string[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string[]>>(copy _6, copy _8) -> [bb5];
     }
 
     bb5: {
@@ -580,6 +613,40 @@ fn user.fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, c
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.GenerateTests$build_request(count: int, topic: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: int // count // param
+    let _2: string // topic // param
+    let _3: null | ai.Client // client // param
+    let _4: bool
+    let _5: ai.FunctionSpec<string[]>
+    let _6: type
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = call const fn user.fixtures.testset_vibes_nested.GenerateTests$spec(copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type(string[]);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _6>(copy _5, copy _3) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -753,7 +820,7 @@ fn .<lambda(GenerateTests$spec, 0)>( __spec_output_format: string) -> ai.Prompt 
         _29 = copy _30.0;
         _32 = copy _2;
         _31 = copy _32.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _29, copy _31) -> [bb6];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _29, copy _31) -> [bb6];
     }
 
     bb6: {
@@ -866,7 +933,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: n
 
     bb2: {
         _6 = load_type(string);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -874,7 +941,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: n
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -883,6 +950,39 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: n
     }
 
     bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.ClassifySentiment2$build_request(text: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment2$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -1030,7 +1130,7 @@ fn .<lambda(ClassifySentiment2$spec, 0)>( __spec_output_format: string) -> ai.Pr
         _21 = copy _22.0;
         _24 = copy _2;
         _23 = copy _24.1;
-        _0 = call const fn ai.internal.assemble_prompt(copy _21, copy _23) -> [bb4];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _21, copy _23) -> [bb4];
     }
 
     bb4: {

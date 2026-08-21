@@ -32,6 +32,14 @@ def test_main_lorem_resume_class_shape():
     assert set(fields) == {"name", "email"}
 
 
+# SDK_PARITY_LINT(skip): pins the Python generator's nullable-field `= None` default
+def test_main_nullable_model_field_can_be_omitted():
+    from baml_sdk.lorem import Resume
+
+    resume = Resume(name="Ada")
+    assert resume.email is None
+
+
 def test_main_lorem_streaming_doc_class_shape():
     import pydantic
     from baml_sdk.lorem import StreamingDoc
@@ -112,6 +120,13 @@ def test_main_stream_types_lorem_leaf_present():
     assert has_any, (
         "expected at least one $stream companion class in stream_types/lorem"
     )
+
+
+# SDK_PARITY_LINT(skip): validates Python generated stream_types package imports
+def test_main_nested_stream_partial_module_imports_cleanly():
+    from baml_sdk.stream_types import stream_typing
+
+    assert stream_typing.TextResultStreamHolder is not None
 
 
 def test_main_classify_sentiment_factory_bindings():

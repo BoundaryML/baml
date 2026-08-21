@@ -300,14 +300,14 @@ pub(crate) fn alloc_builder(vm: &mut BexVm, name: &str) -> Value {
 }
 
 fn compilation_error(vm: &mut BexVm, id: DiagnosticId, message: String) -> VmRustFnError {
-    VmRustFnError::Thrown(alloc_compilation_error(
+    VmRustFnError::thrown_fresh(alloc_compilation_error(
         vm,
         &[compiler_diagnostic(id, message)],
     ))
 }
 
 fn shared_compilation_error(vm: &mut BexVm, diagnostic: Diagnostic) -> VmRustFnError {
-    VmRustFnError::Thrown(alloc_compilation_error(vm, &[diagnostic]))
+    VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
 }
 
 impl BamlClassReflectClassBuilder for PackageBamlImpl {
@@ -839,7 +839,7 @@ fn build_group(
     let prepared = match prepare_group(vm, &group) {
         Ok(prepared) => prepared,
         Err(diagnostics) => {
-            return Err(VmRustFnError::Thrown(alloc_compilation_error(
+            return Err(VmRustFnError::thrown_fresh(alloc_compilation_error(
                 vm,
                 &diagnostics,
             )));
@@ -890,7 +890,7 @@ fn build_group(
         &mut witness_diagnostics,
     );
     if !witness_diagnostics.is_empty() {
-        return Err(VmRustFnError::Thrown(alloc_compilation_error(
+        return Err(VmRustFnError::thrown_fresh(alloc_compilation_error(
             vm,
             &witness_diagnostics,
         )));

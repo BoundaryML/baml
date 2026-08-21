@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function prompt_tag_runtime.$init_test_ns_prompt_tag_runtime_prompt_tag_runtime(registry: <unresolved type #49679510787122>) -> null {
+function prompt_tag_runtime.$init_test_ns_prompt_tag_runtime_prompt_tag_runtime(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.prompt_tag_runtime"
     load_const "role_construction_isolation"
@@ -125,7 +125,7 @@ function prompt_tag_runtime.$init_test_ns_prompt_tag_runtime_prompt_tag_runtime(
     return
 }
 
-function prompt_tag_runtime.Labeled.baml.ToString.to_string(self: <unresolved type #31544962449427>) -> string {
+function prompt_tag_runtime.Labeled.baml.ToString.to_string(self: prompt_tag_runtime.Labeled) -> string {
     load_const "LBL<"
     load_var self
     load_field .tag
@@ -135,7 +135,7 @@ function prompt_tag_runtime.Labeled.baml.ToString.to_string(self: <unresolved ty
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson(client: <unresolved type #34575171419448> | null) -> <unresolved type #192523725849> {
+function prompt_tag_runtime.PtRenderPerson(client: ai.Client | null) -> prompt_tag_runtime.Person {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -146,6 +146,7 @@ function prompt_tag_runtime.PtRenderPerson(client: <unresolved type #34575171419
   L0:
     load_type prompt_tag_runtime.Person
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -154,7 +155,7 @@ function prompt_tag_runtime.PtRenderPerson(client: <unresolved type #34575171419
     call user.prompt_tag_runtime.PtRenderPerson$spec
     store_var _6
     load_var2 3 4
-    load_type ai.Runner<prompt_tag_runtime.Person, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<prompt_tag_runtime.Person>>
+    load_type ai.Runner<prompt_tag_runtime.Person, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<prompt_tag_runtime.Person>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _3
@@ -163,14 +164,31 @@ function prompt_tag_runtime.PtRenderPerson(client: <unresolved type #34575171419
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson$parse(json: string) -> <unresolved type #192523725849> {
+function prompt_tag_runtime.PtRenderPerson$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.prompt_tag_runtime.PtRenderPerson$spec
+    store_var _3
+    load_type prompt_tag_runtime.Person
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function prompt_tag_runtime.PtRenderPerson$parse(json: string) -> prompt_tag_runtime.Person {
     load_type prompt_tag_runtime.Person
     load_var json
     call baml.sap.parse
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson$render_prompt() -> <unresolved type #135172864440005> {
+function prompt_tag_runtime.PtRenderPerson$render_prompt() -> ai.Prompt {
     call user.prompt_tag_runtime.PtRenderPerson$spec
     store_var _1
     load_type prompt_tag_runtime.Person
@@ -182,12 +200,14 @@ function prompt_tag_runtime.PtRenderPerson$render_prompt() -> <unresolved type #
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson$spec() -> <unresolved type #25974768157144><<unresolved type #192523725849>> {
+function prompt_tag_runtime.PtRenderPerson$spec() -> ai.FunctionSpec<prompt_tag_runtime.Person> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
     load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -214,7 +234,7 @@ function prompt_tag_runtime.PtRenderPerson$spec() -> <unresolved type #259747681
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><<unresolved type #98911002459791> | null, <unresolved type #192523725849>> {
+function prompt_tag_runtime.PtRenderPerson$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -232,7 +252,7 @@ function prompt_tag_runtime.PtRenderPerson$stream(client: <unresolved type #1286
     return
 }
 
-function prompt_tag_runtime.PtStructuredGreeting(name: string, client: <unresolved type #34575171419448> | null) -> string {
+function prompt_tag_runtime.PtStructuredGreeting(name: string, client: ai.Client | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -243,6 +263,7 @@ function prompt_tag_runtime.PtStructuredGreeting(name: string, client: <unresolv
   L0:
     load_type string
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -252,12 +273,30 @@ function prompt_tag_runtime.PtStructuredGreeting(name: string, client: <unresolv
     call user.prompt_tag_runtime.PtStructuredGreeting$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
     load_var _4
     load_field .value
+    return
+}
+
+function prompt_tag_runtime.PtStructuredGreeting$build_request(name: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var name
+    call user.prompt_tag_runtime.PtStructuredGreeting$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
     return
 }
 
@@ -268,7 +307,7 @@ function prompt_tag_runtime.PtStructuredGreeting$parse(json: string) -> string {
     return
 }
 
-function prompt_tag_runtime.PtStructuredGreeting$render_prompt(name: string) -> <unresolved type #135172864440005> {
+function prompt_tag_runtime.PtStructuredGreeting$render_prompt(name: string) -> ai.Prompt {
     load_var name
     call user.prompt_tag_runtime.PtStructuredGreeting$spec
     store_var _2
@@ -281,7 +320,7 @@ function prompt_tag_runtime.PtStructuredGreeting$render_prompt(name: string) -> 
     return
 }
 
-function prompt_tag_runtime.PtStructuredGreeting$spec(name: string) -> <unresolved type #25974768157144><string> {
+function prompt_tag_runtime.PtStructuredGreeting$spec(name: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -290,6 +329,8 @@ function prompt_tag_runtime.PtStructuredGreeting$spec(name: string) -> <unresolv
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -319,7 +360,7 @@ function prompt_tag_runtime.PtStructuredGreeting$spec(name: string) -> <unresolv
     return
 }
 
-function prompt_tag_runtime.PtStructuredGreeting$stream(name: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
+function prompt_tag_runtime.PtStructuredGreeting$stream(name: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -338,7 +379,7 @@ function prompt_tag_runtime.PtStructuredGreeting$stream(name: string, client: <u
     return
 }
 
-function prompt_tag_runtime.PtStructuredImage(photo: image, client: <unresolved type #34575171419448> | null) -> string {
+function prompt_tag_runtime.PtStructuredImage(photo: image, client: ai.Client | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -349,6 +390,7 @@ function prompt_tag_runtime.PtStructuredImage(photo: image, client: <unresolved 
   L0:
     load_type string
     load_const <omitted>
+    load_const <omitted>
     load_var client
     load_const <omitted>
     load_const <omitted>
@@ -358,12 +400,30 @@ function prompt_tag_runtime.PtStructuredImage(photo: image, client: <unresolved 
     call user.prompt_tag_runtime.PtStructuredImage$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.UnknownError | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
     load_var _4
     load_field .value
+    return
+}
+
+function prompt_tag_runtime.PtStructuredImage$build_request(photo: image, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var photo
+    call user.prompt_tag_runtime.PtStructuredImage$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
     return
 }
 
@@ -374,7 +434,7 @@ function prompt_tag_runtime.PtStructuredImage$parse(json: string) -> string {
     return
 }
 
-function prompt_tag_runtime.PtStructuredImage$render_prompt(photo: image) -> <unresolved type #135172864440005> {
+function prompt_tag_runtime.PtStructuredImage$render_prompt(photo: image) -> ai.Prompt {
     load_var photo
     call user.prompt_tag_runtime.PtStructuredImage$spec
     store_var _2
@@ -387,7 +447,7 @@ function prompt_tag_runtime.PtStructuredImage$render_prompt(photo: image) -> <un
     return
 }
 
-function prompt_tag_runtime.PtStructuredImage$spec(photo: image) -> <unresolved type #25974768157144><string> {
+function prompt_tag_runtime.PtStructuredImage$spec(photo: image) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -396,6 +456,8 @@ function prompt_tag_runtime.PtStructuredImage$spec(photo: image) -> <unresolved 
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -425,7 +487,7 @@ function prompt_tag_runtime.PtStructuredImage$spec(photo: image) -> <unresolved 
     return
 }
 
-function prompt_tag_runtime.PtStructuredImage$stream(photo: image, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
+function prompt_tag_runtime.PtStructuredImage$stream(photo: image, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -444,7 +506,7 @@ function prompt_tag_runtime.PtStructuredImage$stream(photo: image, client: <unre
     return
 }
 
-function prompt_tag_runtime.RedactedMedia.baml.ToString.to_string(self: <unresolved type #97326269572468>) -> string {
+function prompt_tag_runtime.RedactedMedia.baml.ToString.to_string(self: prompt_tag_runtime.RedactedMedia) -> string {
     load_const "REDACTED"
     return
 }
@@ -541,7 +603,7 @@ function prompt_tag_runtime.pt_ctx_output_format_fn() -> string {
     return
 }
 
-function prompt_tag_runtime.pt_media_bundle_fn() -> <unresolved type #121675214097096> {
+function prompt_tag_runtime.pt_media_bundle_fn() -> prompt_tag_runtime.MediaBundle {
     load_const "https://example.com/picture.png"
     load_const "image/png"
     call baml.media.Image.from_url
@@ -794,14 +856,14 @@ function prompt_tag_runtime.pt_render_prompt_companion_output_format_fn() -> str
     return
 }
 
-function prompt_tag_runtime.pt_render_prompt_messages_fn() -> <unresolved type #45063328831484>[] {
+function prompt_tag_runtime.pt_render_prompt_messages_fn() -> ai.PromptMessage[] {
     load_const "Ada"
     call user.prompt_tag_runtime.PtStructuredGreeting$render_prompt
     call ai.Prompt.messages
     return
 }
 
-function prompt_tag_runtime.pt_role_construction_fn() -> <unresolved type #58152337932491> {
+function prompt_tag_runtime.pt_role_construction_fn() -> ai.Role {
     load_const "system"
     load_type string
     load_type unknown
@@ -856,7 +918,7 @@ function prompt_tag_runtime.pt_spec_prompt_media_fn() -> string {
     return
 }
 
-function prompt_tag_runtime.pt_spec_prompt_messages_fn() -> <unresolved type #45063328831484>[] {
+function prompt_tag_runtime.pt_spec_prompt_messages_fn() -> ai.PromptMessage[] {
     load_const "Ada"
     call user.prompt_tag_runtime.PtStructuredGreeting$spec
     store_var _2

@@ -497,9 +497,6 @@ fn run_server_inner(
             ..Default::default()
         },
     ));
-    let _profile_observer = bex_events::run::register_profile_observer(Arc::new(
-        playground_runs::RunStoreProfileObserver::new(run_store.clone(), broadcast_tx.clone()),
-    ));
     let session_store = Arc::new(PlaygroundSessionStore::default());
     let env_state = Arc::new(PlaygroundEnvState::new(
         broadcast_tx.clone(),
@@ -610,10 +607,6 @@ fn run_server_inner(
         spawner,
     );
     let bex: Arc<dyn bex_project::BexLsp> = Arc::new(bex);
-    run_store.set_graph_runtime_overlay_span_provider(Arc::new(
-        playground_runs::ProjectGraphRuntimeOverlaySpanProvider::new(bex.clone()),
-    ));
-
     let has_explicit_workspace_roots = !workspace_roots.is_empty();
     let explicit_projects = if has_explicit_workspace_roots {
         bex.initialize_workspace_roots(workspace_roots.clone())?
@@ -1224,7 +1217,7 @@ mod tests {
             "baml_src/main.baml"
         )));
         assert!(!watches_standalone_workspace_file(Path::new(
-            ".baml/profiles/run.bamlprof"
+            ".baml/profiles-v1/runs/run.meta"
         )));
         assert!(should_skip_poll_dir(Path::new(".baml")));
         assert!(should_skip_poll_dir(Path::new("target")));

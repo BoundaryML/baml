@@ -15,6 +15,10 @@ class ChatClient {
     // never touches env, so declaring/constructing a client is always safe.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
+    // Native request deadline; TTFT begins only after a streaming response opens.
+    // Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
+    request_timeout_ms: int?,
+    time_to_first_token_timeout_ms: int?,
 
     // Escape hatch: deep-merged into the serialized request as the LAST step.
     // A null value removes a key the client set (`{"max_tokens": null}`).
@@ -38,6 +42,8 @@ class ChatClient {
         model: string = "gpt-4o-mini",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
+        request_timeout_ms: int? = null,
+        time_to_first_token_timeout_ms: int? = null,
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
@@ -52,6 +58,8 @@ class ChatClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
+            request_timeout_ms: request_timeout_ms,
+            time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
             request_body: request_body,
             headers: headers,
             query_params: query_params,
@@ -81,29 +89,37 @@ class ChatClient {
     // endpoint. Only `stream_options` distinguishes first-party OpenAI from a
     // bare compatible server.
     function compat(self) -> root.internal.ChatCompat {
-        root.internal.ChatCompat.new(
-            provider = "openai-chat",
-            base_url = self.resolved_base_url(),
-            api_key_env = "OPENAI_API_KEY",
-            api_key_required = true,
-            send_stream_options = true,
-        )
+        root.internal
+            .ChatCompat
+            .new(
+                provider = "openai-chat",
+                base_url = self.resolved_base_url(),
+                api_key_env = "OPENAI_API_KEY",
+                api_key_required = true,
+                send_stream_options = true,
+            )
     }
 
-    function params(self) -> root.internal.ChatParams {
-        root.internal.ChatParams.new(
-            model = self.model,
-            api_key = self.resolved_api_key(),
-            temperature = self.temperature,
-            max_tokens = self.max_tokens,
-            max_completion_tokens = self.max_completion_tokens,
-            top_p = self.top_p,
-            stop = self.stop,
-            seed = self.seed,
-            headers = self.headers,
-            query_params = self.query_params,
-            request_body = self.request_body,
-        )
+    function params(self, preview: bool = false) -> root.internal.ChatParams {
+        root.internal
+            .ChatParams
+            .new(
+                model = self.model,
+                api_key = if (preview) {
+                    null
+                } else {
+                    self.resolved_api_key()
+                },
+                temperature = self.temperature,
+                max_tokens = self.max_tokens,
+                max_completion_tokens = self.max_completion_tokens,
+                top_p = self.top_p,
+                stop = self.stop,
+                seed = self.seed,
+                headers = self.headers,
+                query_params = self.query_params,
+                request_body = self.request_body,
+            )
     }
 
     implements ai.Client {
@@ -111,17 +127,34 @@ class ChatClient {
             `openai-chat/${self.model}`
         }
 
-        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            root.internal.chat_invoke(self.compat(), self.params(), input) catch_all (e) {
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            openai.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
+            }
+        }
+
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            root.internal.chat_invoke(
+                self.compat(),
+                self.params(),
+                input,
+                request_timeout_ms = self.request_timeout_ms,
+            ) catch_all (e) {
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-            root.internal.chat_invoke_stream(self.compat(), self.params(), input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+            root.internal.chat_invoke_stream(
+                self.compat(),
+                self.params(),
+                input,
+                request_timeout_ms = self.request_timeout_ms,
+                time_to_first_token_timeout_ms = self.time_to_first_token_timeout_ms,
+            ) catch_all (e) {
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

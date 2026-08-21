@@ -198,35 +198,53 @@ function errorcontext.ec_deferthrow_check() -> bool {
   L3:
     jump_if_false L4
     pop 1
+    jump L5
+
+  L4:
+    store_var all_present
+    jump L6
+
+  L5:
     load_var cleanup_at
     load_const 0
     cmp_int_op >=
+    store_var all_present
 
-  L4:
+  L6:
     load_var2 2 4
     cmp_int_op <
-    jump_if_false L5
+    jump_if_false L7
     pop 1
+    jump L8
+
+  L7:
+    store_var ordered
+    jump L9
+
+  L8:
     load_var2 4 6
     cmp_int_op <
+    store_var ordered
 
-  L5:
+  L9:
     load_var rendered
     load_const "During handling of the above error, another error occurred"
     call baml.String.split
     container_len
     store_var pieces
-    jump_if_false L6
+    load_var all_present
+    jump_if_false L10
     pop 1
+    load_var ordered
 
-  L6:
-    jump_if_false L7
+  L10:
+    jump_if_false L11
     pop 1
     load_var pieces
     load_const 3
     cmp_int_op ==
 
-  L7:
+  L11:
     return
 }
 
@@ -237,7 +255,6 @@ function errorcontext.ec_deferthrow_fail_low() -> string {
 
 function errorcontext.ec_deferthrow_main() -> string {
     call user.errorcontext.ec_deferthrow_mid
-    store_var _0
     jump L0
     load_var e
     throw_if_panic
@@ -245,10 +262,8 @@ function errorcontext.ec_deferthrow_main() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L0:
-    load_var _0
     return
 }
 
@@ -664,7 +679,6 @@ function errorcontext.ec_tostring_fail_low() -> string {
 
 function errorcontext.ec_tostring_main() -> string {
     call user.errorcontext.ec_tostring_mid
-    store_var _0
     jump L0
     load_var e
     throw_if_panic
@@ -672,10 +686,8 @@ function errorcontext.ec_tostring_main() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
 
   L0:
-    load_var _0
     return
 }
 

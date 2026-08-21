@@ -2480,7 +2480,7 @@ impl io::IoClassHttpResponse for NativeSysOps {
 /// handle network failures instead of them surfacing as an uncatchable host
 /// error.
 #[cfg(feature = "bundle-http")]
-fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlError {
+pub(crate) fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlError {
     if e.is_timeout() {
         VmBamlError::Timeout {
             message: format!("{context}: {e}"),
@@ -2691,7 +2691,7 @@ impl io::IoClassHttpSseStream for NativeSysOps {
                         })?));
                     }
                     if let Some(err) = buf.error.take() {
-                        return Err(VmRustFnError::from(VmBamlError::Io { message: err }));
+                        return Err(VmRustFnError::from(err));
                     }
                     if buf.done {
                         return Ok(None);
@@ -2819,11 +2819,13 @@ impl io::IoNamespaceHttp for NativeSysOps {
     }
 
     #[cfg(feature = "bundle-http")]
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         request: owned::http::Request,
+        timeout_nanos: Arc<num_bigint::BigInt>,
+        first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         use std::sync::atomic::{AtomicBool, Ordering};
@@ -2853,23 +2855,35 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body.clone());
             }
 
-            let response = builder
+            let response = apply_http_timeout(builder, &timeout_nanos)
                 .send()
                 .await
                 .map_err(|e| http_transport_error("SSE connection failed", &e))?;
 
             if !response.status().is_success() {
                 let status = response.status().as_u16();
-                let body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "<could not read body>".to_string());
+                let body = match response.text().await {
+                    Ok(body) => body,
+                    Err(error) if error.is_timeout() => {
+                        return Err(VmRustFnError::from(http_transport_error(
+                            "SSE error response body failed",
+                            &error,
+                        )));
+                    }
+                    Err(_) => "<could not read body>".to_string(),
+                };
                 return Err(VmRustFnError::from(VmBamlError::Io {
                     message: format!("SSE request failed with status {status}: {body}"),
                 }));
             }
 
             let url = response.url().to_string();
+            // Legacy TTFT semantics start after the SSE response opens and end
+            // on the first parsed event; connection/headers are governed only
+            // by the total request timeout.
+            let first_event_timeout = timeout_from_nanos(&first_event_timeout_nanos);
+            let first_event_deadline = first_event_timeout
+                .map(|duration| (tokio::time::Instant::now() + duration, duration));
 
             let buffer = Arc::new(TokioMutex::new(SseBuffer {
                 events: Vec::new(),
@@ -2896,7 +2910,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
                             if let Ok(mut buf) = self.buffer.try_lock() {
                                 if !buf.done {
                                     if !self.closed.load(Ordering::Acquire) {
-                                        buf.error = Some("SSE stream task was cancelled".into());
+                                        buf.error = Some(VmBamlError::Io {
+                                            message: "SSE stream task was cancelled".into(),
+                                        });
                                     }
                                     buf.done = true;
                                 }
@@ -2915,12 +2931,38 @@ impl io::IoNamespaceHttp for NativeSysOps {
 
                 let mut parser = SseParser::new();
                 let mut byte_stream = response.bytes_stream();
+                let mut first_event_deadline = first_event_deadline;
 
-                while let Some(chunk_result) = byte_stream.next().await {
+                loop {
+                    let next_chunk = if let Some((deadline, duration)) = first_event_deadline {
+                        match tokio::time::timeout_at(deadline, byte_stream.next()).await {
+                            Ok(chunk) => chunk,
+                            Err(_elapsed) => {
+                                let mut buf = buf_clone.lock().await;
+                                buf.error = Some(VmBamlError::Timeout {
+                                    message: format!(
+                                        "SSE first event timed out after {}ms",
+                                        duration.as_millis()
+                                    ),
+                                    duration_ms: i64::try_from(duration.as_millis()).ok(),
+                                });
+                                buf.done = true;
+                                notify_clone.notify_waiters();
+                                guard.completed = true;
+                                return;
+                            }
+                        }
+                    } else {
+                        byte_stream.next().await
+                    };
+                    let Some(chunk_result) = next_chunk else {
+                        break;
+                    };
                     match chunk_result {
                         Ok(bytes) => {
                             let events = parser.feed(&bytes);
                             if !events.is_empty() {
+                                first_event_deadline = None;
                                 let mut buf = buf_clone.lock().await;
                                 buf.events.extend(events);
                                 notify_clone.notify_waiters();
@@ -2928,7 +2970,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                         }
                         Err(e) => {
                             let mut buf = buf_clone.lock().await;
-                            buf.error = Some(format!("SSE stream error: {e}"));
+                            buf.error = Some(http_transport_error("SSE stream failed", &e));
                             buf.done = true;
                             notify_clone.notify_waiters();
                             guard.completed = true;
@@ -2965,11 +3007,13 @@ impl io::IoNamespaceHttp for NativeSysOps {
     }
 
     #[cfg(not(feature = "bundle-http"))]
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _request: owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         SysOpOutput::err(VmPanic::HostUnavailable {

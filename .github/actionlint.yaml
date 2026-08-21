@@ -9,3 +9,14 @@ self-hosted-runner:
     - blacksmith-4vcpu-ubuntu-2204-arm
     - blacksmith-8vcpu-windows-2025
     - blacksmith-4vcpu-windows-2025
+    # self-hosted ix runner pool
+    - ix
+    # ix pool job-family affinity labels (pool definition in the
+    # ix-runners repo)
+    - ix-msrv
+    - ix-musl
+    - ix-gnu
+    - ix-sdk
+    - ix-web
+    - ix-wasm
+    - ix-light

@@ -12,6 +12,7 @@ function         ai.internal._from_shorthand      <builtin>/ai/ns_internal/clien
 function         ai.internal._schema_for_signature <builtin>/ai/ns_internal/helpers.baml:5
 class            ai.internal.SpecCtx              <builtin>/ai/ns_internal/helpers.baml:18
 function         ai.internal.assemble_prompt      <builtin>/ai/ns_internal/helpers.baml:27
+function         ai.internal.assemble_llm_prompt  <builtin>/ai/ns_internal/helpers.baml:36
 function         ai.internal._header              <builtin>/ai/ns_internal/http_errors.baml:7
 function         ai.internal._int_header          <builtin>/ai/ns_internal/http_errors.baml:13
 function         ai.internal._retry_after_ms      <builtin>/ai/ns_internal/http_errors.baml:32
@@ -25,6 +26,7 @@ function         ai.internal._media_join_text     <builtin>/ai/ns_internal/media
 function         ai.internal._media_reject_mixed  <builtin>/ai/ns_internal/media_output.baml:123
 function         ai.internal._media_mime_type     <builtin>/ai/ns_internal/media_resolve.baml:5
 function         ai.internal._resolve_media_content <builtin>/ai/ns_internal/media_resolve.baml:65
+function         ai.internal._resolve_media_preview_content <builtin>/ai/ns_internal/media_resolve.baml:169
 function         ai.internal.validate_output_type <builtin>/ai/ns_internal/prompt.baml:9
 function         ai.internal.render_output_format <builtin>/ai/ns_internal/prompt.baml:30
 type             ai.internal.OutputFormat         <builtin>/ai/ns_internal/prompt.baml:36

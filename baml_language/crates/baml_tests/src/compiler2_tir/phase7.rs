@@ -125,6 +125,27 @@ fn narrow_truthiness_then_branch_non_null() {
     ");
 }
 
+#[test]
+fn nullable_bool_and_null_conditions_coerce_by_truthiness() {
+    // B-1563: condition positions accept any value via truthiness, so the
+    // strict-bool rejection this test used to pin no longer exists. Deep
+    // truthiness coverage lives in canary's ns_truthiness fixtures; this
+    // only pins that the former rejection stays gone.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function optional(flag: bool?) -> string {
+  if (flag) { "taken" } else { "not-taken" }
+}
+
+function null_literal() -> string {
+  if (null) { "taken" } else { "not-taken" }
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(!tir.contains("expected bool"), "{tir}");
+}
+
 // ── Negated narrowing: !(x == null) ──────────────────────────────────────────
 
 #[test]

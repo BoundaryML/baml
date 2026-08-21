@@ -473,7 +473,7 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
         let witnesses =
             validate_class_witnesses(vm, &witness_fields, implementations, &mut diagnostics);
         if !diagnostics.is_empty() {
-            return Err(crate::errors::VmRustFnError::Thrown(
+            return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(vm, &diagnostics),
             ));
         }
@@ -514,7 +514,7 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
         name: &bex_str::BexStr,
     ) -> Result<Value, crate::errors::VmRustFnError> {
         let fail = |vm: &mut BexVm, message: String| {
-            crate::errors::VmRustFnError::Thrown(alloc_compilation_error(
+            crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(
                 vm,
                 &[compiler_diagnostic(DiagnosticId::TypeMismatch, message)],
             ))
@@ -525,7 +525,7 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
                 &vm.type_of(value).to_string(),
             )
             .with_phase(DiagnosticPhase::Hir);
-            crate::errors::VmRustFnError::Thrown(alloc_compilation_error(vm, &[diagnostic]))
+            crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
         };
         let Some(instance_ptr) = value.as_object_ptr() else {
             return Err(fail_non_instance(vm));
@@ -669,7 +669,7 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
         }
 
         if !diagnostics.is_empty() {
-            return Err(crate::errors::VmRustFnError::Thrown(
+            return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(vm, &diagnostics),
             ));
         }
@@ -724,7 +724,7 @@ impl BamlClassReflectInterfaceImplementation for PackageBamlImpl {
         class_field: Option<&bex_str::BexStr>,
     ) -> Result<Value, crate::errors::VmRustFnError> {
         let mut witness = witness_state(vm, *implementation).map_err(|message| {
-            crate::errors::VmRustFnError::Thrown(alloc_compilation_error(
+            crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(
                 vm,
                 &[compiler_diagnostic(DiagnosticId::TypeMismatch, message)],
             ))
@@ -739,7 +739,7 @@ impl BamlClassReflectInterfaceImplementation for PackageBamlImpl {
             .any(|field| field.name == field_name)
         {
             let interface_name = interface.name.display_name().to_string();
-            return Err(crate::errors::VmRustFnError::Thrown(
+            return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
                     vm,
                     &[compiler_diagnostic(
@@ -751,7 +751,7 @@ impl BamlClassReflectInterfaceImplementation for PackageBamlImpl {
         }
         if witness.field_links.contains_key(&field_name) {
             let interface_name = interface.name.display_name().to_string();
-            return Err(crate::errors::VmRustFnError::Thrown(
+            return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
                     vm,
                     &[compiler_diagnostic(
@@ -780,7 +780,7 @@ impl BamlNamespaceReflectInterface for PackageBamlImpl {
             unreachable!("implementation<I> receives one runtime type argument")
         };
         let bex_vm_types::RealizedTy::Interface(interface_head, _, _, _) = &interface_ty else {
-            return Err(crate::errors::VmRustFnError::Thrown(
+            return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
                     vm,
                     &[compiler_diagnostic(
@@ -806,7 +806,7 @@ impl BamlNamespaceReflectInterface for PackageBamlImpl {
         {
             let interface_name = interface.name.display_name().to_string();
             let required_name = required.name.to_string();
-            return Err(crate::errors::VmRustFnError::Thrown(
+            return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
                     vm,
                     &[compiler_diagnostic(
@@ -868,7 +868,7 @@ impl BamlNamespaceReflectUnion for PackageBamlImpl {
     fn new(vm: &mut BexVm, types: &[Value]) -> Result<Value, crate::errors::VmRustFnError> {
         if types.is_empty() {
             let diagnostic = runtime_type::runtime_empty_union().with_phase(DiagnosticPhase::Hir);
-            return Err(crate::errors::VmRustFnError::Thrown(
+            return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(vm, &[diagnostic]),
             ));
         }

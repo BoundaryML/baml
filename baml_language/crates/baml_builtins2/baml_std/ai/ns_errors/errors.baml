@@ -11,15 +11,110 @@ interface Failure {
     function retry_safety(self) -> RetrySafety throws never
 }
 
-// Close an untyped error channel at an ai boundary. Classified failures and
-// already-normalized unknown errors retain their identity; everything else is
-// captured in the standard untyped wrapper.
-function normalize(error: unknown) -> Failure | baml.errors.UnknownError throws never {
+// The closed error channel of the client surface: every typed failure the
+// stack can produce, the two host signals (deadline, cancel) that must
+// survive each boundary untouched, and schema-compilation failures from
+// output-format rendering. `throws unknown` is not used on this surface;
+// stored callback positions declare this alias explicitly (TYPE_SYSTEM.md
+// rule 5) and parameter positions infer per call site.
+type InvokeError = Failure
+    | baml.errors.Timeout
+    | baml.errors.UnknownError
+    | baml.panics.Cancelled
+    | baml.reflect.errors.CompilationError;
+
+// Every raw type the client stack is known to raise before classification.
+// This union is deliberately CLOSED: when a new throw appears anywhere in
+// the provider stack, the call into `normalize` stops compiling and the new
+// type must be added here with an explicit classification below.
+type RaisedInClient = InvokeError
+    | baml.errors.InvalidArgument
+    | baml.errors.Io
+    | baml.errors.ParseError
+    | baml.json.JsonSerializationError
+    | baml.json.JsonParseError
+    | baml.json.JsonDecodeError
+    | baml.errors.AccessError
+    | baml.errors.Unsupported;
+
+// The classifying gate at every client boundary. Nothing is wrapped in
+// UnknownError here: each raw infrastructure type maps to a typed Failure,
+// and UnknownError only passes through when a host boundary already
+// produced one. Classifications:
+//   InvalidArgument / ParseError / JsonSerializationError / AccessError /
+//   Unsupported -> InvalidRequest
+//     (request construction or client configuration bug; not retryable)
+//   Io -> NetworkFailure (transport-adjacent; safely retryable)
+//   JsonParseError / JsonDecodeError -> NetworkFailure
+//     (malformed provider wire payload; safely retryable)
+//   Timeout / Cancelled / CompilationError / Failure / UnknownError -> as-is
+function normalize(error: RaisedInClient) -> InvokeError throws never {
     match (error) {
         let failure: Failure => failure,
-        let unknown_error: baml.errors.UnknownError => unknown_error,
-        _ => baml.errors.UnknownError { data: error, message: [error.to_string()] },
+        let unknown_error: baml.errors.UnknownError => {
+            // A host boundary may have wrapped a genuinely typed Failure;
+            // `from<Failure>` unwraps exactly that case (and never
+            // double-wraps), so typedness survives the host round-trip.
+            baml.errors.UnknownError.from<Failure>(unknown_error)
+        },
+        let timeout: baml.errors.Timeout => timeout,
+        let cancelled: baml.panics.Cancelled => cancelled,
+        let compilation: baml.reflect.errors.CompilationError => compilation,
+        let invalid: baml.errors.InvalidArgument => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: invalid.message,
+                raw_body: null,
+            }
+        },
+        let parse: baml.errors.ParseError => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: parse.message,
+                raw_body: null,
+            }
+        },
+        let serialize: baml.json.JsonSerializationError => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: serialize.message,
+                raw_body: null,
+            }
+        },
+        let access: baml.errors.AccessError => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: access.message,
+                raw_body: null,
+            }
+        },
+        let unsupported: baml.errors.Unsupported => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: unsupported.message,
+                raw_body: null,
+            }
+        },
+        let io: baml.errors.Io => {
+            NetworkFailure { provider: "client", detail: io.message, raw_body: null }
+        },
+        let json_parse: baml.json.JsonParseError => {
+            NetworkFailure { provider: "client", detail: json_parse.message, raw_body: null }
+        },
+        let json_decode: baml.json.JsonDecodeError => {
+            NetworkFailure { provider: "client", detail: json_decode.message, raw_body: null }
+        },
     }
+}
+
+// Kept as a named boundary for the invoke-path call sites; identical gate.
+function normalize_invoke(error: RaisedInClient) -> InvokeError throws never {
+    normalize(error)
 }
 
 class RateLimited {
@@ -56,6 +151,19 @@ class InvalidRequest {
     }
 }
 
+// A request preview cannot represent this input without performing the I/O
+// that the preview API explicitly forbids (for example, reading a local media
+// file or downloading a URL for a provider that has no URL wire form).
+class PreviewUnsupported {
+    provider: string,
+    detail: string,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
 class Refused {
     provider: string,
     reason: string,
@@ -69,6 +177,22 @@ class Refused {
 
 class ParseFailed {
     provider: string,
+    raw_output: string,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
+// The provider completed a turn with a terminal reason that is not a valid
+// successful completion. This stays distinct from ParseFailed: the response
+// may be syntactically valid but incomplete because the model exhausted its
+// output budget. Host SDKs can map MaxTokens to their legacy `length` finish
+// reason without treating it as a schema-validation failure.
+class FinishReasonError {
+    provider: string,
+    finish_reason: root.content.StopReason,
     raw_output: string,
     implements Failure {
         function retry_safety(self) -> RetrySafety {
