@@ -542,3 +542,97 @@ async fn get_field_missing_and_wrong_type_throw_compilation_diagnostics() {
         "unexpected type mismatch: {result}"
     );
 }
+
+/// A runtime-created class has no spelling a host can resolve, and its bare
+/// item name collides with a *compiled* class of the same name — an echoed
+/// value would rebind to that declaration and violate its contract. So its
+/// instance crosses as an opaque handle rather than structurally.
+#[tokio::test]
+async fn an_anonymous_class_instance_crosses_as_an_opaque_handle() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        /// The compiled declaration whose item name the runtime one repeats.
+        class Widget {
+            name: string,
+        }
+
+        function Extract<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> unknown {
+            let widget_t = reflect.class.new("Widget", {
+                "name": type.of<string>(),
+            })
+            Extract$parse<unreflect(widget_t.as_type())>(`{"name":"anonymous"}`)
+        }
+        "##
+    );
+
+    match output
+        .result
+        .expect("a runtime class instance should reach the host")
+    {
+        BexExternalValue::Handle(_) => {}
+        other => panic!(
+            "an anonymous class instance must not cross structurally under a \
+             name that resolves to the compiled `Widget`: {other:?}"
+        ),
+    }
+}
+
+/// The same for a *runtime-compiled package* member, which is the case a
+/// name-based guard misses: it is a `Declared` name like any static class, and
+/// emit qualifies it identically (`user.ExtractedRecord`), so it collides with
+/// the statically compiled declaration below — whose fields even match, which
+/// is what would make the rebind silent. Only the compile-time heap section is
+/// host-addressable; a runtime-compiled member lives on the moving heap and has
+/// no codegen entry, exactly like an anonymous one.
+#[tokio::test]
+async fn a_runtime_compiled_class_instance_crosses_as_an_opaque_handle() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        /// The statically compiled declaration a rebind would land on.
+        class ExtractedRecord {
+            account: string,
+        }
+
+        function Extract<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format}`
+        }
+
+        function main() -> unknown throws unknown {
+            let pkg = reflect.Package.compile({
+                "schema.baml": "class ExtractedRecord { account string }"
+            })
+            let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
+            Extract$parse<unreflect(record_t.as_type())>(`{"account":"AC-1"}`)
+        }
+        "##
+    );
+
+    match output
+        .result
+        .expect("a runtime-compiled class instance should reach the host")
+    {
+        BexExternalValue::Handle(_) => {}
+        other => panic!(
+            "a runtime-compiled class instance must not cross structurally under a \
+             name that resolves to the static `ExtractedRecord`: {other:?}"
+        ),
+    }
+}

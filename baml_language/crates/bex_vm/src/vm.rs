@@ -1713,7 +1713,7 @@ impl BexVm {
             let value = self.stack[StackIndex::from_raw(slot)];
             value.as_object_ptr().is_some_and(|ptr| {
                 matches!(self.get_object(ptr), Object::Type(type_value)
-                    if crate::reachable::is_statically_declared(self, &type_value.ty))
+                    if crate::reachable::is_statically_declared(&type_value.ty))
             })
         });
         if all_plain_static {

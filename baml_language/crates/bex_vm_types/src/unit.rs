@@ -15,12 +15,11 @@
 //! folds units into a runnable `Program` by resolving imports and rebasing
 //! local operands through the existing `relink` operand walkers.
 //!
-use crate::{RealizedTy, TyTemplate};
 use baml_base::Name;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
-    Object, TestCase,
+    Object, RealizedTy, TestCase, TyTemplate,
     types::{InterfaceBound, LocalName},
 };
 

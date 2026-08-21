@@ -9,7 +9,6 @@
 mod class;
 mod const_value;
 mod containers;
-mod declaration_name;
 mod enums;
 mod function;
 mod future;
@@ -22,12 +21,13 @@ mod value;
 
 use std::collections::HashMap;
 
-use crate::RuntimeTy;
+/// Re-exported from `baml_type`, which owns the naming vocabulary; the
+/// runtime spells it unqualified everywhere it builds a declaration.
+pub use baml_type::DeclarationName;
 use borsh::{BorshDeserialize, BorshSerialize};
 pub use class::*;
 pub use const_value::*;
 pub use containers::*;
-pub use declaration_name::*;
 pub use enums::*;
 pub use function::*;
 pub use future::*;
@@ -40,7 +40,7 @@ pub use type_alias::*;
 pub use type_value::*;
 pub use value::*;
 
-use crate::{heap_ptr::HeapPtr, indexable::ObjectPool};
+use crate::{RuntimeTy, heap_ptr::HeapPtr, indexable::ObjectPool};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -156,14 +156,15 @@ impl Program {
         idx
     }
 
-    /// Flatten every package's recursive type aliases into one
-    /// `TypeName → RealizedTy` map (only recursive aliases survive; non-recursive
-    /// ones are expanded inline), reconstructing each qualified name from its
+    /// Flatten every package's recursive type aliases into one map keyed by
+    /// declaration identity (only recursive aliases survive; non-recursive ones
+    /// are expanded inline), reconstructing each alias's declared name from its
     /// package + `LocalName`. The shape output-format rendering consumes.
     ///
     /// Aliases are `Object::TypeAlias` declarations, so this dereferences each
-    /// through the object pool rather than reading a side map.
-    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TypeName, crate::RealizedTy> {
+    /// through the object pool rather than reading a side map — which is also
+    /// where the identity comes from.
+    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TaggedTypeName, crate::RealizedTy> {
         let mut out = IndexMap::new();
         for (pkg_name, package) in &self.packages {
             for (local, idx) in &package.type_aliases {
@@ -177,7 +178,13 @@ impl Program {
                     local.namespace.clone(),
                     local.name.clone(),
                 );
-                out.insert(qtn, alias.definition.clone());
+                out.insert(
+                    baml_type::TaggedTypeName::new(
+                        alias.type_tag,
+                        baml_type::DeclarationName::Declared(qtn),
+                    ),
+                    alias.definition.clone(),
+                );
             }
         }
         out

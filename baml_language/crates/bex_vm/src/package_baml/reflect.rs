@@ -24,8 +24,8 @@ use baml_compiler_diagnostics::{
 use baml_type::{TyAttr, normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    AtomicValueSlot, HeapPtr, Object, RuntimeCompileArtifact, RuntimeSessionCompileArtifact,
-    SessionEvalLease,
+    AtomicValueSlot, HeapPtr, Interface, Object, RealizedTy, RuntimeCompileArtifact,
+    RuntimeSessionCompileArtifact, SessionEvalLease, Ty,
     link::link_dynamic,
     relink::{IndexOperand, visit_object_operands},
     types::{
@@ -33,7 +33,6 @@ use bex_vm_types::{
         Value,
     },
 };
-use bex_vm_types::{Interface, RealizedTy, Ty};
 use indexmap::IndexMap;
 
 use super::{

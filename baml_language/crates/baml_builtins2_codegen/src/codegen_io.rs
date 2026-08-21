@@ -277,7 +277,7 @@ fn owned_rust_type(
             } else {
                 match name.as_str() {
                     "unknown" => quote! { BexExternalValue },
-                    "type" => quote! { baml_type::RuntimeTy },
+                    "type" => quote! { baml_type::RuntimeTy<baml_type::TaggedTypeName> },
                     "function" => quote! { BexExternalValue },
                     _ => quote! { BexExternalValue },
                 }
@@ -319,7 +319,7 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
         // generic `BexExternalValue` fallback, which would not type-check.
         BamlType::Named(name) if name == "type" => {
             *needs_heap = true;
-            quote! { Result<baml_type::RuntimeTy, AccessError> }
+            quote! { Result<baml_type::RuntimeTy<baml_type::TaggedTypeName>, AccessError> }
         }
         _ => {
             *needs_heap = true;
@@ -472,8 +472,11 @@ fn external_to_typed_expr(
         BamlType::Named(name) if name == "type" => quote! {
             match #val_expr {
                 BexExternalValue::Adt(bex_external_types::BexExternalAdt::Type(v)) => Ok(v),
-                BexExternalValue::Adt(bex_external_types::BexExternalAdt::TypeDef(v)) => {
-                    Ok(v.into_def().root)
+                BexExternalValue::Adt(bex_external_types::BexExternalAdt::TypeDef(_)) => {
+                    Err(AccessError::TypeMismatch {
+                        expected: "a type value",
+                        actual: "a portable type definition".to_string(),
+                    })
                 }
                 other => Err(AccessError::TypeMismatch {
                     expected: "type",
@@ -661,7 +664,7 @@ fn clean_rust_type(
                 quote! { #owned::#ns_ident::#name_ident }
             } else {
                 match name.as_str() {
-                    "type" => quote! { baml_type::RuntimeTy },
+                    "type" => quote! { baml_type::RuntimeTy<baml_type::TaggedTypeName> },
                     "unknown" => quote! { BexExternalValue },
                     "function" => quote! { BexExternalValue },
                     _ => quote! { BexExternalValue },
@@ -1455,7 +1458,7 @@ fn emit_one_class_trait(
             let type_arg_params: Vec<TokenStream> = (0..fn_type_arg_count)
                 .map(|i| {
                     let p_ident = format_ident!("type_arg_{}", i);
-                    quote! { #p_ident: baml_type::RuntimeTy }
+                    quote! { #p_ident: baml_type::RuntimeTy<baml_type::TaggedTypeName> }
                 })
                 .collect();
 
@@ -1749,7 +1752,7 @@ fn emit_one_namespace_trait(
                 .enumerate()
                 .map(|(i, _)| {
                     let p_ident = format_ident!("type_arg_{}", i);
-                    quote! { #p_ident: baml_type::RuntimeTy }
+                    quote! { #p_ident: baml_type::RuntimeTy<baml_type::TaggedTypeName> }
                 })
                 .collect();
 

@@ -9,7 +9,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 /// authoring) is [`Anonymous`](Self::Anonymous): it has an item name for
 /// display, but no package and no namespace — no source world can spell it, so
 /// nothing may key on it or resolve by it. Its identity is its declaration
-/// object and the counter [`TypeTag`](baml_type::typetag::TypeTag) that
+/// object and the counter [`TypeTag`](crate::typetag::TypeTag) that
 /// travels with it; the only ways to reach it are a `TypeHead` and the mount
 /// surfaces that a compile explicitly names it through.
 ///
@@ -21,9 +21,9 @@ use borsh::{BorshDeserialize, BorshSerialize};
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum DeclarationName {
     /// Declared in source under this package-qualified name.
-    Declared(baml_type::TypeName),
+    Declared(crate::TypeName),
     /// Created at runtime: an item name with no package or namespace path.
-    Anonymous(baml_type::Name),
+    Anonymous(crate::Name),
 }
 
 impl DeclarationName {
@@ -32,7 +32,7 @@ impl DeclarationName {
     /// to resolve, and callers must treat that as "not addressable by name" —
     /// never invent one.
     #[must_use]
-    pub fn declared(&self) -> Option<&baml_type::TypeName> {
+    pub fn declared(&self) -> Option<&crate::TypeName> {
         match self {
             Self::Declared(qtn) => Some(qtn),
             Self::Anonymous(_) => None,
@@ -42,7 +42,7 @@ impl DeclarationName {
     /// The bare item name (`Person`), present for every declaration. Display
     /// and schema rendering only — it is not unique, even within one heap.
     #[must_use]
-    pub fn item_name(&self) -> &baml_type::Name {
+    pub fn item_name(&self) -> &crate::Name {
         match self {
             Self::Declared(qtn) => qtn.name(),
             Self::Anonymous(name) => name,
@@ -52,7 +52,7 @@ impl DeclarationName {
     /// The user-facing display string (`ai.PromptMessage`, `Person`). An
     /// anonymous declaration displays as its bare item name.
     #[must_use]
-    pub fn display_name(&self) -> baml_type::Name {
+    pub fn display_name(&self) -> crate::Name {
         match self {
             Self::Declared(qtn) => qtn.display_name(),
             Self::Anonymous(name) => name.clone(),
@@ -70,10 +70,10 @@ impl DeclarationName {
     /// why [`declared`](Self::declared) stays the only form the strict
     /// outbound and lookup paths accept.
     #[must_use]
-    pub fn overlay_name(&self) -> baml_type::TypeName {
+    pub fn overlay_name(&self) -> crate::TypeName {
         match self {
             Self::Declared(qtn) => qtn.clone(),
-            Self::Anonymous(name) => baml_type::TypeName::local(name.clone()),
+            Self::Anonymous(name) => crate::TypeName::local(name.clone()),
         }
     }
 }

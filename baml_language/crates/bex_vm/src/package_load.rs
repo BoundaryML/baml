@@ -471,7 +471,7 @@ pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr>
 /// rendering), reconstructing each qualified name from its package + `LocalName`.
 pub fn all_recursive_type_aliases(
     packages: &PackageIndex,
-) -> IndexMap<baml_type::TypeName, bex_vm_types::RealizedTy> {
+) -> IndexMap<baml_type::TaggedTypeName, bex_vm_types::RealizedTy> {
     let mut out = IndexMap::new();
     for (pkg_name, pkg_ptr) in packages.iter() {
         // SAFETY: `packages` only ever holds compile-time `Object::Package`
@@ -489,12 +489,20 @@ pub fn all_recursive_type_aliases(
             let Object::TypeAlias(alias) = alias_object else {
                 continue;
             };
+            // Keyed by declaration identity: the alias object's own tag, with
+            // its declared name carried alongside for rendering.
             let qtn = baml_type::TypeName::new(
                 pkg_name.clone(),
                 local.namespace.clone(),
                 local.name.clone(),
             );
-            out.insert(qtn, alias.definition.clone());
+            out.insert(
+                baml_type::TaggedTypeName::new(
+                    alias.type_tag,
+                    baml_type::DeclarationName::Declared(qtn),
+                ),
+                alias.definition.clone(),
+            );
         }
     }
     out

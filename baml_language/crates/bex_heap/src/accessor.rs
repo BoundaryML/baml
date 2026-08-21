@@ -310,12 +310,20 @@ impl<'a> BexValue<'a> {
             .map(|cls| T::from(cls))
     }
 
+    /// Read a `type` argument at the sys-op lane's head.
+    ///
+    /// Identity travels with the type, so the definition tables a sys-op
+    /// consults can be keyed by declaration rather than by name — and nothing
+    /// returned here holds a pointer, so a collection during the sys-op's await
+    /// cannot invalidate it.
     pub fn as_baml_type_owned(
         self,
         heap: &BexHeap,
         _permit: PermitProof<'_>,
-    ) -> Result<baml_type::RuntimeTy, AccessError> {
-        fn from_ptr(ptr: &HeapPtr) -> Result<baml_type::RuntimeTy, AccessError> {
+    ) -> Result<baml_type::RuntimeTy<baml_type::TaggedTypeName>, AccessError> {
+        fn from_ptr(
+            ptr: &HeapPtr,
+        ) -> Result<baml_type::RuntimeTy<baml_type::TaggedTypeName>, AccessError> {
             let obj = unsafe { ptr.get() };
             let Object::Type(tv) = obj else {
                 return Err(AccessError::TypeMismatch {
@@ -324,12 +332,13 @@ impl<'a> BexValue<'a> {
                 });
             };
             // `Object::Type` stores a realized type at the runtime's head;
-            // recover the names a host can look up, then widen into `RuntimeTy`.
+            // carry identity and the declaration's own name off the heap, then
+            // widen into `RuntimeTy`.
             Ok(baml_type::RuntimeTy::from(
                 tv.ty
-                    .try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
+                    .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
                     .map_err(|head| AccessError::TypeMismatch {
-                        expected: "a nameable type",
+                        expected: "a resolved declaration",
                         actual: head.to_string(),
                     })?,
             ))
@@ -339,8 +348,16 @@ impl<'a> BexValue<'a> {
             BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::Type(ty))) => {
                 Ok(ty.clone())
             }
-            BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::TypeDef(definition))) => {
-                Ok(definition.def().root.clone())
+            // The portable definition graph is name-headed and carries no
+            // identities, so it cannot be read onto the lane. Its one real
+            // consumer is the inbound authoring path, which resolves names
+            // against the VM to obtain declarations (and therefore tags); that
+            // resolution is not available here. Dies with the graph itself.
+            BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::TypeDef(_))) => {
+                Err(AccessError::TypeMismatch {
+                    expected: "a type value",
+                    actual: "a portable type definition".to_string(),
+                })
             }
             BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
                 let ptr = heap
@@ -652,13 +669,16 @@ fn convert_object(
             })
         }
         Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-        // Only the described type crosses the boundary (BEP-066 H-4).
+        // Only the described type crosses the boundary (BEP-066 H-4), and it
+        // crosses onto the sys-op lane's head: identity plus the declaration's
+        // own name, with no pointer to go stale if the collector runs while the
+        // sys-op awaits.
         Object::Type(tv) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
             baml_type::RuntimeTy::from(
                 tv.ty
-                    .try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
+                    .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
                     .map_err(|head| AccessError::TypeMismatch {
-                        expected: "a nameable type",
+                        expected: "a resolved declaration",
                         actual: head.to_string(),
                     })?,
             ),

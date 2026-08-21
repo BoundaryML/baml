@@ -103,9 +103,10 @@ fn realize_host_ty(
     vm: &crate::BexVm,
     ty: &RuntimeTy,
 ) -> Result<bex_vm_types::RealizedTy, EngineError> {
-    // The single inbound anchor: a wire type's names become heads here, once,
+    // The single inbound anchor: a lane type's names become heads here, once,
     // off the declarations this engine holds — so nothing downstream has to
     // wonder whether a type it received is bound.
+    //
     let anchored = anchor_wire_ty(vm, ty)?;
     bex_vm_types::RealizedTy::try_from(anchored).map_err(|e| EngineError::TypeMismatch {
         message: format!("host-supplied type is not realized: {e}"),
@@ -526,6 +527,26 @@ impl BexEngine {
                     }));
                 }
 
+                // Only a *statically compiled* declaration is addressable by
+                // a host: codegen emitted a host type for its FQN, so the
+                // structural form is well-typed on arrival. Every other
+                // declaration crosses as an opaque handle instead (BEP-066:
+                // dynamic types never leave the heap).
+                //
+                // The line is the *tag*, not the name. A runtime-compiled
+                // package member is `Declared` and carries a real qualified
+                // name — but no codegen entry exists for it, and that name can
+                // collide with a statically compiled one, so an echoed value
+                // would rebind to the static declaration and violate its
+                // contract. An anonymous typebuilder declaration fails the
+                // same way through its bare item name. Both are reminted from
+                // the counter range, so one integer compare separates them
+                // from the content-addressed static heads — without reading
+                // the heap, and without depending on a pointer staying valid.
+                if class.type_tag.is_dynamic() {
+                    return Ok(BexExternalValue::Handle(self.heap.create_handle(ptr)));
+                }
+
                 debug_assert_eq!(
                     class.fields.len(),
                     instance.fields.len(),
@@ -578,6 +599,12 @@ impl BexEngine {
                 let Object::Enum(enm) = enum_obj else {
                     panic!("Variant.enm should point to an Enum object")
                 };
+                // As for a class instance above: only a statically compiled
+                // enum has a codegen entry, and any other spelling can collide
+                // with one that does.
+                if enm.type_tag.is_dynamic() {
+                    return Ok(BexExternalValue::Handle(self.heap.create_handle(ptr)));
+                }
                 let variant_name = enm
                     .variants
                     .get(variant.index)
@@ -637,6 +664,12 @@ impl BexEngine {
             // the handle resolves back to this same `Object::Type` in this
             // engine and is dropped by any wire encoder — so a value echoed
             // through a sys-op comes back as itself rather than a copy.
+            #[expect(
+                deprecated,
+                reason = "the outbound definition graph is the only wire form a dynamic \
+                          head has while a BamlTy head is a bare FQN; the deprecation \
+                          marks the debt and fires again when BamlTypeHead lands"
+            )]
             Object::Type(type_value) => Ok(BexExternalValue::Adt(BexExternalAdt::TypeDef(
                 bex_external_types::TypeDefRef::Live {
                     handle: self.heap.create_handle(ptr),
@@ -1413,7 +1446,22 @@ impl BexEngine {
                 Value::object(holder.holder_mut().tlab_mut().alloc_collector(c))
             }
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
-                let ty = realize_host_ty(&holder.holder_mut().vm, &ty)?;
+                // A lane type lands here. An anonymous declaration has no
+                // spelling to anchor against and is refused: it should have
+                // crossed as a rooted handle, which lands as the declaration
+                // itself rather than through a name.
+                let named: RuntimeTy = ty.try_map_heads(&mut |head: &::sys_types::DefKey| {
+                    head.declared()
+                        .cloned()
+                        .ok_or_else(|| EngineError::TypeMismatch {
+                            message: format!(
+                                "host-supplied type names the anonymous declaration `{}`, \
+                                 which has no resolvable spelling; pass it as a handle instead",
+                                head.display_name()
+                            ),
+                        })
+                })?;
+                let ty = realize_host_ty(&holder.holder_mut().vm, &named)?;
                 // The wire carries the definition only (H-4); derive a fresh
                 // static identity with the receiving VM's complete fact context.
                 Value::object(
@@ -2590,7 +2638,7 @@ fn find_unannotated_inbound_member_with_aliases(
     value: &BexExternalValue,
     members: &[RuntimeTy],
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    classes: &indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
+    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
     ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
 ) -> Result<RuntimeTy, EngineError> {
     let mut matching: Vec<&RuntimeTy> = Vec::new();
@@ -2717,29 +2765,32 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
     )
 }
 
+/// Look up a class definition in the inbound wire view by its declared name.
+///
+/// Exact. The view holds only *declared* names — anonymous declarations are
+/// filtered out when it is projected, having no name a wire value could carry
+/// — and declared names are program-unique, so the old "scan for a unique
+/// matching `display_name`" fallback had nothing left to find that this misses.
 fn find_inbound_class_definition<'a>(
-    classes: &'a indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
+    classes: &'a indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
     type_name: &baml_type::TypeName,
-) -> Option<&'a sys_types::ClassDefinition> {
-    classes.get(type_name).or_else(|| {
-        let mut matches = classes
-            .iter()
-            .filter(|(name, _)| name.display_name() == type_name.display_name())
-            .map(|(_, definition)| definition);
-        let first = matches.next()?;
-        matches.next().is_none().then_some(first)
-    })
+) -> Option<&'a WireClassDefinition> {
+    classes.get(type_name)
 }
 
 fn map_matches_class_shape(
     entries: &indexmap::IndexMap<String, BexExternalValue>,
     type_name: &baml_type::TypeName,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    classes: &indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
+    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
 ) -> bool {
     let Some(definition) = find_inbound_class_definition(classes, type_name) else {
-        // Unit-level callers without a loaded program retain the historical
-        // shape-only behavior. A real engine always supplies its definitions.
+        // Shape-only fallback. Reached by unit-level callers with no loaded
+        // program, and — deliberately — by a real engine for any class the
+        // inbound view cannot represent: one that is anonymous, or whose field
+        // types name an anonymous declaration. Matching on shape alone is
+        // weaker than matching on a definition, but it never asserts a shape
+        // the class does not actually have.
         return true;
     };
 
@@ -2780,7 +2831,7 @@ fn value_matches_type_with_definitions(
     value: &BexExternalValue,
     ty: &RuntimeTy,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    classes: &indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
+    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
 ) -> bool {
     if let RuntimeTy::TypeAlias(name, _) = ty
         && !is_canonical_json_alias(name)
@@ -3721,11 +3772,80 @@ impl BexEngine {
         coerce_arg_to_declared_type_with_aliases(
             value,
             ty,
-            self.sys_op_ctx.type_alias_definitions.as_ref(),
-            self.sys_op_ctx.class_definitions.as_ref(),
+            &self.inbound_alias_view,
+            &self.inbound_class_view,
             crate::inbound_config::inbound_union_ambiguity_policy(),
         )
     }
+}
+
+/// A class definition as the inbound matcher reads it: name-headed, because it
+/// is matched against wire values that carry only names.
+#[derive(Clone, Debug)]
+pub(crate) struct WireClassDefinition {
+    pub fields: Vec<WireClassFieldDefinition>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct WireClassFieldDefinition {
+    pub name: String,
+    pub field_type: RuntimeTy,
+    /// The serialized key a payload may use instead of `name`.
+    pub alias: Option<String>,
+    pub skip: bool,
+}
+
+/// Project the lane's definition tables into the name-headed views the inbound
+/// matcher needs.
+///
+/// The one place the two spellings meet, and it is a genuine boundary: an
+/// inbound value carries a name and nothing else, so matching it can only ever
+/// be name-based. Identity still governs everywhere it can — the tables
+/// themselves, rendering, and rooting — and an anonymous declaration simply
+/// does not appear here, because it has no name a wire value could carry.
+///
+/// A class projects **all of its fields or none of it**. Admitting a class
+/// whose unprojectable fields were dropped would be worse than omitting it:
+/// the matcher decides "does this payload fit" by walking `fields`, so a
+/// missing field silently stops being required and a payload lacking it
+/// matches anyway. Omitting the class instead lands on the shape-only path,
+/// which is degraded but does not claim a shape the class does not have.
+pub(crate) fn wire_definition_views(
+    aliases: &indexmap::IndexMap<::sys_types::DefKey, ::sys_types::SapTy>,
+    classes: &indexmap::IndexMap<::sys_types::DefKey, sys_types::ClassDefinition>,
+) -> (
+    indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+    indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+) {
+    let to_wire = |ty: &::sys_types::SapTy| -> Option<RuntimeTy> {
+        ty.clone()
+            .try_map_heads(&mut |head: &::sys_types::DefKey| head.declared().cloned().ok_or(()))
+            .ok()
+    };
+    let alias_view = aliases
+        .iter()
+        .filter_map(|(head, ty)| Some((head.declared()?.clone(), to_wire(ty)?)))
+        .collect();
+    let class_view = classes
+        .iter()
+        .filter_map(|(head, def)| {
+            // All fields or no class — see the doc comment.
+            let fields = def
+                .fields
+                .iter()
+                .map(|f| {
+                    Some(WireClassFieldDefinition {
+                        name: f.name.clone(),
+                        field_type: to_wire(&f.field_type)?,
+                        alias: f.alias.clone(),
+                        skip: f.skip,
+                    })
+                })
+                .collect::<Option<Vec<_>>>()?;
+            Some((head.declared()?.clone(), WireClassDefinition { fields }))
+        })
+        .collect();
+    (alias_view, class_view)
 }
 
 fn runtime_ty_assignable_with_aliases(
@@ -3925,7 +4045,7 @@ fn coerce_arg_to_declared_type_with_aliases(
     value: BexExternalValue,
     ty: &RuntimeTy,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    classes: &indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
+    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
     ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
 ) -> Result<BexExternalValue, EngineError> {
     // Defense in depth for internally constructed values and aliases. Wire

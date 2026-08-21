@@ -1,8 +1,7 @@
-use crate::TyTemplate;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use super::InterfaceBound;
-use crate::{Bytecode, HeapPtr, SysOp, Value};
+use crate::{Bytecode, HeapPtr, SysOp, TyTemplate, Value};
 
 /// Function type.
 ///

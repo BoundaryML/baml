@@ -34,6 +34,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 mod attr;
 mod codegen_ty;
 pub mod decl_cycles;
+mod declaration_name;
 mod defs;
 mod family;
 mod head;
@@ -53,9 +54,10 @@ pub mod typetag;
 pub mod unify;
 pub mod user_facing;
 pub use attr::*;
+pub use declaration_name::DeclarationName;
 pub use defs::*;
 pub use family::*;
-pub use head::Head;
+pub use head::{Head, TaggedTypeName};
 pub use names::*;
 pub use param::*;
 pub use primitive::*;
@@ -700,6 +702,18 @@ pub trait HeadDisplay {
 }
 
 impl HeadDisplay for QualifiedTypeName {
+    fn head_display_name(&self) -> String {
+        self.display_name().to_string()
+    }
+}
+
+impl HeadDisplay for crate::head::TaggedTypeName {
+    fn head_display_name(&self) -> String {
+        self.name().display_name().to_string()
+    }
+}
+
+impl HeadDisplay for crate::DeclarationName {
     fn head_display_name(&self) -> String {
         self.display_name().to_string()
     }

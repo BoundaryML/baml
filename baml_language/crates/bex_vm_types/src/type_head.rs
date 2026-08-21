@@ -214,6 +214,50 @@ impl TypeHead {
         }
     }
 
+    /// This head at the sys-op lane's head: the identity it already carries,
+    /// plus the declaration's own name read off the declaration.
+    ///
+    /// Nothing is fabricated — an anonymous declaration stays anonymous — and
+    /// nothing is a pointer, so the result survives the collector moving
+    /// objects while a sys-op awaits. `None` when the head is unresolved or
+    /// points at something that is not a declaration.
+    #[must_use]
+    pub fn tagged_name(self) -> Option<baml_type::TaggedTypeName> {
+        if !self.is_resolved() {
+            return None;
+        }
+        // SAFETY: as in `declared_name` — the caller holds the heap permit for
+        // the read, and a declaration is immutable after it is created.
+        #[expect(
+            unsafe_code,
+            reason = "reading a head's declaration to carry its name off the heap"
+        )]
+        let object = unsafe { self.ptr.get() };
+        let name = match object {
+            crate::Object::Class(class) => class.name.clone(),
+            crate::Object::Enum(enm) => enm.name.clone(),
+            crate::Object::Interface(iface) => {
+                baml_type::DeclarationName::Declared(iface.name.clone())
+            }
+            crate::Object::TypeAlias(alias) => {
+                baml_type::DeclarationName::Declared(alias.name.clone())
+            }
+            _ => return None,
+        };
+        Some(baml_type::TaggedTypeName::new(self.tag, name))
+    }
+
+    /// The mapper form of [`tagged_name`](Self::tagged_name), for pairing with
+    /// `try_map_heads` to carry a whole type onto the lane.
+    ///
+    /// # Errors
+    ///
+    /// [`UnnameableHead`](crate::UnnameableHead) when the head is unresolved or
+    /// does not point at a declaration.
+    pub fn to_tagged_name(&self) -> Result<baml_type::TaggedTypeName, crate::UnnameableHead> {
+        self.tagged_name().ok_or(crate::UnnameableHead(self.tag))
+    }
+
     /// The mapper form of [`overlay_name`](Self::overlay_name), for pairing
     /// with `try_map_heads` — the per-call twin of [`to_name`](Self::to_name).
     ///

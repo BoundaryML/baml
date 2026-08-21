@@ -48,7 +48,7 @@ impl io::IoClassReflectSession for NativeSysOps {
         _call_id: CallId,
         _session: io::owned::reflect::Session,
         _source: String,
-        _type_arg_0: baml_type::RuntimeTy,
+        _type_arg_0: ::sys_types::SapTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::reflect::Package> {
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -3254,7 +3254,7 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        return_type: baml_type::RuntimeTy,
+        return_type: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         sys_ops::render_output_format_op(&return_type, ctx)
@@ -3264,7 +3264,7 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        return_type: baml_type::RuntimeTy,
+        return_type: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::ai::OutputFormat> {
         sys_ops::build_output_format_op(&return_type, ctx)
@@ -3276,7 +3276,7 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
         _call_id: CallId,
         function_name: String,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::RuntimeTy> {
+    ) -> SysOpOutput<::sys_types::SapTy> {
         sys_ops::get_return_type_op(&function_name, ctx)
     }
 

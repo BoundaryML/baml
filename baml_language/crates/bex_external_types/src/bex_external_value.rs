@@ -82,7 +82,13 @@ impl UnionMetadata {
 #[derive(Clone, Debug, PartialEq)]
 pub enum BexExternalAdt {
     Collector(bex_vm_types::CollectorRef),
-    Type(baml_type::RuntimeTy),
+    /// A reflected type, carried at the sys-op lane's head so a definition
+    /// table can be keyed by declaration identity rather than by name.
+    ///
+    /// Deliberately pointer-free: the collector can run while a sys-op is
+    /// awaiting, so anything a sys-op holds across that boundary must survive
+    /// objects moving. A tag does; an address does not.
+    Type(baml_type::RuntimeTy<baml_type::TaggedTypeName>),
     /// A reflected type carrying runtime definitions.
     ///
     /// The two arms are the two things a `type` value can be at a boundary,
@@ -729,7 +735,7 @@ impl AsBexExternalValue for std::sync::Arc<num_bigint::BigInt> {
     }
 }
 
-impl AsBexExternalValue for baml_type::RuntimeTy {
+impl AsBexExternalValue for baml_type::RuntimeTy<baml_type::TaggedTypeName> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Type(self))
     }

@@ -1,7 +1,7 @@
 use std::fmt::Write as _;
 
+use ::sys_types::SapTy;
 use baml_base::Literal as LiteralValue;
-use baml_type::RuntimeTy;
 use indexmap::IndexMap;
 use thiserror::Error;
 
@@ -38,7 +38,7 @@ pub struct Enum {
 pub struct ClassField {
     pub name: String,
     pub alias: Option<String>,
-    pub field_type: RuntimeTy,
+    pub field_type: SapTy,
     pub description: Option<String>,
 }
 
@@ -56,15 +56,15 @@ pub struct Class {
 pub struct OutputFormatContent {
     pub enums: IndexMap<String, Enum>,
     pub classes: IndexMap<String, Class>,
-    pub target: RuntimeTy,
+    pub target: ::sys_types::SapTy,
     pub recursive_classes: indexmap::IndexSet<String>,
     /// Recursive type aliases: alias name → target type.
-    pub recursive_type_aliases: IndexMap<String, RuntimeTy>,
+    pub recursive_type_aliases: IndexMap<String, ::sys_types::SapTy>,
 }
 
 impl OutputFormatContent {
     /// Create a new `OutputFormatContent` with the given target type.
-    pub fn new(target: RuntimeTy) -> Self {
+    pub fn new(target: ::sys_types::SapTy) -> Self {
         Self {
             enums: IndexMap::new(),
             classes: IndexMap::new(),
@@ -111,7 +111,7 @@ impl OutputFormatContent {
         }
 
         // For string target with no explicit prefix, return None
-        if matches!(self.target, RuntimeTy::String { .. })
+        if matches!(self.target, SapTy::String { .. })
             && matches!(options.prefix, RenderSetting::Auto)
         {
             return Ok(None);
@@ -120,7 +120,7 @@ impl OutputFormatContent {
         // The `json` type alias is an opaque leaf from the LLM's perspective.
         // Regardless of rendering options, the only thing we ask the model to produce
         // is arbitrary JSON — no schema body, no prefix enumeration.
-        if let RuntimeTy::TypeAlias(tn, _) = &self.target {
+        if let SapTy::TypeAlias(tn, _) = &self.target {
             if tn.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
                 return Ok(Some("Respond with valid JSON.".to_string()));
             }
@@ -136,17 +136,14 @@ impl OutputFormatContent {
         // But with explicit prefix, we need to append the type
         if matches!(
             self.target,
-            RuntimeTy::Int { .. }
-                | RuntimeTy::Bigint { .. }
-                | RuntimeTy::Float { .. }
-                | RuntimeTy::Bool { .. }
+            SapTy::Int { .. } | SapTy::Bigint { .. } | SapTy::Float { .. } | SapTy::Bool { .. }
         ) && matches!(options.prefix, RenderSetting::Auto)
         {
             return Ok(prefix);
         }
 
         // Check if the target is a hoisted enum
-        let target_is_hoisted_enum = if let RuntimeTy::Enum(tn, _) = &self.target {
+        let target_is_hoisted_enum = if let SapTy::Enum(tn, _) = &self.target {
             hoisted_enums.contains(tn.display_name().as_str())
         } else {
             false
@@ -227,9 +224,7 @@ impl OutputFormatContent {
         }
 
         // Render the target type with hoisting awareness
-        let message = if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) =
-            &self.target
-        {
+        let message = if let SapTy::Class(tn, _, _) | SapTy::Interface(tn, _, _, _) = &self.target {
             let tn_display_name = tn.display_name();
             if hoisted_classes.contains(tn_display_name.as_str()) {
                 let display_name = self
@@ -240,7 +235,7 @@ impl OutputFormatContent {
             } else {
                 self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
             }
-        } else if let RuntimeTy::Enum(tn, _) = &self.target {
+        } else if let SapTy::Enum(tn, _) = &self.target {
             if target_is_hoisted_enum {
                 // Hoisted target enum: rendered in enum_definitions block
                 None
@@ -250,7 +245,7 @@ impl OutputFormatContent {
             } else {
                 Some(tn.display_name().to_string())
             }
-        } else if let RuntimeTy::TypeAlias(fqn, _) = &self.target {
+        } else if let SapTy::TypeAlias(fqn, _) = &self.target {
             Some(fqn.display_name().to_string())
         } else {
             self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
@@ -362,20 +357,18 @@ impl OutputFormatContent {
     /// (`T?` == `T | null`) delegates to its non-null part — so `string?` has no
     /// prefix like `string`, and `Class?` uses the class prefix.
     fn auto_prefix(
-        ty: &RuntimeTy,
+        ty: &SapTy,
         type_word: &str,
         hoisted: &indexmap::IndexSet<String>,
     ) -> Option<String> {
         match ty {
-            RuntimeTy::String { .. } => None,
-            RuntimeTy::Int { .. } => Some("Answer as an int".to_string()),
-            RuntimeTy::Bigint { .. } => Some("Answer as a bigint".to_string()),
-            RuntimeTy::Float { .. } => Some("Answer as a float".to_string()),
-            RuntimeTy::Bool { .. } => Some("Answer as a bool".to_string()),
-            RuntimeTy::List(..) => {
-                Some("Answer with a JSON Array using this schema:\n".to_string())
-            }
-            RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
+            SapTy::String { .. } => None,
+            SapTy::Int { .. } => Some("Answer as an int".to_string()),
+            SapTy::Bigint { .. } => Some("Answer as a bigint".to_string()),
+            SapTy::Float { .. } => Some("Answer as a float".to_string()),
+            SapTy::Bool { .. } => Some("Answer as a bool".to_string()),
+            SapTy::List(..) => Some("Answer with a JSON Array using this schema:\n".to_string()),
+            SapTy::Class(tn, _, _) | SapTy::Interface(tn, _, _, _) => {
                 let end = if hoisted.contains(tn.display_name().as_str()) {
                     " "
                 } else {
@@ -383,12 +376,12 @@ impl OutputFormatContent {
                 };
                 Some(format!("Answer in JSON using this {type_word}:{end}"))
             }
-            RuntimeTy::Map { .. } => Some(format!("Answer in JSON using this {type_word}:\n")),
-            RuntimeTy::Enum(..) => Some("Answer with any of the categories:\n".to_string()),
-            RuntimeTy::Union(variants, _) => {
-                let non_null: Vec<&RuntimeTy> = variants
+            SapTy::Map { .. } => Some(format!("Answer in JSON using this {type_word}:\n")),
+            SapTy::Enum(..) => Some("Answer with any of the categories:\n".to_string()),
+            SapTy::Union(variants, _) => {
+                let non_null: Vec<&SapTy> = variants
                     .iter()
-                    .filter(|v| !matches!(v, RuntimeTy::Null { .. }))
+                    .filter(|v| !matches!(v, SapTy::Null { .. }))
                     .collect();
                 // `T?` (single non-null member + null) follows the inner type's
                 // prefix; a true multi-member union gets the union prefix.
@@ -400,13 +393,13 @@ impl OutputFormatContent {
                     Some(format!("Answer in JSON using this {type_word}:\n"))
                 }
             }
-            RuntimeTy::TypeAlias(tn, _)
+            SapTy::TypeAlias(tn, _)
                 if tn.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON =>
             {
                 None
             }
-            RuntimeTy::TypeAlias(..) => Some(format!("Answer in JSON using this {type_word}: ")),
-            RuntimeTy::Literal(..) => Some("Answer using this specific value:\n".to_string()),
+            SapTy::TypeAlias(..) => Some(format!("Answer in JSON using this {type_word}: ")),
+            SapTy::Literal(..) => Some("Answer using this specific value:\n".to_string()),
             _ => None,
         }
     }
@@ -414,13 +407,13 @@ impl OutputFormatContent {
     /// Render a type, with hoisted classes rendered as just their name.
     fn render_type_hoisted(
         &self,
-        ty: &RuntimeTy,
+        ty: &SapTy,
         options: &RenderOptions,
         hoisted_classes: &indexmap::IndexSet<String>,
         hoisted_enums: &indexmap::IndexSet<String>,
     ) -> Result<Option<String>, RenderError> {
         // Intercept hoisted classes: return just the (aliased) name
-        if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) = ty {
+        if let SapTy::Class(tn, _, _) | SapTy::Interface(tn, _, _, _) = ty {
             let tn_display_name = tn.display_name();
             if hoisted_classes.contains(tn_display_name.as_str()) {
                 let display_name = self
@@ -437,48 +430,48 @@ impl OutputFormatContent {
         };
 
         match ty {
-            RuntimeTy::String { .. } => Ok(Some("string".to_string())),
-            RuntimeTy::Int { .. } => Ok(Some("int".to_string())),
-            RuntimeTy::Bigint { .. } => Ok(Some("bigint".to_string())),
-            RuntimeTy::Float { .. } => Ok(Some("float".to_string())),
-            RuntimeTy::Bool { .. } => Ok(Some("bool".to_string())),
-            RuntimeTy::Null { .. } => Ok(Some(rendered_null_type(options).to_string())),
+            SapTy::String { .. } => Ok(Some("string".to_string())),
+            SapTy::Int { .. } => Ok(Some("int".to_string())),
+            SapTy::Bigint { .. } => Ok(Some("bigint".to_string())),
+            SapTy::Float { .. } => Ok(Some("float".to_string())),
+            SapTy::Bool { .. } => Ok(Some("bool".to_string())),
+            SapTy::Null { .. } => Ok(Some(rendered_null_type(options).to_string())),
 
-            RuntimeTy::List(inner, _) => {
+            SapTy::List(inner, _) => {
                 let inner_str = self
                     .render_type_hoisted(inner, options, hoisted_classes, hoisted_enums)?
                     .unwrap_or_else(|| "unknown".to_string());
 
                 // Determine if we need multiline rendering
                 let is_hoisted = match inner.as_ref() {
-                    RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
+                    SapTy::Class(tn, _, _) | SapTy::Interface(tn, _, _, _) => {
                         hoisted_classes.contains(tn.display_name().as_str())
                     }
-                    RuntimeTy::TypeAlias(tn, _) => self
+                    SapTy::TypeAlias(tn, _) => self
                         .recursive_type_aliases
                         .contains_key(tn.display_name().as_str()),
                     _ => false,
                 };
                 let needs_multiline = !is_hoisted
                     && match inner.as_ref() {
-                        RuntimeTy::String { .. }
-                        | RuntimeTy::Int { .. }
-                        | RuntimeTy::Float { .. }
-                        | RuntimeTy::Bool { .. }
-                        | RuntimeTy::Null { .. } => false,
-                        RuntimeTy::Enum(tn, _) => {
+                        SapTy::String { .. }
+                        | SapTy::Int { .. }
+                        | SapTy::Float { .. }
+                        | SapTy::Bool { .. }
+                        | SapTy::Null { .. } => false,
+                        SapTy::Enum(tn, _) => {
                             // Inline enums render short; hoisted ones are just a name
                             !hoisted_enums.contains(tn.display_name().as_str())
                                 && inner_str.len() > 15
                         }
-                        RuntimeTy::Union(items, _) => items.iter().all(|t| {
+                        SapTy::Union(items, _) => items.iter().all(|t| {
                             !matches!(
                                 t,
-                                RuntimeTy::String { .. }
-                                    | RuntimeTy::Int { .. }
-                                    | RuntimeTy::Float { .. }
-                                    | RuntimeTy::Bool { .. }
-                                    | RuntimeTy::Null { .. }
+                                SapTy::String { .. }
+                                    | SapTy::Int { .. }
+                                    | SapTy::Float { .. }
+                                    | SapTy::Bool { .. }
+                                    | SapTy::Null { .. }
                             )
                         }),
                         _ => true,
@@ -486,14 +479,14 @@ impl OutputFormatContent {
 
                 if needs_multiline {
                     Ok(Some(format!("[\n  {}\n]", inner_str.replace('\n', "\n  "))))
-                } else if matches!(inner.as_ref(), RuntimeTy::Union(_, _)) {
+                } else if matches!(inner.as_ref(), SapTy::Union(_, _)) {
                     Ok(Some(format!("({inner_str})[]")))
                 } else {
                     Ok(Some(format!("{inner_str}[]")))
                 }
             }
 
-            RuntimeTy::Map { key, value, .. } => {
+            SapTy::Map { key, value, .. } => {
                 let key_str = self
                     .render_type_hoisted(key, options, hoisted_classes, hoisted_enums)?
                     .unwrap_or_else(|| "string".to_string());
@@ -508,7 +501,7 @@ impl OutputFormatContent {
                 }
             }
 
-            RuntimeTy::Union(variants, _) => {
+            SapTy::Union(variants, _) => {
                 let rendered: Vec<String> = variants
                     .iter()
                     .filter_map(|v| {
@@ -520,7 +513,7 @@ impl OutputFormatContent {
                 Ok(Some(rendered.join(or_splitter)))
             }
 
-            RuntimeTy::Enum(tn, _) => {
+            SapTy::Enum(tn, _) => {
                 let tn_display_name = tn.display_name();
                 if hoisted_enums.contains(tn_display_name.as_str()) {
                     // Hoisted enum: render as just the display name
@@ -545,7 +538,7 @@ impl OutputFormatContent {
                 }
             }
 
-            RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
+            SapTy::Class(tn, _, _) | SapTy::Interface(tn, _, _, _) => {
                 if let Some(cls) = self.find_class(tn.display_name().as_str()) {
                     Ok(Some(self.render_class_hoisted(
                         cls,
@@ -559,42 +552,42 @@ impl OutputFormatContent {
                 }
             }
 
-            RuntimeTy::Uint8Array { .. } => {
+            SapTy::Uint8Array { .. } => {
                 Err(RenderError::UnsupportedType("uint8array".to_string()))
             }
-            RuntimeTy::Media(kind, _) => Ok(Some(kind.to_string())),
+            SapTy::Media(kind, _) => Ok(Some(kind.to_string())),
 
-            RuntimeTy::Literal(lit, _, _) => Ok(Some(render_literal(lit))),
+            SapTy::Literal(lit, _, _) => Ok(Some(render_literal(lit))),
 
             // Opaque leaf types have no JSON output-format schema. They surface
-            // as `UnsupportedType` named the same way `RuntimeTy`'s `Display` renders
+            // as `UnsupportedType` named the same way `SapTy`'s `Display` renders
             // them (`type`, or the fixed qualified name).
-            RuntimeTy::Type { .. } => Err(RenderError::UnsupportedType("type".to_string())),
-            RuntimeTy::Resource { .. } => {
+            SapTy::Type { .. } => Err(RenderError::UnsupportedType("type".to_string())),
+            SapTy::Resource { .. } => {
                 Err(RenderError::UnsupportedType("ai.Resource".to_string()))
             }
-            RuntimeTy::PromptAst { .. } => {
+            SapTy::PromptAst { .. } => {
                 Err(RenderError::UnsupportedType("ai.Prompt".to_string()))
             }
 
-            RuntimeTy::TypeAlias(fqn, _) => {
+            SapTy::TypeAlias(fqn, _) => {
                 // Recursive type aliases render as just their display name
                 Ok(Some(fqn.display_name().to_string()))
             }
 
-            RuntimeTy::Function { .. }
-            | RuntimeTy::Void { .. }
-            | RuntimeTy::BuiltinUnknown { .. }
-            | RuntimeTy::EnumVariant(..)
-            | RuntimeTy::Future(..)
-            | RuntimeTy::TypeVar(..)
-            | RuntimeTy::AssociatedTypeProjection { .. }
-            | RuntimeTy::Never { .. }
+            SapTy::Function { .. }
+            | SapTy::Void { .. }
+            | SapTy::BuiltinUnknown { .. }
+            | SapTy::EnumVariant(..)
+            | SapTy::Future(..)
+            | SapTy::TypeVar(..)
+            | SapTy::AssociatedTypeProjection { .. }
+            | SapTy::Never { .. }
             // Checked LLM execution and render-companion paths reject these at
             // `validate_output_type`. Throws-never low-level output-format
             // helpers may still degrade this error to an empty string, so keep
             // the formatter fallible rather than aborting the process.
-            | RuntimeTy::RustType { .. } => Err(RenderError::UnsupportedType(ty.to_string())),
+            | SapTy::RustType { .. } => Err(RenderError::UnsupportedType(ty.to_string())),
         }
     }
 
@@ -702,9 +695,9 @@ fn rendered_name<'a>(name: &'a str, alias: Option<&'a String>) -> &'a str {
 }
 
 /// Extract the display name from an enum target type.
-fn enm_display_name(ty: &RuntimeTy) -> Option<baml_type::Name> {
+fn enm_display_name(ty: &SapTy) -> Option<baml_type::Name> {
     match ty {
-        RuntimeTy::Enum(tn, _) => Some(tn.display_name()),
+        SapTy::Enum(tn, _) => Some(tn.display_name()),
         _ => None,
     }
 }
@@ -727,16 +720,16 @@ fn rendered_null_type(options: &RenderOptions) -> &str {
     }
 }
 
-fn media_output_instruction(target: &RuntimeTy, options: &RenderOptions) -> Option<String> {
+fn media_output_instruction(target: &SapTy, options: &RenderOptions) -> Option<String> {
     let null_type = rendered_null_type(options);
     match target {
-        RuntimeTy::Media(kind, _) => Some(format!("Return an {kind} output.")),
-        RuntimeTy::Union(variants, _) if nullable_media_union_kind(variants).is_some() => {
+        SapTy::Media(kind, _) => Some(format!("Return an {kind} output.")),
+        SapTy::Union(variants, _) if nullable_media_union_kind(variants).is_some() => {
             let kind = nullable_media_union_kind(variants).expect("checked above");
             Some(format!("Return an {kind} output or {null_type}."))
         }
-        RuntimeTy::List(inner, _) => match inner.as_ref() {
-            RuntimeTy::Media(kind, _) => Some(format!("Return one or more {kind} outputs.")),
+        SapTy::List(inner, _) => match inner.as_ref() {
+            SapTy::Media(kind, _) => Some(format!("Return one or more {kind} outputs.")),
             inner if is_text_or_image_union(inner) => {
                 Some("Return an ordered sequence of text and image outputs.".to_string())
             }
@@ -749,12 +742,12 @@ fn media_output_instruction(target: &RuntimeTy, options: &RenderOptions) -> Opti
     }
 }
 
-fn nullable_media_union_kind(variants: &[RuntimeTy]) -> Option<baml_base::MediaKind> {
+fn nullable_media_union_kind(variants: &[SapTy]) -> Option<baml_base::MediaKind> {
     let mut kind = None;
     let mut has_null = false;
     for variant in variants {
         match variant {
-            RuntimeTy::Media(media_kind, _) => {
+            SapTy::Media(media_kind, _) => {
                 if kind
                     .replace(*media_kind)
                     .is_some_and(|prev| prev != *media_kind)
@@ -762,7 +755,7 @@ fn nullable_media_union_kind(variants: &[RuntimeTy]) -> Option<baml_base::MediaK
                     return None;
                 }
             }
-            RuntimeTy::Null { .. } => has_null = true,
+            SapTy::Null { .. } => has_null = true,
             _ => return None,
         }
     }
@@ -770,8 +763,8 @@ fn nullable_media_union_kind(variants: &[RuntimeTy]) -> Option<baml_base::MediaK
     if has_null { kind } else { None }
 }
 
-pub(crate) fn is_text_or_image_union(target: &RuntimeTy) -> bool {
-    let RuntimeTy::Union(variants, _) = target else {
+pub(crate) fn is_text_or_image_union(target: &SapTy) -> bool {
+    let SapTy::Union(variants, _) = target else {
         return false;
     };
 
@@ -779,9 +772,9 @@ pub(crate) fn is_text_or_image_union(target: &RuntimeTy) -> bool {
     let mut has_image = false;
     for variant in variants {
         match variant {
-            RuntimeTy::String { .. } => has_string = true,
-            RuntimeTy::Media(baml_base::MediaKind::Image, _) => has_image = true,
-            RuntimeTy::Null { .. } => {}
+            SapTy::String { .. } => has_string = true,
+            SapTy::Media(baml_base::MediaKind::Image, _) => has_image = true,
+            SapTy::Null { .. } => {}
             _ => return false,
         }
     }
@@ -881,7 +874,7 @@ impl RenderOptions {
 /// `RenderOptions::default()`. An empty or `None`
 /// render (e.g. a primitive return type with no schema) becomes the empty string.
 pub fn render_output_format(
-    return_type: &baml_type::RuntimeTy,
+    return_type: &::sys_types::SapTy,
     ctx: &::sys_types::SysOpContext,
 ) -> String {
     build_output_format_content(return_type, ctx)
@@ -936,10 +929,10 @@ pub fn render_output_format_content(
     content.render(&options).ok().flatten().unwrap_or_default()
 }
 
-/// Build an `OutputFormatContent` by walking a `RuntimeTy` and collecting all
+/// Build an `OutputFormatContent` by walking a `SapTy` and collecting all
 /// referenced class/enum/type-alias definitions from `SysOpContext`.
 pub fn build_output_format_content(
-    ty: &baml_type::RuntimeTy,
+    ty: &::sys_types::SapTy,
     ctx: &::sys_types::SysOpContext,
 ) -> self::OutputFormatContent {
     use std::collections::HashSet;
@@ -953,67 +946,53 @@ pub fn build_output_format_content(
     content
 }
 
+/// Look up a class definition by declaration identity.
+///
+/// An exact lookup with nothing to fall back to: the key's `Eq` is its tag, so
+/// this either finds the declaration the type actually names or finds nothing.
+/// The old name-based fallback — scan for a unique matching `display_name` —
+/// existed because the table was keyed by name, which made two declarations a
+/// user spelled alike indistinguishable. It could return a *different*
+/// declaration that happened to share a spelling, and is unrepresentable now.
 fn find_class_definition<'a>(
     ctx: &'a ::sys_types::SysOpContext,
-    type_name: &baml_type::TypeName,
+    head: &::sys_types::DefKey,
 ) -> Option<&'a ::sys_types::ClassDefinition> {
-    ctx.class_definitions.get(type_name).or_else(|| {
-        let mut matches = ctx
-            .class_definitions
-            .iter()
-            .filter(|(name, _)| name.display_name() == type_name.display_name())
-            .map(|(_, def)| def);
-        let first = matches.next()?;
-        matches.next().is_none().then_some(first)
-    })
+    ctx.class_definitions.get(head)
 }
 
+/// See [`find_class_definition`] — same contract, for enums.
 fn find_enum_definition<'a>(
     ctx: &'a ::sys_types::SysOpContext,
-    type_name: &baml_type::TypeName,
+    head: &::sys_types::DefKey,
 ) -> Option<&'a ::sys_types::EnumDefinition> {
-    ctx.enum_definitions.get(type_name).or_else(|| {
-        let mut matches = ctx
-            .enum_definitions
-            .iter()
-            .filter(|(name, _)| name.display_name() == type_name.display_name())
-            .map(|(_, def)| def);
-        let first = matches.next()?;
-        matches.next().is_none().then_some(first)
-    })
+    ctx.enum_definitions.get(head)
 }
 
+/// See [`find_class_definition`] — same contract, for recursive type aliases.
 fn find_type_alias_definition<'a>(
     ctx: &'a ::sys_types::SysOpContext,
-    type_name: &baml_type::TypeName,
-) -> Option<&'a baml_type::RuntimeTy> {
-    ctx.type_alias_definitions.get(type_name).or_else(|| {
-        let mut matches = ctx
-            .type_alias_definitions
-            .iter()
-            .filter(|(name, _)| name.display_name() == type_name.display_name())
-            .map(|(_, ty)| ty);
-        let first = matches.next()?;
-        matches.next().is_none().then_some(first)
-    })
+    head: &::sys_types::DefKey,
+) -> Option<&'a ::sys_types::SapTy> {
+    ctx.type_alias_definitions.get(head)
 }
 
 /// Recursive DFS walk of a type tree. `ancestry` tracks the class names
 /// currently on the call stack so mutual recursion (A → B → A) is detected.
 fn walk_ty(
-    ty: &baml_type::RuntimeTy,
+    ty: &::sys_types::SapTy,
     ctx: &::sys_types::SysOpContext,
     content: &mut self::OutputFormatContent,
-    visited: &mut std::collections::HashSet<baml_type::TypeName>,
-    ancestry: &mut Vec<baml_type::TypeName>,
+    visited: &mut std::collections::HashSet<::sys_types::DefKey>,
+    ancestry: &mut Vec<::sys_types::DefKey>,
 ) {
-    use baml_type::RuntimeTy;
+    use ::sys_types::SapTy;
 
     match ty {
-        RuntimeTy::Class(type_name, _, _) => {
-            // Runtime definitions carry a mint-qualified internal TypeName. Use
-            // that identity for traversal: the display name is an output label,
-            // not a definition key (BEP-066 R-3).
+        SapTy::Class(type_name, _, _) => {
+            // Traverse by declaration identity, never by name: the head's
+            // equality is its tag, so two declarations a user spelled alike
+            // stay distinct here. The name is an output label (BEP-066 R-3).
             let key = type_name.clone();
 
             // If this class is already on the ancestry stack, it's a recursive cycle.
@@ -1064,7 +1043,7 @@ fn walk_ty(
                 ancestry.pop();
             }
         }
-        RuntimeTy::Enum(type_name, _) => {
+        SapTy::Enum(type_name, _) => {
             let key = type_name.clone();
             if !visited.insert(key) {
                 return;
@@ -1092,7 +1071,7 @@ fn walk_ty(
                 );
             }
         }
-        RuntimeTy::TypeAlias(type_name, _) => {
+        SapTy::TypeAlias(type_name, _) => {
             // The `baml.json.json` recursive alias is an opaque leaf for output-format
             // rendering — it has no schema body to collect.  Record the sentinel visit so
             // any later reference is de-duped, but do *not* insert it into
@@ -1114,14 +1093,14 @@ fn walk_ty(
                 walk_ty(target_ty, ctx, content, visited, ancestry);
             }
         }
-        RuntimeTy::List(inner, _) => {
+        SapTy::List(inner, _) => {
             walk_ty(inner, ctx, content, visited, ancestry);
         }
-        RuntimeTy::Map { key, value, .. } => {
+        SapTy::Map { key, value, .. } => {
             walk_ty(key, ctx, content, visited, ancestry);
             walk_ty(value, ctx, content, visited, ancestry);
         }
-        RuntimeTy::Union(members, _) => {
+        SapTy::Union(members, _) => {
             for member in members {
                 walk_ty(member, ctx, content, visited, ancestry);
             }
@@ -1132,7 +1111,17 @@ fn walk_ty(
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Freshness, TyAttr, TypeName};
+    use baml_type::{DeclarationName, Freshness, TyAttr, TypeName};
+    use sys_types::{DefKey, SapTy as RuntimeTy};
+
+    /// Build a lane key for a test declaration: a compiled declaration's
+    /// identity is the content-addressed tag of its qualified name.
+    fn key(name: &TypeName) -> DefKey {
+        DefKey::new(
+            baml_type::typetag::TypeTag::of_head(&name.render_dotted(false)),
+            DeclarationName::Declared(name.clone()),
+        )
+    }
 
     use super::*;
 
@@ -1146,7 +1135,7 @@ mod tests {
     #[test]
     fn test_render_json_alias_sentinel() {
         let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
-        let json_ty = RuntimeTy::TypeAlias(json_tn, TyAttr::default());
+        let json_ty = RuntimeTy::TypeAlias(key(&json_tn), TyAttr::default());
         let content = OutputFormatContent::new(json_ty);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -1162,7 +1151,7 @@ mod tests {
     #[test]
     fn test_render_json_alias_sentinel_ignores_explicit_prefix() {
         let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
-        let json_ty = RuntimeTy::TypeAlias(json_tn, TyAttr::default());
+        let json_ty = RuntimeTy::TypeAlias(key(&json_tn), TyAttr::default());
         let content = OutputFormatContent::new(json_ty);
 
         let options = RenderOptions {
@@ -1181,7 +1170,7 @@ mod tests {
     #[test]
     fn test_render_non_json_alias_does_not_sentinel() {
         let other_tn = TypeName::from_dotted_path("baml.other.SomeAlias");
-        let other_ty = RuntimeTy::TypeAlias(other_tn, TyAttr::default());
+        let other_ty = RuntimeTy::TypeAlias(key(&other_tn), TyAttr::default());
         // Without any class/enum definitions or recursive_type_aliases, the alias
         // renders as just its display name (the existing fallback).
         let content = OutputFormatContent::new(other_ty);
@@ -1466,7 +1455,7 @@ mod tests {
         };
 
         let content = OutputFormatContent::new(RuntimeTy::Class(
-            baml_type::TypeName::local("Person".into()),
+            key(&baml_type::TypeName::local("Person".into())),
             Vec::new(),
             TyAttr::default(),
         ))
@@ -1516,7 +1505,7 @@ mod tests {
         };
 
         let content = OutputFormatContent::new(RuntimeTy::Class(
-            baml_type::TypeName::local("Point".into()),
+            key(&baml_type::TypeName::local("Point".into())),
             Vec::new(),
             TyAttr::default(),
         ))
@@ -1562,7 +1551,7 @@ mod tests {
         };
 
         let content = OutputFormatContent::new(RuntimeTy::Enum(
-            baml_type::TypeName::local("Color".into()),
+            key(&baml_type::TypeName::local("Color".into())),
             TyAttr::default(),
         ))
         .with_enum(enm);
@@ -1713,7 +1702,7 @@ mod tests {
     }
     fn ty_class(name: &str) -> RuntimeTy {
         RuntimeTy::Class(
-            baml_type::TypeName::local(name.into()),
+            key(&baml_type::TypeName::local(name.into())),
             Vec::new(),
             TyAttr::default(),
         )
@@ -1736,7 +1725,10 @@ mod tests {
     }
 
     fn ty_enum(name: &str) -> RuntimeTy {
-        RuntimeTy::Enum(baml_type::TypeName::local(name.into()), TyAttr::default())
+        RuntimeTy::Enum(
+            key(&baml_type::TypeName::local(name.into())),
+            TyAttr::default(),
+        )
     }
 
     fn mk_class(name: &str, fields: Vec<(&str, RuntimeTy)>) -> Class {
@@ -3217,7 +3209,10 @@ Answer in JSON using this schema: Ret"#
     // ========================================================================
 
     fn ty_alias(name: &str) -> RuntimeTy {
-        RuntimeTy::TypeAlias(baml_type::TypeName::local(name.into()), TyAttr::default())
+        RuntimeTy::TypeAlias(
+            key(&baml_type::TypeName::local(name.into())),
+            TyAttr::default(),
+        )
     }
 
     #[test]

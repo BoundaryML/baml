@@ -8,12 +8,12 @@ use std::{
     },
 };
 
-use crate::RealizedTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    HeapPtr, SessionEvalLease, Value, errors::StackFrame, runtime_compile::WeakSessionEvalLease,
+    HeapPtr, RealizedTy, SessionEvalLease, Value, errors::StackFrame,
+    runtime_compile::WeakSessionEvalLease,
 };
 
 /// Error payload carried by a future's [`Future::ready_waiter`] `SetOnce` when the

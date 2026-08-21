@@ -7,7 +7,6 @@
 
 use std::sync::Arc;
 
-use baml_type::TypeName;
 use bex_sap::sap_model::{self, AnnotatedTy, TypeRefDb};
 use indexmap::IndexMap;
 use ouroboros::self_referencing;
@@ -17,19 +16,19 @@ const PARSE_CLASS: &str = "__SapParseTarget";
 /// The synthetic field name within the class.
 const PARSE_FIELD: &str = "value";
 
-/// Self-referential struct that owns the `TypeCtx` and the `baml_type::RuntimeTy`
+/// Self-referential struct that owns the `TypeCtx` and the lane type
 /// for the parse target, and borrows `TypeRefDb` + `AnnotatedTy` from them.
 #[self_referencing]
 pub struct CompiledSapModel {
     type_ctx: sap_model::TypeCtx,
-    /// The `baml_type::RuntimeTy` extracted from the synthetic class field.
-    parse_ty: baml_type::RuntimeTy,
+    /// The lane type extracted from the synthetic class field.
+    parse_ty: ::sys_types::SapTy,
     #[borrows(type_ctx)]
     #[covariant]
-    pub db: TypeRefDb<'this, TypeName>,
+    pub db: TypeRefDb<'this, ::sys_types::DefKey>,
     #[borrows(type_ctx, parse_ty)]
     #[covariant]
-    pub ty: AnnotatedTy<'this, TypeName>,
+    pub ty: AnnotatedTy<'this, ::sys_types::DefKey>,
 }
 
 impl CompiledSapModel {
@@ -38,8 +37,8 @@ impl CompiledSapModel {
     pub fn with_db_and_ty<R>(
         &self,
         f: impl for<'this> FnOnce(
-            &'this TypeRefDb<'this, TypeName>,
-            &'this AnnotatedTy<'this, TypeName>,
+            &'this TypeRefDb<'this, ::sys_types::DefKey>,
+            &'this AnnotatedTy<'this, ::sys_types::DefKey>,
         ) -> R,
     ) -> R {
         self.with(|fields| f(fields.db, fields.ty))
@@ -78,9 +77,9 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
 
     // Extract class and enum definitions from the compiled object pool.
     // This mirrors `BexEngine::extract_class_definitions` / `extract_enum_definitions`.
-    let mut class_defs: IndexMap<TypeName, sys_types::ClassDefinition> = IndexMap::new();
-    let mut enum_defs: IndexMap<TypeName, sys_types::EnumDefinition> = IndexMap::new();
-    let mut parse_field_ty: Option<baml_type::RuntimeTy> = None;
+    let mut class_defs: IndexMap<::sys_types::DefKey, sys_types::ClassDefinition> = IndexMap::new();
+    let mut enum_defs: IndexMap<::sys_types::DefKey, sys_types::EnumDefinition> = IndexMap::new();
+    let mut parse_field_ty: Option<::sys_types::SapTy> = None;
 
     for obj in &program.objects {
         match obj {
@@ -108,14 +107,14 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                         })?;
                     parse_field_ty = field
                         .field_type
-                        .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+                        .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
                         .ok();
                     // Don't add the synthetic class to the definitions.
                     continue;
                 }
 
                 class_defs.insert(
-                    qtn,
+                    ::sys_types::DefKey::new(cls.type_tag, cls.name.clone()),
                     sys_types::ClassDefinition {
                         name: cls.name.display_name().to_string(),
                         description: cls.description.clone(),
@@ -127,8 +126,8 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                                 name: f.name.clone(),
                                 field_type: f
                                     .field_type
-                                    .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
-                                    .unwrap_or_else(|_| baml_type::RuntimeTy::unknown()),
+                                    .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
+                                    .unwrap_or_else(|_| ::sys_types::SapTy::unknown()),
                                 description: f.description.clone(),
                                 alias: f.alias.clone(),
                                 skip: f.skip,
@@ -144,10 +143,7 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                     .is_some_and(|qtn| qtn.package().as_str() != "baml") =>
             {
                 enum_defs.insert(
-                    enm.name
-                        .declared()
-                        .cloned()
-                        .unwrap_or_else(|| unreachable!("guarded by declared() above")),
+                    ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
                     sys_types::EnumDefinition {
                         name: enm.name.display_name().to_string(),
                         description: enm.description.clone(),
@@ -175,10 +171,10 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
     let type_alias_definitions = program
         .recursive_type_aliases()
         .into_iter()
-        .filter_map(|(name, ty)| {
-            ty.try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+        .filter_map(|(head, ty)| {
+            ty.try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
                 .ok()
-                .map(|ty| (name, baml_type::RuntimeTy::from(ty)))
+                .map(|ty| (head, ::sys_types::SapTy::from(ty)))
         })
         .collect();
     let type_ctx =
@@ -192,7 +188,7 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                 .build_db()
                 .map_err(|e| format!("SAP type conversion error: {e}"))
         },
-        ty_builder: |type_ctx: &sap_model::TypeCtx, parse_ty: &baml_type::RuntimeTy| {
+        ty_builder: |type_ctx: &sap_model::TypeCtx, parse_ty: &::sys_types::SapTy| {
             type_ctx
                 .convert_ty(parse_ty)
                 .map_err(|e| format!("Failed to convert parse type: {e}"))

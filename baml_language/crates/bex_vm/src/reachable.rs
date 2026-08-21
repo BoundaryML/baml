@@ -13,6 +13,14 @@ use crate::BexVm;
 
 /// Whether every declaration `ty` names was compiled into the program.
 ///
+/// Decided by tag range: a declared head is content-addressed from its
+/// fully-qualified name, and every runtime-created one — a typebuilder
+/// declaration, *and* a runtime-compiled package member, which is reminted at
+/// graft — comes from the counter range above `DYNAMIC_BASE`. So this is an
+/// integer compare that touches neither the heap nor a pointer, which is what
+/// makes it stable: tags never change, addresses move under the collector, and
+/// an unresolved head still answers correctly.
+///
 /// Only the type's own heads are inspected, not the declarations behind them.
 /// That is exact rather than approximate: the static image never references a
 /// runtime declaration (the collector relies on the same invariant to skip the
@@ -20,10 +28,10 @@ use crate::BexVm;
 /// A runtime declaration reached *through type arguments* — `Box<RuntimeFoo>`
 /// instantiating a compiled generic — is a head of `ty` itself and is seen.
 #[must_use]
-pub fn is_statically_declared(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> bool {
+pub fn is_statically_declared(ty: &bex_vm_types::RealizedTy) -> bool {
     let mut all_static = true;
     ty.visit_heads(&mut |head| {
-        all_static &= head.is_resolved() && vm.heap.is_compile_time_ptr(head.ptr());
+        all_static &= !head.tag().is_dynamic();
     });
     all_static
 }

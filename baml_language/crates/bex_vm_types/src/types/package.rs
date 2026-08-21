@@ -1,12 +1,11 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
-use crate::TyTemplate;
 use baml_base::Name;
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
 use crate::{
-    AtomicValueSlot, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, Value,
+    AtomicValueSlot, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, TyTemplate, Value,
     types::interface::InterfaceBound,
 };
 

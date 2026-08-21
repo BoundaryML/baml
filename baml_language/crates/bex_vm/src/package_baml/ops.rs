@@ -19,9 +19,8 @@ use std::{
 
 use baml_type::{Name, TyAttr, TypeName, normalize::TypeContext};
 use bex_str::BexStr;
-use bex_vm_types::RealizedTy;
 use bex_vm_types::{
-    HeapPtr, ValueKind,
+    HeapPtr, RealizedTy, ValueKind,
     errors::VmInternalError,
     types::{LockedContainer, LockedReadGuard, Object, Type, Value},
 };

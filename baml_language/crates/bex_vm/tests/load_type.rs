@@ -15,11 +15,11 @@ use std::sync::{Arc, atomic::AtomicBool};
 use baml_project::testing::compile_source;
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
-    ConstValue, FunctionCaptureProps, GlobalIndex, Instruction, Object, ObjectIndex, Value,
+    ConstValue, FunctionCaptureProps, GlobalIndex, Instruction, Object, ObjectIndex, RealizedTy,
+    TyTemplate, Value,
     bytecode::Bytecode,
     types::{Function, FunctionKind, FunctionOrigin, Program},
 };
-use bex_vm_types::{RealizedTy, TyTemplate};
 
 /// Minimal valid BAML source used as the base for all tests.
 /// It provides the error/panic class objects that `BexVm::new` requires.

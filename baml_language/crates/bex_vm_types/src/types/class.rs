@@ -1,8 +1,7 @@
-use crate::RuntimeTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
-use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, Value, types::TypeValue};
+use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, RuntimeTy, Value, types::TypeValue};
 
 /// A field within a runtime class, carrying type and schema metadata.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]

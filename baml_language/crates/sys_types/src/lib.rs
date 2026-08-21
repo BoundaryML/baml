@@ -616,17 +616,17 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     pub cancel: CancellationToken,
 
     /// Pre-extracted class definitions for output format rendering.
-    /// Keyed by class name.
-    pub class_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, ClassDefinition>>,
+    /// Keyed by declaration identity.
+    pub class_definitions: Arc<indexmap::IndexMap<DefKey, ClassDefinition>>,
 
     /// Pre-extracted enum definitions for output format rendering.
-    /// Keyed by enum name.
-    pub enum_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, EnumDefinition>>,
+    /// Keyed by declaration identity.
+    pub enum_definitions: Arc<indexmap::IndexMap<DefKey, EnumDefinition>>,
 
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
-    /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
+    /// Maps alias identity → target type.
+    pub type_alias_definitions: Arc<indexmap::IndexMap<DefKey, SapTy>>,
 
     /// Can be used to spawn new VMs.
     pub spawner: Arc<dyn VmSpawner<E>>,
@@ -664,17 +664,17 @@ pub struct EngineSysOpContext {
     pub function_global_indices: Arc<std::collections::HashMap<String, usize>>,
 
     /// Pre-extracted class definitions for output format rendering.
-    /// Keyed by class name.
-    pub class_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, ClassDefinition>>,
+    /// Keyed by declaration identity.
+    pub class_definitions: Arc<indexmap::IndexMap<DefKey, ClassDefinition>>,
 
     /// Pre-extracted enum definitions for output format rendering.
-    /// Keyed by enum name.
-    pub enum_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, EnumDefinition>>,
+    /// Keyed by declaration identity.
+    pub enum_definitions: Arc<indexmap::IndexMap<DefKey, EnumDefinition>>,
 
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
-    /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
+    /// Maps alias identity → target type.
+    pub type_alias_definitions: Arc<indexmap::IndexMap<DefKey, SapTy>>,
 
     /// Typed async IO interface, built from the `SysOps` table at engine init.
     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
@@ -688,8 +688,26 @@ pub struct LlmFunctionInfo {
     /// The client name (e.g., `"MyClient"`) declared in the function.
     pub client_name: String,
     /// The expected return type, used for response parsing.
-    pub return_type: baml_type::RuntimeTy,
+    pub return_type: SapTy,
 }
+
+/// A type as the sys-op / SAP lane carries it: heads are
+/// [`TaggedTypeName`](baml_type::TaggedTypeName), so a definition table can be
+/// keyed by declaration identity while still rendering the name a user wrote.
+///
+/// Plain owned data with no heap pointers, which is what lets SAP hold one
+/// across the permit release.
+pub type SapTy = baml_type::RuntimeTy<baml_type::TaggedTypeName>;
+
+/// How the lane's definition tables are keyed: by declaration identity, never
+/// by name. Two declarations a user spelled alike are different keys; a runtime
+/// declaration can no longer shadow a compiled one.
+///
+/// The key is the whole head rather than a bare tag because its `Eq`/`Hash` are
+/// already tag-only, so lookups compare identity — while `Display` still yields
+/// the name, which SAP and the output-format renderer put in front of users. A
+/// bare tag would key correctly and render `#4713`.
+pub type DefKey = baml_type::TaggedTypeName;
 
 /// Pre-extracted class definition for output format rendering.
 #[derive(Clone, Debug)]
@@ -704,7 +722,7 @@ pub struct ClassDefinition {
 #[derive(Clone, Debug)]
 pub struct ClassFieldDefinition {
     pub name: String,
-    pub field_type: baml_type::RuntimeTy,
+    pub field_type: SapTy,
     pub description: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
@@ -759,16 +777,9 @@ impl SysOpContext {
             llm_functions: Arc::new(std::collections::HashMap::new()),
             function_global_indices: Arc::new(std::collections::HashMap::new()),
             cancel: CancellationToken::new(),
-            class_definitions: Arc::new(
-                indexmap::IndexMap::<baml_type::TypeName, ClassDefinition>::new(),
-            ),
-            enum_definitions: Arc::new(
-                indexmap::IndexMap::<baml_type::TypeName, EnumDefinition>::new(),
-            ),
-            type_alias_definitions: Arc::new(indexmap::IndexMap::<
-                baml_type::TypeName,
-                baml_type::RuntimeTy,
-            >::new()),
+            class_definitions: Arc::new(indexmap::IndexMap::<DefKey, ClassDefinition>::new()),
+            enum_definitions: Arc::new(indexmap::IndexMap::<DefKey, EnumDefinition>::new()),
+            type_alias_definitions: Arc::new(indexmap::IndexMap::<DefKey, SapTy>::new()),
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
         }

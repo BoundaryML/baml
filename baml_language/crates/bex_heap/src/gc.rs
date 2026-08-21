@@ -1732,7 +1732,9 @@ mod tests {
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Enum(Box::new(bex_vm_types::Enum {
-            name: baml_type::TypeName::local(baml_type::Name::new("E")),
+            name: baml_type::DeclarationName::Declared(baml_type::TypeName::local(
+                baml_type::Name::new("E"),
+            )),
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
             variants: vec![bex_vm_types::EnumVariant {
                 name: "A".to_string(),
@@ -1776,7 +1778,9 @@ mod tests {
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Class(Box::new(bex_vm_types::Class {
-            name: baml_type::TypeName::local(baml_type::Name::new("C")),
+            name: baml_type::DeclarationName::Declared(baml_type::TypeName::local(
+                baml_type::Name::new("C"),
+            )),
             fields: vec![bex_vm_types::ClassField {
                 name: "x".to_string(),
                 field_type: baml_type::RuntimeTy::Int {
