@@ -4860,7 +4860,7 @@ impl BexVm {
     /// Unwinds error values (both thrown and panics).
     /// Name of the innermost frame's function, for attributing work started
     /// from the current execution point (e.g. a spawn's provenance label).
-    /// Cheap single-frame variant of [`Self::capture_stack_trace`].
+    /// Cheap single-frame variant of `Self::capture_stack_trace`.
     pub fn current_function_name(&self) -> Option<String> {
         let frame = self.frames.last()?;
         let func = self.get_object(frame.function()).as_callable().ok()?;

@@ -161,14 +161,14 @@ fn classify_fragment(
     })
 }
 
+/// One memoized highlight outcome: the spans, or the classification error
+/// that made the fragment unhighlightable (cached too, so a failing fragment
+/// is not re-parsed per render).
+type CachedHighlight = Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError>;
+
 #[derive(Default)]
 pub struct MessageHighlighter {
-    cache: RefCell<
-        HashMap<
-            (DiagnosticMessageKind, String),
-            Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError>,
-        >,
-    >,
+    cache: RefCell<HashMap<(DiagnosticMessageKind, String), CachedHighlight>>,
 }
 
 impl DiagnosticMessageHighlighter for MessageHighlighter {
