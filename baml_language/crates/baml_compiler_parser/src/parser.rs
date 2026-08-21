@@ -6394,11 +6394,13 @@ impl<'a> Parser<'a> {
                     depth -= 1;
                     if depth == 0 {
                         // We just closed a complete expression
-                        // Allow PATH_EXPR or FIELD_ACCESS_EXPR for module-qualified types
-                        return matches!(
-                            kind,
-                            SyntaxKind::PATH_EXPR | SyntaxKind::FIELD_ACCESS_EXPR
-                        );
+                        // Identifier and module-qualified constructors are
+                        // PATH_EXPRs. FIELD_ACCESS_EXPR is reserved for a
+                        // complex value receiver (call/index/paren); accepting
+                        // it here lets recovery turn malformed expressions such
+                        // as `(1). { x: 2 }` into constructor-less object
+                        // literals that the AST cannot represent.
+                        return *kind == SyntaxKind::PATH_EXPR;
                     }
                 }
                 Event::Token { kind, text, .. } => {
@@ -13180,6 +13182,26 @@ function build(options: string, retries: int) -> Request {
                 .children_with_tokens()
                 .all(|elem| elem.kind() != SyntaxKind::COLON)
         }));
+    }
+
+    #[test]
+    fn recovered_field_access_is_not_an_object_constructor() {
+        let source = r#"
+function Broken() -> null {
+    (1). { x: 2 }
+}
+"#;
+        let (root, errors) = parse_source(source);
+
+        assert!(
+            !errors.is_empty(),
+            "the dangling field access must be rejected"
+        );
+        assert!(
+            root.descendants()
+                .all(|node| node.kind() != SyntaxKind::OBJECT_LITERAL),
+            "a complex field-access receiver cannot become an object constructor"
+        );
     }
 
     #[test]
