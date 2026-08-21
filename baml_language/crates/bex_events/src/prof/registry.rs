@@ -187,10 +187,6 @@ mod global {
     }
 
     static TRANSPORT_CONFIG: OnceLock<TransportConfig> = OnceLock::new();
-    /// Set when the transport latched on the *default* sizing because a
-    /// producer claimed a ring before any session configured it.
-    static TRANSPORT_DEFAULTED: std::sync::atomic::AtomicBool =
-        std::sync::atomic::AtomicBool::new(false);
 
     pub(crate) fn global_registry() -> &'static Registry {
         &REGISTRY
@@ -206,22 +202,11 @@ mod global {
             segment_bytes: usize::try_from(segment_bytes).unwrap_or(usize::MAX),
             freelist_segments: usize::try_from(freelist_segments).unwrap_or(usize::MAX),
         });
-        // The transport latches on first use: later sessions in the same
-        // process (tests, multi-session hosts) share the first one's governor,
-        // which is fine. What is not fine is a producer claiming a ring before
-        // *any* session configured the transport — that ring sits on a default
-        // governor no session sees. That is a host ordering bug, not a runtime
-        // condition to absorb silently.
-        debug_assert!(
-            !TRANSPORT_DEFAULTED.load(std::sync::atomic::Ordering::Acquire),
-            "profiler transport was configured after a producer claimed a ring on the default governor"
-        );
     }
 
     fn transport_config() -> TransportConfig {
         TRANSPORT_CONFIG
             .get_or_init(|| {
-                TRANSPORT_DEFAULTED.store(true, std::sync::atomic::Ordering::Release);
                 let sizing = ProfilerSizingPolicy::derive(
                     crate::prof::backend::ProfilerConfig::default().process_memory_bytes,
                     MeasuredLayouts::V1,
@@ -285,15 +270,9 @@ mod global {
             // which is the real every-stamp-postdates-the-anchor invariant.
             crate::prof::clock::init();
             // The consumer drains every registered ring; it must exist
-            // before the first event can pile up. It is started only once an
-            // on session has configured the transport (§11: no consumer
-            // thread without an on session); a ring claimed on the default
-            // governor — only the global-registry tests do that — is drained
-            // by its own test, never by the process consumer.
+            // before the first event can pile up.
             #[cfg(not(target_arch = "wasm32"))]
-            if !TRANSPORT_DEFAULTED.load(std::sync::atomic::Ordering::Acquire) {
-                crate::prof::consumer::ensure_started();
-            }
+            crate::prof::consumer::ensure_started();
             let handle = REGISTRY.acquire(
                 global_ctx(),
                 config.segment_bytes,

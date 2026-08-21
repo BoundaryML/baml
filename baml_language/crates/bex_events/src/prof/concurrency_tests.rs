@@ -14,7 +14,7 @@
 #![allow(unsafe_code)]
 
 use crate::prof::{
-    ring::{Ring, RingCtx, RingState, segment_footprint},
+    ring::{Ring, RingCtx, RingState},
     sync::thread,
 };
 
@@ -427,6 +427,8 @@ mod scenarios {
 #[cfg(not(baml_loom))]
 #[test]
 fn segment_growth_pressure_rejects_record_without_aborting() {
+    use crate::prof::ring::segment_footprint;
+
     let ctx = leak_ctx(segment_footprint(16));
     let ring = TestRing::new(ctx, 16, 0, 1);
     let producer = ring.get();
@@ -812,28 +814,28 @@ mod stress {
     }
 
     /// The global path end-to-end: `ring_for_engine` + real TLS-destructor
-    /// orphaning + pooled reuse by the next thread. Uses the process-global
-    /// registry, so it asserts only on its own rings (by address).
+    /// orphaning + the process consumer pooling the orphan + reuse by the
+    /// next thread. Uses the process-global registry, so it asserts only on
+    /// its own rings (by address) and lets the consumer — the registry's sole
+    /// sweeper — do the draining; record contents are covered by the
+    /// private-registry scenarios above.
     #[test]
     fn global_tls_orphan_and_reuse() {
-        use crate::prof::registry::{global_registry, ring_for_engine};
+        use std::time::{Duration, Instant};
+
+        use crate::prof::registry::{global_ctx, global_registry, ring_for_engine};
 
         const ENGINE: u64 = 0xBEEF_0001;
 
-        // This test is its own consumer of the PROCESS-GLOBAL registry, so
-        // the real `bex-prof-consumer` must never spawn (two consumers on
-        // one ring is the exact SPSC violation the suite exists to rule
-        // out). Profiling is default-on (follow-up 16): latch the global
-        // config off before `ring_for_engine` reads it. This is the only
-        // lib test touching the global path; the assert keeps that true.
-        // SAFETY: single-threaded at this point in the test; the config is
-        // latched once immediately below.
-        unsafe { std::env::set_var(crate::prof::config::ENV_PROFILE, "0") };
-        assert!(
-            !crate::prof::ProfConfig::global().enabled,
-            "another test latched the global ProfConfig with profiling \
-             enabled — the global-registry tests need it off"
-        );
+        let state_of = |addr: usize| {
+            let mut state = None;
+            global_registry().for_each(|ring| {
+                if std::ptr::from_ref(ring) as usize == addr {
+                    state = Some(ring.state());
+                }
+            });
+            state
+        };
 
         let ptr1 = std::thread::spawn(|| {
             let h = ring_for_engine(ENGINE).expect("test ring capacity");
@@ -846,47 +848,37 @@ mod stress {
         .unwrap();
 
         // join() returns after the thread ran its TLS destructors, so the
-        // orphan store is visible.
-        let mut state = None;
-        global_registry().for_each(|ring| {
-            if std::ptr::from_ref(ring) as usize == ptr1 {
-                state = Some(ring.state());
-            }
-        });
-        assert_eq!(state, Some(RingState::Orphaned));
+        // ring is orphaned — or already pooled if the consumer swept first.
+        assert!(
+            matches!(
+                state_of(ptr1),
+                Some(RingState::Orphaned | RingState::Pooled)
+            ),
+            "ring must be orphaned by TLS teardown: {:?}",
+            state_of(ptr1)
+        );
 
-        // Act as the consumer: drain + pool (only this test sweeps the
-        // global registry; the other suites use private registries).
-        let mut seqs = Vec::new();
-        unsafe {
-            global_registry().sweep(&mut |ring, bytes| {
-                if std::ptr::from_ref(ring) as usize == ptr1 {
-                    super::collect_seqs(bytes, &mut seqs);
-                }
-            });
+        // The consumer drains the orphan and pools it.
+        global_ctx().wake().force_wake();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while state_of(ptr1) != Some(RingState::Pooled) {
+            assert!(
+                Instant::now() < deadline,
+                "consumer never pooled the orphaned ring: {:?}",
+                state_of(ptr1)
+            );
+            std::thread::sleep(Duration::from_millis(5));
         }
-        assert_eq!(seqs, vec![1]);
 
         // The next thread asking for any engine must claim the pooled ring.
         let ptr2 = std::thread::spawn(|| {
             let h = ring_for_engine(ENGINE + 1).expect("test ring capacity");
-            // SAFETY: the claiming thread is alive for the whole call (no TLS
-            // teardown in flight).
+            // SAFETY: as above.
             unsafe { h.push(&rec(2)) };
             std::ptr::from_ref(h.ring()) as usize
         })
         .join()
         .unwrap();
         assert_eq!(ptr1, ptr2, "pooled ring was not reused by the next thread");
-
-        let mut seqs = Vec::new();
-        unsafe {
-            global_registry().sweep(&mut |ring, bytes| {
-                if std::ptr::from_ref(ring) as usize == ptr1 {
-                    super::collect_seqs(bytes, &mut seqs);
-                }
-            });
-        }
-        assert_eq!(seqs, vec![2]);
     }
 }
