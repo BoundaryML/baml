@@ -2697,6 +2697,12 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_sys_collect_garbage(heap, permit, args, ctx, call_id)
             })
         };
+        self.inner.baml_sys_kill = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_kill(heap, permit, args, ctx, call_id)
+            })
+        };
         self.inner.baml_sys_pid = {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
