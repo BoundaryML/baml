@@ -54,7 +54,18 @@ fn guide_warns_about_bootstrap_version_mismatches_without_withholding_the_guide(
         .unwrap();
     assert!(outdated.status.success());
     let stdout = String::from_utf8(outdated.stdout).unwrap();
-    assert!(stdout.contains("bootstrap skill is outdated"), "{stdout}");
+    assert!(
+        stdout.starts_with("WARNING: This BAML bootstrap skill is outdated."),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("run `baml agent install` from the project root before continuing"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("Continuing with outdated BAML instructions is not recommended."),
+        "{stdout}"
+    );
     assert!(stdout.ends_with(MAIN_GUIDE), "{stdout}");
 
     let newer = baml_command()

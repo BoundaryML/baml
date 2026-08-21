@@ -147,7 +147,7 @@ fn version_relation(reported: Option<u32>, expected: u32) -> VersionRelation {
 fn bootstrap_warning(relation: VersionRelation) -> Option<&'static str> {
     match relation {
         VersionRelation::BootstrapOutdated => Some(
-            "> [!WARNING]\n> This project's BAML bootstrap skill is outdated. Ask the user to run `baml agent install`. Continue using the guide below for this session.\n\n",
+            "WARNING: This BAML bootstrap skill is outdated. It is highly recommended that you run `baml agent install` from the project root before continuing. Continuing with outdated BAML instructions is not recommended.\n\n",
         ),
         VersionRelation::ToolchainOutdated => Some(
             "> [!NOTE]\n> This project's BAML bootstrap skill is newer than the active BAML toolchain. The guide below still matches this toolchain.\n\n",
