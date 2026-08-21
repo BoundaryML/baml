@@ -341,7 +341,24 @@ mod tests {
             toml::from_str(include_str!("../../../.cargo/size-gate.toml")).unwrap();
         config.validate().unwrap();
 
-        let macos = &config.artifacts["baml-cli"].platform["aarch64-apple-darwin"];
-        assert_eq!(macos.max_file_bytes, Some(26_633_830));
+        for (artifact_name, artifact) in &config.artifacts {
+            assert!(
+                !artifact.platform.is_empty(),
+                "artifact `{artifact_name}` must have a platform-specific ceiling"
+            );
+
+            for platform in artifact.platform.keys() {
+                let policy = artifact.effective_policy(platform);
+                let ceiling = match artifact.gate {
+                    GateMetric::File => policy.max_file_bytes,
+                    GateMetric::Gzip => policy.max_gzip_bytes,
+                };
+                assert!(
+                    matches!(ceiling, Some(bytes) if bytes > 0),
+                    "artifact `{artifact_name}` must have a positive {} ceiling for platform `{platform}`",
+                    artifact.gate.label()
+                );
+            }
+        }
     }
 }
