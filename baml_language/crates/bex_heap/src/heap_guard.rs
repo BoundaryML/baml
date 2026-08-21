@@ -146,10 +146,20 @@ impl<T: RootHaver> InactiveHeapPermit<T> {
     /// Wait for a permit to become available (i.e. as soon as there is no GC or other exclusive access operation running),
     /// and return a [`ActiveHeapPermit`] that can be used to access the heap with the permit.
     pub async fn acquire(self) -> ActiveHeapPermit<T> {
-        let permit = Arc::clone(&self.active)
-            .acquire_owned()
-            .await
-            .unwrap_or_else(|_| unreachable!("Semaphore should never be closed"));
+        // Fast path: when no GC park is draining the semaphore, a permit is
+        // available and `try_acquire_owned` takes it without constructing and
+        // polling the fair-queue acquire future. This acquisition runs on
+        // every VM task resume, so the setup cost of the slow path is a
+        // measurable interpreter tax under high task counts. Fairness only
+        // matters once a park request is queued — exactly the case where
+        // try fails and we fall through to the fair wait.
+        let permit = match Arc::clone(&self.active).try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => Arc::clone(&self.active)
+                .acquire_owned()
+                .await
+                .unwrap_or_else(|_| unreachable!("Semaphore should never be closed")),
+        };
         ActiveHeapPermit {
             state: self,
             _permit: permit,
