@@ -2175,26 +2175,27 @@ async fn spawned_awaiter_of_internal_error_future_does_not_wedge() {
     assert!(
         matches!(
             result,
-            Err(EngineError::VmInternalError(
-                sys_types::VmInternalError::BridgeFailure { .. }
-            )) | Err(EngineError::TracedVmInternalError {
-                source: sys_types::VmInternalError::BridgeFailure { .. },
-                ..
-            })
+            Err(
+                EngineError::VmInternalError(sys_types::VmInternalError::BridgeFailure { .. })
+                    | EngineError::TracedVmInternalError {
+                        source: sys_types::VmInternalError::BridgeFailure { .. },
+                        ..
+                    }
+            )
         ),
-        "expected the BridgeFailure internal error to surface after the fix, got {result:?}"
+        "expected the `BridgeFailure` internal error to surface after the fix, got {result:?}"
     );
     drop(arc);
 }
 
 /// The scenario-15 "concurrent guards" topology: children spawned inside a
-/// closure (capturing a linked CancelToken), joined with `baml.future.all`
+/// closure (capturing a linked `CancelToken`), joined with `baml.future.all`
 /// under a spawned parent — and ONE child hitting an uncatchable engine error
 /// while its siblings are parked. Before the spawn-leak fix this parked at
 /// 0% CPU forever (the guardrail deadlock documented in
-/// ns_ai_scenarios/15_guardrails); with it, the error propagates and the
+/// `ns_ai_scenarios/15_guardrails`); with it, the error propagates and the
 /// call resolves. Kept alongside the minimal nested-spawn repro because the
-/// closure + all() + cancel-token topology exercises the settle path
+/// closure + `all()` + cancel-token topology exercises the settle path
 /// through `future.all`'s cancel-the-rest arm as well.
 ///
 /// NOTE vs #3959's verbatim form: the closure's typed effects are caught
@@ -2267,5 +2268,76 @@ async fn spawn_in_map_closure_with_erroring_child_does_not_wedge() {
     // scheduling; the deadlock is what this test pins.
     let _result = outcome.expect(
         "engine wedged: spawn-in-map guard topology never resolved (the spawn-leak regressed)",
+    );
+}
+
+/// Shutdown-deadline regression: a fire-and-forget spawn that outlives its
+/// call (the mock-server-leak shape — a test finishes but its background task
+/// never settles) must not park shutdown forever. With a grace of 500ms,
+/// `shutdown_with_deadline` cancels the straggler, force-settles it if it
+/// ignores the token, reports its spawn provenance, and returns. Without the
+/// deadline this waited the full sleep (60s) — the "Waiting for N remaining
+/// BAML futures" forever-loop, in miniature.
+#[tokio::test]
+async fn shutdown_deadline_abandons_leaked_spawn_and_reports_origin() {
+    let source = r#"
+        function main() -> string {
+            let _leak = spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)) catch_all (e) {
+                    _ => null
+                };
+                "never observed"
+            };
+            "done"
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("main should return");
+    assert_eq!(result, BexExternalValue::String("done".into()));
+
+    let started = std::time::Instant::now();
+    let leaks: Arc<std::sync::Mutex<Vec<bex_engine::LeakedFuture>>> = Arc::default();
+    let leaks_out = Arc::clone(&leaks);
+    let shutdown = engine.shutdown_with_deadline(
+        Some(std::time::Duration::from_millis(500)),
+        |_count| {},
+        move |observed| {
+            leaks_out
+                .lock()
+                .expect("leak sink lock")
+                .extend(observed.iter().cloned());
+        },
+    );
+    tokio::time::timeout(std::time::Duration::from_secs(20), shutdown)
+        .await
+        .expect("shutdown wedged: the deadline did not bound the leaked-spawn wait");
+    // Well under the leaked sleep's 60s: the deadline (0.5s) plus the bounded
+    // cooperative-settle window, not the sleep, decides the wall clock.
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(15),
+        "shutdown took {:?}",
+        started.elapsed()
+    );
+
+    let leaks = leaks.lock().expect("leak sink lock");
+    assert_eq!(leaks.len(), 1, "expected exactly one leaked future");
+    assert_eq!(
+        leaks[0].origin.as_ref(),
+        "user.main",
+        "leak should be attributed to the spawning function"
     );
 }

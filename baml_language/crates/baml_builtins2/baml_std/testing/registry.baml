@@ -855,6 +855,12 @@ class LeafIdentities {
     passed: string[],
     failed: string[],
     tolerated: string[],
+    // Durations in milliseconds, parallel to the arrays above; `-1` for a
+    // leaf with no measured run. Left EMPTY by the fallback classifiers,
+    // which have names but no reports.
+    passed_ms: int[],
+    failed_ms: int[],
+    tolerated_ms: int[],
 }
 
 // Classify each leaf in a child-report list as passed / hard-failed /
@@ -932,7 +938,14 @@ function flatten_with_tolerated(report: TestSetReport, selected_names: string[])
     root.collect_leaf_messages(report.results, messages);
     let all_failed_names: string[] = [];
     root.collect_all_failed_names(report, all_failed_names);
-    let executed = LeafIdentities { passed: [], failed: [], tolerated: [] };
+    let executed = LeafIdentities {
+        passed: [],
+        failed: [],
+        tolerated: [],
+        passed_ms: [],
+        failed_ms: [],
+        tolerated_ms: [],
+    };
     root.collect_leaf_identities(report, top_tolerated, selected_names, executed);
     // Built-in reports carry names parallel to their executed child results.
     // Custom runners written before result_names existed may not; fall back to
@@ -961,6 +974,9 @@ function flatten_with_tolerated(report: TestSetReport, selected_names: string[])
         passed_names: identities.passed,
         failed_names: identities.failed,
         tolerated_names: identities.tolerated,
+        passed_ms: identities.passed_ms,
+        failed_ms: identities.failed_ms,
+        tolerated_ms: identities.tolerated_ms,
         messages: messages,
     }
 }
@@ -970,7 +986,14 @@ function classify_selected_names(
     hard_failed_names: string[],
     all_failed_names: string[],
 ) -> LeafIdentities {
-    let out = LeafIdentities { passed: [], failed: [], tolerated: [] };
+    let out = LeafIdentities {
+        passed: [],
+        failed: [],
+        tolerated: [],
+        passed_ms: [],
+        failed_ms: [],
+        tolerated_ms: [],
+    };
     for (let name in selected_names) {
         if (root.failure_matches_selected(name, all_failed_names)) {
             if (root.failure_matches_selected(name, hard_failed_names)) {
@@ -1028,12 +1051,20 @@ function collect_leaf_identities(
                 let name = names[i];
                 match (report.results[i]) {
                     let leaf: TestReport => {
-                        if (leaf.outcome == "pass") {
-                            out.passed.push(name)
-                        } else if (tolerated_by_parent) {
-                            out.tolerated.push(name)
+                        let leaf_ms = if (leaf.runs.length() > 0) {
+                            leaf.runs[0].duration_ms
                         } else {
-                            out.failed.push(name)
+                            -1
+                        };
+                        if (leaf.outcome == "pass") {
+                            out.passed.push(name);
+                            out.passed_ms.push(leaf_ms)
+                        } else if (tolerated_by_parent) {
+                            out.tolerated.push(name);
+                            out.tolerated_ms.push(leaf_ms)
+                        } else {
+                            out.failed.push(name);
+                            out.failed_ms.push(leaf_ms)
                         }
                     },
                     let nested: TestSetReport => {
@@ -1055,9 +1086,11 @@ function collect_leaf_identities(
                                 name + "::(testset error)"
                             };
                             if (nested_tolerated) {
-                                out.tolerated.push(identity)
+                                out.tolerated.push(identity);
+                                out.tolerated_ms.push(-1)
                             } else {
-                                out.failed.push(identity)
+                                out.failed.push(identity);
+                                out.failed_ms.push(-1)
                             }
                         } else {
                             null
