@@ -77,6 +77,18 @@ tokio-tungstenite = { workspace = true, optional = true, features = [
 tracing = { workspace = true }
 walkdir = { workspace = true }
 
+# `ProcessOptions.detached` calls `setsid()` in the child before exec.
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+# `ProcessOptions.detached` spawns with DETACHED_PROCESS |
+# CREATE_NEW_PROCESS_GROUP on Windows.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_System_Threading",
+] }
+
 [lints]
 workspace = true
 

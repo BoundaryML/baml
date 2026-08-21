@@ -93,6 +93,9 @@ fn options_to_js(options: Option<&io::owned::sys::ProcessOptions>) -> JsValue {
             if let Some(BexExternalValue::Variant { variant_name, .. }) = opts.stderr.as_ref() {
                 let _ = Reflect::set(&obj, &"stderr".into(), &variant_name.into());
             }
+            if let Some(detached) = opts.detached {
+                let _ = Reflect::set(&obj, &"detached".into(), &JsValue::from_bool(detached));
+            }
             js_sys::JSON::stringify(&obj)
                 .map(JsValue::from)
                 .unwrap_or(JsValue::NULL)
