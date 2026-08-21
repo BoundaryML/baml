@@ -1,8 +1,8 @@
 # CI on ix (preview): the Linux CI running side by side on an ix runner
 # pool, next to the gating Blacksmith checks. A trial artifact: none of
 # these checks is required, no existing workflow is changed, and deleting
-# the ix-* workflow files (plus the IX_TOKEN secret) removes every
-# ix-scheduled job; nothing outside .github/ is touched.
+# the ix-* workflow files removes every ix-scheduled job; nothing outside
+# .github/ is touched.
 #
 # The jobs are copies of the reusable workflows that carry the Linux
 # spend, pointed at the pool - each ix-*.reusable.yaml header names its
