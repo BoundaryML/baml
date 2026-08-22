@@ -21,9 +21,8 @@
 # no build output). This copy never SAVES cache entries (save-if: false on
 # every step): the env pins below shift rust-cache's keys, so saving here
 # would write a parallel set of entries into the repo's shared cache quota
-# and evict the gating workflow's. On ix, compiled output comes from the
-# shared R2 sccache bucket (ix-ci.yml passes the credentials through); the
-# seed disk adds the registry and toolchains on top when a seed restores.
+# and evict the gating workflow's. On ix, warmth comes from the seed disk,
+# not the Actions cache.
 #
 # mise installs sccache and direnv, then each cargo job loads .envrc via
 # `direnv export gha` so CI uses the exact same sccache config as local shells:
