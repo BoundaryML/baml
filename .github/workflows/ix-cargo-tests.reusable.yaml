@@ -84,13 +84,6 @@ env:
   # lane. Set here, not in the machine image, so the value is deterministic
   # per commit.
   VITEST_MAX_WORKERS: "4"
-  # nextest and libtest size their thread pools from the visible CPU count
-  # too (100 on an ix guest). bex_engine's cancellation tests assert
-  # wall-clock budgets (cancel returns in <2s) and the snapshot suite talks
-  # to mock servers on loopback; both fail when 100 test threads per job
-  # compete across concurrent machines. Match the build's 16.
-  NEXTEST_TEST_THREADS: "16"
-  RUST_TEST_THREADS: "16"
   RUSTUP_MAX_RETRIES: 10
 
 jobs:

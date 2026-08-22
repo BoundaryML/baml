@@ -111,17 +111,14 @@ jobs:
     name: "Cargo Tests"
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/canary'
-    # The same R2 sccache bucket the gating lane reads. Without it every ix
-    # job compiles the workspace from scratch: the seed disk was meant to
-    # carry target/, but seed restore is refused by the platform today
-    # ("snapshot has no captured block-volume root"), so each machine boots
-    # cold and a 90s build on the hosted lane takes 20 minutes here. PR code
-    # runs on these machines; point these at a read-only R2 token once one
-    # exists so a PR can read the cache but never write it.
+    # The same R2 sccache bucket the gating lane reads. Its current token can
+    # write, so only canary and manual dispatch runs receive it. PR jobs run
+    # checked-out code and fall back to the machine-local cache until the
+    # bucket has a read-only token.
     uses: ./.github/workflows/ix-cargo-tests.reusable.yaml
     secrets:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ (github.ref == 'refs/heads/canary' || github.event_name == 'workflow_dispatch') && secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID || '' }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ (github.ref == 'refs/heads/canary' || github.event_name == 'workflow_dispatch') && secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY || '' }}
 
   size-gate:
     name: "Size Gate"
@@ -129,8 +126,8 @@ jobs:
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/ix-size-gate.reusable.yaml
     secrets:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ (github.ref == 'refs/heads/canary' || github.event_name == 'workflow_dispatch') && secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID || '' }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ (github.ref == 'refs/heads/canary' || github.event_name == 'workflow_dispatch') && secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY || '' }}
     # The ix copy drops the report's PR-comment step outright, so the
     # gating workflow's comment stays the only one; the report is still in
     # the job summary.
