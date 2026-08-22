@@ -187,6 +187,12 @@ struct StaticVirtualCallKey {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum StaticVirtualReceiverKey {
+    /// Argument-less primitive receivers (int, string, float, ...) keyed by a
+    /// bare discriminant. These are the hottest virtual-call receivers in
+    /// practice (every string/int method), and the previous `Other(RealizedTy)`
+    /// path built and deep-hashed a realized type per call — the dominant
+    /// frame in VM profiles of test-corpus runs.
+    Primitive(u8),
     /// Static program classes have immutable, program-unique tags. Generic
     /// arguments remain part of identity; the overwhelmingly common
     /// non-generic case clones an empty box without allocating.
@@ -514,7 +520,7 @@ pub(crate) mod tests {
             pending_call_type_values: Vec::new(),
             static_mint_cache: HashMap::new(),
             static_load_type_cache: HashMap::new(),
-            static_virtual_call_cache: HashMap::new(),
+            static_virtual_call_cache: rustc_hash::FxHashMap::default(),
             packages: Arc::new(crate::package_load::PackageIndex::default()),
             dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
         }
@@ -1275,7 +1281,11 @@ pub struct BexVm {
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
     /// dynamic builder registration remain live on every dynamic dispatch.
-    static_virtual_call_cache: HashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
+    /// `FxHashMap`: this map is keyed per virtual call executed, so hasher
+    /// throughput is on the interpreter hot path; `FxHash` over `SipHash` is
+    /// a measurable win and `DoS` resistance is irrelevant for an in-process
+    /// cache keyed by program structure.
+    static_virtual_call_cache: rustc_hash::FxHashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
 }
 
 /// VM execution state.
@@ -1803,7 +1813,7 @@ impl BexVm {
             pending_call_type_values: Vec::new(),
             static_mint_cache: HashMap::new(),
             static_load_type_cache: HashMap::new(),
-            static_virtual_call_cache: HashMap::new(),
+            static_virtual_call_cache: rustc_hash::FxHashMap::default(),
             packages,
             dynamic_dispatch,
         }
@@ -3351,15 +3361,40 @@ impl BexVm {
     /// class name on every method call. Runtime-built classes stay off this
     /// cache because their dispatch tables are live.
     fn static_virtual_receiver_key(&self, value: Value) -> Option<StaticVirtualReceiverKey> {
-        if let Some(ptr) = value.as_object_ptr()
-            && let Object::Instance(instance) = self.get_object(ptr)
-            && let Object::Class(class) = self.get_object(instance.class)
-            && self.heap.is_compile_time_ptr(instance.class)
-        {
-            return Some(StaticVirtualReceiverKey::Class {
-                type_tag: class.type_tag,
-                type_args: instance.class_type_args.clone(),
-            });
+        // Fast discriminants for the argument-less primitives, mirroring the
+        // corresponding arms of `value_concrete_ty` — no realized type is
+        // built or hashed. Receivers whose identity carries type arguments
+        // (instances, containers, enums, futures, media) fall through to the
+        // structural keys below.
+        if value.as_int().is_some() {
+            return Some(StaticVirtualReceiverKey::Primitive(0));
+        }
+        if value.as_bool().is_some() {
+            return Some(StaticVirtualReceiverKey::Primitive(1));
+        }
+        if value.is_null() {
+            return Some(StaticVirtualReceiverKey::Primitive(2));
+        }
+        if let Some(ptr) = value.as_object_ptr() {
+            match self.get_object(ptr) {
+                Object::Float(_) => return Some(StaticVirtualReceiverKey::Primitive(3)),
+                Object::String(_) => return Some(StaticVirtualReceiverKey::Primitive(4)),
+                Object::Bigint(_) => return Some(StaticVirtualReceiverKey::Primitive(5)),
+                Object::Uint8Array(_) => return Some(StaticVirtualReceiverKey::Primitive(6)),
+                Object::Instance(instance)
+                    if matches!(self.get_object(instance.class), Object::Class(_))
+                        && self.heap.is_compile_time_ptr(instance.class) =>
+                {
+                    let Object::Class(class) = self.get_object(instance.class) else {
+                        unreachable!("matched Class above");
+                    };
+                    return Some(StaticVirtualReceiverKey::Class {
+                        type_tag: class.type_tag,
+                        type_args: instance.class_type_args.clone(),
+                    });
+                }
+                _ => {}
+            }
         }
         self.value_concrete_ty(value)
             .map(baml_type::RealizedTy::from)

@@ -570,7 +570,11 @@ impl FutureManagerInner {
         Self {
             tlab,
             next_future_id: AtomicUsize::new(0),
-            active_futures: HashMap::new(),
+            // Pre-sized: a test-corpus run keeps thousands of futures live at
+            // once, and rehashing this map happens under the manager's mutex —
+            // profiled as a whole-engine stall (`reserve_rehash` on the one
+            // busy thread while every worker parks).
+            active_futures: HashMap::with_capacity(4096),
         }
     }
 

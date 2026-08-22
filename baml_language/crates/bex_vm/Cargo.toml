@@ -18,6 +18,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+rustc-hash = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_type = { workspace = true }
