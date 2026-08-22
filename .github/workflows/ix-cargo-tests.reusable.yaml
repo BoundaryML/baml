@@ -21,8 +21,9 @@
 # no build output). This copy never SAVES cache entries (save-if: false on
 # every step): the env pins below shift rust-cache's keys, so saving here
 # would write a parallel set of entries into the repo's shared cache quota
-# and evict the gating workflow's. On ix, warmth comes from the seed disk,
-# not the Actions cache.
+# and evict the gating workflow's. On ix, compiled output comes from the
+# shared R2 sccache bucket (ix-ci.yml passes the credentials through); the
+# seed disk adds the registry and toolchains on top when a seed restores.
 #
 # mise installs sccache and direnv, then each cargo job loads .envrc via
 # `direnv export gha` so CI uses the exact same sccache config as local shells:
@@ -83,6 +84,13 @@ env:
   # lane. Set here, not in the machine image, so the value is deterministic
   # per commit.
   VITEST_MAX_WORKERS: "4"
+  # nextest and libtest size their thread pools from the visible CPU count
+  # too (100 on an ix guest). bex_engine's cancellation tests assert
+  # wall-clock budgets (cancel returns in <2s) and the snapshot suite talks
+  # to mock servers on loopback; both fail when 100 test threads per job
+  # compete across concurrent machines. Match the build's 16.
+  NEXTEST_TEST_THREADS: "16"
+  RUST_TEST_THREADS: "16"
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
