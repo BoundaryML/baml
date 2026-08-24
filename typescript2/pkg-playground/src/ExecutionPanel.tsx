@@ -1399,7 +1399,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         case 'runSnapshot':
         case 'valueBody':
         case 'runCursorExpired':
-        case 'profileArtifactChunk':
           // RunStoreClient consumes these during the staged migration. The
           // legacy reducer keeps ignoring them until the UI cutover.
           break;
