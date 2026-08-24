@@ -1,6 +1,6 @@
 /// A UTF-8 encoded string.
 ///
-/// String literals use double quotes: `"hello"`. Multiline strings use the `#"..."#` syntax.
+/// String literals use double quotes: `"hello"`. Multiline strings use backticks.
 /// All methods returning a new string do not mutate `self` unless noted otherwise.
 class String {
     /// Renders any value as a human-readable string.

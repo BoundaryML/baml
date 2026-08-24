@@ -1,14 +1,14 @@
 enum TestEnum {
-  Angry @alias("k1") @description(#"
+  Angry @alias("k1") @description("
     User is angry
-  "#)
-  Happy @alias("k2") @description(#"
+  ")
+  Happy @alias("k2") @description("
     User is happy
-  "#)
+  ")
   // tests whether k1 doesnt incorrectly get matched with k11
-  Sad @alias("k3") @description(#"
+  Sad @alias("k3") @description("
     User is sad
-  "#)
+  ")
   Confused @description(
     User is confused
   )
@@ -17,10 +17,10 @@ enum TestEnum {
   )
   Exclamation @alias("k6") // only alias
 
-  Bored @alias("k7") @description(#"
+  Bored @alias("k7") @description("
     User is bored
     With a long description
-  "#)
+  ")
 
   @@alias("Category")
 }
