@@ -4,8 +4,7 @@ use super::{BamlClassInt, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmRustFnError};
 
 /// Number of values in the BAML `int` domain.
-const INT_DOMAIN_SPAN: u128 =
-    (Value::INT_MAX as i128 - Value::INT_MIN as i128 + 1).cast_unsigned();
+const INT_DOMAIN_SPAN: u128 = (Value::INT_MAX as i128 - Value::INT_MIN as i128 + 1).cast_unsigned();
 
 impl BamlClassInt for PackageBamlImpl {
     // ── Comparisons / clamping ────────────────────────────────────────────────
