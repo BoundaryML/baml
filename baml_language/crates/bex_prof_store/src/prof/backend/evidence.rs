@@ -100,7 +100,6 @@ pub struct ThrowSite {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ErrorCapture {
     pub id: ErrorCaptureId,
-    pub boundary_id: BoundaryId,
     pub throw_call_ref: CallRef,
     pub throw_context_ref: ContextRef,
     pub throw_function_id: FunctionId,
@@ -176,7 +175,6 @@ pub struct RuntimeIdAnnotation {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SpanStart {
-    pub boundary_id: BoundaryId,
     pub call_ref: CallRef,
     pub parent_call_ref: Option<CallRef>,
     pub thread_ref: ThreadRef,
@@ -213,6 +211,36 @@ pub struct SpanEnd {
     pub inclusive_ns: u64,
 }
 
+/// Whether a logical thread is an execution root or a spawned child.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThreadStartKind {
+    Root,
+    Spawn,
+}
+
+/// Durable thread-lifecycle start fact (streams spec §4.5, tag 6). Root
+/// threads carry no parent/spawn fields.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ThreadStart {
+    pub thread_ref: ThreadRef,
+    pub parent: Option<ThreadRef>,
+    pub spawn_call: Option<CallRef>,
+    pub spawn_site: Option<crate::prof::record::CallSiteSourceSpan>,
+    pub started_ns: u64,
+    pub kind: ThreadStartKind,
+    /// User-defined thread name; empty when unnamed. At most
+    /// [`crate::prof::record::MAX_THREAD_NAME_LEN`] bytes.
+    pub name: String,
+}
+
+/// Durable thread-lifecycle end fact (streams spec §4.5, tag 7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ThreadEnd {
+    pub thread_ref: ThreadRef,
+    pub ended_ns: u64,
+    pub status: crate::prof::record::ThreadEndStatus,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ErrorCodecError {
     Truncated,
@@ -228,7 +256,6 @@ pub(crate) fn encode_error_capture(record: &ErrorCapture) -> Vec<u8> {
     out.extend_from_slice(ERROR_CAPTURE_MAGIC);
     put_u16(&mut out, ERROR_CODEC_VERSION);
     encode_error_id(&mut out, record.id);
-    out.extend_from_slice(&record.boundary_id.as_bytes());
     encode_call_ref(&mut out, record.throw_call_ref);
     encode_context_ref(&mut out, record.throw_context_ref);
     put_u32(&mut out, record.throw_function_id.0);
@@ -267,7 +294,6 @@ pub(crate) fn decode_error_capture(bytes: &[u8]) -> Result<ErrorCapture, ErrorCo
     }
     let record = ErrorCapture {
         id: decode_error_id(&mut cursor)?,
-        boundary_id: BoundaryId::from_bytes(cursor.array()?),
         throw_call_ref: decode_call_ref(&mut cursor)?,
         throw_context_ref: decode_context_ref(&mut cursor)?,
         throw_function_id: FunctionId(cursor.u32()?),
@@ -343,15 +369,8 @@ fn encode_context_ref(out: &mut Vec<u8>, context: ContextRef) {
             out.push(0);
             out.extend_from_slice(&key.0);
         }
-        ContextRef::Overflow {
-            boundary,
-            reason,
-            edge_kind,
-        } => {
+        ContextRef::Overflow { reason, edge_kind } => {
             out.push(1);
-            out.extend_from_slice(&boundary.process_euid.0);
-            put_u64(out, boundary.engine_id.0);
-            out.extend_from_slice(&boundary.boundary_id.as_bytes());
             out.push(match reason {
                 OverflowReason::ContextMemoryUnavailableAfterDrain => 0,
                 OverflowReason::InvalidParentContext => 1,
@@ -365,9 +384,6 @@ fn decode_context_ref(cursor: &mut Cursor<'_>) -> Result<ContextRef, ErrorCodecE
     match cursor.u8()? {
         0 => Ok(ContextRef::Normal(super::ContextKey(cursor.array()?))),
         1 => {
-            let process_euid = crate::ids::ProcessEuid(cursor.array()?);
-            let engine_id = crate::ids::EngineId(cursor.u64()?);
-            let boundary_id = BoundaryId::from_bytes(cursor.array()?);
             let reason = match cursor.u8()? {
                 0 => OverflowReason::ContextMemoryUnavailableAfterDrain,
                 1 => OverflowReason::InvalidParentContext,
@@ -379,15 +395,7 @@ fn decode_context_ref(cursor: &mut Cursor<'_>) -> Result<ContextRef, ErrorCodecE
                 2 => EdgeKind::Spawn,
                 _ => return Err(ErrorCodecError::InvalidTag),
             };
-            Ok(ContextRef::Overflow {
-                boundary: super::BoundaryRef {
-                    process_euid,
-                    engine_id,
-                    boundary_id,
-                },
-                reason,
-                edge_kind,
-            })
+            Ok(ContextRef::Overflow { reason, edge_kind })
         }
         _ => Err(ErrorCodecError::InvalidTag),
     }
@@ -555,7 +563,7 @@ mod tests {
     use super::*;
     use crate::{
         ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
-        prof::backend::{BoundaryRef, ContextKey},
+        prof::backend::ContextKey,
     };
 
     fn thread_ref() -> ThreadRef {
@@ -608,7 +616,6 @@ mod tests {
                 thread_ref: thread_ref(),
                 unwind_ordinal: 4,
             },
-            boundary_id: BoundaryId::from_bytes([5; 16]),
             throw_call_ref: call_ref(6),
             throw_context_ref: ContextRef::Normal(ContextKey([7; 32])),
             throw_function_id: FunctionId(8),
@@ -666,11 +673,6 @@ mod tests {
     fn overflow_context_error_roundtrips_without_fabricated_parent() {
         let mut record = capture();
         record.throw_context_ref = ContextRef::Overflow {
-            boundary: BoundaryRef {
-                process_euid: ProcessEuid([21; 16]),
-                engine_id: EngineId(22),
-                boundary_id: BoundaryId::from_bytes([23; 16]),
-            },
             reason: OverflowReason::InvalidParentContext,
             edge_kind: EdgeKind::Spawn,
         };
@@ -682,7 +684,7 @@ mod tests {
     fn error_record_codecs_have_cross_platform_goldens() {
         assert_eq!(
             hex::encode(encode_error_capture(&capture())),
-            "42414d4c4552523100010101010101010101010101010101010100000000000000020000000000000003000000000000000405050505050505050505050505050505010101010101010101010101010101010000000000000002000000000000000300000000000000060007070707070707070707070707070707070707070707070707070707070707070000000801000000090000000a0000000b0000000c0103000d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d000e000000000000000f"
+            "42414d4c45525231000101010101010101010101010101010101000000000000000200000000000000030000000000000004010101010101010101010101010101010000000000000002000000000000000300000000000000060007070707070707070707070707070707070707070707070707070707070707070000000801000000090000000a0000000b0000000c0103000d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d000e000000000000000f"
         );
         let terminal = TerminalErrorRef {
             call_ref: call_ref(20),

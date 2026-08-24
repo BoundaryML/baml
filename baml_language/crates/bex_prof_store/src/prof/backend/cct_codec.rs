@@ -251,13 +251,13 @@ fn decode_counters(input: &mut Decoder<'_>) -> Result<CctCounters, CctCodecError
     })
 }
 
-fn encode_health(health: CounterHealth) -> u8 {
+pub(crate) fn encode_health(health: CounterHealth) -> u8 {
     u8::from(health.counter_saturated)
         | (u8::from(health.await_counter_saturated) << 1)
         | (u8::from(health.self_time_underflow) << 2)
 }
 
-fn decode_health(bytes: &[u8]) -> Result<CounterHealth, CctCodecError> {
+pub(crate) fn decode_health(bytes: &[u8]) -> Result<CounterHealth, CctCodecError> {
     let [bits] = bytes else {
         return Err(CctCodecError::InvalidHealth);
     };
@@ -329,15 +329,12 @@ mod tests {
     use sha2::{Digest, Sha256};
 
     use super::*;
-    use crate::{
-        ids::{BoundaryId, EngineId, ProcessEuid},
-        prof::{
-            backend::{
-                ActiveCctEpoch, BoundaryRef, MeasuredLayouts, ParentContextRef,
-                ProfilerMemoryGovernor, ProfilerSizingPolicy,
-            },
-            record::FunctionEndStatus,
+    use crate::prof::{
+        backend::{
+            ActiveCctEpoch, MeasuredLayouts, ParentContextRef, ProfilerMemoryGovernor,
+            ProfilerSizingPolicy,
         },
+        record::FunctionEndStatus,
     };
 
     fn fixture() -> SealedCctEpoch {
@@ -345,11 +342,6 @@ mod tests {
         let memory = ProfilerMemoryGovernor::new(sizing, MeasuredLayouts::V1);
         let mut epoch = ActiveCctEpoch::new(
             ProgramId([0x11; 16]),
-            BoundaryRef {
-                process_euid: ProcessEuid([0x22; 16]),
-                engine_id: EngineId(3),
-                boundary_id: BoundaryId::from_bytes([0x44; 16]),
-            },
             MeasuredLayouts::V1.population_item_min_bytes,
         );
         let root = epoch.record_start(

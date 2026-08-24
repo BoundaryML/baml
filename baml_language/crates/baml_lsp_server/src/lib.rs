@@ -1217,7 +1217,7 @@ mod tests {
             "baml_src/main.baml"
         )));
         assert!(!watches_standalone_workspace_file(Path::new(
-            ".baml/profiles-v1/runs/run.meta"
+            ".baml/profiles-v1/streams/00112233445566778899aabbccddeeff/meta/00000000000000000001.bamlmeta"
         )));
         assert!(should_skip_poll_dir(Path::new(".baml")));
         assert!(should_skip_poll_dir(Path::new("target")));

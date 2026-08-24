@@ -23,16 +23,46 @@
 //! is the remaining follow-up. Nothing here should reuse
 //! `sys_types::CallId`.
 
-pub mod backend;
-pub mod clock;
-pub mod config;
+pub use bex_prof_store::prof::{clock, config, record};
+
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
 pub(crate) mod consumer;
-pub mod record;
 pub(crate) mod registry;
 pub(crate) mod ring;
 pub(crate) mod sync;
 pub(crate) mod wake;
+
+/// The segmented store backend, re-exported from the `bex_prof_store` leaf
+/// crate so existing callers are unchanged.
+///
+/// `register_engine_session` is shimmed here: the leaf crate cannot name the
+/// ring transport (registry/consumer stay in this crate), so the transport
+/// hooks are installed at the one choke point every profiled engine passes
+/// through before any backend work can need a wake.
+pub mod backend {
+    pub use bex_prof_store::prof::backend::*;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn register_engine_session(
+        engine_id: crate::ids::EngineId,
+        session: &std::sync::Arc<ProfilerSession>,
+    ) {
+        #[cfg(not(baml_loom))]
+        crate::prof::install_transport_hooks_once();
+        bex_prof_store::prof::backend::register_engine_session(engine_id, session);
+    }
+}
+
+/// Install the leaf crate's transport hooks (idempotent; first install wins).
+#[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
+pub(crate) fn install_transport_hooks_once() {
+    use bex_prof_store::prof::backend::hooks::{TransportHooks, install_transport_hooks};
+    install_transport_hooks(TransportHooks {
+        wake_consumer: || registry::global_ctx().wake().force_wake(),
+        wake_for_backend_terminal: consumer::wake_for_backend_terminal,
+        configure_transport: registry::configure_global_transport,
+    });
+}
 
 #[cfg(test)]
 mod concurrency_tests;

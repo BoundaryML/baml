@@ -119,11 +119,11 @@ profiling data. They never delete committed artifacts. There is no automatic
 retention, eviction, retry backlog, or CAS garbage collection. Recovery is an
 operator-controlled close/clean-or-free-space/reopen cycle.
 
-### 1.5 Boundary lifetime and profiler off
+### 1.5 Execution lifetime and profiler off
 
 All ordinary and detached spawned descendants remain in their parent's
-profiling boundary. `detach = true` changes only cancellation-token behavior.
-Each child acquires a generation-tagged boundary lease before scheduling and
+profiling execution. `detach = true` changes only cancellation-token behavior.
+Each child acquires a generation-tagged execution lease before scheduling and
 releases it after its final profiler facts. Root return records status and
 releases without waiting; the last descendant release submits the terminal
 barrier. The profiler does not cancel or join work to finish an artifact.
@@ -138,10 +138,14 @@ consumption, and separately requested logging.
 ### 1.6 Durability and cutover
 
 CAS objects are durable before evidence references them. Context definitions
-and selected span starts are durable before dependent evidence. Immutable
-objects, segments, `run.meta`, and `run.end` use rename plus directory
-fsync; post-rename ambiguity is retained as one bounded publisher-owned state
-rather than misclassified as success or loss.
+and selected span starts are durable before dependent evidence. Publication
+is batched: a per-process stream writer commits meta and data segments on a
+`publish_interval` cadence (default 1 s) rather than per artifact, and the
+`RootStarted`/`RootEnded` meta-plane records replace `run.meta` and
+`run.end` (superseded by TASK/profiling-backend-streams.md §5.3). Immutable
+objects and segments still use rename plus directory fsync; post-rename
+ambiguity is retained as one bounded publisher-owned state rather than
+misclassified as success or loss.
 
 The new backend has no migration or compatibility reader for `.bamlprof`,
 old invocation profiles, stack segments, or old captured-value records. Legacy
@@ -365,58 +369,47 @@ There is no protobuf transcode, raw-profile file write, general ordering stage,
 or repeated full-call reconstruction between the ring and the new consumer.
 Live observation must not depend on opening a legacy disk writer.
 
-### 5.1 Boundary ownership
+### 5.1 Execution ownership
 
-The direct consumer must not rediscover boundary ownership by retaining a
-large graph of unrelated events. The boundary control path adds two rare,
-self-identifying facts:
+The direct consumer must not rediscover execution ownership by retaining a
+large graph of unrelated events. There are no admission or terminal control
+messages: admission facts (root `ThreadRef`, host runtime token, admission
+ticks) ride the reserved registry slot itself and are collected by
+`registry.take_admitted()` on the consumer thread, and the terminal
+hand-off is the slot's `finish_ready` flag plus a consumer wake
+(superseded by TASK/profiling-backend-streams.md §5.5).
 
-~~~rust
-struct StartBoundary {
-    boundary_id: BoundaryId,
-    root_thread_ref: ThreadRef,
-    program_id: ProgramId,
-}
-
-struct FinishBoundaryBarrier {
-    boundary_id: BoundaryId,
-    root_thread_ref: ThreadRef,
-    root_status: BoundaryEndStatus,
-}
-~~~
-
-Boundary lifetime is producer-owned through one bounded registry entry:
+Execution lifetime is producer-owned through one bounded registry entry:
 
 ~~~rust
-struct BoundaryHandle {
+struct ExecutionHandle {
     slot: u32,
     generation: u32,
 }
 
-struct BoundaryState {
-    boundary_id: BoundaryId,
+struct ExecutionState {
     root_thread_ref: ThreadRef,
-    phase: AtomicU8, // BoundaryPhase
+    runtime_id: BoundaryId, // host runtime token, opaque to the profiler
+    phase: AtomicU8, // ExecutionPhase
     active_threads: AtomicU64,
-    root_status: OnceLock<BoundaryEndStatus>,
+    root_status: OnceLock<ExecutionEndStatus>,
     finish_control: ReservedControlSlot,
-    health: BoundaryHealthBlock,
+    health: ExecutionHealthBlock,
 }
 
-enum BoundaryPhase {
+enum ExecutionPhase {
     Open,
     RootReturned,
     Closing,
-    Sealed,
-    ReleasedIncomplete,
+    Released,
 }
 
-struct BoundaryThreadLease {
-    boundary: BoundaryHandle,
+struct ExecutionThreadLease {
+    execution: ExecutionHandle,
     armed: bool,
 }
 
-enum BoundaryEndStatus {
+enum ExecutionEndStatus {
     Succeeded,
     Failed,
     Cancelled,
@@ -425,18 +418,20 @@ enum BoundaryEndStatus {
 }
 ~~~
 
-`BoundaryHandle` is a process-local slab handle, not a durable identifier.
-Its generation prevents reuse from targeting a later boundary. The registry
+`ExecutionHandle` is a process-local slab handle, not a durable identifier.
+Its generation prevents reuse from targeting a later execution. The registry
 slot count is derived from the process memory policy and complete measured
-slot/control/health layout; a boundary that cannot reserve a stable slot and
-its protected control memory starts with profiling off. `BoundaryThreadLease`
-is a small field on an outer thread-completion guard. It does not allocate
+slot/control/health layout; an execution that cannot reserve a stable slot
+and its protected control memory starts with profiling off.
+`ExecutionThreadLease` is a small field on an outer thread-completion
+guard. It does not allocate
 another task, map entry, or `Arc` per call, and it is deliberately not owned by
 `BexThread`: canary consumes/drops `BexThread` before its outer event-loop
 wrapper emits the final `EndThread`.
 
 The registry is a fixed-capacity slot array allocated when the profiler starts.
-Boundary start/seal may use its bounded free list; the spawn and completion
+Execution admission/release may use its bounded free list; the spawn and
+completion
 paths do not hash, allocate, or take the registry free-list lock. They index
 the stable slot directly, validate its generation/phase, and update the live
 count atomically. Child acquisition uses a checked acquire/release update.
@@ -446,23 +441,22 @@ reading `root_status`, changing phase, and making the final control slot ready;
 the phase compare-and-swap is acquire/release. This is the standard Arc-style
 last-owner synchronization, not a group of unrelated relaxed atomics. Slot
 readiness is release-published and acquire-read by the consumer. Slot reuse
-increments the generation only after durable `Sealed`, or after a fully
-drained terminal failure has entered `ReleasedIncomplete` with no
-indeterminate final path, and the old state has been cleared.
+increments the generation only after the consumer's terminal hand-off has
+entered `Released` and the old state has been cleared; durable terminal
+state lives in the stream, not the slot (superseded by
+TASK/profiling-backend-streams.md §5.6).
 
-These messages use the engine/consumer control lane, not the lossy hot call ring.
-Registration is two-phase. First it provisionally reserves the registry slot,
-fixed health block, root lease, and lifetime terminal control slot. If this
-bounded runtime reservation fails, the boundary runs profiler-off,
-`ProfilerBoundaryStateUnavailable` increments, and no store path is touched.
-Second, `begin_boundary` publishes `run.meta`. `Admitted` activates and
-transfers the already-complete runtime reservation with no remaining fallible
-capacity step. `Rejected` releases it and increments
-`ProfilerBoundaryStoreUnavailable`. `Indeterminate` also leaves the root
-profiler-off and releases provisional runtime ownership while the store alone
-retains its single visible-path state; it increments
-`ProfilerBoundaryStoreIndeterminate`. The program is never allowed to emit
-apparently profiled calls with no boundary owner or durable run metadata.
+Admission takes no control-lane message and no store I/O (superseded by
+TASK/profiling-backend-streams.md §5.5). `register_root` reserves the
+registry slot, fixed health block, root lease, and lifetime terminal
+control state; if this bounded runtime reservation fails, the root runs
+profiler-off and `ProfilerExecutionStateUnavailable` increments. Store
+availability is two atomic reads (`is_normal_admission_open`,
+`is_indeterminate`); an unavailable or indeterminate store leaves the root
+profiler-off with `InactiveReason::StoreUnavailable`. Durable admission is
+the `RootStarted` meta record, published in a later batched cycle by the
+stream writer. The program is never allowed to emit apparently profiled
+calls with no execution owner.
 
 The registration API returns an already-armed
 `RootBoundaryCompletionGuard`, not a naked handle that the caller wraps later.
@@ -471,32 +465,36 @@ ack receiver is dropped, dropping the in-flight guard records the fallback
 before releasing the root lease. There is no state in which registration has
 succeeded and `active_threads = 1` but no component owns the root lease.
 
-The provisional runtime reservation includes the boundary's one terminal
+The provisional runtime reservation includes the execution's one terminal
 control slot for its whole lifetime. After activation, the last lease release
 fills that already-owned slot, marks it ready, and wakes the central consumer;
 it does not allocate, block, or compete for general queue capacity from a
-destructor. The consumer releases the slot only after final-barrier
-acknowledgement. Therefore ordinary control pressure can reject the boundary
-before `run.meta`, but cannot strand a valid boundary at its final release.
+destructor. The consumer releases the slot only after the terminal
+hand-off. Therefore ordinary runtime pressure can reject the root at
+admission, but cannot strand a valid execution at its final release.
 
 This keeps the module interface small: registration returns one fully owned,
-already-armed guard only after durable metadata exists, or it releases the
-provisional state and the boundary runs profiler-off. A `run.meta` path later
-resolved from `Indeterminate` may remain as one visibly incomplete, never-
-armed run; the global indeterminate slot prevents repeated orphan growth.
+already-armed guard when the runtime reservation succeeds, or it releases
+the provisional state and the root runs profiler-off; durable admission
+metadata follows in the next publication cycle (superseded by
+TASK/profiling-backend-streams.md §5.5).
 
 `ThreadRef` and `CallRef` always include `ProcessEuid` and `EngineId` in
 addition to logical thread/call IDs. They are safe to persist across processes;
 the shorter engine-local pair is never used as a durable key.
 
-`StartBoundary` attaches the host boundary ID and nonoptional program ID to
-the root logical thread. `StartThread` keeps its parent thread/call reference
-and gains an optional spawn source span. The consumer propagates boundary
-ownership and the parent context through that edge. A child-start that drains
-before its parent remains in the bounded unresolved table.
+Admission attaches the host runtime token and nonoptional program ID to the
+root logical thread via the registry slot and the `RootStarted` meta record;
+there is no `StartBoundary` fact (superseded by
+TASK/profiling-backend-streams.md §5.5). `StartThread` keeps its parent
+thread/call reference and gains an optional spawn source span. The consumer
+propagates execution ownership and the parent context through that edge. A
+child-start that drains before its parent remains in the bounded unresolved
+table.
 
-The boundary ID is also the root span's initial runtime ID. Once this attach
-fact exists, the profiler does not need a duplicate host-installed root
+The host runtime token is also the root span's initial runtime ID. Once
+this admission fact exists, the profiler does not need a duplicate
+host-installed root
 `SetFunctionId` record. `SetFunctionId`/its replacement is reserved for actual
 language runtime-ID overrides and carries the per-call annotation ordinal.
 
@@ -532,14 +530,14 @@ outer scope/transfer and take the lease only after inner producer futures are
 destroyed.
 
 Acquisition is valid only from an armed parent lease while the phase is
-`Open` or `RootReturned`; `Closing` and `Sealed` reject it. Because the parent
+`Open` or `RootReturned`; `Closing` and `Released` reject it. Because the parent
 still owns a lease until after its spawn operation finishes, the live count
 cannot reach zero between a valid child acquire and publication of the child
 task.
 
 Child lease acquisition is a producer-local atomic operation. It is not an
 acknowledged consumer control message and it does not create another
-`StartBoundary`, boundary ID, run directory, or capture-policy root. The
+admission fact, runtime token, stream, or capture-policy root. The
 existing `StartThread` parent-thread/parent-call fact carries causal ownership
 to the consumer. If that structural record is lost, the lease still prevents
 early sealing while population health reports the missing thread attribution.
@@ -548,7 +546,7 @@ further profiler emission for that child subtree but retains the lease until
 the child completes. A record accepted and later found corrupt is reconciled
 by the consumer's bounded unresolved/loss path.
 
-Immediately after acknowledged boundary registration, an outer
+Immediately after acknowledged root admission, an outer
 `RootBoundaryCompletionGuard` owns the root lease. It is outside the fallible
 setup and event-loop future and is destroyed only after those inner futures
 and their final-record guards have stopped producing. Normal completion maps
@@ -574,18 +572,18 @@ A child that still holds a lease may continue and may spawn grandchildren
 after root return. `Closing` is reachable only when `root_status` exists and
 the last outer completion guard decrements `active_threads` to zero. At that
 point no producer remains that can create another child or profiling record,
-so exactly one successful `RootReturned -> Closing` compare-and-swap submits
-the final barrier to the reserved control lane. If the root is itself the last
-thread, its release takes this same path; there is no special synchronous-root
-finalizer.
+so exactly one successful `RootReturned -> Closing` compare-and-swap marks
+the reserved slot finish-ready and wakes the consumer. If the root is
+itself the last thread, its release takes this same path; there is no
+special synchronous-root finalizer.
 
-There is no per-boundary Tokio waiter. The final lease release notifies the
+There is no per-execution Tokio waiter. The final lease release notifies the
 central profiler consumer, which already owns draining and publication.
 Counter saturation fails the spawn's profiling acquisition before the child
 is runnable: the child may still execute, but its profiler mode is `Off`, the
 process-global fixed `ProfilerThreadLeaseUnavailable` counter increments, and
 that child profiler and its spawned subtree cannot emit structural or evidence
-records into the boundary. A stale generation is an invariant violation
+records into the execution. A stale generation is an invariant violation
 handled the same way and asserted in tests. Neither case permits an untracked
 child to emit profiling records or permits its nonexistent lease to delay
 sealing. Language execution, cancellation, runtime IDs, and `$id` are
@@ -593,26 +591,28 @@ unaffected by this profiler degradation.
 
 **Decision:** `detach = true` changes cancellation propagation only. It does
 not reparent profiling ownership. Detached and ordinary descendants
-remain in the original boundary and use the same CCT, capture resolver,
-evidence writer, and boundary health. The detached child keeps its normal
-spawned-call runtime identity; profiling never installs a new boundary ID as
-its `$id`.
+remain in the original execution and use the same CCT, capture resolver,
+evidence writer, and execution health. The detached child keeps its normal
+spawned-call runtime identity; profiling never installs a new host runtime
+token as its `$id`.
 
-Consequently, root completion and boundary sealing are different events. A
-descendant error cannot retroactively change the root result already returned
-to the host. `run.end` records the immutable `root_status`; descendant
+Consequently, root completion and execution finalization are different
+events. A descendant error cannot retroactively change the root result
+already returned to the host. `RootEnded` records the immutable
+`root_status`; descendant
 completed/error/cancelled/exit counts remain visible in CCT and evidence
 health and may be presented separately as “descendant errors.” A detached task
 that runs forever keeps the profile honestly active rather than creating a
 false terminal record.
 
 This choice preserves the aggregation law: ten thousand equivalent workers
-from one spawn site contribute to one spawned CCT path in one boundary. They
-do not create ten thousand run roots, root spans, automatic root-value
-captures, cross-boundary links, `run.meta` files, or final barriers. The
+from one spawn site contribute to one spawned CCT path in one execution.
+They do not create ten thousand execution roots, root spans, automatic
+root-value captures, cross-execution links, `RootStarted` records, or final
+barriers. The
 incremental profiler work per spawn is one checked atomic acquire, one small
 handle carried by the child, and one atomic release; ordinary call records are
-unchanged. The boundary-local counter can contend under extreme concurrent
+unchanged. The execution-local counter can contend under extreme concurrent
 fan-out, but it is touched per spawn/completion rather than per function call
 and replaces much heavier task, artifact, and writer creation. Phase 0 measures
 this shape before Phase 2; sharded lease counts are not added unless that
@@ -622,9 +622,9 @@ Long-lived ownership must not imply long-lived large buffers. CCT and evidence
 continue to roll into immutable segments. The process-wide writer may keep
 only governor-charged batches and O(1) publication file handles; it must not
 reserve a full derived segment target or a permanently open file for every
-active boundary. Target/maintenance pressure may seal a partial segment while
-the boundary remains active. Only the fixed boundary entry, live thread/call
-state, and currently queued bounded work stay resident.
+active execution. Target/maintenance pressure may seal a partial segment
+while the execution remains active. Only the fixed execution entry, live
+thread/call state, and currently queued bounded work stay resident.
 
 ### 5.2 Identity join
 
@@ -652,7 +652,7 @@ live run is based on an explicit age/pressure rule, not arrival order. Final
 boundary drain is the authoritative point at which remaining entries become
 `UnmatchedCallFact` or `UnmatchedThreadFact`.
 
-### 5.3 Boundary final drain
+### 5.3 Execution final drain
 
 One logical BEX thread may emit records through several OS-thread rings.
 Terminal sealing follows this barrier:
@@ -664,44 +664,41 @@ Terminal sealing follows this barrier:
 3. the release that changes `active_threads` from one to zero performs the
    sole `RootReturned -> Closing` compare-and-swap—at this point no producer
    remains that could spawn another child;
-4. that release sends `FinishBoundaryBarrier { root_status }` through the
-   acknowledged reserved control lane, without waiting on the profiler;
+4. that release sets the reserved slot's `finish_ready` flag and wakes the
+   central consumer, without waiting on the profiler;
 5. the central consumer snapshots the committed tail of every registered ring
-   after boundary producers are quiescent;
+   after execution producers are quiescent;
 6. it drains and decodes each ring through that captured tail;
 7. it waits for the decoder/evidence writer to acknowledge that barrier token;
-8. it converts remaining boundary-owned unresolved facts to terminal health;
-9. it publishes pending CCT, evidence, value, and health batches, or converts
-   batches rejected by a disk-blocked store to terminal health; and
-10. it attempts `run.end`; durable success changes `Closing` to `Sealed`, while
-    a definite pre-rename store rejection changes it to
-    `ReleasedIncomplete`; either terminal state then frees the
-    generation-tagged boundary slot.
+8. it converts remaining execution-owned unresolved facts to terminal health;
+9. it hands the sealed epoch and remaining evidence to the stream writer as
+   one group, enqueues `RootEnded`, and releases the generation-tagged slot
+   to `Released` immediately; publication is batched by the writer's cycle
+   (superseded by TASK/profiling-backend-streams.md §5.6).
 
-No step creates a per-boundary waiter, polls descendants, or blocks delivery
+No step creates a per-execution waiter, polls descendants, or blocks delivery
 of the root result. Root return is an application event; the final lease
 release is the profiler's quiescence signal.
 
-Other boundaries may continue writing beyond the captured tails. A ring that
-registers after the snapshot cannot contain this already-quiescent boundary's
-records. `FinishBoundaryBarrier` is never a best-effort ring push. If its
-reserved slot cannot be published because the consumer/store has failed, or
-its acknowledgement fails, fixed health records
-`BoundaryBarrierControlFailed`, the boundary remains `Closing`, its registry
-slot is not reused, and `run.end` is not written. If the process crashes or the
-barrier cannot complete, the reader reports the run as
-unterminated/incomplete.
+Other executions may continue writing beyond the captured tails. A ring that
+registers after the snapshot cannot contain this already-quiescent
+execution's records. The finish-ready signal is never a best-effort ring
+push: it is state on the execution's reserved slot plus a consumer wake, so
+it cannot fail to be delivered. If the process crashes before the batched
+`RootEnded` commits, the reader reports the execution as
+unterminated/incomplete (superseded by TASK/profiling-backend-streams.md
+§5.6–5.7).
 
-Disk degradation is different from barrier uncertainty. The terminal control
-barrier still completes. If `DiskGuardExceeded` or an actual
-I/O/device/free-space failure prevents terminal publication before rename, the
-consumer increments process-global `TerminalStorePublicationFailed`, changes
-the quiescent slot to `ReleasedIncomplete`, clears it, and permits
-generation-safe reuse; the missing `run.end` is the durable incomplete marker.
-The boundary's fixed live health is queryable until release, but cannot be
+Disk degradation is different from barrier uncertainty. The terminal
+hand-off still completes and the slot is still released. If
+`DiskGuardExceeded` or an actual I/O/device/free-space failure rejects the
+terminal publication before rename, the loss is counted (process-global
+`root_ended_lost`) and the missing `RootEnded` is the durable incomplete
+marker (superseded by TASK/profiling-backend-streams.md §5.7). The
+execution's fixed live health is queryable until release, but cannot be
 promised durably when the store cannot write. A post-rename terminal failure
-remains `RenamedAwaitingDirSync` and keeps the slot until the single
-indeterminate path resolves, as Section 7.2 requires.
+remains `RenamedAwaitingDirSync` and blocks further publication until the
+single indeterminate path resolves, as Section 7.2 requires.
 
 ### 5.4 Inclusive, self, and await time without global ordering
 
@@ -1013,26 +1010,24 @@ Evidence never stores an epoch-local node ID. Its durable join is the
 canonically encoded tagged union:
 
 ~~~rust
-struct BoundaryRef {
-    process_euid: ProcessEuid,
-    engine_id: EngineId,
-    boundary_id: BoundaryId,
-}
-
 enum ContextRef {
     Normal(ContextKey),
     Overflow {
-        boundary: BoundaryRef,
         reason: OverflowReason,
         edge_kind: EdgeKind,
     },
 }
 ~~~
 
-The normal and overflow variants have distinct fixed tags in the versioned
-codec. A normal reference resolves to a `ContextDefinition { key, tuple }` in
-a CCT segment. An overflow reference resolves to the one
-`OverflowDefinition`/aggregate for that boundary, reason, and edge kind.
+There is no `BoundaryRef`: data-plane groups are already keyed by the
+execution's root `ThreadRef`, so the overflow variant carries only the
+reason and edge kind (superseded by TASK/profiling-backend-streams.md
+§4.5). The normal and overflow variants have distinct fixed tags in the
+versioned codec. A normal reference resolves to a
+`ContextDefinition { key, tuple }` in this group's CCT section or an
+earlier committed group of the same execution. An overflow reference
+resolves to the one `OverflowDefinition`/aggregate for that execution,
+reason, and edge kind.
 
 Definition durability uses no lifetime `ContextKey` set and never scans old
 segments. Every context interned into the current epoch carries
@@ -1073,7 +1068,6 @@ Selected calls emit facts rather than one mutable span object:
 
 ~~~rust
 struct SpanStart {
-    boundary_id: BoundaryId,
     call_ref: CallRef,
     parent_call_ref: Option<CallRef>,
     thread_ref: ThreadRef,
@@ -1114,6 +1108,34 @@ events; it is not a sequence field on ordinary call records. The initial
 the ordinal, preserving last-wins semantics even when a call resumes on a
 different OS-thread ring.
 
+`SpanStart` and `ErrorCapture` carry no `boundary_id`: the data-plane group
+is keyed by the execution's root `ThreadRef`, which identifies the
+execution (superseded by TASK/profiling-backend-streams.md §4.5). Two new
+evidence facts, `ThreadStart` (tag 6) and `ThreadEnd` (tag 7), make thread
+lifecycle durable:
+
+~~~rust
+struct ThreadStart {
+    thread_ref: ThreadRef,
+    parent: Option<ThreadRef>,
+    spawn_call: Option<CallRef>,
+    spawn_site: Option<CallSite>,
+    started_ns: u64,
+    kind: ThreadKind, // Root | Spawn
+    name: String,     // <= 256 bytes
+}
+
+struct ThreadEnd {
+    thread_ref: ThreadRef,
+    ended_ns: u64,
+    status: ThreadEndStatus, // Completed | Cancelled | Errored
+}
+~~~
+
+Both are ordinary evidence facts under the evidence reservation policy; a
+`ThreadEnd` is emitted only when its `ThreadStart` was, and reader handling
+of duplicates and missing starts is tolerant (streams spec §4.5).
+
 Long-running spans may have their start, related error captures/terminal
 links, and end in different evidence segments. `CallRef` and
 `ErrorCaptureId` join them. Evidence segment rollover is a file boundary, not
@@ -1124,7 +1146,7 @@ counter. After a segment commits, its batch memory is returned to the process
 governor and later root, LLM, and manual selections use the same policy and
 transient reservations as earlier selections. A queue rejection affects only
 the facts whose concrete enqueue/reservation failed; clearing pressure allows
-subsequent facts immediately. The implementation must not latch a boundary
+subsequent facts immediately. The implementation must not latch an execution
 into CCT-only mode merely because it is old or has rolled many segments.
 
 ### 7.2 Sealed-batch ownership
@@ -1136,8 +1158,10 @@ Open -> Sealed -> Publishing --before rename failure--> Lost(reason)
                            \--rename--> RenamedAwaitingDirSync -> Committed
 ~~~
 
+The batch owner is the per-session stream writer, which publishes with
+per-plane, per-stream sequences (TASK/profiling-backend-streams.md §5.2).
 Open/sealed/publishing batches are charged to the process governor and the
-bounded writer pipeline; there is no per-boundary retry list. Encoding and
+bounded writer pipeline; there is no per-execution retry list. Encoding and
 rename are attempted once. A failure known to occur before the final rename
 may transition to `Lost`: it first folds the exact affected record/count
 dimensions into the preallocated live health block, invalidates all dependency
@@ -1155,9 +1179,9 @@ retry only the containing-directory fsync for that same path. Success commits
 that same batch/sequence exactly once; persistent failure remains
 indeterminate and bounded rather than reusing the sequence or publishing
 around it. The MVP does not automatically unlink an indeterminate final path.
-The identical commit point applies to `run.meta`, CCT/evidence segments, CAS
-objects, and `run.end`. A post-rename `run.meta` ambiguity keeps profiling
-unarmed and is owned by the same single global slot until resolved.
+The identical commit point applies to meta segments, data segments, and CAS
+objects. A post-rename ambiguity blocks admission of new roots and is owned
+by the same single global slot until resolved.
 
 An unambiguous pre-rename I/O or disk-guard publication failure changes the
 shared store writer from `Writable` to `Blocked(reason)`. While blocked,
@@ -1174,9 +1198,10 @@ manual captures do not copy or hash values that cannot be stored.
 free-space probe on VM calls, automatic deletion, or retry of lost work. The
 store may become `Writable` only through an explicit close/reopen after
 `baml clean`, a storage-root/budget change, or external space recovery. New
-boundaries fail store admission while latched. Already-admitted boundaries
-finish their control barrier, make one terminal publication attempt, and then
-become `ReleasedIncomplete` on a definite rejection; they do not wait for
+roots run profiler-off while latched. Already-admitted executions finish
+their final drain and make one terminal publication attempt; a definite
+rejection counts `root_ended_lost` and leaves the execution without a
+`RootEnded`; they do not wait for
 space. A terminal barrier waits only for bounded batches already in
 `Sealed`/`Publishing`/`RenamedAwaitingDirSync`; it never waits on a lifetime
 retry collection.
@@ -1184,7 +1209,7 @@ retry collection.
 ### 7.3 Evidence completeness
 
 Completeness covers every evidence part, not just span admission. Each active
-boundary owns a fixed-size, preallocated `BoundaryHealthBlock`. Producers and
+execution owns a fixed-size, preallocated `ExecutionHealthBlock`. Producers and
 the consumer update atomic counter arrays directly; reporting loss never
 depends on allocating another queue entry in the queue that just failed.
 
@@ -1201,7 +1226,7 @@ The fixed dimensions are:
 - the closed loss-reason enums in Section 8.
 
 The structural push API returns success/failure. Before attempting a selected
-`CallFunction` push, the producer increments `spans_selected` in the boundary
+`CallFunction` push, the producer increments `spans_selected` in the execution
 health block. If the push fails, it increments
 `StructuralStartTransportExceeded` and suppresses value copying for that call.
 If the start arrives but cannot resolve a context, the consumer records
@@ -1234,7 +1259,7 @@ Live checkpoints expose:
   reason; and
 - terminal error links observed, queued, committed, and lost by reason.
 
-After a successful terminal barrier and `run.end` publication:
+After `RootEnded` is committed:
 
 ~~~text
 spans_selected
@@ -1266,18 +1291,18 @@ terminal_error_links_observed
 successful terminal seal. A structurally lost call end is one of the
 span-end-loss reasons; it never leaves a silently open durable span.
 
-The boundary health block is reserved before root execution. If even that
-fixed block cannot be allocated, the boundary runs with profiling disabled
+The execution health block is reserved before root execution. If even that
+fixed block cannot be allocated, the root runs with profiling disabled
 and increments a process-global preallocated
-`ProfilerBoundaryStateUnavailable` counter. Health snapshots use a reserved
+`ProfilerExecutionStateUnavailable` counter. Health snapshots use a reserved
 control buffer, independent of the ordinary evidence queue. They are folded
-into CCT health segments and `run.end` while the store is writable. If the
-terminal store cannot persist health, `run.end` is not written; the live API
-retains boundary counters until `ReleasedIncomplete`, process-global fixed
-health records the terminal failure while the process lives, and this session
-does not retry or later seal the released run. A crashed/full process cannot
-promise a durable reason for bytes it never wrote, so readers use the missing
-terminal marker.
+into CCT health and the `RootEnded` record while the store is writable. If
+the terminal publication is lost, no `RootEnded` is written and
+process-global `root_ended_lost` increments; process-global fixed health
+records the terminal failure while the process lives, and this session does
+not retry or later seal the released execution. A crashed/full process
+cannot promise a durable reason for bytes it never wrote, so readers use the
+missing terminal marker.
 
 ### 7.4 Value and error occurrences
 
@@ -1337,7 +1362,6 @@ struct ThrowSite {
 
 struct ErrorCapture {
     id: ErrorCaptureId,
-    boundary_id: BoundaryId,
     throw_call_ref: CallRef,
     throw_context_ref: ContextRef,
     throw_function_id: FunctionId,
@@ -1775,16 +1799,19 @@ manage locks, usage-ledger entries, terminal exceptions, or cleanup policy.
 Its interface performs three operations:
 
 ~~~text
-begin_boundary(meta) -> Admitted | Rejected(reason) | Indeterminate
-reserve_and_publish(normal_batch) -> Committed | Lost(reason) | Indeterminate
-finish_boundary(run.end) -> Sealed | ReleasedIncomplete | Indeterminate
+publish_meta(records, terminal) -> Committed | Lost(reason) | Blocked | Indeterminate
+publish_data(groups)            -> Committed | Lost(reason) | Blocked | Indeterminate
+publish_cas_object(codec, body) -> (cid, publish result)
 ~~~
 
-`begin_boundary` commits `run.meta` before runtime profiling is armed; its
-post-rename ambiguity is never collapsed into either success or rejection.
-`reserve_and_publish` owns the store state machine and CAS/dependency ordering.
-`finish_boundary` makes one final publication attempt after the control
-barrier but never waits for space. Tests cross this seam through injected
+There is no `begin_boundary` or `finish_boundary`: admission takes no store
+I/O, and terminal state is a `RootEnded` record inside an ordinary meta
+batch (superseded by TASK/profiling-backend-streams.md §5.1).
+`publish_meta`/`publish_data` own the store state machine and
+CAS/dependency ordering; post-rename ambiguity is never collapsed into
+either success or rejection. The terminal meta batch (`terminal = true`) is
+one final publication attempt after the final drain but never waits for
+space. Tests cross this seam through injected
 accounting/filesystem adapters; no caller reimplements disk-full behavior.
 
 Before publishing a segment or unique CAS object, the store checks total bytes
@@ -1803,9 +1830,10 @@ continue; committed artifacts remain immutable.
 
 There is no automatic cleanup or in-session polling. Recovery is an explicit
 close, clean/change/free-space, and reopen with usage reconciliation. New
-boundaries start profiler-off while blocked. Admitted boundaries still finish
-terminal control, but a definite pre-rename terminal rejection releases the
-boundary incomplete without `run.end` as Section 5.3 specifies.
+boundaries start profiler-off while blocked. Admitted executions still
+finish their terminal hand-off, but a definite pre-rename terminal
+rejection leaves the execution without a `RootEnded`, as Section 5.3
+specifies.
 
 ### 8.3 Deterministic derived sizing
 
@@ -1869,13 +1897,13 @@ Population reasons:
 | Reason | Meaning | Admission owner/cause |
 |---|---|---|
 | `TransportMemoryExceeded` | structural record could not enqueue | `General / Transport` memory denial |
-| `ProfilerBoundaryStateUnavailable` | root could not reserve fixed boundary health/control state | `Control / Population` denial or no derived stable slot |
-| `ProfilerBoundaryStoreUnavailable` | store was blocked or could not commit `run.meta` | disk policy/store state |
-| `ProfilerBoundaryStoreIndeterminate` | metadata rename succeeded but directory durability was unresolved; root stayed profiler-off | post-rename directory fsync |
+| `ProfilerExecutionStateUnavailable` | root could not reserve fixed execution health/control state | `Control / Population` denial or no derived stable slot |
+| `StoreUnavailable` (admission) | store gate was closed or indeterminate at admission; folds the former store-unavailable/store-indeterminate reasons | disk policy/store state; two atomic reads, no I/O |
+| `ForkedProcess` | admission attempted in a `fork()` child; root runs profiler-off | fork guard (streams spec §5.8) |
 | `ProfilerThreadLeaseUnavailable` | child/subtree could not join profiling before runnable | derived counter saturation or stale generation |
 | `RootAbandoned` | host dropped/aborted an acknowledged root before classified result | host lifecycle |
 | `BoundaryBarrierControlFailed` | pre-reserved terminal barrier failed to publish/acknowledge | consumer/store shutdown or failure |
-| `TerminalStorePublicationFailed` | quiescent `run.end` failed; slot released unless indeterminate | disk policy, I/O, device, or free-space change |
+| `TerminalStorePublicationFailed` | quiescent terminal `RootEnded` failed; slot already released | disk policy, I/O, device, or free-space change |
 | `CorruptRecord` | committed bytes failed decode | corruption |
 | `ActiveThreadCapacityExceeded` | decoded child start could not retain bounded thread state; producer lease still owns lifetime | `General / Population` denial |
 | `ActiveCallCapacityExceeded` | decoded start could not retain active-call state | `General / ActiveCalls` denial |
@@ -1888,6 +1916,12 @@ Population reasons:
 | `CounterSaturated` | aggregate exceeded numeric schema | numeric saturation |
 | `ContextKeyCollision` | identical key had a different tuple | hash/corruption |
 | `PopulationUnpersisted` | terminal store could not persist emergency health | terminal store failure |
+
+Batched publication adds three process-global counters: `meta_batch_lost`
+(a meta-pre batch was terminally lost), `root_ended_lost` (a terminal
+`RootEnded` record was terminally lost), and
+`function_table_publish_failed` (the per-engine `FunctionTableV1` CAS
+publication failed); see TASK/profiling-backend-streams.md §5.3/§7.2.
 
 Timing reasons:
 
@@ -1950,22 +1984,25 @@ misclassified as memory or disk-policy denial.
   profiles-v1/
     publish.lock
     usage.state
-    runs/
-      <boundary-id>/
-        run.meta
-        cct/
-          00000001.bamlcct
-          00000002.bamlcct
-        evidence/
-          00000001.bamlspans
-          00000002.bamlspans
-        run.end
+    tmp/
+    streams/
+      <process-euid hex32>/
+        stream.lock
+        meta/
+          00000000000000000001.bamlmeta
+        data/
+          00000000000000000001.bamldata
     cas/
       sha256/
         ab/
           <64-hex-digest>.bamlvalue
-    tmp/
+    runs/                # legacy v1 layout: never read; removed by clean
 ~~~
+
+There is one stream directory per process, holding one meta plane and one
+data plane shared by every execution and engine of that process; there are
+no per-execution directories (superseded by
+TASK/profiling-backend-streams.md §3).
 
 The stable external lease file prevents a cleaner from deleting the locked
 inode and allowing another process to create a different lock while cleanup
@@ -1987,54 +2024,46 @@ closed with `StoreUnavailable`.
 
 The same open scan resolves a publisher that crashed after final rename but
 before directory fsync: if the checksummed final path exists, the opener fsyncs
-its containing directory and accounts/accepts that exact `run.meta`, object,
-segment, or `run.end`; if it is absent, the run remains crash-incomplete and
-any segment sequence is still unused. A conflicting/corrupt final path fails
+its containing directory and accounts/accepts that exact meta segment, data
+segment, or object; if it is absent, the batch remains crash-lost and any
+segment sequence is still unused. A conflicting/corrupt final path fails
 closed. This is recovery of one indeterminate commit point, not replay of a
 lost data batch.
 
-`run.meta` is immutable boundary/program metadata, including nonoptional
-`ProgramId` and optional revision/source labels. `run.end` is an immutable
-terminal summary written after final drain. In addition to status and terminal
-health, it stores O(1) per-plane high-water values:
+There is no `run.meta` or `run.end`. Immutable execution metadata and the
+terminal summary are `RootStarted`/`RootEnded` records in the meta plane,
+and program identity plus optional revision/source labels ride
+`EngineStarted` (superseded by TASK/profiling-backend-streams.md §4.3).
+Instead of a per-run segment fence, `RootEnded` stores the execution's
+data-plane extent as O(1) values — `data_first_seq`, `data_last_seq`, and
+`data_segment_count` — final at encode time because `RootEnded` publishes
+only after every group of that execution is committed or lost.
 
-~~~rust
-struct SegmentHighWater {
-    last_sequence: u64, // zero means no segment
-    segment_count: u64,
-}
+A crashed or still-active execution has no `RootEnded`; it reads `Running`
+while the stream is alive and `Abandoned` afterwards (superseded by
+TASK/profiling-backend-streams.md §6.2).
 
-struct RunEndSegmentFence {
-    cct: SegmentHighWater,
-    evidence: SegmentHighWater,
-}
-~~~
-
-A crashed or still-active run has no `run.end` and is explicitly incomplete.
-
-Every segment has:
-
-- magic and schema version;
-- segment kind and a checked, non-reused `u64` boundary-local sequence;
-- boundary, `ProgramId`, and optional revision/source labels;
-- record count and encoded length;
-- checksum; and
-- terminal health deltas for facts in that segment.
+Segment headers are defined by TASK/profiling-backend-streams.md §4.3 (meta
+plane, `BAMLMET1`) and §4.4 (data plane, `BAMLDAT1`): magic, schema
+version, a checked non-reused per-stream `u64` sequence, `ProcessEuid`,
+record/group counts, payload length, and a trailing checksum. Data-plane
+groups are keyed by the execution's root `ThreadRef`.
 
 Readers scan immutable segments and ignore temporary files. Missing/corrupt
 segments mark the corresponding plane incomplete.
 
-The zero-padded names above are illustrative, not an eight-digit lifetime
+The zero-padded names above are illustrative, not a lifetime
 limit. Each plane publishes contiguous sequences starting at one. A candidate
 sequence advances only after rename plus directory fsync; a pre-rename lost
 batch does not consume a number, while a renamed-indeterminate batch owns its
-candidate exclusively until resolved. Per-boundary/per-plane publication is
+candidate exclusively until resolved. Per-stream/per-plane publication is
 serialized, so concurrent writers cannot allocate the same candidate. Writers retain only
 the next sequence/high-water pair and bounded current batch; they do not keep
 an in-memory manifest entry per completed segment.
 
-Directory enumeration and segment decoding are streaming. For a sealed run,
-the reader compares observed contiguous sequences/counts with `run.end`, so a
+Directory enumeration and segment decoding are streaming. For an ended
+execution, the reader compares the observed data segments with
+`RootEnded.data_first_seq`/`data_last_seq`/`data_segment_count`, so a
 missing interior or final segment is detectable without a manifest. A query
 that asks for a fully merged CCT necessarily uses memory proportional to
 distinct returned contexts, but not to calls or segment count when the same
@@ -2045,12 +2074,14 @@ path.
 
 Writers:
 
-1. acquire and retain `store.lock(shared)` for the store session;
+1. acquire and retain `store.lock(shared)` and the stream's
+   `stream.lock(exclusive)` for the store session;
 2. build/encode the bounded batch under a memory reservation;
 3. acquire `publish.lock`;
 4. reread current `usage.state`, reserve bytes, and recheck free space;
 5. write a uniquely named file in `tmp/`;
-6. flush and fsync the file;
+6. flush and fsync the file (every file fsync routes through the
+   platform's `sync_file`);
 7. rename to its final content/sequence path and enter
    `RenamedAwaitingDirSync`;
 8. fsync the containing directory, resolving that state to `Committed`; and
@@ -2060,16 +2091,18 @@ Writers:
 If step 8 fails, the publisher retains the single indeterminate state and
 `publish.lock` as specified in Section 7.2; it does not execute step 9, reuse
 the candidate, or allow another publication around the visible path. The same
-protocol governs the final `run.end` rename, so the boundary registry reaches
-`Sealed` only after its directory fsync and accounting complete.
+protocol governs the terminal meta batch carrying `RootEnded`; the registry
+slot is already released at hand-off, so durable terminal state lives in
+the stream alone (superseded by TASK/profiling-backend-streams.md §5.6).
 
 CAS objects required by evidence publish first. Any `ContextKey` whose bounded
 dependency token is not yet `DurableDefinition` publishes its definition in a
 CCT segment before the evidence segment rename, following Section 6.5; no
 lifetime lookup is performed. Within evidence, a dependency may appear earlier
-in the same atomically published segment: `SpanStart` precedes its dependent
+in the same atomically published group: `SpanStart` precedes its dependent
 facts, and `ErrorCapture` precedes every `TerminalErrorRef` that targets it.
-Otherwise the dependency must already exist in an earlier committed segment.
+Otherwise the dependency must already exist in an earlier committed group of
+the same execution.
 
 Full CAS-hit verification does not hold the project publication lock:
 
@@ -2087,7 +2120,7 @@ A memory-governed cache may remember verified CID plus immutable file identity
 to avoid repeat reads. External mutation that changes the identity invalidates
 the cache.
 
-Boundary publishers may build batches concurrently. The project
+Stream publishers may build batches concurrently. The project
 `publish.lock` serializes only final existence/identity checks, disk
 accounting, no-overwrite CAS publication, and segment publication, so two
 processes cannot oversubscribe the disk budget or race a CID path. A large
@@ -2095,11 +2128,11 @@ dedupe hit never serializes unrelated CCT/evidence writers for the duration of
 a full read/hash. Publications are batched to keep this lock off the VM path.
 Readers and writers hold a shared `store.lock` lease. `baml clean` requires
 the exclusive lease and only then acquires `publish.lock`. The global lock
-order is always `store.lock -> publish.lock`; no path may acquire them in the
-opposite order.
+order is always `store.lock -> stream.lock -> publish.lock`; no path may
+acquire them in another order.
 
 Temporary and orphan files count toward disk usage. The MVP does not silently
-delete them during boundary start or capture. `baml clean` removes them.
+delete them during admission or capture. `baml clean` removes them.
 
 ## 10. Live and local reader model
 
@@ -2108,22 +2141,32 @@ consumer folds decoded facts directly into the bounded CCT/evidence writer
 batches described above. CCT deltas remain additive by `ContextKey`; exact
 facts remain the types in Section 7.
 
-Each already-bounded active boundary state exposes one O(1), atomically read
-checkpoint:
+The stream writer exposes one O(1), atomically read stream checkpoint, and
+each already-bounded active execution exposes one execution checkpoint
+(superseded by TASK/profiling-backend-streams.md §5.6):
 
 ~~~rust
-struct ProfilerCheckpoint {
-    boundary_id: BoundaryId,
-    committed_cct_sequence: u64,
-    committed_evidence_sequence: u64,
-    health: BoundaryHealthSnapshot,
-    queued_and_inflight: QueueHealthSnapshot,
+struct StreamCheckpoint {
+    high_water: StreamHighWater, // last committed sequence per plane
+    pending_groups: u32,
+    pending_meta: u32,
+    oldest_pending_age: Option<Duration>,
+    publication_inflight: bool,
+}
+
+struct ExecutionCheckpoint {
+    root: ThreadRef,
+    health: ExecutionHealthSnapshot,
+    queued: QueueHealthSnapshot,
+    data_first_seq: u64,
+    data_last_seq: u64,
 }
 ~~~
 
 The high-water fields advance only after the corresponding directory fsync.
-A live reader polls this checkpoint and streams newly committed segment files
-from its own cursor. Current partial batches are reported only as bounded
+A live reader polls the stream checkpoint, cursors on `StreamHighWater`,
+streams newly committed segment files, and filters data-plane groups by
+root `ThreadRef`. Current partial batches are reported only as bounded
 queued/in-flight health and become queryable after normal size/age/terminal
 sealing. A slow or disconnected reader retains no profiler-owned backlog; it
 catches up from immutable files. There is no subscriber queue, retained
@@ -2148,9 +2191,10 @@ Local readers:
 - expose population, exact evidence, error evidence, and value health
   separately.
 
-The reader does not reconstruct all invocations from a raw event log. A sealed
-reader validates both per-plane sequences against `run.end`; an active reader
-uses its checkpoint high-water as a consistent committed prefix.
+The reader does not reconstruct all invocations from a raw event log. For an
+ended execution the reader validates the data plane against `RootEnded`'s
+extent fields; an active reader uses the stream high-water as a consistent
+committed prefix.
 
 ## 11. Profiler off and benchmarking
 
@@ -2244,7 +2288,8 @@ unrelated language identity, logging, and run-lifecycle behavior.
 - the existing `baml.id.current()`, `baml.id.new()`, and `baml.id.set()`
   runtime-identity behavior;
 - revision/function metadata needed for CCT labels;
-- host boundary lifecycle; and
+- host boundary lifecycle;
+- host runtime token minting; and
 - non-profile structured logging.
 
 ### 12.2 Replace
@@ -2414,6 +2459,11 @@ Record every accepted deviation in this document before merge.
 
 Every named case below is required. Grouping related cases does not permit one
 fixture to stand in for another when their failure seams differ.
+
+Note: gates below that mention `run.meta`, `run.end`, per-boundary
+directories, `Sealed`/`ReleasedIncomplete`, or `begin_boundary` are
+replaced by the gates in TASK/profiling-backend-streams.md §9; all other
+gates remain in force verbatim.
 
 ### Population and boundary lifetime
 
@@ -2670,7 +2720,10 @@ fixture to stand in for another when their failure seams differ.
 - separate profiling boundaries/runs for detached descendants;
 - session-scoped or dynamically reparented background-task lanes;
 - large-value streaming/spill until proven;
-- source/local-variable snapshots; and
+- source/local-variable snapshots;
+- per-execution synchronous durability (durability stronger than the
+  batched `publish_interval` window);
+- profiling in `fork()` children; and
 - old artifact migration/readers.
 
 ## 16. Decision traceability and handoff gates
@@ -2689,6 +2742,8 @@ contracts; it does not restate them.
 | Disk exhaustion | New profiling data fails closed without deleting committed data or affecting BAML execution | Sections 7.2 and 8.2 |
 | Profiler off | One shared off session owns no profiler resources; identity and logging still work | Section 11 |
 | Old artifacts | No migration or compatibility reader; production legacy paths are removed after the oracle window | Section 12 |
+| Execution identity | An execution is the thread tree under a parentless root thread; `ExecutionId` is the root `ThreadRef`; no `BoundaryId` in durable formats | TASK/profiling-backend-streams.md §2 |
+| Layout | One stream of meta/data segments per process; batched publication through a per-session stream writer | TASK/profiling-backend-streams.md §3–5 |
 
 Phase 0 must produce these engineering artifacts before dependent phases land:
 

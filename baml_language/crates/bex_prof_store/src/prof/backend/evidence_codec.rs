@@ -3,14 +3,15 @@
 use super::{
     CodecVersion, ContextRef, EdgeKind, ErrorCapture, ErrorCodecError, RoleMask,
     RuntimeIdAnnotation, SelectionReasons, SpanEnd, SpanRuntimeId, SpanStart, TerminalErrorRef,
-    ValueCid, ValueLossReason, ValueOccurrence, ValueRole, ValueState, decode_error_capture,
-    decode_terminal_error_ref, encode_error_capture, encode_terminal_error_ref,
+    ThreadEnd, ThreadStart, ThreadStartKind, ValueCid, ValueLossReason, ValueOccurrence, ValueRole,
+    ValueState, decode_error_capture, decode_terminal_error_ref, encode_error_capture,
+    encode_terminal_error_ref,
 };
 use crate::{
     ids::{
         BexCallId, BexThreadId, BoundaryId, CallRef, EngineId, FunctionId, ProcessEuid, ThreadRef,
     },
-    prof::record::{CallSiteSourceSpan, FunctionEndStatus},
+    prof::record::{CallSiteSourceSpan, FunctionEndStatus, MAX_THREAD_NAME_LEN, ThreadEndStatus},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -21,6 +22,8 @@ pub enum EvidenceFact {
     ValueOccurrence(ValueOccurrence),
     ErrorCapture(ErrorCapture),
     TerminalErrorRef(TerminalErrorRef),
+    ThreadStart(ThreadStart),
+    ThreadEnd(ThreadEnd),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,6 +38,7 @@ pub enum EvidenceCodecError {
     InvalidTag,
     InvalidBits,
     InvalidNestedError,
+    NameTooLong,
     CountOverflow,
     RecordCountMismatch,
     TrailingBytes,
@@ -90,6 +94,8 @@ fn encode_fact(fact: &EvidenceFact) -> (u8, Vec<u8>) {
         EvidenceFact::ValueOccurrence(occurrence) => (3, encode_value_occurrence(*occurrence)),
         EvidenceFact::ErrorCapture(capture) => (4, encode_error_capture(capture)),
         EvidenceFact::TerminalErrorRef(terminal) => (5, encode_terminal_error_ref(terminal)),
+        EvidenceFact::ThreadStart(start) => (6, encode_thread_start(start)),
+        EvidenceFact::ThreadEnd(end) => (7, encode_thread_end(*end)),
     }
 }
 
@@ -105,13 +111,14 @@ fn decode_fact(tag: u8, body: &[u8]) -> Result<EvidenceFact, EvidenceCodecError>
         5 => decode_terminal_error_ref(body)
             .map(EvidenceFact::TerminalErrorRef)
             .map_err(map_error_codec),
+        6 => decode_thread_start(body).map(EvidenceFact::ThreadStart),
+        7 => decode_thread_end(body).map(EvidenceFact::ThreadEnd),
         _ => Err(EvidenceCodecError::InvalidTag),
     }
 }
 
 fn encode_span_start(span: SpanStart) -> Vec<u8> {
     let mut body = Vec::with_capacity(192);
-    body.extend_from_slice(&span.boundary_id.as_bytes());
     encode_call_ref(&mut body, span.call_ref);
     encode_optional_call_ref(&mut body, span.parent_call_ref);
     encode_thread_ref(&mut body, span.thread_ref);
@@ -135,7 +142,6 @@ fn encode_span_start(span: SpanStart) -> Vec<u8> {
 
 fn decode_span_start(bytes: &[u8]) -> Result<SpanStart, EvidenceCodecError> {
     let mut cursor = Cursor::new(bytes);
-    let boundary_id = BoundaryId::from_bytes(cursor.array()?);
     let call_ref = decode_call_ref(&mut cursor)?;
     let parent_call_ref = decode_optional_call_ref(&mut cursor)?;
     let thread_ref = decode_thread_ref(&mut cursor)?;
@@ -157,7 +163,6 @@ fn decode_span_start(bytes: &[u8]) -> Result<SpanStart, EvidenceCodecError> {
     };
     cursor.finish()?;
     Ok(SpanStart {
-        boundary_id,
         call_ref,
         parent_call_ref,
         thread_ref,
@@ -240,6 +245,94 @@ fn decode_value_occurrence(bytes: &[u8]) -> Result<ValueOccurrence, EvidenceCode
     Ok(occurrence)
 }
 
+fn encode_thread_start(start: &ThreadStart) -> Vec<u8> {
+    let mut body = Vec::with_capacity(128 + start.name.len());
+    encode_thread_ref(&mut body, start.thread_ref);
+    match start.parent {
+        None => body.push(0),
+        Some(parent) => {
+            body.push(1);
+            encode_thread_ref(&mut body, parent);
+        }
+    }
+    encode_optional_call_ref(&mut body, start.spawn_call);
+    encode_call_site(&mut body, start.spawn_site);
+    body.extend_from_slice(&start.started_ns.to_be_bytes());
+    body.push(match start.kind {
+        ThreadStartKind::Root => 0,
+        ThreadStartKind::Spawn => 1,
+    });
+    debug_assert!(start.name.len() <= MAX_THREAD_NAME_LEN);
+    let name = start.name.as_bytes();
+    let name = &name[..name.len().min(MAX_THREAD_NAME_LEN)];
+    body.extend_from_slice(&u32::try_from(name.len()).unwrap_or(u32::MAX).to_be_bytes());
+    body.extend_from_slice(name);
+    body
+}
+
+fn decode_thread_start(bytes: &[u8]) -> Result<ThreadStart, EvidenceCodecError> {
+    let mut cursor = Cursor::new(bytes);
+    let thread_ref = decode_thread_ref(&mut cursor)?;
+    let parent = match cursor.u8()? {
+        0 => None,
+        1 => Some(decode_thread_ref(&mut cursor)?),
+        _ => return Err(EvidenceCodecError::InvalidTag),
+    };
+    let spawn_call = decode_optional_call_ref(&mut cursor)?;
+    let spawn_site = decode_call_site(&mut cursor)?;
+    let started_ns = cursor.u64()?;
+    let kind = match cursor.u8()? {
+        0 => ThreadStartKind::Root,
+        1 => ThreadStartKind::Spawn,
+        _ => return Err(EvidenceCodecError::InvalidTag),
+    };
+    let name_len = usize::try_from(cursor.u32()?).map_err(|_| EvidenceCodecError::CountOverflow)?;
+    if name_len > MAX_THREAD_NAME_LEN {
+        return Err(EvidenceCodecError::NameTooLong);
+    }
+    let name = std::str::from_utf8(cursor.take(name_len)?)
+        .map_err(|_| EvidenceCodecError::InvalidBits)?
+        .to_owned();
+    cursor.finish()?;
+    Ok(ThreadStart {
+        thread_ref,
+        parent,
+        spawn_call,
+        spawn_site,
+        started_ns,
+        kind,
+        name,
+    })
+}
+
+fn encode_thread_end(end: ThreadEnd) -> Vec<u8> {
+    let mut body = Vec::with_capacity(48);
+    encode_thread_ref(&mut body, end.thread_ref);
+    body.extend_from_slice(&end.ended_ns.to_be_bytes());
+    body.push(end.status as u8);
+    body
+}
+
+fn decode_thread_end(bytes: &[u8]) -> Result<ThreadEnd, EvidenceCodecError> {
+    let mut cursor = Cursor::new(bytes);
+    let end = ThreadEnd {
+        thread_ref: decode_thread_ref(&mut cursor)?,
+        ended_ns: cursor.u64()?,
+        status: decode_thread_status(cursor.u8()?)?,
+    };
+    cursor.finish()?;
+    Ok(end)
+}
+
+fn decode_thread_status(tag: u8) -> Result<ThreadEndStatus, EvidenceCodecError> {
+    match tag {
+        0 => Ok(ThreadEndStatus::Completed),
+        1 => Ok(ThreadEndStatus::Cancelled),
+        2 => Ok(ThreadEndStatus::Errored),
+        _ => Err(EvidenceCodecError::InvalidTag),
+    }
+}
+
 fn encode_optional_call_ref(output: &mut Vec<u8>, value: Option<CallRef>) {
     match value {
         None => output.push(0),
@@ -302,15 +395,8 @@ fn encode_context_ref(output: &mut Vec<u8>, context: ContextRef) {
             output.push(0);
             output.extend_from_slice(&key.0);
         }
-        ContextRef::Overflow {
-            boundary,
-            reason,
-            edge_kind,
-        } => {
+        ContextRef::Overflow { reason, edge_kind } => {
             output.push(1);
-            output.extend_from_slice(&boundary.process_euid.0);
-            output.extend_from_slice(&boundary.engine_id.0.to_be_bytes());
-            output.extend_from_slice(&boundary.boundary_id.as_bytes());
             output.push(match reason {
                 super::OverflowReason::ContextMemoryUnavailableAfterDrain => 0,
                 super::OverflowReason::InvalidParentContext => 1,
@@ -324,11 +410,6 @@ fn decode_context_ref(cursor: &mut Cursor<'_>) -> Result<ContextRef, EvidenceCod
     match cursor.u8()? {
         0 => Ok(ContextRef::Normal(super::ContextKey(cursor.array()?))),
         1 => Ok(ContextRef::Overflow {
-            boundary: super::BoundaryRef {
-                process_euid: ProcessEuid(cursor.array()?),
-                engine_id: EngineId(cursor.u64()?),
-                boundary_id: BoundaryId::from_bytes(cursor.array()?),
-            },
             reason: match cursor.u8()? {
                 0 => super::OverflowReason::ContextMemoryUnavailableAfterDrain,
                 1 => super::OverflowReason::InvalidParentContext,
@@ -490,7 +571,7 @@ mod tests {
 
     use super::*;
     use crate::prof::backend::{
-        BoundaryRef, ContextKey, ErrorCaptureId, ErrorSource, ErrorUnwindKind, TerminalErrorTarget,
+        ContextKey, ErrorCaptureId, ErrorSource, ErrorUnwindKind, TerminalErrorTarget,
     };
 
     fn call(byte: u8) -> CallRef {
@@ -516,7 +597,6 @@ mod tests {
         };
         vec![
             EvidenceFact::SpanStart(SpanStart {
-                boundary_id: BoundaryId::from_bytes([7; 16]),
                 call_ref,
                 parent_call_ref: None,
                 thread_ref,
@@ -550,14 +630,8 @@ mod tests {
             }),
             EvidenceFact::ErrorCapture(ErrorCapture {
                 id: error_id,
-                boundary_id: BoundaryId::from_bytes([7; 16]),
                 throw_call_ref: call_ref,
                 throw_context_ref: ContextRef::Overflow {
-                    boundary: BoundaryRef {
-                        process_euid: call_ref.process_euid,
-                        engine_id: call_ref.engine_id,
-                        boundary_id: BoundaryId::from_bytes([7; 16]),
-                    },
                     reason: super::super::OverflowReason::InvalidParentContext,
                     edge_kind: EdgeKind::Call,
                 },
@@ -576,6 +650,37 @@ mod tests {
                 ended_ns: 20,
                 status: FunctionEndStatus::Errored,
                 inclusive_ns: 7,
+            }),
+            EvidenceFact::ThreadStart(ThreadStart {
+                thread_ref,
+                parent: None,
+                spawn_call: None,
+                spawn_site: None,
+                started_ns: 5,
+                kind: ThreadStartKind::Root,
+                name: String::new(),
+            }),
+            EvidenceFact::ThreadStart(ThreadStart {
+                thread_ref: ThreadRef {
+                    thread_id: BexThreadId(9),
+                    ..thread_ref
+                },
+                parent: Some(thread_ref),
+                spawn_call: Some(call_ref),
+                spawn_site: Some(CallSiteSourceSpan {
+                    file_id: 1,
+                    start_offset: 2,
+                    end_offset: 3,
+                    line: 4,
+                }),
+                started_ns: 6,
+                kind: ThreadStartKind::Spawn,
+                name: "worker".to_string(),
+            }),
+            EvidenceFact::ThreadEnd(ThreadEnd {
+                thread_ref,
+                ended_ns: 30,
+                status: ThreadEndStatus::Completed,
             }),
         ]
     }
@@ -612,8 +717,8 @@ mod tests {
         let encoded = encode_evidence_facts(&fixture());
         assert_eq!(
             hex::encode(Sha256::digest(&encoded.payload)),
-            "c6c37276dc6acb4184c25966c1b9f2b72a8d5f231afa35fa8eff09d544aab8b1"
+            "9464a212e3c41a28b0e7ba4e16330855b373fbcb9c367fd0b479eba0daaa2559"
         );
-        assert_eq!(encoded.record_count, 6);
+        assert_eq!(encoded.record_count, 9);
     }
 }

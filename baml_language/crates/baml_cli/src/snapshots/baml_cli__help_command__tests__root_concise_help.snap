@@ -10,6 +10,7 @@ Usage: baml [OPTIONS] <COMMAND>
 Commands:
   check       Check BAML source files for compiler errors
   clean       Remove segmented local profiler data
+  query       Query the local profile store with SQL
   auth        Manage authentication
   feedback    Report an issue or improvement to Boundary
   fmt         Format BAML source files

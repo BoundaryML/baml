@@ -708,6 +708,9 @@ impl RunArgs {
             Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::TargetError) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::Exit(code)) => {
+                // Streams spec §7.5: the profiler's durability window ends
+                // here — flush before the process exits.
+                bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {
@@ -1078,6 +1081,9 @@ impl RunArgs {
             Ok(true) if !unhandled_spawn_failed => Ok(crate::ExitCode::Success),
             Ok(_) => Ok(crate::ExitCode::TargetError),
             Err(bex_engine::EngineError::Exit { code }) => {
+                // Streams spec §7.5: the profiler's durability window ends
+                // here — flush before the process exits.
+                bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {

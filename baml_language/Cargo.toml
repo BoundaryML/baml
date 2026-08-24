@@ -132,6 +132,9 @@ sys_wasm = { path = "crates/sys_wasm" }
 baml_cli = { path = "crates/baml_cli" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
+bex_prof_store = { path = "crates/bex_prof_store" }
+baml_query = { path = "crates/baml_query" }
+baml_query_profiles = { path = "crates/baml_query_profiles" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
@@ -260,6 +263,15 @@ tempfile = { version = "3" }
 time = { version = "0.3", features = [ "formatting", "macros", "parsing" ] }
 text-size = { version = "1.1", features = [ "serde" ] }
 thiserror = { version = "2.0.0" }
+# Pinned exactly: DataFusion minor bumps change planner behaviour
+# (TASK/baml-query-scope.md §3.1); the conformance corpus re-runs on bumps.
+datafusion = { version = "=54.1.0", default-features = false, features = [
+  "sql",
+  "nested_expressions",
+  "unicode_expressions",
+  "regex_expressions",
+  "datetime_expressions",
+] }
 toml = { version = "0.8" }
 toml_edit = { version = "0.22" }
 tokio = { version = "1.36" }

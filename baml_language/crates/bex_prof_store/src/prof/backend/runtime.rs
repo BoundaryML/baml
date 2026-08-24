@@ -8,7 +8,7 @@ use std::{
 use smallvec::SmallVec;
 
 use super::{
-    BoundaryHandle, ErrorCaptureAttempt, ErrorCaptureId, ProfilerSession, Reservation,
+    ErrorCaptureAttempt, ErrorCaptureId, ExecutionHandle, ProfilerSession, Reservation,
     TerminalErrorTarget, ValueLossReason, ValueState,
 };
 use crate::ids::{CallRef, EngineId, ProcessEuid};
@@ -46,7 +46,7 @@ fn live_sessions() -> SmallVec<[Arc<ProfilerSession>; 4]> {
 pub fn register_engine_session(engine_id: EngineId, session: &Arc<ProfilerSession>) {
     #[cfg(not(baml_loom))]
     if let (Some(sizing), Some(memory)) = (session.sizing(), session.memory()) {
-        crate::prof::registry::configure_global_transport(
+        super::hooks::configure_transport(
             memory.clone(),
             sizing.transport_segment_bytes,
             sizing.transport_freelist_segments,
@@ -75,13 +75,13 @@ pub fn consume_engine_bytes(process_euid: ProcessEuid, engine_id: EngineId, byte
     session.consume_raw_bytes(process_euid, engine_id, bytes);
 }
 
-pub fn record_session_transport_loss(session: &ProfilerSession, handle: BoundaryHandle) {
+pub fn record_session_transport_loss(session: &ProfilerSession, handle: ExecutionHandle) {
     session.record_structural_transport_loss(handle);
 }
 
 pub fn reserve_session_error_attempt(
     session: &ProfilerSession,
-    handle: BoundaryHandle,
+    handle: ExecutionHandle,
     manual_eligible: bool,
 ) -> Option<Reservation> {
     session.reserve_error_attempt(handle, manual_eligible)
@@ -89,7 +89,7 @@ pub fn reserve_session_error_attempt(
 
 pub fn reserve_session_error_value(
     session: &ProfilerSession,
-    handle: BoundaryHandle,
+    handle: ExecutionHandle,
     manual_eligible: bool,
 ) -> Result<Reservation, ValueLossReason> {
     if !session.boundary_accepts_producer(handle) {
@@ -100,7 +100,7 @@ pub fn reserve_session_error_value(
 
 pub fn submit_session_error_attempt(
     session: &ProfilerSession,
-    handle: BoundaryHandle,
+    handle: ExecutionHandle,
     attempt: ErrorCaptureAttempt,
     reservation: Reservation,
 ) {
@@ -109,7 +109,7 @@ pub fn submit_session_error_attempt(
 
 pub fn complete_session_error_value(
     session: &ProfilerSession,
-    handle: BoundaryHandle,
+    handle: ExecutionHandle,
     id: ErrorCaptureId,
     value: ValueState,
 ) {
@@ -118,7 +118,7 @@ pub fn complete_session_error_value(
 
 pub fn submit_session_terminal_error(
     session: &ProfilerSession,
-    handle: BoundaryHandle,
+    handle: ExecutionHandle,
     call_ref: CallRef,
     target: TerminalErrorTarget,
     reservation: Reservation,
@@ -126,11 +126,11 @@ pub fn submit_session_terminal_error(
     session.submit_terminal_error(handle, call_ref, target, reservation);
 }
 
-pub fn record_session_error_attempt_loss(session: &ProfilerSession, handle: BoundaryHandle) {
+pub fn record_session_error_attempt_loss(session: &ProfilerSession, handle: ExecutionHandle) {
     session.record_error_attempt_transport_loss(handle);
 }
 
-pub fn record_session_terminal_error_loss(session: &ProfilerSession, handle: BoundaryHandle) {
+pub fn record_session_terminal_error_loss(session: &ProfilerSession, handle: ExecutionHandle) {
     session.record_terminal_error_transport_loss(handle);
 }
 
@@ -153,7 +153,26 @@ pub fn resolve_session_thread_ends() -> bool {
 pub fn maintain_sessions() -> bool {
     let mut progress = false;
     for session in live_sessions() {
-        progress |= session.maintain_ready_boundaries();
+        progress |= session.maintain_ready_executions();
     }
     progress
+}
+
+/// Flush path: publish everything publishable in every live session
+/// (`flush_and_join` / process exit).
+pub fn flush_sessions() {
+    for session in live_sessions() {
+        session.force_publish();
+    }
+}
+
+/// The smallest publication age trigger across live sessions, for the
+/// consumer's park timeout (streams spec §5.3: `min(WAKE_INTERVAL,
+/// publish_interval)` when the interval is shorter than the park).
+#[must_use]
+pub fn min_publish_interval() -> Option<std::time::Duration> {
+    live_sessions()
+        .iter()
+        .filter_map(|session| session.publish_interval())
+        .min()
 }

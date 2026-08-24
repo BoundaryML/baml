@@ -1,27 +1,26 @@
 //! Bounded direct raw-record join and CCT fold.
 
-use std::sync::Arc;
+use std::{sync::Mutex, time::Instant};
 
 use rustc_hash::FxHashMap as HashMap;
 
 use super::{
-    ActiveCctEpoch, AdmittedBoundary, BoundaryEndStatus, BoundaryHandle, BoundaryPhase,
-    BoundaryRef, CapturePlan, ContextAdmission, ContextRef, DerivedSizing, EdgeKind, ErrorCapture,
-    ErrorCaptureAttempt, ErrorCaptureId, ErrorCaptureLossReason, EvidenceFact,
-    FinishBoundaryResult, MeasuredLayouts, Owner, ParentContextRef, ProfilerMemoryGovernor,
-    PublishBatchResult, Reservation, ReservationClass, ResolveIndeterminateResult, RunEnd, SpanEnd,
-    SpanStart, TerminalErrorRef, TerminalErrorTarget, ValueState,
+    ActiveCctEpoch, CapturePlan, ContextAdmission, ContextRef, DerivedSizing, EdgeKind,
+    ErrorCapture, ErrorCaptureAttempt, ErrorCaptureId, ErrorCaptureLossReason, EvidenceFact,
+    ExecutionEndStatus, ExecutionHandle, ExecutionPhase, MeasuredLayouts, Owner, ParentContextRef,
+    ProfilerMemoryGovernor, Reservation, ReservationClass, SpanEnd, SpanStart, TerminalErrorRef,
+    TerminalErrorTarget, ThreadEnd, ThreadStart, ThreadStartKind, ValueState, writer::StreamWriter,
 };
 use crate::{
-    ids::{BexCallId, CallRef, EngineId, ProcessEuid, ThreadRef},
+    ids::{BexCallId, BoundaryId, CallRef, EngineId, ProcessEuid, ProgramId, ThreadRef},
     prof::{
         clock::TickConverter,
-        record::{CallSiteSourceSpan, FunctionEndStatus, RawRecord},
+        record::{CallSiteSourceSpan, FunctionEndStatus, RawRecord, ThreadEndStatus},
     },
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct BoundaryHealthSnapshot {
+pub struct ExecutionHealthSnapshot {
     pub corrupt_records: u64,
     pub active_thread_capacity_exceeded: u64,
     pub active_call_capacity_exceeded: u64,
@@ -50,10 +49,11 @@ pub struct BoundaryHealthSnapshot {
     pub terminal_error_link_evidence_publish_failed: u64,
 }
 
-impl BoundaryHealthSnapshot {
+impl ExecutionHealthSnapshot {
     const ENCODED_LEN: usize = 8 * 26;
 
-    fn encode(self) -> Vec<u8> {
+    #[must_use]
+    pub fn encode(self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(Self::ENCODED_LEN);
         for value in [
             self.corrupt_records,
@@ -128,7 +128,7 @@ impl BoundaryHealthSnapshot {
         })
     }
 
-    fn record_evidence_committed(&mut self, stats: EvidenceBatchStats) {
+    pub(super) fn record_evidence_committed(&mut self, stats: EvidenceBatchStats) {
         self.error_captures_committed = self
             .error_captures_committed
             .saturating_add(stats.error_captures);
@@ -137,7 +137,7 @@ impl BoundaryHealthSnapshot {
             .saturating_add(stats.terminal_error_links);
     }
 
-    fn record_evidence_publish_failed(&mut self, stats: EvidenceBatchStats) {
+    pub(super) fn record_evidence_publish_failed(&mut self, stats: EvidenceBatchStats) {
         self.error_capture_evidence_publish_failed = self
             .error_capture_evidence_publish_failed
             .saturating_add(stats.error_captures);
@@ -154,80 +154,53 @@ pub struct QueueHealthSnapshot {
     pub publication_inflight: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ProfilerCheckpoint {
-    pub boundary_id: crate::ids::BoundaryId,
-    pub committed_cct_sequence: u64,
-    pub committed_evidence_sequence: u64,
-    pub health: BoundaryHealthSnapshot,
-    pub queued_and_inflight: QueueHealthSnapshot,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FinalizationState {
-    Open,
-    CctIndeterminate,
-    EvidenceIndeterminate {
-        batch_id: u64,
-        stats: EvidenceBatchStats,
-    },
-    FinishIndeterminate,
-}
-
-pub(super) struct BoundaryRuntime {
+pub(super) struct ExecutionRuntime {
     pub generation: u32,
-    pub publisher: Arc<AdmittedBoundary>,
+    /// The execution's identity: its root thread.
+    pub root: ThreadRef,
+    /// Host runtime token, source of the root span's ordinal-0 annotation.
+    pub runtime_id: BoundaryId,
+    pub program_id: ProgramId,
     cct: Option<ActiveCctEpoch>,
     evidence: EvidenceBatch,
-    health: BoundaryHealthSnapshot,
-    finalization: FinalizationState,
+    pub(super) health: ExecutionHealthSnapshot,
 }
 
-impl std::fmt::Debug for BoundaryRuntime {
+impl std::fmt::Debug for ExecutionRuntime {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
-            .debug_struct("BoundaryRuntime")
+            .debug_struct("ExecutionRuntime")
             .field("generation", &self.generation)
+            .field("root", &self.root)
             .field("health", &self.health)
-            .field("finalization", &self.finalization)
             .finish_non_exhaustive()
     }
 }
 
-impl BoundaryRuntime {
+impl ExecutionRuntime {
     pub(super) fn new(
         generation: u32,
-        publisher: Arc<AdmittedBoundary>,
-        process_euid: ProcessEuid,
-        engine_id: EngineId,
+        root: ThreadRef,
+        runtime_id: BoundaryId,
+        program_id: ProgramId,
     ) -> Self {
-        let meta = publisher.meta();
         Self {
             generation,
+            root,
+            runtime_id,
+            program_id,
             cct: Some(ActiveCctEpoch::new(
-                meta.program_id,
-                BoundaryRef {
-                    process_euid,
-                    engine_id,
-                    boundary_id: meta.boundary_id,
-                },
+                program_id,
                 MeasuredLayouts::V1.population_item_min_bytes,
             )),
-            publisher,
             evidence: EvidenceBatch::new(),
-            health: BoundaryHealthSnapshot::default(),
-            finalization: FinalizationState::Open,
+            health: ExecutionHealthSnapshot::default(),
         }
     }
 
-    fn fresh_epoch(&self, process_euid: ProcessEuid, engine_id: EngineId) -> ActiveCctEpoch {
+    fn fresh_epoch(&self) -> ActiveCctEpoch {
         ActiveCctEpoch::new(
-            self.publisher.meta().program_id,
-            BoundaryRef {
-                process_euid,
-                engine_id,
-                boundary_id: self.publisher.meta().boundary_id,
-            },
+            self.program_id,
             MeasuredLayouts::V1.population_item_min_bytes,
         )
     }
@@ -311,9 +284,12 @@ impl EvidenceBatch {
 
 #[derive(Debug)]
 struct ThreadState {
-    boundary: BoundaryHandle,
+    boundary: ExecutionHandle,
     spawn_parent: Option<ContextKeyProjection>,
     spawn_site: Option<CallSiteSourceSpan>,
+    /// A `ThreadEnd` fact is pushed only if this thread's `ThreadStart` was
+    /// pushed (dependency rule, like `SpanEnd` after `SpanStart`).
+    start_pushed: bool,
     _reservation: Reservation,
 }
 
@@ -322,7 +298,7 @@ struct ContextKeyProjection(super::ContextKey);
 
 #[derive(Debug)]
 struct CallState {
-    boundary: BoundaryHandle,
+    boundary: ExecutionHandle,
     context: ContextAdmission,
     context_key: Option<ContextKeyProjection>,
     parent_key: Option<ContextKeyProjection>,
@@ -375,22 +351,21 @@ enum SpanState {
     Lost,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum EvidenceBatchOutcome {
-    Noop,
-    Committed(u64),
-    Lost(u64),
-    Indeterminate,
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct EvidenceBatchStats {
+pub(super) struct EvidenceBatchStats {
     error_captures: u64,
     terminal_error_links: u64,
 }
 
 impl EvidenceBatchStats {
-    fn from_facts(facts: &[EvidenceFact]) -> Self {
+    pub(super) fn add(&mut self, other: Self) {
+        self.error_captures = self.error_captures.saturating_add(other.error_captures);
+        self.terminal_error_links = self
+            .terminal_error_links
+            .saturating_add(other.terminal_error_links);
+    }
+
+    pub(super) fn from_facts(facts: &[EvidenceFact]) -> Self {
         let mut stats = Self::default();
         for fact in facts {
             match fact {
@@ -420,7 +395,7 @@ struct OwnedCallStart {
 #[derive(Debug)]
 struct PendingCallStart {
     fact: OwnedCallStart,
-    boundary: Option<BoundaryHandle>,
+    boundary: Option<ExecutionHandle>,
     _reservation: Reservation,
 }
 
@@ -436,27 +411,31 @@ struct OwnedCallEnd {
 #[derive(Debug)]
 struct PendingCallEnd {
     fact: OwnedCallEnd,
-    boundary: Option<BoundaryHandle>,
+    boundary: Option<ExecutionHandle>,
     _reservation: Reservation,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct OwnedThreadStart {
     thread_ref: ThreadRef,
     parent_call: CallRef,
     spawn_site: Option<CallSiteSourceSpan>,
+    ts_ticks: u64,
+    name: String,
 }
 
 #[derive(Debug)]
 struct PendingThreadStart {
     fact: OwnedThreadStart,
-    boundary: Option<BoundaryHandle>,
+    boundary: Option<ExecutionHandle>,
     _reservation: Reservation,
 }
 
 #[derive(Debug)]
 struct PendingThreadEnd {
-    boundary: Option<BoundaryHandle>,
+    boundary: Option<ExecutionHandle>,
+    ts_ticks: u64,
+    status: ThreadEndStatus,
     _reservation: Reservation,
 }
 
@@ -464,13 +443,13 @@ struct PendingThreadEnd {
 struct PendingRuntimeId {
     id: [u8; 16],
     ts_ticks: u64,
-    boundary: Option<BoundaryHandle>,
+    boundary: Option<ExecutionHandle>,
     _reservation: Reservation,
 }
 
 #[derive(Debug)]
 struct PendingValueOccurrence {
-    handle: BoundaryHandle,
+    handle: ExecutionHandle,
     role: super::ValueRole,
     state: super::ValueState,
     manual_eligible: bool,
@@ -479,7 +458,7 @@ struct PendingValueOccurrence {
 
 #[derive(Debug)]
 struct PendingErrorAttempt {
-    handle: BoundaryHandle,
+    handle: ExecutionHandle,
     attempt: ErrorCaptureAttempt,
     value: Option<ValueState>,
     throw_context_ref: Option<ContextRef>,
@@ -489,7 +468,7 @@ struct PendingErrorAttempt {
 
 #[derive(Debug)]
 struct ErrorTargetState {
-    handle: BoundaryHandle,
+    handle: ExecutionHandle,
     target: TerminalErrorTarget,
     batch_id: Option<u64>,
     _reservation: Reservation,
@@ -497,45 +476,23 @@ struct ErrorTargetState {
 
 #[derive(Debug)]
 struct PendingTerminalError {
-    handle: BoundaryHandle,
+    handle: ExecutionHandle,
     call_ref: CallRef,
     target: TerminalErrorTarget,
     start_dependency: Option<Result<(), ErrorCaptureLossReason>>,
     reservation: Reservation,
 }
 
-/// §5.2: the unresolved-join table is bounded by memory *and* entry count.
-/// Beyond this many parked facts (starts, ends, thread starts, thread ends
-/// combined) further reorder facts are charged as `JoinCapacityExceeded`
-/// instead of parked. FIFO ring registration keeps the table empty in steady
-/// state; only pathological reorder approaches this.
-const MAX_UNRESOLVED_JOIN_ENTRIES: usize = 1 << 18;
-
-/// One step of start resolution. The former mutual recursion
-/// (`consume_call_start` → `resolve_starts_for_thread` → `consume_call_start`,
-/// and `resolve_threads_for_parent` → `insert_thread` → same) is an explicit
-/// LIFO worklist of these frames, so depth is bounded by heap, never by the
-/// consumer thread's stack. Frame order preserves the recursive semantics:
-/// a call's parked descendants (spawned threads, then same-thread children,
-/// smallest call id first) are opened before its own `FinishCall`, which is
-/// what consumes its parked end.
-#[derive(Clone, Copy, Debug)]
-enum StartResolution {
-    /// Attach parked spawned threads whose parent is this call; each attached
-    /// thread then drains its ready starts.
-    SpawnedThreadsOf(CallRef),
-    /// Open ready parked starts on this thread, smallest call id first.
-    ReadyStartsOn(ThreadRef),
-    /// Per-call epilogue: runtime ids, values, error joins, parked end. Runs
-    /// only once every frame pushed above it has drained.
-    FinishCall(CallRef),
-}
-
 #[derive(Debug, Default)]
 pub(super) struct DirectDecoder {
     threads: HashMap<ThreadRef, ThreadState>,
     calls: HashMap<CallRef, CallState>,
-    pending_starts: HashMap<CallRef, PendingCallStart>,
+    /// Parked call starts, keyed by owning thread with `call_id` order
+    /// inside. The per-thread split keeps `resolve_starts_for_thread` from
+    /// scanning every parked start in the process on each opened call — a
+    /// flood of parked starts made that scan quadratic and starved the
+    /// consumer.
+    pending_starts: HashMap<ThreadRef, std::collections::BTreeMap<u64, PendingCallStart>>,
     pending_ends: HashMap<CallRef, PendingCallEnd>,
     pending_threads: HashMap<ThreadRef, PendingThreadStart>,
     pending_thread_ends: HashMap<ThreadRef, PendingThreadEnd>,
@@ -552,7 +509,10 @@ pub(super) struct DecoderResources<'a> {
     pub memory: &'a ProfilerMemoryGovernor,
     pub sizing: DerivedSizing,
     pub clock: &'a TickConverter,
-    pub boundaries: &'a [std::sync::Mutex<Option<BoundaryRuntime>>],
+    pub boundaries: &'a [std::sync::Mutex<Option<ExecutionRuntime>>],
+    /// The session's stream writer; hand-off target for sealed epochs and
+    /// evidence batches (consumer thread only; lock order decoder → writer).
+    pub writer: &'a Mutex<StreamWriter>,
 }
 
 impl DirectDecoder {
@@ -560,10 +520,11 @@ impl DirectDecoder {
         self.pending_thread_ends.len()
     }
 
-    pub(super) fn checkpoint(
-        handle: BoundaryHandle,
-        boundaries: &[std::sync::Mutex<Option<BoundaryRuntime>>],
-    ) -> Option<ProfilerCheckpoint> {
+    /// Queue snapshot for one live execution (session checkpoint support).
+    pub(super) fn queue_snapshot(
+        handle: ExecutionHandle,
+        boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
+    ) -> Option<(ThreadRef, ExecutionHealthSnapshot, QueueHealthSnapshot)> {
         let slot = boundaries.get(handle.slot as usize)?;
         let runtime = slot
             .lock()
@@ -572,7 +533,6 @@ impl DirectDecoder {
         if runtime.generation != handle.generation {
             return None;
         }
-        let fence = runtime.publisher.fence();
         let evidence_accounted_bytes = runtime
             .evidence
             .general
@@ -585,18 +545,16 @@ impl DirectDecoder {
                     .as_ref()
                     .map_or(0, Reservation::accounted_bytes),
             );
-        Some(ProfilerCheckpoint {
-            boundary_id: runtime.publisher.meta().boundary_id,
-            committed_cct_sequence: fence.cct.last_sequence,
-            committed_evidence_sequence: fence.evidence.last_sequence,
-            health: runtime.health,
-            queued_and_inflight: QueueHealthSnapshot {
+        Some((
+            runtime.root,
+            runtime.health,
+            QueueHealthSnapshot {
                 evidence_fact_count: u64::try_from(runtime.evidence.facts.len())
                     .unwrap_or(u64::MAX),
                 evidence_accounted_bytes,
-                publication_inflight: runtime.finalization != FinalizationState::Open,
+                publication_inflight: false,
             },
-        })
+        ))
     }
 
     pub(super) fn consume(&mut self, resources: &DecoderResources<'_>, raw: RawRecord<'_>) {
@@ -604,30 +562,34 @@ impl DirectDecoder {
             RawRecord::StartThread {
                 thread_id,
                 parent_thread_id,
+                ts_ticks,
+                name,
                 ..
             } if parent_thread_id.0 == 0 => {
                 let thread_ref = thread_ref(resources, thread_id);
-                // Root admission publishes the boundary runtime before the VM
-                // can push this record, and a boundary cannot seal before its
-                // rings are drained, so a root start without a runtime is a
-                // broken invariant rather than a reorder. There is no boundary
-                // to charge; the thread's later facts surface as unattributed
-                // pending joins.
-                let Some(boundary) = find_boundary_by_root(resources.boundaries, thread_ref) else {
-                    debug_assert!(false, "root thread start without an admitted boundary");
+                // Root admission publishes the execution runtime before the
+                // VM can push this record, and an execution cannot finalize
+                // before its rings are drained, so a root start without a
+                // runtime is a broken invariant rather than a reorder. There
+                // is no execution to charge; the thread's later facts surface
+                // as unattributed pending joins.
+                let Some(boundary) = find_execution_by_root(resources.boundaries, thread_ref)
+                else {
+                    debug_assert!(false, "root thread start without an admitted execution");
                     return;
                 };
-                self.insert_thread(resources, thread_ref, boundary, None, None);
-                self.drain_start_resolution(
-                    resources,
-                    vec![StartResolution::ReadyStartsOn(thread_ref)],
+                self.insert_thread(
+                    resources, thread_ref, boundary, None, None, None, ts_ticks, name,
                 );
+                self.resolve_starts_for_thread(resources, thread_ref);
             }
             RawRecord::StartThreadSpawn {
                 thread_id,
                 parent_thread_id,
                 parent_call_id,
                 spawn_site,
+                ts_ticks,
+                name,
                 ..
             } => {
                 self.consume_child_thread_start(
@@ -636,12 +598,16 @@ impl DirectDecoder {
                     parent_thread_id,
                     parent_call_id,
                     spawn_site,
+                    ts_ticks,
+                    name,
                 );
             }
             RawRecord::StartThread {
                 thread_id,
                 parent_thread_id,
                 parent_call_id,
+                ts_ticks,
+                name,
                 ..
             } => {
                 self.consume_child_thread_start(
@@ -650,6 +616,8 @@ impl DirectDecoder {
                     parent_thread_id,
                     parent_call_id,
                     None,
+                    ts_ticks,
+                    name,
                 );
             }
             RawRecord::CallFunction {
@@ -718,10 +686,19 @@ impl DirectDecoder {
                     await_count,
                 },
             ),
-            RawRecord::EndThread { thread_id, .. } => {
+            RawRecord::EndThread {
+                thread_id,
+                status,
+                ts_ticks,
+            } => {
                 let thread_ref = thread_ref(resources, thread_id);
-                if self.threads.remove(&thread_ref).is_none() {
-                    self.insert_pending_thread_end(resources, thread_ref);
+                match self.threads.remove(&thread_ref) {
+                    Some(state) => {
+                        push_thread_end(resources, &state, thread_ref, ts_ticks, status);
+                    }
+                    None => {
+                        self.insert_pending_thread_end(resources, thread_ref, ts_ticks, status);
+                    }
                 }
             }
             RawRecord::SetFunctionId {
@@ -749,7 +726,7 @@ impl DirectDecoder {
     pub(super) fn consume_value_occurrence(
         &mut self,
         resources: &DecoderResources<'_>,
-        handle: BoundaryHandle,
+        handle: ExecutionHandle,
         call_ref: CallRef,
         role: super::ValueRole,
         state: super::ValueState,
@@ -812,7 +789,7 @@ impl DirectDecoder {
     pub(super) fn consume_error_attempt(
         &mut self,
         resources: &DecoderResources<'_>,
-        handle: BoundaryHandle,
+        handle: ExecutionHandle,
         attempt: ErrorCaptureAttempt,
         reservation: Reservation,
     ) {
@@ -866,7 +843,7 @@ impl DirectDecoder {
     pub(super) fn consume_terminal_error(
         &mut self,
         resources: &DecoderResources<'_>,
-        handle: BoundaryHandle,
+        handle: ExecutionHandle,
         call_ref: CallRef,
         target: TerminalErrorTarget,
         reservation: Reservation,
@@ -901,7 +878,7 @@ impl DirectDecoder {
     fn queue_value_occurrence(
         &mut self,
         resources: &DecoderResources<'_>,
-        handle: BoundaryHandle,
+        handle: ExecutionHandle,
         call_ref: CallRef,
         role: super::ValueRole,
         state: super::ValueState,
@@ -943,7 +920,7 @@ impl DirectDecoder {
                     runtime.health.evidence_queue_full.saturating_add(1);
             }
         });
-        self.flush_evidence_if_target(resources, handle);
+        flush_evidence_if_target(resources, handle);
         true
     }
 
@@ -963,6 +940,7 @@ impl DirectDecoder {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn consume_child_thread_start(
         &mut self,
         resources: &DecoderResources<'_>,
@@ -970,6 +948,8 @@ impl DirectDecoder {
         parent_thread_id: crate::ids::BexThreadId,
         parent_call_id: BexCallId,
         spawn_site: Option<CallSiteSourceSpan>,
+        ts_ticks: u64,
+        name: &[u8],
     ) {
         let thread_ref = thread_ref(resources, thread_id);
         let parent_call = CallRef {
@@ -979,17 +959,18 @@ impl DirectDecoder {
             call_id: parent_call_id,
         };
         if let Some(parent) = self.calls.get(&parent_call) {
+            let (boundary, context_key) = (parent.boundary, parent.context_key);
             self.insert_thread(
                 resources,
                 thread_ref,
-                parent.boundary,
-                parent.context_key,
+                boundary,
+                Some(parent_call),
+                context_key,
                 spawn_site,
+                ts_ticks,
+                name,
             );
-            self.drain_start_resolution(
-                resources,
-                vec![StartResolution::ReadyStartsOn(thread_ref)],
-            );
+            self.resolve_starts_for_thread(resources, thread_ref);
         } else {
             self.insert_pending_thread(
                 resources,
@@ -997,41 +978,53 @@ impl DirectDecoder {
                     thread_ref,
                     parent_call,
                     spawn_site,
+                    ts_ticks,
+                    name: String::from_utf8_lossy(name).into_owned(),
                 },
             );
         }
     }
 
     fn consume_call_start(&mut self, resources: &DecoderResources<'_>, fact: OwnedCallStart) {
-        let thread_ref = call_thread_ref(fact.call_ref);
-        let Some(call_ref) = self.open_call_start(resources, fact) else {
-            return;
+        let thread_ref = ThreadRef {
+            process_euid: fact.call_ref.process_euid,
+            engine_id: fact.call_ref.engine_id,
+            thread_id: fact.call_ref.thread_id,
         };
-        // LIFO: spawned threads first, then same-thread children, then this
-        // call's epilogue — the order the recursion used to take.
-        self.drain_start_resolution(
-            resources,
-            vec![
-                StartResolution::FinishCall(call_ref),
-                StartResolution::ReadyStartsOn(thread_ref),
-                StartResolution::SpawnedThreadsOf(call_ref),
-            ],
-        );
+        let call_ref = fact.call_ref;
+        if !self.consume_call_start_open(resources, fact) {
+            return;
+        }
+        // Same-thread children may have been parked before this start when a
+        // logical thread migrated to an older ring. Resolve them while this
+        // call is still open: consuming this call's pending end below removes
+        // the context key their own starts need.
+        self.resolve_starts_for_thread(resources, thread_ref);
+        if let Some(pending) = self.pending_ends.remove(&call_ref) {
+            self.consume_call_end(resources, pending.fact);
+        }
     }
 
-    /// Folds a call start into the CCT and retains its join state. Returns
-    /// the opened call, or `None` when the fact was parked or dropped. Never
-    /// resolves anything else: descendants and the epilogue are worklist
-    /// frames (`drain_start_resolution`).
-    fn open_call_start(
+    /// Opens one decoded call start: parks it when a dependency is not yet
+    /// resolvable, otherwise folds it into the CCT and retains join state.
+    /// Returns whether the call opened. The same-thread parked-start sweep
+    /// and this call's parked end are the caller's responsibility: running
+    /// them here recursed through sibling chains (one stack frame per parked
+    /// start, bounded only by ring content) and overflowed the consumer
+    /// stack.
+    fn consume_call_start_open(
         &mut self,
         resources: &DecoderResources<'_>,
         fact: OwnedCallStart,
-    ) -> Option<CallRef> {
-        let thread_ref = call_thread_ref(fact.call_ref);
+    ) -> bool {
+        let thread_ref = ThreadRef {
+            process_euid: fact.call_ref.process_euid,
+            engine_id: fact.call_ref.engine_id,
+            thread_id: fact.call_ref.thread_id,
+        };
         let Some(thread) = self.threads.get(&thread_ref) else {
             self.insert_pending_start(resources, fact);
-            return None;
+            return false;
         };
         let boundary = thread.boundary;
         let (parent, parent_admission, edge_kind, call_site) = if fact.parent_call_id.0 == 0 {
@@ -1056,11 +1049,11 @@ impl DirectDecoder {
             };
             let Some(parent_call) = self.calls.get(&parent_ref) else {
                 self.insert_pending_start(resources, fact);
-                return None;
+                return false;
             };
             let Some(parent_key) = parent_call.context_key else {
                 self.insert_pending_start(resources, fact);
-                return None;
+                return false;
             };
             (
                 ParentContextRef::External(parent_key.0),
@@ -1102,7 +1095,9 @@ impl DirectDecoder {
                 resources.memory,
             ))
         });
-        let context = context?;
+        let Some(context) = context else {
+            return false;
+        };
         let context_key = match context.context_ref() {
             ContextRef::Normal(key) => Some(ContextKeyProjection(key)),
             ContextRef::Overflow { .. } => None,
@@ -1118,7 +1113,7 @@ impl DirectDecoder {
                     .active_call_capacity_exceeded
                     .saturating_add(1);
             });
-            return None;
+            return false;
         };
         let span_state = if plan.selected {
             let started_ns = resources.clock.to_ns(fact.ts_ticks);
@@ -1130,12 +1125,11 @@ impl DirectDecoder {
                 let runtime_id = (plan.reasons.root() && !plan.reasons.manual()).then_some(
                     super::RuntimeIdAnnotation {
                         annotation_ordinal: 0,
-                        runtime_id: runtime.publisher.meta().boundary_id,
+                        runtime_id: runtime.runtime_id,
                     },
                 );
                 match runtime.evidence.push(
                     EvidenceFact::SpanStart(SpanStart {
-                        boundary_id: runtime.publisher.meta().boundary_id,
                         call_ref: fact.call_ref,
                         parent_call_ref,
                         thread_ref,
@@ -1181,104 +1175,15 @@ impl DirectDecoder {
                 _reservation: reservation,
             },
         );
-        self.flush_evidence_if_target(resources, boundary);
-        Some(fact.call_ref)
-    }
-
-    /// The per-call epilogue of a start. Same-thread children parked before
-    /// this start (a logical thread that migrated to an older ring) must be
-    /// opened *before* this runs: consuming the call's pending end here can
-    /// remove the context key their own starts need. The worklist guarantees
-    /// that ordering.
-    fn finish_call_start(&mut self, resources: &DecoderResources<'_>, call_ref: CallRef) {
-        self.resolve_runtime_ids(resources, call_ref);
-        self.resolve_values(resources, call_ref);
+        flush_evidence_if_target(resources, boundary);
+        self.resolve_threads_for_parent(resources, fact.call_ref);
+        self.resolve_runtime_ids(resources, fact.call_ref);
+        self.resolve_values(resources, fact.call_ref);
         self.refresh_error_dependencies();
         self.resolve_error_attempts(resources);
         self.refresh_terminal_dependencies();
         self.resolve_terminal_errors(resources);
-        if let Some(pending) = self.pending_ends.remove(&call_ref) {
-            self.consume_call_end(resources, pending.fact);
-        }
-    }
-
-    /// Drives start resolution to a fixed point from an explicit stack. Each
-    /// frame either makes one unit of progress (and may push frames above
-    /// itself) or pops. The stack holds at most three frames per opened call,
-    /// on the heap; the process stack stays flat however deep the parked tree
-    /// is.
-    fn drain_start_resolution(
-        &mut self,
-        resources: &DecoderResources<'_>,
-        mut stack: Vec<StartResolution>,
-    ) {
-        while let Some(step) = stack.last().copied() {
-            match step {
-                StartResolution::SpawnedThreadsOf(parent_call) => {
-                    let Some(parent) = self
-                        .calls
-                        .get(&parent_call)
-                        .map(|parent| (parent.boundary, parent.context_key))
-                    else {
-                        stack.pop();
-                        continue;
-                    };
-                    let next = self.pending_threads.iter().find_map(|(key, pending)| {
-                        (pending.fact.parent_call == parent_call).then_some(*key)
-                    });
-                    let Some(key) = next else {
-                        stack.pop();
-                        continue;
-                    };
-                    let pending = self
-                        .pending_threads
-                        .remove(&key)
-                        .expect("selected pending thread exists");
-                    self.insert_thread(
-                        resources,
-                        pending.fact.thread_ref,
-                        parent.0,
-                        parent.1,
-                        pending.fact.spawn_site,
-                    );
-                    stack.push(StartResolution::ReadyStartsOn(pending.fact.thread_ref));
-                }
-                StartResolution::ReadyStartsOn(thread_ref) => {
-                    // A consumer can observe a spawned child's descendants
-                    // before the spawning thread's ring publishes the child's
-                    // entry call. Only take a fact whose parent is already
-                    // resolvable; removing and immediately re-parking an
-                    // unready fact could select the same entry forever and
-                    // livelock the sole consumer.
-                    let next = self
-                        .pending_starts
-                        .iter()
-                        .filter(|(_, pending)| {
-                            call_thread_ref(pending.fact.call_ref) == thread_ref
-                                && self.call_start_dependency_ready(&pending.fact)
-                        })
-                        .map(|(key, _)| *key)
-                        .min_by_key(|key| key.call_id.0);
-                    let Some(key) = next else {
-                        stack.pop();
-                        continue;
-                    };
-                    let pending = self
-                        .pending_starts
-                        .remove(&key)
-                        .expect("selected pending call start exists");
-                    if let Some(call_ref) = self.open_call_start(resources, pending.fact) {
-                        stack.push(StartResolution::FinishCall(call_ref));
-                        stack.push(StartResolution::ReadyStartsOn(thread_ref));
-                        stack.push(StartResolution::SpawnedThreadsOf(call_ref));
-                    }
-                }
-                StartResolution::FinishCall(call_ref) => {
-                    stack.pop();
-                    self.finish_call_start(resources, call_ref);
-                }
-            }
-        }
+        true
     }
 
     fn consume_call_end(&mut self, resources: &DecoderResources<'_>, fact: OwnedCallEnd) {
@@ -1387,7 +1292,7 @@ impl DirectDecoder {
                         runtime.health.evidence_queue_full.saturating_add(1);
                 }
             });
-            self.flush_evidence_if_target(resources, call.boundary);
+            flush_evidence_if_target(resources, call.boundary);
         }
     }
 
@@ -1433,7 +1338,7 @@ impl DirectDecoder {
                     runtime.health.evidence_queue_full.saturating_add(1);
             }
         });
-        self.flush_evidence_if_target(resources, boundary);
+        flush_evidence_if_target(resources, boundary);
     }
 
     fn insert_pending_runtime_id(
@@ -1476,7 +1381,7 @@ impl DirectDecoder {
         }
     }
 
-    fn boundary_for_thread(&self, thread_ref: ThreadRef) -> Option<BoundaryHandle> {
+    fn boundary_for_thread(&self, thread_ref: ThreadRef) -> Option<ExecutionHandle> {
         self.threads
             .get(&thread_ref)
             .map(|thread| thread.boundary)
@@ -1487,13 +1392,21 @@ impl DirectDecoder {
             })
     }
 
+    /// Admits a logical thread: retains its join state, pushes the durable
+    /// `ThreadStart` evidence fact (streams spec §4.5 — a reservation failure
+    /// counts `evidence_queue_full` and the population is still folded), and
+    /// resolves parked joins.
+    #[allow(clippy::too_many_arguments)]
     fn insert_thread(
         &mut self,
         resources: &DecoderResources<'_>,
         thread_ref: ThreadRef,
-        boundary: BoundaryHandle,
+        boundary: ExecutionHandle,
+        spawn_call: Option<CallRef>,
         spawn_parent: Option<ContextKeyProjection>,
         spawn_site: Option<CallSiteSourceSpan>,
+        ts_ticks: u64,
+        name: &[u8],
     ) {
         if self.threads.contains_key(&thread_ref) {
             return;
@@ -1511,15 +1424,44 @@ impl DirectDecoder {
             });
             return;
         };
+        let start = ThreadStart {
+            thread_ref,
+            parent: spawn_call.map(call_thread_ref),
+            spawn_call,
+            spawn_site,
+            started_ns: resources.clock.to_ns(ts_ticks),
+            kind: if spawn_call.is_some() {
+                ThreadStartKind::Spawn
+            } else {
+                ThreadStartKind::Root
+            },
+            name: String::from_utf8_lossy(name).into_owned(),
+        };
+        let start_pushed = with_runtime_value(resources.boundaries, boundary, |runtime| {
+            match runtime
+                .evidence
+                .push(EvidenceFact::ThreadStart(start), false, resources.memory)
+            {
+                Ok(_) => Some(true),
+                Err(()) => {
+                    runtime.health.evidence_queue_full =
+                        runtime.health.evidence_queue_full.saturating_add(1);
+                    Some(false)
+                }
+            }
+        })
+        .unwrap_or(false);
         self.threads.insert(
             thread_ref,
             ThreadState {
                 boundary,
                 spawn_parent,
                 spawn_site,
+                start_pushed,
                 _reservation: reservation,
             },
         );
+        flush_evidence_if_target(resources, boundary);
         self.attribute_pending_joins();
     }
 
@@ -1569,9 +1511,11 @@ impl DirectDecoder {
                         .and_then(|thread| thread.boundary)
                 })
         };
-        for pending in self.pending_starts.values_mut() {
-            if pending.boundary.is_none() {
-                pending.boundary = boundary_for_thread(call_thread_ref(pending.fact.call_ref));
+        for parked in self.pending_starts.values_mut() {
+            for pending in parked.values_mut() {
+                if pending.boundary.is_none() {
+                    pending.boundary = boundary_for_thread(call_thread_ref(pending.fact.call_ref));
+                }
             }
         }
         for pending in self.pending_ends.values_mut() {
@@ -1595,33 +1539,28 @@ impl DirectDecoder {
         }
     }
 
-    /// Parked facts across every pending map (§5.2 entry limit).
-    fn unresolved_join_entries(&self) -> usize {
-        self.pending_starts
-            .len()
-            .saturating_add(self.pending_ends.len())
-            .saturating_add(self.pending_threads.len())
-            .saturating_add(self.pending_thread_ends.len())
-    }
-
     fn insert_pending_start(&mut self, resources: &DecoderResources<'_>, fact: OwnedCallStart) {
-        if self.pending_starts.contains_key(&fact.call_ref) {
+        let thread_ref = ThreadRef {
+            process_euid: fact.call_ref.process_euid,
+            engine_id: fact.call_ref.engine_id,
+            thread_id: fact.call_ref.thread_id,
+        };
+        if self
+            .pending_starts
+            .get(&thread_ref)
+            .is_some_and(|parked| parked.contains_key(&fact.call_ref.call_id.0))
+        {
             return;
         }
-        let thread_ref = call_thread_ref(fact.call_ref);
         let boundary = self.boundary_for_thread(thread_ref);
-        if self.unresolved_join_entries() >= MAX_UNRESOLVED_JOIN_ENTRIES {
-            record_join_capacity_exceeded(resources.boundaries, boundary);
-            return;
-        }
         match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
             MeasuredLayouts::V1.unresolved_fact_min_bytes,
         ) {
             Ok(reservation) => {
-                self.pending_starts.insert(
-                    fact.call_ref,
+                self.pending_starts.entry(thread_ref).or_default().insert(
+                    fact.call_ref.call_id.0,
                     PendingCallStart {
                         fact,
                         boundary,
@@ -1637,12 +1576,12 @@ impl DirectDecoder {
         if self.pending_ends.contains_key(&fact.call_ref) {
             return;
         }
-        let thread_ref = call_thread_ref(fact.call_ref);
+        let thread_ref = ThreadRef {
+            process_euid: fact.call_ref.process_euid,
+            engine_id: fact.call_ref.engine_id,
+            thread_id: fact.call_ref.thread_id,
+        };
         let boundary = self.boundary_for_thread(thread_ref);
-        if self.unresolved_join_entries() >= MAX_UNRESOLVED_JOIN_ENTRIES {
-            record_join_capacity_exceeded(resources.boundaries, boundary);
-            return;
-        }
         match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
@@ -1680,10 +1619,6 @@ impl DirectDecoder {
                     .get(&parent_thread)
                     .and_then(|thread| thread.boundary)
             });
-        if self.unresolved_join_entries() >= MAX_UNRESOLVED_JOIN_ENTRIES {
-            record_join_capacity_exceeded(resources.boundaries, boundary);
-            return;
-        }
         match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
@@ -1707,6 +1642,8 @@ impl DirectDecoder {
         &mut self,
         resources: &DecoderResources<'_>,
         thread_ref: ThreadRef,
+        ts_ticks: u64,
+        status: ThreadEndStatus,
     ) {
         if self.pending_thread_ends.contains_key(&thread_ref) {
             return;
@@ -1720,16 +1657,7 @@ impl DirectDecoder {
                     .get(&thread_ref)
                     .and_then(|thread| thread.boundary)
             })
-            .or_else(|| find_boundary_by_root(resources.boundaries, thread_ref));
-        if self.unresolved_join_entries() >= MAX_UNRESOLVED_JOIN_ENTRIES {
-            if let Some(boundary) = boundary {
-                with_runtime(resources.boundaries, boundary, |runtime| {
-                    runtime.health.join_capacity_exceeded =
-                        runtime.health.join_capacity_exceeded.saturating_add(1);
-                });
-            }
-            return;
-        }
+            .or_else(|| find_execution_by_root(resources.boundaries, thread_ref));
         match resources.memory.try_reserve(
             ReservationClass::General,
             Owner::UnresolvedJoins,
@@ -1740,6 +1668,8 @@ impl DirectDecoder {
                     thread_ref,
                     PendingThreadEnd {
                         boundary,
+                        ts_ticks,
+                        status,
                         _reservation: reservation,
                     },
                 );
@@ -1755,7 +1685,40 @@ impl DirectDecoder {
         }
     }
 
-    pub(super) fn resolve_thread_ends_after_sweep(&mut self) {
+    fn resolve_threads_for_parent(
+        &mut self,
+        resources: &DecoderResources<'_>,
+        parent_call: CallRef,
+    ) {
+        loop {
+            let next = self.pending_threads.iter().find_map(|(key, pending)| {
+                (pending.fact.parent_call == parent_call).then_some(*key)
+            });
+            let Some(key) = next else { break };
+            let pending = self
+                .pending_threads
+                .remove(&key)
+                .expect("selected pending thread exists");
+            let Some(parent) = self.calls.get(&parent_call) else {
+                break;
+            };
+            let (boundary, context_key) = (parent.boundary, parent.context_key);
+            let thread_ref = pending.fact.thread_ref;
+            self.insert_thread(
+                resources,
+                thread_ref,
+                boundary,
+                Some(pending.fact.parent_call),
+                context_key,
+                pending.fact.spawn_site,
+                pending.fact.ts_ticks,
+                pending.fact.name.as_bytes(),
+            );
+            self.resolve_starts_for_thread(resources, thread_ref);
+        }
+    }
+
+    pub(super) fn resolve_thread_ends_after_sweep(&mut self, resources: &DecoderResources<'_>) {
         let ready = self
             .pending_thread_ends
             .keys()
@@ -1763,8 +1726,69 @@ impl DirectDecoder {
             .copied()
             .collect::<Vec<_>>();
         for thread_ref in ready {
-            self.pending_thread_ends.remove(&thread_ref);
-            self.threads.remove(&thread_ref);
+            let Some(pending) = self.pending_thread_ends.remove(&thread_ref) else {
+                continue;
+            };
+            let Some(state) = self.threads.remove(&thread_ref) else {
+                continue;
+            };
+            push_thread_end(
+                resources,
+                &state,
+                thread_ref,
+                pending.ts_ticks,
+                pending.status,
+            );
+        }
+    }
+
+    fn resolve_starts_for_thread(
+        &mut self,
+        resources: &DecoderResources<'_>,
+        thread_ref: ThreadRef,
+    ) {
+        // Two phases replace a recursion that alternated with
+        // `consume_call_start` and nested one stack frame per parked sibling
+        // start. Opening a call can only make more parked starts ready and
+        // consuming a parked end never can, so opening every ready start
+        // before any parked end runs resolves the same set.
+        let mut opened = Vec::new();
+        loop {
+            // A consumer can observe a spawned child's descendants before the
+            // spawning thread's ring publishes the child's entry call. Only
+            // remove a fact whose parent is already resolvable; removing and
+            // immediately reinserting an unready fact can otherwise select the
+            // same map entry forever and livelock the sole consumer.
+            let Some(parked) = self.pending_starts.get(&thread_ref) else {
+                break;
+            };
+            let next = parked
+                .iter()
+                .find(|(_, pending)| self.call_start_dependency_ready(&pending.fact))
+                .map(|(call_id, _)| *call_id);
+            let Some(call_id) = next else { break };
+            let parked = self
+                .pending_starts
+                .get_mut(&thread_ref)
+                .expect("parked map just observed");
+            let pending = parked
+                .remove(&call_id)
+                .expect("selected pending call start exists");
+            if parked.is_empty() {
+                self.pending_starts.remove(&thread_ref);
+            }
+            let call_ref = pending.fact.call_ref;
+            if self.consume_call_start_open(resources, pending.fact) {
+                opened.push(call_ref);
+            }
+        }
+        // A call's parked end runs only after every same-thread descendant
+        // opened above (it strips the context key their starts need);
+        // newest-first mirrors the unwind order of the replaced recursion.
+        for call_ref in opened.into_iter().rev() {
+            if let Some(pending) = self.pending_ends.remove(&call_ref) {
+                self.consume_call_end(resources, pending.fact);
+            }
         }
     }
 
@@ -1831,7 +1855,6 @@ impl DirectDecoder {
                             match runtime.evidence.push(
                                 EvidenceFact::ErrorCapture(ErrorCapture {
                                     id,
-                                    boundary_id: runtime.publisher.meta().boundary_id,
                                     throw_call_ref: pending.attempt.throw_call_ref,
                                     throw_context_ref,
                                     throw_function_id: pending.attempt.throw_function_id,
@@ -1899,7 +1922,7 @@ impl DirectDecoder {
                     _reservation: pending.reservation,
                 },
             );
-            self.flush_evidence_if_target(resources, pending.handle);
+            flush_evidence_if_target(resources, pending.handle);
             self.resolve_terminal_errors(resources);
         }
     }
@@ -1983,7 +2006,7 @@ impl DirectDecoder {
                         .saturating_add(1);
                 }
             });
-            self.flush_evidence_if_target(resources, pending.handle);
+            flush_evidence_if_target(resources, pending.handle);
         }
     }
 
@@ -2008,120 +2031,34 @@ impl DirectDecoder {
         }
     }
 
-    fn flush_evidence_if_target(
+    /// Flips `SpanState::Queued(batch_id)` on the batch's publication
+    /// outcome and rewrites terminal-error targets for lost batches. Called
+    /// on the consumer thread before the next decode; a no-op for handles
+    /// whose slot has been released.
+    pub(super) fn apply_batch_outcomes(
         &mut self,
-        resources: &DecoderResources<'_>,
-        handle: BoundaryHandle,
+        handle: ExecutionHandle,
+        batch_ids: &[u64],
+        committed: bool,
     ) {
-        let reached = with_runtime_value(resources.boundaries, handle, |runtime| {
-            Some(
-                runtime
-                    .evidence
-                    .target_reached(resources.sizing.segment_target_bytes),
-            )
-        })
-        .unwrap_or(false);
-        if reached {
-            self.flush_evidence(resources, handle);
-        }
-    }
-
-    fn flush_evidence(
-        &mut self,
-        resources: &DecoderResources<'_>,
-        handle: BoundaryHandle,
-    ) -> EvidenceBatchOutcome {
-        let outcome = with_runtime_value(resources.boundaries, handle, |runtime| {
-            if runtime.finalization != FinalizationState::Open || runtime.evidence.facts.is_empty()
-            {
-                return Some(EvidenceBatchOutcome::Noop);
-            }
-
-            // Context definitions are the durable dependency of every exact
-            // evidence fact. Seal the current definitions before taking the
-            // evidence batch so a failed definition publication cannot leave
-            // a dangling ContextRef on disk.
-            if let Some(epoch) = runtime.cct.take() {
-                let sealed = epoch.seal();
-                runtime.cct =
-                    Some(runtime.fresh_epoch(resources.process_euid, resources.engine_id));
-                if (!sealed.contexts.is_empty() || !sealed.overflow.is_empty())
-                    && match runtime.publisher.publish_cct_epoch(&sealed) {
-                        PublishBatchResult::Committed { .. } => false,
-                        PublishBatchResult::Lost(_) => {
-                            runtime.health.cct_segment_publish_failed =
-                                runtime.health.cct_segment_publish_failed.saturating_add(1);
-                            let lost = runtime.evidence.take();
-                            runtime.health.record_evidence_publish_failed(
-                                EvidenceBatchStats::from_facts(&lost.facts),
-                            );
-                            runtime.health.evidence_segment_publish_failed = runtime
-                                .health
-                                .evidence_segment_publish_failed
-                                .saturating_add(1);
-                            return Some(EvidenceBatchOutcome::Lost(lost.id));
-                        }
-                        PublishBatchResult::Indeterminate(_) => {
-                            runtime.finalization = FinalizationState::CctIndeterminate;
-                            true
-                        }
-                    }
-                {
-                    return Some(EvidenceBatchOutcome::Indeterminate);
-                }
-            }
-
-            let batch = runtime.evidence.take();
-            let batch_id = batch.id;
-            let stats = EvidenceBatchStats::from_facts(&batch.facts);
-            Some(
-                match runtime.publisher.publish_evidence_facts(&batch.facts) {
-                    PublishBatchResult::Committed { .. } => {
-                        runtime.health.record_evidence_committed(stats);
-                        EvidenceBatchOutcome::Committed(batch_id)
-                    }
-                    PublishBatchResult::Lost(_) => {
-                        runtime.health.record_evidence_publish_failed(stats);
-                        runtime.health.evidence_segment_publish_failed = runtime
-                            .health
-                            .evidence_segment_publish_failed
-                            .saturating_add(1);
-                        EvidenceBatchOutcome::Lost(batch_id)
-                    }
-                    PublishBatchResult::Indeterminate(_) => {
-                        runtime.finalization =
-                            FinalizationState::EvidenceIndeterminate { batch_id, stats };
-                        EvidenceBatchOutcome::Indeterminate
-                    }
-                },
-            )
-        })
-        .unwrap_or(EvidenceBatchOutcome::Noop);
-        self.apply_evidence_batch_outcome(handle, outcome);
-        outcome
-    }
-
-    fn apply_evidence_batch_outcome(
-        &mut self,
-        handle: BoundaryHandle,
-        outcome: EvidenceBatchOutcome,
-    ) {
-        let (batch_id, state) = match outcome {
-            EvidenceBatchOutcome::Committed(batch_id) => (batch_id, SpanState::Durable),
-            EvidenceBatchOutcome::Lost(batch_id) => (batch_id, SpanState::Lost),
-            EvidenceBatchOutcome::Noop | EvidenceBatchOutcome::Indeterminate => return,
+        let state = if committed {
+            SpanState::Durable
+        } else {
+            SpanState::Lost
         };
         for call in self.calls.values_mut() {
-            if call.boundary == handle && call.span_state == SpanState::Queued(batch_id) {
+            if call.boundary == handle
+                && matches!(call.span_state, SpanState::Queued(id) if batch_ids.contains(&id))
+            {
                 call.span_state = state;
             }
         }
         for error in self.error_targets.values_mut() {
-            if error.handle != handle || error.batch_id != Some(batch_id) {
+            if error.handle != handle || !error.batch_id.is_some_and(|id| batch_ids.contains(&id)) {
                 continue;
             }
             error.batch_id = None;
-            if matches!(outcome, EvidenceBatchOutcome::Lost(_)) {
+            if !committed {
                 error.target =
                     TerminalErrorTarget::Lost(ErrorCaptureLossReason::EvidenceSegmentPublishFailed);
             }
@@ -2136,7 +2073,7 @@ impl DirectDecoder {
     pub(super) fn complete_missing_values(
         &mut self,
         resources: &DecoderResources<'_>,
-        handle: BoundaryHandle,
+        handle: ExecutionHandle,
     ) {
         loop {
             let missing = self.calls.iter().find_map(|(call_ref, call)| {
@@ -2162,7 +2099,7 @@ impl DirectDecoder {
         }
     }
 
-    pub(super) fn discard_boundary(&mut self, handle: BoundaryHandle) -> BoundaryHealthSnapshot {
+    pub(super) fn discard_execution(&mut self, handle: ExecutionHandle) -> ExecutionHealthSnapshot {
         let mut unmatched_calls = 0u64;
         let mut unmatched_threads = 0u64;
         self.calls.retain(|_, call| {
@@ -2175,10 +2112,13 @@ impl DirectDecoder {
             unmatched_threads = unmatched_threads.saturating_add(u64::from(remove));
             !remove
         });
-        self.pending_starts.retain(|_, pending| {
-            let remove = pending.boundary == Some(handle);
-            unmatched_calls = unmatched_calls.saturating_add(u64::from(remove));
-            !remove
+        self.pending_starts.retain(|_, parked| {
+            parked.retain(|_, pending| {
+                let remove = pending.boundary == Some(handle);
+                unmatched_calls = unmatched_calls.saturating_add(u64::from(remove));
+                !remove
+            });
+            !parked.is_empty()
         });
         self.pending_ends.retain(|_, pending| {
             let remove = pending.boundary == Some(handle);
@@ -2225,47 +2165,142 @@ impl DirectDecoder {
             missing_terminal_joins = missing_terminal_joins.saturating_add(u64::from(remove));
             !remove
         });
-        BoundaryHealthSnapshot {
+        ExecutionHealthSnapshot {
             unmatched_call_facts: unmatched_calls,
             unmatched_thread_facts: unmatched_threads,
             error_capture_missing_structural_join: missing_error_joins,
             terminal_error_link_start_uncommitted: missing_terminal_joins,
-            ..BoundaryHealthSnapshot::default()
+            ..ExecutionHealthSnapshot::default()
         }
     }
 }
 
-fn rollover_if_needed(resources: &DecoderResources<'_>, handle: BoundaryHandle) {
-    with_runtime(resources.boundaries, handle, |runtime| {
-        if runtime.finalization != FinalizationState::Open {
-            return;
+/// Hands the current evidence batch — and, per the dependency rule, the
+/// sealed current CCT epoch — to the stream writer. No store I/O happens
+/// here; batch outcomes arrive later through `apply_batch_outcomes` when
+/// the writer publishes.
+fn flush_evidence(resources: &DecoderResources<'_>, handle: ExecutionHandle) {
+    let handoff = with_runtime_value(resources.boundaries, handle, |runtime| {
+        let epoch_has_content = runtime
+            .cct
+            .as_ref()
+            .is_some_and(super::cct::ActiveCctEpoch::has_content);
+        if runtime.evidence.facts.is_empty() && !epoch_has_content {
+            return None;
         }
-        let Some(epoch) = runtime.cct.as_ref() else {
-            return;
-        };
+        // Context definitions are the durable dependency of every exact
+        // evidence fact: seal the current epoch into the same group so a
+        // ContextRef can never dangle on disk.
+        let sealed = runtime.cct.take().map(|epoch| {
+            let sealed = epoch.seal();
+            runtime.cct = Some(runtime.fresh_epoch());
+            sealed
+        });
+        let batch = runtime.evidence.take();
+        Some((runtime.root, sealed, batch))
+    });
+    let Some((root, sealed, batch)) = handoff else {
+        return;
+    };
+    let stats = EvidenceBatchStats::from_facts(&batch.facts);
+    let batch_id = (!batch.facts.is_empty()).then_some(batch.id);
+    let reservations: Vec<Reservation> = [batch.general, batch.manual]
+        .into_iter()
+        .flatten()
+        .collect();
+    resources
+        .writer
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .hand_off(
+            handle,
+            root,
+            sealed,
+            batch.facts,
+            batch_id,
+            stats,
+            reservations,
+            Instant::now(),
+        );
+}
+
+/// Pushes the durable `ThreadEnd` fact — only for a thread whose
+/// `ThreadStart` was pushed (dependency rule).
+fn push_thread_end(
+    resources: &DecoderResources<'_>,
+    state: &ThreadState,
+    thread_ref: ThreadRef,
+    ts_ticks: u64,
+    status: ThreadEndStatus,
+) {
+    if !state.start_pushed {
+        return;
+    }
+    let end = ThreadEnd {
+        thread_ref,
+        ended_ns: resources.clock.to_ns(ts_ticks),
+        status,
+    };
+    with_runtime(resources.boundaries, state.boundary, |runtime| {
+        if runtime
+            .evidence
+            .push(EvidenceFact::ThreadEnd(end), false, resources.memory)
+            .is_err()
+        {
+            runtime.health.evidence_queue_full =
+                runtime.health.evidence_queue_full.saturating_add(1);
+        }
+    });
+    flush_evidence_if_target(resources, state.boundary);
+}
+
+fn flush_evidence_if_target(resources: &DecoderResources<'_>, handle: ExecutionHandle) {
+    let reached = with_runtime_value(resources.boundaries, handle, |runtime| {
+        Some(
+            runtime
+                .evidence
+                .target_reached(resources.sizing.segment_target_bytes),
+        )
+    })
+    .unwrap_or(false);
+    if reached {
+        flush_evidence(resources, handle);
+    }
+}
+
+fn rollover_if_needed(resources: &DecoderResources<'_>, handle: ExecutionHandle) {
+    let handoff = with_runtime_value(resources.boundaries, handle, |runtime| {
+        let epoch = runtime.cct.as_ref()?;
         let estimated_bytes = u64::try_from(epoch.cardinality())
             .unwrap_or(u64::MAX)
             .saturating_mul(MeasuredLayouts::V1.population_item_min_bytes);
         if estimated_bytes < resources.sizing.cct_epoch_target_bytes {
-            return;
+            return None;
         }
-        let next = runtime.fresh_epoch(resources.process_euid, resources.engine_id);
+        let next = runtime.fresh_epoch();
         let sealed = runtime
             .cct
             .replace(next)
-            .expect("open boundary has an active CCT epoch")
+            .expect("open execution has an active CCT epoch")
             .seal();
-        match runtime.publisher.publish_cct_epoch(&sealed) {
-            PublishBatchResult::Committed { .. } => {}
-            PublishBatchResult::Lost(_) => {
-                runtime.health.cct_segment_publish_failed =
-                    runtime.health.cct_segment_publish_failed.saturating_add(1);
-            }
-            PublishBatchResult::Indeterminate(_) => {
-                runtime.finalization = FinalizationState::CctIndeterminate;
-            }
-        }
+        Some((runtime.root, sealed))
     });
+    if let Some((root, sealed)) = handoff {
+        resources
+            .writer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .hand_off(
+                handle,
+                root,
+                Some(sealed),
+                Vec::new(),
+                None,
+                EvidenceBatchStats::default(),
+                Vec::new(),
+                Instant::now(),
+            );
+    }
 }
 
 trait ContextAdmissionExt {
@@ -2281,37 +2316,19 @@ impl ContextAdmissionExt for ContextAdmission {
     }
 }
 
-pub(super) fn finalize_ready_boundary(
-    handle: BoundaryHandle,
-    runtime: &mut BoundaryRuntime,
+/// Finalizes a ready execution (streams spec §5.6): discard decoder state,
+/// merge producer health, hand off the final CCT epoch and evidence batch to
+/// the stream writer, enqueue `RootEnded`, and release the slot immediately.
+/// Infallible: no store I/O happens on this path.
+pub(super) fn finalize_ready_execution(
+    handle: ExecutionHandle,
+    runtime: &mut ExecutionRuntime,
     decoder: &mut DirectDecoder,
-    registry: &super::BoundaryRegistry,
+    registry: &super::ExecutionRegistry,
+    writer: &Mutex<StreamWriter>,
+    clock: &TickConverter,
 ) -> bool {
-    match runtime.finalization {
-        FinalizationState::CctIndeterminate => {
-            if runtime.publisher.resolve_pending() != ResolveIndeterminateResult::Committed {
-                return false;
-            }
-            runtime.finalization = FinalizationState::Open;
-        }
-        FinalizationState::EvidenceIndeterminate { batch_id, stats } => {
-            if runtime.publisher.resolve_pending() != ResolveIndeterminateResult::Committed {
-                return false;
-            }
-            runtime.health.record_evidence_committed(stats);
-            decoder.apply_evidence_batch_outcome(handle, EvidenceBatchOutcome::Committed(batch_id));
-            runtime.finalization = FinalizationState::Open;
-        }
-        FinalizationState::FinishIndeterminate => {
-            if runtime.publisher.resolve_pending() != ResolveIndeterminateResult::Committed {
-                return false;
-            }
-            return registry.acknowledge_terminal(handle, BoundaryPhase::Sealed);
-        }
-        FinalizationState::Open => {}
-    }
-
-    let discarded = decoder.discard_boundary(handle);
+    let discarded = decoder.discard_execution(handle);
     let producer_health = registry.producer_health(handle);
     runtime.health.structural_transport_exceeded = producer_health.structural_transport_exceeded;
     runtime.health.value_attempt_transport_exceeded =
@@ -2348,86 +2365,64 @@ pub(super) fn finalize_ready_boundary(
         .health
         .terminal_error_link_start_uncommitted
         .saturating_add(discarded.terminal_error_link_start_uncommitted);
-    if let Some(epoch) = runtime.cct.take() {
-        let sealed = epoch.seal();
-        if !sealed.contexts.is_empty() || !sealed.overflow.is_empty() {
-            match runtime.publisher.publish_cct_epoch(&sealed) {
-                PublishBatchResult::Committed { .. } => {}
-                PublishBatchResult::Lost(_) => {
-                    runtime.health.cct_segment_publish_failed =
-                        runtime.health.cct_segment_publish_failed.saturating_add(1);
-                    if !runtime.evidence.facts.is_empty() {
-                        let lost = runtime.evidence.take();
-                        runtime.health.record_evidence_publish_failed(
-                            EvidenceBatchStats::from_facts(&lost.facts),
-                        );
-                        runtime.health.evidence_segment_publish_failed = runtime
-                            .health
-                            .evidence_segment_publish_failed
-                            .saturating_add(1);
-                    }
-                }
-                PublishBatchResult::Indeterminate(_) => {
-                    runtime.finalization = FinalizationState::CctIndeterminate;
-                    return false;
-                }
-            }
-        }
+
+    // CCT and evidence of this final hand-off form one group in one segment
+    // and share one outcome — the MVP's "on CCT loss drop the evidence
+    // batch" nuance is structural now.
+    let sealed = runtime.cct.take().map(super::ActiveCctEpoch::seal);
+    let batch = runtime.evidence.take();
+    let stats = EvidenceBatchStats::from_facts(&batch.facts);
+    let batch_id = (!batch.facts.is_empty()).then_some(batch.id);
+    let reservations: Vec<Reservation> = [batch.general, batch.manual]
+        .into_iter()
+        .flatten()
+        .collect();
+    let now = Instant::now();
+    let (status, closing_ticks) = registry.closing_facts(handle).map_or_else(
+        || {
+            (
+                ExecutionEndStatus::Abandoned,
+                crate::prof::clock::now_ticks(),
+            )
+        },
+        |(_, status, closing_ticks)| (status, closing_ticks),
+    );
+    {
+        let mut writer = writer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        writer.hand_off(
+            handle,
+            runtime.root,
+            sealed,
+            batch.facts,
+            batch_id,
+            stats,
+            reservations,
+            now,
+        );
+        writer.enqueue_root_ended(
+            runtime.root,
+            clock.to_ns(closing_ticks),
+            status,
+            runtime.health,
+            now,
+        );
     }
-    if !runtime.evidence.facts.is_empty() {
-        let batch = runtime.evidence.take();
-        let stats = EvidenceBatchStats::from_facts(&batch.facts);
-        match runtime.publisher.publish_evidence_facts(&batch.facts) {
-            PublishBatchResult::Committed { .. } => {
-                runtime.health.record_evidence_committed(stats);
-            }
-            PublishBatchResult::Lost(_) => {
-                runtime.health.record_evidence_publish_failed(stats);
-                runtime.health.evidence_segment_publish_failed = runtime
-                    .health
-                    .evidence_segment_publish_failed
-                    .saturating_add(1);
-            }
-            PublishBatchResult::Indeterminate(_) => {
-                runtime.finalization = FinalizationState::EvidenceIndeterminate {
-                    batch_id: batch.id,
-                    stats,
-                };
-                return false;
-            }
-        }
-    }
-    let status = registry
-        .closing_facts(handle)
-        .map_or(BoundaryEndStatus::Abandoned, |(_, status)| status);
-    match runtime.publisher.finish_boundary(&RunEnd {
-        status,
-        terminal_health: runtime.health.encode(),
-    }) {
-        FinishBoundaryResult::Sealed => {
-            registry.acknowledge_terminal(handle, BoundaryPhase::Sealed)
-        }
-        FinishBoundaryResult::ReleasedIncomplete(_) => {
-            registry.acknowledge_terminal(handle, BoundaryPhase::ReleasedIncomplete)
-        }
-        FinishBoundaryResult::Indeterminate(_) => {
-            runtime.finalization = FinalizationState::FinishIndeterminate;
-            false
-        }
-    }
+    registry.acknowledge_terminal(handle, ExecutionPhase::Released)
 }
 
-fn find_boundary_by_root(
-    boundaries: &[std::sync::Mutex<Option<BoundaryRuntime>>],
+fn find_execution_by_root(
+    boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
     root: ThreadRef,
-) -> Option<BoundaryHandle> {
+) -> Option<ExecutionHandle> {
     boundaries.iter().enumerate().find_map(|(slot, runtime)| {
         let runtime = runtime
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let runtime = runtime.as_ref()?;
-        if runtime.publisher.meta().root_thread_ref == root {
-            Some(BoundaryHandle {
+        if runtime.root == root {
+            Some(ExecutionHandle {
                 slot: u32::try_from(slot).ok()?,
                 generation: runtime.generation,
             })
@@ -2437,10 +2432,10 @@ fn find_boundary_by_root(
     })
 }
 
-fn with_runtime(
-    boundaries: &[std::sync::Mutex<Option<BoundaryRuntime>>],
-    handle: BoundaryHandle,
-    operation: impl FnOnce(&mut BoundaryRuntime),
+pub(super) fn with_runtime(
+    boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
+    handle: ExecutionHandle,
+    operation: impl FnOnce(&mut ExecutionRuntime),
 ) {
     let Some(slot) = boundaries.get(handle.slot as usize) else {
         return;
@@ -2455,9 +2450,9 @@ fn with_runtime(
 }
 
 fn with_runtime_value<T>(
-    boundaries: &[std::sync::Mutex<Option<BoundaryRuntime>>],
-    handle: BoundaryHandle,
-    operation: impl FnOnce(&mut BoundaryRuntime) -> Option<T>,
+    boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
+    handle: ExecutionHandle,
+    operation: impl FnOnce(&mut ExecutionRuntime) -> Option<T>,
 ) -> Option<T> {
     let slot = boundaries.get(handle.slot as usize)?;
     let mut slot = slot
@@ -2470,8 +2465,8 @@ fn with_runtime_value<T>(
 }
 
 fn record_join_capacity_exceeded(
-    boundaries: &[std::sync::Mutex<Option<BoundaryRuntime>>],
-    handle: Option<BoundaryHandle>,
+    boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
+    handle: Option<ExecutionHandle>,
 ) {
     if let Some(handle) = handle {
         with_runtime(boundaries, handle, |runtime| {
@@ -2485,7 +2480,7 @@ fn record_join_capacity_exceeded(
 /// one boundary, so every live boundary of that engine is marked as having a
 /// possibly incomplete structural stream.
 pub(super) fn record_engine_framing_error(
-    boundaries: &[std::sync::Mutex<Option<BoundaryRuntime>>],
+    boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
     engine_id: EngineId,
 ) {
     for slot in boundaries {
@@ -2493,7 +2488,7 @@ pub(super) fn record_engine_framing_error(
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(runtime) = slot.as_mut()
-            && runtime.publisher.meta().root_thread_ref.engine_id == engine_id
+            && runtime.root.engine_id == engine_id
         {
             runtime.health.corrupt_records = runtime.health.corrupt_records.saturating_add(1);
         }
@@ -2518,23 +2513,23 @@ fn call_thread_ref(call_ref: CallRef) -> ThreadRef {
 
 #[cfg(test)]
 mod tests {
-    use super::{BoundaryHealthSnapshot, DirectDecoder, OwnedCallStart};
+    use super::{DirectDecoder, ExecutionHealthSnapshot, OwnedCallStart};
     use crate::ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid};
 
     #[test]
     fn terminal_health_round_trips_and_rejects_wrong_lengths() {
-        let health = BoundaryHealthSnapshot {
+        let health = ExecutionHealthSnapshot {
             corrupt_records: 1,
             active_thread_capacity_exceeded: 2,
             terminal_error_link_evidence_publish_failed: 25,
-            ..BoundaryHealthSnapshot::default()
+            ..ExecutionHealthSnapshot::default()
         };
         let encoded = health.encode();
-        assert_eq!(BoundaryHealthSnapshot::decode(&encoded), Some(health));
-        assert!(BoundaryHealthSnapshot::decode(&encoded[..encoded.len() - 1]).is_none());
+        assert_eq!(ExecutionHealthSnapshot::decode(&encoded), Some(health));
+        assert!(ExecutionHealthSnapshot::decode(&encoded[..encoded.len() - 1]).is_none());
         let mut trailing = encoded;
         trailing.push(0);
-        assert!(BoundaryHealthSnapshot::decode(&trailing).is_none());
+        assert!(ExecutionHealthSnapshot::decode(&trailing).is_none());
     }
 
     #[test]

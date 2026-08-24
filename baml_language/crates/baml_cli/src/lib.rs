@@ -41,6 +41,7 @@ pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub(crate) mod project_session;
+pub(crate) mod query_command;
 pub mod reporter;
 pub(crate) mod run_command;
 pub(crate) mod shutdown;

@@ -11,7 +11,7 @@ use super::{
     ReservationClass,
 };
 use crate::{
-    ids::{BoundaryId, EngineId, FunctionId, ProcessEuid, ProgramId},
+    ids::{FunctionId, ProgramId},
     prof::record::{CallSiteSourceSpan, FunctionEndStatus},
 };
 
@@ -106,13 +106,6 @@ impl CctCounters {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct BoundaryRef {
-    pub process_euid: ProcessEuid,
-    pub engine_id: EngineId,
-    pub boundary_id: BoundaryId,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OverflowReason {
     ContextMemoryUnavailableAfterDrain,
     InvalidParentContext,
@@ -122,7 +115,6 @@ pub enum OverflowReason {
 pub enum ContextRef {
     Normal(ContextKey),
     Overflow {
-        boundary: BoundaryRef,
         reason: OverflowReason,
         edge_kind: EdgeKind,
     },
@@ -158,7 +150,119 @@ pub struct SealedCctEpoch {
     pub contexts: Vec<ContextDelta>,
     pub overflow: Vec<OverflowDelta>,
     pub health: CounterHealth,
-    _reservation: Option<Reservation>,
+    reservations: Vec<Reservation>,
+}
+
+impl SealedCctEpoch {
+    /// Governed bytes carried by this sealed epoch (transferred to the stream
+    /// writer on hand-off).
+    #[must_use]
+    pub fn accounted_bytes(&self) -> u64 {
+        self.reservations
+            .iter()
+            .map(Reservation::accounted_bytes)
+            .fold(0u64, u64::saturating_add)
+    }
+
+    /// Merges another sealed epoch of the same execution into this one:
+    /// contexts merged by `ContextKey` (tuples must be identical within one
+    /// execution — mismatch keeps the first), counters added saturating,
+    /// `CounterHealth` OR-ed, overflow added by `(reason, edge)`. Both inputs
+    /// are key-sorted (`seal` sorts) and the result stays sorted.
+    pub(crate) fn merge(&mut self, other: SealedCctEpoch) {
+        let mut merged = Vec::with_capacity(self.contexts.len() + other.contexts.len());
+        let mut left = std::mem::take(&mut self.contexts).into_iter().peekable();
+        let mut right = other.contexts.into_iter().peekable();
+        while let (Some(a), Some(b)) = (left.peek(), right.peek()) {
+            match a.key.0.cmp(&b.key.0) {
+                std::cmp::Ordering::Less => merged.push(left.next().expect("peeked")),
+                std::cmp::Ordering::Greater => merged.push(right.next().expect("peeked")),
+                std::cmp::Ordering::Equal => {
+                    let mut a = left.next().expect("peeked");
+                    let b = right.next().expect("peeked");
+                    debug_assert!(
+                        a.tuple.is_none() || b.tuple.is_none() || a.tuple == b.tuple,
+                        "one execution cannot define one ContextKey two ways"
+                    );
+                    if a.tuple.is_none() {
+                        a.tuple = b.tuple;
+                    }
+                    add_delta_counters(&mut a.counters, b.counters, &mut self.health);
+                    merged.push(a);
+                }
+            }
+        }
+        merged.extend(left);
+        merged.extend(right);
+        self.contexts = merged;
+        for delta in other.overflow {
+            match self.overflow.iter_mut().find(|existing| {
+                existing.reason == delta.reason && existing.edge_kind == delta.edge_kind
+            }) {
+                Some(existing) => {
+                    add_delta_counters(&mut existing.counters, delta.counters, &mut self.health);
+                }
+                None => self.overflow.push(delta),
+            }
+        }
+        self.health.counter_saturated |= other.health.counter_saturated;
+        self.health.await_counter_saturated |= other.health.await_counter_saturated;
+        self.health.self_time_underflow |= other.health.self_time_underflow;
+        self.reservations.extend(other.reservations);
+    }
+}
+
+fn add_delta_counters(target: &mut CctCounters, delta: CctCounters, health: &mut CounterHealth) {
+    saturating_add_u64(
+        &mut target.invocations_started,
+        delta.invocations_started,
+        &mut health.counter_saturated,
+    );
+    saturating_add_u64(
+        &mut target.spans_selected,
+        delta.spans_selected,
+        &mut health.counter_saturated,
+    );
+    saturating_add_u64(
+        &mut target.completed_ok,
+        delta.completed_ok,
+        &mut health.counter_saturated,
+    );
+    saturating_add_u64(
+        &mut target.completed_error,
+        delta.completed_error,
+        &mut health.counter_saturated,
+    );
+    saturating_add_u64(
+        &mut target.completed_cancelled,
+        delta.completed_cancelled,
+        &mut health.counter_saturated,
+    );
+    saturating_add_u64(
+        &mut target.completed_exit,
+        delta.completed_exit,
+        &mut health.counter_saturated,
+    );
+    saturating_add_u128(
+        &mut target.inclusive_ns,
+        delta.inclusive_ns,
+        &mut health.counter_saturated,
+    );
+    saturating_add_u128(
+        &mut target.direct_call_child_inclusive_ns,
+        delta.direct_call_child_inclusive_ns,
+        &mut health.counter_saturated,
+    );
+    saturating_add_u128(
+        &mut target.await_ns,
+        delta.await_ns,
+        &mut health.await_counter_saturated,
+    );
+    saturating_add_u64(
+        &mut target.await_count,
+        delta.await_count,
+        &mut health.await_counter_saturated,
+    );
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -199,7 +303,6 @@ struct ActiveContext {
 #[derive(Debug)]
 pub(crate) struct ActiveCctEpoch {
     program_id: ProgramId,
-    boundary: BoundaryRef,
     context_charge_bytes: u64,
     lookup: HashMap<LookupKey, u32>,
     contexts: Vec<ActiveContext>,
@@ -211,14 +314,9 @@ pub(crate) struct ActiveCctEpoch {
 
 impl ActiveCctEpoch {
     #[must_use]
-    pub(crate) fn new(
-        program_id: ProgramId,
-        boundary: BoundaryRef,
-        context_charge_bytes: u64,
-    ) -> Self {
+    pub(crate) fn new(program_id: ProgramId, context_charge_bytes: u64) -> Self {
         Self {
             program_id,
-            boundary,
             context_charge_bytes,
             lookup: HashMap::default(),
             contexts: Vec::new(),
@@ -434,6 +532,19 @@ impl ActiveCctEpoch {
         self.contexts.len()
     }
 
+    /// Whether sealing this epoch would produce any context or overflow
+    /// delta.
+    #[must_use]
+    pub(crate) fn has_content(&self) -> bool {
+        !self.contexts.is_empty()
+            || !self.external_deltas.is_empty()
+            || self
+                .overflow
+                .iter()
+                .flatten()
+                .any(|counters| *counters != CctCounters::default())
+    }
+
     #[must_use]
     pub(crate) fn seal(mut self) -> SealedCctEpoch {
         let mut contexts: Vec<_> = self
@@ -475,7 +586,7 @@ impl ActiveCctEpoch {
             contexts,
             overflow,
             health: self.health,
-            _reservation: self.reservation.take(),
+            reservations: self.reservation.take().into_iter().collect(),
         }
     }
 
@@ -513,11 +624,7 @@ impl ActiveCctEpoch {
         self.overflow[reason_index(reason)][edge_index(edge_kind)]
             .start(selected, &mut self.health);
         ContextAdmission::Overflow {
-            context_ref: ContextRef::Overflow {
-                boundary: self.boundary,
-                reason,
-                edge_kind,
-            },
+            context_ref: ContextRef::Overflow { reason, edge_kind },
         }
     }
 
@@ -586,11 +693,6 @@ mod tests {
         let memory = ProfilerMemoryGovernor::new(sizing, MeasuredLayouts::V1);
         let epoch = ActiveCctEpoch::new(
             ProgramId([9; 16]),
-            BoundaryRef {
-                process_euid: ProcessEuid([1; 16]),
-                engine_id: EngineId(2),
-                boundary_id: BoundaryId::from_bytes([3; 16]),
-            },
             MeasuredLayouts::V1.population_item_min_bytes,
         );
         (epoch, memory)
