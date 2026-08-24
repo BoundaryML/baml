@@ -25,6 +25,14 @@ function TestBamlEventsTypo() -> void {
 //  4 │     baml.ev.send("test", {})
 //    ·     ────────────
 //    ╰────
+// E0155
+//
+//   × type annotations needed
+//   │ full type: `map<string, unknown>`
+//    ╭─[expr_unresolved_builtin_namespace.baml:4:26]
+//  4 │     baml.ev.send("test", {})
+//    ·                          ──
+//    ╰────
 // E0003
 //
 //   × unresolved name: `baml.lo.info`
@@ -45,4 +53,12 @@ function TestBamlEventsTypo() -> void {
 //     ╭─[expr_unresolved_builtin_namespace.baml:16:5]
 //  16 │     baml.event.send("test", {})
 //     ·     ───────────────
+//     ╰────
+// E0155
+//
+//   × type annotations needed
+//   │ full type: `map<string, unknown>`
+//     ╭─[expr_unresolved_builtin_namespace.baml:16:29]
+//  16 │     baml.event.send("test", {})
+//     ·                             ──
 //     ╰────
