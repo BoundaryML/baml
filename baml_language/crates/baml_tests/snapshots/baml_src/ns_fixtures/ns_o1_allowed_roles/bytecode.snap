@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.o1_allowed_roles.AskGpt4o(question: string, client: <unresolved type #34575171419448> | null) -> string {
+function fixtures.o1_allowed_roles.AskGpt4o(question: string, client: ai.Client | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -31,7 +31,7 @@ function fixtures.o1_allowed_roles.AskGpt4o(question: string, client: <unresolve
     return
 }
 
-function fixtures.o1_allowed_roles.AskGpt4o$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
+function fixtures.o1_allowed_roles.AskGpt4o$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -56,7 +56,7 @@ function fixtures.o1_allowed_roles.AskGpt4o$parse(json: string) -> string {
     return
 }
 
-function fixtures.o1_allowed_roles.AskGpt4o$render_prompt(question: string) -> <unresolved type #135172864440005> {
+function fixtures.o1_allowed_roles.AskGpt4o$render_prompt(question: string) -> ai.Prompt {
     load_var question
     call user.fixtures.o1_allowed_roles.AskGpt4o$spec
     store_var _2
@@ -69,7 +69,7 @@ function fixtures.o1_allowed_roles.AskGpt4o$render_prompt(question: string) -> <
     return
 }
 
-function fixtures.o1_allowed_roles.AskGpt4o$spec(question: string) -> <unresolved type #25974768157144><string> {
+function fixtures.o1_allowed_roles.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -94,7 +94,7 @@ function fixtures.o1_allowed_roles.AskGpt4o$spec(question: string) -> <unresolve
     return
 }
 
-function fixtures.o1_allowed_roles.AskGpt4o$stream(question: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
+function fixtures.o1_allowed_roles.AskGpt4o$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -113,7 +113,7 @@ function fixtures.o1_allowed_roles.AskGpt4o$stream(question: string, client: <un
     return
 }
 
-function fixtures.o1_allowed_roles.AskO1(question: string, client: <unresolved type #34575171419448> | null) -> string {
+function fixtures.o1_allowed_roles.AskO1(question: string, client: ai.Client | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -143,7 +143,7 @@ function fixtures.o1_allowed_roles.AskO1(question: string, client: <unresolved t
     return
 }
 
-function fixtures.o1_allowed_roles.AskO1$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
+function fixtures.o1_allowed_roles.AskO1$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -168,7 +168,7 @@ function fixtures.o1_allowed_roles.AskO1$parse(json: string) -> string {
     return
 }
 
-function fixtures.o1_allowed_roles.AskO1$render_prompt(question: string) -> <unresolved type #135172864440005> {
+function fixtures.o1_allowed_roles.AskO1$render_prompt(question: string) -> ai.Prompt {
     load_var question
     call user.fixtures.o1_allowed_roles.AskO1$spec
     store_var _2
@@ -181,7 +181,7 @@ function fixtures.o1_allowed_roles.AskO1$render_prompt(question: string) -> <unr
     return
 }
 
-function fixtures.o1_allowed_roles.AskO1$spec(question: string) -> <unresolved type #25974768157144><string> {
+function fixtures.o1_allowed_roles.AskO1$spec(question: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -206,7 +206,7 @@ function fixtures.o1_allowed_roles.AskO1$spec(question: string) -> <unresolved t
     return
 }
 
-function fixtures.o1_allowed_roles.AskO1$stream(question: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
+function fixtures.o1_allowed_roles.AskO1$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

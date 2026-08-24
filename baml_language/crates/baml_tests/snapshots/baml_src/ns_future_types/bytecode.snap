@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function future_types.$init_test_ns_future_types_future_types(registry: <unresolved type #49679510787122>) -> null {
+function future_types.$init_test_ns_future_types_future_types(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.future_types"
     load_const "int_future_is_int_future"

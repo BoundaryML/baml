@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function json_parse_stringify.$init_test_ns_json_parse_stringify_json_parse_stringify(registry: <unresolved type #49679510787122>) -> null {
+function json_parse_stringify.$init_test_ns_json_parse_stringify_json_parse_stringify(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.json_parse_stringify"
     load_const "parse_array_of_ints"

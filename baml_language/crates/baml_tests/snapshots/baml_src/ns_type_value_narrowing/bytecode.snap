@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function type_value_narrowing.$init_test_ns_type_value_narrowing_type_value_narrowing(registry: <unresolved type #49679510787122>) -> null {
+function type_value_narrowing.$init_test_ns_type_value_narrowing_type_value_narrowing(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.type_value_narrowing"
     load_const "type_is_type_positive_and_negatives"

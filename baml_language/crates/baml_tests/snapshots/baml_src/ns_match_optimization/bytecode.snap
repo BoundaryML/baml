@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function match_optimization.$init_test_ns_match_optimization_match_optimization(registry: <unresolved type #49679510787122>) -> null {
+function match_optimization.$init_test_ns_match_optimization_match_optimization(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.match_optimization"
     load_const "match_jump_table_first_arm"

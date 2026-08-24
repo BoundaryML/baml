@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function control_flow.$init_test_ns_control_flow_control_flow(registry: <unresolved type #49679510787122>) -> null {
+function control_flow.$init_test_ns_control_flow_control_flow(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.control_flow"
     load_const "match_arm_break_exits_infinite_while_loop"
@@ -199,7 +199,7 @@ function control_flow.break_loop(x: int) -> int {
     return
 }
 
-function control_flow.chain_two(a: <unresolved type #61817867943798> | <unresolved type #97872390728147>, b: <unresolved type #61817867943798> | <unresolved type #97872390728147>) -> string {
+function control_flow.chain_two(a: control_flow.Ok | control_flow.Err, b: control_flow.Ok | control_flow.Err) -> string {
     load_var a
     store_var _3
     load_var _3
@@ -238,7 +238,7 @@ function control_flow.chain_two(a: <unresolved type #61817867943798> | <unresolv
     return
 }
 
-function control_flow.concat_oks(items: (<unresolved type #61817867943798> | <unresolved type #97872390728147>)[]) -> string {
+function control_flow.concat_oks(items: (control_flow.Ok | control_flow.Err)[]) -> string {
     load_const ""
     store_var acc
     load_const 0
@@ -312,7 +312,7 @@ function control_flow.continue_loop(x: int) -> int {
     jump L0
 }
 
-function control_flow.describe_else_message(r: <unresolved type #61817867943798> | <unresolved type #97872390728147>) -> string {
+function control_flow.describe_else_message(r: control_flow.Ok | control_flow.Err) -> string {
     load_var r
     store_var _2
     load_var _2
@@ -333,7 +333,7 @@ function control_flow.describe_else_message(r: <unresolved type #61817867943798>
     return
 }
 
-function control_flow.describe_or_pattern(r: <unresolved type #61817867943798> | <unresolved type #75674522340448> | <unresolved type #97872390728147>) -> string {
+function control_flow.describe_or_pattern(r: control_flow.Ok | control_flow.Warn | control_flow.Err) -> string {
     load_var r
     store_var _2
     load_var _2
@@ -375,7 +375,7 @@ function control_flow.describe_or_pattern(r: <unresolved type #61817867943798> |
     return
 }
 
-function control_flow.describe_then_default(r: <unresolved type #61817867943798> | <unresolved type #97872390728147>) -> string {
+function control_flow.describe_then_default(r: control_flow.Ok | control_flow.Err) -> string {
     load_var r
     store_var _2
     load_var _2
@@ -395,7 +395,7 @@ function control_flow.describe_then_default(r: <unresolved type #61817867943798>
     return
 }
 
-function control_flow.first_value_statement(r: <unresolved type #61817867943798> | <unresolved type #97872390728147>) -> string {
+function control_flow.first_value_statement(r: control_flow.Ok | control_flow.Err) -> string {
     load_var r
     store_var _2
     load_var _2
@@ -415,7 +415,7 @@ function control_flow.first_value_statement(r: <unresolved type #61817867943798>
     return
 }
 
-function control_flow.get_value_or_fallback(r: <unresolved type #61817867943798> | <unresolved type #97872390728147>) -> string {
+function control_flow.get_value_or_fallback(r: control_flow.Ok | control_flow.Err) -> string {
     load_var r
     store_var _2
     load_var _2
@@ -435,7 +435,7 @@ function control_flow.get_value_or_fallback(r: <unresolved type #61817867943798>
     return
 }
 
-function control_flow.greet_if_let(u: <unresolved type #31620995776503> | <unresolved type #134098523160891>) -> string {
+function control_flow.greet_if_let(u: control_flow.User | control_flow.Admin) -> string {
     load_var u
     is_type control_flow.User
     pop_jump_if_false L0
@@ -453,7 +453,7 @@ function control_flow.greet_if_let(u: <unresolved type #31620995776503> | <unres
     return
 }
 
-function control_flow.greet_let_else(u: <unresolved type #31620995776503> | <unresolved type #134098523160891>) -> string {
+function control_flow.greet_let_else(u: control_flow.User | control_flow.Admin) -> string {
     load_var u
     is_type control_flow.User
     pop_jump_if_false L0
@@ -491,7 +491,7 @@ function control_flow.if_let_call() -> string {
     return
 }
 
-function control_flow.inner_throws(r: <unresolved type #61817867943798> | <unresolved type #97872390728147>) -> string {
+function control_flow.inner_throws(r: control_flow.Ok | control_flow.Err) -> string {
     load_var r
     store_var _2
     load_var _2
@@ -530,13 +530,13 @@ function control_flow.main_caught() -> string {
     return
 }
 
-function control_flow.maybe_ok() -> <unresolved type #61817867943798> | <unresolved type #97872390728147> {
+function control_flow.maybe_ok() -> control_flow.Ok | control_flow.Err {
     load_const "from call"
     init_instance user.control_flow.Ok .value
     return
 }
 
-function control_flow.pick_first_ok(items: (<unresolved type #61817867943798> | <unresolved type #97872390728147>)[]) -> string {
+function control_flow.pick_first_ok(items: (control_flow.Ok | control_flow.Err)[]) -> string {
     load_const "no-ok"
     store_var result
     load_const 0
@@ -570,7 +570,7 @@ function control_flow.pick_first_ok(items: (<unresolved type #61817867943798> | 
     jump L0
 }
 
-function control_flow.pick_let_else(r: <unresolved type #61817867943798> | <unresolved type #75674522340448> | <unresolved type #97872390728147>) -> string {
+function control_flow.pick_let_else(r: control_flow.Ok | control_flow.Warn | control_flow.Err) -> string {
     load_var r
     store_var _3
     load_var _3
@@ -612,7 +612,7 @@ function control_flow.pick_let_else(r: <unresolved type #61817867943798> | <unre
     return
 }
 
-function control_flow.pick_nested(outer: <unresolved type #83162982107759>, inner: <unresolved type #83162982107759> | <unresolved type #137842783393030>) -> string {
+function control_flow.pick_nested(outer: control_flow.Wrapper, inner: control_flow.Wrapper | control_flow.Other) -> string {
     load_var outer
     store_var _3
     load_var _3
@@ -647,7 +647,7 @@ function control_flow.pick_nested(outer: <unresolved type #83162982107759>, inne
     return
 }
 
-function control_flow.pick_ok_err_empty(r: <unresolved type #61817867943798> | <unresolved type #97872390728147> | <unresolved type #112034943454629>) -> string {
+function control_flow.pick_ok_err_empty(r: control_flow.Ok | control_flow.Err | control_flow.Empty) -> string {
     load_var r
     store_var _2
     load_var _2
@@ -680,7 +680,7 @@ function control_flow.pick_ok_err_empty(r: <unresolved type #61817867943798> | <
     return
 }
 
-function control_flow.pick_optional(item: <unresolved type #120298623801443> | null) -> string {
+function control_flow.pick_optional(item: control_flow.Item | null) -> string {
     load_var item
     store_var _2
     load_var _2

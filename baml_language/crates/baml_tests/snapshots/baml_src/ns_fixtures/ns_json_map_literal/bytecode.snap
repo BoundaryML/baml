@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.json_map_literal.NestedMapLiteral() -> <unresolved type #1888633819501> {
+function fixtures.json_map_literal.NestedMapLiteral() -> baml.json.json {
     load_const 1
     load_const 2
     load_const 3

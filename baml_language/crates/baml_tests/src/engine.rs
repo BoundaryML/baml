@@ -133,6 +133,18 @@ pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
     heap
 }
 
+/// Read the function at pool index `idx` out of a heap built by
+/// [`bound_pool`], or `None` if the slot holds something else.
+pub fn bound_function(heap: &bex_heap::BexHeap, idx: usize) -> Option<&Function> {
+    let ptr = heap.compile_time_ptr(idx);
+    // SAFETY: `ptr` indexes the pool the heap was built from, and the returned
+    // borrow is tied to `heap`, which owns that pool for the borrow's lifetime.
+    match unsafe { ptr.get() } {
+        Object::Function(f) => Some(&**f),
+        _ => None,
+    }
+}
+
 /// [`display_user_functions`] over a [`bound_pool`], so type positions in the
 /// rendered bytecode show declaration names instead of raw head tags.
 pub fn display_user_functions_bound(program: &Program) -> String {
@@ -141,17 +153,12 @@ pub fn display_user_functions_bound(program: &Program) -> String {
         .function_indices
         .iter()
         .filter_map(|(name, idx)| {
-            let ptr = heap.compile_time_ptr(*idx);
-            // SAFETY: `ptr` indexes the pool the heap was just built from, and
-            // the unsealed heap outlives every read in this function.
-            let Object::Function(f) = (unsafe { ptr.get() }) else {
-                return None;
-            };
+            let f = bound_function(&heap, *idx)?;
             if !f.origin.is_user_callable() {
                 return None;
             }
             let display_name = name.strip_prefix("user.").unwrap_or(name).to_owned();
-            Some((display_name, &**f))
+            Some((display_name, f))
         })
         .collect();
     functions.sort_by(|(a, _), (b, _)| a.cmp(b));

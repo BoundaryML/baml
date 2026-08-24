@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function optional_function_parameters.$init_test_ns_optional_function_parameters_optional_function_parameters(registry: <unresolved type #49679510787122>) -> null {
+function optional_function_parameters.$init_test_ns_optional_function_parameters_optional_function_parameters(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.optional_function_parameters"
     load_const "source_defaults_named_overrides_and_required_by_name"

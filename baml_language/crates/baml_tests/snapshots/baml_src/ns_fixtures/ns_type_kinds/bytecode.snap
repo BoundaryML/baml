@@ -163,7 +163,7 @@ function fixtures.type_kinds.exercise_all_kinds() -> bool {
     return
 }
 
-function fixtures.type_kinds.read_class(view: <unresolved type #3200895997298>) -> reflect.Type {
+function fixtures.type_kinds.read_class(view: reflect.class.Type) -> reflect.Type {
     load_var view
     load_type reflect.TypeView
     load_const "as_type"

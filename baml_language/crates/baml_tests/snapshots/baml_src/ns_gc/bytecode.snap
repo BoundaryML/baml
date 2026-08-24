@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function gc.$init_test_ns_gc_gc(registry: <unresolved type #49679510787122>) -> null {
+function gc.$init_test_ns_gc_gc(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.gc"
     load_const "test_heavy_allocation_loop"

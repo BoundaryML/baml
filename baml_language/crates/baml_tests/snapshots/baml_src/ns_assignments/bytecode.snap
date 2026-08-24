@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function assignments.$init_test_ns_assignments_assignments(registry: <unresolved type #49679510787122>) -> null {
+function assignments.$init_test_ns_assignments_assignments(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.assignments"
     load_const "block_expr"
@@ -146,7 +146,7 @@ function assignments.$init_test_ns_assignments_assignments(registry: <unresolved
     return
 }
 
-function assignments.Factory.get_counter(self: <unresolved type #75696356273534>) -> <unresolved type #64340807572500> {
+function assignments.Factory.get_counter(self: assignments.Factory) -> assignments.Counter {
     load_var self
     load_field .counter
     return

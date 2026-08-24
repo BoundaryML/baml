@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: <unresolved type #34575171419448> | null) -> #0 {
+function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.Client | null) -> #0 {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -32,7 +32,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: <un
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
+function fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string, client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -58,7 +58,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify$parse(json: string) -> #0 
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: string) -> <unresolved type #135172864440005> {
+function fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: string) -> ai.Prompt {
     load_type #0
     load_var input
     call user.fixtures.anyfunction_reflect.RuntimeClassify$spec
@@ -72,7 +72,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: strin
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> <unresolved type #25974768157144><#0> {
+function fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<#0> {
     load_var ?1
     make_cell
     store_var ?1
@@ -98,7 +98,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> <un
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><#0 | null, #0> {
+function fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<#0 | null, #0> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -130,7 +130,7 @@ function fixtures.anyfunction_reflect.current_time() -> string {
     return
 }
 
-function fixtures.anyfunction_reflect.heterogeneous_tool_map() -> map<string, <unresolved type #56645786973401><Returns = <unresolved type #96883028434860>[] | string, Throws = <unresolved type #14591142978634>>> {
+function fixtures.anyfunction_reflect.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns = fixtures.anyfunction_reflect.Doc[] | string, Throws = fixtures.anyfunction_reflect.ToolError>> {
     load_const user.fixtures.anyfunction_reflect.web_search
     load_const user.fixtures.anyfunction_reflect.current_time
     load_const "search"
@@ -171,7 +171,7 @@ function fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> s
     return
 }
 
-function fixtures.anyfunction_reflect.signature_access(f: <unresolved type #56645786973401><Returns = unknown, Throws = unknown>) -> string {
+function fixtures.anyfunction_reflect.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> string {
     load_var f
     call reflect.signature
     store_var sig
@@ -284,7 +284,7 @@ function fixtures.anyfunction_reflect.signature_access(f: <unresolved type #5664
     return
 }
 
-function fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<string, unknown>) -> <unresolved type #96883028434860>[] | string {
+function fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<string, unknown>) -> fixtures.anyfunction_reflect.Doc[] | string {
     call user.fixtures.anyfunction_reflect.heterogeneous_tool_map
     store_var tools
     load_type string
@@ -358,7 +358,7 @@ function fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<str
     return
 }
 
-function fixtures.anyfunction_reflect.web_search(q: string) -> <unresolved type #96883028434860>[] {
+function fixtures.anyfunction_reflect.web_search(q: string) -> fixtures.anyfunction_reflect.Doc[] {
     load_var q
     load_const "boom"
     cmp_op ==

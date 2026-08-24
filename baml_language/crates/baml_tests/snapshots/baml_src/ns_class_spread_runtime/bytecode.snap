@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function class_spread_runtime.$init_test_ns_class_spread_runtime_class_spread_runtime(registry: <unresolved type #49679510787122>) -> null {
+function class_spread_runtime.$init_test_ns_class_spread_runtime_class_spread_runtime(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.class_spread_runtime"
     load_const "generic_spread_preserves_callable_and_last_field"
@@ -20,7 +20,7 @@ function class_spread_runtime.$init_test_ns_class_spread_runtime_class_spread_ru
     return
 }
 
-function class_spread_runtime.csr_defaults(value: #0, transform: (#0) -> #0 throws never) -> <unresolved type #53247902475478><#0> {
+function class_spread_runtime.csr_defaults(value: #0, transform: (#0) -> #0 throws never) -> class_spread_runtime.CsrTask<#0> {
     load_var2 1 2
     load_const "created"
     load_type string
@@ -67,7 +67,7 @@ function class_spread_runtime.csr_generic_spread() -> bool {
     return
 }
 
-function class_spread_runtime.csr_option_defaults(tools: <unresolved type #41153798759297>[], callback: (int[]) -> int[] throws never, registry: <unresolved type #41153798759297> | null, hook: <unresolved type #41153798759297> | null, observers: <unresolved type #41153798759297>[]) -> <unresolved type #32941661741515> {
+function class_spread_runtime.csr_option_defaults(tools: class_spread_runtime.CsrTool[], callback: (int[]) -> int[] throws never, registry: class_spread_runtime.CsrTool | null, hook: class_spread_runtime.CsrTool | null, observers: class_spread_runtime.CsrTool[]) -> class_spread_runtime.CsrOptions {
     load_var registry
     load_const <omitted>
     cmp_op ==
@@ -154,7 +154,7 @@ function class_spread_runtime.csr_spread_with_omitted_defaults() -> bool {
     return
 }
 
-function class_spread_runtime.csr_tool() -> <unresolved type #41153798759297> {
+function class_spread_runtime.csr_tool() -> class_spread_runtime.CsrTool {
     load_const "knowledge"
     init_instance user.class_spread_runtime.CsrTool .name
     return

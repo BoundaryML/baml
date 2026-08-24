@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function deep_copy.$init_test_ns_deep_copy_deep_copy(registry: <unresolved type #49679510787122>) -> null {
+function deep_copy.$init_test_ns_deep_copy_deep_copy(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.deep_copy"
     load_const "deep_copy_object"
@@ -291,7 +291,7 @@ function deep_copy.deep_copy_nested_arrays_helper() -> int {
     return
 }
 
-function deep_copy.deep_copy_object_helper() -> <unresolved type #23264620820124> {
+function deep_copy.deep_copy_object_helper() -> deep_copy.Tree {
     load_type deep_copy.Tree
     load_const "1"
     load_const "2"

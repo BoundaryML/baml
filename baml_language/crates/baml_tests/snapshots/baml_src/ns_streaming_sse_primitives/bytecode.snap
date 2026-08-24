@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function streaming_sse_primitives.$init_test_ns_streaming_sse_primitives_streaming_sse_primitives(registry: <unresolved type #49679510787122>) -> null {
+function streaming_sse_primitives.$init_test_ns_streaming_sse_primitives_streaming_sse_primitives(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.streaming_sse_primitives"
     load_const "sse_fetch_and_next_returns_events"

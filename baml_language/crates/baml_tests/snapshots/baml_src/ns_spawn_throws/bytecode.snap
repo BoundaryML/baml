@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function spawn_throws.$init_test_ns_spawn_throws_spawn_throws(registry: <unresolved type #49679510787122>) -> null {
+function spawn_throws.$init_test_ns_spawn_throws_spawn_throws(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.spawn_throws"
     load_const "await_uncaught_bubbles_to_host"

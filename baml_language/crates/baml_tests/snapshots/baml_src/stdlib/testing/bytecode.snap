@@ -1,18 +1,18 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function testing.$invoke_collector(collector: (<unresolved type #49679510787122>) -> void throws unknown, c: <unresolved type #49679510787122>) -> void {
+function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {
     load_var2 2 1
     call_indirect
     return
 }
 
-function testing.FailFast() -> (<unresolved type #93725257556349>[]) -> <unresolved type #38539982593899> throws never {
+function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
     make_closure .<lambda(FailFast, 0)>, 0
     return
 }
 
-function testing.PassRate(threshold: float) -> (<unresolved type #93725257556349>[]) -> <unresolved type #38539982593899> throws never {
+function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
     load_var ?1
     make_cell
     store_var ?1
@@ -40,7 +40,7 @@ function testing.PassRate(threshold: float) -> (<unresolved type #93725257556349
     return
 }
 
-function testing.Quorum(n: int, m: int) -> (() -> <unresolved type #108767753477609> throws never) -> (() -> <unresolved type #108767753477609> throws never) throws never {
+function testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never {
     load_var ?1
     make_cell
     store_var ?1
@@ -84,7 +84,7 @@ function testing.Quorum(n: int, m: int) -> (() -> <unresolved type #108767753477
     return
 }
 
-function testing.Retry(max_attempts: int) -> (() -> <unresolved type #108767753477609> throws never) -> (() -> <unresolved type #108767753477609> throws never) throws never {
+function testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never {
     load_var ?1
     make_cell
     store_var ?1
@@ -102,12 +102,12 @@ function testing.Retry(max_attempts: int) -> (() -> <unresolved type #1087677534
     return
 }
 
-function testing.Sequential() -> (<unresolved type #93725257556349>[]) -> <unresolved type #38539982593899> throws never {
+function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
     make_closure .<lambda(Sequential, 0)>, 0
     return
 }
 
-function testing.TestCollector.find_test(self: <unresolved type #49679510787122>, name: string) -> <unresolved type #136894341402> {
+function testing.TestCollector.find_test(self: testing.TestCollector, name: string) -> testing.TestRegistration {
     load_var self
     load_field .tests
     load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
@@ -143,7 +143,7 @@ function testing.TestCollector.find_test(self: <unresolved type #49679510787122>
     throw
 }
 
-function testing.TestCollector.find_testset(self: <unresolved type #49679510787122>, name: string) -> <unresolved type #48992417349648> {
+function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
     load_var self
     load_field .testsets
     load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
@@ -179,7 +179,7 @@ function testing.TestCollector.find_testset(self: <unresolved type #496795107871
     throw
 }
 
-function testing.TestCollector.new(prefix: string) -> <unresolved type #49679510787122> {
+function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     load_var prefix
     load_type testing.TestRegistration
     alloc_array 0
@@ -189,7 +189,7 @@ function testing.TestCollector.new(prefix: string) -> <unresolved type #49679510
     return
 }
 
-function testing.TestCollector.register_test(self: <unresolved type #49679510787122>, name: string, body: () -> void throws unknown, runner: ((() -> <unresolved type #108767753477609> throws never) -> (() -> <unresolved type #108767753477609> throws never) throws never) | null) -> void {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> void {
     load_var name
     load_const "::"
     call baml.String.includes
@@ -314,7 +314,7 @@ function testing.TestCollector.register_test(self: <unresolved type #49679510787
     throw
 }
 
-function testing.TestCollector.register_test_at(self: <unresolved type #49679510787122>, owner: string, name: string, body: () -> void throws unknown, runner: ((() -> <unresolved type #108767753477609> throws never) -> (() -> <unresolved type #108767753477609> throws never) throws never) | null) -> void {
+function testing.TestCollector.register_test_at(self: testing.TestCollector, owner: string, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> void {
     load_var2 2 1
     load_field .tests
     load_var self
@@ -326,7 +326,7 @@ function testing.TestCollector.register_test_at(self: <unresolved type #49679510
     return
 }
 
-function testing.TestCollector.register_test_set(self: <unresolved type #49679510787122>, name: string, collector: (<unresolved type #49679510787122>) -> void throws unknown, runner: ((<unresolved type #93725257556349>[]) -> <unresolved type #38539982593899> throws never) | null) -> void {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null) -> void {
     load_var name
     load_const "::"
     call baml.String.includes
@@ -451,7 +451,7 @@ function testing.TestCollector.register_test_set(self: <unresolved type #4967951
     throw
 }
 
-function testing.TestCollector.register_test_set_at(self: <unresolved type #49679510787122>, owner: string, name: string, collector: (<unresolved type #49679510787122>) -> void throws unknown, runner: ((<unresolved type #93725257556349>[]) -> <unresolved type #38539982593899> throws never) | null) -> void {
+function testing.TestCollector.register_test_set_at(self: testing.TestCollector, owner: string, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null) -> void {
     load_var2 2 1
     load_field .tests
     load_var self
@@ -463,7 +463,7 @@ function testing.TestCollector.register_test_set_at(self: <unresolved type #4967
     return
 }
 
-function testing.TestPool.acquire(self: <unresolved type #118264986786077>) -> null {
+function testing.TestPool.acquire(self: testing.TestPool) -> null {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -501,7 +501,7 @@ function testing.TestPool.acquire(self: <unresolved type #118264986786077>) -> n
     return
 }
 
-function testing.TestPool.release(self: <unresolved type #118264986786077>) -> null {
+function testing.TestPool.release(self: testing.TestPool) -> null {
     load_type int
     load_var self
     load_field .tokens
@@ -512,7 +512,7 @@ function testing.TestPool.release(self: <unresolved type #118264986786077>) -> n
     return
 }
 
-function testing.TestRegistry.expand_set(self: <unresolved type #26487773213760>, name: string) -> (<unresolved type #112046581445265> | <unresolved type #91171177102271>)[] {
+function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
     load_var self
     load_field .collector
     load_field .testsets
@@ -594,7 +594,7 @@ function testing.TestRegistry.expand_set(self: <unresolved type #26487773213760>
     throw
 }
 
-function testing.TestRegistry.expand_testset_registry(self: <unresolved type #26487773213760>, ts: <unresolved type #48992417349648>) -> <unresolved type #26487773213760> {
+function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.TestRegistry {
     load_type string
     load_type testing.TestRegistry
     load_var self
@@ -673,7 +673,7 @@ function testing.TestRegistry.expand_testset_registry(self: <unresolved type #26
     return
 }
 
-function testing.TestRegistry.list_filtered(self: <unresolved type #26487773213760>, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
+function testing.TestRegistry.list_filtered(self: testing.TestRegistry, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
     load_var2 1 2
     load_var2 3 4
     load_var cli_exclude
@@ -681,7 +681,7 @@ function testing.TestRegistry.list_filtered(self: <unresolved type #264877732137
     return
 }
 
-function testing.TestRegistry.new(collector: <unresolved type #49679510787122>) -> <unresolved type #26487773213760> {
+function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
     load_var collector
     load_type string
     load_type testing.TestRegistry
@@ -691,7 +691,7 @@ function testing.TestRegistry.new(collector: <unresolved type #49679510787122>) 
     return
 }
 
-function testing.TestRegistry.run_all(self: <unresolved type #26487773213760>) -> <unresolved type #38539982593899> {
+function testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.TestSetReport {
     load_const 0
     call testing.test_pool
     store_var _2
@@ -700,7 +700,7 @@ function testing.TestRegistry.run_all(self: <unresolved type #26487773213760>) -
     return
 }
 
-function testing.TestRegistry.run_all_pooled(self: <unresolved type #26487773213760>, pool: <unresolved type #118264986786077>) -> <unresolved type #38539982593899> {
+function testing.TestRegistry.run_all_pooled(self: testing.TestRegistry, pool: testing.TestPool) -> testing.TestSetReport {
     load_var2 1 2
     call testing.testset_children
     load_const null
@@ -709,7 +709,7 @@ function testing.TestRegistry.run_all_pooled(self: <unresolved type #26487773213
     return
 }
 
-function testing.TestRegistry.run_filtered(self: <unresolved type #26487773213760>, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[], max_concurrency: int) -> <unresolved type #77139304646434> {
+function testing.TestRegistry.run_filtered(self: testing.TestRegistry, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[], max_concurrency: int) -> testing.FlatTestReport {
     load_var2 1 2
     load_var2 3 4
     load_var cli_exclude
@@ -773,7 +773,7 @@ function testing.TestRegistry.run_filtered(self: <unresolved type #2648777321376
     return
 }
 
-function testing.TestRegistry.run_selected(self: <unresolved type #26487773213760>, names: string[]) -> <unresolved type #38539982593899> {
+function testing.TestRegistry.run_selected(self: testing.TestRegistry, names: string[]) -> testing.TestSetReport {
     load_const 0
     call testing.test_pool
     store_var _3
@@ -783,7 +783,7 @@ function testing.TestRegistry.run_selected(self: <unresolved type #2648777321376
     return
 }
 
-function testing.TestRegistry.run_selected_pooled(self: <unresolved type #26487773213760>, names: string[], pool: <unresolved type #118264986786077>) -> <unresolved type #38539982593899> {
+function testing.TestRegistry.run_selected_pooled(self: testing.TestRegistry, names: string[], pool: testing.TestPool) -> testing.TestSetReport {
     load_var2 1 2
     load_var pool
     call testing.testset_children_selected
@@ -793,7 +793,7 @@ function testing.TestRegistry.run_selected_pooled(self: <unresolved type #264877
     return
 }
 
-function testing.TestRegistry.run_test(self: <unresolved type #26487773213760>, name: string) -> <unresolved type #108767753477609> {
+function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport {
     load_var self
     load_field .collector
     load_field .tests
@@ -875,7 +875,7 @@ function testing.TestRegistry.run_test(self: <unresolved type #26487773213760>, 
     throw
 }
 
-function testing.TestRegistry.run_testset(self: <unresolved type #26487773213760>, name: string) -> <unresolved type #38539982593899> {
+function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: string) -> testing.TestSetReport {
     load_var self
     load_field .collector
     load_field .testsets
@@ -963,7 +963,7 @@ function testing.TestRegistry.run_testset(self: <unresolved type #26487773213760
     throw
 }
 
-function testing.TestRegistry.serialize(self: <unresolved type #26487773213760>) -> (<unresolved type #112046581445265> | <unresolved type #91171177102271>)[] {
+function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
     load_type testing.SerializedTest | testing.SerializedTestSet
     alloc_array 0
     store_var items
@@ -1148,7 +1148,7 @@ function testing._name_selected(name: string, names: string[]) -> bool {
     return
 }
 
-function testing.aggregate_reports(named_results: <unresolved type #54626613411488>[]) -> <unresolved type #38539982593899> {
+function testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testing.TestSetReport {
     load_const 0
     store_var passed
     load_const 0
@@ -1375,7 +1375,7 @@ function testing.any_pattern_matches(pats: string[], canonical_id: string) -> bo
     return
 }
 
-function testing.classify_selected_names(selected_names: string[], hard_failed_names: string[], all_failed_names: string[]) -> <unresolved type #66598141985709> {
+function testing.classify_selected_names(selected_names: string[], hard_failed_names: string[], all_failed_names: string[]) -> testing.LeafIdentities {
     load_type string
     alloc_array 0
     load_type string
@@ -1453,7 +1453,7 @@ function testing.classify_selected_names(selected_names: string[], hard_failed_n
     return
 }
 
-function testing.collect_all_failed_names(report: <unresolved type #38539982593899>, out: string[]) -> void {
+function testing.collect_all_failed_names(report: testing.TestSetReport, out: string[]) -> void {
     load_var report
     load_field .failed_names
     load_type baml.iter.Iterable<Error = never, Item = string>
@@ -1522,7 +1522,7 @@ function testing.collect_all_failed_names(report: <unresolved type #385399825938
     return
 }
 
-function testing.collect_leaf_identities(report: <unresolved type #38539982593899>, tolerated_by_parent: bool, selected_names: string[], out: <unresolved type #66598141985709>) -> void {
+function testing.collect_leaf_identities(report: testing.TestSetReport, tolerated_by_parent: bool, selected_names: string[], out: testing.LeafIdentities) -> void {
     load_var report
     load_field .result_names
     store_var_load_var _5
@@ -1798,7 +1798,7 @@ function testing.collect_leaf_identities(report: <unresolved type #3853998259389
     return
 }
 
-function testing.collect_leaf_messages(results: (<unresolved type #108767753477609> | <unresolved type #38539982593899>)[], out: string[]) -> void {
+function testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetReport)[], out: string[]) -> void {
     load_var results
     load_type baml.iter.Iterable<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "iter"
@@ -1878,7 +1878,7 @@ function testing.collect_leaf_messages(results: (<unresolved type #1087677534776
     return
 }
 
-function testing.collect_leaf_names(registry: <unresolved type #26487773213760>) -> string[] {
+function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] {
     load_type string
     alloc_array 0
     store_var out
@@ -1960,7 +1960,7 @@ function testing.collect_leaf_names(registry: <unresolved type #26487773213760>)
     return
 }
 
-function testing.collect_subtree_names(registry: <unresolved type #26487773213760>, ts: <unresolved type #48992417349648>) -> string[] {
+function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> string[] {
     load_var2 1 2
     call testing.TestRegistry.expand_testset_registry
     call testing.collect_leaf_names
@@ -2096,7 +2096,7 @@ function testing.collect_subtree_names(registry: <unresolved type #2648777321376
     return
 }
 
-function testing.collect_subtree_names_layered(registry: <unresolved type #26487773213760>, ts: <unresolved type #48992417349648>, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
+function testing.collect_subtree_names_layered(registry: testing.TestRegistry, ts: testing.TestSetRegistration, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
     load_var2 1 2
     call testing.TestRegistry.expand_testset_registry
     load_var2 3 4
@@ -2262,7 +2262,7 @@ function testing.collect_subtree_names_layered(registry: <unresolved type #26487
     return
 }
 
-function testing.count_leaves(results: (<unresolved type #108767753477609> | <unresolved type #38539982593899>)[], tolerated_by_parent: bool) -> <unresolved type #36827743972303> {
+function testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[], tolerated_by_parent: bool) -> testing.LeafCounts {
     load_const 0
     store_var passed
     load_const 0
@@ -2427,7 +2427,7 @@ function testing.count_leaves(results: (<unresolved type #108767753477609> | <un
     return
 }
 
-function testing.expansion_error_report(name: string) -> <unresolved type #38539982593899> {
+function testing.expansion_error_report(name: string) -> testing.TestSetReport {
     load_const "error"
     load_const 0
     load_const 1
@@ -2505,7 +2505,7 @@ function testing.failure_matches_selected(selected: string, failed_names: string
     return
 }
 
-function testing.flatten_with_tolerated(report: <unresolved type #38539982593899>, selected_names: string[]) -> <unresolved type #77139304646434> {
+function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names: string[]) -> testing.FlatTestReport {
     load_var report
     load_field .outcome
     load_const "pass"
@@ -2938,7 +2938,7 @@ function testing.pattern_may_match_descendant(pattern: string, prefix: string) -
     return
 }
 
-function testing.run_children_parallel(children: <unresolved type #93725257556349>[], pool: <unresolved type #118264986786077>) -> <unresolved type #38539982593899> {
+function testing.run_children_parallel(children: testing.TestSetChild[], pool: testing.TestPool) -> testing.TestSetReport {
     load_var ?2
     make_cell
     store_var ?2
@@ -3019,7 +3019,7 @@ function testing.run_children_parallel(children: <unresolved type #9372525755634
     return
 }
 
-function testing.run_children_sequential(children: <unresolved type #93725257556349>[], fail_fast: bool) -> <unresolved type #38539982593899> {
+function testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport {
     load_type testing.NamedChildReport
     alloc_array 0
     store_var named_results
@@ -3094,7 +3094,7 @@ function testing.run_children_sequential(children: <unresolved type #93725257556
     return
 }
 
-function testing.run_test(body: () -> void throws unknown, runner: ((() -> <unresolved type #108767753477609> throws never) -> (() -> <unresolved type #108767753477609> throws never) throws never) | null) -> <unresolved type #108767753477609> {
+function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestReport {
     load_var ?1
     make_cell
     store_var ?1
@@ -3139,7 +3139,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> <unre
     return
 }
 
-function testing.run_testset(children: <unresolved type #93725257556349>[], runner: ((<unresolved type #93725257556349>[]) -> <unresolved type #38539982593899> throws never) | null, pool: <unresolved type #118264986786077>) -> <unresolved type #38539982593899> {
+function testing.run_testset(children: testing.TestSetChild[], runner: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null, pool: testing.TestPool) -> testing.TestSetReport {
     load_var runner
     load_const null
     cmp_op ==
@@ -3159,7 +3159,7 @@ function testing.run_testset(children: <unresolved type #93725257556349>[], runn
     return
 }
 
-function testing.select_names(registry: <unresolved type #26487773213760>, include: string[], exclude: string[]) -> string[] {
+function testing.select_names(registry: testing.TestRegistry, include: string[], exclude: string[]) -> string[] {
     load_var registry
     load_type string
     alloc_array 0
@@ -3170,7 +3170,7 @@ function testing.select_names(registry: <unresolved type #26487773213760>, inclu
     return
 }
 
-function testing.select_names_layered(registry: <unresolved type #26487773213760>, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
+function testing.select_names_layered(registry: testing.TestRegistry, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
     load_type string
     alloc_array 0
     store_var out
@@ -3398,7 +3398,7 @@ function testing.subtree_may_be_selected(prefix: string, include: string[], excl
     return
 }
 
-function testing.test_child(name: string, body: () -> void throws unknown, runner: ((() -> <unresolved type #108767753477609> throws never) -> (() -> <unresolved type #108767753477609> throws never) throws never) | null) -> <unresolved type #93725257556349> {
+function testing.test_child(name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestSetChild {
     load_var ?2
     make_cell
     store_var ?2
@@ -3413,7 +3413,7 @@ function testing.test_child(name: string, body: () -> void throws unknown, runne
     return
 }
 
-function testing.test_pool(max_concurrency: int) -> <unresolved type #118264986786077> {
+function testing.test_pool(max_concurrency: int) -> testing.TestPool {
     load_var max_concurrency
     load_const 0
     cmp_int_op >
@@ -3460,7 +3460,7 @@ function testing.test_pool(max_concurrency: int) -> <unresolved type #1182649867
     jump L3
 }
 
-function testing.testset_child(registry: <unresolved type #26487773213760>, ts: <unresolved type #48992417349648>, pool: <unresolved type #118264986786077>) -> <unresolved type #93725257556349> {
+function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration, pool: testing.TestPool) -> testing.TestSetChild {
     load_var ?1
     make_cell
     store_var ?1
@@ -3480,7 +3480,7 @@ function testing.testset_child(registry: <unresolved type #26487773213760>, ts: 
     return
 }
 
-function testing.testset_child_selected(registry: <unresolved type #26487773213760>, ts: <unresolved type #48992417349648>, names: string[], pool: <unresolved type #118264986786077>) -> <unresolved type #93725257556349> {
+function testing.testset_child_selected(registry: testing.TestRegistry, ts: testing.TestSetRegistration, names: string[], pool: testing.TestPool) -> testing.TestSetChild {
     load_var ?1
     make_cell
     store_var ?1
@@ -3503,7 +3503,7 @@ function testing.testset_child_selected(registry: <unresolved type #264877732137
     return
 }
 
-function testing.testset_children(registry: <unresolved type #26487773213760>, pool: <unresolved type #118264986786077>) -> <unresolved type #93725257556349>[] {
+function testing.testset_children(registry: testing.TestRegistry, pool: testing.TestPool) -> testing.TestSetChild[] {
     load_type testing.TestSetChild
     alloc_array 0
     store_var children
@@ -3578,7 +3578,7 @@ function testing.testset_children(registry: <unresolved type #26487773213760>, p
     return
 }
 
-function testing.testset_children_selected(registry: <unresolved type #26487773213760>, names: string[], pool: <unresolved type #118264986786077>) -> <unresolved type #93725257556349>[] {
+function testing.testset_children_selected(registry: testing.TestRegistry, names: string[], pool: testing.TestPool) -> testing.TestSetChild[] {
     load_type testing.TestSetChild
     alloc_array 0
     store_var children

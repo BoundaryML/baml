@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function media_union_narrowing.$init_test_ns_media_union_narrowing_media_union_narrowing(registry: <unresolved type #49679510787122>) -> null {
+function media_union_narrowing.$init_test_ns_media_union_narrowing_media_union_narrowing(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.media_union_narrowing"
     load_const "media_is_image_positive_and_negatives"
@@ -705,7 +705,7 @@ function media_union_narrowing.media_vs_non_media() -> string {
     return
 }
 
-function media_union_narrowing.mixed_union_match(v: <unresolved type #119567881295348> | image | int) -> string {
+function media_union_narrowing.mixed_union_match(v: media_union_narrowing.Note | image | int) -> string {
     load_var v
     store_var _2
     load_var _2

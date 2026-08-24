@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function json_to_from_string.$init_test_ns_json_to_from_string_json_to_from_string(registry: <unresolved type #49679510787122>) -> null {
+function json_to_from_string.$init_test_ns_json_to_from_string_json_to_from_string(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.json_to_from_string"
     load_const "to_string_simple_class"
@@ -418,7 +418,7 @@ function json_to_from_string.level3(s: string) -> #0 {
     return
 }
 
-function json_to_from_string.make_decoder() -> (string) -> #0 throws <unresolved type #92755081178858> | <unresolved type #71316871800887> {
+function json_to_from_string.make_decoder() -> (string) -> #0 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
     load_type #0
     make_closure .<lambda(make_decoder, 0)>, captures=0, ntypeargs=1
     return

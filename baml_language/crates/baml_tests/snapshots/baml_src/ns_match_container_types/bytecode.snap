@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function match_container_types.$init_test_ns_match_container_types_match_container_types(registry: <unresolved type #49679510787122>) -> null {
+function match_container_types.$init_test_ns_match_container_types_match_container_types(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.match_container_types"
     load_const "match_container_int_list"

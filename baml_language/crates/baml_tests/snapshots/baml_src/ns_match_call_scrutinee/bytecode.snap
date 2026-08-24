@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function match_call_scrutinee.$init_test_ns_match_call_scrutinee_match_call_scrutinee(registry: <unresolved type #49679510787122>) -> null {
+function match_call_scrutinee.$init_test_ns_match_call_scrutinee_match_call_scrutinee(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.match_call_scrutinee"
     load_const "call_scrutinee_first_arm"
@@ -62,7 +62,7 @@ function match_call_scrutinee.$init_test_ns_match_call_scrutinee_match_call_scru
     return
 }
 
-function match_call_scrutinee.deal(which: int) -> <unresolved type #138088800242672> {
+function match_call_scrutinee.deal(which: int) -> match_call_scrutinee.Hand {
     load_var which
     jump_table [L4, L3, L2, L1], default L0
 
@@ -94,7 +94,7 @@ function match_call_scrutinee.deal(which: int) -> <unresolved type #138088800242
     return
 }
 
-function match_call_scrutinee.decide(which: int) -> <unresolved type #86580895330451> {
+function match_call_scrutinee.decide(which: int) -> match_call_scrutinee.Decision {
     load_var which
     load_const 1
     cmp_int_op ==
@@ -131,7 +131,7 @@ function match_call_scrutinee.decide_int() -> int {
     return
 }
 
-function match_call_scrutinee.flip(which: int) -> <unresolved type #54270299696716> {
+function match_call_scrutinee.flip(which: int) -> match_call_scrutinee.Coin {
     load_var which
     load_const 1
     cmp_int_op ==
@@ -182,7 +182,7 @@ function match_call_scrutinee.pick_int_chain() -> string {
     return
 }
 
-function match_call_scrutinee.pick_jump_table(other: <unresolved type #138088800242672>) -> string {
+function match_call_scrutinee.pick_jump_table(other: match_call_scrutinee.Hand) -> string {
     load_const 4
     call user.match_call_scrutinee.deal
     discriminant
@@ -214,7 +214,7 @@ function match_call_scrutinee.pick_jump_table(other: <unresolved type #138088800
     unreachable
 }
 
-function match_call_scrutinee.pick_param(d: <unresolved type #86580895330451>, other: <unresolved type #86580895330451>) -> string {
+function match_call_scrutinee.pick_param(d: match_call_scrutinee.Decision, other: match_call_scrutinee.Decision) -> string {
     load_var d
     discriminant
     load_const Decision.Alpha
@@ -245,7 +245,7 @@ function match_call_scrutinee.pick_param(d: <unresolved type #86580895330451>, o
     return
 }
 
-function match_call_scrutinee.pick_two_arms(other: <unresolved type #54270299696716>) -> string {
+function match_call_scrutinee.pick_two_arms(other: match_call_scrutinee.Coin) -> string {
     load_const 2
     call user.match_call_scrutinee.flip
     discriminant
@@ -299,7 +299,7 @@ function match_call_scrutinee.pick_with_closure_local(which: int, cb: () -> void
     return
 }
 
-function match_call_scrutinee.pick_with_enum_local(which: int, other: <unresolved type #86580895330451>) -> string {
+function match_call_scrutinee.pick_with_enum_local(which: int, other: match_call_scrutinee.Decision) -> string {
     load_var which
     call user.match_call_scrutinee.decide
     store_var _3

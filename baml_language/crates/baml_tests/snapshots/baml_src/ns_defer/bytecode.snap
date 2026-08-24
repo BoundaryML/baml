@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function defer.$init_test_ns_defer_defer(registry: <unresolved type #49679510787122>) -> null {
+function defer.$init_test_ns_defer_defer(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.defer"
     load_const "defer_runs_lifo_on_normal_block_exit"
@@ -837,7 +837,7 @@ function defer.unwind_risky_binding(log: string[]) -> int {
     return
 }
 
-function defer.unwind_risky_counter(c: <unresolved type #14964617190369>) -> int {
+function defer.unwind_risky_counter(c: defer.UnwindCounter) -> int {
     load_const 10
     load_const 0
     div_int

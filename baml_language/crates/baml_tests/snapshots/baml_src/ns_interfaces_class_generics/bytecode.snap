@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function interfaces_class_generics.$init_test_ns_interfaces_class_generics_interfaces_class_generics(registry: <unresolved type #49679510787122>) -> null {
+function interfaces_class_generics.$init_test_ns_interfaces_class_generics_interfaces_class_generics(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.interfaces_class_generics"
     load_const "class_generic_bound_member_access_runs_in_class_method"
@@ -34,7 +34,7 @@ function interfaces_class_generics.$init_test_ns_interfaces_class_generics_inter
     return
 }
 
-function interfaces_class_generics.AemEchoer.AemEcho<int>.echo(self: <unresolved type #100358108502815>, value: #1) -> #0 {
+function interfaces_class_generics.AemEchoer.AemEcho<int>.echo(self: interfaces_class_generics.AemEchoer, value: #1) -> #0 {
     load_var value
     load_type interfaces_class_generics.AemEq<#0>
     load_const "get"
@@ -44,13 +44,13 @@ function interfaces_class_generics.AemEchoer.AemEcho<int>.echo(self: <unresolved
     return
 }
 
-function interfaces_class_generics.AemValue.AemEq<T>.get(self: <unresolved type #522382340534><#0>) -> #0 {
+function interfaces_class_generics.AemValue.AemEq<T>.get(self: interfaces_class_generics.AemValue<#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function interfaces_class_generics.Box.label(self: <unresolved type #104795220105469><#0>) -> string {
+function interfaces_class_generics.Box.label(self: interfaces_class_generics.Box<#0>) -> string {
     load_var self
     load_field .value
     load_type interfaces_class_generics.Named
@@ -58,7 +58,7 @@ function interfaces_class_generics.Box.label(self: <unresolved type #10479522010
     return
 }
 
-function interfaces_class_generics.McapIntDriver.McapDriver<McapTask<int>>.drive(self: <unresolved type #57380346101156>, input: <unresolved type #124725167695888><int>) -> string {
+function interfaces_class_generics.McapIntDriver.McapDriver<McapTask<int>>.drive(self: interfaces_class_generics.McapIntDriver, input: interfaces_class_generics.McapTask<int>) -> string {
     load_var input
     load_field .value
     load_const 42
@@ -77,7 +77,7 @@ function interfaces_class_generics.McapIntDriver.McapDriver<McapTask<int>>.drive
     return
 }
 
-function interfaces_class_generics.McapTask.drive(self: <unresolved type #124725167695888><#0>, driver: #1) -> (#1 as <unresolved type #107705643382979><<unresolved type #124725167695888><#0>>).Output {
+function interfaces_class_generics.McapTask.drive(self: interfaces_class_generics.McapTask<#0>, driver: #1) -> (#1 as interfaces_class_generics.McapDriver<interfaces_class_generics.McapTask<#0>>).Output {
     load_var2 2 1
     load_type interfaces_class_generics.McapDriver<interfaces_class_generics.McapTask<#0>>
     load_const "drive"
@@ -87,7 +87,7 @@ function interfaces_class_generics.McapTask.drive(self: <unresolved type #124725
     return
 }
 
-function interfaces_class_generics.aem_accept_echo(value: <unresolved type #58093907784624><int>) -> int {
+function interfaces_class_generics.aem_accept_echo(value: interfaces_class_generics.AemEcho<int>) -> int {
     load_type int
     load_type interfaces_class_generics.AemValue<int>
     load_var value

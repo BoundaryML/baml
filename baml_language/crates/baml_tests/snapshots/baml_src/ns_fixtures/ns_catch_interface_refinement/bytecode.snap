@@ -1,12 +1,12 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.catch_interface_refinement.QuotaExceeded.Failure.is_transient(self: <unresolved type #85985398458226>) -> bool {
+function fixtures.catch_interface_refinement.QuotaExceeded.Failure.is_transient(self: fixtures.catch_interface_refinement.QuotaExceeded) -> bool {
     load_const false
     return
 }
 
-function fixtures.catch_interface_refinement.Throttled.Failure.is_transient(self: <unresolved type #113180554403727>) -> bool {
+function fixtures.catch_interface_refinement.Throttled.Failure.is_transient(self: fixtures.catch_interface_refinement.Throttled) -> bool {
     load_const true
     return
 }

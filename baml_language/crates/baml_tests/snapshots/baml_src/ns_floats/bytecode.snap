@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function floats.$init_test_ns_floats_floats(registry: <unresolved type #49679510787122>) -> null {
+function floats.$init_test_ns_floats_floats(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.floats"
     load_const "float_is_nan_true"

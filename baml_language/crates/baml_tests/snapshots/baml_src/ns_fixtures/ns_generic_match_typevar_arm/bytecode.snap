@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.generic_match_typevar_arm.unwrap_or(o: <unresolved type #119919648883535><#0> | <unresolved type #85834671110809>, default: #0) -> #0 {
+function fixtures.generic_match_typevar_arm.unwrap_or(o: fixtures.generic_match_typevar_arm.Opt<#0> | fixtures.generic_match_typevar_arm.Non, default: #0) -> #0 {
     load_var o
     store_var _3
     load_var _3
