@@ -1,4 +1,6 @@
 #[cfg(test)]
+mod b1607_diagnostic_ownership;
+#[cfg(test)]
 mod lsp_issues_authoring;
 #[cfg(test)]
 mod lsp_issues_generic_hover;

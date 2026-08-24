@@ -242,7 +242,7 @@ function main(t: reflect.Type) -> unknown throws unknown { wrap<unreflect(t)>(1)
 /// The same report from the CALL side, whose span and rewrite travel a
 /// different road than the class literal's: the slot span comes from
 /// `DiagnosticLocation::UnreflectArg` through `AstSourceMap`, and the rewrite
-/// is assembled in `TirDiagnostic::render_with_type_refs` from the file text.
+/// is assembled in `TirDiagnostic::render_with_body_type_refs` from the file text.
 /// The code+message assertions above would not notice either degrading.
 #[test]
 fn the_report_at_a_call_site_names_the_slot_and_spells_the_fix() {
