@@ -372,6 +372,16 @@ pub fn receiver_at_dot<'db>(
     baml_type::interned::Ty,
 )> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let text = file.text(db);
+    // A receiver "reaches" the dot when only trivia separates them, so a
+    // member access written across lines (`s\n    .len()`) addresses the
+    // same value a single-line one does.
+    let reaches = |end: TextSize| {
+        end <= dot
+            && text
+                .get(usize::from(end)..usize::from(dot))
+                .is_some_and(|between| between.chars().all(|c| c.is_whitespace() || c == '?'))
+    };
     let mut seen: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>> = Vec::new();
     // Innermost wins, the same contest `member_position_at` runs: a receiver
     // nested in an argument list claims over the call that encloses it.
@@ -406,7 +416,7 @@ pub fn receiver_at_dot<'db>(
         };
         for (expr_id, expr) in expr_body.exprs.iter() {
             let found = match expr {
-                Expr::MemberAccess { base, .. } => (source_map.expr_span(*base).end() == dot)
+                Expr::MemberAccess { base, .. } => reaches(source_map.expr_span(*base).end())
                     .then(|| {
                         inference
                             .type_of_expr
@@ -414,9 +424,26 @@ pub fn receiver_at_dot<'db>(
                             .map(|ty| (ty.clone(), source_map.expr_span(*base)))
                     })
                     .flatten(),
+                // `a?.b` reads a member of the NON-NULL payload — that is
+                // what the optional access is for, and the recorded variant
+                // is what says so.
+                Expr::OptionalMemberAccess { base, .. } => {
+                    reaches(source_map.expr_span(*base).end())
+                        .then(|| {
+                            inference.type_of_expr.get(base).map(|ty| {
+                                (
+                                    baml_type::interned::Ty::from_plain(
+                                        &ty.to_plain().strip_null(),
+                                    ),
+                                    source_map.expr_span(*base),
+                                )
+                            })
+                        })
+                        .flatten()
+                }
                 Expr::Path(segments) => (0..segments.len()).find_map(|segment_idx| {
                     let span = source_map.path_segment_span(expr_id, segment_idx);
-                    if span.end() != dot {
+                    if !reaches(span.end()) {
                         return None;
                     }
                     let resolved = inference.path_resolutions.get(&expr_id)?;
@@ -435,7 +462,186 @@ pub fn receiver_at_dot<'db>(
             }
         }
     }
-    best.map(|(owner, ty, _)| (owner, ty))
+    // A receiver the checker could not type addresses nothing: `baml.` is a
+    // package qualifier, and inference records the error sentinel for the
+    // `baml` it could not read as a value. Reporting that as a receiver
+    // would answer "no members" for a dot that has plenty.
+    best.filter(|(_, ty, _)| !matches!(ty.kind(), baml_type::interned::TyKind::Error { .. }))
+        .map(|(owner, ty, _)| (owner, ty))
+}
+
+/// The type declaration a qualifier path names, when it names one:
+/// `baml.iter.Range`, `root.Point`, or a builtin alias like `int` (whose
+/// declaration is the companion class the language defines it by).
+///
+/// This is the middle rung of a dotted read — between a value receiver and a
+/// namespace — and it is what makes UFCS addressable: `int.min(a, b)` names
+/// the same member `a.min(b)` does.
+pub fn type_qualifier_at<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    segments: &[Name],
+) -> Option<Definition<'db>> {
+    // A lowercase alias is the SOURCE spelling of a companion class; the
+    // language's own table says which (`PrimitiveType::builtin_class_path`).
+    if let [only] = segments
+        && let Some(baml_type::BuiltinTypeName::Primitive(primitive)) =
+            baml_type::BuiltinTypeName::from_alias(only.as_str())
+    {
+        let path: Vec<Name> = primitive
+            .builtin_class_path()
+            .iter()
+            .map(Name::new)
+            .collect();
+        let (name, namespace) = path.split_last()?;
+        let baml = baml_compiler2_hir::package::PackageId::new(db, Name::new("baml"));
+        return baml_compiler2_ppir::package_items(db, baml).lookup_type(namespace, name);
+    }
+
+    let definition = baml_compiler2_ppir::resolve::qualified_type_at(db, file, segments)?;
+    matches!(
+        definition,
+        Definition::Class(_) | Definition::Enum(_) | Definition::Interface(_)
+    )
+    .then_some(definition)
+}
+
+/// A call being written: the callee's function type and the argument labels
+/// already spelled.
+pub struct CallPosition {
+    /// The callee's type, which carries the parameter names and which of
+    /// them are optional (and therefore named-only).
+    pub callee: baml_type::interned::Ty,
+    /// Labels already written in this call — a name is offered once.
+    pub written: Vec<Name>,
+}
+
+/// The call whose argument list opens at `open_paren`.
+///
+/// Addressed like [`receiver_at_dot`]: the callee's recorded span ends where
+/// the `(` begins, so the call is found by an offset rather than by
+/// re-resolving the callee's name.
+pub fn call_at(
+    db: &dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    open_paren: TextSize,
+) -> Option<CallPosition> {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let mut seen: Vec<baml_compiler2_hir::loc::FunctionLoc<'_>> = Vec::new();
+    for scope_id in scope_candidates_at(db, file, index, open_paren) {
+        let Some((body, source_map, inference)) = body_at(db, index, scope_id, &mut seen) else {
+            continue;
+        };
+        let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+            continue;
+        };
+        for expr in expr_body.exprs.values() {
+            let Expr::Call { callee, args, .. } = expr else {
+                continue;
+            };
+            if source_map.expr_span(*callee).end() != open_paren {
+                continue;
+            }
+            let ty = inference.type_of_expr.get(callee)?;
+            return Some(CallPosition {
+                callee: ty.clone(),
+                written: args.iter().filter_map(|arg| arg.label.clone()).collect(),
+            });
+        }
+    }
+    None
+}
+
+/// An object literal being written: the class it constructs and the fields
+/// already spelled.
+pub struct ObjectLiteralPosition<'db> {
+    pub class: baml_compiler2_hir::loc::ClassLoc<'db>,
+    pub written: Vec<Name>,
+}
+
+/// The object literal whose recorded span covers `offset`.
+///
+/// The literal's TYPE is the recorded one, so a constructor whose name the
+/// reader is still typing resolves the same way inference resolved it —
+/// nothing here re-resolves a type path.
+pub fn object_literal_at<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    offset: TextSize,
+) -> Option<ObjectLiteralPosition<'db>> {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let mut seen: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>> = Vec::new();
+    let mut best: Option<(ObjectLiteralPosition<'db>, TextRange)> = None;
+    for scope_id in scope_candidates_at(db, file, index, offset) {
+        let Some((body, source_map, inference)) = body_at(db, index, scope_id, &mut seen) else {
+            continue;
+        };
+        let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+            continue;
+        };
+        for (expr_id, expr) in expr_body.exprs.iter() {
+            let Expr::Object { fields, .. } = expr else {
+                continue;
+            };
+            let span = source_map.expr_span(expr_id);
+            if !(span.contains(offset) || span.end() == offset) {
+                continue;
+            }
+            let Some(baml_type::interned::TyKind::Class(qtn, ..)) = inference
+                .type_of_expr
+                .get(&expr_id)
+                .map(baml_type::interned::Ty::kind)
+            else {
+                continue;
+            };
+            let facts = baml_compiler2_hir_ty::facts::Facts::new(db);
+            let Some(Definition::Class(class)) = facts.definition_of(qtn) else {
+                continue;
+            };
+            // Innermost wins: `Outer { inner: Inner { … } }`.
+            if best
+                .as_ref()
+                .is_none_or(|(_, previous)| span.len() < previous.len())
+            {
+                best = Some((
+                    ObjectLiteralPosition {
+                        class,
+                        written: fields.iter().map(|field| field.name.clone()).collect(),
+                    },
+                    span,
+                ));
+            }
+        }
+    }
+    best.map(|(position, _)| position)
+}
+
+/// The body a scope belongs to, with everything a position query reads from
+/// it. `seen` keeps a function's family (an llm function and its companions
+/// share spans) from being walked twice.
+fn body_at<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    index: &'db FileSemanticIndex<'db>,
+    scope_id: FileScopeId,
+    seen: &mut Vec<baml_compiler2_hir::loc::FunctionLoc<'db>>,
+) -> Option<(
+    std::sync::Arc<baml_compiler2_hir::body::FunctionBody>,
+    baml_compiler2_ast::AstSourceMap,
+    &'db baml_compiler2_hir_ty::infer::InferenceResult<'db>,
+)> {
+    let func_scope = enclosing_function_scope(index, scope_id)?;
+    let func_owner = index.scope_ids[func_scope.index() as usize];
+    let item_data::ScopeOwner::Function(func_loc) = item_data::scope_owner(db, func_owner)? else {
+        return None;
+    };
+    if seen.contains(&func_loc) {
+        return None;
+    }
+    seen.push(func_loc);
+    let body = baml_compiler2_ppir::function_body(db, func_loc);
+    let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc)?;
+    let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
+    Some((body, source_map, inference))
 }
 
 /// The local binding at `offset`, if any: either the declaration's own name

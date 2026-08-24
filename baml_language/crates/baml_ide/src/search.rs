@@ -22,6 +22,7 @@ use baml_compiler2_ppir::item_data;
 use text_size::TextRange;
 
 use crate::outline::{OutlineItem, file_outline};
+use crate::symbols::is_synthesized;
 
 // ── Substring mode (workspace/symbol) ────────────────────────────────────────
 
@@ -283,27 +284,6 @@ struct Candidate {
     /// The full dotted path, shown to the reader and scored weakly.
     path: String,
     docstring: Option<String>,
-}
-
-/// Whether an item enumeration should skip this definition as synthesized:
-/// `$`-companions and auto-derives carry the docstring of the declaration
-/// they shadow, so each is a duplicate hit for whatever its original
-/// matched.
-fn is_synthesized(db: &dyn baml_compiler2_ppir::Db, name: &Name, def: Definition<'_>) -> bool {
-    if name.as_str().contains('$') {
-        return true;
-    }
-    if let Definition::Function(func) = def {
-        use baml_compiler2_ast::ast::FunctionOrigin;
-        match item_data::function_data(db, func).metadata.origin {
-            FunctionOrigin::UserDefined => false,
-            FunctionOrigin::Companion | FunctionOrigin::Internal | FunctionOrigin::AutoDerive => {
-                true
-            }
-        }
-    } else {
-        false
-    }
 }
 
 /// Everything in `packages` the ranked search can land on.

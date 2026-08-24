@@ -2226,6 +2226,42 @@ function demo() -> int throws never {
     }
 
     #[test]
+    fn an_unresolved_throws_clause_is_reported_once_at_its_own_span() {
+        // A `throws` clause is a SIGNATURE annotation: its type reference
+        // lives in the signature's `TypeRefStore`, while a body's lowering
+        // sink hands back ids read against the BODY's store. Lowering the
+        // clause with that sink live anchored the failure at whatever the
+        // body had written at the same index — an unrelated annotation, or
+        // nothing at all, which panicked the whole file's check.
+        //
+        // Three bodies, chosen for the three outcomes the old code had:
+        // no body annotations (index out of bounds), one (out of bounds by
+        // one), two (in bounds and pointing at the wrong one).
+        for body in [
+            "0",
+            r#"let a: string = "x"; 0"#,
+            r#"let a: string = "x"; let b: bool = true; 0"#,
+        ] {
+            let source = format!("function f() -> int throws Nonexistent {{ {body} }}\n");
+            let (db, file) = single_file(&source);
+            let unresolved: Vec<_> = check_file(&db, file)
+                .into_iter()
+                .filter(|diag| diag.id == DiagnosticId::UnknownType)
+                .collect();
+            assert_eq!(
+                unresolved.len(),
+                1,
+                "one clause, one report; body `{body}` gave {unresolved:?}"
+            );
+            let span = unresolved[0].annotations[0].span.range;
+            assert_eq!(
+                &source[span], "Nonexistent",
+                "the report underlines the clause itself"
+            );
+        }
+    }
+
+    #[test]
     fn self_referential_associated_bound_checks_clean() {
         // `type Assoc extends Iface` on `Iface` itself is valid (a bound is
         // a constraint head — it never demands the target's associated

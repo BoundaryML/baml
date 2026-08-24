@@ -1,97 +1,73 @@
-//! `receiver.<here>` — the members of the value to the left of the dot.
+//! What follows a dot, per [`DotTarget`] arm.
 //!
-//! Nothing here searches for a member by name or walks an interface graph:
-//! [`baml_compiler2_hir_ty::ide::members_for_receiver`] enumerates through
-//! the same ladder resolution uses, so this module's whole job is to render
-//! what the compiler already decided is reachable.
+//! A VALUE offers its INSTANCE members — the ones with a `self` receiver,
+//! since that receiver is the value already written. A TYPE offers
+//! everything it declares: statics, and instance methods in their UFCS form
+//! (`int.min(a, b)` is the call `a.min(b)`). A NAMESPACE offers its items
+//! and child namespaces. All three are compiler enumerations the context
+//! already resolved; what remains here is each arm's own filter — which
+//! names a reader can actually write at this position.
 
 use baml_base::SourceFile;
-use baml_compiler2_hir_ty::method_resolution::{MemberDecl, MemberSource};
-use text_size::TextSize;
+use baml_compiler2_hir::contributions::Definition;
+use baml_compiler2_ppir::resolve::NamespaceMemberKind;
 
-use super::{
-    context::CompletionContext,
-    item::{Completion, CompletionInsert, CompletionKind, CompletionRelevance},
-};
-use crate::{info, render, resolve};
+use super::{completions::Completions, context::DotTarget, render::MemberForm};
+use crate::symbols;
 
-pub(crate) fn complete_members(
+pub(crate) fn complete(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,
-    dot: TextSize,
-    context: &CompletionContext,
-    out: &mut Vec<Completion>,
+    target: &DotTarget<'_>,
+    out: &mut Completions,
 ) {
-    let Some((owner, receiver)) = resolve::receiver_at_dot(db, file, dot) else {
-        return;
-    };
-    for candidate in baml_compiler2_hir_ty::ide::members_for_receiver(db, owner, &receiver) {
-        let (detail, documentation) = describe_member(db, file, &candidate.decl);
-        out.push(Completion {
-            label: candidate.name.as_str().to_string(),
-            source_range: context.source_range,
-            // A method's parentheses are part of writing the call; the tab
-            // stop lands inside them so the next keystroke is the argument.
-            insert: if candidate.is_method {
-                CompletionInsert::Snippet(format!("{}($0)", candidate.name.as_str()))
-            } else {
-                CompletionInsert::Plain(candidate.name.as_str().to_string())
-            },
-            kind: if candidate.is_method {
-                CompletionKind::Method
-            } else {
-                CompletionKind::Field
-            },
-            detail,
-            documentation,
-            relevance: CompletionRelevance {
-                is_inherent: matches!(candidate.source, MemberSource::Inherent),
-            },
-        });
+    match target {
+        DotTarget::Value { owner, receiver } => {
+            for candidate in baml_compiler2_hir_ty::ide::members_for_receiver(db, *owner, receiver)
+            {
+                // A static is reached through the TYPE. Offering it here
+                // would suggest a call the checker rejects.
+                if candidate.is_static {
+                    continue;
+                }
+                out.add_member(db, file, &candidate, MemberForm::Instance);
+            }
+        }
+        DotTarget::Type(definition) => {
+            for candidate in baml_compiler2_hir_ty::ide::members_for_type(db, *definition) {
+                out.add_member(db, file, &candidate, MemberForm::Qualified);
+            }
+        }
+        DotTarget::Namespace(members) => {
+            for member in members {
+                if let NamespaceMemberKind::Item(def) = &member.kind
+                    && (symbols::is_synthesized(db, &member.name, *def)
+                        || is_builtin_companion(db, *def))
+                {
+                    continue;
+                }
+                out.add_namespace_member(db, file, member);
+            }
+        }
     }
 }
 
-/// The right-hand column and the tooltip: rendered from the DECLARATION the
-/// enumeration handed back, through the same signature engine hover uses, so
-/// a member reads identically in both surfaces.
-fn describe_member(
-    db: &dyn baml_compiler2_ppir::Db,
-    file: SourceFile,
-    decl: &MemberDecl<'_>,
-) -> (Option<String>, Option<String>) {
-    match decl {
-        MemberDecl::Method(function) => {
-            let data = baml_compiler2_ppir::item_data::function_data(db, *function);
-            let signature = info::resolved_function_sig_parts(db, *function, None).render(
-                db,
-                file,
-                info::method_sig_style(),
-            );
-            (Some(signature), data.docstring.clone())
-        }
-        MemberDecl::ClassField { class, index } => {
-            let data = baml_compiler2_ppir::item_data::class_data(db, *class);
-            let ty = baml_compiler2_hir_ty::lower::resolve_class_fields(db, *class)
-                .get(*index)
-                .map(|(_, ty, _)| render::display_ty_canonical_for_file(db, file, ty));
-            (
-                ty,
-                data.fields
-                    .get(*index)
-                    .and_then(|field| field.docstring.clone()),
-            )
-        }
-        MemberDecl::InterfaceField { interface, index } => {
-            let data = baml_compiler2_ppir::item_data::interface_data(db, *interface);
-            (
-                None,
-                data.fields
-                    .get(*index)
-                    .and_then(|field| field.docstring.clone()),
-            )
-        }
-        // A mounted package exports rows, not declarations: the name is all
-        // there is to show until the row itself is threaded through.
-        MemberDecl::Mounted => (None, None),
-    }
+/// Whether a definition is a COMPANION CARRIER — the class a builtin's
+/// methods are declared on, whose written spelling is the builtin itself.
+///
+/// `baml.Int` is where `int`'s methods live and `int` is how it is written;
+/// likewise `baml.Array<T>.item` reads `T[].item` and `baml.Map<K, V>.item`
+/// reads `map<K, V>.item`. Offering the carrier under its package path would
+/// teach a spelling nobody uses, so `baml.` lists neither it nor its
+/// siblings. The set is the language's own
+/// ([`builtin_companion_of`](baml_type::type_kind::builtin_companion_of)),
+/// not a list kept here.
+fn is_builtin_companion(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -> bool {
+    let Definition::Class(class) = def else {
+        return false;
+    };
+    let data = baml_compiler2_ppir::item_data::class_data(db, class);
+    let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
+    let qtn = baml_type::QualifiedTypeName::new(pkg.package, pkg.namespace_path, data.name.clone());
+    baml_type::type_kind::builtin_companion_of(&qtn).is_some()
 }

@@ -158,6 +158,20 @@ pub(super) fn completion_item(
         kind: Some(match item.kind {
             baml_ide::CompletionKind::Field => lsp_types::CompletionItemKind::FIELD,
             baml_ide::CompletionKind::Method => lsp_types::CompletionItemKind::METHOD,
+            baml_ide::CompletionKind::Function => lsp_types::CompletionItemKind::FUNCTION,
+            baml_ide::CompletionKind::Local => lsp_types::CompletionItemKind::VARIABLE,
+            baml_ide::CompletionKind::Parameter => lsp_types::CompletionItemKind::PROPERTY,
+            baml_ide::CompletionKind::Class => lsp_types::CompletionItemKind::CLASS,
+            baml_ide::CompletionKind::Enum => lsp_types::CompletionItemKind::ENUM,
+            baml_ide::CompletionKind::EnumVariant => lsp_types::CompletionItemKind::ENUM_MEMBER,
+            baml_ide::CompletionKind::Interface => lsp_types::CompletionItemKind::INTERFACE,
+            baml_ide::CompletionKind::TypeAlias => lsp_types::CompletionItemKind::STRUCT,
+            baml_ide::CompletionKind::Client | baml_ide::CompletionKind::RetryPolicy => {
+                lsp_types::CompletionItemKind::CONSTANT
+            }
+            baml_ide::CompletionKind::Package => lsp_types::CompletionItemKind::MODULE,
+            baml_ide::CompletionKind::Keyword => lsp_types::CompletionItemKind::KEYWORD,
+            baml_ide::CompletionKind::Other => lsp_types::CompletionItemKind::TEXT,
         }),
         detail: item.detail.clone(),
         documentation: item.documentation.as_ref().map(|docs| {

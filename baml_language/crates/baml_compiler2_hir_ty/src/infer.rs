@@ -1392,13 +1392,19 @@ fn infer_body_impl<'db>(
         .with_frame(frame)
         .with_bounds(owner_declared_bounds(db, owner))
         .with_self_ty(concrete_self)
-        .with_impl_target(impl_target)
-        .with_diagnostics();
+        .with_impl_target(impl_target);
     let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
     let plain_bounds = owner_bounds(db, owner);
     // Split the declared clause into its named part and openness (spec
     // rule 3: `throws T | _` names T and opens the remainder to
     // inference); nested holes in named members stay ruling-4 errors.
+    //
+    // Lowered BEFORE the sink exists, deliberately. The clause lives in the
+    // SIGNATURE's `TypeRefStore`, while every id the sink hands back is read
+    // against the BODY's (`body_type_ref_spans`) - so a failure here
+    // recorded in the sink would anchor at whatever the body happens to
+    // have written at that index, or at nothing at all. The signature's own
+    // check reports the clause, at the clause's own span.
     let (declared_throws, declared_throws_open) =
         match declared_throws_ref.map(|(store, throws)| lower.lower_type_ref(store, throws)) {
             Some(raw) => {
@@ -1407,6 +1413,7 @@ fn infer_body_impl<'db>(
             }
             None => (None, false),
         };
+    let lower = lower.with_diagnostics();
     let mut ctx = InferenceContext::new(
         db,
         index,
@@ -10062,7 +10069,20 @@ impl<'db> InferenceContext<'db> {
             }
             // The body LowerCtx's sink: every written annotation whose
             // path resolved nowhere (E0002), anchored at its TypeRefId.
+            //
+            // Those ids are read against the BODY's store, so anything the
+            // sink collected while lowering a reference from ANOTHER item's
+            // store (the signature's `throws` clause, an impl block's
+            // for-target) would anchor at an unrelated annotation - or out
+            // of bounds. Such lowerings run without the sink; this states
+            // the invariant they uphold.
             for lowering in self.lower.take_diagnostics() {
+                debug_assert!(
+                    self.type_refs.store.contains(lowering.type_ref),
+                    "the body sink recorded a diagnostic for a type reference \
+                     from another item's store; lower foreign references \
+                     without the sink so their own item reports them"
+                );
                 self.pending_diags.push(PendingDiag::BodyAnnot {
                     type_ref: lowering.type_ref,
                     kind: lowering.kind,

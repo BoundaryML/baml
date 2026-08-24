@@ -52,8 +52,7 @@ pub use annotations::{AnnotationKind, InlineAnnotation, file_annotations};
 pub use baml_compiler2_hir::contributions::DefinitionKind;
 pub use cfg::ast_control_flow_graph;
 pub use completion::{
-    Completion, CompletionAnalysis, CompletionInsert, CompletionKind, CompletionRelevance,
-    completions,
+    Completion, CompletionInsert, CompletionKind, CompletionRelevance, completions,
 };
 pub use cursor_context::{CursorContext, find_source_file, playground_cursor_context};
 pub use definition::definition_at;

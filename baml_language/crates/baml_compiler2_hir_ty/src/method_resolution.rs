@@ -16,7 +16,7 @@
 
 use baml_compiler2_hir::{
     contributions::Definition,
-    loc::{ClassLoc, FunctionLoc, ImplLoc, InterfaceLoc},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
 };
 use baml_type::{
     Literal, MediaKind, Name, ParamTy, TyAttr, TypeName,
@@ -930,6 +930,9 @@ pub struct MemberCandidate<'db> {
     pub name: Name,
     /// A method (call it) rather than a field (read it).
     pub is_method: bool,
+    /// Declared without a `self` receiver, so it is reached through the TYPE
+    /// (`int.parse("3")`), never through a value. Fields are never static.
+    pub is_static: bool,
     pub source: MemberSource,
     /// Where the member is declared, as the walk that found it already knew.
     /// Handing this back costs nothing and saves every consumer a second
@@ -948,6 +951,11 @@ pub enum MemberDecl<'db> {
     /// A field of a source interface, by index into its declared field list.
     InterfaceField {
         interface: InterfaceLoc<'db>,
+        index: usize,
+    },
+    /// An enum variant, by index into its declared variant list.
+    EnumVariant {
+        enum_loc: EnumLoc<'db>,
         index: usize,
     },
     /// Declared by a mounted package: there is no source declaration to
@@ -994,19 +1002,17 @@ pub fn member_candidates<'db>(
                 &mut out,
                 field.name.clone(),
                 false,
+                false,
                 MemberSource::Inherent,
                 MemberDecl::ClassField { class, index },
             );
         }
-        for &method in &data.methods {
-            let function = baml_compiler2_ppir::item_data::function_data(db, method);
-            if function.metadata.is_language_internal {
-                continue;
-            }
+        for (name, is_static, method) in declared_methods(db, &data.methods) {
             push_candidate(
                 &mut out,
-                function.name.clone(),
+                name,
                 true,
+                is_static,
                 MemberSource::Inherent,
                 MemberDecl::Method(method),
             );
@@ -1021,6 +1027,7 @@ pub fn member_candidates<'db>(
                 &mut out,
                 name.clone(),
                 false,
+                false,
                 MemberSource::Inherent,
                 MemberDecl::Mounted,
             );
@@ -1030,6 +1037,7 @@ pub fn member_candidates<'db>(
                 &mut out,
                 method.name.clone(),
                 true,
+                is_static_exported(method),
                 MemberSource::Inherent,
                 MemberDecl::Mounted,
             );
@@ -1062,10 +1070,110 @@ pub fn member_candidates<'db>(
     out
 }
 
+/// The members a TYPE exposes to a qualified access: `int.parse("3")`,
+/// `Range.new(0, 10)`, `baml.ops.Compare.cmp(a, b)`.
+///
+/// Keyed on the DECLARATION rather than a `Ty` because a type qualifier
+/// names a declaration, not a value of it — `Range` is not `Range<int>`, and
+/// synthesizing generic arguments to ask the value-side question would be
+/// inventing a type nobody wrote. Both static members and instance members
+/// come back: BAML has UFCS, so `int.min(a, b)` is the same call as
+/// `a.min(b)`, and `is_static` is what tells the two forms apart.
+///
+/// FIELDS are not members of a type. UFCS turns a `self` receiver into an
+/// argument, and a field has no argument to become — `Point.x` and
+/// `Greet.field` are both `unresolved name`, so neither is enumerated here.
+/// Enum variants are the opposite case: `Status.Active` is the only way to
+/// name one, so they are the type's members and nothing else's.
+///
+// BUG: UFCS through a COMPANION CARRIER does not type-check. `Point.norm(p)`
+// works, but `int.abs(a)` / `string.includes(s, "x")` report a mismatch of
+// `baml.Int` against `int`: a carrier method's `self` has the carrier CLASS
+// type (`class_self_ty` returns `Class(baml.Int)` with no bridging), and a
+// primitive is not a subtype of the class that carries its methods. The
+// value-receiver path never compares the two, which is why `a.abs()` is
+// fine. Fixing it means deciding what `Self` realizes to inside a carrier —
+// a TYPE_SYSTEM.md question, not a local one — so the enumeration keeps
+// reporting what the language says (UFCS reaches instance methods) rather
+// than what today's checker manages.
+pub fn type_member_candidates<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    definition: Definition<'db>,
+) -> Vec<MemberCandidate<'db>> {
+    let mut out = Vec::new();
+    match definition {
+        Definition::Class(class) => {
+            let data = baml_compiler2_ppir::item_data::class_data(db, class);
+            for (name, is_static, method) in declared_methods(db, &data.methods) {
+                push_candidate(
+                    &mut out,
+                    name,
+                    true,
+                    is_static,
+                    MemberSource::Inherent,
+                    MemberDecl::Method(method),
+                );
+            }
+        }
+        Definition::Enum(enum_loc) => {
+            let data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
+            for (index, variant) in data.variants.iter().enumerate() {
+                push_candidate(
+                    &mut out,
+                    variant.name.clone(),
+                    false,
+                    true,
+                    MemberSource::Inherent,
+                    MemberDecl::EnumVariant { enum_loc, index },
+                );
+            }
+        }
+        Definition::Interface(interface) => {
+            let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+            // No one-`Self` exclusion here: a type qualifier names `Self`
+            // explicitly (`(T as Iface).m` or inferred), so every method is
+            // reachable — the exclusion is the EXISTENTIAL receiver's.
+            for (name, is_static, method) in declared_methods(db, &data.methods) {
+                push_candidate(
+                    &mut out,
+                    name,
+                    true,
+                    is_static,
+                    MemberSource::Inherent,
+                    MemberDecl::Method(method),
+                );
+            }
+        }
+        // Only a type declaration has members to qualify into.
+        _ => {}
+    }
+    out
+}
+
+/// The user-facing methods among a declaration's method list, with their
+/// staticness — the one walk behind every enumeration of what a class or
+/// interface declares, so the value rung and the type rung cannot disagree
+/// about it. Language-internal members are dropped here, once: they are
+/// "outside BAML's user-facing language surface" (`FunctionMetadata`), so no
+/// source position can name one.
+fn declared_methods<'a, 'db: 'a>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    methods: &'a [FunctionLoc<'db>],
+) -> impl Iterator<Item = (Name, bool, FunctionLoc<'db>)> + 'a {
+    methods.iter().filter_map(move |&method| {
+        let function = baml_compiler2_ppir::item_data::function_data(db, method);
+        if function.metadata.is_language_internal {
+            return None;
+        }
+        Some((function.name.clone(), is_static_source(db, method), method))
+    })
+}
+
 fn push_candidate<'db>(
     out: &mut Vec<MemberCandidate<'db>>,
     name: Name,
     is_method: bool,
+    is_static: bool,
     source: MemberSource,
     decl: MemberDecl<'db>,
 ) {
@@ -1075,9 +1183,25 @@ fn push_candidate<'db>(
     out.push(MemberCandidate {
         name,
         is_method,
+        is_static,
         source,
         decl,
     });
+}
+
+/// Whether a source function is declared without a `self` receiver, and is
+/// therefore reached through the type rather than through a value.
+fn is_static_source(db: &dyn baml_compiler2_ppir::Db, method: FunctionLoc<'_>) -> bool {
+    baml_compiler2_ppir::item_data::function_data(db, method)
+        .params
+        .first()
+        .is_none_or(|param| param.name.as_str() != "self")
+}
+
+/// The exported twin of [`is_static_source`], over the same predicate the
+/// dispatch shape is built from.
+fn is_static_exported(method: &crate::package_interface::ExportedFunction) -> bool {
+    !crate::package_interface::exported_takes_self(method)
 }
 
 fn extend_from_interface<'db>(
@@ -1087,11 +1211,13 @@ fn extend_from_interface<'db>(
     target: &InterfaceRef,
     existential: bool,
 ) {
-    for (name, is_method, decl) in interface_member_rows(db, facts, target, existential) {
+    for (name, is_method, is_static, decl) in interface_member_rows(db, facts, target, existential)
+    {
         push_candidate(
             out,
             name,
             is_method,
+            is_static,
             MemberSource::Interface(target.clone()),
             decl,
         );
@@ -1109,7 +1235,7 @@ fn interface_member_rows<'db>(
     facts: &Facts<'db>,
     target: &InterfaceRef,
     existential: bool,
-) -> Vec<(Name, bool, MemberDecl<'db>)> {
+) -> Vec<(Name, bool, bool, MemberDecl<'db>)> {
     let mut rows = Vec::new();
     if let Some(crate::package_interface::ExportedType::Interface {
         self_param,
@@ -1120,7 +1246,7 @@ fn interface_member_rows<'db>(
     }) = crate::package_interface::mounted_type_row(db, &target.name)
     {
         for (name, ..) in fields {
-            rows.push((name.clone(), false, MemberDecl::Mounted));
+            rows.push((name.clone(), false, false, MemberDecl::Mounted));
         }
         for method in required_methods.iter().chain(default_methods) {
             let function = crate::package_interface::resolved_exported_function(
@@ -1131,7 +1257,12 @@ fn interface_member_rows<'db>(
             if existential && exported_signature_breaks_one_self(&function, self_param) {
                 continue;
             }
-            rows.push((method.name.clone(), true, MemberDecl::Mounted));
+            rows.push((
+                method.name.clone(),
+                true,
+                is_static_exported(method),
+                MemberDecl::Mounted,
+            ));
         }
         return rows;
     }
@@ -1143,18 +1274,15 @@ fn interface_member_rows<'db>(
         rows.push((
             field.name.clone(),
             false,
+            false,
             MemberDecl::InterfaceField { interface, index },
         ));
     }
-    for &method in &data.methods {
-        let function = baml_compiler2_ppir::item_data::function_data(db, method);
-        if function.metadata.is_language_internal {
-            continue;
-        }
+    for (name, is_static, method) in declared_methods(db, &data.methods) {
         if existential && signature_breaks_one_self(crate::lower::function_signature(db, method)) {
             continue;
         }
-        rows.push((function.name.clone(), true, MemberDecl::Method(method)));
+        rows.push((name, true, is_static, MemberDecl::Method(method)));
     }
     rows
 }

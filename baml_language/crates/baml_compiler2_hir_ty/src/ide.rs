@@ -149,3 +149,16 @@ pub fn members_for_receiver<'db>(
     let facts = crate::facts::Facts::with_bounds(db, crate::infer::owner_bounds(db, owner));
     crate::method_resolution::member_candidates(db, &facts, receiver)
 }
+
+/// The members a TYPE qualifier reaches: `int.parse`, `Range.new`,
+/// `baml.ops.Compare.cmp`.
+///
+/// No param env is needed — a declaration's members do not depend on where
+/// the reader is standing, which is exactly what makes this the type-side
+/// question rather than the value-side one.
+pub fn members_for_type<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    definition: baml_compiler2_hir::contributions::Definition<'db>,
+) -> Vec<crate::method_resolution::MemberCandidate<'db>> {
+    crate::method_resolution::type_member_candidates(db, definition)
+}

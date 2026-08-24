@@ -1076,8 +1076,9 @@ fn completion_after_a_dot_offers_the_receivers_members() {
     assert!(
         at["detail"]
             .as_str()
-            .is_some_and(|detail| detail.contains("at(self")),
-        "detail is the signature, got {:?}",
+            .is_some_and(|detail| detail.contains("at(index: int)")),
+        "detail is the signature minus the receiver already written \
+         (`xs.at(…)`, not the UFCS `T[].at(xs, …)`), got {:?}",
         at["detail"]
     );
     // The edit is explicit: the server decides what an item replaces, never
@@ -1665,64 +1666,84 @@ fn closing_a_detached_document_frees_the_workspace_slot() {
     assert_eq!(roots, vec![h.ws.clone()], "the real project loaded");
 }
 
-/// A diagnostics pass unwound by another thread's query panic must not
-/// repost its tail: the panicking query would just re-run (the memo was
-/// never stored) and panic again. Retry waits for the next edit.
+/// A diagnostics pass unwound by `PropagatedPanic` retries; one unwound by
+/// a REAL panic does not.
+///
+/// Salsa raises `PropagatedPanic` whenever the thread computing a query this
+/// pass blocked on released its claim by unwinding for anything other than
+/// that thread's own `$/cancelRequest` — a mutation cancelling the producer
+/// included. So it usually means the same thing `PendingWrite` means, and
+/// refusing to retry stalled diagnostics until the next edit every time a
+/// request and the pass raced one keystroke. A genuine panic still stops the
+/// retry, on the `Panicked` arm, where the panicking thread has already
+/// logged the message and backtrace.
 #[test]
-fn a_propagated_panic_does_not_hot_retry_diagnostics() {
-    let manual = Arc::new(ManualExecutor::default());
-    let executors = Executors {
-        requests: Arc::new(Inline),
-        diagnostics: Arc::clone(&manual) as Arc<dyn Executor>,
-        io: Arc::new(Inline),
+fn a_propagated_panic_retries_diagnostics_but_a_real_panic_does_not() {
+    // `true` = a real panic, `false` = salsa's `PropagatedPanic`. Passed as
+    // a flag so the outcome is built inside, where its types are in scope.
+    let park_a_pass = |real_panic: bool| {
+        let outcome = if real_panic {
+            Err(TaskFailure::Panicked("boom".to_owned()))
+        } else {
+            Err(TaskFailure::Cancelled(salsa::Cancelled::PropagatedPanic))
+        };
+        let manual = Arc::new(ManualExecutor::default());
+        let executors = Executors {
+            requests: Arc::new(Inline),
+            diagnostics: Arc::clone(&manual) as Arc<dyn Executor>,
+            io: Arc::new(Inline),
+        };
+        let mut h = Harness::with_executors(executors, None);
+        h.fs.add_project(&h.ws);
+        h.fs.write(h.ws.join("main.baml"), "class A { x int }\n");
+        let s = SessionKey(1);
+        h.init_session(s, &[]);
+        // Apply the queued discovery mutations before any snapshot can park
+        // on the manual lane (a parked snapshot would block `apply`).
+        while let Ok(event) = h.state.events().try_recv() {
+            h.state.handle_event(event);
+        }
+        let root = h
+            .state
+            .roots()
+            .workspace_roots()
+            .next()
+            .expect("the discovered project root")
+            .root;
+
+        // Fire the tail: the pass parks on the manual lane, in flight.
+        h.state.on_tick(Instant::now() + DIAGNOSTICS_DEBOUNCE * 2);
+        while let Ok(event) = h.state.events().try_recv() {
+            h.state.handle_event(event);
+        }
+        assert_eq!(manual.parked(), 1, "the diagnostics pass is parked");
+        assert!(h.state.root_state(root).unwrap().diagnostics_in_flight);
+
+        h.state
+            .handle_event(OwnerEvent::DiagnosticsResult { root, outcome });
+
+        let root_state = h.state.root_state(root).unwrap();
+        assert!(!root_state.diagnostics_in_flight);
+        assert!(
+            root_state.fence.is_dirty(),
+            "the root still owes a publication"
+        );
+        let reposted = matches!(
+            h.state.events().try_recv(),
+            Ok(OwnerEvent::DiagnosticsDue { .. })
+        );
+        // Cleanup: run the parked pass so its snapshot drops before the state.
+        manual.run_all();
+        reposted
     };
-    let mut h = Harness::with_executors(executors, None);
-    h.fs.add_project(&h.ws);
-    h.fs.write(h.ws.join("main.baml"), "class A { x int }\n");
-    let s = SessionKey(1);
-    h.init_session(s, &[]);
-    // Apply the queued discovery mutations before any snapshot can park on
-    // the manual lane (a parked snapshot would block `apply`).
-    while let Ok(event) = h.state.events().try_recv() {
-        h.state.handle_event(event);
-    }
-    let root = h
-        .state
-        .roots()
-        .workspace_roots()
-        .next()
-        .expect("the discovered project root")
-        .root;
 
-    // Fire the tail: the pass parks on the manual lane, in flight.
-    h.state.on_tick(Instant::now() + DIAGNOSTICS_DEBOUNCE * 2);
-    while let Ok(event) = h.state.events().try_recv() {
-        h.state.handle_event(event);
-    }
-    assert_eq!(manual.parked(), 1, "the diagnostics pass is parked");
-    assert!(h.state.root_state(root).unwrap().diagnostics_in_flight);
-
-    // Another thread's query panic unwinds the pass.
-    h.state.handle_event(OwnerEvent::DiagnosticsResult {
-        root,
-        outcome: Err(TaskFailure::Cancelled(salsa::Cancelled::PropagatedPanic)),
-    });
-
-    let root_state = h.state.root_state(root).unwrap();
-    assert!(!root_state.diagnostics_in_flight);
     assert!(
-        root_state.diagnostics_due.is_none(),
-        "no timer was re-armed"
+        park_a_pass(false),
+        "a producer that unwound (all but certainly a mutation) is retried"
     );
     assert!(
-        h.state.events().try_recv().is_err(),
-        "no DiagnosticsDue was reposted"
+        !park_a_pass(true),
+        "a real panic waits for the next edit rather than re-running the \
+         query that panicked"
     );
-    assert!(
-        h.state.root_state(root).unwrap().fence.is_dirty(),
-        "the root still owes a publication — the next edit retries"
-    );
-
-    // Cleanup: run the parked pass so its snapshot drops before the state.
-    manual.run_all();
 }

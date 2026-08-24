@@ -1411,6 +1411,17 @@ fn hover_sig_style() -> SigStyle {
     }
 }
 
+/// The instance-completion style: like the method listing, but the `self`
+/// receiver is dropped. A dot completion is offered on a value the reader
+/// already wrote, so printing `self` would read as the UFCS form of the same
+/// call rather than the one being written.
+pub(crate) fn instance_completion_sig_style() -> SigStyle {
+    SigStyle {
+        hide_self_receiver: true,
+        ..method_sig_style()
+    }
+}
+
 /// The method-listing style (hover hint + describe): like hover, but
 /// unresolved fallbacks use the brief type spelling — method lists are dense
 /// and the resolved types carry the precision.

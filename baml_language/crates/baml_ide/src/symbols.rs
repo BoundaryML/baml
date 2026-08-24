@@ -18,6 +18,36 @@ use crate::{
     param_schema::{ParamSchema, TypeSchema},
 };
 
+/// Whether an enumeration of the language surface should skip this
+/// definition as synthesized.
+///
+/// Two reasons, one rule. A `$`-companion (`Extract$parse`, `Agent$stream`)
+/// has no spelling in source — `$` cannot appear in a written name — so no
+/// position can name one. And companions and auto-derives carry the
+/// docstring of the declaration they shadow, so listing them makes every
+/// original into several near-duplicate rows. Search and completion both
+/// enumerate what a reader can write, so both ask here.
+pub(crate) fn is_synthesized(
+    db: &dyn baml_compiler2_ppir::Db,
+    name: &Name,
+    def: Definition<'_>,
+) -> bool {
+    if name.as_str().contains('$') {
+        return true;
+    }
+    if let Definition::Function(func) = def {
+        use baml_compiler2_ast::ast::FunctionOrigin;
+        match function_data(db, func).metadata.origin {
+            FunctionOrigin::UserDefined => false,
+            FunctionOrigin::Companion | FunctionOrigin::Internal | FunctionOrigin::AutoDerive => {
+                true
+            }
+        }
+    } else {
+        false
+    }
+}
+
 /// Symbol kind — locally defined since v1 HIR is removed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolKind {

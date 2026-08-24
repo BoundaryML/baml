@@ -133,8 +133,10 @@ impl Drop for Snapshot {
 #[derive(Debug)]
 pub enum TaskFailure {
     /// Salsa unwound the task: a mutation landed (`PendingWrite`), the
-    /// task's own token was cancelled (`Local`), or another thread's query
-    /// panicked (`PropagatedPanic`).
+    /// task's own token was cancelled (`Local`), or the thread computing a
+    /// query this task was blocked on unwound first (`PropagatedPanic` -
+    /// which, despite the name, is not evidence of a panic; see the
+    /// conversion below).
     Cancelled(salsa::Cancelled),
     /// A real panic. The message is the payload's `&str`/`String` if it had
     /// one.
@@ -150,10 +152,24 @@ impl From<TaskFailure> for LspError {
             TaskFailure::Cancelled(salsa::Cancelled::Local) => {
                 LspError::RequestCanceled("request canceled".to_owned())
             }
-            TaskFailure::Cancelled(salsa::Cancelled::PropagatedPanic) => {
-                tracing::error!("a query on another thread panicked");
-                LspError::Internal("a query on another thread panicked".to_owned())
-            }
+            // `PropagatedPanic` is a misnomer at our layer. Salsa raises it
+            // whenever the thread computing a query we blocked on released
+            // its claim by unwinding for anything other than that thread's
+            // OWN `$/cancelRequest` token (`release_panicking` in
+            // `function/sync.rs` reads only the local flag), and the common
+            // cause here is the ordinary one: a mutation landed and
+            // cancelled the producer mid-query. So it says the same thing
+            // `PendingWrite` says, and it gets the same answer - which is
+            // also what rust-analyzer does, mapping every `Cancelled` to
+            // `ContentModified` without inspecting the variant.
+            //
+            // Nothing is lost if a real panic WAS the cause: the thread that
+            // actually panicked reports it, with the panic hook's message,
+            // location, and backtrace, and the client's retry runs the same
+            // query again on a thread that will panic in its own right.
+            TaskFailure::Cancelled(salsa::Cancelled::PropagatedPanic) => LspError::ContentModified(
+                "sources changed while the request was computing".to_owned(),
+            ),
             // `Cancelled` is `#[non_exhaustive]`.
             TaskFailure::Cancelled(other) => LspError::Internal(format!("cancelled: {other}")),
             TaskFailure::Panicked(message) => {
@@ -189,5 +205,40 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
         s.clone()
     } else {
         "<non-string panic payload>".to_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every salsa unwind that is not this task's own `$/cancelRequest`
+    /// answers `ContentModified`, so the client retries.
+    ///
+    /// `PropagatedPanic` is the one that reads wrong: salsa names it for a
+    /// panic, but raises it whenever the thread computing a query we blocked
+    /// on unwound for a reason other than ITS OWN local token — which a
+    /// mutation cancelling that thread satisfies. Reporting it as an
+    /// internal error put a red toast on ordinary typing.
+    #[test]
+    fn a_salsa_unwind_asks_the_client_to_retry() {
+        assert!(matches!(
+            LspError::from(TaskFailure::Cancelled(salsa::Cancelled::PendingWrite)),
+            LspError::ContentModified(_)
+        ));
+        assert!(matches!(
+            LspError::from(TaskFailure::Cancelled(salsa::Cancelled::PropagatedPanic)),
+            LspError::ContentModified(_)
+        ));
+        assert!(matches!(
+            LspError::from(TaskFailure::Cancelled(salsa::Cancelled::Local)),
+            LspError::RequestCanceled(_)
+        ));
+        // A real panic is reported by the thread that panicked, and stays an
+        // internal error.
+        assert!(matches!(
+            LspError::from(TaskFailure::Panicked("boom".to_owned())),
+            LspError::Internal(_)
+        ));
     }
 }

@@ -87,18 +87,19 @@ impl GlobalState {
                 return;
             }
             // A mutation landed: it re-armed the tail itself.
-            Err(TaskFailure::Cancelled(salsa::Cancelled::PendingWrite)) => {}
-            // A panicking query on another thread unwound this pass; the
-            // memo was not stored, so an immediate retry would re-run the
-            // panicking query from this thread and panic outright. Same
-            // policy as a local panic: wait for the next edit.
-            Err(TaskFailure::Cancelled(salsa::Cancelled::PropagatedPanic)) => {
-                tracing::error!(
-                    ?root,
-                    "another thread's query panicked under the diagnostics pass; retry on the next edit"
-                );
-                return;
-            }
+            //
+            // `PropagatedPanic` belongs here too. It does NOT mean a panic:
+            // salsa raises it when the thread computing a query this pass
+            // blocked on released its claim by unwinding for anything other
+            // than that thread's own `$/cancelRequest`, and a mutation
+            // cancelling the producer is exactly that. Treating it as a
+            // defect stalled diagnostics until the next edit every time a
+            // request and the pass raced one mutation. A genuine panic is
+            // still caught by the `Panicked` arm below, on the thread that
+            // panics.
+            Err(TaskFailure::Cancelled(
+                salsa::Cancelled::PendingWrite | salsa::Cancelled::PropagatedPanic,
+            )) => {}
             // `Local` (nothing cancels a diagnostics token today) and any
             // future variant: nothing re-armed the tail, so a blind repost
             // could spin — fail safe and wait for the next edit.
