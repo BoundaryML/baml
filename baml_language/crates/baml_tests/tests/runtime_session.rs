@@ -56,6 +56,22 @@ function main() -> bool throws unknown {
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
+#[tokio::test]
+async fn session_synthetic_step_names_do_not_collide_with_user_bindings() {
+    let output = baml_test!(
+        r####"
+function main() -> int throws unknown {
+  let session = reflect.Session.new()
+  session.eval(`let result = 5`)
+  session.eval(`let stmt_1 = 7
+log.info("keep the second generated step")`)
+  session.eval<int>(`result + stmt_1`)
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(12)));
+}
+
 const S11_LIVENESS_PROBE: &str = r#####"
 function escape_one_session_value() -> reflect.Type throws unknown {
   let dependency = reflect.Package.compile({

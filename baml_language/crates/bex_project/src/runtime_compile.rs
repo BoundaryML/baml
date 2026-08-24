@@ -1354,7 +1354,10 @@ fn lower_session_submission(
                 binding = Some((name, symbol));
                 internal_name
             } else {
-                format!("__baml_session_{sequence}_stmt_{index}")
+                // Synthetic step globals must live outside `internal()`'s
+                // namespace so a user binding such as `stmt_1` cannot mint
+                // the same name.
+                format!("__baml_stmt_{sequence}_{index}")
             };
             let assignment = is_statement
                 .then(|| assignment_parts(raw))
@@ -1461,7 +1464,9 @@ fn lower_session_submission(
     }
 
     if result_step.is_none() {
-        let generated_name = format!("__baml_session_{sequence}_result");
+        // This fallback must likewise be outside `internal()`'s namespace:
+        // otherwise a user binding called `result` collides with it.
+        let generated_name = format!("__baml_result_{sequence}");
         let step_source = format!("let {generated_name} = null\n");
         generated.push_str(&step_source);
         result_step = Some(steps.len());

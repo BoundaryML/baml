@@ -138,12 +138,12 @@ async fn package_finish_refuses_session_compile_artifact() {
         r####"
 function main() -> bool throws unknown {
   let session = reflect.Session.new()
-  let artifact = session._compile<int>(#"1"#)
+  let artifact = session._compile<int>(`1`)
   let rejected = false
   let _ = reflect.Package._finish(artifact, {}) catch (_) {
     _ => { rejected = true },
   }
-  rejected && session.eval<int>(#"2"#) == 2
+  rejected && session.eval<int>(`2`) == 2
 }
 "####
     );
