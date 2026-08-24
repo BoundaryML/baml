@@ -1353,7 +1353,7 @@ function _chat_send(
     request: baml.http.Request,
     provider: string,
     client_name: string,
-    capture_wire: bool = false,
+    capture_wire: bool = true,
     audio_mime: string = "audio/wav",
     request_timeout_ms: int? = null,
 ) -> ai.ModelTurn {
@@ -1405,7 +1405,7 @@ function _chat_send(
             baml.http.Request {
                 method: request.method,
                 url: ai.wire.redact_url_secrets(request.url),
-                headers: request.headers,
+                headers: ai.wire.redact_request_headers(request.headers),
                 body: request.body,
             }
         } else {
@@ -1432,7 +1432,7 @@ function chat_invoke(
     compat: ChatCompat,
     params: ChatParams,
     input: ai.ModelTurnInput,
-    capture_wire: bool = false,
+    capture_wire: bool = true,
     request_timeout_ms: int? = null,
 ) -> ai.ModelTurn {
     let request = chat_render(compat, params, input, false);
@@ -1648,7 +1648,7 @@ function chat_invoke_stream(
     compat: ChatCompat,
     params: ChatParams,
     input: ai.ModelTurnInput,
-    capture_wire: bool = false,
+    capture_wire: bool = true,
     request_timeout_ms: int? = null,
     time_to_first_token_timeout_ms: int? = null,
 ) -> ai.stream.TurnStream {
@@ -1688,7 +1688,7 @@ function chat_invoke_stream(
             baml.http.Request {
                 method: request.method,
                 url: ai.wire.redact_url_secrets(request.url),
-                headers: request.headers,
+                headers: ai.wire.redact_request_headers(request.headers),
                 body: request.body,
             }
         } else {
@@ -1710,6 +1710,7 @@ function chat_invoke_stream(
     stream._calls = [call];
     stream._wire_call = call;
     stream._call_started = started;
+    stream._ttft_from = baml.time.Instant.now();
     stream._capture_sse = capture_wire;
     stream
 }

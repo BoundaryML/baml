@@ -53,6 +53,33 @@ function redact_url_secrets(text: string) -> string {
     root.internal._redact_after(tokens, "secret=")
 }
 
+/// Replace credential-bearing request headers with "REDACTED" before a
+/// request snapshot rides an `ai.events.LLMCall`. Unlike previews, the
+/// request `invoke` actually sends DOES carry auth headers (`x-api-key`,
+/// `authorization`, Azure's `api-key`, ...), so captured requests must be
+/// scrubbed. Matching is case-insensitive; values are replaced, names kept.
+function redact_request_headers(headers: map<string, string>) -> map<string, string> {
+    let out: map<string, string> = {};
+    for (let name in headers.keys()) {
+        let lower = name.to_lower_case();
+        let sensitive = lower == "authorization"
+            || lower == "proxy-authorization"
+            || lower == "x-api-key"
+            || lower == "api-key"
+            || lower == "x-goog-api-key"
+            || lower == "x-amz-security-token"
+            || lower == "cookie";
+        if (sensitive) {
+            let _ = out.set(name, "REDACTED");
+        } else {
+            if let value: string = headers.get(name) {
+                let _ = out.set(name, value);
+            }
+        }
+    }
+    out
+}
+
 /// The environment variables a credential chain consulted, as a readable list,
 /// for the "no credential configured" error a client raises when the whole
 /// chain came back empty.
@@ -137,7 +164,7 @@ function send_as_with_wire<T>(
     req: baml.http.Request,
     provider: string,
     client_name: string,
-    capture_wire: bool = false,
+    capture_wire: bool = true,
     request_timeout_ms: int? = null,
 ) -> SentAs<T> {
     let started = baml.time.Instant.now();
@@ -183,7 +210,7 @@ function send_as_with_wire<T>(
             baml.http.Request {
                 method: req.method,
                 url: redact_url_secrets(req.url),
-                headers: req.headers,
+                headers: redact_request_headers(req.headers),
                 body: req.body,
             }
         } else {

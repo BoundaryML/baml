@@ -83,7 +83,7 @@ class VertexClient {
         stop_sequences: string[]? = null,
         response_modalities: string[]? = null,
         safety_settings: SafetySetting[]? = null,
-        capture_wire: bool = false,
+        capture_wire: bool = true,
     ) -> VertexClient {
         VertexClient {
             model: model,

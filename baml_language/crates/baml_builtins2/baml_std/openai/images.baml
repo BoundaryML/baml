@@ -90,7 +90,7 @@ class ImageClient {
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
-        capture_wire: bool = false,
+        capture_wire: bool = true,
     ) -> ImageClient {
         ImageClient {
             model: model,

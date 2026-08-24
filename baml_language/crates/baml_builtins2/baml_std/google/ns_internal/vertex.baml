@@ -447,7 +447,7 @@ function vertex_invoke_stream(
                 method: req.method,
                 // Express mode signs the request with `?key=…` in the URL.
                 url: ai.wire.redact_url_secrets(req.url),
-                headers: req.headers,
+                headers: ai.wire.redact_request_headers(req.headers),
                 body: req.body,
             }
         } else {
@@ -469,6 +469,7 @@ function vertex_invoke_stream(
     stream._calls = [call];
     stream._wire_call = call;
     stream._call_started = started;
+    stream._ttft_from = baml.time.Instant.now();
     stream._capture_sse = c.capture_wire;
     stream
 }

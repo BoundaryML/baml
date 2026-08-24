@@ -44,7 +44,7 @@ class OllamaClient {
         top_p: float? = null,
         stop: string[]? = null,
         seed: int? = null,
-        capture_wire: bool = false,
+        capture_wire: bool = true,
     ) -> OllamaClient {
         OllamaClient {
             model: model,

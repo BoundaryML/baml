@@ -75,7 +75,7 @@ class AzureClient {
         top_p: float? = null,
         stop: string[]? = null,
         seed: int? = null,
-        capture_wire: bool = false,
+        capture_wire: bool = true,
     ) -> AzureClient {
         AzureClient {
             model: model,

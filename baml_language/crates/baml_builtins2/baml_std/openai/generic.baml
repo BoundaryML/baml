@@ -52,7 +52,7 @@ class GenericClient {
         top_p: float? = null,
         stop: string[]? = null,
         seed: int? = null,
-        capture_wire: bool = false,
+        capture_wire: bool = true,
     ) -> GenericClient {
         GenericClient {
             model: model,

@@ -343,7 +343,15 @@ class Agent {
                 let futures = calls.map((call) -> {
                     spawn { self._run_one_tool(spec.tools(), call, j) }
                 });
-                let _ = await baml.future.all(futures);
+                let _ = await baml.future.all(futures) catch_all (e) {
+                    _ => {
+                        // A Raise-mode tool failure: its ToolFailed event is
+                        // already on the record; deliver it before the error
+                        // propagates so listeners never miss journal events.
+                        seen = self._emit_from(j, seen);
+                        throw e
+                    },
+                };
                 seen = self._emit_from(j, seen);
                 // Reporting a failure lets the model adapt; repeating the
                 // IDENTICAL failing call is futile, and each step can be

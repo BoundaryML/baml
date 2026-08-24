@@ -26,7 +26,7 @@ class ClaudeCodeClient {
         permission_mode: string = "default",
         harness_tools: string[] = [],
         mcp_servers: map<string, json>? = null,
-        capture_wire: bool = false,
+        capture_wire: bool = true,
     ) -> ClaudeCodeClient {
         let servers: map<string, json> = {};
         ClaudeCodeClient {

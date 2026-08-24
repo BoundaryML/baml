@@ -146,6 +146,9 @@ class TurnStream {
     _calls: root.events.LLMCall[],
     _wire_call: root.events.LLMCall?,
     _call_started: baml.time.Instant?,
+    // TTFT base: stamped when the SSE response opened (legacy TTFT semantics);
+    // falls back to _call_started when a provider did not set it.
+    _ttft_from: baml.time.Instant?,
     _capture_sse: bool,
 
     // A turn stream over a live SSE connection. `decode` receives the raw
@@ -182,6 +185,7 @@ class TurnStream {
             _calls: [],
             _wire_call: null,
             _call_started: null,
+            _ttft_from: null,
             _capture_sse: false,
         }
     }
@@ -209,6 +213,7 @@ class TurnStream {
             _calls: [],
             _wire_call: null,
             _call_started: null,
+            _ttft_from: null,
             _capture_sse: false,
         }
     }
@@ -237,6 +242,7 @@ class TurnStream {
             _calls: [],
             _wire_call: null,
             _call_started: null,
+            _ttft_from: null,
             _capture_sse: false,
         }
     }
@@ -245,8 +251,8 @@ class TurnStream {
     function _stamp_first_delta(self) -> void {
         if let call: root.events.LLMCall = self._wire_call {
             if (call.timing.ttft_ms == null) {
-                if let started: baml.time.Instant = self._call_started {
-                    call.timing.ttft_ms = started.elapsed().to_milliseconds();
+                if let base: baml.time.Instant = self._ttft_from ?? self._call_started {
+                    call.timing.ttft_ms = base.elapsed().to_milliseconds();
                 }
             }
         }
@@ -531,6 +537,7 @@ function from_spec<TStream, TFinal>(
         let c: root.Client => c.id(),
     };
     let emit = root.events.guard(on_event);
+    let settled = false;
     if let cb: (root.events.Event) -> void throws never = emit {
         cb(root.events.RunStarted {
             spec_name: spec.name(),
@@ -553,18 +560,23 @@ function from_spec<TStream, TFinal>(
                 let d: Done => {
                     // Settle: fold the completed turn (this is where the
                     // previously-discarded streamed usage is recovered) and
-                    // emit the same events the Agent path emits.
-                    if let cb: (root.events.Event) -> void throws never = emit {
-                        let turn = turns.final_turn();
-                        cb(root.events.AssistantMessage {
-                            content: turn.content,
-                            client_id: provider,
-                        });
-                        if let u: root.events.Usage = turn.usage {
-                            cb(u);
-                        }
-                        for (let call in turn.calls) {
-                            cb(call);
+                    // emit the same events the Agent path emits. The flag
+                    // guards re-entry: a listener that pulls this same stream
+                    // (e.g. calls final() mid-callback) must not re-settle.
+                    if (!settled) {
+                        settled = true;
+                        if let cb: (root.events.Event) -> void throws never = emit {
+                            let turn = turns.final_turn();
+                            cb(root.events.AssistantMessage {
+                                content: turn.content,
+                                client_id: provider,
+                            });
+                            if let u: root.events.Usage = turn.usage {
+                                cb(u);
+                            }
+                            for (let call in turn.calls) {
+                                cb(call);
+                            }
                         }
                     }
                     null

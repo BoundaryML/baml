@@ -11,7 +11,11 @@ fn add_dir(db: &mut ProjectDatabase, root: &Path, dir: &Path) {
         if path.is_dir() {
             add_dir(db, root, &path);
         } else if path.extension().and_then(|e| e.to_str()) == Some("baml") {
-            let rel = path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+            let rel = path
+                .strip_prefix(root)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
             let content = std::fs::read_to_string(&path).expect("read");
             db.add_file(&rel, &content);
         }
@@ -34,7 +38,8 @@ fn main() {
     }
     println!("total diagnostics: {}", diags.len());
     println!("running stdlib bytecode generation...");
-    let program = baml_compiler2_emit::generate_stdlib_program(&db, baml_compiler2_emit::OptLevel::default());
+    let program =
+        baml_compiler2_emit::generate_stdlib_program(&db, baml_compiler2_emit::OptLevel::default());
     match program {
         Ok(_) => println!("stdlib bytecode: OK"),
         Err(e) => println!("stdlib bytecode error: {e:?}"),

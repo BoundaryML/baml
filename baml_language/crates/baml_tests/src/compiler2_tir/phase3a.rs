@@ -225,10 +225,21 @@ function main() -> string {
     assert!(
         tir.contains(
             "ai.Agent.new(client = client, on_event = on_event).run(Greet$spec(name, suffix = suffix)).value"
-        ) && tir
-            .contains("(Greet$spec(name, suffix = suffix), client = client, on_event = on_event)")
-            && tir.contains("ai.stream.from_spec<"),
-        "direct and stream companions must name the defaulted spec argument and thread on_event:\n{tir}"
+        ),
+        "the direct-call companion must name the defaulted spec argument and thread on_event:\n{tir}"
+    );
+    // Bind the argument tuple to the from_spec call itself: the tuple must
+    // appear right after this marker's generic args, not just anywhere in the
+    // rendered TIR.
+    let stream_call = tir
+        .split("ai.stream.from_spec<")
+        .nth(1)
+        .unwrap_or_else(|| panic!("stream companion must call ai.stream.from_spec:\n{tir}"));
+    let window = &stream_call[..stream_call.len().min(200)];
+    assert!(
+        window
+            .contains("(Greet$spec(name, suffix = suffix), client = client, on_event = on_event)"),
+        "the stream companion must pass spec, client, and on_event to from_spec:\n{tir}"
     );
 }
 
