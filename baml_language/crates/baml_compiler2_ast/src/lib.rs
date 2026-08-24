@@ -514,13 +514,18 @@ function Extract(client: string, text: string) -> string {
             })
             .expect("expected Extract function");
         let param_names: Vec<&str> = function.params.iter().map(|p| p.name.as_str()).collect();
-        assert_eq!(param_names, vec!["text", "client"]);
-        let default_id = function.params[1].default.expect("expected client default");
-        let default_expr = &function.defaults.exprs.exprs[default_id.expr()];
-        assert!(
-            matches!(default_expr, Expr::Null),
-            "the injected ai.Client? override defaults to null, got {default_expr:#?}"
-        );
+        assert_eq!(param_names, vec!["text", "client", "on_event"]);
+        for injected in [&function.params[1], &function.params[2]] {
+            let default_id = injected
+                .default
+                .unwrap_or_else(|| panic!("expected {} default", injected.name.as_str()));
+            let default_expr = &function.defaults.exprs.exprs[default_id.expr()];
+            assert!(
+                matches!(default_expr, Expr::Null),
+                "the injected {} override defaults to null, got {default_expr:#?}",
+                injected.name.as_str()
+            );
+        }
     }
 
     #[test]
